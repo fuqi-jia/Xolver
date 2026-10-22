@@ -10,18 +10,20 @@ import re
 
 ROOT = Path(__file__).resolve().parents[2]
 # Direct dependencies. Search implementations still contain cycles internally;
-# they cannot leak into evidence checking, exact decision procedures or the IR.
+# they cannot leak into evidence checking, application orchestration or the IR.
 LAYERS = {
     "base": [],
     "ir": ["base"],
     "contracts": ["base", "ir"],
     "algebra": ["base", "ir", "contracts"],
     "evidence": ["base", "ir", "contracts"],
-    "decision": ["base", "ir", "contracts", "evidence"],
     "frontend": ["base", "ir", "contracts", "algebra"],
     "search": ["base", "ir", "contracts", "algebra", "evidence"],
+    "quantifiers": ["base", "ir", "contracts", "algebra", "search"],
+    "logic": ["base", "ir", "contracts", "algebra", "quantifiers"],
+    "applications": ["base", "ir", "contracts", "algebra", "evidence", "search", "quantifiers", "logic"],
     "runtime": ["base", "ir", "contracts", "algebra", "evidence",
-                "decision", "frontend", "search"],
+                "frontend", "search", "quantifiers", "logic", "applications"],
 }
 INCLUDE = re.compile(r'^\s*#\s*include\s*[<"]([^">]+)[">]', re.M)
 
@@ -42,26 +44,41 @@ def inspect(root: Path = ROOT) -> tuple[dict, list[str]]:
         text = re.sub(r"/\*.*?\*/|//[^\n]*", "", path.read_text(), flags=re.S)
         if re.search(r"\b(?:CoreIr|CoreExpr)\b", text):
             errors.append(f"retired duplicate expression representation: {name}")
-        if name.startswith("decision/pa/") and re.search(r"\b(?:NativeTerms|TermExpr|Kind|ExprId)\b", text):
+        if name.startswith(("applications/sv/pa/", "quantifiers/integer/")) and re.search(r"\b(?:NativeTerms|TermExpr|Kind|ExprId)\b", text):
             errors.append(f"PA still consumes the general compatibility vocabulary: {name}")
+        if name.startswith("applications/"):
+            parts = Path(name).parts
+            if len(parts) > 2 and parts[1] not in ("smt", "omt", "cp", "milp", "de", "sv", "counting"):
+                errors.append(f"unowned application family: {name}")
         for include in INCLUDE.findall(text):
             if any(part in (".", "..") for part in include.split("/")):
                 errors.append(f"noncanonical include bypasses ownership: {name} -> {include}")
                 continue
             if include in owned:
+                if name.startswith("applications/") and include.startswith("applications/"):
+                    source_parts, target_parts = Path(name).parts, Path(include).parts
+                    if len(source_parts) == 2 and len(target_parts) > 2:
+                        errors.append(f"application base depends on concrete application: {name} -> {include}")
+                    elif len(source_parts) > 2 and len(target_parts) > 2:
+                        if source_parts[1] != target_parts[1]:
+                            errors.append(f"cross-application dependency: {name} -> {include}")
+                        elif source_parts[1] == "sv" and source_parts[2] != target_parts[2] and target_parts[2] != "common":
+                            errors.append(f"cross-SV solver dependency: {name} -> {include}")
+                        elif source_parts[2] == "common" and len(target_parts) > 3 and target_parts[2] != "common":
+                            errors.append(f"application common depends on private solver: {name} -> {include}")
                 target = include.split("/")[0]
                 if layer != target:
                     edges[layer, target] += 1
                     if target not in LAYERS[layer]:
                         errors.append(f"forbidden dependency: {name} -> {include}")
-            elif include.startswith(tuple(LAYERS) + ("theory/", "expr/", "util/", "api/", "proof/", "sat/")):
+            elif include.startswith(tuple(LAYERS) + ("decision/", "solvers/", "theory/", "expr/", "util/", "api/", "proof/", "sat/")):
                 errors.append(f"missing internal header: {name} -> {include}")
             # Native external solver and parser headers belong to adapters.
             elif ("cadical" in include and layer != "search"
                   or include.startswith("somtparser/frontend/") and layer not in ("frontend", "runtime")
                   or include.startswith("somtparser/passes/") and layer not in ("frontend", "runtime")
-                  or include.startswith(("somtparser/ir/", "somtparser/core/")) and layer not in ("ir", "decision", "frontend", "runtime")
-                  or include.startswith(("poly/", "polyxx/")) and layer not in ("algebra", "search")):
+                  or include.startswith(("somtparser/ir/", "somtparser/core/")) and layer not in ("ir", "logic", "quantifiers", "applications", "frontend", "runtime")
+                  or include.startswith(("poly/", "polyxx/")) and layer not in ("algebra", "search", "applications")):
                 errors.append(f"external backend leaks into {layer}: {name} -> {include}")
         if layer not in ("base",) and re.search(r"\b(?:getenv|setenv|unsetenv)\s*\(", text):
             errors.append(f"process configuration outside input adapter: {name}")

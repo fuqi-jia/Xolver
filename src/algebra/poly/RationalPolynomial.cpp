@@ -205,20 +205,14 @@ RationalPolynomial& RationalPolynomial::operator+=(
     const RationalPolynomial& other) {
     // terms_ is already canonical; append other's terms and re-canonicalize
     // once (sort+merge+strip) — same canonical result as repeated terms_[k]+=c.
-    terms_.reserve(terms_.size() + other.terms_.size());
-    for (const auto& [key, coeff] : other.terms_) {
-        terms_.append(key, coeff);
-    }
+    appendTerms(other);
     terms_.canonicalize();
     return *this;
 }
 
 RationalPolynomial& RationalPolynomial::operator-=(
     const RationalPolynomial& other) {
-    terms_.reserve(terms_.size() + other.terms_.size());
-    for (const auto& [key, coeff] : other.terms_) {
-        terms_.append(key, -coeff);
-    }
+    appendTerms(other, true);
     terms_.canonicalize();
     return *this;
 }
@@ -229,7 +223,13 @@ RationalPolynomial& RationalPolynomial::appendTerms(
     // once. Building a sum of M monomials via operator+= re-sorts the growing
     // accumulator every step (O(M^2 log M)); this makes it O(M) appends + one
     // O(M log M) sort. terms_ is left non-canonical until normalize().
-    terms_.reserve(terms_.size() + other.terms_.size());
+    if (this == &other) {
+        const auto copy = other;
+        return appendTerms(copy, negate);
+    }
+    // Let append grow storage geometrically. Reserving the exact next size
+    // here reallocates and copies the entire prefix on every small append,
+    // turning a 30,000-term sum into hundreds of millions of GMP copies.
     for (const auto& [key, coeff] : other.terms_) {
         terms_.append(key, negate ? mpq_class(-coeff) : coeff);
     }

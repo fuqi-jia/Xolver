@@ -60,7 +60,7 @@ static void printUsage(const char* prog) {
               << "\nOptions:\n"
               << "  --logic <logic>        Set logic (e.g., QF_NRA)\n"
               << "  --produce-models       Enable model production\n"
-              << "  --produce-proof [base] On unsat, emit a checkable refutation: <base>.cnf + <base>.drat (needs -DXOLVER_ENABLE_PROOFS=ON)\n"
+              << "  --produce-proof [base] Export UNSAT proofs (multiple queries use <base>.query-N; needs proofs ON)\n"
               << "  --trace-out <file>     Write execution trace\n"
               << "  --seed <n>             Random seed for reproducibility\n"
               << "  --timeout <seconds>    Per-solve wall-clock budget (0 = none)\n"
@@ -165,6 +165,8 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
     std::optional<std::string> logicOpt;
     std::optional<std::string> certifyPath;
     std::optional<std::string> proofBase;
+    int proofOptionIndex = -1;
+    int proofPathIndex = -1;
     std::optional<std::string> paCertificate;
     bool checkModel = false;
     bool verbose = false;
@@ -209,6 +211,8 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
             // internally on every sat (see Solver.cpp), so dumpModel is meaningful.
             produceModels = true;
         } else if (arg == "--produce-proofs" || arg == "--produce-proof") {
+            proofOptionIndex = i;
+            proofPathIndex = -1;
             // Enable UNSAT proof production. Optional explicit base path follows;
             // otherwise derive it from the input file. The backend writes the
             // DIMACS it feeds the SAT engine to <base>.cnf and the propositional
@@ -217,7 +221,10 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
             // -DXOLVER_ENABLE_PROOFS=ON; otherwise this is a degraded no-op
             // (unsat is still emitted, just without a certificate).
             std::string base;
-            if (i + 1 < argc && argv[i + 1][0] != '-') base = argv[++i];
+            if (i + 1 < argc && argv[i + 1][0] != '-') {
+                proofPathIndex = ++i;
+                base = argv[i];
+            }
             else base = std::string(argv[fileIdx]) + ".proof";
             proofBase = base;
             solver.setOption("produce-proofs", xolver::OptionValue(std::string_view(base)));
@@ -278,10 +285,17 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
         const std::string source{std::istreambuf_iterator<char>(scriptInput), {}};
         const auto snapshots = xolver::smtQuerySnapshots(source);
         if (snapshots.size() > 1 && !parseOnly && !featuresOnly) {
-            if (certifyPath || proofBase || paCertificate) {
-                std::cerr << "certificate/proof export requires a single query per invocation\n";
+            if (certifyPath || paCertificate) {
+                std::cerr << "model/PA certificate export requires a single query per invocation\n";
                 return EXIT_FAILURE;
             }
+            if (proofBase) {
+                std::ofstream manifest(*proofBase + ".queries");
+                manifest << snapshots.size() << '\n';
+                manifest.close();
+                if (!manifest) return EXIT_FAILURE;
+            }
+            size_t queryIndex = 0;
             for (const auto& snapshot : snapshots) {
                 struct TemporaryQuery {
                     char path[32] = "/tmp/xolver-query-XXXXXX";
@@ -299,8 +313,19 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
                 }
                 std::vector<char*> args(argv, argv + argc);
                 args[fileIdx] = temp.path;
+                std::string queryBase;
+                if (proofBase) {
+                    queryBase = *proofBase + ".query-" + std::to_string(++queryIndex);
+                    std::ofstream input(queryBase + ".input.smt2");
+                    input << snapshot;
+                    input.close();
+                    if (!input) return EXIT_FAILURE;
+                    if (proofPathIndex >= 0) args[proofPathIndex] = queryBase.data();
+                    else args.insert(args.begin() + proofOptionIndex + 1, queryBase.data());
+                }
+                const int queryArgc = static_cast<int>(args.size());
                 args.push_back(nullptr);
-                const int rc = cmdSolve(argc, args.data());
+                const int rc = cmdSolve(queryArgc, args.data(), defaultMode);
                 if (rc != EXIT_SUCCESS) return rc;
             }
             return EXIT_SUCCESS;

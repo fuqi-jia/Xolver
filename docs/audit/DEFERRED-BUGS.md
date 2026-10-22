@@ -88,3 +88,51 @@ All attempts, binary hashes and protocols are preserved in gate-batch-12 evidenc
 The final r4 suite passed833units/243658assertions and had902pairs with0wrong answers,
 0errors and0verdict regressions, but1model-check timeout out of77checks, so strict
 acceptance is failed. Preserve that status; do not omit the case or waive the check.
+
+## Baseline failures confirmed during application migration
+
+The application-layout run `a6d3591b65c0` built successfully and passed the 833-case
+existing selection plus all five new application-dispatch tests. The expanded
+85-case native selection retained three failures. Attribution experiment
+`8dec15ac3975` reran these exact three cases against the frozen gate-closeout
+baseline and the candidate: both reports have the same three failed assertions
+(out of 30), with no new failing identity:
+
+- `native SL inductive unfoldings preserve recursive heap ownership and alpha binding`
+  exhausts the SL work budget on `(sep (ls 1 2) (pto 1 2))`.
+- `native SL heap dependent actuals retain their value at the calling heap`
+  exhausts the SL work budget on `(p (ite sep.emp 2 3))`.
+- `native public comparison construction retains every chain operand`
+  fails one expected-UNSAT assertion in both binaries. Its cause is not yet
+  attributed; the failing test alone does not establish an opposite verdict.
+
+The expanded PA text suite has 109 passing cases and six parsing errors in both
+binaries (`nary-div-identity`, `signed-nary-div`, `nary-div-model`, `nary-huge--1`,
+`nary-huge-1`, `nested-nary-key`). Updating SOMTParser to main did not implement
+these textual n-ary div forms. Native integer elimination coverage is distinct
+from textual parser coverage. Any parser fix must follow the user's upstream
+SOMTParser PR/main/submodule workflow; no third-party checkout was patched.
+
+The 902-case paired suite has zero wrong answers, errors, verdict regressions or
+model failures; both binaries time out on seven cases. Its 75 performed model
+checks pass. This does not resolve the previously documented intermittent NRA
+model-check timeout. Broad application-migration acceptance remains failed due
+to the native and parser cases; the successful architecture/attribution run
+does not waive them. See `APPLICATION-VALIDATION.json` and retained raw evidence.
+
+## CI repair follow-up (2026-10-23)
+
+The historical failures above remain part of the audit trail. The follow-up
+repairs the two native SL cases, and the comparison-chain failure was positively
+identified as false SAT: elimination removed arithmetic variables, leaving
+constant constraints routed as Boolean atoms. Solver construction and atom
+registration now share the arithmetic-domain selection. The independently
+failing `CDCL(T): boolean + LRA unsat` has the same cause.
+
+SOMTParser subsequently merged PR 63 and main now contains textual n-ary integer
+division. Xolver advances its submodule to `7e53cb1056843d4fa4e6a8d80f9724e880753a34`;
+there is no local dependency patch. Both formerly failing SL tests and the two
+incorrect SAT tests pass in server run `xolver-ci-repair-r8`. Full acceptance is
+recorded separately in `CI-REPAIR.md`; the older failed selections are not
+retroactively relabeled. The intermittent NRA behavior above is not claimed as
+fixed by this work.

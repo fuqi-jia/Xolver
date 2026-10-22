@@ -7,7 +7,6 @@
 // stay inline here. Member state is verbatim. Behavior is unchanged.
 #include "xolver/Solver.h"
 #include "xolver/Result.h"
-#include "decision/pa/Presburger.h"
 #include "ir/NativeTerms.h"
 #ifdef XOLVER_ENABLE_PROOFS
 #include "evidence/TheoryProofSink.h"
@@ -42,7 +41,7 @@
 #include "search/coordination/TheoryManager.h"
 #include "search/coordination/TheoryLemmaDatabase.h"
 #include "search/coordination/TheoryAtomRegistry.h"
-#include "runtime/factory/TheoryFactory.h"
+#include "applications/smt/TheoryFactory.h"
 #include "contracts/LogicFeatureDetector.h"
 #include "search/bitblast/EagerBitBlastSolver.h"
 #ifdef XOLVER_ENABLE_CASESTATS
@@ -426,6 +425,7 @@ public:
     SortId getOrCreateRealSort();
 
     Result checkSatInternal();
+    Result checkSatGround();
 
 
 };

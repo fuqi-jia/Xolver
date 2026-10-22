@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
 #include "xolver/SeparationLogic.h"
-#include "decision/sl/HeapSearch.h"
+#include "applications/sv/sl/HeapSearch.h"
 #include <algorithm>
 #include <functional>
 #include <random>

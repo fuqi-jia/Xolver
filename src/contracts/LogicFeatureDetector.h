@@ -84,7 +84,7 @@ LogicFeatures BasicLogicFeatureDetector<Formula>::detect() const {
     }
 
     // Ground CDCL(T) routing does not accept quantifiers, FP or BV here.
-    // The native PA entry point handles its own quantified fragment separately.
+    // The first-order entry point handles quantified capabilities separately.
     // Arrays are supported in the array logics (QF_AX, ...); the per-logic
     // gate in Solver.cpp decides whether `hasArray` is acceptable, so we do
     // NOT fold it into `hasUnsupported` here.

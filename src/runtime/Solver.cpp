@@ -1,7 +1,7 @@
 #include "base/RuntimeConfig.h"
 #include "base/EnvParam.h"
 #include "runtime/SolverImpl.h"
-#include "decision/sl/NativeSeparation.h"
+#include "applications/sv/sl/NativeSeparation.h"
 #include "base/MpqUtils.h"
 #include <type_traits>
 #include <functional>

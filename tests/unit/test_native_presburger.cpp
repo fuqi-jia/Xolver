@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
-#include "decision/pa/Presburger.h"
-#include "decision/pa/UnaryArithmetic.h"
+#include "applications/sv/pa/Presburger.h"
+#include "algebra/integer/UnaryArithmetic.h"
 #include "evidence/PresburgerModel.h"
 #include "frontend/parser/adapter.h"
 #include "xolver/Solver.h"
@@ -211,12 +211,15 @@ TEST_CASE("native parser preserves simultaneous lets and every chain operand") {
 
 TEST_CASE("native public comparison construction retains every chain operand") {
     for (auto kind : {Kind::Lt, Kind::Gt, Kind::Leq, Kind::Geq, Kind::Eq}) {
+        CAPTURE(static_cast<unsigned>(kind));
         Solver solver;
         auto x = solver.mkConst(solver.intSort(), "x");
         auto left = solver.mkInt(1), right = solver.mkInt(0);
         if (kind == Kind::Gt || kind == Kind::Geq) std::swap(left, right);
         solver.assertFormula(solver.mkOp(static_cast<uint32_t>(kind), {left, x, right}));
-        CHECK((solver.checkSat() == Result::Unsat));
+        const auto result = solver.checkSat();
+        CAPTURE(static_cast<unsigned>(result));
+        CHECK((result == Result::Unsat));
     }
     Solver solver;
     auto p = solver.mkConst(solver.boolSort(), "p");

@@ -1,5 +1,5 @@
 #include <doctest/doctest.h>
-#include "decision/sl/NativeSeparation.h"
+#include "applications/sv/sl/NativeSeparation.h"
 #include "xolver/Solver.h"
 #include <somtparser/frontend/parser.h>
 #include <filesystem>

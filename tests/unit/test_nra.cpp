@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
 #include "xolver/Solver.h"
-#include "search/nra/NraSolver.h"
+#include "applications/smt/qfnra/NraSolver.h"
 #include "search/coordination/TheoryLemmaDatabase.h"
 #include <fstream>
 #include <filesystem>

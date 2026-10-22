@@ -4,7 +4,7 @@
 // sat -> unknown, so it can never introduce a wrong answer.
 #include <doctest/doctest.h>
 #include "xolver/Solver.h"
-#include "search/lra/LraSolver.h"
+#include "applications/smt/qflra/LraSolver.h"
 #include "search/coordination/TheoryLemmaDatabase.h"
 #include <cstdlib>
 #include <fstream>

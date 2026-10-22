@@ -14,7 +14,7 @@
 #include "search/coordination/TheoryAtomRegistry.h"
 #include "contracts/TheoryAtomTypes.h"
 #include "search/coordination/TheoryLemmaDatabase.h"
-#include "search/lra/LraSolver.h"
+#include "applications/smt/qflra/LraSolver.h"
 #include "base/RealValue.h"
 #include "contracts/SatSolver.h"
 #include "xolver/Solver.h"

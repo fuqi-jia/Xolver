@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
 #include "search/arith/Reasoner.h"
-#include "search/nra/NraSolver.h"
+#include "applications/smt/qfnra/NraSolver.h"
 #include "search/coordination/TheoryLemmaDatabase.h"
 #include <stdexcept>
 #include <string>

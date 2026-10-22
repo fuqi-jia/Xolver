@@ -1,7 +1,7 @@
 #include <doctest/doctest.h>
 #include "search/linear/IntegerReasoner.h"
 #include "algebra/linear/LinearConstraintNormalizer.h"
-#include "search/lia/LiaSolver.h"
+#include "applications/smt/common/lia/LiaSolver.h"
 #include "search/coordination/TheoryLemmaDatabase.h"
 #include <stdexcept>
 #include <unordered_map>

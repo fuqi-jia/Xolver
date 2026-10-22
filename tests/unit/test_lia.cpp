@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
 #include "xolver/Solver.h"
-#include "search/lia/LiaSolver.h"
+#include "applications/smt/common/lia/LiaSolver.h"
 #include "search/coordination/TheoryAtomRegistry.h"
 #include "search/boolean/Atomizer.h"
 #include "search/coordination/TheoryLemmaDatabase.h"

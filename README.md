@@ -24,19 +24,25 @@ At SMT-COMP 2026, Xolver competed as a Standalone Solver and received two awards
 
 ```mermaid
 flowchart TD
-    Input[SMT-LIB / public API] --> DAG[SOMTParser native DAG]
-    DAG --> PA[PA affine and divisibility formulas]
-    DAG --> SL[SL heap formulas]
-    DAG --> Ground[Ground preprocessing on native nodes]
-    PA --> QE[Integer quantifier elimination]
-    SL --> Heap[Heap decision procedures]
-    Ground --> SAT[CaDiCaL CDCL-T]
-    SAT <--> Theory[Arithmetic / EUF / arrays / datatypes]
-    QE --> Result[Result and model]
-    Heap --> Result
-    Theory --> Result
-    Result --> Check[Model checks / optional proof artifacts]
+    Input[CLI / public API] --> Session[Runtime query session]
+    Session --> SMT[applications/smt]
+    Session -->|explicit SL request| SL[applications/sv/sl]
+    SMT --> Logic[logic: first-order framework]
+    Logic --> Quantifiers[quantifiers: integer / Boolean / bit-vector / real]
+    SL -->|translated pure integer constraints| Quantifiers
+    SMT -->|quantifier-free session| Search[search: CDCL-T / simplex / ICP / CAD]
+    Quantifiers --> Search
+    Quantifiers --> Algebra[algebra: mathematical primitives]
+    Search --> Algebra
 ```
+
+The [architecture and actual call-flow diagrams](docs/audit/APPLICATION-ARCHITECTURE.md)
+separate applications, logical frameworks, quantifier algorithms and reusable
+search/mathematics. `applications/Solver.h` provides the common abstract identity
+and typed `solve` interface. Each application owns its input and result semantics;
+SMT and SV applications do not call each other. QBF/QBV/real quantifier directories
+are planned locations, not implemented backends.
+
 
 There is one shared general formula representation: the SOMTParser DAG.
 `NativeTerms` supplies handles, scopes and metadata; its temporary `Kind`/`TermExpr`
@@ -102,9 +108,11 @@ model-check timeout; full PA/SL completion remains separate work.
 | `src/contracts/` | Theory-specific formulas, models and solver contracts |
 | `src/algebra/` | Polynomial representation and exact algebraic operations |
 | `src/evidence/` | Independent model checks and proof/certificate serialization |
-| `src/decision/` | Native PA and SL decision procedures |
+| `src/applications/` | SMT, OMT, CP, MILP, DE, SV and counting application entries |
+| `src/logic/` | Shared first-order framework and theory capability interface |
+| `src/quantifiers/` | Quantifier algorithms above search and algebra |
 | `src/frontend/` | Parser integration and ground preprocessing |
-| `src/search/` | SAT, theory search, combination and heuristics |
+| `src/search/` | Reusable SAT, theory search, combination and numeric search engines |
 | `src/runtime/` | Query lifecycle, dispatch and public API implementation |
 | `include/xolver/`, `app/`, `python/` | Public headers, CLI and Python bindings |
 | `tools/`, `tests/` | Validation, differential tests, server workflows and regression inputs |

@@ -1,0 +1,202 @@
+{
+  "schema": "xolver-application-validation/1",
+  "base_revision": "d173712fd3e0502499729183e50d6136a336d990",
+  "architecture_status": "implemented and built; ground incremental state remains in the documented runtime session bridge",
+  "full_acceptance": "failed: three retained native baseline failures and six retained parser errors; not waived",
+  "host": "Panda1 via ExperimentOS",
+  "shared_build": "/pub/data/jiafq/xolver/build",
+  "build_jobs": 4,
+  "runs": [
+    {
+      "experiment_name": "xolver-applications-r1",
+      "experiment_id": "7f7e6035846e",
+      "id": "d07b1ecc26c9",
+      "status": "failed"
+    },
+    {
+      "experiment_name": "xolver-applications-r2",
+      "experiment_id": "a6d3591b65c0",
+      "id": "9c2978b096bf",
+      "status": "failed"
+    },
+    {
+      "experiment_name": "xolver-applications-r3",
+      "experiment_id": "8dec15ac3975",
+      "id": "62cf71f125d9",
+      "status": "success"
+    },
+    {
+      "experiment_name": "xolver-applications-r4",
+      "experiment_id": "6e1f31e5c1a2",
+      "id": "9515b2573c24",
+      "status": "failed"
+    }
+  ],
+  "final_solver_sha256": "72d7d0e1804c7e21d43108c0726488315af359f75aa184691e2302ea6f2d607b",
+  "final_units_sha256": "7d75bce5d63cf466ac39b75084f8a39828d3bb626da0b37461417150995c3b5e",
+  "baseline_solver_sha256": "ad847f38920967abf8ada8b1846f557ff78ac4b8a60bbb083aa0fcf74295cee2",
+  "submodule": "SOMTParser ac3efd64c1b6ac88fd00803f8edf33a44e499194; no third-party edits",
+  "architecture": {
+    "layers": [
+      "base",
+      "ir",
+      "contracts",
+      "algebra",
+      "evidence",
+      "frontend",
+      "search",
+      "quantifiers",
+      "logic",
+      "applications",
+      "runtime"
+    ],
+    "files": 545,
+    "violations": 0,
+    "dependency_checker_unit_cases": 16
+  },
+  "migration": {
+    "files": 65,
+    "normalized_tokens_unchanged_after_path_rewrite": 58
+  },
+  "controls": {
+    "names": 161,
+    "read_sites": 237,
+    "new_feature_gates": 0
+  },
+  "tests": {
+    "ctest_tools_and_independent_evidence": {
+      "selected": 3,
+      "passed": 3
+    },
+    "existing_selected_units": {
+      "cases": 833,
+      "passed": 833,
+      "assertions": 243658
+    },
+    "native_selection": {
+      "cases": 86,
+      "passed": 83,
+      "failed": 3,
+      "assertions": 28798,
+      "failed_assertions": 3,
+      "failed_names": [
+        "native SL inductive unfoldings preserve recursive heap ownership and alpha binding",
+        "native SL heap dependent actuals retain their value at the calling heap",
+        "native public comparison construction retains every chain operand"
+      ]
+    },
+    "new_application_cases": [
+      {
+        "name": "application dispatch: quantified inputs never reach ground callbacks",
+        "passed": true
+      },
+      {
+        "name": "application dispatch: memory encoded as arrays stays SMT",
+        "passed": true
+      },
+      {
+        "name": "application dispatch: first-order framework accepts independent theory backends",
+        "passed": true
+      },
+      {
+        "name": "application dispatch: QF factory rejects binders before constructing a stack",
+        "passed": true
+      },
+      {
+        "name": "application dispatch: theory capability inspects native sorts beyond coarse features",
+        "passed": true
+      },
+      {
+        "name": "application dispatch: independent applications share the typed abstract base",
+        "passed": true
+      }
+    ],
+    "baseline_attribution": {
+      "selection": 3,
+      "same_failed_assertions": true,
+      "new_failures": 0,
+      "note": "The attribution run covers exactly these three cases, not the complete unit inventory."
+    },
+    "pa_text_suite": {
+      "cases": 115,
+      "correct": 109,
+      "wrong": 0,
+      "errors": 6,
+      "unknown": 0,
+      "timeouts": 0,
+      "certificates": 109,
+      "model_checks": 11,
+      "bad_models": 0,
+      "model_incomplete": 0,
+      "oracle_checks": 230,
+      "oracle_errors": 0,
+      "baseline_unknown": 0,
+      "baseline_wrong": 0,
+      "passed": 0
+    },
+    "baseline_parser_errors": [
+      "nary-div-identity",
+      "signed-nary-div",
+      "nary-div-model",
+      "nary-huge--1",
+      "nary-huge-1",
+      "nested-nary-key"
+    ],
+    "paired": {
+      "unit_rc": 0,
+      "paired_rc": 0,
+      "input_integrity_rc": 0,
+      "tools_rc": 0,
+      "native_rc": 1,
+      "pa_rc": 1,
+      "build_rc": 0,
+      "cases": 902,
+      "wrong_answers": 0,
+      "errors": 0,
+      "regressions": 0,
+      "model_failures": 0,
+      "model_checks": 76,
+      "oracle_skips": 0,
+      "candidate_unknown": 0,
+      "candidate_timeout": 6,
+      "baseline_unknown": 0,
+      "baseline_timeout": 6,
+      "oracle_checked": 103,
+      "improved": 0,
+      "baseline_sat": 499,
+      "candidate_sat": 499,
+      "baseline_unsat": 397,
+      "candidate_unsat": 397
+    }
+  },
+  "scope_limits": [
+    "General first-order instantiation/MBQI, QBF, QBV and quantified real algorithms are not implemented.",
+    "OMT remains the existing skeleton; CP, MILP optimization, counting, ODE and PDE have no new algorithms.",
+    "Integer certificate checks in this run validate schemas/obligation structure, not a new Isabelle replay or end-to-end C++ proof.",
+    "No performance improvement or resolution of the earlier intermittent NRA timeout is established."
+  ],
+  "source_overlays": [
+    {
+      "path": "build/applications-r1-source.tar.gz",
+      "sha256": "4c54e2230dc61075265a7f632d2ebcc205f572c6e9f5dccb992d1a57cf882b11"
+    },
+    {
+      "path": "build/applications-r2-source.tar.gz",
+      "sha256": "30f2d5fbf338c4e650d1d1fcbd5751db5a5e710c6a9c909cde41f76c2e763952"
+    },
+    {
+      "path": "build/applications-r3-source.tar.gz",
+      "sha256": "8c11edcf9173ae80b4c323cee29c8ab2ef4f0055f47f2f9efb8cab30cf67cbf5"
+    },
+    {
+      "path": "build/applications-r4-source.tar.gz",
+      "sha256": "7db19ad85a118d665d666d3fc0582d0c6f6819b4f0bb5274b55a9da18e75be90"
+    }
+  ],
+  "evidence": {
+    "path": "docs/audit/evidence/applications-layout/applications-results.tar.gz",
+    "sha256": "50cf7cf4fc4e2da093b0ce9a00cfe2ae622f1023aba4f564d5c5c1600ed03b03",
+    "verified_members": 3289
+  },
+  "publication": "Pre-repair migration evidence. Current CI repair work is described in CI-REPAIR.md."
+}

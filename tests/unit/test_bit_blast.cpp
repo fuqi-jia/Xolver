@@ -336,7 +336,7 @@ TEST_CASE("BitBlastSolver: domain-only variable inconsistency is detected") {
     CHECK(r.status != bitblast::BitBlastResult::Status::Sat);
 }
 
-#include "search/nia/NiaSolver.h"
+#include "applications/smt/qfnia/NiaSolver.h"
 #include <algorithm>
 
 // Real registration check: the bit-blast stage must appear by name in the NIA

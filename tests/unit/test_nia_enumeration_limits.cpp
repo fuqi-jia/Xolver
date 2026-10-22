@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
 #include "base/EnvParam.h"
-#include "search/nia/NiaSolver.h"
+#include "applications/smt/qfnia/NiaSolver.h"
 #include "search/arith/Reasoner.h"
 #include "search/coordination/TheoryLemmaDatabase.h"
 #include <limits>

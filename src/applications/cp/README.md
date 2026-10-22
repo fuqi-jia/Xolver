@@ -1,0 +1,1 @@
+Constraint programming application. Reserved architecture location; no CP search algorithm is implemented in this migration. Future implementations derive from `applications::TypedSolver` and own their domain and result types.

@@ -1,0 +1,467 @@
+{
+  "base": "d173712fd3e0502499729183e50d6136a336d990",
+  "moves": [
+    {
+      "from": "src/search/lra/LraSolver.cpp",
+      "to": "src/applications/smt/qflra/LraSolver.cpp",
+      "before_sha256": "1287ffb10e057eae991cf61a48d9878e0a9fa6bd3580768f3591d07f535aac20",
+      "after_sha256": "1c48522683515e1fc3616c92610f20544f9523217cc901275bcee585fc8f9903",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/lra/LraSolver.h",
+      "to": "src/applications/smt/qflra/LraSolver.h",
+      "before_sha256": "5ac9b3f996633883cefc64b80f2db5c92fdd700824eddfebb54fa13e0159ffab",
+      "after_sha256": "5ac9b3f996633883cefc64b80f2db5c92fdd700824eddfebb54fa13e0159ffab",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/lia/LiaSolver.cpp",
+      "to": "src/applications/smt/common/lia/LiaSolver.cpp",
+      "before_sha256": "62cd56bbdc6cd72536be51a3e88fac737e09e252d23615934e04a02d48770465",
+      "after_sha256": "731cad2dec9950a670fd6dfb8cf92f379d9d682af289090a5373e5d891dc5be0",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/lia/LiaSolver.h",
+      "to": "src/applications/smt/common/lia/LiaSolver.h",
+      "before_sha256": "f2e83de83c0741cdf4d625d0d3ddc8bd6c4ab663480db0e46e8bd3a6706a141d",
+      "after_sha256": "f2e83de83c0741cdf4d625d0d3ddc8bd6c4ab663480db0e46e8bd3a6706a141d",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/lia/LiaSolverDetail.h",
+      "to": "src/applications/smt/common/lia/LiaSolverDetail.h",
+      "before_sha256": "d9bb908186d7bd6a95627f1ff83c4a97535deb9d7fe7cee07070471734c71e94",
+      "after_sha256": "d9bb908186d7bd6a95627f1ff83c4a97535deb9d7fe7cee07070471734c71e94",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/lia/LiaSolver_combination.cpp",
+      "to": "src/applications/smt/common/lia/LiaSolver_combination.cpp",
+      "before_sha256": "d1233421c2d14e0c8eec22371018abc288e2683fc6f05186efd55d10dee059be",
+      "after_sha256": "1e477a2a60947f63af6cca58b23f67afa2f020c69fccbd890a140d4ba21f12f6",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/lia/LiaSolver_entailment.cpp",
+      "to": "src/applications/smt/common/lia/LiaSolver_entailment.cpp",
+      "before_sha256": "61f3fe450cc47121f2a35efccc38f87cf4bba8e985aefba19e76b360469f0e08",
+      "after_sha256": "09a4f49c8ca026c8d61e2942672f5628ac0e898e8b9a5bb519c0aa038f202986",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/lia/LiaSolver_integrality.cpp",
+      "to": "src/applications/smt/common/lia/LiaSolver_integrality.cpp",
+      "before_sha256": "5be06a54a03e40db2c0aa696884a66735c277598f751e903b7c1e09a40af1112",
+      "after_sha256": "6b11076330b83b272829a254a63cf669d1be3a81297ff1b95ca5b15183c99994",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/lia/LiaSolver_model.cpp",
+      "to": "src/applications/smt/common/lia/LiaSolver_model.cpp",
+      "before_sha256": "fc4f24f56d2b5422eeccca80b0b93c56d17ee79b11335a9632251a772152aff6",
+      "after_sha256": "d617015519854fa73dbe25ec1069d6bf098381596800978f0932115e0ad9f7ee",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/nra/NraSolver.cpp",
+      "to": "src/applications/smt/qfnra/NraSolver.cpp",
+      "before_sha256": "8aed8ea2f26f59455381bd5f63513805e6710d9b7224f754280f7632f0da2b3a",
+      "after_sha256": "f6d97c41083a71a0398e6a3d5de854f25cc54808e2e8d0d66353f01c7ec08bde",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/nra/NraSolver.h",
+      "to": "src/applications/smt/qfnra/NraSolver.h",
+      "before_sha256": "7524958e663ee6c1f8b7045f1b00ef7d078d3f67323e32eacd73181ec408d270",
+      "after_sha256": "7524958e663ee6c1f8b7045f1b00ef7d078d3f67323e32eacd73181ec408d270",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/nra/NraSolver_cac.cpp",
+      "to": "src/applications/smt/qfnra/NraSolver_cac.cpp",
+      "before_sha256": "8855261728bc760e35beec5cb8f2e6254c220895d6a9b6564e81b1ffc06739a7",
+      "after_sha256": "d739fc046ee0f219b087a79a8214dd041e775430eaa43d0ffb6b453f24aaf8c6",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/nra/NraSolver_stages.cpp",
+      "to": "src/applications/smt/qfnra/NraSolver_stages.cpp",
+      "before_sha256": "84f88fe8acd1bad480a1e9691621c97206a94180a459103da75bb484a138d8ee",
+      "after_sha256": "34fdc9531293b9ffbe0462be4d551ba20fd36d7d76dc54562347dd9653017bf6",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/nia/NiaSolver.cpp",
+      "to": "src/applications/smt/qfnia/NiaSolver.cpp",
+      "before_sha256": "af1b624a7262a1c5d7f33725618f74f70d55d1472376ae2b20bfcdd55a0f769b",
+      "after_sha256": "1b4834b8c1ba997dc49a9e9d73219cfbedfba598ca58c3ef8a43e89501c7c90a",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/nia/NiaSolver.h",
+      "to": "src/applications/smt/qfnia/NiaSolver.h",
+      "before_sha256": "f8fa538c98e551d335204b2f7d748f365f1d2f6d86eda277cc58a88947179285",
+      "after_sha256": "f8fa538c98e551d335204b2f7d748f365f1d2f6d86eda277cc58a88947179285",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/nia/NiaSolverDetail.h",
+      "to": "src/applications/smt/qfnia/NiaSolverDetail.h",
+      "before_sha256": "5626c57891d258fc00d32237936217d6f3edbf272ba12c6924645d7970f8512b",
+      "after_sha256": "5626c57891d258fc00d32237936217d6f3edbf272ba12c6924645d7970f8512b",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/nia/NiaSolver_bitblast.cpp",
+      "to": "src/applications/smt/qfnia/NiaSolver_bitblast.cpp",
+      "before_sha256": "4c31f946714bba998f48fd6b4053dd9a704d34e816420cb0e840263cafd7401e",
+      "after_sha256": "dc8da7c7ebe8e62ce8451caf91bfb7a680b9a24faf3f1df59ece50180d8950a7",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/nia/NiaSolver_branch.cpp",
+      "to": "src/applications/smt/qfnia/NiaSolver_branch.cpp",
+      "before_sha256": "1bffb6eff626581bf8d9aeb564d4d17cc49d639e63b7d0f62b3cc3494d5055b1",
+      "after_sha256": "1baf9f6eacbce0519be64e9db2f674d2e74e3b807b67564af0ed8e281fd8eca0",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/nia/NiaSolver_combination.cpp",
+      "to": "src/applications/smt/qfnia/NiaSolver_combination.cpp",
+      "before_sha256": "6ff944fe3b0e05c269cbb6045f7d13008f73c1649b74d1d727c20351dbfa4209",
+      "after_sha256": "de3ba0cfaa61b38dbc5dd1cb746f92c9381fc4a8256bf9a343776fe667a69006",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/nia/NiaSolver_engines.cpp",
+      "to": "src/applications/smt/qfnia/NiaSolver_engines.cpp",
+      "before_sha256": "53845671ca28ec876656eb064e8c91657b5acc18ad308369e422174cb7a24f12",
+      "after_sha256": "cb55e7e0380442622a12c4d80ff07b8c18cf3574c681a689c4b2bbd180ab90e5",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/nia/NiaSolver_farkas.cpp",
+      "to": "src/applications/smt/qfnia/NiaSolver_farkas.cpp",
+      "before_sha256": "b6dd4cfc099fd350b5d6a2f9f3364416db914fe1ed7289c461e133b59f0b66e1",
+      "after_sha256": "7ca97c4879a98ec661153719bd1999bbc6219b2be1d1ef4090adb8edefe43b5a",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/nia/NiaSolver_linear.cpp",
+      "to": "src/applications/smt/qfnia/NiaSolver_linear.cpp",
+      "before_sha256": "30e734de5714e649747a085a9d0c50327eef00e67a59c315bd3e15f1cc0efea0",
+      "after_sha256": "3beeee03f1eaa024030f6588f1067c74141f9a3746965b5ca9f8386a5b8576a1",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/nia/NiaSolver_refute.cpp",
+      "to": "src/applications/smt/qfnia/NiaSolver_refute.cpp",
+      "before_sha256": "36aed8bd44ef563731fea7675e37c7361fd6a3fb4d8d64b8d8d3868754e34496",
+      "after_sha256": "e14a8702ec7878b6c98f6c2b6e741b4282941ecfb7857eb445001b12a66fc227",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/euf/EufSolver.cpp",
+      "to": "src/applications/smt/qfuf/EufSolver.cpp",
+      "before_sha256": "9c9e5aaa89f08c17a29633bab7d7959ce91349cb585fe3a64cef0e38ad270bd0",
+      "after_sha256": "8afc616c8bac9186ac586021b6bb259621e34d36d7755c3e12d50f8591e2a4b1",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/euf/EufSolver.h",
+      "to": "src/applications/smt/qfuf/EufSolver.h",
+      "before_sha256": "5fd13d3031b7cc7c65e9ad5918af7eae6418ea15ab11ac599a8e052523109cde",
+      "after_sha256": "5fd13d3031b7cc7c65e9ad5918af7eae6418ea15ab11ac599a8e052523109cde",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/euf/EufSolver_array.cpp",
+      "to": "src/applications/smt/qfuf/EufSolver_array.cpp",
+      "before_sha256": "bb437a6d0f80eb5cca1c29bd3ae4319fd32f78c73b606466401a9f9a222d1d1c",
+      "after_sha256": "d6d29e26fecf00130843e24c98ae37fe5c7ecda56932a0c68c783ea42317cb6d",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/euf/EufSolver_check.cpp",
+      "to": "src/applications/smt/qfuf/EufSolver_check.cpp",
+      "before_sha256": "3d4c0bc63cfd3cf805f9f289df12d23bf73dfb5e75989204d3e4164e53a47cff",
+      "after_sha256": "bd607e15fcb83472375298d13775bb566187fcace12c8dab533d2a9e7183e531",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/euf/EufSolver_diagnostics.cpp",
+      "to": "src/applications/smt/qfuf/EufSolver_diagnostics.cpp",
+      "before_sha256": "38bf4491332cf71b509f09de69e251de90ca9224c690993a832530b8842e96d2",
+      "after_sha256": "db36d3813a87f093c9c8dd9b847bc2290e4da3bee955ae8a03b66670f822677e",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/euf/EufSolver_model.cpp",
+      "to": "src/applications/smt/qfuf/EufSolver_model.cpp",
+      "before_sha256": "ea03cbf491c8acebeeb06e37360c6d20b2b749efb47f178f013dee1e56d4b1eb",
+      "after_sha256": "a498673c34c51fe4ee25f747906cf6b30fc22acdc022965b98ec4bfac79b439e",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/lra/SimplexSolver.h",
+      "to": "src/applications/smt/qflra/SimplexSolver.h",
+      "before_sha256": "9f5f9b2d69525b9cc58880f1cbedda97831f4fde1d9ed6b8d04dfac338f230ea",
+      "after_sha256": "c056a0d421ba1a40f58b48509be18c3cf08f5e732b53ae5f23644805e3863b59",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/mixed/LiraSolver.cpp",
+      "to": "src/applications/smt/qflira/LiraSolver.cpp",
+      "before_sha256": "105b2e9c246e274ed41059b0979585205bfb74c1ac567b71226beca23174106f",
+      "after_sha256": "9a7aff283cbc92152bbd2ab78f66b95609608e84ce6ee0f57ba8c50e0fd7e2aa",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/mixed/LiraSolver.h",
+      "to": "src/applications/smt/qflira/LiraSolver.h",
+      "before_sha256": "53f1f850a0ceefbda9e73854c8b84b3eb007c067dccb308603ae2ccb897170f9",
+      "after_sha256": "642049345df037a034a1da0d04c7ddb735c87dd5082083c44770357db3b3f4e4",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/mixed/NiraSolver.cpp",
+      "to": "src/applications/smt/qfnira/NiraSolver.cpp",
+      "before_sha256": "c534b7a79ec2b1ef23f8bfe97c5925ca7b6476e7c53c355c2fbbcbcca483a2d9",
+      "after_sha256": "e56c1c6acc41dfd8054c4094845395b8b504e605bfb891a7520fbaec405584c2",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/mixed/NiraSolver.h",
+      "to": "src/applications/smt/qfnira/NiraSolver.h",
+      "before_sha256": "d1047c3bb8eaef6f7eb14519b43db06b99f7ac4bc7ed08e244005557f0069f4b",
+      "after_sha256": "d1047c3bb8eaef6f7eb14519b43db06b99f7ac4bc7ed08e244005557f0069f4b",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/dl/IdlSolver.cpp",
+      "to": "src/applications/smt/qfidl/IdlSolver.cpp",
+      "before_sha256": "544bb93c2b9d70f4250a89fe69ef751c758e04351c6047c7cd10a0e67a7a60b5",
+      "after_sha256": "61b728bffeef128c478b39ea59ef13f0fc1e0c8330c1d2e258361f1c9ba5fda8",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/dl/IdlSolver.h",
+      "to": "src/applications/smt/qfidl/IdlSolver.h",
+      "before_sha256": "ec526fd376c42bc8f75b120f1d8a37ef960fd13608a8b210b134f46ad28696c7",
+      "after_sha256": "ec526fd376c42bc8f75b120f1d8a37ef960fd13608a8b210b134f46ad28696c7",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/dl/RdlSolver.cpp",
+      "to": "src/applications/smt/qfrdl/RdlSolver.cpp",
+      "before_sha256": "00f03337907c881ea8b5866b89bf4510d01686a672aae128e881ed7ee8070c89",
+      "after_sha256": "b5248a751dcf463d63081beac193424f17b315bb0c81c3ef6ab0373c6692eff5",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/dl/RdlSolver.h",
+      "to": "src/applications/smt/qfrdl/RdlSolver.h",
+      "before_sha256": "2813ff554ecf8b99774b9d90a753f0fdb90816dfa783a3cf215eb65e01fc0c11",
+      "after_sha256": "2813ff554ecf8b99774b9d90a753f0fdb90816dfa783a3cf215eb65e01fc0c11",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/runtime/factory/SolverRegistry.cpp",
+      "to": "src/applications/smt/SolverRegistry.cpp",
+      "before_sha256": "70f1573eeaf172a441e622d4a4e26cca68c5f0eff6626a6f04de66f98e6a7eed",
+      "after_sha256": "f1f60d4309704aa1cb7039690b84a0fc1eba165f3a59fb6106c6de17c77260e7",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/runtime/factory/SolverRegistry.h",
+      "to": "src/applications/smt/SolverRegistry.h",
+      "before_sha256": "4160368fa4354865aa1ee5164443c9c509e6d97301b53eb3fcad3a0a5910c1eb",
+      "after_sha256": "4160368fa4354865aa1ee5164443c9c509e6d97301b53eb3fcad3a0a5910c1eb",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/runtime/factory/TheoryFactory.cpp",
+      "to": "src/applications/smt/TheoryFactory.cpp",
+      "before_sha256": "39ab48977faf5de0534afaddebbe08400cbebf71e85d1012ff02eb840f0b79f6",
+      "after_sha256": "5409b189bd08a78afaee53beb0630144182f6a40248147cb467a76e9a00fdf7a",
+      "normalized_tokens_equal_after_include_migration": false,
+      "post_migration_change": "CI correctness repair; see CI-REPAIR.md"
+    },
+    {
+      "from": "src/runtime/factory/TheoryFactory.h",
+      "to": "src/applications/smt/TheoryFactory.h",
+      "before_sha256": "50630b7363f65d484d601b9c84bbdff61562d0a84fa83fce34a5bd83d9da72a0",
+      "after_sha256": "04e6d745e6e5dfa253c31b9d279ec6c957cbf2ce87fc56f3f6cad974ba530422",
+      "normalized_tokens_equal_after_include_migration": false
+    },
+    {
+      "from": "src/search/nia/search/NiaLinearDecider.cpp",
+      "to": "src/applications/smt/qfnia/NiaLinearDecider.cpp",
+      "before_sha256": "0011a5b671c9bb48b903b4bd51e835e626b622ed9b55bc7db0ed73945d642138",
+      "after_sha256": "4ea023eb3986105b4d5ffa8dc2c59c62c6cc894c3908c1a80b6e7f760fceb7f8",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/experimental/mcsat/McsatSolver.cpp",
+      "to": "src/applications/smt/qfnra/McsatSolver.cpp",
+      "before_sha256": "3a3ceda9d085a3aa4d8e81ee8175cff3a25ab2f4b963743c23f333617e64234c",
+      "after_sha256": "78ac0aef56f92b40a63a19499c9e198359c7367c97c385174d55b8dd04f520ce",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/experimental/omt/Optimize.cpp",
+      "to": "src/applications/omt/Optimize.cpp",
+      "before_sha256": "dbaf9ec36d6f834a730da781b36abfea85b01440881750c5729ed5b944e2e0a9",
+      "after_sha256": "7df75ce3ca3ac7208a9ccdb6499bd890869f5657e4f12a6a8c2adf14e306ec9a",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/lia/InternalMilpEngine.cpp",
+      "to": "src/applications/smt/qflira/InternalMilpEngine.cpp",
+      "before_sha256": "404034b5b7e2e90989540d9ef63ad288ac4866ddb7f7e9f56811482fe4bfd62e",
+      "after_sha256": "42a6730a125cf77ce87b0b114736a5d6281a1d3e97c59e7e5503591bfac68553",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/nia/search/NiaLinearDecider.h",
+      "to": "src/applications/smt/qfnia/NiaLinearDecider.h",
+      "before_sha256": "72eb5f7a9ab14906fdeb5243b0e5dcefbb421cc5c95cf4ce6397c9d5487fc86b",
+      "after_sha256": "72eb5f7a9ab14906fdeb5243b0e5dcefbb421cc5c95cf4ce6397c9d5487fc86b",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/experimental/mcsat/McsatSolver.h",
+      "to": "src/applications/smt/qfnra/McsatSolver.h",
+      "before_sha256": "28b892d7d96ec91daded2161b963b5e1f772e4d64dfd066c734dc5a48efdae36",
+      "after_sha256": "28b892d7d96ec91daded2161b963b5e1f772e4d64dfd066c734dc5a48efdae36",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/search/experimental/omt/Optimize.h",
+      "to": "src/applications/omt/Optimize.h",
+      "before_sha256": "69b8374f961624c36662cef34d71539111d1b36fad4194dbebfbd4b53ac42d74",
+      "after_sha256": "a7a61d8d753cffd4685782d081c95598d7e4781227dc435b1bfa936290c2be85",
+      "normalized_tokens_equal_after_include_migration": false
+    },
+    {
+      "from": "src/search/lia/InternalMilpEngine.h",
+      "to": "src/applications/smt/qflira/InternalMilpEngine.h",
+      "before_sha256": "fffc1a323a07b40f89110cd0bf56bccb8ea0b9456c2db5bc5045e9ef501be72a",
+      "after_sha256": "fffc1a323a07b40f89110cd0bf56bccb8ea0b9456c2db5bc5045e9ef501be72a",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/decision/sl/BooleanHeap.cpp",
+      "to": "src/applications/sv/sl/BooleanHeap.cpp",
+      "before_sha256": "c3f30b65c289cf564e1f70acdb2d85b1a32fc4739c340d26aa87a8c2ceeb7833",
+      "after_sha256": "8cb2d4ef8d87a4f179f156f8f37342feb37e481301c0133502063addb373292e",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/decision/sl/HeapSearch.h",
+      "to": "src/applications/sv/sl/HeapSearch.h",
+      "before_sha256": "6a2f348fb34952e18f7fb6ef905031c071a984df65040f03f00ee56124e04a15",
+      "after_sha256": "6a2f348fb34952e18f7fb6ef905031c071a984df65040f03f00ee56124e04a15",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/decision/sl/NativeArithmetic.cpp",
+      "to": "src/applications/sv/sl/NativeArithmetic.cpp",
+      "before_sha256": "103d1daeeaed8f6a3c2000784a0fe699cf895e17db7e3c7b6bb2e81f9b04c873",
+      "after_sha256": "32e697821065ae528b02f837e530cb0f6f4e689e264a021d6b4270ecddb2df54",
+      "normalized_tokens_equal_after_include_migration": false
+    },
+    {
+      "from": "src/decision/sl/NativeArithmetic.h",
+      "to": "src/applications/sv/sl/NativeArithmetic.h",
+      "before_sha256": "f5318ccaa3f16f3e077a11dbca607c43d80b1e0a5da13e39a200c4eae0b4be6d",
+      "after_sha256": "ba2ff65999b251b17bb34f91545c6f9f8093995df32152addf3a0ee2b26e0114",
+      "normalized_tokens_equal_after_include_migration": false
+    },
+    {
+      "from": "src/decision/sl/NativeInductive.cpp",
+      "to": "src/applications/sv/sl/NativeInductive.cpp",
+      "before_sha256": "1d9f173c046583251d216f70377d7105ad3c4e81d81d27ffc0cc7b4656363041",
+      "after_sha256": "b0debe413a5fd15701e92f90af7f2da609cde4e29c18220c91cde4170ce50e92",
+      "normalized_tokens_equal_after_include_migration": false,
+      "post_migration_change": "CI correctness repair; see CI-REPAIR.md"
+    },
+    {
+      "from": "src/decision/sl/NativeInductive.h",
+      "to": "src/applications/sv/sl/NativeInductive.h",
+      "before_sha256": "6780d4483155a420d74638ca38a207782651aa7ece8f8ac197c0464c935971fa",
+      "after_sha256": "c568dcc4c5cfcc3b4084830a9af2967b32cf1900609fdf3c876707e9fc84719d",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/decision/sl/NativeSeparation.cpp",
+      "to": "src/applications/sv/sl/NativeSeparation.cpp",
+      "before_sha256": "37d60433374a26b194112d590ea2361515cab5173522f72572b9d1f49db44887",
+      "after_sha256": "e1f5b4a8700c9f60569ff4bc0eb725ba211b6a554616c774bc3468b5d9f95780",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/decision/sl/NativeSeparation.h",
+      "to": "src/applications/sv/sl/NativeSeparation.h",
+      "before_sha256": "436865820e10d895b1c69b441cc093d056c7b982cbb42dd070f6dc08008ce94f",
+      "after_sha256": "436865820e10d895b1c69b441cc093d056c7b982cbb42dd070f6dc08008ce94f",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/decision/sl/NativeSpatialSearch.cpp",
+      "to": "src/applications/sv/sl/NativeSpatialSearch.cpp",
+      "before_sha256": "f1f7f8713940483faf994780a56ce5b3504532c4241fbf43e337f0cab0c7bc2e",
+      "after_sha256": "94a26ccd77c5ca9a9b12e5d4066fa2cba049b9f6f5087953e290b120ef37f87f",
+      "normalized_tokens_equal_after_include_migration": false,
+      "post_migration_change": "CI correctness repair; see CI-REPAIR.md"
+    },
+    {
+      "from": "src/decision/sl/NativeSpatialSearch.h",
+      "to": "src/applications/sv/sl/NativeSpatialSearch.h",
+      "before_sha256": "7f27321dd88e6b673bba13ca078e1c6a4cb59aeb5b5d12a0c3a4074819619636",
+      "after_sha256": "30ee2f8b61c808fdd943668a73641991043df0763995b57f287635110b0e2e69",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/decision/sl/SymbolicHeap.cpp",
+      "to": "src/applications/sv/sl/SymbolicHeap.cpp",
+      "before_sha256": "79096a2f5e56b50b526e51d2d91d283d26d735175626d695c0e24dfa7a43f262",
+      "after_sha256": "79096a2f5e56b50b526e51d2d91d283d26d735175626d695c0e24dfa7a43f262",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/decision/pa/Elimination.h",
+      "to": "src/quantifiers/integer/Elimination.h",
+      "before_sha256": "9940fee8c9668c1fac0ed51431ec541d241de050b866f48723365fe08bfb3cba",
+      "extracted_native_compiler": "src/quantifiers/integer/NativeFormula.h",
+      "after_sha256": "7d67df039889301681caa54e743d497a9899044440fcb09241a06f1684d1a4a4",
+      "extracted_native_compiler_sha256": "4bf210f3f153b15d51d36867b21fa6d47e9f1a4f56bf1265d0a5c05deaf718b5",
+      "normalized_tokens_equal_after_include_migration": false
+    },
+    {
+      "from": "src/decision/pa/UnaryArithmetic.h",
+      "to": "src/algebra/integer/UnaryArithmetic.h",
+      "before_sha256": "1cc4e20398fc778934b48946905fe8382a5a1b5aee7d170352bddd703cd06651",
+      "after_sha256": "1cc4e20398fc778934b48946905fe8382a5a1b5aee7d170352bddd703cd06651",
+      "normalized_tokens_equal_after_include_migration": true
+    },
+    {
+      "from": "src/decision/pa/Presburger.h",
+      "to": "src/applications/sv/pa/Presburger.h",
+      "before_sha256": "0e806d066e847b81fd06b61cd3c74c41710a639cd4b6cbd24f61683ec74c8d5f",
+      "after_sha256": "972e87799256d4936db539962fe8ed799240bd88868bd10d165ed1588953dc0d",
+      "normalized_tokens_equal_after_include_migration": false
+    },
+    {
+      "from": "src/decision/pa/Presburger.cpp",
+      "to": "src/applications/sv/pa/Presburger.cpp",
+      "before_sha256": "88a9859b4ca57e0bc3f001031333650ffbdfbade076b88b3e50e391a57269d13",
+      "after_sha256": "8e7b95f2cbcfae6abde00dec2c62b97629e8302b055e0259af559c63bd593a0f",
+      "normalized_tokens_equal_after_include_migration": false
+    }
+  ],
+  "scope": "Existing implementation migration and CI correctness/resource repairs; no new application family algorithm.",
+  "comparison_note": "Comments and whitespace normalized after exact include-path migration; source comparison is not a formal semantic proof."
+}

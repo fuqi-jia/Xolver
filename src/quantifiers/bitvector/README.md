@@ -1,0 +1,1 @@
+Bit-vector quantifier processing (QBV). Reserved algorithm location; may use `search/bitblast`, `search/sat` and Boolean quantifier processing. No QBV engine is introduced by this migration. It must not reinterpret bit-vectors as unbounded mathematical integers.
