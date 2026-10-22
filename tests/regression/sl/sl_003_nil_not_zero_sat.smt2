@@ -1,0 +1,6 @@
+(set-logic QF_ALL)
+(declare-heap (Int Int))
+(set-info :status sat)
+(assert (= (as sep.nil Int) 17))
+(assert (pto 0 (- 123456789012345678901234567890)))
+(check-sat)

@@ -14,9 +14,9 @@
 
 #include <chrono>
 
-#include "theory/arith/kernel/poly/PolynomialKernel.h"
-#include "theory/arith/kernel/poly/RationalPolynomial.h"
-#include "theory/arith/logics/nra/lazard/LazardProjectionClosure.h"
+#include "algebra/poly/PolynomialKernel.h"
+#include "algebra/poly/RationalPolynomial.h"
+#include "search/nra/lazard/LazardProjectionClosure.h"
 
 using namespace xolver;
 

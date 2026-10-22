@@ -1,19 +1,20 @@
+#include "base/RuntimeConfig.h"
 #include "frontend/preprocess/targeted/UfApplyAckermann.h"
-#include "util/EnvParam.h"
+#include "base/EnvParam.h"
 
 #include <cstdio>
 #include <cstdlib>
 
 namespace xolver {
 
-UfApplyAckermann::UfApplyAckermann(CoreIr& ir) : ir_(ir) {}
+UfApplyAckermann::UfApplyAckermann(NativeTerms& ir) : ir_(ir) {}
 
 bool UfApplyAckermann::isScalarSort(SortId s) const {
     return s == ir_.intSortId() || s == ir_.realSortId();
 }
 
 bool UfApplyAckermann::intConstVal(ExprId e, mpz_class& out) const {
-    const CoreExpr& n = ir_.get(e);
+    const TermExpr& n = ir_.get(e);
     if (n.kind == Kind::ConstInt) {
         if (auto* p = std::get_if<int64_t>(&n.payload.value)) { out = *p; return true; }
     } else if (n.kind == Kind::ConstReal) {
@@ -30,7 +31,7 @@ ExprId UfApplyAckermann::rewriteRec(ExprId e) {
     if (it != memo_.end()) return it->second;
     if (!inProgress_.insert(e).second) return e;
 
-    const CoreExpr& n = ir_.get(e);
+    const TermExpr& n = ir_.get(e);
     ExprId r;
     if (n.kind == Kind::UFApply && isScalarSort(n.sort)) {
         // Rewrite args first, then Ackermannize this application.
@@ -51,7 +52,7 @@ ExprId UfApplyAckermann::rewriteRec(ExprId e) {
         }
         didRewrite_ = true;
     } else {
-        CoreExpr copy = n;
+        TermExpr copy = n;
         bool changed = false;
         for (auto& c : copy.children) {
             ExprId nc = rewriteRec(c);
@@ -83,10 +84,10 @@ void UfApplyAckermann::buildCongruences() {
                         if (ca != cb) { provablyDistinct = true; break; }
                         continue;
                     }
-                    eqs.push_back(ir_.addShared(CoreExpr{Kind::Eq, boolS, {a, b}, {}}));
+                    eqs.push_back(ir_.addShared(TermExpr{Kind::Eq, boolS, {a, b}, {}}));
                 }
                 if (provablyDistinct) continue;
-                ExprId cons = ir_.addShared(CoreExpr{Kind::Eq, boolS,
+                ExprId cons = ir_.addShared(TermExpr{Kind::Eq, boolS,
                               {apps[i].second, apps[j].second}, {}});
                 if (eqs.empty()) {
                     // All argument pairs are equal (syntactically, or value-equal
@@ -99,9 +100,9 @@ void UfApplyAckermann::buildCongruences() {
                 }
                 ExprId ante = eqs.size() == 1
                     ? eqs[0]
-                    : ir_.addShared(CoreExpr{Kind::And, boolS,
+                    : ir_.addShared(TermExpr{Kind::And, boolS,
                               SmallVector<ExprId, 4>(eqs.begin(), eqs.end()), {}});
-                extra_.push_back(ir_.addShared(CoreExpr{Kind::Implies, boolS, {ante, cons}, {}}));
+                extra_.push_back(ir_.addShared(TermExpr{Kind::Implies, boolS, {ante, cons}, {}}));
             }
         }
     }
@@ -125,7 +126,7 @@ bool UfApplyAckermann::run() {
         while (!work.empty() && !any) {
             ExprId e = work.back(); work.pop_back();
             if (!seen.insert(e).second) continue;
-            const CoreExpr& n = ir_.get(e);
+            const TermExpr& n = ir_.get(e);
             if (n.kind == Kind::UFApply && isScalarSort(n.sort)) { any = true; break; }
             for (ExprId c : n.children) work.push_back(c);
         }
@@ -137,7 +138,7 @@ bool UfApplyAckermann::run() {
     if (!didRewrite_) return false;
     buildCongruences();
 
-    if (xolver::env::diag("XOLVER_TARGETED_PP_DIAG"))
+    if (xolver::config::read<xolver::config::ReadKind::Presence>("XOLVER_TARGETED_PP_DIAG"))
         std::fprintf(stderr, "[UFACK] apps=%zu congruences=%zu\n",
                      appVar_.size(), extra_.size());
     return true;

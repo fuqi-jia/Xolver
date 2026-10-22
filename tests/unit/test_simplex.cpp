@@ -1,14 +1,40 @@
 #include <doctest/doctest.h>
-#include "theory/arith/logics/lra/LraSolver.h"
-#include "theory/arith/logics/lra/GeneralSimplex.h"
-#include "theory/arith/kernel/linear/LinearExpr.h"
-#include "theory/core/TheoryLemmaDatabase.h"
-#include "expr/ir.h"
+#include "search/lra/LraSolver.h"
+#include "search/lra/GeneralSimplex.h"
+#include "algebra/linear/LinearExpr.h"
+#include "search/coordination/TheoryLemmaDatabase.h"
+#include "ir/NativeTerms.h"
 #include <random>
 
 using namespace xolver;
 
-static TheoryAtomRecord makeLinearAtom(SatVar sv, ExprId eid, const CoreIr& ir, TheoryId theory) {
+TEST_CASE("GeneralSimplex: pop restores parent conflict state and permits the next branch") {
+    GeneralSimplex simplex;
+    const auto x = simplex.addVar("x");
+    REQUIRE(simplex.assertLower(x, BoundInfo(BoundValue(DeltaRational(0)), SatLit::positive(1))));
+    REQUIRE((simplex.check() == GeneralSimplex::Result::Sat));
+    simplex.push();
+    CHECK_FALSE(simplex.assertUpper(x, BoundInfo(BoundValue(DeltaRational(-1)), SatLit::positive(2))));
+    REQUIRE((simplex.check() == GeneralSimplex::Result::Unsat));
+    const auto conflict = simplex.getConflict();
+    simplex.push();
+    simplex.pop();
+    REQUIRE((simplex.check() == GeneralSimplex::Result::Unsat));
+    REQUIRE(simplex.getConflict().size() == conflict.size());
+    for (std::size_t i = 0; i < conflict.size(); ++i)
+        CHECK(simplex.getConflict()[i].reason == conflict[i].reason);
+    simplex.pop();
+    CHECK(simplex.getConflict().empty());
+    REQUIRE((simplex.check() == GeneralSimplex::Result::Sat));
+    simplex.push();
+    REQUIRE(simplex.assertLower(x, BoundInfo(BoundValue(DeltaRational(1)), SatLit::positive(3))));
+    REQUIRE((simplex.check() == GeneralSimplex::Result::Sat));
+    CHECK(simplex.value(x).a >= 1);
+    simplex.pop();
+    CHECK((simplex.check() == GeneralSimplex::Result::Sat));
+}
+
+static TheoryAtomRecord makeLinearAtom(SatVar sv, ExprId eid, const NativeTerms& ir, TheoryId theory) {
     std::unordered_map<std::string, mpq_class> coeffs;
     mpq_class rhs;
     Relation rel;
@@ -23,13 +49,15 @@ static TheoryAtomRecord makeLinearAtom(SatVar sv, ExprId eid, const CoreIr& ir, 
 }
 
 TEST_CASE("LraSolver: single variable bound conflict") {
-    CoreIr ir;
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Real);
+    ir.registerSort(1, SortKind::Bool);
 
-    ExprId x = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("x"))});
-    ExprId zero = ir.add(CoreExpr{Kind::ConstInt, 0, {}, Payload(int64_t(0))});
-    ExprId lt0 = ir.add(CoreExpr{Kind::Lt, 0, {x, zero}, {}});
+    ExprId x = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("x"))});
+    ExprId zero = ir.add(TermExpr{Kind::ConstReal, 0, {}, Payload(int64_t(0))});
+    ExprId lt0 = ir.add(TermExpr{Kind::Lt, 1, {x, zero}, {}});
 
-    ExprId eq0 = ir.add(CoreExpr{Kind::Eq, 0, {x, zero}, {}});
+    ExprId eq0 = ir.add(TermExpr{Kind::Eq, 1, {x, zero}, {}});
 
     LraSolver solver;
     solver.push();

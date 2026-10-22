@@ -4,10 +4,10 @@
 
 #include <doctest/doctest.h>
 #include <gmpxx.h>
-#include "theory/arith/logics/nra/cac/SingleCellProjection.h"
+#include "search/nra/cac/SingleCellProjection.h"
 #ifdef XOLVER_HAS_LIBPOLY
-#include "theory/arith/logics/nra/backend/LibpolyBackend.h"
-#include "theory/arith/kernel/poly/PolynomialKernel.h"
+#include "search/nra/backend/LibpolyBackend.h"
+#include "algebra/poly/PolynomialKernel.h"
 #endif
 
 using namespace xolver;

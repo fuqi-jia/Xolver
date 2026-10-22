@@ -1,0 +1,296 @@
+#pragma once
+
+#include "ir/NativeTerms.h"
+#include <vector>
+#include <unordered_set>
+
+namespace xolver {
+
+/**
+ * Detected logic features from a NativeTerms problem.
+ * Used to route to the correct solver plan and detect
+ * mismatches between declared logic and actual formula content.
+ */
+struct LogicFeatures {
+    bool hasBool = false;
+    bool hasInt = false;
+    bool hasReal = false;
+    bool hasUF = false;
+    bool hasBV = false;
+    bool hasQuantifier = false;
+    bool hasArray = false;
+    bool hasFP = false;
+    bool hasIntVar = false;          // Int-sort variable (not constant)
+    bool hasRealVar = false;         // Real-sort variable (not constant)
+    bool hasNonlinear = false;       // Mul of two non-constants, Pow, etc.
+    bool hasMixedIntReal = false;    // Both Int and Real variables appear
+    bool hasInterpretedArithmetic = false; // Add, Mul, Lt, etc. on arithmetic sorts
+    bool hasDatatype = false;        // Constructor/Selector/Tester or DT-sort var
+    bool hasUnsupported = false;     // Anything we cannot soundly handle
+
+    bool isEmpty() const {
+        return !hasBool && !hasInt && !hasReal && !hasUF && !hasBV &&
+               !hasQuantifier && !hasArray && !hasFP && !hasNonlinear &&
+               !hasMixedIntReal && !hasInterpretedArithmetic && !hasDatatype &&
+               !hasUnsupported;
+    }
+};
+
+/**
+ * Scan NativeTerms to detect features relevant for solver routing.
+ *
+ * Rules:
+ * - hasBool      : ConstBool, Not, And, Or, Implies, Xor, or Bool-sort Variable
+ * - hasInt       : Int-sort Variable/Constant, Mod, Abs
+ * - hasReal      : Real-sort Variable/Constant
+ * - hasUF        : UFApply
+ * - hasBV        : BvNot, BvAnd, BvOr, BvAdd, BvMul, or BV-sort Variable
+ * - hasQuantifier: Forall, Exists
+ * - hasArray     : Array-sort Variable
+ * - hasFP        : ConstFP, or FP-sort Variable
+ * - hasNonlinear : Mul where both operands are non-constant,
+ *                  or Pow, or Div on non-linear expressions
+ * - hasMixedIntReal: both hasInt and hasReal in same problem
+ * - hasUnsupported: anything beyond current solver capabilities (e.g., quantifiers)
+ */
+template<class Formula>
+class BasicLogicFeatureDetector {
+public:
+    explicit BasicLogicFeatureDetector(const Formula& ir);
+
+    LogicFeatures detect() const;
+
+private:
+    const Formula& ir_;
+
+    void scanExpr(ExprId id, LogicFeatures& f, std::unordered_set<ExprId>& visited) const;
+    bool isNonConstantExpr(ExprId id, const std::unordered_set<ExprId>& visited) const;
+};
+
+template<class Formula>
+BasicLogicFeatureDetector<Formula>::BasicLogicFeatureDetector(const Formula& ir) : ir_(ir) {}
+
+template<class Formula>
+LogicFeatures BasicLogicFeatureDetector<Formula>::detect() const {
+    LogicFeatures f;
+    std::unordered_set<ExprId> visited;
+
+    for (ExprId aid : ir_.assertions()) {
+        scanExpr(aid, f, visited);
+    }
+
+    if (f.hasIntVar && f.hasRealVar) {
+        f.hasMixedIntReal = true;
+    }
+
+    // Ground CDCL(T) routing does not accept quantifiers, FP or BV here.
+    // The native PA entry point handles its own quantified fragment separately.
+    // Arrays are supported in the array logics (QF_AX, ...); the per-logic
+    // gate in Solver.cpp decides whether `hasArray` is acceptable, so we do
+    // NOT fold it into `hasUnsupported` here.
+    if (f.hasQuantifier || f.hasFP || f.hasBV) {
+        f.hasUnsupported = true;
+    }
+
+    return f;
+}
+
+template<class Formula>
+bool BasicLogicFeatureDetector<Formula>::isNonConstantExpr(ExprId id, const std::unordered_set<ExprId>& visited) const {
+    if (id >= ir_.size()) return false;
+    const auto& e = ir_.get(id);
+    if (e.isConst()) return false;
+    if (e.kind == Kind::Variable) return true;
+    // Any composite expr that is not a constant is non-constant.
+    // For safety, if not visited we conservatively say non-constant.
+    if (visited.find(id) == visited.end()) return true;
+    return true;
+}
+
+template<class Formula>
+void BasicLogicFeatureDetector<Formula>::scanExpr(ExprId root, LogicFeatures& f, std::unordered_set<ExprId>& visited) const {
+    // Iterative DFS (was recursive on children; deep formulas overflowed the
+    // stack). Feature flags accumulate order-independently and `visited` dedups
+    // the DAG, so traversal order is irrelevant — behavior-identical.
+    std::vector<ExprId> stack{root};
+    while (!stack.empty()) {
+    ExprId id = stack.back();
+    stack.pop_back();
+    if (id >= ir_.size()) continue;
+    if (!visited.insert(id).second) continue;
+
+    const auto& e = ir_.get(id);
+
+
+    // Detect sort-based features for variables
+    if (e.kind == Kind::Variable) {
+        // Skip solver-internal/synthetic variables (e.g. ITE-lowering aux
+        // "__nlc_ite_*"): their sort is an artifact of lowering — an ITE over
+        // Real branches can be assigned an Int-sorted aux — not part of the
+        // user's declared logic. The mismatch guard must reflect the USER's
+        // formula, so a genuine (declare-fun x () Int) in QF_LRA is still
+        // flagged, while spurious synthetic Int aux are not.
+        // User names beginning with '__' are ordinary symbols. Only explicit
+        // provenance from makeFreshVariable can identify solver auxiliaries.
+        bool synthetic = ir_.isRoutingAuxiliary(id);
+        auto sk = ir_.sortKind(e.sort);
+        if (sk && !synthetic) {
+            switch (*sk) {
+                case SortKind::Bool:  f.hasBool = true; break;
+                case SortKind::Int:   f.hasInt = true; f.hasIntVar = true; break;
+                case SortKind::Real:  f.hasReal = true; f.hasRealVar = true; break;
+                case SortKind::BV:    f.hasBV = true; break;
+                case SortKind::FP:    f.hasFP = true; break;
+                case SortKind::Array: f.hasArray = true; break;
+                case SortKind::Datatype: f.hasDatatype = true; break;
+                default: break;
+            }
+        }
+    }
+
+    // Detect kind-based features
+    switch (e.kind) {
+        case Kind::ConstBool:
+            f.hasBool = true;
+            break;
+        case Kind::ConstInt:
+            f.hasInt = true;
+            break;
+        case Kind::ConstReal: {
+            auto sk = ir_.sortKind(e.sort);
+            if (sk == SortKind::Int) {
+                f.hasInt = true;
+            } else if (sk == SortKind::Real) {
+                f.hasReal = true;
+            } else {
+                // SK_INTOREAL or unregistered sort: inspect payload string.
+                // Integer literals (no '.' and no '/') → Int, otherwise → Real.
+                bool isIntLit = false;
+                if (std::holds_alternative<std::string>(e.payload.value)) {
+                    const std::string& s = std::get<std::string>(e.payload.value);
+                    bool hasDot = s.find('.') != std::string::npos;
+                    bool hasSlash = s.find('/') != std::string::npos;
+                    if (!hasDot && !hasSlash) {
+                        isIntLit = true;
+                    }
+                }
+                if (isIntLit) f.hasInt = true;
+                else f.hasReal = true;
+            }
+            break;
+        }
+        case Kind::ConstFP:
+            f.hasFP = true;
+            break;
+        case Kind::ConstBV:
+            f.hasBV = true;
+            break;
+        case Kind::UFApply:
+            f.hasUF = true;
+            break;
+        case Kind::Not:
+        case Kind::And:
+        case Kind::Or:
+        case Kind::Implies:
+        case Kind::Xor:
+            f.hasBool = true;
+            break;
+        case Kind::Add:
+        case Kind::Sub:
+        case Kind::Neg:
+        case Kind::Mod:
+        case Kind::Abs:
+            f.hasInterpretedArithmetic = true;
+            break;
+        case Kind::Pow:
+            f.hasNonlinear = true;
+            f.hasInterpretedArithmetic = true;
+            if (e.children.size() >= 1) {
+                auto sk = ir_.sortKind(ir_.get(e.children[0]).sort);
+                if (sk == SortKind::Int) f.hasInt = true;
+                else if (sk == SortKind::Real) f.hasReal = true;
+            }
+            break;
+        case Kind::Mul: {
+            f.hasInterpretedArithmetic = true;
+            // SMT-LIB '*' is VARIADIC: nonlinear iff >= 2 non-constant factors
+            // (e.g. (* 3 x y) is degree 2). The old code only inspected the first
+            // two children, so (* const var var) was misreported as linear.
+            int nonConst = 0;
+            for (ExprId ch : e.children) {
+                if (isNonConstantExpr(ch, visited) && ++nonConst >= 2) break;
+            }
+            if (nonConst >= 2) f.hasNonlinear = true;
+            break;
+        }
+        case Kind::Div: {
+            // Integer div vs real div: use sort of result
+            f.hasInterpretedArithmetic = true;
+            auto sk = ir_.sortKind(e.sort);
+            if (sk == SortKind::Int) {
+                f.hasInt = true;
+            } else {
+                f.hasReal = true;
+            }
+            // Division by a NON-CONSTANT denominator is nonlinear (x / y).
+            for (size_t i = 1; i < e.children.size(); ++i) {
+                if (isNonConstantExpr(e.children[i], visited)) { f.hasNonlinear = true; break; }
+            }
+            break;
+        }
+        case Kind::Forall:
+        case Kind::Exists:
+            f.hasQuantifier = true;
+            break;
+        case Kind::BvNot:
+        case Kind::BvAnd:
+        case Kind::BvOr:
+        case Kind::BvAdd:
+        case Kind::BvMul:
+            f.hasBV = true;
+            break;
+        case Kind::ToReal:
+            f.hasInterpretedArithmetic = true;
+            break;  // child pushed by the generic loop below; ToReal is not an atom
+        case Kind::ToInt:
+        case Kind::IsInt:
+            f.hasInterpretedArithmetic = true;
+            f.hasUnsupported = true;
+            break;
+        case Kind::Select:
+        case Kind::Store:
+        case Kind::ConstArray:
+            f.hasArray = true;
+            break;
+        case Kind::Constructor:
+        case Kind::Selector:
+        case Kind::Tester:
+            f.hasDatatype = true;
+            break;
+        default:
+            break;
+    }
+
+    // Propagate sort features from arithmetic relations
+    if (e.isAtom() && e.children.size() >= 2) {
+        auto sk = ir_.sortKind(ir_.get(e.children[0]).sort);
+        if (sk == SortKind::Int) f.hasInt = true;
+        else if (sk == SortKind::Real) f.hasReal = true;
+        if (e.kind == Kind::Lt || e.kind == Kind::Leq ||
+            e.kind == Kind::Gt || e.kind == Kind::Geq) {
+            f.hasInterpretedArithmetic = true;
+        }
+    }
+
+    // Push children (iterative DFS).
+    for (ExprId child : e.children) {
+        stack.push_back(child);
+    }
+    }  // while
+}
+
+
+using LogicFeatureDetector = BasicLogicFeatureDetector<NativeTerms>;
+extern template class BasicLogicFeatureDetector<NativeTerms>;
+
+} // namespace xolver

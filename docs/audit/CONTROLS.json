@@ -1,0 +1,6121 @@
+{
+  "schema": "xolver-runtime-control-inventory/2",
+  "unique_controls": 375,
+  "literal_read_sites": 489,
+  "categories": {
+    "correctness-review": 10,
+    "diagnostic-review": 89,
+    "heuristic-or-preprocessing-review": 165,
+    "numeric-or-boolean-review": 103,
+    "strategy-review": 8
+  },
+  "controls": [
+    {
+      "name": "ARITH_STAGE_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/arith/ArithSolverBase.cpp",
+          "line": 134,
+          "reader": "Presence",
+          "key": "kARITH_STAGE_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "ARITH_STAGE_ENTER",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/arith/ArithSolverBase.cpp",
+          "line": 101,
+          "reader": "Presence",
+          "key": "kARITH_STAGE_ENTER",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "ARITH_STAGE_PROF",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/arith/ArithSolverBase.cpp",
+          "line": 69,
+          "reader": "ProfilePath",
+          "key": "kARITH_STAGE_PROF",
+          "semantics": "optional profile destination; true selects default path"
+        },
+        {
+          "path": "src/search/arith/ArithSolverBase.cpp",
+          "line": 78,
+          "reader": "ProfilePath",
+          "key": "kARITH_STAGE_PROF",
+          "semantics": "optional profile destination; true selects default path"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "BB_ASSERT_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/bitblast/PolyBitBlaster.cpp",
+          "line": 80,
+          "reader": "Presence",
+          "key": "kBB_ASSERT_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "EUF_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/combination/Purifier.cpp",
+          "line": 594,
+          "reader": "Presence",
+          "key": "kEUF_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/euf/EufSolver.cpp",
+          "line": 446,
+          "reader": "Presence",
+          "key": "kEUF_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/euf/EufSolver.cpp",
+          "line": 648,
+          "reader": "Presence",
+          "key": "kEUF_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/euf/EufSolver_check.cpp",
+          "line": 433,
+          "reader": "Presence",
+          "key": "kEUF_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/euf/EufSolver_check.cpp",
+          "line": 443,
+          "reader": "Presence",
+          "key": "kEUF_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/euf/EufSolver_check.cpp",
+          "line": 454,
+          "reader": "Presence",
+          "key": "kEUF_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/euf/EufSolver_check.cpp",
+          "line": 467,
+          "reader": "Presence",
+          "key": "kEUF_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/euf/EufSolver_check.cpp",
+          "line": 482,
+          "reader": "Presence",
+          "key": "kEUF_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "EUF_VERIFY",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/euf/EufSolver_check.cpp",
+          "line": 113,
+          "reader": "Presence",
+          "key": "kEUF_VERIFY",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "NIA_BITBLAST_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/bitblast/BitBlastSolver.cpp",
+          "line": 217,
+          "reader": "Presence",
+          "key": "kNIA_BITBLAST_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "NIA_BITBLAST_PROF",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/bitblast/BitBlastSolver.cpp",
+          "line": 159,
+          "reader": "Presence",
+          "key": "kNIA_BITBLAST_PROF",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "NIA_DOM_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver_refute.cpp",
+          "line": 209,
+          "reader": "Presence",
+          "key": "kNIA_DOM_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/nia/core/DomainStore.cpp",
+          "line": 257,
+          "reader": "Presence",
+          "key": "kNIA_DOM_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "NIA_EAGER_BB_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/bitblast/EagerBitBlastSolver.cpp",
+          "line": 139,
+          "reader": "Presence",
+          "key": "kNIA_EAGER_BB_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/bitblast/EagerBitBlastSolver.cpp",
+          "line": 202,
+          "reader": "Presence",
+          "key": "kNIA_EAGER_BB_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/bitblast/EagerBitBlastSolver.cpp",
+          "line": 232,
+          "reader": "Presence",
+          "key": "kNIA_EAGER_BB_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/bitblast/EagerBitBlastSolver.cpp",
+          "line": 237,
+          "reader": "Presence",
+          "key": "kNIA_EAGER_BB_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/bitblast/EagerBitBlastSolver.cpp",
+          "line": 289,
+          "reader": "Presence",
+          "key": "kNIA_EAGER_BB_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "NIA_EAGER_BB_GATE_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 1088,
+          "reader": "Presence",
+          "key": "kNIA_EAGER_BB_GATE_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "NIA_OPP_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver.cpp",
+          "line": 395,
+          "reader": "Presence",
+          "key": "kNIA_OPP_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "SOLVE_PHASE_PROF",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 171,
+          "reader": "Presence",
+          "key": "kSOLVE_PHASE_PROF",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_ANIA_PROF",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/array/AniaProfile.h",
+          "line": 111,
+          "reader": "Flag",
+          "key": "kXOLVER_ANIA_PROF",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_ARRAY_COMB_VALIDATE_SAT",
+      "category": "correctness-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 2090,
+          "reader": "Presence",
+          "key": "kXOLVER_ARRAY_COMB_VALIDATE_SAT",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_ARRAY_CONGR_EXT",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/euf/EufSolver_array.cpp",
+          "line": 98,
+          "reader": "Presence",
+          "key": "kXOLVER_ARRAY_CONGR_EXT",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_ARRAY_NOARR_DOWNGRADE",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 884,
+          "reader": "Boolean",
+          "key": "kXOLVER_ARRAY_NOARR_DOWNGRADE",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_ARRAY_NOARR_DOWNGRADE_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 892,
+          "reader": "Presence",
+          "key": "kXOLVER_ARRAY_NOARR_DOWNGRADE_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_ASSERT_PF_INV",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/euf/EufSolver_diagnostics.cpp",
+          "line": 370,
+          "reader": "Presence",
+          "key": "kXOLVER_ASSERT_PF_INV",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_AX_COMPLETE_BUDGET",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/array/ArrayReasoner.cpp",
+          "line": 56,
+          "reader": "Long",
+          "key": "kXOLVER_AX_COMPLETE_BUDGET",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_AX_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/array/ArrayReasoner.cpp",
+          "line": 634,
+          "reader": "Presence",
+          "key": "kXOLVER_AX_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/euf/EufSolver_check.cpp",
+          "line": 394,
+          "reader": "Presence",
+          "key": "kXOLVER_AX_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/euf/EufSolver_check.cpp",
+          "line": 423,
+          "reader": "Presence",
+          "key": "kXOLVER_AX_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_AX_FIXPOINT",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/euf/EufSolver.cpp",
+          "line": 86,
+          "reader": "Presence",
+          "key": "kXOLVER_AX_FIXPOINT",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_AX_LAZY",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/array/ArrayReasoner.cpp",
+          "line": 21,
+          "reader": "Presence",
+          "key": "kXOLVER_AX_LAZY",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_AX_R2D_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/array/ArrayReasoner.cpp",
+          "line": 489,
+          "reader": "Presence",
+          "key": "kXOLVER_AX_R2D_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/euf/EufSolver_check.cpp",
+          "line": 522,
+          "reader": "Presence",
+          "key": "kXOLVER_AX_R2D_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/euf/EufSolver_check.cpp",
+          "line": 599,
+          "reader": "Presence",
+          "key": "kXOLVER_AX_R2D_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_AX_REFINE",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/euf/EufSolver.cpp",
+          "line": 82,
+          "reader": "Presence",
+          "key": "kXOLVER_AX_REFINE",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_AX_REFINE_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/euf/EufSolver_check.cpp",
+          "line": 648,
+          "reader": "Presence",
+          "key": "kXOLVER_AX_REFINE_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_AX_ROW2_CONST",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/array/ArrayReasoner.cpp",
+          "line": 19,
+          "reader": "Presence",
+          "key": "kXOLVER_AX_ROW2_CONST",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_AX_ROW2_DISEQ",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/array/ArrayReasoner.cpp",
+          "line": 29,
+          "reader": "Flag",
+          "key": "kXOLVER_AX_ROW2_DISEQ",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_AX_ROW2_SPLIT",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/coordination/TheoryManager.cpp",
+          "line": 365,
+          "reader": "Flag",
+          "key": "kXOLVER_AX_ROW2_SPLIT",
+          "semantics": "nonempty and first character != 0; caller default"
+        },
+        {
+          "path": "src/search/euf/EufSolver_check.cpp",
+          "line": 580,
+          "reader": "Flag",
+          "key": "kXOLVER_AX_ROW2_SPLIT",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_AX_STORECOMM_EXT",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/array/ArrayReasoner.cpp",
+          "line": 36,
+          "reader": "Presence",
+          "key": "kXOLVER_AX_STORECOMM_EXT",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_AX_STORECOMM_EXT_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/array/ArrayReasoner.cpp",
+          "line": 807,
+          "reader": "Presence",
+          "key": "kXOLVER_AX_STORECOMM_EXT_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_AX_STORE_MODEL",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/euf/EufSolver.cpp",
+          "line": 80,
+          "reader": "Flag",
+          "key": "kXOLVER_AX_STORE_MODEL",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_AX_STORE_NOOP",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/array/ArrayReasoner.cpp",
+          "line": 34,
+          "reader": "Flag",
+          "key": "kXOLVER_AX_STORE_NOOP",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_CMS_WIDTH_PROBE",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 1575,
+          "reader": "Boolean",
+          "key": "kXOLVER_CMS_WIDTH_PROBE",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_CMS_WIDTH_PROBE_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 1648,
+          "reader": "Presence",
+          "key": "kXOLVER_CMS_WIDTH_PROBE_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_COMB_ARRANGE_INTERNAL",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/coordination/TheoryManager.cpp",
+          "line": 1070,
+          "reader": "Presence",
+          "key": "kXOLVER_COMB_ARRANGE_INTERNAL",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/coordination/TheoryManager.cpp",
+          "line": 1188,
+          "reader": "Presence",
+          "key": "kXOLVER_COMB_ARRANGE_INTERNAL",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_COMB_ARRAY_BRIDGE_MODEL",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_model.cpp",
+          "line": 122,
+          "reader": "Int",
+          "key": "kXOLVER_COMB_ARRAY_BRIDGE_MODEL",
+          "semantics": "checked numeric conversion with caller default"
+        },
+        {
+          "path": "src/runtime/Solver_impl_model.cpp",
+          "line": 190,
+          "reader": "Int",
+          "key": "kXOLVER_COMB_ARRAY_BRIDGE_MODEL",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_COMB_ARRAY_NIA",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 622,
+          "reader": "Int",
+          "key": "kXOLVER_COMB_ARRAY_NIA",
+          "semantics": "checked numeric conversion with caller default"
+        },
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 1030,
+          "reader": "Int",
+          "key": "kXOLVER_COMB_ARRAY_NIA",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_COMB_CAREGRAPH",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/coordination/TheoryManager.cpp",
+          "line": 113,
+          "reader": "Presence",
+          "key": "kXOLVER_COMB_CAREGRAPH",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_COMB_CONFLICT_TRACE",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/coordination/TheoryManager.cpp",
+          "line": 645,
+          "reader": "Presence",
+          "key": "kXOLVER_COMB_CONFLICT_TRACE",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_COMB_DECIDE_FREE_ATOMS",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/sat/CadicalTheoryPropagator.cpp",
+          "line": 372,
+          "reader": "Flag",
+          "key": "kXOLVER_COMB_DECIDE_FREE_ATOMS",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_COMB_DEMAND_ARRANGE",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/coordination/TheoryManager.cpp",
+          "line": 1180,
+          "reader": "Boolean",
+          "key": "kXOLVER_COMB_DEMAND_ARRANGE",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_COMB_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/coordination/TheoryManager.cpp",
+          "line": 36,
+          "reader": "Presence",
+          "key": "kXOLVER_COMB_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_COMB_EQ_DISEQ_PHASE",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/coordination/TheoryManager.cpp",
+          "line": 78,
+          "reader": "ExactZero",
+          "key": "kXOLVER_COMB_EQ_DISEQ_PHASE",
+          "semantics": "disabled only by the complete string 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_COMB_MODEL_BASED",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/coordination/TheoryManager.cpp",
+          "line": 149,
+          "reader": "Boolean",
+          "key": "kXOLVER_COMB_MODEL_BASED",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_COMB_PUBLISH_ON_LEMMA",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/coordination/TheoryManager.cpp",
+          "line": 619,
+          "reader": "Boolean",
+          "key": "kXOLVER_COMB_PUBLISH_ON_LEMMA",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_COMB_SAT_FLOOR",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/combination/Purifier.cpp",
+          "line": 19,
+          "reader": "Presence",
+          "key": "kXOLVER_COMB_SAT_FLOOR",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_COMB_SCALAR_BACKFILL",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/coordination/TheoryManager.cpp",
+          "line": 1681,
+          "reader": "Presence",
+          "key": "kXOLVER_COMB_SCALAR_BACKFILL",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_COMB_UFARG_ARITH_APART",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/coordination/TheoryManager.cpp",
+          "line": 1263,
+          "reader": "Boolean",
+          "key": "kXOLVER_COMB_UFARG_ARITH_APART",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_COMB_UFARG_ARRANGE",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/combination/Purifier.cpp",
+          "line": 20,
+          "reader": "Boolean",
+          "key": "kXOLVER_COMB_UFARG_ARRANGE",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        },
+        {
+          "path": "src/search/coordination/TheoryManager.cpp",
+          "line": 1249,
+          "reader": "Boolean",
+          "key": "kXOLVER_COMB_UFARG_ARRANGE",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_COMB_UF_CONGRUENCE",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/runtime/factory/TheoryFactory.cpp",
+          "line": 302,
+          "reader": "Presence",
+          "key": "kXOLVER_COMB_UF_CONGRUENCE",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/coordination/TheoryManager.cpp",
+          "line": 1046,
+          "reader": "Presence",
+          "key": "kXOLVER_COMB_UF_CONGRUENCE",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_COMB_VALIDATE_SAT",
+      "category": "correctness-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 1978,
+          "reader": "Boolean",
+          "key": "kXOLVER_COMB_VALIDATE_SAT",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_DECIDE_PROBE",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/sat/CadicalTheoryPropagator.cpp",
+          "line": 293,
+          "reader": "Period",
+          "key": "kXOLVER_DECIDE_PROBE",
+          "semantics": "sampling period; zero disables; true or 1 selects default"
+        },
+        {
+          "path": "src/search/sat/CadicalTheoryPropagator.cpp",
+          "line": 295,
+          "reader": "Period",
+          "key": "kXOLVER_DECIDE_PROBE",
+          "semantics": "sampling period; zero disables; true or 1 selects default"
+        },
+        {
+          "path": "src/search/sat/CadicalTheoryPropagator.cpp",
+          "line": 335,
+          "reader": "Period",
+          "key": "kXOLVER_DECIDE_PROBE",
+          "semantics": "sampling period; zero disables; true or 1 selects default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_DIAG_AM",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_model.cpp",
+          "line": 126,
+          "reader": "Presence",
+          "key": "kXOLVER_DIAG_AM",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/array/ArrayModelCompletion.cpp",
+          "line": 17,
+          "reader": "Presence",
+          "key": "kXOLVER_DIAG_AM",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/array/ArrayModelCompletion.cpp",
+          "line": 240,
+          "reader": "Presence",
+          "key": "kXOLVER_DIAG_AM",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/euf/EufSolver_array.cpp",
+          "line": 411,
+          "reader": "Presence",
+          "key": "kXOLVER_DIAG_AM",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_DIAG_AMV",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/evidence/ArithModelValidator.cpp",
+          "line": 21,
+          "reader": "Presence",
+          "key": "kXOLVER_DIAG_AMV",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_DIAG_AMV_DEEP",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/evidence/ArithModelValidator.cpp",
+          "line": 22,
+          "reader": "Presence",
+          "key": "kXOLVER_DIAG_AMV_DEEP",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_DIAG_CMS",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/candidate/CandidateModelSearch.cpp",
+          "line": 31,
+          "reader": "Presence",
+          "key": "kXOLVER_DIAG_CMS",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/candidate/CandidateModelSearch.cpp",
+          "line": 55,
+          "reader": "Presence",
+          "key": "kXOLVER_DIAG_CMS",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_DIAG_FI",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/coordination/TheoryManager.cpp",
+          "line": 1624,
+          "reader": "Presence",
+          "key": "kXOLVER_DIAG_FI",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_DIAG_PF_INV",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/euf/EufSolver_diagnostics.cpp",
+          "line": 369,
+          "reader": "Presence",
+          "key": "kXOLVER_DIAG_PF_INV",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_DT_HC_STATS",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/datatype/DtReasoner.cpp",
+          "line": 156,
+          "reader": "Presence",
+          "key": "kXOLVER_DT_HC_STATS",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_DT_SELECTOR_SEMANTIC_BRIDGE",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_model.cpp",
+          "line": 446,
+          "reader": "Flag",
+          "key": "kXOLVER_DT_SELECTOR_SEMANTIC_BRIDGE",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_DT_VALIDATE_DIAG",
+      "category": "correctness-review",
+      "sites": [
+        {
+          "path": "src/search/euf/EufSolver_check.cpp",
+          "line": 707,
+          "reader": "Presence",
+          "key": "kXOLVER_DT_VALIDATE_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_DT_VALIDATE_PER_ASSERT",
+      "category": "correctness-review",
+      "sites": [
+        {
+          "path": "src/search/datatype/DtModelValidator.cpp",
+          "line": 421,
+          "reader": "Presence",
+          "key": "kXOLVER_DT_VALIDATE_PER_ASSERT",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_DT_VALIDATOR_STRICT",
+      "category": "correctness-review",
+      "sites": [
+        {
+          "path": "src/search/euf/EufSolver_check.cpp",
+          "line": 704,
+          "reader": "Presence",
+          "key": "kXOLVER_DT_VALIDATOR_STRICT",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_DUMP_FINAL_ASSERTS",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 856,
+          "reader": "Presence",
+          "key": "kXOLVER_DUMP_FINAL_ASSERTS",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_ENTAIL_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/coordination/TheoryManager.cpp",
+          "line": 346,
+          "reader": "Presence",
+          "key": "kXOLVER_ENTAIL_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_ESCALATING_BOUNDED_SAT",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver.cpp",
+          "line": 1169,
+          "reader": "Int",
+          "key": "kXOLVER_ESCALATING_BOUNDED_SAT",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_ESCALATING_BOUNDED_SAT_BUDGET_MS",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver.cpp",
+          "line": 1175,
+          "reader": "Int",
+          "key": "kXOLVER_ESCALATING_BOUNDED_SAT_BUDGET_MS",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_EUF_HOTPROFILE",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/euf/EufSolver.cpp",
+          "line": 84,
+          "reader": "Presence",
+          "key": "kXOLVER_EUF_HOTPROFILE",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_EUF_INCREMENTAL_PROP",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/euf/EufSolver.cpp",
+          "line": 57,
+          "reader": "Presence",
+          "key": "kXOLVER_EUF_INCREMENTAL_PROP",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_EUF_INCREMENTAL_PROP_VERIFY",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/euf/EufSolver.cpp",
+          "line": 58,
+          "reader": "Presence",
+          "key": "kXOLVER_EUF_INCREMENTAL_PROP_VERIFY",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_EUF_MINLEVEL_HEAP",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/euf/EufSolver.cpp",
+          "line": 55,
+          "reader": "Presence",
+          "key": "kXOLVER_EUF_MINLEVEL_HEAP",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_EUF_PROP",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/euf/EufSolver.cpp",
+          "line": 46,
+          "reader": "ExactZero",
+          "key": "kXOLVER_EUF_PROP",
+          "semantics": "disabled only by the complete string 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_EUF_PROP_BUDGET",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/euf/EufSolver_diagnostics.cpp",
+          "line": 84,
+          "reader": "Int",
+          "key": "kXOLVER_EUF_PROP_BUDGET",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_EUF_PROP_COMB",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/coordination/TheoryManager.cpp",
+          "line": 336,
+          "reader": "Flag",
+          "key": "kXOLVER_EUF_PROP_COMB",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_EUF_PROP_DEDUP",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/euf/EufSolver.cpp",
+          "line": 61,
+          "reader": "Presence",
+          "key": "kXOLVER_EUF_PROP_DEDUP",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_EUF_UF_MODEL",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/coordination/TheoryManager.cpp",
+          "line": 1515,
+          "reader": "Boolean",
+          "key": "kXOLVER_EUF_UF_MODEL",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        },
+        {
+          "path": "src/search/euf/EufSolver.cpp",
+          "line": 52,
+          "reader": "Boolean",
+          "key": "kXOLVER_EUF_UF_MODEL",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_L4R_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/coordination/TheoryManager.cpp",
+          "line": 523,
+          "reader": "Presence",
+          "key": "kXOLVER_L4R_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/coordination/TheoryManager.cpp",
+          "line": 767,
+          "reader": "Presence",
+          "key": "kXOLVER_L4R_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/coordination/TheoryManager.cpp",
+          "line": 840,
+          "reader": "Presence",
+          "key": "kXOLVER_L4R_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/coordination/TheoryManager.cpp",
+          "line": 924,
+          "reader": "Presence",
+          "key": "kXOLVER_L4R_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/sat/CadicalTheoryPropagator.cpp",
+          "line": 926,
+          "reader": "Presence",
+          "key": "kXOLVER_L4R_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_LIA_CUTS",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/lia/LiaSolver.cpp",
+          "line": 33,
+          "reader": "Flag",
+          "key": "kXOLVER_LIA_CUTS",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_LIA_CUT_MAXBITS",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/lia/LiaSolver_integrality.cpp",
+          "line": 476,
+          "reader": "Int",
+          "key": "kXOLVER_LIA_CUT_MAXBITS",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_LIA_CUT_MAXPERSOLVE",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/lia/LiaSolver_integrality.cpp",
+          "line": 212,
+          "reader": "Int",
+          "key": "kXOLVER_LIA_CUT_MAXPERSOLVE",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_LIA_DIO",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/lia/LiaSolver.cpp",
+          "line": 47,
+          "reader": "Flag",
+          "key": "kXOLVER_LIA_DIO",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_LIA_DUMP_DIR",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/lia/LiaSolver_model.cpp",
+          "line": 251,
+          "reader": "Path",
+          "key": "kXOLVER_LIA_DUMP_DIR",
+          "semantics": "owned filesystem path; caller fallback on missing/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_LIA_ENTAIL_GEN",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/lia/LiaSolver_entailment.cpp",
+          "line": 125,
+          "reader": "Presence",
+          "key": "kXOLVER_LIA_ENTAIL_GEN",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_LIA_GMI_CUTS",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/lia/LiaSolver.cpp",
+          "line": 34,
+          "reader": "Flag",
+          "key": "kXOLVER_LIA_GMI_CUTS",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_LIA_INCREMENTAL",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/lia/LiaSolver.cpp",
+          "line": 45,
+          "reader": "Flag",
+          "key": "kXOLVER_LIA_INCREMENTAL",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_LIA_LP_DUALITY",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/lia/LiaSolver.cpp",
+          "line": 412,
+          "reader": "Presence",
+          "key": "kXOLVER_LIA_LP_DUALITY",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_LIA_MILP_BRANCH_BUDGET",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/lia/InternalMilpEngine.cpp",
+          "line": 139,
+          "reader": "Int",
+          "key": "kXOLVER_LIA_MILP_BRANCH_BUDGET",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_LIA_PORTFOLIO_ARM0_MS",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/runtime/factory/StrategyPresets.cpp",
+          "line": 17,
+          "reader": "Int",
+          "key": "kXOLVER_LIA_PORTFOLIO_ARM0_MS",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_LIA_PORTFOLIO_CUT_MS",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/runtime/factory/StrategyPresets.cpp",
+          "line": 18,
+          "reader": "Int",
+          "key": "kXOLVER_LIA_PORTFOLIO_CUT_MS",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_LIA_REPAIR",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/lia/LiaSolver.cpp",
+          "line": 32,
+          "reader": "Flag",
+          "key": "kXOLVER_LIA_REPAIR",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_LRA_BETA_EVERY",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/lra/GeneralSimplex.cpp",
+          "line": 327,
+          "reader": "Int",
+          "key": "kXOLVER_LRA_BETA_EVERY",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_LRA_BOUND_AXIOMS",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/linear/BoundAxiomGenerator.cpp",
+          "line": 132,
+          "reader": "Flag",
+          "key": "kXOLVER_LRA_BOUND_AXIOMS",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_LRA_BOUND_AXIOMS_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/linear/BoundAxiomGenerator.cpp",
+          "line": 187,
+          "reader": "Boolean",
+          "key": "kXOLVER_LRA_BOUND_AXIOMS_DIAG",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_LRA_BOUND_AXIOMS_MAXGROUP",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/linear/BoundAxiomGenerator.cpp",
+          "line": 138,
+          "reader": "Int",
+          "key": "kXOLVER_LRA_BOUND_AXIOMS_MAXGROUP",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_LRA_DECIDE",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/sat/CadicalTheoryPropagator.cpp",
+          "line": 329,
+          "reader": "Flag",
+          "key": "kXOLVER_LRA_DECIDE",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_LRA_INCREMENTAL_BETA",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/lra/GeneralSimplex.cpp",
+          "line": 59,
+          "reader": "Flag",
+          "key": "kXOLVER_LRA_INCREMENTAL_BETA",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_LRA_INCREMENTAL_BETA_REFRESH",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/lra/GeneralSimplex.cpp",
+          "line": 67,
+          "reader": "Long",
+          "key": "kXOLVER_LRA_INCREMENTAL_BETA_REFRESH",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_LRA_LP_DUALITY_BUDGET",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/lra/LraSolver.cpp",
+          "line": 41,
+          "reader": "Int",
+          "key": "kXOLVER_LRA_LP_DUALITY_BUDGET",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_LRA_PIVOT_HEUR",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/lra/GeneralSimplex.cpp",
+          "line": 48,
+          "reader": "Flag",
+          "key": "kXOLVER_LRA_PIVOT_HEUR",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_LRA_PROFILE_EVERY",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/lra/GeneralSimplex.cpp",
+          "line": 711,
+          "reader": "Int",
+          "key": "kXOLVER_LRA_PROFILE_EVERY",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_LRA_PROP",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/lra/LraSolver.cpp",
+          "line": 37,
+          "reader": "Flag",
+          "key": "kXOLVER_LRA_PROP",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_LRA_VERIFY_BETA",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/lra/GeneralSimplex.cpp",
+          "line": 252,
+          "reader": "Presence",
+          "key": "kXOLVER_LRA_VERIFY_BETA",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_ARITH_VALUE_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver_combination.cpp",
+          "line": 242,
+          "reader": "Presence",
+          "key": "kXOLVER_NIA_ARITH_VALUE_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_BB_ARRAY",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver_bitblast.cpp",
+          "line": 51,
+          "reader": "Presence",
+          "key": "kXOLVER_NIA_BB_ARRAY",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_BB_CONGRUENCE",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/bitblast/BitBlastSolver.cpp",
+          "line": 185,
+          "reader": "Presence",
+          "key": "kXOLVER_NIA_BB_CONGRUENCE",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_BB_EARLY_MIN_ACTIVE",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver_bitblast.cpp",
+          "line": 70,
+          "reader": "Long",
+          "key": "kXOLVER_NIA_BB_EARLY_MIN_ACTIVE",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_BB_ENTRY_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver_bitblast.cpp",
+          "line": 72,
+          "reader": "Presence",
+          "key": "kXOLVER_NIA_BB_ENTRY_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/nia/NiaSolver_bitblast.cpp",
+          "line": 113,
+          "reader": "Presence",
+          "key": "kXOLVER_NIA_BB_ENTRY_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_BILINEAR_FACTOR",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/reasoners/AlgebraicIntegerReasoner.cpp",
+          "line": 301,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_BILINEAR_FACTOR",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_BILINEAR_FACTOR_MAX_C",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nia/reasoners/AlgebraicIntegerReasoner.cpp",
+          "line": 306,
+          "reader": "Long",
+          "key": "kXOLVER_NIA_BILINEAR_FACTOR_MAX_C",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_BILINEAR_FACTOR_MAX_DIV",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nia/reasoners/AlgebraicIntegerReasoner.cpp",
+          "line": 311,
+          "reader": "Long",
+          "key": "kXOLVER_NIA_BILINEAR_FACTOR_MAX_DIV",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_BITBLAST_CONFLICTS",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/bitblast/BitBlastSolver.h",
+          "line": 44,
+          "reader": "Long",
+          "key": "kXOLVER_NIA_BITBLAST_CONFLICTS",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_BITBLAST_GATE_BUDGET",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/bitblast/BitBlastSolver.cpp",
+          "line": 24,
+          "reader": "Long",
+          "key": "kXOLVER_NIA_BITBLAST_GATE_BUDGET",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_BITBLAST_MAX_BITWIDTH",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/bitblast/BitBlastSolver.h",
+          "line": 59,
+          "reader": "Long",
+          "key": "kXOLVER_NIA_BITBLAST_MAX_BITWIDTH",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_BITBLAST_MAX_ITERS",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/bitblast/BitBlastSolver.h",
+          "line": 49,
+          "reader": "Long",
+          "key": "kXOLVER_NIA_BITBLAST_MAX_ITERS",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_BOUNDED_ENUM_THRESHOLD",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver_bitblast.cpp",
+          "line": 171,
+          "reader": "Long",
+          "key": "kXOLVER_NIA_BOUNDED_ENUM_THRESHOLD",
+          "semantics": "checked numeric conversion with caller default"
+        },
+        {
+          "path": "src/search/nia/reasoners/BoundedNiaSolver.cpp",
+          "line": 13,
+          "reader": "Long",
+          "key": "kXOLVER_NIA_BOUNDED_ENUM_THRESHOLD",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_CDCAC",
+      "category": "strategy-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver.cpp",
+          "line": 280,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_CDCAC",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_CT_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nia/farkas/LeafFarkasLia.cpp",
+          "line": 20,
+          "reader": "Path",
+          "key": "kXOLVER_NIA_CT_DIAG",
+          "semantics": "owned filesystem path; caller fallback on missing/empty"
+        },
+        {
+          "path": "src/search/nia/farkas/LeafFarkasLia.cpp",
+          "line": 182,
+          "reader": "Path",
+          "key": "kXOLVER_NIA_CT_DIAG",
+          "semantics": "owned filesystem path; caller fallback on missing/empty"
+        },
+        {
+          "path": "src/search/nia/farkas/LeafFarkasLia.cpp",
+          "line": 296,
+          "reader": "Path",
+          "key": "kXOLVER_NIA_CT_DIAG",
+          "semantics": "owned filesystem path; caller fallback on missing/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_CT_SMT",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/farkas/LeafFarkasLia.cpp",
+          "line": 234,
+          "reader": "Path",
+          "key": "kXOLVER_NIA_CT_SMT",
+          "semantics": "owned filesystem path; caller fallback on missing/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_DIO",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver_engines.cpp",
+          "line": 305,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_DIO",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_EAGER_BITBLAST",
+      "category": "strategy-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 1087,
+          "reader": "Boolean",
+          "key": "kXOLVER_NIA_EAGER_BITBLAST",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_EAGER_BITBLAST_BUDGET",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/bitblast/EagerBitBlastSolver.cpp",
+          "line": 300,
+          "reader": "Long",
+          "key": "kXOLVER_NIA_EAGER_BITBLAST_BUDGET",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_EAGER_BITBLAST_BUDGET_MS",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/bitblast/EagerBitBlastSolver.cpp",
+          "line": 339,
+          "reader": "Long",
+          "key": "kXOLVER_NIA_EAGER_BITBLAST_BUDGET_MS",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_EAGER_BITBLAST_BUDGET_PCT",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/bitblast/EagerBitBlastSolver.cpp",
+          "line": 343,
+          "reader": "Long",
+          "key": "kXOLVER_NIA_EAGER_BITBLAST_BUDGET_PCT",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_EAGER_BITBLAST_CONFLICTS",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/bitblast/EagerBitBlastSolver.cpp",
+          "line": 356,
+          "reader": "Long",
+          "key": "kXOLVER_NIA_EAGER_BITBLAST_CONFLICTS",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_EAGER_BITBLAST_UNSAT_CAP",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/bitblast/EagerBitBlastSolver.cpp",
+          "line": 383,
+          "reader": "Long",
+          "key": "kXOLVER_NIA_EAGER_BITBLAST_UNSAT_CAP",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_EAGER_LIA",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 1111,
+          "reader": "Presence",
+          "key": "kXOLVER_NIA_EAGER_LIA",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_COMBO_CAP",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver_farkas.cpp",
+          "line": 288,
+          "reader": "Long",
+          "key": "kXOLVER_NIA_FARKAS_COMBO_CAP",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_DNF_BLOCKS",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/farkas/FarkasOrDetector.cpp",
+          "line": 616,
+          "reader": "Presence",
+          "key": "kXOLVER_NIA_FARKAS_DNF_BLOCKS",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_DNF_CAP",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nia/farkas/FarkasOrDetector.cpp",
+          "line": 618,
+          "reader": "Long",
+          "key": "kXOLVER_NIA_FARKAS_DNF_CAP",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_DUMP",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 1443,
+          "reader": "Presence",
+          "key": "kXOLVER_NIA_FARKAS_DUMP",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/nia/NiaSolver.cpp",
+          "line": 52,
+          "reader": "Presence",
+          "key": "kXOLVER_NIA_FARKAS_DUMP",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_DUMP_FILE",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 1444,
+          "reader": "Path",
+          "key": "kXOLVER_NIA_FARKAS_DUMP_FILE",
+          "semantics": "owned filesystem path; caller fallback on missing/empty"
+        },
+        {
+          "path": "src/search/nia/NiaSolver.cpp",
+          "line": 53,
+          "reader": "Path",
+          "key": "kXOLVER_NIA_FARKAS_DUMP_FILE",
+          "semantics": "owned filesystem path; caller fallback on missing/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_EAGER_BUDGET_MS",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 1145,
+          "reader": "Long",
+          "key": "kXOLVER_NIA_FARKAS_EAGER_BUDGET_MS",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_EAGER_PCT",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 1144,
+          "reader": "Long",
+          "key": "kXOLVER_NIA_FARKAS_EAGER_PCT",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_FAILDIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver_farkas.cpp",
+          "line": 351,
+          "reader": "Presence",
+          "key": "kXOLVER_NIA_FARKAS_FAILDIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_OR_MAX_B",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver_farkas.cpp",
+          "line": 95,
+          "reader": "Long",
+          "key": "kXOLVER_NIA_FARKAS_OR_MAX_B",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_OR_TRACE",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver_farkas.cpp",
+          "line": 103,
+          "reader": "Presence",
+          "key": "kXOLVER_NIA_FARKAS_OR_TRACE",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/nia/NiaSolver_farkas.cpp",
+          "line": 562,
+          "reader": "Presence",
+          "key": "kXOLVER_NIA_FARKAS_OR_TRACE",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_OR_UNSAT_EMIT",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver_farkas.cpp",
+          "line": 219,
+          "reader": "Presence",
+          "key": "kXOLVER_NIA_FARKAS_OR_UNSAT_EMIT",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_OUTER_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver_farkas.cpp",
+          "line": 116,
+          "reader": "Presence",
+          "key": "kXOLVER_NIA_FARKAS_OUTER_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_REFUTE_DOM_CAP",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver_farkas.cpp",
+          "line": 576,
+          "reader": "Long",
+          "key": "kXOLVER_NIA_FARKAS_REFUTE_DOM_CAP",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_REFUTE_LEAF_CAP",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver_farkas.cpp",
+          "line": 737,
+          "reader": "Long",
+          "key": "kXOLVER_NIA_FARKAS_REFUTE_LEAF_CAP",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_REFUTE_MAX_LEAF_VARS",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver_farkas.cpp",
+          "line": 819,
+          "reader": "Long",
+          "key": "kXOLVER_NIA_FARKAS_REFUTE_MAX_LEAF_VARS",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_REJECT_DUMP",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nia/farkas/FarkasOrDetector.cpp",
+          "line": 517,
+          "reader": "Presence",
+          "key": "kXOLVER_NIA_FARKAS_REJECT_DUMP",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_REJECT_FILE",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/farkas/FarkasOrDetector.cpp",
+          "line": 519,
+          "reader": "Path",
+          "key": "kXOLVER_NIA_FARKAS_REJECT_FILE",
+          "semantics": "owned filesystem path; caller fallback on missing/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_VALIDATE_BUDGET",
+      "category": "correctness-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver_farkas.cpp",
+          "line": 308,
+          "reader": "Long",
+          "key": "kXOLVER_NIA_FARKAS_VALIDATE_BUDGET",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_GROBNER",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver.cpp",
+          "line": 269,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_GROBNER",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_GROBNER_MAX_EQ",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nia/reasoners/GroebnerIdealReasoner.cpp",
+          "line": 96,
+          "reader": "Long",
+          "key": "kXOLVER_NIA_GROBNER_MAX_EQ",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_GROBNER_MAX_VARS",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nia/reasoners/GroebnerIdealReasoner.cpp",
+          "line": 101,
+          "reader": "Long",
+          "key": "kXOLVER_NIA_GROBNER_MAX_VARS",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_IFACE_LIFECYCLE",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver.cpp",
+          "line": 334,
+          "reader": "Boolean",
+          "key": "kXOLVER_NIA_IFACE_LIFECYCLE",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_IFACE_PROP",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver_linear.cpp",
+          "line": 161,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_IFACE_PROP",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_INT_BOUND_PROP",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver.cpp",
+          "line": 160,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_INT_BOUND_PROP",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_INT_BOUND_PROP_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver_engines.cpp",
+          "line": 292,
+          "reader": "Presence",
+          "key": "kXOLVER_NIA_INT_BOUND_PROP_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_LINDECIDE_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver_linear.cpp",
+          "line": 90,
+          "reader": "Presence",
+          "key": "kXOLVER_NIA_LINDECIDE_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/nia/search/NiaLinearDecider.cpp",
+          "line": 32,
+          "reader": "Presence",
+          "key": "kXOLVER_NIA_LINDECIDE_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_LINEAR_DOWNGRADE",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 947,
+          "reader": "Boolean",
+          "key": "kXOLVER_NIA_LINEAR_DOWNGRADE",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_LINEAR_DOWNGRADE_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 950,
+          "reader": "Presence",
+          "key": "kXOLVER_NIA_LINEAR_DOWNGRADE_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_LINEAR_PROP",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/coordination/TheoryManager.cpp",
+          "line": 322,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_LINEAR_PROP_Flag",
+          "semantics": "nonempty and first character != 0; caller default"
+        },
+        {
+          "path": "src/search/nia/NiaSolver.cpp",
+          "line": 138,
+          "reader": "Int",
+          "key": "kXOLVER_NIA_LINEAR_PROP_Int",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": true
+    },
+    {
+      "name": "XOLVER_NIA_LINPROP_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver_linear.cpp",
+          "line": 182,
+          "reader": "Presence",
+          "key": "kXOLVER_NIA_LINPROP_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/nia/search/NiaLinearDecider.cpp",
+          "line": 184,
+          "reader": "Presence",
+          "key": "kXOLVER_NIA_LINPROP_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_LOCALSEARCH",
+      "category": "strategy-review",
+      "sites": [
+        {
+          "path": "src/search/nia/search/NiaLocalSearch.cpp",
+          "line": 50,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_LOCALSEARCH",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_LS_ADAPTIVE_PLATEAU",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/search/NiaLocalSearch.cpp",
+          "line": 123,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_LS_ADAPTIVE_PLATEAU",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_LS_ATOM_LOCAL_ACCEPT",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/search/NiaLocalSearch.cpp",
+          "line": 98,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_LS_ATOM_LOCAL_ACCEPT",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_LS_BILINEAR_PAIR",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/search/NiaLocalSearch.cpp",
+          "line": 71,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_LS_BILINEAR_PAIR",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_LS_BILINEAR_SUBST",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/search/NiaLocalSearch.cpp",
+          "line": 74,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_LS_BILINEAR_SUBST",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_LS_BRANCH_HINT",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver_branch.cpp",
+          "line": 133,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_LS_BRANCH_HINT",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_LS_BUDGET_MS",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nia/search/NiaLocalSearch.cpp",
+          "line": 48,
+          "reader": "Long",
+          "key": "kXOLVER_NIA_LS_BUDGET_MS",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_LS_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nia/search/NiaLocalSearch.cpp",
+          "line": 1730,
+          "reader": "Presence",
+          "key": "kXOLVER_NIA_LS_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/nia/search/NiaLocalSearch.cpp",
+          "line": 2074,
+          "reader": "Presence",
+          "key": "kXOLVER_NIA_LS_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_LS_DIVERSE_INIT",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/search/NiaLocalSearch.cpp",
+          "line": 68,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_LS_DIVERSE_INIT",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_LS_DIVERSIFY",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/search/NiaLocalSearch.cpp",
+          "line": 83,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_LS_DIVERSIFY",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_LS_FARKAS_INIT",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/search/NiaLocalSearch.cpp",
+          "line": 126,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_LS_FARKAS_INIT",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_LS_FS_JUMP",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/search/NiaLocalSearch.cpp",
+          "line": 65,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_LS_FS_JUMP",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_LS_LONG",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/search/NiaLocalSearch.cpp",
+          "line": 113,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_LS_LONG",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_LS_MAX_FLIPS",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nia/search/NiaLocalSearch.cpp",
+          "line": 111,
+          "reader": "Long",
+          "key": "kXOLVER_NIA_LS_MAX_FLIPS",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_LS_MODULAR_ESCALATE",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/search/NiaLocalSearch.cpp",
+          "line": 80,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_LS_MODULAR_ESCALATE",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_LS_MULTI_SCALE",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/search/NiaLocalSearch.cpp",
+          "line": 59,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_LS_MULTI_SCALE",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_LS_PIN_EQ",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/search/NiaLocalSearch.cpp",
+          "line": 77,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_LS_PIN_EQ",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_LS_QUAD_CRITICAL",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/search/NiaLocalSearch.cpp",
+          "line": 62,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_LS_QUAD_CRITICAL",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_LS_RESTARTS",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nia/search/NiaLocalSearch.cpp",
+          "line": 108,
+          "reader": "Long",
+          "key": "kXOLVER_NIA_LS_RESTARTS",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_LS_RW_HUB",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/search/NiaLocalSearch.cpp",
+          "line": 117,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_LS_RW_HUB",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_LS_RW_LADDER",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/search/NiaLocalSearch.cpp",
+          "line": 120,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_LS_RW_LADDER",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_LS_SMART_INIT",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/search/NiaLocalSearch.cpp",
+          "line": 86,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_LS_SMART_INIT",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_LS_SMART_MOVE",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/search/NiaLocalSearch.cpp",
+          "line": 89,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_LS_SMART_MOVE",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_LS_TABU",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/search/NiaLocalSearch.cpp",
+          "line": 92,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_LS_TABU",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_LS_TOTAL_MS",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nia/search/NiaLocalSearch.cpp",
+          "line": 49,
+          "reader": "Long",
+          "key": "kXOLVER_NIA_LS_TOTAL_MS",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_LS_TWO_LEVEL",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/search/NiaLocalSearch.cpp",
+          "line": 53,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_LS_TWO_LEVEL",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_LS_VIOLATION_CORE",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/search/NiaLocalSearch.cpp",
+          "line": 95,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_LS_VIOLATION_CORE",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_LS_WARM_START",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/search/NiaLocalSearch.cpp",
+          "line": 56,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_LS_WARM_START",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_MCSAT",
+      "category": "strategy-review",
+      "sites": [
+        {
+          "path": "src/runtime/factory/TheoryFactory.cpp",
+          "line": 105,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_MCSAT",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_MCSAT_DFS_BUDGET",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nia/mcsat/NiaMcsatEngine.cpp",
+          "line": 178,
+          "reader": "Int",
+          "key": "kXOLVER_NIA_MCSAT_DFS_BUDGET",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_MODULAR_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nia/reasoners/ModularResidueReasoner.cpp",
+          "line": 486,
+          "reader": "Int",
+          "key": "kXOLVER_NIA_MODULAR_DIAG",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_MODULAR_ENUM_BUDGET",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nia/reasoners/ModularResidueReasoner.cpp",
+          "line": 74,
+          "reader": "Long",
+          "key": "kXOLVER_NIA_MODULAR_ENUM_BUDGET",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_MODULAR_MAX_ENUM",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nia/reasoners/AlgebraicIntegerReasoner.cpp",
+          "line": 206,
+          "reader": "Long",
+          "key": "kXOLVER_NIA_MODULAR_MAX_ENUM",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_MODULAR_MAX_VARS",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nia/reasoners/AlgebraicIntegerReasoner.cpp",
+          "line": 201,
+          "reader": "Long",
+          "key": "kXOLVER_NIA_MODULAR_MAX_VARS",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_MODULAR_MODULI",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nia/reasoners/AlgebraicIntegerReasoner.cpp",
+          "line": 222,
+          "reader": "Moduli",
+          "key": "kXOLVER_NIA_MODULAR_MODULI",
+          "semantics": "validated distinct integer list in [2,100]; whole-list fallback"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_MODULAR_MODULUS_CAP",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nia/reasoners/ModularResidueReasoner.cpp",
+          "line": 72,
+          "reader": "Long",
+          "key": "kXOLVER_NIA_MODULAR_MODULUS_CAP",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_MODULAR_WARM_START",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver_refute.cpp",
+          "line": 430,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_MODULAR_WARM_START",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_NATIVE_MODEQCONST",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/frontend/preprocess/IntDivModLowerer.cpp",
+          "line": 406,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_NATIVE_MODEQCONST",
+          "semantics": "nonempty and first character != 0; caller default"
+        },
+        {
+          "path": "src/search/nia/NiaSolver_refute.cpp",
+          "line": 471,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_NATIVE_MODEQCONST",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_NLA_CUTS",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver_refute.cpp",
+          "line": 568,
+          "reader": "Boolean",
+          "key": "kXOLVER_NIA_NLA_CUTS",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        },
+        {
+          "path": "src/search/nra/reasoners/NlaCutsRunner.cpp",
+          "line": 20,
+          "reader": "Boolean",
+          "key": "kXOLVER_NIA_NLA_CUTS",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_NO_DISEQ",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/coordination/TheoryManager.cpp",
+          "line": 732,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_NO_DISEQ",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_NO_PROP",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/coordination/TheoryManager.cpp",
+          "line": 892,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_NO_PROP",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_OMEGA",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver.cpp",
+          "line": 150,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_OMEGA",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_OMEGA_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver_engines.cpp",
+          "line": 117,
+          "reader": "Presence",
+          "key": "kXOLVER_NIA_OMEGA_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_PER_BRANCH_BB",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver_bitblast.cpp",
+          "line": 109,
+          "reader": "Presence",
+          "key": "kXOLVER_NIA_PER_BRANCH_BB",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_PRESOLVE_BUDGET_MS",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver_linear.cpp",
+          "line": 254,
+          "reader": "Long",
+          "key": "kXOLVER_NIA_PRESOLVE_BUDGET_MS",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_ROW2_DEMAND",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/coordination/TheoryManager.cpp",
+          "line": 787,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_ROW2_DEMAND",
+          "semantics": "nonempty and first character != 0; caller default"
+        },
+        {
+          "path": "src/search/euf/EufSolver_check.cpp",
+          "line": 155,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_ROW2_DEMAND",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_SECANT",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver_engines.cpp",
+          "line": 546,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_SECANT",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_SHARED_ARITH_VALUE",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver_combination.cpp",
+          "line": 122,
+          "reader": "Int",
+          "key": "kXOLVER_NIA_SHARED_ARITH_VALUE",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_SHARED_EQ_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver_combination.cpp",
+          "line": 498,
+          "reader": "Presence",
+          "key": "kXOLVER_NIA_SHARED_EQ_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_SMALL_PRIME_MODULAR",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver.cpp",
+          "line": 155,
+          "reader": "Flag",
+          "key": "kXOLVER_NIA_SMALL_PRIME_MODULAR",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_SMALL_PRIME_MODULAR_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nia/NiaSolver_engines.cpp",
+          "line": 190,
+          "reader": "Presence",
+          "key": "kXOLVER_NIA_SMALL_PRIME_MODULAR_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_ZOHAR_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/frontend/preprocess/ZoharBwiAxiomEmitter.cpp",
+          "line": 200,
+          "reader": "Presence",
+          "key": "kXOLVER_NIA_ZOHAR_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 598,
+          "reader": "Presence",
+          "key": "kXOLVER_NIA_ZOHAR_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NIA_ZOHAR_PLUGIN",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 595,
+          "reader": "Boolean",
+          "key": "kXOLVER_NIA_ZOHAR_PLUGIN",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        },
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 1544,
+          "reader": "Boolean",
+          "key": "kXOLVER_NIA_ZOHAR_PLUGIN",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NO_BAKED_DEFAULTS",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "app/main.cpp",
+          "line": 718,
+          "reader": "Boolean",
+          "key": "kXOLVER_NO_BAKED_DEFAULTS",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NO_DEBUG",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/contracts/DebugTrace.h",
+          "line": 16,
+          "reader": "Boolean",
+          "key": "kXOLVER_NO_DEBUG",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NO_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/coordination/TheoryManager.cpp",
+          "line": 869,
+          "reader": "Presence",
+          "key": "kXOLVER_NO_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NO_EXPAND_FUNCTIONS",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_solve.cpp",
+          "line": 57,
+          "reader": "Presence",
+          "key": "kXOLVER_NO_EXPAND_FUNCTIONS",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_BOUNDCHAIN_MAX_ATOMS",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/presolve/BoundChainComposer.cpp",
+          "line": 55,
+          "reader": "Int",
+          "key": "kXOLVER_NRA_BOUNDCHAIN_MAX_ATOMS",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_BOUNDCHAIN_MAX_WORK",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/presolve/BoundChainComposer.cpp",
+          "line": 57,
+          "reader": "Int",
+          "key": "kXOLVER_NRA_BOUNDCHAIN_MAX_WORK",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_COMBINATION",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver.cpp",
+          "line": 529,
+          "reader": "Flag",
+          "key": "kXOLVER_NRA_CAC_COMBINATION",
+          "semantics": "nonempty and first character != 0; caller default"
+        },
+        {
+          "path": "src/search/nra/NraSolver_cac.cpp",
+          "line": 69,
+          "reader": "Flag",
+          "key": "kXOLVER_NRA_CAC_COMBINATION",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_COMB_SAT",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver.cpp",
+          "line": 517,
+          "reader": "Flag",
+          "key": "kXOLVER_NRA_CAC_COMB_SAT",
+          "semantics": "nonempty and first character != 0; caller default"
+        },
+        {
+          "path": "src/search/nra/NraSolver_cac.cpp",
+          "line": 374,
+          "reader": "Flag",
+          "key": "kXOLVER_NRA_CAC_COMB_SAT",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_DEADLINE_MS",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver_cac.cpp",
+          "line": 293,
+          "reader": "Long",
+          "key": "kXOLVER_NRA_CAC_DEADLINE_MS",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver_cac.cpp",
+          "line": 316,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_CAC_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/nra/cac/CacEngine.cpp",
+          "line": 230,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_CAC_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/nra/cac/CacEngine.cpp",
+          "line": 329,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_CAC_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/nra/cac/SingleCellProjection.cpp",
+          "line": 243,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_CAC_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_DUMP",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nra/cac/SingleCellProjection.cpp",
+          "line": 432,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_CAC_DUMP",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_EARLY_INFEAS",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver_cac.cpp",
+          "line": 295,
+          "reader": "Flag",
+          "key": "kXOLVER_NRA_CAC_EARLY_INFEAS",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_INSTR",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/cac/SingleCellProjection.cpp",
+          "line": 40,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_CAC_INSTR",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_INT",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nia/mcsat/NiaMcsatEngine.cpp",
+          "line": 378,
+          "reader": "Flag",
+          "key": "kXOLVER_NRA_CAC_INT",
+          "semantics": "nonempty and first character != 0; caller default"
+        },
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 2208,
+          "reader": "Flag",
+          "key": "kXOLVER_NRA_CAC_INT",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_INT_COVER",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 1444,
+          "reader": "Flag",
+          "key": "kXOLVER_NRA_CAC_INT_COVER",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_INT_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 1449,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_CAC_INT_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 1846,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_CAC_INT_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_LAZARD_DEDUP",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/lazard/LazardProjectionOperator.cpp",
+          "line": 141,
+          "reader": "Flag",
+          "key": "kXOLVER_NRA_CAC_LAZARD_DEDUP",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_MIN_CONFLICT",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver_cac.cpp",
+          "line": 352,
+          "reader": "Boolean",
+          "key": "kXOLVER_NRA_CAC_MIN_CONFLICT",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_NLSAT",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 264,
+          "reader": "Boolean",
+          "key": "kXOLVER_NRA_CAC_NLSAT",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_NO_COLLINS",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver_cac.cpp",
+          "line": 289,
+          "reader": "Boolean",
+          "key": "kXOLVER_NRA_CAC_NO_COLLINS",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        },
+        {
+          "path": "src/search/nra/NraSolver_cac.cpp",
+          "line": 558,
+          "reader": "Boolean",
+          "key": "kXOLVER_NRA_CAC_NO_COLLINS",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_ONLY",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver_cac.cpp",
+          "line": 289,
+          "reader": "Boolean",
+          "key": "kXOLVER_NRA_CAC_ONLY",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        },
+        {
+          "path": "src/search/nra/NraSolver_cac.cpp",
+          "line": 558,
+          "reader": "Boolean",
+          "key": "kXOLVER_NRA_CAC_ONLY",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_PRUNE_INTERVALS",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver_cac.cpp",
+          "line": 298,
+          "reader": "Flag",
+          "key": "kXOLVER_NRA_CAC_PRUNE_INTERVALS",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_RATIONAL_FALLBACK",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver_cac.cpp",
+          "line": 446,
+          "reader": "Flag",
+          "key": "kXOLVER_NRA_CAC_RATIONAL_FALLBACK",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_SAT_ALGEBRAIC",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver_cac.cpp",
+          "line": 387,
+          "reader": "Flag",
+          "key": "kXOLVER_NRA_CAC_SAT_ALGEBRAIC",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_SAT_FIRST",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 254,
+          "reader": "Boolean",
+          "key": "kXOLVER_NRA_CAC_SAT_FIRST",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_SAT_FIRST_ALG",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 270,
+          "reader": "Boolean",
+          "key": "kXOLVER_NRA_CAC_SAT_FIRST_ALG",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_SAT_FIRST_ALG_DEG",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 271,
+          "reader": "Long",
+          "key": "kXOLVER_NRA_CAC_SAT_FIRST_ALG_DEG",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_SAT_FIRST_BUDGET",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 255,
+          "reader": "Long",
+          "key": "kXOLVER_NRA_CAC_SAT_FIRST_BUDGET",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_SAT_FIRST_LOOKAHEAD",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 275,
+          "reader": "Boolean",
+          "key": "kXOLVER_NRA_CAC_SAT_FIRST_LOOKAHEAD",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_SAT_FIRST_MAX_BITS",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 257,
+          "reader": "Long",
+          "key": "kXOLVER_NRA_CAC_SAT_FIRST_MAX_BITS",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_SAT_FIRST_MAX_DEG",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 844,
+          "reader": "Int",
+          "key": "kXOLVER_NRA_CAC_SAT_FIRST_MAX_DEG",
+          "semantics": "checked numeric conversion with caller default"
+        },
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 845,
+          "reader": "Int",
+          "key": "kXOLVER_NRA_CAC_SAT_FIRST_MAX_DEG",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_SAT_FIRST_MS",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 259,
+          "reader": "Long",
+          "key": "kXOLVER_NRA_CAC_SAT_FIRST_MS",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_SAT_FIRST_TOWER_CAP",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 2267,
+          "reader": "Int",
+          "key": "kXOLVER_NRA_CAC_SAT_FIRST_TOWER_CAP",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_SAT_SAMPLE",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nra/cac/CacEngine.cpp",
+          "line": 222,
+          "reader": "Flag",
+          "key": "kXOLVER_NRA_CAC_SAT_SAMPLE",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_SAT_SAMPLE_DEPTH",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nra/cac/CacEngine.cpp",
+          "line": 226,
+          "reader": "Int",
+          "key": "kXOLVER_NRA_CAC_SAT_SAMPLE_DEPTH",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_TRACE",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nra/cac/CacEngine.cpp",
+          "line": 480,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_CAC_TRACE",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_VAR_ORDER",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver_cac.cpp",
+          "line": 248,
+          "reader": "Flag",
+          "key": "kXOLVER_NRA_CAC_VAR_ORDER",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_VAR_ORDER_DESC",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver_cac.cpp",
+          "line": 268,
+          "reader": "Flag",
+          "key": "kXOLVER_NRA_CAC_VAR_ORDER_DESC",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_CDCAC_GUARD_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver_cac.cpp",
+          "line": 549,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_CDCAC_GUARD_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_CDCAC_MAX_DEGREE",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver.cpp",
+          "line": 52,
+          "reader": "Int",
+          "key": "kXOLVER_NRA_CDCAC_MAX_DEGREE",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_CDCAC_MAX_VARS",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver.cpp",
+          "line": 51,
+          "reader": "Int",
+          "key": "kXOLVER_NRA_CDCAC_MAX_VARS",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_EQ_CASCADE",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver_stages.cpp",
+          "line": 1026,
+          "reader": "Boolean",
+          "key": "kXOLVER_NRA_EQ_CASCADE",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_EQ_CASCADE_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nra/StructuralIntegerProbe.cpp",
+          "line": 660,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_EQ_CASCADE_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_EQ_CASCADE_DYADIC_DEPTH",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nra/StructuralIntegerProbe.cpp",
+          "line": 653,
+          "reader": "Int",
+          "key": "kXOLVER_NRA_EQ_CASCADE_DYADIC_DEPTH",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_GROBNER",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver.cpp",
+          "line": 50,
+          "reader": "Flag",
+          "key": "kXOLVER_NRA_GROBNER",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_GROBNER_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver_stages.cpp",
+          "line": 371,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_GROBNER_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_HYB_PARTITION_STATS",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver.cpp",
+          "line": 292,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_HYB_PARTITION_STATS",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/nra/core/HybridPartitionStats.cpp",
+          "line": 69,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_HYB_PARTITION_STATS",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_ICP",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver_stages.cpp",
+          "line": 150,
+          "reader": "Flag",
+          "key": "kXOLVER_NRA_ICP",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_ICP_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 901,
+          "reader": "Boolean",
+          "key": "kXOLVER_NRA_ICP_DIAG",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_INT_PROBE",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver_stages.cpp",
+          "line": 907,
+          "reader": "Flag",
+          "key": "kXOLVER_NRA_INT_PROBE",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_INT_PROBE_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver_stages.cpp",
+          "line": 900,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_INT_PROBE_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/nra/NraSolver_stages.cpp",
+          "line": 921,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_INT_PROBE_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/nra/StructuralIntegerProbe.cpp",
+          "line": 347,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_INT_PROBE_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_KERNEL_STATS",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/algebra/poly/LibPolyKernel.cpp",
+          "line": 79,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_KERNEL_STATS",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_LAZARD_CELL_CERT",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 251,
+          "reader": "Boolean",
+          "key": "kXOLVER_NRA_LAZARD_CELL_CERT",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_LAZARD_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nra/backend/LibpolyBackend.cpp",
+          "line": 1791,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_LAZARD_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/nra/backend/LibpolyBackend.cpp",
+          "line": 1999,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_LAZARD_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 500,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_LAZARD_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 547,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_LAZARD_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 937,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_LAZARD_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 955,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_LAZARD_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 1127,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_LAZARD_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 1196,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_LAZARD_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 1885,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_LAZARD_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_LAZARD_LIFT",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 218,
+          "reader": "Boolean",
+          "key": "kXOLVER_NRA_LAZARD_LIFT",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_LAZARD_MAX_COEFF_BITS",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 831,
+          "reader": "Int",
+          "key": "kXOLVER_NRA_LAZARD_MAX_COEFF_BITS",
+          "semantics": "checked numeric conversion with caller default"
+        },
+        {
+          "path": "src/search/nra/lazard/LazardProjectionOperator.cpp",
+          "line": 62,
+          "reader": "Int",
+          "key": "kXOLVER_NRA_LAZARD_MAX_COEFF_BITS",
+          "semantics": "checked numeric conversion with caller default"
+        },
+        {
+          "path": "src/search/nra/lazard/Squarefree.cpp",
+          "line": 26,
+          "reader": "Int",
+          "key": "kXOLVER_NRA_LAZARD_MAX_COEFF_BITS",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_LIBPOLY_FIREWALL_DIAG",
+      "category": "correctness-review",
+      "sites": [
+        {
+          "path": "src/search/nra/backend/LibpolyBackend.cpp",
+          "line": 129,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_LIBPOLY_FIREWALL_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_LIBPOLY_MAX_COEFF_BITS",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nra/backend/LibpolyBackend.cpp",
+          "line": 122,
+          "reader": "Int",
+          "key": "kXOLVER_NRA_LIBPOLY_MAX_COEFF_BITS",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_LIBPOLY_PSC",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/lazard/SubresultantChain.cpp",
+          "line": 20,
+          "reader": "Boolean",
+          "key": "kXOLVER_NRA_LIBPOLY_PSC",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_LINEARIZE",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver_cac.cpp",
+          "line": 590,
+          "reader": "Boolean",
+          "key": "kXOLVER_NRA_LINEARIZE",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_LINEARIZE_CAP",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver_cac.cpp",
+          "line": 596,
+          "reader": "Int",
+          "key": "kXOLVER_NRA_LINEARIZE_CAP",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_LINEARIZE_DUMP",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver_cac.cpp",
+          "line": 639,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_LINEARIZE_DUMP",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_LINEAR_DOWNGRADE",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 920,
+          "reader": "Boolean",
+          "key": "kXOLVER_NRA_LINEAR_DOWNGRADE",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_LINEAR_DOWNGRADE_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 923,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_LINEAR_DOWNGRADE_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_LS_BUDGET_MS",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver.cpp",
+          "line": 357,
+          "reader": "Long",
+          "key": "kXOLVER_NRA_LS_BUDGET_MS",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_LS_EQ_RELAX",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver.cpp",
+          "line": 364,
+          "reader": "Flag",
+          "key": "kXOLVER_NRA_LS_EQ_RELAX",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_LS_MAX_DEN",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nra/reasoners/NraLocalSearch.cpp",
+          "line": 655,
+          "reader": "Long",
+          "key": "kXOLVER_NRA_LS_MAX_DEN",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_LS_MAX_ROUNDS",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver.cpp",
+          "line": 363,
+          "reader": "Int",
+          "key": "kXOLVER_NRA_LS_MAX_ROUNDS",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_LS_NOISE_PCT",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nra/reasoners/NraLocalSearch.cpp",
+          "line": 960,
+          "reader": "Long",
+          "key": "kXOLVER_NRA_LS_NOISE_PCT",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_LS_SA_PCT",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nra/reasoners/NraLocalSearch.cpp",
+          "line": 915,
+          "reader": "Long",
+          "key": "kXOLVER_NRA_LS_SA_PCT",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_LS_STATS",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nra/reasoners/NraLocalSearch.cpp",
+          "line": 77,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_LS_STATS",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_LS_TOP_VARS",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nra/reasoners/NraLocalSearch.cpp",
+          "line": 611,
+          "reader": "Long",
+          "key": "kXOLVER_NRA_LS_TOP_VARS",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_MCCORMICK_PARTIAL",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/linearizer/McCormickGenerator.cpp",
+          "line": 66,
+          "reader": "Flag",
+          "key": "kXOLVER_NRA_MCCORMICK_PARTIAL",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_MCSAT",
+      "category": "strategy-review",
+      "sites": [
+        {
+          "path": "src/runtime/factory/TheoryFactory.cpp",
+          "line": 69,
+          "reader": "Flag",
+          "key": "kXOLVER_NRA_MCSAT",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_MCSAT_NO_CDCAC",
+      "category": "strategy-review",
+      "sites": [
+        {
+          "path": "src/search/nra/engine/NlsatEngine.cpp",
+          "line": 544,
+          "reader": "Boolean",
+          "key": "kXOLVER_NRA_MCSAT_NO_CDCAC",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_NLA_CUTS",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver_cac.cpp",
+          "line": 144,
+          "reader": "Boolean",
+          "key": "kXOLVER_NRA_NLA_CUTS",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        },
+        {
+          "path": "src/search/nra/reasoners/NlaCutsRunner.cpp",
+          "line": 19,
+          "reader": "Boolean",
+          "key": "kXOLVER_NRA_NLA_CUTS",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_NLEXT_BERNSTEIN",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/linearizer/IncrementalLinearizer.cpp",
+          "line": 244,
+          "reader": "Flag",
+          "key": "kXOLVER_NRA_NLEXT_BERNSTEIN",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_NLEXT_HIGHER",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/linearizer/IncrementalLinearizer.cpp",
+          "line": 391,
+          "reader": "Flag",
+          "key": "kXOLVER_NRA_NLEXT_HIGHER",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_NLEXT_MONO_BOUND",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/linearizer/IncrementalLinearizer.cpp",
+          "line": 324,
+          "reader": "Flag",
+          "key": "kXOLVER_NRA_NLEXT_MONO_BOUND",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_NLEXT_POWER",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/linearizer/IncrementalLinearizer.cpp",
+          "line": 241,
+          "reader": "Flag",
+          "key": "kXOLVER_NRA_NLEXT_POWER",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_NLEXT_TANGENT_PERTURB",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver_cac.cpp",
+          "line": 707,
+          "reader": "Boolean",
+          "key": "kXOLVER_NRA_NLEXT_TANGENT_PERTURB",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_NLEXT_TANGENT_PERTURB_CAP",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver_cac.cpp",
+          "line": 716,
+          "reader": "Int",
+          "key": "kXOLVER_NRA_NLEXT_TANGENT_PERTURB_CAP",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_NLEXT_TANGENT_PERTURB_MINROUND",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver_cac.cpp",
+          "line": 726,
+          "reader": "Int",
+          "key": "kXOLVER_NRA_NLEXT_TANGENT_PERTURB_MINROUND",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_NLSAT_DFS_BUDGET",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nra/engine/NlsatEngine.cpp",
+          "line": 419,
+          "reader": "Int",
+          "key": "kXOLVER_NRA_NLSAT_DFS_BUDGET",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_NLSAT_FALLBACK_DEG_CAP",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nra/engine/NlsatEngine.cpp",
+          "line": 556,
+          "reader": "Int",
+          "key": "kXOLVER_NRA_NLSAT_FALLBACK_DEG_CAP",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_NLSAT_ISO_BUDGET",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nra/engine/NlsatEngine.cpp",
+          "line": 162,
+          "reader": "Long",
+          "key": "kXOLVER_NRA_NLSAT_ISO_BUDGET",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_NLSAT_MAX_CORE_POLYS",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 3052,
+          "reader": "Int",
+          "key": "kXOLVER_NRA_NLSAT_MAX_CORE_POLYS",
+          "semantics": "checked numeric conversion with caller default"
+        },
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 3053,
+          "reader": "Int",
+          "key": "kXOLVER_NRA_NLSAT_MAX_CORE_POLYS",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_NLSAT_MAX_CORE_VARS",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 3049,
+          "reader": "Int",
+          "key": "kXOLVER_NRA_NLSAT_MAX_CORE_VARS",
+          "semantics": "checked numeric conversion with caller default"
+        },
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 3050,
+          "reader": "Int",
+          "key": "kXOLVER_NRA_NLSAT_MAX_CORE_VARS",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_NLSAT_MAX_ELIM_DEG",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 3055,
+          "reader": "Int",
+          "key": "kXOLVER_NRA_NLSAT_MAX_ELIM_DEG",
+          "semantics": "checked numeric conversion with caller default"
+        },
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 3056,
+          "reader": "Int",
+          "key": "kXOLVER_NRA_NLSAT_MAX_ELIM_DEG",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_NLSAT_ROOT_CANDIDATES",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nra/engine/NlsatEngine.cpp",
+          "line": 785,
+          "reader": "Int",
+          "key": "kXOLVER_NRA_NLSAT_ROOT_CANDIDATES",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_NLSAT_ROOT_DEG_CAP",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nra/engine/NlsatEngine.cpp",
+          "line": 836,
+          "reader": "Int",
+          "key": "kXOLVER_NRA_NLSAT_ROOT_DEG_CAP",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_OSF_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver_stages.cpp",
+          "line": 587,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_OSF_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/nra/simplex/PolynomialIntervalPruner.cpp",
+          "line": 1172,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_OSF_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_OSF_FACTOR_CADENCE",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver_stages.cpp",
+          "line": 575,
+          "reader": "Int",
+          "key": "kXOLVER_NRA_OSF_FACTOR_CADENCE",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_OSF_PRUNE",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver_stages.cpp",
+          "line": 506,
+          "reader": "Flag",
+          "key": "kXOLVER_NRA_OSF_PRUNE",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_PREELIM",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver.cpp",
+          "line": 198,
+          "reader": "Boolean",
+          "key": "kXOLVER_NRA_PREELIM",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_PRESOLVE_BUDGET_MS",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver_stages.cpp",
+          "line": 63,
+          "reader": "Long",
+          "key": "kXOLVER_NRA_PRESOLVE_BUDGET_MS",
+          "semantics": "checked numeric conversion with caller default"
+        },
+        {
+          "path": "src/search/nra/NraSolver_stages.cpp",
+          "line": 639,
+          "reader": "Long",
+          "key": "kXOLVER_NRA_PRESOLVE_BUDGET_MS",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_PROJECTION",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 231,
+          "reader": "Projection",
+          "key": "kXOLVER_NRA_PROJECTION",
+          "semantics": "typed automatic/Collins/Lazard strategy"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_PROJ_MAX_COEFF_BITS",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 481,
+          "reader": "Int",
+          "key": "kXOLVER_NRA_PROJ_MAX_COEFF_BITS",
+          "semantics": "checked numeric conversion with caller default"
+        },
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 482,
+          "reader": "Int",
+          "key": "kXOLVER_NRA_PROJ_MAX_COEFF_BITS",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_PROJ_MAX_DEG",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 475,
+          "reader": "Int",
+          "key": "kXOLVER_NRA_PROJ_MAX_DEG",
+          "semantics": "checked numeric conversion with caller default"
+        },
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 476,
+          "reader": "Int",
+          "key": "kXOLVER_NRA_PROJ_MAX_DEG",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_PROJ_MAX_TERMS",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 472,
+          "reader": "Int",
+          "key": "kXOLVER_NRA_PROJ_MAX_TERMS",
+          "semantics": "checked numeric conversion with caller default"
+        },
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 473,
+          "reader": "Int",
+          "key": "kXOLVER_NRA_PROJ_MAX_TERMS",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_SIGN_REFUTE_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver_stages.cpp",
+          "line": 326,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_SIGN_REFUTE_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_SIGN_SPLIT",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver_stages.cpp",
+          "line": 392,
+          "reader": "Flag",
+          "key": "kXOLVER_NRA_SIGN_SPLIT",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_SIGN_SPLIT_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver_stages.cpp",
+          "line": 483,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_SIGN_SPLIT_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_SQUARE_CASCADE",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver_stages.cpp",
+          "line": 1056,
+          "reader": "Boolean",
+          "key": "kXOLVER_NRA_SQUARE_CASCADE",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_STAGE_TIMING",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver.cpp",
+          "line": 60,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_STAGE_TIMING",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/nra/NraSolver.cpp",
+          "line": 205,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_STAGE_TIMING",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_STAGE_TRACE",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver.cpp",
+          "line": 61,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_STAGE_TRACE",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_STAGE_TRACE_FILE",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver.cpp",
+          "line": 68,
+          "reader": "Path",
+          "key": "kXOLVER_NRA_STAGE_TRACE_FILE",
+          "semantics": "owned filesystem path; caller fallback on missing/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_SUBTROP_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver_stages.cpp",
+          "line": 880,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_SUBTROP_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_TOWER_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/nra/NraSolver_cac.cpp",
+          "line": 54,
+          "reader": "Path",
+          "key": "kXOLVER_NRA_TOWER_DIAG",
+          "semantics": "owned filesystem path; caller fallback on missing/empty"
+        },
+        {
+          "path": "src/search/nra/NraSolver_cac.cpp",
+          "line": 530,
+          "reader": "Path",
+          "key": "kXOLVER_NRA_TOWER_DIAG",
+          "semantics": "owned filesystem path; caller fallback on missing/empty"
+        },
+        {
+          "path": "src/search/nra/backend/LibpolyBackend.cpp",
+          "line": 666,
+          "reader": "Path",
+          "key": "kXOLVER_NRA_TOWER_DIAG",
+          "semantics": "owned filesystem path; caller fallback on missing/empty"
+        },
+        {
+          "path": "src/search/nra/backend/LibpolyBackend.cpp",
+          "line": 1893,
+          "reader": "Path",
+          "key": "kXOLVER_NRA_TOWER_DIAG",
+          "semantics": "owned filesystem path; caller fallback on missing/empty"
+        },
+        {
+          "path": "src/search/nra/cac/CacEngine.cpp",
+          "line": 154,
+          "reader": "Path",
+          "key": "kXOLVER_NRA_TOWER_DIAG",
+          "semantics": "owned filesystem path; caller fallback on missing/empty"
+        },
+        {
+          "path": "src/search/nra/cac/CacEngine.cpp",
+          "line": 402,
+          "reader": "Path",
+          "key": "kXOLVER_NRA_TOWER_DIAG",
+          "semantics": "owned filesystem path; caller fallback on missing/empty"
+        },
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 23,
+          "reader": "Path",
+          "key": "kXOLVER_NRA_TOWER_DIAG",
+          "semantics": "owned filesystem path; caller fallback on missing/empty"
+        },
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 731,
+          "reader": "Path",
+          "key": "kXOLVER_NRA_TOWER_DIAG",
+          "semantics": "owned filesystem path; caller fallback on missing/empty"
+        },
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 746,
+          "reader": "Path",
+          "key": "kXOLVER_NRA_TOWER_DIAG",
+          "semantics": "owned filesystem path; caller fallback on missing/empty"
+        },
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 776,
+          "reader": "Path",
+          "key": "kXOLVER_NRA_TOWER_DIAG",
+          "semantics": "owned filesystem path; caller fallback on missing/empty"
+        },
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 786,
+          "reader": "Path",
+          "key": "kXOLVER_NRA_TOWER_DIAG",
+          "semantics": "owned filesystem path; caller fallback on missing/empty"
+        },
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 970,
+          "reader": "Path",
+          "key": "kXOLVER_NRA_TOWER_DIAG",
+          "semantics": "owned filesystem path; caller fallback on missing/empty"
+        },
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 985,
+          "reader": "Path",
+          "key": "kXOLVER_NRA_TOWER_DIAG",
+          "semantics": "owned filesystem path; caller fallback on missing/empty"
+        },
+        {
+          "path": "src/search/nra/core/CdcacCore.cpp",
+          "line": 1239,
+          "reader": "Path",
+          "key": "kXOLVER_NRA_TOWER_DIAG",
+          "semantics": "owned filesystem path; caller fallback on missing/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_VARORDER_ASC",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/core/CdcacSolver.cpp",
+          "line": 173,
+          "reader": "Presence",
+          "key": "kXOLVER_NRA_VARORDER_ASC",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_NRA_VARORDER_SIMPLEX",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/nra/core/CdcacSolver.cpp",
+          "line": 20,
+          "reader": "Boolean",
+          "key": "kXOLVER_NRA_VARORDER_SIMPLEX",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_PA_RESIDUES",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 95,
+          "reader": "Long",
+          "key": "kXOLVER_PA_RESIDUES",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_PA_WORK",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 94,
+          "reader": "Long",
+          "key": "kXOLVER_PA_WORK",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_PP_AND_FLATTEN",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 194,
+          "reader": "Presence",
+          "key": "kXOLVER_PP_AND_FLATTEN",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_PP_AUTO_EUF_PROMOTE",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 671,
+          "reader": "Presence",
+          "key": "kXOLVER_PP_AUTO_EUF_PROMOTE",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_PP_BOUNDED_ENUM",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 222,
+          "reader": "Presence",
+          "key": "kXOLVER_PP_BOUNDED_ENUM",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_PP_BOUNDED_ENUM_MAX_CARTESIAN",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/frontend/preprocess/BoundedEnumeration.cpp",
+          "line": 98,
+          "reader": "Long",
+          "key": "kXOLVER_PP_BOUNDED_ENUM_MAX_CARTESIAN",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_PP_INLINE_SINGLE_DEFS_INT",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/frontend/preprocess/DefinedVariableSubstitution.cpp",
+          "line": 76,
+          "reader": "Presence",
+          "key": "kXOLVER_PP_INLINE_SINGLE_DEFS_INT",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_PP_MONOMIAL_SHARE",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 275,
+          "reader": "Presence",
+          "key": "kXOLVER_PP_MONOMIAL_SHARE",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_PP_MONOMIAL_SHARE_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/frontend/preprocess/MonomialSharingPass.cpp",
+          "line": 114,
+          "reader": "Presence",
+          "key": "kXOLVER_PP_MONOMIAL_SHARE_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_PP_NEWTON_INT_SQRT",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 226,
+          "reader": "Presence",
+          "key": "kXOLVER_PP_NEWTON_INT_SQRT",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_PP_PG_CNF",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 1322,
+          "reader": "Presence",
+          "key": "kXOLVER_PP_PG_CNF",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_PP_PURE_DEFINED_VAR_SUBST",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 392,
+          "reader": "Presence",
+          "key": "kXOLVER_PP_PURE_DEFINED_VAR_SUBST",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_PP_REWRITE",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 233,
+          "reader": "Presence",
+          "key": "kXOLVER_PP_REWRITE",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_PP_ROW_FOLD",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 525,
+          "reader": "Int",
+          "key": "kXOLVER_PP_ROW_FOLD",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_PP_ROW_FOLD_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/frontend/preprocess/ArrayReadOverWrite.cpp",
+          "line": 17,
+          "reader": "Flag",
+          "key": "kXOLVER_PP_ROW_FOLD_DIAG",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_PP_SOLVE_EQS",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 326,
+          "reader": "Boolean",
+          "key": "kXOLVER_PP_SOLVE_EQS",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_PP_SOLVE_EQS_BUDGET",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/frontend/preprocess/SolveEqs.cpp",
+          "line": 17,
+          "reader": "Long",
+          "key": "kXOLVER_PP_SOLVE_EQS_BUDGET",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_PP_SOLVE_EQS_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/frontend/preprocess/SolveEqs.cpp",
+          "line": 175,
+          "reader": "Presence",
+          "key": "kXOLVER_PP_SOLVE_EQS_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/frontend/preprocess/SolveEqs.cpp",
+          "line": 219,
+          "reader": "Presence",
+          "key": "kXOLVER_PP_SOLVE_EQS_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/frontend/preprocess/SolveEqs.cpp",
+          "line": 234,
+          "reader": "Presence",
+          "key": "kXOLVER_PP_SOLVE_EQS_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_PP_SOLVE_EQS_GAUSS",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 346,
+          "reader": "Presence",
+          "key": "kXOLVER_PP_SOLVE_EQS_GAUSS",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_PP_SOLVE_EQS_GROWTH_CAP",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/frontend/preprocess/SolveEqs.cpp",
+          "line": 22,
+          "reader": "Double",
+          "key": "kXOLVER_PP_SOLVE_EQS_GROWTH_CAP",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_PP_STORE_TOWER_MULTISET",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 449,
+          "reader": "Int",
+          "key": "kXOLVER_PP_STORE_TOWER_MULTISET",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_PP_STRICT_VALIDATION",
+      "category": "correctness-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 2093,
+          "reader": "Presence",
+          "key": "kXOLVER_PP_STRICT_VALIDATION",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_PP_TIGHT_BOUND_SUBST",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/frontend/preprocess/FormulaRewriter.cpp",
+          "line": 282,
+          "reader": "Presence",
+          "key": "kXOLVER_PP_TIGHT_BOUND_SUBST",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_PP_UNCONSTRAINED_ELIM",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 373,
+          "reader": "Presence",
+          "key": "kXOLVER_PP_UNCONSTRAINED_ELIM",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_PP_UNIVARIATE_CYCLE_SOLVE",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/frontend/preprocess/DefinedVariableSubstitution.cpp",
+          "line": 165,
+          "reader": "Presence",
+          "key": "kXOLVER_PP_UNIVARIATE_CYCLE_SOLVE",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_PP_VALIDATE_NONLINEAR_SAT",
+      "category": "correctness-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 2095,
+          "reader": "Presence",
+          "key": "kXOLVER_PP_VALIDATE_NONLINEAR_SAT",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_PP_VALIDATOR_MEMO",
+      "category": "correctness-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_model.cpp",
+          "line": 523,
+          "reader": "Flag",
+          "key": "kXOLVER_PP_VALIDATOR_MEMO",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_PRESOLVE_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/presolve/BoundChainComposer.cpp",
+          "line": 58,
+          "reader": "Presence",
+          "key": "kXOLVER_PRESOLVE_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/presolve/PresolveEngine.cpp",
+          "line": 101,
+          "reader": "Presence",
+          "key": "kXOLVER_PRESOLVE_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_PROP_CHECK_EVERY",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/sat/CadicalTheoryPropagator.cpp",
+          "line": 742,
+          "reader": "Int",
+          "key": "kXOLVER_PROP_CHECK_EVERY",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_RELEVANCY",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 1486,
+          "reader": "Presence",
+          "key": "kXOLVER_RELEVANCY",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_RELEVANCY_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 1490,
+          "reader": "Presence",
+          "key": "kXOLVER_RELEVANCY_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_SAT_DEFER_EARLY_CONFLICT",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/sat/CadicalTheoryPropagator.cpp",
+          "line": 113,
+          "reader": "Presence",
+          "key": "kXOLVER_SAT_DEFER_EARLY_CONFLICT",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_SAT_LEMMA_MGMT",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/coordination/TheoryLemmaDatabase.cpp",
+          "line": 12,
+          "reader": "Capacity",
+          "key": "kXOLVER_SAT_LEMMA_MGMT",
+          "semantics": "entry capacity; zero is unbounded; true selects default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_SAT_MIN",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/coordination/TheoryManager.cpp",
+          "line": 129,
+          "reader": "Presence",
+          "key": "kXOLVER_SAT_MIN",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_SAT_PROF",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/sat/CadicalTheoryPropagator.cpp",
+          "line": 182,
+          "reader": "Presence",
+          "key": "kXOLVER_SAT_PROF",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/sat/CadicalTheoryPropagator.cpp",
+          "line": 250,
+          "reader": "Presence",
+          "key": "kXOLVER_SAT_PROF",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/sat/CadicalTheoryPropagator.cpp",
+          "line": 401,
+          "reader": "Presence",
+          "key": "kXOLVER_SAT_PROF",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/sat/CadicalTheoryPropagator.cpp",
+          "line": 430,
+          "reader": "Presence",
+          "key": "kXOLVER_SAT_PROF",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/sat/CadicalTheoryPropagator.cpp",
+          "line": 554,
+          "reader": "Presence",
+          "key": "kXOLVER_SAT_PROF",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/sat/CadicalTheoryPropagator.cpp",
+          "line": 611,
+          "reader": "Presence",
+          "key": "kXOLVER_SAT_PROF",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/sat/CadicalTheoryPropagator.cpp",
+          "line": 636,
+          "reader": "Presence",
+          "key": "kXOLVER_SAT_PROF",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/sat/CadicalTheoryPropagator.cpp",
+          "line": 654,
+          "reader": "Presence",
+          "key": "kXOLVER_SAT_PROF",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/sat/CadicalTheoryPropagator.cpp",
+          "line": 680,
+          "reader": "Presence",
+          "key": "kXOLVER_SAT_PROF",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/search/sat/CadicalTheoryPropagator.cpp",
+          "line": 937,
+          "reader": "Presence",
+          "key": "kXOLVER_SAT_PROF",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_SAT_SAMPLE",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/sat/CadicalBackend.cpp",
+          "line": 188,
+          "reader": "Presence",
+          "key": "kXOLVER_SAT_SAMPLE",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_SAT_SIZE_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/sat/CadicalBackend.cpp",
+          "line": 189,
+          "reader": "Presence",
+          "key": "kXOLVER_SAT_SIZE_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_SELFPROF",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "app/main.cpp",
+          "line": 39,
+          "reader": "Presence",
+          "key": "kXOLVER_SELFPROF",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_SIMPLEX_IMPLIED_EQ",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/lia/LiaSolver.cpp",
+          "line": 46,
+          "reader": "Flag",
+          "key": "kXOLVER_SIMPLEX_IMPLIED_EQ",
+          "semantics": "nonempty and first character != 0; caller default"
+        },
+        {
+          "path": "src/search/lra/LraSolver.cpp",
+          "line": 39,
+          "reader": "Flag",
+          "key": "kXOLVER_SIMPLEX_IMPLIED_EQ",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_STRAT_PORTFOLIO",
+      "category": "strategy-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver.cpp",
+          "line": 1174,
+          "reader": "Flag",
+          "key": "kXOLVER_STRAT_PORTFOLIO",
+          "semantics": "nonempty and first character != 0; caller default"
+        },
+        {
+          "path": "src/runtime/Solver.cpp",
+          "line": 1178,
+          "reader": "Flag",
+          "key": "kXOLVER_STRAT_PORTFOLIO",
+          "semantics": "nonempty and first character != 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_STRAT_PORTFOLIO_BUDGET_MS",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/runtime/factory/StrategyPresets.cpp",
+          "line": 19,
+          "reader": "Int",
+          "key": "kXOLVER_STRAT_PORTFOLIO_BUDGET_MS",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_STRAT_PRESETS",
+      "category": "strategy-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 234,
+          "reader": "Presence",
+          "key": "kXOLVER_STRAT_PRESETS",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 1212,
+          "reader": "Presence",
+          "key": "kXOLVER_STRAT_PRESETS",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_TARGETED_PP",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 245,
+          "reader": "Int",
+          "key": "kXOLVER_TARGETED_PP",
+          "semantics": "checked numeric conversion with caller default"
+        },
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 544,
+          "reader": "Int",
+          "key": "kXOLVER_TARGETED_PP",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_TARGETED_PP_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/frontend/preprocess/targeted/ReadOnlyArrayElim.cpp",
+          "line": 298,
+          "reader": "Presence",
+          "key": "kXOLVER_TARGETED_PP_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/frontend/preprocess/targeted/UfApplyAckermann.cpp",
+          "line": 141,
+          "reader": "Presence",
+          "key": "kXOLVER_TARGETED_PP_DIAG",
+          "semantics": "presence (even 0 enables)"
+        },
+        {
+          "path": "src/runtime/Solver_impl_model.cpp",
+          "line": 386,
+          "reader": "Presence",
+          "key": "kXOLVER_TARGETED_PP_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_TARGETED_PP_DUMP",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/frontend/preprocess/targeted/ReadOnlyArrayElim.cpp",
+          "line": 321,
+          "reader": "Presence",
+          "key": "kXOLVER_TARGETED_PP_DUMP",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_TARGETED_PP_UFACK",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver_impl_checksat.cpp",
+          "line": 561,
+          "reader": "Presence",
+          "key": "kXOLVER_TARGETED_PP_UFACK",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_TARGETED_PP_WRITEARRAY",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/frontend/preprocess/targeted/ReadOnlyArrayElim.cpp",
+          "line": 286,
+          "reader": "Presence",
+          "key": "kXOLVER_TARGETED_PP_WRITEARRAY",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_THEORY_ENTAIL_PROP_EVERY",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/search/sat/CadicalTheoryPropagator.cpp",
+          "line": 905,
+          "reader": "Int",
+          "key": "kXOLVER_THEORY_ENTAIL_PROP_EVERY",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_TMCHECK_HB",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/coordination/TheoryManager.cpp",
+          "line": 622,
+          "reader": "Presence",
+          "key": "kXOLVER_TMCHECK_HB",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_UF_DISEQ_WATCH",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/euf/EufSolver.cpp",
+          "line": 45,
+          "reader": "ExactZero",
+          "key": "kXOLVER_UF_DISEQ_WATCH",
+          "semantics": "disabled only by the complete string 0; caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_UF_FAST_CC",
+      "category": "heuristic-or-preprocessing-review",
+      "sites": [
+        {
+          "path": "src/search/euf/IncrementalEGraph.cpp",
+          "line": 14,
+          "reader": "Boolean",
+          "key": "kXOLVER_UF_FAST_CC",
+          "semantics": "canonical case-insensitive Boolean; caller default on invalid/empty"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_WALLCLOCK_MS",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/runtime/Solver.cpp",
+          "line": 1152,
+          "reader": "Long",
+          "key": "kXOLVER_WALLCLOCK_MS",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_WALLCLOCK_SCALE",
+      "category": "numeric-or-boolean-review",
+      "sites": [
+        {
+          "path": "src/base/SolveClock.cpp",
+          "line": 58,
+          "reader": "Int",
+          "key": "kXOLVER_WALLCLOCK_SCALE",
+          "semantics": "checked numeric conversion with caller default"
+        }
+      ],
+      "mixed_reader_semantics": false
+    },
+    {
+      "name": "XOLVER_WISA_DIAG",
+      "category": "diagnostic-review",
+      "sites": [
+        {
+          "path": "src/search/sat/CadicalTheoryPropagator.cpp",
+          "line": 833,
+          "reader": "Presence",
+          "key": "kXOLVER_WISA_DIAG",
+          "semantics": "presence (even 0 enables)"
+        }
+      ],
+      "mixed_reader_semantics": false
+    }
+  ],
+  "dynamic_reads": [
+    {
+      "path": "src/base/EnvParam.cpp",
+      "line": 55,
+      "argument": "name"
+    },
+    {
+      "path": "src/base/RuntimeConfig.cpp",
+      "line": 13,
+      "argument": "key.name("
+    },
+    {
+      "path": "src/base/RuntimeConfig.cpp",
+      "line": 38,
+      "argument": "key.name("
+    },
+    {
+      "path": "src/base/RuntimeConfig.cpp",
+      "line": 41,
+      "argument": "key.name("
+    },
+    {
+      "path": "src/base/RuntimeConfig.cpp",
+      "line": 45,
+      "argument": "key.name("
+    },
+    {
+      "path": "src/base/RuntimeConfig.cpp",
+      "line": 52,
+      "argument": "key.name("
+    },
+    {
+      "path": "src/base/RuntimeConfig.cpp",
+      "line": 57,
+      "argument": "key.name("
+    },
+    {
+      "path": "src/base/RuntimeConfig.cpp",
+      "line": 63,
+      "argument": "key.name("
+    },
+    {
+      "path": "src/base/RuntimeConfig.cpp",
+      "line": 83,
+      "argument": "key.name("
+    },
+    {
+      "path": "app/main.cpp",
+      "line": 596,
+      "argument": "envVar"
+    },
+    {
+      "path": "app/main.cpp",
+      "line": 755,
+      "argument": "f"
+    }
+  ],
+  "declared_controls": 375,
+  "legacy_text_controls": 0
+}

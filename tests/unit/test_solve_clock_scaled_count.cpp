@@ -14,7 +14,7 @@
 
 #include <doctest/doctest.h>
 
-#include "util/SolveClock.h"
+#include "base/SolveClock.h"
 
 using namespace xolver;
 

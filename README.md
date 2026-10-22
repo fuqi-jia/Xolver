@@ -1,6 +1,6 @@
 # Xolver
 
-Xolver is an SMT solver for quantifier-free nonlinear arithmetic and its combinations with uninterpreted functions, arrays, and algebraic datatypes. A CaDiCaL-driven CDCL(T) core orchestrates theory solvers that reason over exact rational (GMP/MPFR) and real-algebraic (libpoly) arithmetic, with no floating point on the decision path. Incomplete reasoning yields `unknown` rather than an unsound verdict.
+Xolver is an SMT solver for quantifier-free nonlinear arithmetic and its combinations with uninterpreted functions, arrays, and algebraic datatypes. Dedicated native paths also handle quantified Presburger arithmetic and quantifier-free separation logic. A CaDiCaL-driven CDCL(T) core orchestrates theory solvers that reason over exact rational (GMP/MPFR) and real-algebraic (libpoly) arithmetic, with no floating point on the decision path. Incomplete reasoning yields `unknown` rather than an unsound verdict.
 
 At SMT-COMP 2026, Xolver competed as a Standalone Solver and received two awards: **Single Query Track Largest Contribution — UNSAT Performance Winner** and **QF_NIRA Winner**.
 
@@ -22,38 +22,28 @@ At SMT-COMP 2026, Xolver competed as a Standalone Solver and received two awards
 
 ## Architecture
 
+```mermaid
+flowchart TD
+    Input[SMT-LIB / public API] --> DAG[SOMTParser native DAG]
+    DAG --> PA[PA affine and divisibility formulas]
+    DAG --> SL[SL heap formulas]
+    DAG --> Ground[Ground preprocessing on native nodes]
+    PA --> QE[Integer quantifier elimination]
+    SL --> Heap[Heap decision procedures]
+    Ground --> SAT[CaDiCaL CDCL-T]
+    SAT <--> Theory[Arithmetic / EUF / arrays / datatypes]
+    QE --> Result[Result and model]
+    Heap --> Result
+    Theory --> Result
+    Result --> Check[Model checks / optional proof artifacts]
 ```
-                  SMT-LIB 2 input
-                         │
-                  SOMTParser           (frontend, git submodule)
-                         │
-                  Frontend lowering    (ToInt / div-mod / ITE)
-                         │
-   ┌──────────────────────────────────────────────────┐
-   │ Core IR (Expr / Sort)        hash-consed DAG     │
-   │ Polynomial view (PolyId)     libpoly kernel      │
-   │ Evaluation view              local-search        │
-   └─────────────────────┬────────────────────────────┘
-                         │  Atomizer  (b_i ↔ theory atom_i)
-                         ▼
-                  CaDiCaL SAT engine   (CDCL(T) main loop)
-                         │
-                         ▼
-   ┌──────────────────────────────────────────────────┐
-   │ Theory solvers (ArithSolverBase + Reasoner)      │
-   │   LRA / LIA      simplex + branch&bound          │
-   │   IDL / RDL      Bellman-Ford difference         │
-   │   NRA            CDCAC + Collins/Lazard          │
-   │   NIA            NIA-Core + bit-blast            │
-   │   NIRA / LIRA    mixed int/real                  │
-   │   EUF / Arrays   e-graph + lazy axioms           │
-   │   Datatypes      lazy constructor plugin         │
-   └─────────────────────┬────────────────────────────┘
-                         │  candidate models / conflicts
-                         ▼
-            ModelValidator    (gates every sat — exact)
-            Advisor           (heuristic, propose-only)
-```
+
+There is one shared general formula representation: the SOMTParser DAG.
+`NativeTerms` supplies handles, scopes and metadata; its temporary `Kind`/`TermExpr`
+read/construction interfaces still serve legacy ground consumers. PA and SL
+consume native nodes directly and build their own theory representations.
+The old CoreIR graph is removed; compatibility-interface cleanup remains in scope.
+
 
 Xolver uses [SOMTParser](https://github.com/fuqi-jia/SOMTParser) as its frontend for SMT-LIB parsing, type checking, expression management, and rewriting.
 
@@ -78,8 +68,8 @@ CLI at `build/bin/xolver`. CMake options: `XOLVER_BUILD_TESTS`, `XOLVER_BUILD_TO
 
 ```bash
 ./build/bin/xolver solve input.smt2                  # sat / unsat / unknown
-./build/bin/xolver solve --produce-models input.smt2 # with model
-./build/bin/xolver model-check <model>               # validate a model
+./build/bin/xolver solve input.smt2 --produce-models # with model
+./build/bin/xolver model-check input.smt2            # solve, then strictly check the model
 ./build/bin/xolver proof-check <proof>               # check a proof certificate
 ```
 
@@ -93,23 +83,32 @@ cd build && ctest                          # unit + per-logic regression
 python3 tools/regression/run_regression.py --root tests/regression --solver build/bin/xolver
 ```
 
-The regression harness compares each verdict against z3/cvc5 and flags any sat↔unsat disagreement.
+The regression harness compares stdout verdicts with the embedded `:status`;
+it does not invoke z3/cvc5. Differential tools run those oracles separately.
+Opposite verdicts and crashes always fail, including known-gap cases.
+
+The [gate cleanup audit](docs/audit/GATE-CLOSEOUT.md) records the current source
+and validation status. The latest broad server run has one unresolved NRA
+model-check timeout; full PA/SL completion remains separate work.
 
 ---
 
 ## Repository layout
 
-| Path                                           | Contents                                               |
-| ---------------------------------------------- | ------------------------------------------------------ |
-| `src/expr/`                                    | hash-consed Core IR, rewriter                          |
-| `src/parser/`, `src/frontend/`                 | SOMTParser adapter, lowering passes                    |
-| `src/sat/`                                     | CaDiCaL wrapper                                        |
-| `src/theory/core/`                             | TheoryManager, Nelson–Oppen combination                |
-| `src/theory/arith/`                            | per-theory solvers (LRA/LIA/IDL/RDL/NRA/NIA/NIRA/LIRA) |
-| `src/theory/{euf,array,datatype}/`             | e-graph + lazy axioms                                  |
-| `tools/`                                       | CLI, build/test/benchmark scripts                      |
-| `tests/`                                       | doctest unit suite + per-logic regression corpora      |
-| `third_party/SOMTParser`, `cadical`, `libpoly` | git submodules                                         |
+| Path | Contents |
+| --- | --- |
+| `src/base/` | Exact values, resource budgets and typed process configuration |
+| `src/ir/` | SOMTParser DAG handles, sorts and temporary compatibility interfaces |
+| `src/contracts/` | Theory-specific formulas, models and solver contracts |
+| `src/algebra/` | Polynomial representation and exact algebraic operations |
+| `src/evidence/` | Independent model checks and proof/certificate serialization |
+| `src/decision/` | Native PA and SL decision procedures |
+| `src/frontend/` | Parser integration and ground preprocessing |
+| `src/search/` | SAT, theory search, combination and heuristics |
+| `src/runtime/` | Query lifecycle, dispatch and public API implementation |
+| `include/xolver/`, `app/`, `python/` | Public headers, CLI and Python bindings |
+| `tools/`, `tests/` | Validation, differential tests, server workflows and regression inputs |
+| `third_party/` | SOMTParser, CaDiCaL and libpoly dependencies |
 
 ---
 
@@ -121,7 +120,31 @@ Xolver does not call, wrap, link, or include source from any existing SMT solver
 
 Xolver was developed through a **researcher-led, AI coding-agent-assisted workflow**. The author defined the overall solver architecture, algorithm design and selection, task decomposition, integration, testing, and validation. AI coding agents (Claude Opus 4.7 / Sonnet 4.6, ChatGPT 5.5, Kimi 2.6) carried out much of the code implementation under this coordination, with role-specialised agents for individual theory lanes (LRA/LIA, NRA, NIA, EUF/arrays, combination, and infrastructure).
 
-To reduce correctness risks in AI-assisted implementation, Xolver validates candidate `sat` results against the original formula using exact arithmetic. Supported `unsat` paths use additional consistency checks and proof-certificate checks where available. Incomplete reasoning yields `unknown` rather than an unsound verdict.
+Candidate models can be checked against the original formula using exact
+arithmetic. Validation is three-valued: a model may satisfy, violate, or be
+indeterminate. Legacy solving paths do not all require positive validation;
+`--certify` requires it. UNSAT proof coverage is partial, and a checked Boolean
+skeleton does not certify assumed theory lemmas or preprocessing.
+
+The [verification architecture audit](docs/audit/ARCHITECTURE.md) records the
+remaining work, runtime-control inventory, fixes, and preparation for Presburger
+arithmetic and separation logic. The [current native-DAG implementation](docs/audit/NATIVE-TERMS.md)
+uses SOMTParser nodes directly and reconstructs free-variable models for its
+budgeted quantified PA procedure. [Independent PA replay](docs/audit/PA-ISABELLE.md)
+checks selected original claims in Isabelle.
+The [Boolean separation-logic core](docs/audit/SEPARATION-BOOLEAN.md) adds nested
+negation, star and wand, typed heap records and a standalone concrete-heap
+checker to the earlier symbolic-heap API. Direct native SL parser/runtime
+integration combines linear integer terms, constant div/mod and ite/abs with
+Boolean connectives, star and wand over integer addresses/data. It exports
+checked heap models and evaluates arithmetic `get-value` against the existing
+model. [R33 server validation](docs/audit/VALIDATION-NATIVE-TERMS.md) records the
+full test suites, arithmetic differential checks, semantic replays and a
+reproduced unconstrained-nil inconsistency in the installed cvc5 oracle.
+PA certificate coverage, further theory combinations, quantified and inductive
+SL, and remaining unknown/performance cases are solver work still in progress.
+The current task targets SMT solving and validation; a formal refinement proof
+of the C++ implementation is not a delivery requirement.
 
 ### Citation
 

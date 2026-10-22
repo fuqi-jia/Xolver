@@ -237,10 +237,13 @@ class ModelRef:
 
     def __init__(self, ll_model, consts):
         self._m = ll_model            # _xolver.Model
-        self._consts = consts         # name -> ExprRef (declared on the solver)
+        self._consts = dict(consts)   # snapshot; later reset/declarations cannot change a model
+        self._contexts = {e.term.context() for e in self._consts.values()}
 
     def _expr(self, key):
         if isinstance(key, ExprRef):
+            if key.term.context() not in self._contexts:
+                raise ValueError("expression belongs to a different solver context")
             return key
         if isinstance(key, str):
             return self._consts.get(key)
@@ -336,6 +339,11 @@ class Solver:
 
     # --- const factories ---
     def _declare(self, name: str, sort: str, ll_sort) -> ExprRef:
+        if name in self._consts:
+            e = self._consts[name]
+            if e.sort != sort:
+                raise ValueError("symbol already declared with a different sort")
+            return e
         e = _NamedExpr(self, self._s.mk_const(ll_sort, name), sort, name)
         self._consts[name] = e
         return e
@@ -356,7 +364,9 @@ class Solver:
 
     # --- literals ---
     def int_val(self, v: int) -> ExprRef:
-        return ExprRef(self, self._s.mk_int(int(v)), "Int")
+        if not isinstance(v, int):
+            raise TypeError("integer literal requires a Python int")
+        return ExprRef(self, self._s.mk_int(v), "Int")
 
     def real_val(self, v: PyNum) -> ExprRef:
         return ExprRef(self, self._s.mk_real(_to_rational(v)), "Real")
@@ -402,6 +412,10 @@ class Solver:
 
     def model(self) -> ModelRef:
         return ModelRef(self._s.get_model(), self._consts)
+
+    def validate_model(self):
+        """Three-valued exact check; only ModelValidation.Satisfied is evidence."""
+        return self._s.validate_model()
 
     def value(self, e: ExprRef):
         """Value of a const in the current model (Python value)."""
@@ -551,5 +565,8 @@ def _to_rational(v: PyNum) -> str:
         return "1" if v else "0"
     if isinstance(v, int):
         return str(v)
-    fr = Fraction(v).limit_denominator(10**12) if isinstance(v, float) else Fraction(v)
+    # Preserve the exact Python float value. Rounding with limit_denominator
+    # can make two distinct constants equal, changing a verification problem.
+    # Use a string or Fraction for an exact intended decimal such as "0.1".
+    fr = Fraction(v)
     return f"{fr.numerator}/{fr.denominator}" if fr.denominator != 1 else str(fr.numerator)

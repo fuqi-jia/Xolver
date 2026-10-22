@@ -1,0 +1,18 @@
+experiment: xolver-audit-python-implementation-r3
+description: Public C++ API and Python DSL regression on the shared native build.
+environment:
+  host: panda1
+  workdir: /pub/data/jiafq/xolver
+protocol:
+  inputs: {list: [python]}
+  timeout: 25m
+  memory: 8G
+  parallelism: 1
+trials:
+  - {name: python312}
+run:
+  cmd: bash tools/remote/test_python.sh python-implementation-r3
+measurements:
+  from: metrics.json
+  primary: pytest_rc
+  checks: ["pytest_rc == 0"]

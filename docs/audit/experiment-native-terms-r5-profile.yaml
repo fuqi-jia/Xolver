@@ -1,0 +1,21 @@
+experiment: xolver-native-terms-r5-profile
+description: Compare native and historical NRA formulas and CPU samples.
+environment:
+  host: panda1
+  workdir: /pub/data/jiafq/xolver
+protocol:
+  inputs: {list: [nra_155_unsat_hycomp_ballcount_197var, nra_200_sat_metitarski_polypaver-bench-sqrt-3d-]}
+  timeout: 3m
+  memory: 4G
+  parallelism: 1
+trials:
+  - name: baseline
+    params: {label: architecture-r9}
+  - name: native
+    params: {label: native-terms-r5}
+run:
+  cmd: python3 tools/remote/profile_case.py --binary validation/{params.label}/xolver --case tests/regression/nra/{input}.smt2 --output validation/native-terms-r5/profile-{params.label}-{input} --timeout 30
+measurements:
+  from: metrics.json
+  primary: samples
+  checks: ["profile_completed == 1"]

@@ -11,11 +11,13 @@
 // Soundness is the gate: a value returned by pickValue must satisfy every
 // atom that is evaluable to a constant under the current trail.
 
-#include "experimental/mcsat/MCSatTrail.h"
-#include "theory/arith/logics/nra/engine/NlsatEngine.h"
-#include "theory/arith/kernel/poly/PolynomialKernel.h"
-#include "theory/core/TheoryAtomTypes.h"
-#include "util/RealValue.h"
+#include "search/experimental/mcsat/MCSatTrail.h"
+#include "search/nra/engine/NlsatEngine.h"
+#include "algebra/poly/PolynomialKernel.h"
+#include "search/nra/backend/LibpolyBackend.h"
+#include "base/EnvParam.h"
+#include "contracts/TheoryAtomTypes.h"
+#include "base/RealValue.h"
 
 #include <doctest/doctest.h>
 #include <memory>
@@ -43,6 +45,33 @@ TheoryAtomRecord makePolyAtom(PolyId p, Relation rel, mpq_class rhs,
 }
 
 } // namespace
+
+TEST_CASE("NlsatEngine: safe univariate harvesting finds a cubic rational root") {
+    // A root outside the small candidate grid must come from root isolation.
+    // The fallback degree budget excludes CDCAC for this cubic, so that route
+    // cannot conceal a disabled or broken root-candidate implementation.
+    env::Scope scope(env::Snapshot::capture({{"XOLVER_NRA_NLSAT_FALLBACK_DEG_CAP", "1"}}));
+    for (long root : {17L, -17L}) {
+        CAPTURE(root);
+        auto kernel = createPolynomialKernel();
+        LibpolyBackend algebra(kernel.get());
+        VarId x = kernel->getOrCreateVar("x");
+        PolyId p = kernel->pow(kernel->mkVar(x), 3);
+        nlsat::NlsatEngine engine;
+        engine.setAlgebra(kernel.get(), &algebra);
+        engine.onAssertAtom(makePolyAtom(p, Relation::Eq, mpq_class(root * root * root)),
+                            true, 1, SatLit{1, true});
+        MCSatTrail trail;
+        auto choice = engine.pickValue(x, trail);
+        REQUIRE(choice.kind == ValueChoice::Kind::Found);
+        auto value = choice.value.tryAsRational();
+        REQUIRE(value.has_value());
+        CHECK(*value == mpq_class(root));
+        REQUIRE(trail.pushTheoryDecision(x, choice.value, 1));
+        TheorySolver::TheoryModel model;
+        CHECK(engine.validateModel(trail, model));
+    }
+}
 
 TEST_CASE("NlsatEngine: pickNextVar returns x for x^2 - 4 = 0") {
     auto kernel = createPolynomialKernel();

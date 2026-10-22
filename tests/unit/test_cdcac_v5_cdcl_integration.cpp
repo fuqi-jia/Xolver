@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
-#include "theory/arith/logics/nra/core/CdcacCache.h"
-#include "theory/arith/logics/nra/preprocess/ActiveConstraintSet.h"
+#include "search/nra/core/CdcacCache.h"
+#include "search/nra/preprocess/ActiveConstraintSet.h"
 
 using namespace xolver;
 

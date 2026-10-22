@@ -1,0 +1,13 @@
+; z3=sat cvc5=sat xolver=unknown; seed=17 case=43
+(set-info :status sat)
+(set-logic QF_ALIA)
+(declare-fun i () Int)
+(declare-fun j () Int)
+(declare-fun k () Int)
+(declare-fun a () (Array Int Int))
+(declare-fun b () (Array Int Int))
+(declare-fun c () (Array Int Int))
+(assert (distinct i (+ i k)))
+(assert (< 1 (select (store a 1 5) 1)))
+(assert (distinct (store a j 0) a))
+(check-sat)

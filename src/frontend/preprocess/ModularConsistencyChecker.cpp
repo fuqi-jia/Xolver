@@ -9,7 +9,7 @@ namespace {
 // denominator is 1 (sort is IntOrReal). We accept those alongside the
 // proper Kind::ConstInt encoding so the matcher works in both QF_NIA and
 // QF_LIA inputs interchangeably.
-std::optional<mpz_class> extractIntConst(const CoreIr& ir, ExprId e) {
+std::optional<mpz_class> extractIntConst(const NativeTerms& ir, ExprId e) {
     const auto& node = ir.get(e);
     if (node.kind == Kind::ConstInt) {
         if (auto* v = std::get_if<int64_t>(&node.payload.value)) {
@@ -36,7 +36,7 @@ std::optional<mpz_class> extractIntConst(const CoreIr& ir, ExprId e) {
 
 } // namespace
 
-ModularConsistencyChecker::ModularConsistencyChecker(CoreIr& ir)
+ModularConsistencyChecker::ModularConsistencyChecker(NativeTerms& ir)
     : ir_(ir),
       boolSortId_(ir.boolSortId()),
       intSortId_(ir.intSortId()) {}
@@ -173,7 +173,7 @@ void ModularConsistencyChecker::crtCombine(
 }
 
 ExprId ModularConsistencyChecker::mkFalse() {
-    CoreExpr e;
+    TermExpr e;
     e.kind    = Kind::ConstBool;
     e.sort    = boolSortId_;
     e.payload = Payload(false);
@@ -181,7 +181,7 @@ ExprId ModularConsistencyChecker::mkFalse() {
 }
 
 ExprId ModularConsistencyChecker::mkIntConst(const mpz_class& v) {
-    CoreExpr e;
+    TermExpr e;
     e.kind    = Kind::ConstInt;
     e.sort    = intSortId_;
     // SOUNDNESS: the pinned candidate `start = lo + k` can be a 2^256-scale EVM
@@ -198,7 +198,7 @@ ExprId ModularConsistencyChecker::mkIntConst(const mpz_class& v) {
 }
 
 ExprId ModularConsistencyChecker::mkEq(ExprId a, ExprId b) {
-    CoreExpr e;
+    TermExpr e;
     e.kind = Kind::Eq;
     e.sort = boolSortId_;
     e.children.push_back(a);

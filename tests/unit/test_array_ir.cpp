@@ -1,13 +1,13 @@
 // Array IR plumbing (Part 3A): the frontend adapter must map SMT-LIB array
-// operations (select / store / (as const ...)) to the new CoreExpr kinds and
+// operations (select / store / (as const ...)) to the new TermExpr kinds and
 // record the (index, element) sorts of each Array sort, which SortId otherwise
 // does not carry.
 
 #include <doctest/doctest.h>
 #include <somtparser/frontend/parser.h>
 
-#include "parser/adapter.h"
-#include "expr/ir.h"
+#include "frontend/parser/adapter.h"
+#include "ir/NativeTerms.h"
 
 using namespace xolver;
 
@@ -34,7 +34,7 @@ TEST_CASE("adapter maps select/store and records (Array Int Real) sort params") 
     bool sawSelect = false, sawStore = false;
     SortId arraySort = NullSort;
     for (ExprId id = 0; id < static_cast<ExprId>(ir->size()); ++id) {
-        const CoreExpr& n = ir->get(id);
+        const TermExpr& n = ir->get(id);
         if (n.kind == Kind::Select) sawSelect = true;
         if (n.kind == Kind::Store) { sawStore = true; arraySort = n.sort; }
     }

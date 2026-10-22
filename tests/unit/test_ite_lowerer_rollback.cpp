@@ -1,10 +1,10 @@
 #include "xolver/Solver.h"
-#include "expr/ir.h"
+#include "ir/NativeTerms.h"
 #include <doctest/doctest.h>
 
 using namespace xolver;
 
-TEST_CASE("CoreIteLowerer: incremental push/pop with ITE via API") {
+TEST_CASE("IteLowerer: incremental push/pop with ITE via API") {
     Solver solver;
     solver.setLogic("QF_UF");
     Sort boolSort = solver.boolSort();

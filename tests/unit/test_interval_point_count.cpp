@@ -1,5 +1,5 @@
 #include <doctest/doctest.h>
-#include "theory/core/DerivedFact.h"
+#include "search/coordination/DerivedFact.h"
 #include <gmpxx.h>
 
 // Tests for IntervalSet::integerPointCount() — the O(#intervals), no-materialization

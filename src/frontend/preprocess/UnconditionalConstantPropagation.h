@@ -1,6 +1,6 @@
 #pragma once
 
-#include "expr/ir.h"
+#include "ir/NativeTerms.h"
 #include <gmpxx.h>
 #include <unordered_map>
 #include <vector>
@@ -32,12 +32,12 @@ namespace xolver {
  * unconditionally asserted), `hadContradiction()` returns true and the
  * caller can short-circuit to UNSAT.
  *
- * The pass never mutates existing CoreExpr nodes; it builds fresh
+ * The pass never mutates existing TermExpr nodes; it builds fresh
  * ExprIds and produces a new assertion list via `commit()`.
  */
 class UnconditionalConstantPropagation {
 public:
-    explicit UnconditionalConstantPropagation(CoreIr& ir);
+    explicit UnconditionalConstantPropagation(NativeTerms& ir);
 
     // Returns false only on fatal IR error. Run-not-found is reported
     // via hadContradiction(); the caller decides whether to short-
@@ -93,7 +93,7 @@ private:
     ExprId materializeConstant(const mpq_class& value, SortId sort);
     ExprId mkBool(bool value);
 
-    CoreIr& ir_;
+    NativeTerms& ir_;
     SortId boolSortId_;
     SortId intSortId_;
     SortId realSortId_;

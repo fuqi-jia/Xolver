@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
-#include "theory/arith/kernel/poly/FlatMonomialMap.h"
-#include "expr/types.h"
+#include "algebra/poly/FlatMonomialMap.h"
+#include "ir/types.h"
 #include <gmpxx.h>
 using namespace xolver;
 using Key = FlatMonomialMap<mpq_class>::Key;   // SmallVector<pair<VarId,int>,4>

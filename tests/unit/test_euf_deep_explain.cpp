@@ -15,10 +15,10 @@
 // exposed. Built at the egraph level to bypass the recursive-descent parser
 // (which would overflow first on deep S-expressions, masking this path).
 #include <doctest/doctest.h>
-#include "expr/ir.h"
-#include "theory/euf/EufTermManager.h"
-#include "theory/euf/IncrementalEGraph.h"
-#include "sat/SatSolver.h"
+#include "ir/NativeTerms.h"
+#include "search/euf/EufTermManager.h"
+#include "search/euf/IncrementalEGraph.h"
+#include "contracts/SatSolver.h"
 #include <deque>
 
 using namespace xolver;
@@ -26,16 +26,16 @@ using namespace xolver;
 TEST_CASE("EUF: deeply-nested UF congruence explanation does not overflow") {
     constexpr int kDeep = 60000;
 
-    CoreIr ir;
+    NativeTerms ir;
     SortId u = ir.allocateSortId();
     ir.registerSort(u, SortKind::Other);  // uninterpreted sort U
 
-    ExprId a = ir.add(CoreExpr{Kind::Variable, u, {}, Payload(std::string("a"))});
-    ExprId b = ir.add(CoreExpr{Kind::Variable, u, {}, Payload(std::string("b"))});
+    ExprId a = ir.add(TermExpr{Kind::Variable, u, {}, Payload(std::string("a"))});
+    ExprId b = ir.add(TermExpr{Kind::Variable, u, {}, Payload(std::string("b"))});
     ExprId fa = a, fb = b;
     for (int i = 0; i < kDeep; ++i) {
-        fa = ir.add(CoreExpr{Kind::UFApply, u, {fa}, Payload(std::string("f"))});
-        fb = ir.add(CoreExpr{Kind::UFApply, u, {fb}, Payload(std::string("f"))});
+        fa = ir.add(TermExpr{Kind::UFApply, u, {fa}, Payload(std::string("f"))});
+        fb = ir.add(TermExpr{Kind::UFApply, u, {fb}, Payload(std::string("f"))});
     }
 
     EufTermManager tm;
@@ -90,25 +90,25 @@ TEST_CASE("EUF: deeply-nested UF congruence explanation does not overflow") {
 TEST_CASE("EUF: deeply-nested store-tower congruence explanation does not overflow") {
     constexpr int kDeep = 60000;
 
-    CoreIr ir;
+    NativeTerms ir;
     SortId idxSort = ir.allocateSortId();
     ir.registerSort(idxSort, SortKind::Other);
     SortId elemSort = ir.allocateSortId();
     ir.registerSort(elemSort, SortKind::Other);
     SortId arrSort = ir.allocateSortId();
-    ir.registerSort(arrSort, SortKind::Array);
+    ir.registerArraySort(arrSort, idxSort, elemSort);
 
-    ExprId A = ir.add(CoreExpr{Kind::Variable, arrSort, {}, Payload(std::string("A"))});
-    ExprId B = ir.add(CoreExpr{Kind::Variable, arrSort, {}, Payload(std::string("B"))});
-    ExprId i = ir.add(CoreExpr{Kind::Variable, idxSort, {}, Payload(std::string("i"))});
-    ExprId v = ir.add(CoreExpr{Kind::Variable, elemSort, {}, Payload(std::string("v"))});
+    ExprId A = ir.add(TermExpr{Kind::Variable, arrSort, {}, Payload(std::string("A"))});
+    ExprId B = ir.add(TermExpr{Kind::Variable, arrSort, {}, Payload(std::string("B"))});
+    ExprId i = ir.add(TermExpr{Kind::Variable, idxSort, {}, Payload(std::string("i"))});
+    ExprId v = ir.add(TermExpr{Kind::Variable, elemSort, {}, Payload(std::string("v"))});
 
     // store_k = store(store_{k-1}, i, v); the same i/v at every level, so the
     // only varying argument is the (deep) array, and A=B propagates by congruence.
     ExprId sA = A, sB = B;
     for (int k = 0; k < kDeep; ++k) {
-        sA = ir.add(CoreExpr{Kind::Store, arrSort, {sA, i, v}, {}});
-        sB = ir.add(CoreExpr{Kind::Store, arrSort, {sB, i, v}, {}});
+        sA = ir.add(TermExpr{Kind::Store, arrSort, {sA, i, v}, {}});
+        sB = ir.add(TermExpr{Kind::Store, arrSort, {sB, i, v}, {}});
     }
 
     EufTermManager tm;

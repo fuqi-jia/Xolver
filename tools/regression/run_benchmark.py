@@ -215,12 +215,10 @@ def parse_result(stdout: str, stderr: str, returncode: int, timed_out: bool = Fa
     # Check for OOM killer or signals
     if returncode == -9 or returncode == 137:
         return "killed"
-    if returncode != 0 and "error" in (stdout + stderr).lower():
-        # Some solvers exit non-zero on error
-        pass
+    if returncode != 0:
+        return "timeout" if returncode == 124 else "error"
 
-    combined = stdout + "\n" + stderr
-    lines = combined.strip().splitlines()
+    lines = stdout.strip().splitlines()
 
     # Scan from the bottom (result usually at the end)
     for line in reversed(lines):
@@ -229,16 +227,10 @@ def parse_result(stdout: str, stderr: str, returncode: int, timed_out: bool = Fa
         if not line_stripped or line_stripped.startswith("("):
             continue
         for pattern, result in RESULT_PATTERNS:
-            if re.search(pattern, line_stripped):
+            if re.fullmatch(pattern, line_stripped):
                 return result
 
-    # Fallback: if returncode != 0 and we didn't match anything
-    if returncode != 0:
-        if "timeout" in combined.lower():
-            return "timeout"
-        return "error"
-
-    return "unknown"
+    return "error"
 
 
 def run_solver(cmd: List[str], file_path: Path, timeout: float, solver_name: str = "solver",

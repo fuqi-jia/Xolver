@@ -1,0 +1,24 @@
+experiment: xolver-audit-combination-fuzz-final
+description: Seeded differential tests with two independent reference solvers.
+environment:
+  host: panda1
+  workdir: /pub/data/jiafq/xolver
+protocol:
+  inputs: {list: [combination]}
+  seeds: [1, 17]
+  timeout: 45m
+  memory: 8G
+  parallelism: 2
+trials:
+  - {name: candidate}
+run:
+  cmd: >-
+    python3 tools/fuzz/fuzz_combination_soundness.py --n 100 --seed {seed}
+    --solver /pub/data/jiafq/xolver/validation/final/xolver --timeout 8
+    --z3 /pub/data/jiafq/xolver/dependencies/oracles/z3
+    --cvc5 /pub/data/jiafq/z3-native-audit-tools-20260924-r3/cvc5/bin/cvc5
+    --failures-dir validation/fuzz-final-cases --report "$EOS_METRICS_FILE"
+measurements:
+  from: metrics.json
+  primary: checked
+  checks: ["checked > 0", "unsound == 0", "errors == 0"]

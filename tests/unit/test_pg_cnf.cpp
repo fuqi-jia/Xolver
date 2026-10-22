@@ -1,4 +1,3 @@
-// XOLVER_PP_PG_CNF: Plaisted-Greenbaum polarity-aware CNF.
 //
 // A polarity bug in PG-CNF can only DROP a defining clause, which relaxes the
 // encoding and can only turn an unsat formula spuriously sat (never the
@@ -7,9 +6,9 @@
 // satisfiable (brute-forced over all assignments) — for BOTH pg-off and pg-on.
 // If the two ever disagree with the oracle, PG is unsound.
 #include <doctest/doctest.h>
-#include "frontend/atomization/Atomizer.h"
-#include "sat/SatSolver.h"
-#include "expr/ir.h"
+#include "search/boolean/Atomizer.h"
+#include "contracts/SatSolver.h"
+#include "ir/NativeTerms.h"
 #include <random>
 #include <vector>
 #include <string>
@@ -20,7 +19,7 @@ using namespace xolver;
 namespace {
 
 struct BoolHarness {
-    CoreIr ir;
+    NativeTerms ir;
     SortId boolS;
     std::vector<std::string> vars;
     std::vector<ExprId> varIds;
@@ -35,7 +34,7 @@ struct BoolHarness {
         }
     }
     ExprId mk(Kind k, std::vector<ExprId> ch, Payload p = Payload()) {
-        CoreExpr e; e.kind = k; e.sort = boolS;
+        TermExpr e; e.kind = k; e.sort = boolS;
         e.children = SmallVector<ExprId, 4>(ch.begin(), ch.end());
         e.payload = std::move(p);
         return ir.add(std::move(e));
@@ -43,9 +42,9 @@ struct BoolHarness {
 };
 
 // Brute-force truth value of `id` under a bitmask assignment (bit i = var i).
-bool evalBool(const CoreIr& ir, ExprId id, unsigned mask,
+bool evalBool(const NativeTerms& ir, ExprId id, unsigned mask,
               const std::vector<std::string>& vars) {
-    const CoreExpr& e = ir.get(id);
+    const TermExpr& e = ir.get(id);
     switch (e.kind) {
         case Kind::ConstBool: return std::get<bool>(e.payload.value);
         case Kind::Variable: {
@@ -71,7 +70,7 @@ bool evalBool(const CoreIr& ir, ExprId id, unsigned mask,
     }
 }
 
-bool bruteSatisfiable(const CoreIr& ir, ExprId root,
+bool bruteSatisfiable(const NativeTerms& ir, ExprId root,
                       const std::vector<std::string>& vars) {
     for (unsigned m = 0; m < (1u << vars.size()); ++m)
         if (evalBool(ir, root, m, vars)) return true;
@@ -88,27 +87,26 @@ struct CountingSat : SatSolver {
     SolveResult solve() override { return SolveResult::Unknown; }
     SolveResult solve(const std::vector<SatLit>&) override { return SolveResult::Unknown; }
     bool value(SatVar) const override { return false; }
+    void setDeadline(std::chrono::steady_clock::time_point) override {}
 };
 
-int countClauses(CoreIr& ir, ExprId root, SortId boolS, bool pg) {
+int countClauses(NativeTerms& ir, ExprId root, SortId boolS, bool pg) {
     CountingSat sat;
     Atomizer atom(sat);
     atom.setBoolSortId(boolS);
-    atom.setPgCnf(pg);
-    atom.computePolarities({root}, ir);
+    if (pg) atom.computePolarities({root}, ir);
     SatLit lit = atom.atomize(root, ir);
     sat.addClause({lit});
     return sat.clauses;
 }
 
 // SAT-status of the PG-encoded formula. Fresh SatSolver + Atomizer per call.
-bool encodeAndSolveIsSat(CoreIr& ir, ExprId root, SortId boolS, bool pg) {
+bool encodeAndSolveIsSat(NativeTerms& ir, ExprId root, SortId boolS, bool pg) {
     auto sat = createSatSolver();
     REQUIRE(sat);
     Atomizer atom(*sat);
     atom.setBoolSortId(boolS);
-    atom.setPgCnf(pg);
-    atom.computePolarities({root}, ir);
+    if (pg) atom.computePolarities({root}, ir);
     SatLit lit = atom.atomize(root, ir);
     sat->addClause({lit});
     return sat->solve() == SatSolver::SolveResult::Sat;

@@ -1,0 +1,14 @@
+experiment: xolver-native-terms-r2-regression
+description: Diagnose regressions against the frozen native DAG migration binary.
+environment:
+  host: panda1
+  workdir: /pub/data/jiafq/xolver
+protocol:
+  inputs: {list: [regression]}
+  timeout: 100m
+  memory: 8G
+  parallelism: 1
+trials:
+  - {name: native}
+run:
+  cmd: python3 tools/regression/run_regression.py --solver validation/native-terms-r2/xolver --timeout 240 -j 1 --report validation/native-terms-r2/regression-diagnostic.json > validation/native-terms-r2/regression-diagnostic.log 2>&1

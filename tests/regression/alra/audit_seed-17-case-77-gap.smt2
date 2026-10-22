@@ -1,0 +1,13 @@
+; z3=sat cvc5=sat xolver=unknown; seed=17 case=77
+(set-info :status sat)
+(set-logic QF_ALRA)
+(declare-fun i () Real)
+(declare-fun j () Real)
+(declare-fun k () Real)
+(declare-fun a () (Array Real Real))
+(declare-fun b () (Array Real Real))
+(declare-fun c () (Array Real Real))
+(assert (< (- 1.0 k) (- (- (- k 0.0) (- 1.0)) k)))
+(assert (not (= b (store a (+ (- 1.0) i) 5.0))))
+(assert (not (distinct a (store (store (store c k 5.0) (- i 5.0) 2.0) (- 5.0 (- (- 1.0) j)) (+ j (+ 2.0 j))))))
+(check-sat)

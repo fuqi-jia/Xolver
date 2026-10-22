@@ -1,0 +1,25 @@
+experiment: xolver-audit-paired-nra
+description: Full CPU per case; original four timeout cases, baseline vs candidate.
+environment:
+  host: panda1
+  workdir: /pub/data/jiafq/xolver
+protocol:
+  inputs:
+    list:
+      - nra_150_sat_melquiond2_hashcons_stress.smt2
+      - nra_154_sat_kissing_4_4.smt2
+      - nra_197_sat_metitarski_sqrt-problem-Melquiond2-.smt2
+      - nra_200_sat_metitarski_polypaver-bench-sqrt-3d-.smt2
+  timeout: 6m
+  memory: 8G
+  parallelism: 8
+trials:
+  - {name: baseline, params: {version: baseline}}
+  - {name: candidate, params: {version: candidate}}
+run:
+  cmd: python3 tools/remote/paired_case.py --case {input} --version {params.version} --timeout 240
+measurements:
+  from: metrics.json
+  primary: elapsed_ms
+  direction: minimize
+  checks: ["soundness_failure == 0", "execution_error == 0"]

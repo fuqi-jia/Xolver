@@ -1,9 +1,9 @@
 #include <gmpxx.h>
 #include <doctest/doctest.h>
-#include "theory/arith/kernel/poly/PolynomialKernel.h"
-#include "theory/arith/kernel/poly/PolynomialConverter.h"
-#include "theory/arith/kernel/poly/RationalPolynomial.h"
-#include "expr/ir.h"
+#include "algebra/poly/PolynomialKernel.h"
+#include "algebra/poly/PolynomialConverter.h"
+#include "algebra/poly/RationalPolynomial.h"
+#include "ir/NativeTerms.h"
 #include <chrono>
 
 using namespace xolver;
@@ -239,11 +239,13 @@ TEST_CASE("Stress: cascaded substituteRational (x+y)^10, x=1/2, y=1/3") {
 }
 
 // ============================================================================
-// Deeply nested expression from CoreIr
+// Deeply nested expression from NativeTerms
 // ============================================================================
 
 TEST_CASE("Stress: PolynomialConverter deep nested rational expression") {
-    CoreIr ir;
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Real);
+    ir.registerSort(1, SortKind::Int);
     auto kernel = createPolynomialKernel();
     PolynomialConverter conv(*kernel);
 
@@ -259,13 +261,13 @@ TEST_CASE("Stress: PolynomialConverter deep nested rational expression") {
 
     ExprId terms[5];
     for (int i = 0; i < 5; ++i) {
-        ExprId vi = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("v") + std::to_string(i))});
-        ExprId ci = ir.add(CoreExpr{Kind::ConstReal, 0, {}, Payload(std::string(coeffs[i].get_str()))});
-        terms[i] = ir.add(CoreExpr{Kind::Mul, 0, {ci, vi}, {}});
+        ExprId vi = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("v") + std::to_string(i))});
+        ExprId ci = ir.add(TermExpr{Kind::ConstReal, 0, {}, Payload(std::string(coeffs[i].get_str()))});
+        terms[i] = ir.add(TermExpr{Kind::Mul, 0, {ci, vi}, {}});
     }
-    ExprId addExpr = ir.add(CoreExpr{Kind::Add, 0, {terms[0], terms[1], terms[2], terms[3], terms[4]}, {}});
-    ExprId eight = ir.add(CoreExpr{Kind::ConstInt, 0, {}, Payload(int64_t(8))});
-    ExprId powExpr = ir.add(CoreExpr{Kind::Pow, 0, {addExpr, eight}, {}});
+    ExprId addExpr = ir.add(TermExpr{Kind::Add, 0, {terms[0], terms[1], terms[2], terms[3], terms[4]}, {}});
+    ExprId eight = ir.add(TermExpr{Kind::ConstInt, 1, {}, Payload(int64_t(8))});
+    ExprId powExpr = ir.add(TermExpr{Kind::Pow, 0, {addExpr, eight}, {}});
 
     auto t0 = steady_clock::now();
     auto res = conv.convert(powExpr, ir);
@@ -650,7 +652,9 @@ TEST_CASE("ULTRA: monomial power tower  (x^2 * y^3 * z^5)^20") {
 
 TEST_CASE("ULTRA: deep nested add-mul chain with rationals") {
     auto kernel = createPolynomialKernel();
-    CoreIr ir;
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Real);
+    ir.registerSort(1, SortKind::Int);
     PolynomialConverter conv(*kernel);
 
     // Build: ((1/2)v0 + (1/3)v1) * ((1/5)v2 + (1/7)v3) * ((1/11)v4 + (1/13)v5)
@@ -664,16 +668,16 @@ TEST_CASE("ULTRA: deep nested add-mul chain with rationals") {
     }
 
     auto makeMul = [&](int i) -> ExprId {
-        ExprId vi = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("v") + std::to_string(i))});
-        ExprId ci = ir.add(CoreExpr{Kind::ConstReal, 0, {}, Payload(std::string(coeffs[i].get_str()))});
-        return ir.add(CoreExpr{Kind::Mul, 0, {ci, vi}, {}});
+        ExprId vi = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("v") + std::to_string(i))});
+        ExprId ci = ir.add(TermExpr{Kind::ConstReal, 0, {}, Payload(std::string(coeffs[i].get_str()))});
+        return ir.add(TermExpr{Kind::Mul, 0, {ci, vi}, {}});
     };
 
-    ExprId add0 = ir.add(CoreExpr{Kind::Add, 0, {makeMul(0), makeMul(1)}, {}});
-    ExprId add1 = ir.add(CoreExpr{Kind::Add, 0, {makeMul(2), makeMul(3)}, {}});
-    ExprId add2 = ir.add(CoreExpr{Kind::Add, 0, {makeMul(4), makeMul(5)}, {}});
-    ExprId mul0 = ir.add(CoreExpr{Kind::Mul, 0, {add0, add1}, {}});
-    ExprId expr  = ir.add(CoreExpr{Kind::Mul, 0, {mul0, add2}, {}});
+    ExprId add0 = ir.add(TermExpr{Kind::Add, 0, {makeMul(0), makeMul(1)}, {}});
+    ExprId add1 = ir.add(TermExpr{Kind::Add, 0, {makeMul(2), makeMul(3)}, {}});
+    ExprId add2 = ir.add(TermExpr{Kind::Add, 0, {makeMul(4), makeMul(5)}, {}});
+    ExprId mul0 = ir.add(TermExpr{Kind::Mul, 0, {add0, add1}, {}});
+    ExprId expr  = ir.add(TermExpr{Kind::Mul, 0, {mul0, add2}, {}});
 
     auto t0 = steady_clock::now();
     auto res = conv.convert(expr, ir);
@@ -698,7 +702,9 @@ TEST_CASE("ULTRA: deep nested add-mul chain with rationals") {
 
 TEST_CASE("ULTRA: PolynomialConverter with 30-variable linear expression squared") {
     auto kernel = createPolynomialKernel();
-    CoreIr ir;
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Real);
+    ir.registerSort(1, SortKind::Int);
     PolynomialConverter conv(*kernel);
 
     const int N = 30;
@@ -709,16 +715,16 @@ TEST_CASE("ULTRA: PolynomialConverter with 30-variable linear expression squared
 
     for (int i = 0; i < N; ++i) {
         vars.push_back(kernel->getOrCreateVar("v" + std::to_string(i)));
-        ExprId vi = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("v") + std::to_string(i))});
-        ExprId ci = ir.add(CoreExpr{Kind::ConstReal, 0, {}, Payload(std::string(mpq_class(i+1, i+2).get_str()))});
-        children.push_back(ir.add(CoreExpr{Kind::Mul, 0, {ci, vi}, {}}));
+        ExprId vi = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("v") + std::to_string(i))});
+        ExprId ci = ir.add(TermExpr{Kind::ConstReal, 0, {}, Payload(std::string(mpq_class(i+1, i+2).get_str()))});
+        children.push_back(ir.add(TermExpr{Kind::Mul, 0, {ci, vi}, {}}));
     }
 
     SmallVector<ExprId, 4> addChildren;
     for (auto c : children) addChildren.push_back(c);
-    ExprId addExpr = ir.add(CoreExpr{Kind::Add, 0, addChildren, {}});
-    ExprId two = ir.add(CoreExpr{Kind::ConstInt, 0, {}, Payload(int64_t(2))});
-    ExprId powExpr = ir.add(CoreExpr{Kind::Pow, 0, {addExpr, two}, {}});
+    ExprId addExpr = ir.add(TermExpr{Kind::Add, 0, addChildren, {}});
+    ExprId two = ir.add(TermExpr{Kind::ConstInt, 1, {}, Payload(int64_t(2))});
+    ExprId powExpr = ir.add(TermExpr{Kind::Pow, 0, {addExpr, two}, {}});
 
     auto t0 = steady_clock::now();
     auto res = conv.convert(powExpr, ir);

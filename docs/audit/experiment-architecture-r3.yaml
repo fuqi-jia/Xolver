@@ -1,0 +1,18 @@
+experiment: xolver-architecture-r3
+description: Native SOMTParser PA input, binder identity repair, enforced layers and typed runtime controls.
+environment:
+  host: panda1
+  workdir: /pub/data/jiafq/xolver
+protocol:
+  inputs: {list: [architecture]}
+  timeout: 100m
+  memory: 16G
+  parallelism: 1
+trials:
+  - {name: native}
+run:
+  cmd: bash tools/remote/build.sh build/architecture-r3-source.tar.gz && XOLVER_REGRESSION_TIMEOUT=240 XOLVER_REGRESSION_JOBS=1 bash tools/remote/validate.sh architecture-r3
+measurements:
+  from: metrics.json
+  primary: unit_rc
+  checks: ["checker_rc == 0", "architecture_rc == 0", "unit_rc == 0", "regression_rc == 0", "tools_rc == 0", "known_gaps_rc == 0"]

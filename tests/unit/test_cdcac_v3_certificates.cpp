@@ -1,10 +1,10 @@
 #include <doctest/doctest.h>
-#include "theory/arith/logics/nra/core/CdcacCore.h"
-#include "theory/arith/logics/nra/core/CdcacTypes.h"
-#include "theory/arith/logics/nra/core/CdcacConstraint.h"
-#include "theory/arith/logics/nra/proof/CellCertificateValidator.h"
-#include "theory/arith/logics/nra/backend/LibpolyBackend.h"
-#include "theory/arith/kernel/poly/PolynomialKernel.h"
+#include "search/nra/core/CdcacCore.h"
+#include "search/nra/core/CdcacTypes.h"
+#include "search/nra/core/CdcacConstraint.h"
+#include "search/nra/proof/CellCertificateValidator.h"
+#include "search/nra/backend/LibpolyBackend.h"
+#include "algebra/poly/PolynomialKernel.h"
 
 using namespace xolver;
 

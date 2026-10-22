@@ -1,7 +1,7 @@
 #include <doctest/doctest.h>
-#include "theory/arith/logics/nia/reasoners/GcdDivisibilityReasoner.h"
-#include "theory/arith/kernel/poly/PolynomialKernel.h"
-#include "sat/SatSolver.h"
+#include "search/nia/reasoners/GcdDivisibilityReasoner.h"
+#include "algebra/poly/PolynomialKernel.h"
+#include "contracts/SatSolver.h"
 #include <gmpxx.h>
 
 using namespace xolver;

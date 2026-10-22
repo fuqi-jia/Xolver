@@ -1,0 +1,17 @@
+experiment: xolver-proofs-architecture-r9
+environment:
+  host: panda1
+  workdir: /pub/data/jiafq/xolver
+protocol:
+  inputs: {list: [verification]}
+  timeout: 40m
+  memory: 8G
+  parallelism: 1
+trials:
+  - {name: native}
+run:
+  cmd: XOLVER_PROOF_SOLVER=/pub/data/jiafq/xolver/validation/architecture-r9/xolver bash tools/remote/test_proofs.sh proofs-architecture-r9
+measurements:
+  from: metrics.json
+  primary: proof_rc
+  checks: ["proof_rc == 0", "rejected == 0", "errors == 0"]

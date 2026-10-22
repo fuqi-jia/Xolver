@@ -1,0 +1,18 @@
+experiment: xolver-native-terms-r3-profile
+description: Bounded CPU samples for the native DAG NRA performance regression.
+environment:
+  host: panda1
+  workdir: /pub/data/jiafq/xolver
+protocol:
+  inputs: {list: [nra-200]}
+  timeout: 3m
+  memory: 4G
+  parallelism: 1
+trials:
+  - {name: profile}
+run:
+  cmd: python3 tools/remote/profile_case.py --binary validation/native-terms-r3/xolver --case tests/regression/nra/nra_200_sat_metitarski_polypaver-bench-sqrt-3d-.smt2 --output validation/native-terms-r3/profile-nra200 --timeout 45
+measurements:
+  from: metrics.json
+  primary: samples
+  checks: ["profile_completed == 1"]

@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
-#include "theory/euf/ProofForest.h"
-#include "theory/euf/EufTypes.h"
+#include "search/euf/ProofForest.h"
+#include "search/euf/EufTypes.h"
 #include <algorithm>
 #include <tuple>
 #include <vector>

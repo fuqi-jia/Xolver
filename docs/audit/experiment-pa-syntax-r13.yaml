@@ -1,0 +1,23 @@
+experiment: xolver-pa-syntax-r13
+description: Compare 200 scope and chain formulas with explicit expansions using Xolver, Z3 and cvc5.
+environment:
+  host: panda1
+  workdir: /pub/data/jiafq/xolver
+protocol:
+  inputs: {list: [scope-and-chain]}
+  timeout: 30m
+  memory: 8G
+  parallelism: 1
+trials:
+  - {name: syntax}
+run:
+  cmd: >-
+    python3 build/pa-syntax-r13/fuzz_pa_syntax.py
+    --solver /pub/data/jiafq/xolver/validation/native-terms-r13/xolver
+    --z3 /pub/data/jiafq/xolver/dependencies/oracles/z3
+    --cvc5 /pub/data/jiafq/z3-native-audit-tools-20260924-r3/cvc5/bin/cvc5
+    --output validation/pa-syntax-r13
+measurements:
+  from: metrics.json
+  primary: checked
+  checks: ["checked == 200", "mismatches == 0", "inconclusive == 0"]

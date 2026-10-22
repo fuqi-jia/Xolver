@@ -16,14 +16,19 @@ DRATTRIM="${2:?need drat-trim binary}"
 LIST="${3:?need corpus list file}"
 CARCARA="${4:-}"   # optional: also check Alethe theory proofs with Carcara
 HERE="$(cd "$(dirname "$0")" && pwd)"
-WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
+WORK="${XOLVER_PROOF_WORKDIR:-$(mktemp -d)}"
+mkdir -p "$WORK"
+[ -r "$LIST" ] || { echo "ERROR: cannot read $LIST"; exit 1; }
+echo "Proof artifacts: $WORK"
 
-v=0 skel=0 rej=0 nop=0 skip=0 rejected_files=""
+v=0 skel=0 rej=0 nop=0 skip=0 errors=0 cases=0 rejected_files=""
 while IFS= read -r f; do
   [ -z "$f" ] && continue
-  [ -f "$f" ] || { echo "MISSING: $f"; continue; }
-  out="$(bash "$HERE/check_proof.sh" "$XOLVER" "$DRATTRIM" "$f" "$WORK" "$CARCARA" 2>/dev/null)"
+  [[ "$f" = \#* ]] && continue
+  cases=$((cases+1))
+  [ -f "$f" ] || { echo "MISSING: $f"; errors=$((errors+1)); continue; }
+  casework="$(mktemp -d "$WORK/case.XXXXXXXX")"
+  out="$(bash "$HERE/check_proof.sh" "$XOLVER" "$DRATTRIM" "$f" "$casework" "$CARCARA" 2>&1)"
   rc=$?
   echo "$out"
   case $rc in
@@ -32,14 +37,15 @@ while IFS= read -r f; do
   $f";;
     2) nop=$((nop+1));;
     3) skip=$((skip+1));;
+    *) errors=$((errors+1));;
   esac
 done < "$LIST"
 
 echo "----------------------------------------------------------------"
-echo "VERIFIED(complete)=$v  VERIFIED-SKELETON(lemmas assumed)=$skel  NO-PROOF(degraded)=$nop  SKIP(not-unsat)=$skip  REJECTED=$rej"
-if [ "$rej" -ne 0 ]; then
-  echo "HARD FAILURE: $rej proof(s) REJECTED by the external checker:$rejected_files"
+echo "VERIFIED(complete)=$v  VERIFIED-SKELETON(lemmas assumed)=$skel  NO-PROOF(degraded)=$nop  SKIP(not-unsat)=$skip  REJECTED=$rej ERROR=$errors"
+if [ "$rej" -ne 0 ] || [ "$errors" -ne 0 ] || [ "$cases" -eq 0 ]; then
+  echo "HARD FAILURE: $rej rejected proofs, $errors execution/setup errors, $cases cases:$rejected_files"
   exit 1
 fi
-echo "OK: no rejected proofs (every produced proof externally verified)."
+echo "OK: no rejected artifacts or execution errors; complete/skeleton/no-proof coverage reported separately."
 exit 0

@@ -1,8 +1,8 @@
 #include <doctest/doctest.h>
-#include "theory/arith/logics/nia/reasoners/ProductPositivityReasoner.h"
-#include "theory/arith/logics/nia/core/DomainStore.h"
-#include "theory/arith/kernel/poly/PolynomialKernel.h"
-#include "sat/SatSolver.h"
+#include "search/nia/reasoners/ProductPositivityReasoner.h"
+#include "search/nia/core/DomainStore.h"
+#include "algebra/poly/PolynomialKernel.h"
+#include "contracts/SatSolver.h"
 #include <gmpxx.h>
 
 using namespace xolver;

@@ -35,11 +35,6 @@ VERDICT_RE = re.compile(r"\b(unsat|sat|unknown)\b")
 
 DEFAULT_CONFIGS = {
     "baseline": {},
-    "nra_cuts": {"XOLVER_NRA_NLEXT_POWER": "1", "XOLVER_NRA_NLEXT_MONO_BOUND": "1",
-                 "XOLVER_NRA_NLEXT_HIGHER": "1", "XOLVER_NRA_NLEXT_BERNSTEIN": "1",
-                 "XOLVER_NRA_NLA_CUTS": "1"},
-    "nia_linprop": {"XOLVER_NIA_LINEAR_PROP": "1"},
-    "comb": {"XOLVER_EUF_PROP_COMB": "1", "XOLVER_AX_LAZY": "1"},
 }
 
 

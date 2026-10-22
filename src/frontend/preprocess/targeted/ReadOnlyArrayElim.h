@@ -1,6 +1,6 @@
 #pragma once
 
-#include "expr/ir.h"
+#include "ir/NativeTerms.h"
 #include <gmpxx.h>
 #include <map>
 #include <string>
@@ -13,7 +13,7 @@ namespace xolver {
 /**
  * ReadOnlyArrayElim — targeted Ackermannization of read-only array reads.
  *
- * TARGETED preprocessing rule (gated XOLVER_TARGETED_PP), aimed at the SV-COMP
+ * Fragment-checked preprocessing rule, aimed at the SV-COMP
  * memory-model family that dominates the failing QF_ANIA / QF_AUFNIA corpus
  * (UltimateAutomizer `#memory_int : (Array Int (Array Int Int))`). In those
  * benchmarks the memory array is **never stored to** on the path that reaches
@@ -47,7 +47,7 @@ namespace xolver {
  */
 class ReadOnlyArrayElim {
 public:
-    explicit ReadOnlyArrayElim(CoreIr& ir);
+    explicit ReadOnlyArrayElim(NativeTerms& ir);
 
     bool run();                 // returns didRewrite()
     void commit();
@@ -56,13 +56,8 @@ public:
     size_t readsEliminated() const { return readVar_.size(); }
     size_t congruencesEmitted() const { return extra_.size(); }
 
-    // Model-reconstruction record for the validator. Each eliminated scalar read
-    // `(select arrOperand idxExpr)` was replaced by fresh variable `freshVar`
-    // (named `freshName`). Post-solve, the validator re-keys this as a select
-    // override (arrOperand-ExprId, value-of-idxExpr) -> value-of-freshVar so the
-    // ORIGINAL array-bearing assertions still evaluate concretely. arrOperand /
-    // idxExpr are hash-cons-stable inner nodes, identical in the original
-    // (pre-const-prop) assertion snapshot the validator walks.
+    // Reconstruct the eliminated reads as concrete (possibly nested) arrays
+    // from the final scalar witness. Rewritten indices may contain fresh reads.
     struct ReadRec {
         ExprId arrOperand;       // the select's array operand (child 0)
         ExprId idxExpr;          // the select's index operand (child 1)
@@ -71,19 +66,8 @@ public:
     };
     const std::vector<ReadRec>& reads() const { return reads_; }
 
-    // Write-array mode (XOLVER_TARGETED_PP, avg20/array-swap family): array
-    // equalities `(= S W)` where W is a free read-only array variable are
-    // replaced by `false` (W can always be chosen != S), and W's reads are
-    // Ackermannized. freeArrayVars() are the (hash-cons-stable) Variable ExprIds
-    // the validator must treat as free (any equality involving them -> false).
-    // usedWriteArray() is true iff at least one such equality was rewritten — in
-    // which case the caller MUST suppress UNSAT to Unknown (the rewrite is a
-    // relaxation; only the validator-confirmed SAT direction is sound).
-    const std::unordered_set<ExprId>& freeArrayVars() const { return freeArrayVars_; }
-    bool usedWriteArray() const { return usedWriteArray_; }
-
 private:
-    CoreIr& ir_;
+    NativeTerms& ir_;
     bool didRewrite_ = false;
     bool bailed_ = false;
 
@@ -112,16 +96,7 @@ private:
     std::vector<std::pair<ReadKey, ExprId>> readList_;            // for pairwise congruence
     std::vector<ReadRec> reads_;                                  // for model reconstruction
 
-    // Write-array mode state.
-    std::unordered_set<ExprId> falseEqNodes_;    // Eq ExprIds replaced by `false`
-    std::unordered_set<ExprId> freeArrayVars_;   // free read-only array Variable ExprIds
-    bool usedWriteArray_ = false;
-
     bool isArraySort(SortId s) const;
-    // Pass 1: find array equalities `(= S W)` with W a free read-only array var.
-    // Populates falseEqNodes_/freeArrayVars_. Returns false (bail) on a
-    // non-falsifiable array equality.
-    bool collectFalseEqs();
     bool intConstVal(ExprId e, mpz_class& out) const;
     // Pre-scan: returns false (and sets bailed_) if anything outside the
     // read-only fragment is present.

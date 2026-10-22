@@ -1,0 +1,1707 @@
+{
+  "date": "2026-10-23",
+  "scope": "source named controls plus internal Boolean/CLI scan; no claim of formal exhaustiveness",
+  "controls_sha256": "745b9ff9b9eaa03155ee28409962cd2020353c6899ff56d717cd763cec718967",
+  "counts": {
+    "diagnostic": 88,
+    "resource": 66,
+    "strategy": 7
+  },
+  "read_sites": 237,
+  "controls": [
+    {
+      "name": "ARITH_STAGE_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "ARITH_STAGE_ENTER",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "ARITH_STAGE_PROF",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "ProfilePath"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "BB_ASSERT_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "EUF_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "EUF_VERIFY",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "NIA_BITBLAST_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "NIA_BITBLAST_PROF",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "NIA_DOM_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "NIA_EAGER_BB_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "NIA_EAGER_BB_GATE_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "NIA_OPP_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "SOLVE_PHASE_PROF",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_ANIA_PROF",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Flag"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_ARRAY_NOARR_DOWNGRADE_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_ASSERT_PF_INV",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "开启 proof-forest 不变量检查，违例会 abort；属于诊断但不保证纯日志/无行为影响。"
+    },
+    {
+      "name": "XOLVER_AX_COMPLETE_BUDGET",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "数组 completion 累计生成 select 的数量上限。"
+    },
+    {
+      "name": "XOLVER_AX_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_AX_R2D_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_AX_REFINE_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_AX_STORECOMM_EXT_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_CMS_WIDTH_PROBE_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_COMB_CONFLICT_TRACE",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_COMB_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_DECIDE_PROBE",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Period"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_DIAG_AM",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_DIAG_AMV",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_DIAG_AMV_DEEP",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_DIAG_CMS",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_DIAG_FI",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_DIAG_PF_INV",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_DT_HC_STATS",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_DT_VALIDATE_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_DT_VALIDATE_PER_ASSERT",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "统计打印每个断言验证结果，不控制是否运行 validator。"
+    },
+    {
+      "name": "XOLVER_DUMP_FINAL_ASSERTS",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_ENTAIL_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_EUF_HOTPROFILE",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_EUF_PROP_BUDGET",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "semantics": "每次 EUF 蕴含扫描/输出的工作数量上限。"
+    },
+    {
+      "name": "XOLVER_L4R_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_LIA_CUT_MAXBITS",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "semantics": "LIA cut 可处理的数值位数阈值。"
+    },
+    {
+      "name": "XOLVER_LIA_CUT_MAXPERSOLVE",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "semantics": "每次求解生成 LIA cuts 的最大数量。"
+    },
+    {
+      "name": "XOLVER_LIA_DUMP_DIR",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Path"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_LIA_MILP_BRANCH_BUDGET",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "semantics": "快速 MILP integrality 检查的分支工作预算。"
+    },
+    {
+      "name": "XOLVER_LRA_BETA_EVERY",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_LRA_BOUND_AXIOMS_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Boolean"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_LRA_BOUND_AXIOMS_MAXGROUP",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "semantics": "bound axioms 每组原子数量阈值，用来避免成对生成爆炸。"
+    },
+    {
+      "name": "XOLVER_LRA_PROFILE_EVERY",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_LRA_VERIFY_BETA",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_NIA_ARITH_VALUE_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_NIA_BB_EARLY_MIN_ACTIVE",
+      "classification": "strategy",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "早期 bit-blast 适用的约束数阈值，默认 50。"
+    },
+    {
+      "name": "XOLVER_NIA_BB_ENTRY_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_NIA_BITBLAST_CONFLICTS",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "CaDiCaL 冲突预算，0 不限。"
+    },
+    {
+      "name": "XOLVER_NIA_BITBLAST_GATE_BUDGET",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "编码生成的 SAT 变量/gate 资源上限；此 gate 是电路门，不是功能开关。"
+    },
+    {
+      "name": "XOLVER_NIA_BITBLAST_MAX_BITWIDTH",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "任一编码整数的位宽上限，超出返回资源不足结果。"
+    },
+    {
+      "name": "XOLVER_NIA_BITBLAST_MAX_ITERS",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "位宽编码/SAT 尝试次数上限。"
+    },
+    {
+      "name": "XOLVER_NIA_BOUNDED_ENUM_THRESHOLD",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "完整有限域枚举的域乘积/工作量阈值。"
+    },
+    {
+      "name": "XOLVER_NIA_CT_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Path"
+        }
+      ],
+      "semantics": "写诊断文件并做 abstraction 模型核验及 CT 可行性子查询；当前无论结果均返回 false，不据此发新求解结论。"
+    },
+    {
+      "name": "XOLVER_NIA_CT_SMT",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Path"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_NIA_EAGER_BITBLAST_BUDGET",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "全公式 eager bit-blast 的编码变量/gate 上限。"
+    },
+    {
+      "name": "XOLVER_NIA_EAGER_BITBLAST_BUDGET_MS",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "eager bit-blast 时间上限。"
+    },
+    {
+      "name": "XOLVER_NIA_EAGER_BITBLAST_BUDGET_PCT",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "eager bit-blast 可使用总墙钟的百分比。"
+    },
+    {
+      "name": "XOLVER_NIA_EAGER_BITBLAST_CONFLICTS",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "eager SAT 每次冲突数预算。"
+    },
+    {
+      "name": "XOLVER_NIA_EAGER_BITBLAST_UNSAT_CAP",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "小位宽连续 UNSAT 尝试次数上限，不把小盒 UNSAT 当全域 UNSAT。"
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_COMBO_CAP",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "Farkas 表候选组合枚举上限。"
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_DUMP",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_DUMP_FILE",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Path"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_EAGER_BUDGET_MS",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "Farkas eager 阶段时间上限。"
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_EAGER_PCT",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "Farkas eager 阶段墙钟份额。"
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_FAILDIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_OR_MAX_B",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "Farkas OR 建表所允许的 bounded 参数规模上限。"
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_OR_TRACE",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_OUTER_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_REFUTE_DOM_CAP",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "Farkas refutation 有界全局变量域乘积上限。"
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_REFUTE_LEAF_CAP",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "Farkas refutation 叶枚举上限。"
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_REFUTE_MAX_LEAF_VARS",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "Farkas 叶输入变量数阈值。"
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_REJECT_DUMP",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_REJECT_FILE",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Path"
+        }
+      ],
+      "semantics": "Farkas 拒绝诊断输出文件路径，受 REJECT_DUMP 控制，缺省 /tmp/farkas_reject。"
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_VALIDATE_BUDGET",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "Farkas 候选全公式验证次数上限。"
+    },
+    {
+      "name": "XOLVER_NIA_LINDECIDE_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_NIA_LINEAR_DOWNGRADE_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_NIA_LS_BUDGET_MS",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "NIA 局部搜索单次时间预算。"
+    },
+    {
+      "name": "XOLVER_NIA_LS_TOTAL_MS",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "NIA 局部搜索累计时间预算。"
+    },
+    {
+      "name": "XOLVER_NIA_MODULAR_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_NIA_MODULAR_ENUM_BUDGET",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "模数域枚举总工作预算。"
+    },
+    {
+      "name": "XOLVER_NIA_MODULAR_MAX_ENUM",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "小模数推理每个模数的枚举上限。"
+    },
+    {
+      "name": "XOLVER_NIA_MODULAR_MAX_VARS",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "小模数推理接收变量数量阈值。"
+    },
+    {
+      "name": "XOLVER_NIA_MODULAR_MODULI",
+      "classification": "strategy",
+      "reads": [
+        {
+          "kind": "Moduli"
+        }
+      ],
+      "semantics": "显式小模数列表，解析为 [2,100] 范围去重整数。"
+    },
+    {
+      "name": "XOLVER_NIA_MODULAR_MODULUS_CAP",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "模数 residue 推理允许的模数大小上限。"
+    },
+    {
+      "name": "XOLVER_NIA_PRESOLVE_BUDGET_MS",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "整数 presolve fixpoint 时间预算。"
+    },
+    {
+      "name": "XOLVER_NIA_SHARED_EQ_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_NO_DEBUG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Boolean"
+        }
+      ],
+      "semantics": "NO 指 Nelson–Oppen；设置该值启用 NO_DBG stderr 输出，并非关闭 debug。"
+    },
+    {
+      "name": "XOLVER_NO_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_NRA_BOUNDCHAIN_MAX_ATOMS",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "semantics": "bound-chain composer 输入原子数上限。"
+    },
+    {
+      "name": "XOLVER_NRA_BOUNDCHAIN_MAX_WORK",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "semantics": "bound-chain composer 工作量预算。"
+    },
+    {
+      "name": "XOLVER_NRA_CAC_DEADLINE_MS",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "CAC 混合路径时间份额；sole engine 策略还有外部墙钟语义。"
+    },
+    {
+      "name": "XOLVER_NRA_CAC_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_NRA_CAC_DUMP",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_NRA_CAC_INSTR",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "析构时打印 projection instrumentation 计数。"
+    },
+    {
+      "name": "XOLVER_NRA_CAC_SAT_FIRST_ALG_DEG",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "algebraic sample-first 约束次数上限。"
+    },
+    {
+      "name": "XOLVER_NRA_CAC_SAT_FIRST_BUDGET",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "sample-first 节点预算。"
+    },
+    {
+      "name": "XOLVER_NRA_CAC_SAT_FIRST_MAX_BITS",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "sample-first 候选数值位数上限。"
+    },
+    {
+      "name": "XOLVER_NRA_CAC_SAT_FIRST_MAX_DEG",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "semantics": "sample-first 可处理的次数上限。"
+    },
+    {
+      "name": "XOLVER_NRA_CAC_SAT_FIRST_MS",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "sample-first 时间上限，0 保留节点预算。"
+    },
+    {
+      "name": "XOLVER_NRA_CAC_SAT_FIRST_TOWER_CAP",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "semantics": "algebraic sample-first 扩张塔深度上限。"
+    },
+    {
+      "name": "XOLVER_NRA_CAC_TRACE",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_NRA_CDCAC_GUARD_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_NRA_CDCAC_MAX_DEGREE",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "semantics": "CDCAC 输入次数资源阈值，0 不加此限制。"
+    },
+    {
+      "name": "XOLVER_NRA_CDCAC_MAX_VARS",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "semantics": "CDCAC 输入变量数资源阈值，0 不加此限制。"
+    },
+    {
+      "name": "XOLVER_NRA_EQ_CASCADE_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_NRA_EQ_CASCADE_DYADIC_DEPTH",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "semantics": "等式 cascade dyadic 候选深度上限。"
+    },
+    {
+      "name": "XOLVER_NRA_HYB_PARTITION_STATS",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_NRA_ICP_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Boolean"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_NRA_KERNEL_STATS",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_NRA_LAZARD_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_NRA_LAZARD_MAX_COEFF_BITS",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "semantics": "Lazard/平方自由运算系数位数资源上限。"
+    },
+    {
+      "name": "XOLVER_NRA_LIBPOLY_FIREWALL_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "打印超 cap 拒绝原因，cap 不受此值解除。"
+    },
+    {
+      "name": "XOLVER_NRA_LIBPOLY_MAX_COEFF_BITS",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "semantics": "libpoly 运算预估系数位数防护 cap，非正值回到安全缺省。"
+    },
+    {
+      "name": "XOLVER_NRA_LINEAR_DOWNGRADE_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_NRA_LS_BUDGET_MS",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "NRA 局部搜索累计时间份额，可能按墙钟缩放。"
+    },
+    {
+      "name": "XOLVER_NRA_LS_MAX_DEN",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "局部搜索有理候选分母上限。"
+    },
+    {
+      "name": "XOLVER_NRA_LS_MAX_ROUNDS",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "semantics": "NRA 局部搜索最大轮次，可能按墙钟缩放。"
+    },
+    {
+      "name": "XOLVER_NRA_LS_NOISE_PCT",
+      "classification": "strategy",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "局部搜索扰动动作概率，候选仍经模型检查。"
+    },
+    {
+      "name": "XOLVER_NRA_LS_SA_PCT",
+      "classification": "strategy",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "局部搜索模拟退火动作概率。"
+    },
+    {
+      "name": "XOLVER_NRA_LS_STATS",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_NRA_LS_TOP_VARS",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "每轮局部搜索处理的变量预算。"
+    },
+    {
+      "name": "XOLVER_NRA_NLSAT_DFS_BUDGET",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "semantics": "NLSAT DFS 节点预算。"
+    },
+    {
+      "name": "XOLVER_NRA_NLSAT_FALLBACK_DEG_CAP",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "semantics": "NLSAT→CDCAC 回退的最高次数阈值。"
+    },
+    {
+      "name": "XOLVER_NRA_NLSAT_ISO_BUDGET",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "NLSAT 每次 pickValue 的根隔离调用上限。"
+    },
+    {
+      "name": "XOLVER_NRA_NLSAT_MAX_CORE_POLYS",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "semantics": "NLSAT 核心多项式数量上限。"
+    },
+    {
+      "name": "XOLVER_NRA_NLSAT_MAX_CORE_VARS",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "semantics": "NLSAT 核心变量数量上限。"
+    },
+    {
+      "name": "XOLVER_NRA_NLSAT_MAX_ELIM_DEG",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "semantics": "NLSAT elimination 的次数上限。"
+    },
+    {
+      "name": "XOLVER_NRA_NLSAT_ROOT_DEG_CAP",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "semantics": "精确根候选路径的次数上限。"
+    },
+    {
+      "name": "XOLVER_NRA_PRESOLVE_BUDGET_MS",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "NRA presolve/preelim 阶段时间上限。"
+    },
+    {
+      "name": "XOLVER_NRA_PROJECTION",
+      "classification": "strategy",
+      "reads": [
+        {
+          "kind": "Projection"
+        }
+      ],
+      "semantics": "显式 Automatic/Collins/Lazard 投影策略。"
+    },
+    {
+      "name": "XOLVER_NRA_PROJ_MAX_COEFF_BITS",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "semantics": "投影多项式总系数位长 cap。"
+    },
+    {
+      "name": "XOLVER_NRA_PROJ_MAX_DEG",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "semantics": "投影多项式次数 cap。"
+    },
+    {
+      "name": "XOLVER_NRA_PROJ_MAX_TERMS",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "semantics": "投影多项式项数 cap。"
+    },
+    {
+      "name": "XOLVER_NRA_SIGN_REFUTE_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_NRA_STAGE_TIMING",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_NRA_STAGE_TRACE",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_NRA_STAGE_TRACE_FILE",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Path"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_NRA_SUBTROP_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_NRA_TOWER_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Path"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_PA_RESIDUES",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "Presburger 消元 residue 枚举工作预算。"
+    },
+    {
+      "name": "XOLVER_PA_WORK",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "Presburger 消元总体工作预算。"
+    },
+    {
+      "name": "XOLVER_PP_SOLVE_EQS_BUDGET",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "solve-eqs 代换工作预算。"
+    },
+    {
+      "name": "XOLVER_PP_SOLVE_EQS_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_PRESOLVE_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_PROP_CHECK_EVERY",
+      "classification": "strategy",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "semantics": "theory check 的赋值增长阈值，0 采用自适应 max(3,size/10)。"
+    },
+    {
+      "name": "XOLVER_SAT_LEMMA_MGMT",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Capacity"
+        }
+      ],
+      "semantics": "lemma 缓存容量，unset/0 无上限，true 默认 100000，1 表示容量 1。"
+    },
+    {
+      "name": "XOLVER_SAT_PROF",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_SAT_SAMPLE",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_SAT_SIZE_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_SELFPROF",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_TARGETED_PP_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_TARGETED_PP_DUMP",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_THEORY_ENTAIL_PROP_EVERY",
+      "classification": "strategy",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "semantics": "理论蕴含传播调用节奏，最小 1。"
+    },
+    {
+      "name": "XOLVER_TMCHECK_HB",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    },
+    {
+      "name": "XOLVER_WALLCLOCK_MS",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "semantics": "整个求解查询的墙钟预算，0 不限。"
+    },
+    {
+      "name": "XOLVER_WALLCLOCK_SCALE",
+      "classification": "resource",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "semantics": "按 wall-clock 缩放内部工作预算的资源分配策略。"
+    },
+    {
+      "name": "XOLVER_WISA_DIAG",
+      "classification": "diagnostic",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "semantics": "调用点用于日志、统计、计时或额外不变量检查；具体动作和调用语义见本条源码上下文。"
+    }
+  ],
+  "extra_removed": [
+    "XOLVER_STRAT_PORTFOLIO",
+    "ArithModelValidator::numElems_",
+    "CandidateModelSearch::Config::allowUF",
+    "LinearizationConfig::emitAllMcCormick",
+    "LinearizationConfig::emitSquareSecant",
+    "LinearizationConfig::emitSquareTangent",
+    "LinearizationConfig::emitSquareNonneg",
+    "XOLVER_ENABLE_TRACING"
+  ],
+  "excluded_state_examples": [
+    "TheoryManager::combinationMode_ is assigned by theory composition",
+    "CdcacCore::hybridEnabled_ derives from an explicit typed projection strategy",
+    "proof/model state, diagnostic activation and resource-budget policy are not retired algorithm experiments"
+  ],
+  "server_validation_previous": {
+    "experiment": "a9182f5840e0",
+    "run": "c05d7e724fa0",
+    "status": "strict passed:828units,902pairs,76model checks,18 external model replays;0wrong/errors/regressions/model failures/unknown;6timeouts each",
+    "archive": "evidence/gate-batch-11/gate-batch-11-results.tar.gz"
+  },
+  "server_validation": {
+    "experiment": "6448777d785e",
+    "run": "f728115343ae",
+    "status": "strict failed:833units passed;902pairs0wrong/errors/regressions,77model checks with1timeout;candidate5/baseline6timeouts. Separate15attempts reproduce13timeouts across old and new binaries. No invalid model reported.",
+    "archive": "evidence/gate-batch-12/gate-batch-12-results.tar.gz",
+    "unit_tests": 833,
+    "assertions": 243658,
+    "cases": 902,
+    "model_checks": 77,
+    "model_timeouts": 1,
+    "wrong_answers": 0,
+    "regressions": 0,
+    "candidate_timeout": 5,
+    "baseline_timeout": 6
+  },
+  "final_removed_switches": [
+    "XOLVER_NRA_CAC_INT",
+    "XOLVER_NRA_CAC_NLSAT",
+    "XOLVER_NRA_CAC_SAT_FIRST",
+    "XOLVER_NRA_CAC_SAT_FIRST_LOOKAHEAD",
+    "XOLVER_NRA_MCSAT",
+    "XOLVER_NRA_MCSAT_NO_CDCAC",
+    "XOLVER_NRA_NLSAT_ROOT_CANDIDATES"
+  ],
+  "residual_scan": {
+    "headers": "Boolean members and Boolean option parameters reviewed; feature-presence, proof-request, solver-state and diagnostic fields retained",
+    "implementation": "named switches, direct environment reads and constant Boolean promotion remnants scanned; folded invariant true iisEnabled",
+    "last_extra_switches": [
+      "LinearizationConfig::emitAllMcCormick",
+      "LinearizationConfig::emitSquareSecant",
+      "LinearizationConfig::emitSquareTangent",
+      "LinearizationConfig::emitSquareNonneg"
+    ]
+  },
+  "closeout": {
+    "known_remaining_legacy_gates": 0,
+    "additional_removed": "unused CMake XOLVER_ENABLE_TRACING option and propagated definition",
+    "retired_tool": "tools/tuning/autotune.py (default-flip proposer; no callers)",
+    "scope": [
+      "named runtime readers",
+      "internal Boolean fields and parameters",
+      "preprocessor conditions and CMake options",
+      "CLI and Solver options",
+      "test and tool references to retired controls"
+    ],
+    "retained_build_options": "proof output, profiling/statistics, tests/tools/Python/static packaging, dependency availability",
+    "retained_guards": "input applicability, solver state, evidence validation, resource limits and typed search strategies",
+    "server_validation": {
+      "experiment": "7da3c959bb36",
+      "run": "2d66d951cae6",
+      "status": "success",
+      "unit_cases": 833,
+      "assertions": 243658,
+      "failed": 0,
+      "unselected_cases": 666,
+      "build": "Panda1, existing /pub/data/jiafq/xolver/build, serialized writer lock, j4",
+      "cpp_comments_only_files": 13,
+      "solver_sha256": "ad847f38920967abf8ada8b1846f557ff78ac4b8a60bbb083aa0fcf74295cee2",
+      "unit_binary_sha256": "dc8a3778013439de0db96466c39f59641db543aef95be566807b8ca2273c49be",
+      "byte_identical_to_batch12_r4": true,
+      "prior_strict_suite": "failed: one of 77 model checks timed out; not waived, fixed or rerun to green"
+    }
+  }
+}

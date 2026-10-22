@@ -1,0 +1,23 @@
+experiment: xolver-audit-performance-native-terms-r8-focus
+description: Paired checks of the three regressions exposed by native migration, one diagnostic repetition.
+environment:
+  host: panda1
+  workdir: /pub/data/jiafq/xolver
+protocol:
+  inputs: {list: [paired-regression]}
+  timeout: 90m
+  memory: 8G
+  parallelism: 1
+trials:
+  - {name: paired}
+run:
+  cmd: >-
+    python3 tools/remote/paired_suite.py
+    --baseline /pub/data/jiafq/xolver/validation/architecture-r9/xolver
+    --candidate /pub/data/jiafq/xolver/validation/native-terms-r8/xolver
+    --corpus docs/audit/native-regression-focus.txt
+    --repetitions 1 --timeout 60 --output validation/performance-native-terms-r8-focus
+measurements:
+  from: metrics.json
+  primary: geomean_speedup
+  checks: ["errors == 0", "disagreements == 0", "comparable > 0"]

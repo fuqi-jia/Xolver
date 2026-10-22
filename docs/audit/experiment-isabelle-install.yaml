@@ -1,0 +1,18 @@
+experiment: xolver-isabelle-install-2025-2
+description: Install the checksum-pinned Isabelle distribution once for independent PA proof replay.
+environment:
+  host: panda1
+  workdir: /pub/data/jiafq/xolver
+protocol:
+  inputs: {list: [isabelle]}
+  timeout: 90m
+  memory: 4G
+  parallelism: 1
+trials:
+  - {name: install}
+run:
+  cmd: bash build/install_isabelle.sh
+measurements:
+  from: metrics.json
+  primary: installed
+  checks: ["installed == 1", "archive_verified == 1"]

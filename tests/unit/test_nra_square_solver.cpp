@@ -5,9 +5,9 @@
 #include <doctest/doctest.h>
 #include <gmpxx.h>
 
-#include "theory/arith/logics/nra/NraSquareSolver.h"
-#include "theory/arith/kernel/poly/PolynomialKernel.h"
-#include "theory/arith/kernel/poly/RationalPolynomial.h"
+#include "search/nra/NraSquareSolver.h"
+#include "algebra/poly/PolynomialKernel.h"
+#include "algebra/poly/RationalPolynomial.h"
 
 using namespace xolver;
 

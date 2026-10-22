@@ -1,10 +1,10 @@
-// Unit tests for FarkasOrBranchSolver (P1). Build small CoreIr fragments
+// Unit tests for FarkasOrBranchSolver (P1). Build small NativeTerms fragments
 // that mirror Stroeder-style Farkas branches; verify the solver produces
 // the expected primitive non-negative ray + CT interval.
 
-#include "expr/ir.h"
-#include "theory/arith/logics/nia/farkas/FarkasOrBranchSolver.h"
-#include "theory/arith/logics/nia/farkas/FarkasOrTypes.h"
+#include "ir/NativeTerms.h"
+#include "search/nia/farkas/FarkasOrBranchSolver.h"
+#include "search/nia/farkas/FarkasOrTypes.h"
 
 #include <doctest/doctest.h>
 
@@ -17,37 +17,43 @@ using namespace xolver::farkas;
 
 namespace {
 
-// Tiny CoreIr builder for tests.
+// Tiny NativeTerms builder for tests.
 struct IrBuilder {
-    CoreIr ir;
+    NativeTerms ir;
     SortId intSort;
     SortId realSort;
+    SortId boolSort;
 
     IrBuilder() {
         intSort = ir.allocateSortId();
         realSort = ir.allocateSortId();
+        ir.registerSort(intSort, SortKind::Int);
+        ir.registerSort(realSort, SortKind::Real);
+        boolSort = ir.allocateSortId();
+        ir.registerSort(boolSort, SortKind::Bool);
         ir.setIntSortId(intSort);
         ir.setRealSortId(realSort);
     }
 
     ExprId mkVar(std::string name, SortId s) {
-        CoreExpr e;
+        TermExpr e;
         e.kind = Kind::Variable;
         e.sort = s;
         e.payload = Payload(std::move(name));
         return ir.add(std::move(e));
     }
     ExprId mkConst(int64_t v) {
-        CoreExpr e;
+        TermExpr e;
         e.kind = Kind::ConstReal;        // mirror frontend's QF_NIA lift
         e.sort = realSort;
         e.payload = Payload(std::to_string(v));
         return ir.add(std::move(e));
     }
     ExprId mk(Kind k, std::vector<ExprId> ch) {
-        CoreExpr e;
+        TermExpr e;
         e.kind = k;
         e.sort = realSort;
+        if (e.isAtom() || k == Kind::And || k == Kind::Or || k == Kind::Not) e.sort = boolSort;
         for (auto c : ch) e.children.push_back(c);
         return ir.add(std::move(e));
     }

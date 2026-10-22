@@ -1,0 +1,8 @@
+(set-logic ALL)
+(declare-heap (Int Int))
+(set-info :status unsat)
+(declare-const x Int)
+(declare-const y Int)
+(assert (= y (+ x 1)))
+(assert (sep (pto (+ x 1) 0) (pto y 0)))
+(check-sat)

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "expr/ir.h"
+#include "ir/NativeTerms.h"
 #include <unordered_map>
 #include <vector>
 
@@ -22,11 +22,11 @@ struct CastNormalizeResult {
  */
 class ArithCastNormalizer {
 public:
-    explicit ArithCastNormalizer(CoreIr& ir) : ir_(ir) {}
+    explicit ArithCastNormalizer(NativeTerms& ir) : ir_(ir) {}
     CastNormalizeResult run();
 
 private:
-    CoreIr& ir_;
+    NativeTerms& ir_;
     std::unordered_map<ExprId, ExprId> memo_;
     ExprId rewriteRec(ExprId e);
 };

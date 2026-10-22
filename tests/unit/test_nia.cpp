@@ -1,10 +1,37 @@
 #include <doctest/doctest.h>
 #include "xolver/Solver.h"
+#include "search/nia/search/NiaLinearDecider.h"
+#include "search/coordination/TheoryAtomRegistry.h"
+#include "search/boolean/Atomizer.h"
+#include "search/coordination/TheoryManager.h"
+#include "search/coordination/TheoryLemmaDatabase.h"
+#include "search/sat/CadicalBackend.h"
+#include "search/sat/CadicalTheoryPropagator.h"
 #include <fstream>
 #include <filesystem>
-#include <cstdlib>
 
 using namespace xolver;
+
+namespace {
+// The linear decider can register branch atoms; even direct component tests
+// need the same SAT/observation context as a production theory instance.
+struct LinearDeciderContext {
+    std::unique_ptr<SatSolver> sat = createSatSolver();
+    Atomizer atomizer{*sat};
+    TheoryAtomRegistry registry;
+    TheoryManager theories;
+    TheoryLemmaDatabase lemmas;
+    CadicalBackend& backend = dynamic_cast<CadicalBackend&>(*sat);
+    CadicalTheoryPropagator propagator{registry, theories, lemmas, backend};
+
+    LinearDeciderContext() {
+        registry.setContext(sat.get(), &atomizer);
+        backend.connectPropagator(&propagator);
+    }
+    ~LinearDeciderContext() { backend.disconnectPropagator(); }
+    SatLit reason() { return SatLit::positive(sat->newVar()); }
+};
+}
 
 static std::string writeTempSmt2(const std::string& content) {
     std::string path = std::filesystem::temp_directory_path() / "xolver_nia.smt2";
@@ -235,21 +262,47 @@ TEST_CASE("NIA: false Geq effective relation (not (>= x 0)) + (>= x 0) -> unsat"
     CHECK(static_cast<int>(r) == static_cast<int>(Result::Unsat));
 }
 
-TEST_CASE("NIA linear-decide: combination linear SAT solved without bit-blast") {
-    // Regression for the QF_ANIA SVCOMP cluster (UltimateAutomizer sum10/avg):
-    // a purely-LINEAR array+NIA SAT formula whose model needs a value just above
-    // 2^31 (mod-by-2^32). The array reads are unconstrained ⇒ free integer
-    // bridge variables; the constraint forces their sum mod 2^32 to exceed
-    // 2^31-1 (e.g. A[0]=2^31, A[1]=A[2]=0). The NIA pipeline's only complete
-    // model-finder for this shape was bit-blast, which escalates bit-width and
-    // times out in combination mode; with bit-blast disabled the remaining
-    // stages return Unknown. The embedded-LIA linear-decide stage must DECIDE it
-    // (exact, IntegerModelValidator-checked integer model) and return Sat.
-    // bit-blast is disabled here to isolate the linear-decide path: without the
-    // new stage this case returns `unknown`. The stage is opt-in (default-OFF)
-    // until it nets positive on the broader cluster, so enable it explicitly.
-    setenv("XOLVER_NIA_LINEAR_DECIDE", "1", 1);
-    setenv("XOLVER_NIA_NO_BITBLAST", "1", 1);
+TEST_CASE("NIA linear-decide: preserves auxiliary and double-underscore variable values") {
+    auto kernel = createPolynomialKernel();
+    LinearDeciderContext context;
+    auto& registry = context.registry;
+    IntegerModelValidator validator(*kernel);
+    NiaLinearDecider decider;
+    const auto user = kernel->mkVar(kernel->getOrCreateVar("__user"));
+    const auto witness = kernel->mkVar(kernel->getOrCreateVar("__nlc_ext_idx_0"));
+    const std::vector<NormalizedNiaConstraint> constraints{
+        {kernel->sub(user, kernel->mkConst(7)), Relation::Eq, context.reason()},
+        {kernel->sub(witness, user), Relation::Eq, context.reason()}
+    };
+    auto model = decider.decide(&registry, *kernel, constraints, validator);
+    REQUIRE(model.has_value());
+    CHECK((validator.validate(*model, constraints) == IntegerModelValidator::Result::Valid));
+    CHECK(model->at("__user") == 7);
+    CHECK(model->at("__nlc_ext_idx_0") == 7);
+}
+
+TEST_CASE("NIA linear-decide: searches beyond integral points violating disequalities") {
+    auto kernel = createPolynomialKernel();
+    LinearDeciderContext context;
+    auto& registry = context.registry;
+    IntegerModelValidator validator(*kernel);
+    NiaLinearDecider decider;
+    const auto x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    const std::vector<NormalizedNiaConstraint> constraints{
+        {x, Relation::Neq, context.reason()},
+        {x, Relation::Geq, context.reason()},
+        {kernel->sub(x, kernel->mkConst(1)), Relation::Neq, context.reason()},
+        {kernel->sub(x, kernel->mkConst(2)), Relation::Leq, context.reason()}
+    };
+    auto model = decider.decide(&registry, *kernel, constraints, validator);
+    REQUIRE(model.has_value());
+    CHECK((validator.validate(*model, constraints) == IntegerModelValidator::Result::Valid));
+    CHECK(model->at("x") == 2);
+}
+
+TEST_CASE("NIA: combination linear model covers wide modulus values") {
+    // Exercise the normal pipeline and check its model against the original
+    // array/mod formula. The linear decider is tested directly below.
     std::string path = writeTempSmt2(
         "(set-logic QF_ANIA)\n"
         "(declare-const A (Array Int Int))\n"
@@ -262,21 +315,14 @@ TEST_CASE("NIA linear-decide: combination linear SAT solved without bit-blast") 
     solver.setLogic("QF_ANIA");
     REQUIRE(solver.parseFile(path));
     Result r = solver.checkSat();
-    unsetenv("XOLVER_NIA_NO_BITBLAST");
-    unsetenv("XOLVER_NIA_LINEAR_DECIDE");
-    CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
+    REQUIRE(static_cast<int>(r) == static_cast<int>(Result::Sat));
+    CHECK(solver.validateModel() == Solver::ModelValidation::Satisfied);
 }
 
-TEST_CASE("NIA linear-decide: theory conflict prunes an infeasible branch (still SAT, never wrong-UNSAT)") {
-    // The linear-decide stage feeds the embedded LIA the REAL asserted satVars,
-    // so when a bool assignment makes the linear part infeasible (the `!b` branch
-    // x=5 ∧ x=6), the embedded LIA's Farkas conflict — over those real literals —
-    // is returned as a theory conflict that PRUNES that branch. SAT then takes the
-    // `b` branch (a large-valued mod goal) which linear-decide solves with a
-    // model. Net: SAT (NOT unsat — the conflict must never escalate to a global
-    // UNSAT on a satisfiable formula; that is the cardinal-sin guard).
-    setenv("XOLVER_NIA_LINEAR_DECIDE", "1", 1);
-    setenv("XOLVER_NIA_NO_BITBLAST", "1", 1);
+TEST_CASE("NIA: infeasible linear branch does not refute the satisfiable formula") {
+    // An infeasible Boolean branch must not become a global UNSAT verdict.
+    // The other branch has a wide-modulus witness. Direct component coverage
+    // below separately checks the linear decider's conflict reasons.
     std::string path = writeTempSmt2(
         "(set-logic QF_NIA)\n"
         "(declare-const x Int)\n"
@@ -291,7 +337,49 @@ TEST_CASE("NIA linear-decide: theory conflict prunes an infeasible branch (still
     solver.setLogic("QF_NIA");
     REQUIRE(solver.parseFile(path));
     Result r = solver.checkSat();
-    unsetenv("XOLVER_NIA_NO_BITBLAST");
-    unsetenv("XOLVER_NIA_LINEAR_DECIDE");
-    CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
+    REQUIRE(static_cast<int>(r) == static_cast<int>(Result::Sat));
+    CHECK(solver.validateModel() == Solver::ModelValidation::Satisfied);
+}
+
+TEST_CASE("NIA linear-decide: wide modulus linkage has an exact integer witness") {
+    auto kernel = createPolynomialKernel();
+    LinearDeciderContext context;
+    auto& registry = context.registry;
+    IntegerModelValidator validator(*kernel);
+    NiaLinearDecider decider;
+    const auto x = kernel->mkVar(kernel->getOrCreateVar("array_read"));
+    const auto q = kernel->mkVar(kernel->getOrCreateVar("__quotient"));
+    const auto r = kernel->mkVar(kernel->getOrCreateVar("__remainder"));
+    const mpz_class modulus = mpz_class(1) << 32;
+    const mpz_class lower = mpz_class(1) << 31;
+    const auto linkage = kernel->sub(kernel->sub(x, kernel->mul(kernel->mkConst(mpq_class(modulus)), q)), r);
+    const std::vector<NormalizedNiaConstraint> cs{
+        {linkage, Relation::Eq, context.reason()},
+        {kernel->sub(r, kernel->mkConst(mpq_class(lower))), Relation::Geq, context.reason()},
+        {kernel->sub(r, kernel->mkConst(mpq_class(modulus - 1))), Relation::Leq, context.reason()}};
+    const auto model = decider.decide(&registry, *kernel, cs, validator);
+    REQUIRE(model.has_value());
+    CHECK(model->at("array_read") == modulus * model->at("__quotient") + model->at("__remainder"));
+    CHECK(model->at("__remainder") >= lower);
+    CHECK(model->at("__remainder") < modulus);
+}
+
+TEST_CASE("NIA linear-decide: root conflict carries exactly the asserted branch reasons") {
+    auto kernel = createPolynomialKernel();
+    LinearDeciderContext context;
+    auto& registry = context.registry;
+    IntegerModelValidator validator(*kernel);
+    NiaLinearDecider decider;
+    const auto x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    const auto first = context.reason(), second = context.reason();
+    const std::vector<NormalizedNiaConstraint> cs{
+        {kernel->sub(x, kernel->mkConst(5)), Relation::Eq, first},
+        {kernel->sub(x, kernel->mkConst(6)), Relation::Eq, second}};
+    std::optional<TheoryConflict> conflict;
+    CHECK_FALSE(decider.decide(&registry, *kernel, cs, validator, &conflict).has_value());
+    REQUIRE(conflict.has_value());
+    REQUIRE(conflict->clause.size() == 2);
+    for (const auto& literal : conflict->clause) {
+        CHECK((literal == first || literal == second));
+    }
 }

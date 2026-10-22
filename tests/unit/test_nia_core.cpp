@@ -720,6 +720,21 @@ TEST_CASE("NIA-Core: 4-var modular system over mod 3 -> unsat") {
     CHECK(static_cast<int>(r) != static_cast<int>(Result::Sat));
 }
 
+TEST_CASE("native eager SAT deadline yields to integer modular refutation") {
+    const auto path = writeTempSmt2(
+        "(set-logic QF_NIA)"
+        "(declare-const x Int)(declare-const y Int)"
+        "(declare-const z Int)(declare-const w Int)"
+        "(assert (= (+ (* x x) (* y y)) (* 3 z)))"
+        "(assert (= (+ x y) (+ 1 (* 3 w))))(check-sat)");
+    Solver solver;
+    solver.setRuntimeParameter("XOLVER_NIA_EAGER_BITBLAST_BUDGET_MS", "20");
+    REQUIRE(solver.parseFile(path));
+    const auto start = std::chrono::steady_clock::now();
+    CHECK((solver.checkSat() == Result::Unsat));
+    CHECK((std::chrono::steady_clock::now() - start < std::chrono::seconds(5)));
+}
+
 // ---------------------------------------------------------------------------
 // Category D-N+: Soundness of env-overridable modular caps (iter-84)
 // ---------------------------------------------------------------------------
@@ -803,10 +818,10 @@ TEST_CASE("NIA-Core: malformed moduli env var falls back gracefully") {
 }
 
 // ---------------------------------------------------------------------------
-// Category D-BF: iter-89 bilinear factor restriction (XOLVER_NIA_BILINEAR_FACTOR)
+// Integer factorization regressions through the public solver API.
 // ---------------------------------------------------------------------------
 
-TEST_CASE("NIA-Core: x*y=7 (prime) via bilinear factor → SAT") {
+TEST_CASE("NIA-Core: x*y=7 (prime) → SAT") {
     std::string path = writeTempSmt2(
         "(set-logic QF_NIA)\n"
         "(declare-const x Int)\n"
@@ -814,7 +829,6 @@ TEST_CASE("NIA-Core: x*y=7 (prime) via bilinear factor → SAT") {
         "(assert (= (* x y) 7))\n"
         "(check-sat)\n"
     );
-    setenv("XOLVER_NIA_BILINEAR_FACTOR", "1", 1);
     Solver solver;
     solver.setLogic("QF_NIA");
     CHECK(solver.parseFile(path));
@@ -823,8 +837,8 @@ TEST_CASE("NIA-Core: x*y=7 (prime) via bilinear factor → SAT") {
     CHECK(static_cast<int>(r) != static_cast<int>(Result::Unsat));
 }
 
-TEST_CASE("NIA-Core: trilinear factor x*y*z=6 → SAT (iter-91 multilinear)") {
-    // iter-91 extended bilinear to multilinear k=2..4. For x*y*z=6,
+TEST_CASE("NIA-Core: trilinear factor x*y*z=6 → SAT") {
+    // For x*y*z=6,
     // each variable | 6, so each ∈ ±{1,2,3,6}. Valid triples exist:
     // (1,2,3), (1,3,2), (2,3,1), (6,1,1), (-1,-2,3), etc.
     std::string path = writeTempSmt2(
@@ -838,7 +852,6 @@ TEST_CASE("NIA-Core: trilinear factor x*y*z=6 → SAT (iter-91 multilinear)") {
         "(assert (>= z 1))\n"
         "(check-sat)\n"
     );
-    setenv("XOLVER_NIA_BILINEAR_FACTOR", "1", 1);
     Solver solver;
     solver.setLogic("QF_NIA");
     CHECK(solver.parseFile(path));
@@ -856,7 +869,6 @@ TEST_CASE("NIA-Core: bilinear factor x*y=-6 (negative) → SAT") {
         "(assert (= (* x y) (- 6)))\n"
         "(check-sat)\n"
     );
-    setenv("XOLVER_NIA_BILINEAR_FACTOR", "1", 1);
     Solver solver;
     solver.setLogic("QF_NIA");
     CHECK(solver.parseFile(path));

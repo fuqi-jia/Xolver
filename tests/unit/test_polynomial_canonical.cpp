@@ -7,7 +7,7 @@
 
 #include <doctest/doctest.h>
 #include <gmpxx.h>
-#include "theory/arith/kernel/poly/PolynomialKernel.h"
+#include "algebra/poly/PolynomialKernel.h"
 
 using namespace xolver;
 

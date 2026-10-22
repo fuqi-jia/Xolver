@@ -1,7 +1,8 @@
 #include <doctest/doctest.h>
-#include "theory/arith/logics/nra/backend/LibpolyBackend.h"
-#include "theory/arith/logics/nra/core/CdcacCore.h"
-#include "theory/arith/kernel/poly/PolynomialKernel.h"
+#include "search/nra/backend/LibpolyBackend.h"
+#include "search/nra/core/CdcacCore.h"
+#include "algebra/poly/PolynomialKernel.h"
+#include "base/EnvParam.h"
 #include <cstdlib>
 #include <string>
 #include <unordered_map>
@@ -10,7 +11,7 @@ using namespace xolver;
 
 // ------------------------------------------------------------------
 // nlsat-engine STEP A: the SAT-only sample-first model search inside
-// CdcacCore (XOLVER_NRA_CAC_SAT_FIRST). These tests exercise the engine
+// CdcacCore. These tests exercise the engine
 // DIRECTLY (the CLI runs the solve on a worker thread whose std::cerr is
 // suppressed, so behaviour can only be observed in-process here).
 //
@@ -32,7 +33,10 @@ CdcacConstraint mkC(PolyId p, Relation rel, uint32_t satVar) {
 }  // namespace
 
 TEST_CASE("SAT-first: finds & validates a small rational model (xy=6, x+y=5)") {
-    setenv("XOLVER_NRA_CAC_SAT_FIRST", "1", 1);
+    const char* degree = "12";
+    SUBCASE("algebraic sampling") { degree = "12"; }
+    SUBCASE("rational sampling when the algebraic degree budget is exceeded") { degree = "1"; }
+    env::Scope scope(env::Snapshot::capture({{"XOLVER_NRA_CAC_SAT_FIRST_ALG_DEG", degree}}));
     auto kernel = createPolynomialKernel();
     LibpolyBackend algebra(kernel.get());
 
@@ -62,11 +66,9 @@ TEST_CASE("SAT-first: finds & validates a small rational model (xy=6, x+y=5)") {
     }
     CHECK(kernel->sgn(p1, asg) == 0);
     CHECK(kernel->sgn(p2, asg) == 0);
-    unsetenv("XOLVER_NRA_CAC_SAT_FIRST");
 }
 
 TEST_CASE("SAT-first: never returns false SAT on an UNSAT system (x^2 + 1 = 0)") {
-    setenv("XOLVER_NRA_CAC_SAT_FIRST", "1", 1);
     auto kernel = createPolynomialKernel();
     LibpolyBackend algebra(kernel.get());
 
@@ -83,11 +85,9 @@ TEST_CASE("SAT-first: never returns false SAT on an UNSAT system (x^2 + 1 = 0)")
 
     // SAT-first must not claim SAT; the projection backstop decides Unsat/Unknown.
     CHECK(r.status != CdcacStatus::Sat);
-    unsetenv("XOLVER_NRA_CAC_SAT_FIRST");
 }
 
 TEST_CASE("SAT-first: an inequality-only system gets a validated rational model") {
-    setenv("XOLVER_NRA_CAC_SAT_FIRST", "1", 1);
     auto kernel = createPolynomialKernel();
     LibpolyBackend algebra(kernel.get());
 
@@ -119,5 +119,4 @@ TEST_CASE("SAT-first: an inequality-only system gets a validated rational model"
     CHECK(kernel->sgn(circ, asg) <= 0);
     CHECK(kernel->sgn(xge, asg) >= 0);
     CHECK(kernel->sgn(yle, asg) >= 0);
-    unsetenv("XOLVER_NRA_CAC_SAT_FIRST");
 }

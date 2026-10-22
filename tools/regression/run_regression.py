@@ -2,7 +2,7 @@
 """Run Xolver against tests/regression/**/*.smt2 and compare to (set-info :status …).
 
 Designed for CTest integration. Exit code:
-    0  – every file PASS or KNOWN_FAIL (no UNEXPECTED_FAIL)
+    0  – every file PASS or an explicitly allowed incomplete result
     1  – at least one UNEXPECTED_FAIL
     2  – setup error (solver missing, no SMT2 found, etc.)
 
@@ -21,16 +21,17 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import subprocess
 import sys
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 STATUS_RE = re.compile(r"\(\s*set-info\s+:status\s+(sat|unsat|unknown)\s*\)", re.I)
-RESULT_RE = re.compile(r"^(sat|unsat|unknown)\b", re.M)
+RESULT_RE = re.compile(r"^(sat|unsat|unknown)[ \t]*$", re.M)
 
 # Manifest at tests/regression/KNOWN_FAILURES.md. Lines that look like
 # `- `path` — reason` under a "## known-fail" / "## known-unsound" section
@@ -52,6 +53,8 @@ def load_manifest(root: Path) -> dict[str, str]:
         if m:
             section = m.group(1).lower()
             continue
+        if line.startswith("## "):
+            section = None
         if section is None:
             continue
         e = ENTRY_RE.match(line)
@@ -72,7 +75,7 @@ class CaseResult:
 
 
 def read_oracle_status(path: Path) -> str:
-    text = path.read_text(errors="replace")
+    text = re.sub(r";[^\n]*", "", path.read_text(errors="replace"))
     m = STATUS_RE.search(text)
     return m.group(1).lower() if m else ""
 
@@ -102,21 +105,27 @@ def run_case(path_str: str, solver: str, timeout: float, expected: str) -> CaseR
                           (time.perf_counter() - start) * 1000)
     elapsed = (time.perf_counter() - start) * 1000
     out = (proc.stdout or "") + "\n" + (proc.stderr or "")
-    solver_status = parse_solver_output(out)
+    # Diagnostics are never solver answers. In particular, a token on stderr
+    # must not overwrite a valid stdout result or turn a crash into a pass.
+    solver_status = parse_solver_output(proc.stdout or "")
 
     if not oracle:
         return CaseResult(path, "", solver_status, expected, "UNEXPECTED_FAIL", elapsed,
                           "missing (set-info :status) — run tools/stamp_status.py")
 
-    if proc.returncode != 0 and not solver_status:
+    # A contradictory answer is always a hard failure, including legacy
+    # known-unsound entries and processes that subsequently crash.
+    if oracle in ("sat", "unsat") and solver_status in ("sat", "unsat") and solver_status != oracle:
+        return CaseResult(path, oracle, solver_status, expected, "UNSOUND", elapsed,
+                          f"oracle={oracle} solver={solver_status} exit={proc.returncode}")
+
+    if proc.returncode != 0:
         detail = (f"exit={proc.returncode}: " + out.strip().splitlines()[-1][:200]
                   if out.strip() else f"exit={proc.returncode}")
-        verdict = "KNOWN_FAIL" if expected in ("known-fail", "known-unsound") else "ERROR"
-        return CaseResult(path, oracle, "error", expected, verdict, elapsed, detail)
+        return CaseResult(path, oracle, solver_status or "error", expected, "ERROR", elapsed, detail)
 
     if not solver_status:
-        verdict = "KNOWN_FAIL" if expected in ("known-fail", "known-unsound") else "ERROR"
-        return CaseResult(path, oracle, "", expected, verdict, elapsed,
+        return CaseResult(path, oracle, "", expected, "ERROR", elapsed,
                           "no sat/unsat/unknown line in output")
 
     # Match logic
@@ -126,21 +135,13 @@ def run_case(path_str: str, solver: str, timeout: float, expected: str) -> CaseR
         # oracle gave up; solver doing better than oracle is acceptable but
         # we can't certify — treat solver=sat/unsat here as PASS only if
         # cross-checked, and as KNOWN_FAIL otherwise. We're conservative:
-        verdict = "PASS" if solver_status == "unknown" else "PASS"
+        verdict = "UNEXPECTED_FAIL"
     elif solver_status == "unknown":
         # solver punted on a known-status case
         verdict = "KNOWN_FAIL" if expected != "pass" else "UNEXPECTED_FAIL"
     else:
         # solver returned the OPPOSITE of oracle — unsoundness!
         verdict = "UNSOUND"
-
-    # Override with expected tag for graceful gap-handling
-    if verdict in ("UNEXPECTED_FAIL", "ERROR", "TIMEOUT") and expected == "known-fail":
-        verdict = "KNOWN_FAIL"
-    # known-unsound also tolerates CRASH/TIMEOUT: a SEGV is a more severe
-    # variant of unsoundness, not a separate category.
-    if verdict in ("UNSOUND", "ERROR", "TIMEOUT") and expected == "known-unsound":
-        verdict = "KNOWN_FAIL"
 
     detail = f"oracle={oracle} solver={solver_status} expected={expected}"
     return CaseResult(path, oracle, solver_status, expected, verdict, elapsed, detail)
@@ -158,10 +159,13 @@ def main() -> int:
     ap.add_argument("-j", "--jobs", type=int, default=4)
     ap.add_argument("-v", "--verbose", action="store_true",
                     help="print each case result, not just summary")
+    ap.add_argument("--allow-unknown", action="store_true",
+                    help="accept unknown for known-gap cases; wrong verdicts and crashes still fail")
+    ap.add_argument("--report", type=Path, help="write all per-case outcomes as JSON")
     args = ap.parse_args()
 
     root = Path(args.root)
-    solver = Path(args.solver)
+    solver = Path(args.solver).resolve()
     if not solver.exists():
         print(f"ERROR: solver not found at {solver}", file=sys.stderr)
         return 2
@@ -189,6 +193,7 @@ def main() -> int:
     tallies: dict[str, int] = {}
     failures: list[CaseResult] = []
     unsound: list[CaseResult] = []
+    results: list[CaseResult] = []
 
     manifest = load_manifest(root)
 
@@ -197,7 +202,7 @@ def main() -> int:
             rel = path.relative_to(root).as_posix()
         except ValueError:
             rel = path.as_posix()
-        return manifest.get(rel, "pass")
+        return manifest.get(rel, "known-fail" if args.allow_unknown else "pass")
 
     with ProcessPoolExecutor(max_workers=args.jobs) as ex:
         futs = {
@@ -206,6 +211,7 @@ def main() -> int:
         }
         for fut in as_completed(futs):
             r = fut.result()
+            results.append(r)
             tallies[r.verdict] = tallies.get(r.verdict, 0) + 1
             if r.verdict == "UNSOUND":
                 unsound.append(r)
@@ -227,6 +233,13 @@ def main() -> int:
         for r in unsound:
             print(f"  {r.path}: oracle={r.oracle} solver={r.solver}")
 
+    if args.report:
+        args.report.parent.mkdir(parents=True, exist_ok=True)
+        args.report.write_text(json.dumps({
+            "solver": str(solver), "timeout": args.timeout, "jobs": args.jobs,
+            "tallies": tallies,
+            "cases": [dict(asdict(r), path=str(r.path)) for r in sorted(results, key=lambda r: str(r.path))],
+        }, indent=2) + "\n")
     return 1 if (failures or unsound) else 0
 
 

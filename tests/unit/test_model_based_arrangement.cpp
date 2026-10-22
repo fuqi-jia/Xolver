@@ -6,7 +6,6 @@
 
 using namespace xolver;
 
-// Model-based theory combination (XOLVER_COMB_MODEL_BASED) closes the
 // Nelson-Oppen arrangement over shared scalars before reporting Sat, fixing the
 // existing QF_UFLIA combination false-SAT class (a genuinely UNSAT UF pigeonhole
 // over a bounded integer domain was reported sat because the arrangement that
@@ -23,13 +22,10 @@ std::string writeTmp(const std::string& name, const std::string& body) {
     return p.string();
 }
 
-Result solveWithFlag(const std::string& path, bool flag) {
-    if (flag) setenv("XOLVER_COMB_MODEL_BASED", "1", 1);
-    else      unsetenv("XOLVER_COMB_MODEL_BASED");
+Result solveFile(const std::string& path) {
     Solver s;
     REQUIRE(s.parseFile(path));
     Result r = s.checkSat();
-    unsetenv("XOLVER_COMB_MODEL_BASED");
     return r;
 }
 
@@ -63,10 +59,10 @@ const char* kSat =
 TEST_CASE("MBA: UFLIA pigeonhole is UNSAT once the arrangement is closed") {
     auto path = writeTmp("pigeonhole", kPigeonhole);
     // Flag ON: arrangement closure must surface the congruence conflict.
-    CHECK(static_cast<int>(solveWithFlag(path, true)) == static_cast<int>(Result::Unsat));
+    CHECK(static_cast<int>(solveFile(path)) == static_cast<int>(Result::Unsat));
 }
 
 TEST_CASE("MBA: arrangement closure introduces no false UNSAT") {
     auto path = writeTmp("sat", kSat);
-    CHECK(static_cast<int>(solveWithFlag(path, true)) != static_cast<int>(Result::Unsat));
+    CHECK(static_cast<int>(solveFile(path)) != static_cast<int>(Result::Unsat));
 }

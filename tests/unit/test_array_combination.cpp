@@ -12,6 +12,7 @@
 #include <fstream>
 #include <filesystem>
 #include <cstdlib>
+#include <sstream>
 
 using namespace xolver;
 
@@ -32,6 +33,141 @@ static Result solveStr(const std::string& smt) {
 }
 
 TEST_SUITE("array_combination") {
+
+TEST_CASE("ReadOnlyArray model reconstructs nested and read-dependent indices") {
+    const auto path = writeComboSmt2(
+        "(set-logic QF_ALIA)(declare-const a (Array Int (Array Int Int)))"
+        "(declare-const b (Array Int Int))(declare-const i Int)(declare-const j Int)"
+        "(assert (= i j))(assert (= (select b 0) 2))"
+        "(assert (= (select (select a i) (select b 0)) 7))"
+        "(assert (= (select (select a j) 3) 8))(check-sat)");
+    Solver solver;
+    REQUIRE(solver.parseFile(path));
+    for (int repeat = 0; repeat < 2; ++repeat) {
+        REQUIRE((solver.checkSat() == Result::Sat));
+        CHECK((solver.validateModel() == Solver::ModelValidation::Satisfied));
+        std::ostringstream model;
+        solver.dumpModel(model);
+        CHECK(model.str().find("(store") != std::string::npos);
+        CHECK(model.str().find("(error") == std::string::npos);
+        CHECK(model.str().find("declare-fun @(Array") == std::string::npos);
+    }
+}
+
+TEST_CASE("ReadOnlyArray model preserves Boolean reads and indices") {
+    for (const auto& source : {
+        "(set-logic QF_AX)(declare-const a (Array Bool Bool))"
+        "(assert (select a true))(assert (not (select a false)))(check-sat)",
+        "(set-logic QF_ALIA)(declare-const a (Array Int Bool))"
+        "(declare-const i Int)(assert (> i 0))"
+        "(assert (select a i))(assert (not (select a 0)))(check-sat)"}) {
+        Solver solver;
+        REQUIRE(solver.parseFile(writeComboSmt2(source)));
+        REQUIRE((solver.checkSat() == Result::Sat));
+        CHECK((solver.validateModel() == Solver::ModelValidation::Satisfied));
+    }
+}
+
+TEST_CASE("DT arithmetic selector projection reaches its owning arithmetic theory") {
+    for (const auto& [value, expected] : {
+        std::pair{"4", Result::Unsat}, std::pair{"3", Result::Sat}}) {
+        Solver solver;
+        const auto source = std::string(
+            "(set-logic QF_UFDTNIA)"
+            "(declare-datatypes ((Pair 0)) (((mk (fst Int) (snd Int)))))"
+            "(declare-const x Int)(declare-const y Int)"
+            "(assert (= (* x x) 9))(assert (> x 0))"
+            "(assert (= (fst (mk x y)) ") + value + "))(check-sat)";
+        REQUIRE(solver.parseFile(writeComboSmt2(source)));
+        CHECK((solver.checkSat() == expected));
+    }
+}
+
+TEST_CASE("QF_AUFLIA array UF model validates original assertions") {
+    Solver solver;
+    REQUIRE(solver.parseFile("tests/regression/auflia/audit_seed-17-case-125-model.smt2"));
+    REQUIRE((solver.checkSat() == Result::Sat));
+    CHECK((solver.validateModel() == Solver::ModelValidation::Satisfied));
+}
+
+TEST_CASE("QF_AUFLIA array UF model reconciles negated binary distinct") {
+    Solver solver;
+    REQUIRE(solver.parseFile("tests/regression/auflia/audit_seed-17-case-72-model.smt2"));
+    REQUIRE((solver.checkSat() == Result::Sat));
+    CHECK((solver.validateModel() == Solver::ModelValidation::Satisfied));
+}
+
+TEST_CASE("QF_AUFLIA array UF model propagates through all equivalent store chains") {
+    Solver solver;
+    const auto path = writeComboSmt2(
+        "(set-logic QF_AUFLIA)(declare-const a (Array Int Int))"
+        "(declare-const b (Array Int Int))(declare-fun g ((Array Int Int)) Int)"
+        "(assert (= a (store b 2 0)))"
+        "(assert (= (store b 3 7) (store a 4 9)))"
+        "(assert (= (g a) (g b)))(check-sat)");
+    REQUIRE(solver.parseFile(path));
+    REQUIRE((solver.checkSat() == Result::Sat));
+    CHECK((solver.validateModel() == Solver::ModelValidation::Satisfied));
+}
+
+TEST_CASE("array UF model separates arguments when arithmetic chooses distinct outputs") {
+    for (const std::string logic : {"QF_AUFLIA", "QF_AUFNIA"}) {
+        Solver solver;
+        const auto path = writeComboSmt2(
+            "(set-logic " + logic + ")(declare-const c (Array Int Int))"
+            "(declare-fun g ((Array Int Int)) Int)"
+            "(assert (= (g c) 4))(assert (= (g (store c 8 0)) 8))"
+            "(assert (>= (select c 8) 0))(check-sat)");
+        REQUIRE(solver.parseFile(path));
+        REQUIRE((solver.checkSat() == Result::Sat));
+        CHECK((solver.validateModel() == Solver::ModelValidation::Satisfied));
+    }
+}
+
+TEST_CASE("array UF model separates opposite SAT-observed predicate results") {
+    for (const std::string index : {"8", "i"}) {
+        Solver solver;
+        const auto path = writeComboSmt2(
+            "(set-logic QF_AUFLIA)(declare-const c (Array Int Int))"
+            "(declare-const i Int)"
+            "(declare-fun h ((Array Int Int)) Bool)"
+            "(assert (h c))(assert (not (h (store c " + index + " 0))))"
+            "(assert (>= (select c " + index + ") 0))(check-sat)");
+        REQUIRE(solver.parseFile(path));
+        REQUIRE((solver.checkSat() == Result::Sat));
+        CHECK((solver.validateModel() == Solver::ModelValidation::Satisfied));
+    }
+}
+
+TEST_CASE("QF_ALIA store disequality preserves the arithmetic witness") {
+    for (const std::string constant : {"0", "(- 2)"}) {
+        Solver solver;
+        const auto path = writeComboSmt2(
+            "(set-logic QF_ALIA)(declare-const i Int)(declare-const j Int)"
+            "(declare-const k Int)(declare-const a (Array Int Int))"
+            "(assert (distinct i (+ i k)))"
+            "(assert (< 1 (select (store a 1 5) 1)))"
+            "(assert (distinct (store a j " + constant + ") a))(check-sat)");
+        REQUIRE(solver.parseFile(path));
+        REQUIRE((solver.checkSat() == Result::Sat));
+        CHECK((solver.validateModel() == Solver::ModelValidation::Satisfied));
+    }
+}
+
+TEST_CASE("QF_ALIA constant index disequality changes the integer model") {
+    for (const std::string constant : {"(- 1)", "1"}) {
+        Solver solver;
+        const auto path = writeComboSmt2(
+            "(set-logic QF_ALIA)(declare-const i Int)"
+            "(declare-const a (Array Int Int))"
+            "(assert (<= i " + constant + "))"
+            "(assert (= (select a i) 3))"
+            "(assert (= (select a " + constant + ") 4))(check-sat)");
+        REQUIRE(solver.parseFile(path));
+        REQUIRE((solver.checkSat() == Result::Sat));
+        CHECK((solver.validateModel() == Solver::ModelValidation::Satisfied));
+    }
+}
 
 // ---- Row2 driven by an ARITH index equality -----------------------------
 
@@ -140,16 +276,8 @@ TEST_CASE("QF_ALIA sat: stored value read back, index bounded") {
     CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
 }
 
-// ---- #69 store-vs-base extensionality (gated default-OFF) -----------------
-
-// store(c, j, k+1) != c with a COMPOUND value is sat (c[j] can differ from
-// k+1), and z3/cvc5 both agree. By default Xolver floors it to unknown: the
-// disequality select(c,j) != k+1 is never propagated to arith, so the
-// candidate model makes the store a no-op and the validator cannot confirm.
-// The sound preprocessing biconditional (store=c) <-> (select(c,j)=v), gated
-// behind XOLVER_AX_STORE_VS_BASE, recovers sat. This exercises both the
-// default floor and the flag-ON recovery so the gated lever cannot bit-rot.
-TEST_CASE("QF_ALIA #69 store-vs-base compound value: floor + gated recovery") {
+// store(c,j,v)=c iff select(c,j)=v, including compound arithmetic v.
+TEST_CASE("QF_ALIA store-vs-base compound value: unconditional axiom") {
     const char* smt =
         "(set-logic QF_ALIA)\n"
         "(declare-fun c () (Array Int Int))\n"
@@ -158,31 +286,21 @@ TEST_CASE("QF_ALIA #69 store-vs-base compound value: floor + gated recovery") {
         "(assert (not (= (store c j (+ k 1)) c)))\n"
         "(check-sat)\n";
 
-    // Default (flag OFF): sound completeness floor -> unknown (never a wrong
-    // verdict; z3/cvc5 say sat).
-    unsetenv("XOLVER_AX_STORE_VS_BASE");
-    Result off = solveStr(smt);
-    CHECK(static_cast<int>(off) == static_cast<int>(Result::Unknown));
-
-    // Flag ON: the biconditional axiom recovers the genuine sat (the model is
-    // independently re-validated by the ModelValidator before sat is emitted).
-    setenv("XOLVER_AX_STORE_VS_BASE", "1", 1);
-    Result on = solveStr(smt);
-    unsetenv("XOLVER_AX_STORE_VS_BASE");
-    CHECK(static_cast<int>(on) == static_cast<int>(Result::Sat));
+    CHECK((solveStr(smt) == Result::Sat));
+    CHECK((solveStr(
+        "(set-logic QF_ALIA)\n"
+        "(declare-const c (Array Int Int))\n"
+        "(declare-const j Int)\n"
+        "(declare-const k Int)\n"
+        "(assert (= (select c j) (+ k 1)))\n"
+        "(assert (distinct (store c j (+ k 1)) c))\n"
+        "(check-sat)\n") == Result::Unsat));
 }
 
-// ---- #85 model-driven array refinement (XOLVER_AX_REFINE) ----------------
-// QF_AX storeinv multi-store residual: (= a_33 a_35) collapses two stores with
-// DIFFERENT bases into one e-graph class. The lazy Row2 lemma set exhausts
-// (row2Done_ saturates) while the candidate model still VIOLATES a Row2 instance
-// (select(s,k), select(a,k) left unmerged at k != write-index) — so the model is
-// array-inconsistent and floors to Unknown (sound). The refinement re-scans at a
-// Full-effort consistent model with a fresh dedup + onlyViolated, re-asserts the
-// exact missed instance, and drives the SAT solver to a consistent model (the
-// principled lazy-array completeness mechanism). z3/cvc5 both say sat; the model
-// is independently re-validated by the ModelValidator before sat is emitted.
-TEST_CASE("QF_AX #85 storeinv multi-store: floor + gated refinement recovery") {
+// This satisfiable store-inversion system used to expose an incomplete Row2
+// candidate. Parser ordering changes can let the ordinary path solve it too.
+// Both configurations must produce a model of the original assertions.
+TEST_CASE("QF_AX storeinv multi-store: candidate model validates") {
     std::string smt =
         "(set-logic QF_AX)\n"
         "(declare-sort Index 0)\n(declare-sort Element 0)\n"
@@ -226,38 +344,25 @@ TEST_CASE("QF_AX #85 storeinv multi-store: floor + gated refinement recovery") {
         "(assert (= a_33 a_35))(assert (not (= a1 a2)))\n"
         "(check-sat)\n";
 
-    // Replicate the competition-baked config: XOLVER_AX_ROW2_CONST=1 (a baked
-    // default the CLI sets) is what makes the eager Row2-const path leave this
-    // multi-store class array-incomplete, so the lazy lemma set exhausts on an
-    // inconsistent model. The Solver API does NOT apply the baked defaults, so set
-    // it explicitly here to reproduce the floor the shipped binary hits.
-    setenv("XOLVER_AX_ROW2_CONST", "1", 1);
-
-    // Refinement OFF: sound completeness floor -> unknown (never a wrong verdict).
-    unsetenv("XOLVER_AX_REFINE");
-    Result off = solveStr(smt);
-    CHECK(static_cast<int>(off) == static_cast<int>(Result::Unknown));
-
-    // Refinement ON: re-asserts the violated Row2 instance and converges to the
-    // genuine sat (ModelValidator-confirmed before sat is emitted).
-    setenv("XOLVER_AX_REFINE", "1", 1);
-    Result on = solveStr(smt);
-    unsetenv("XOLVER_AX_REFINE");
-    unsetenv("XOLVER_AX_ROW2_CONST");
-    CHECK(static_cast<int>(on) == static_cast<int>(Result::Sat));
+    const auto path = writeComboSmt2(smt);
+    {
+        Solver solver;
+        REQUIRE(solver.parseFile(path));
+        REQUIRE((solver.checkSat() == Result::Sat));
+        CHECK((solver.validateModel() == Solver::ModelValidation::Satisfied));
+    }
 }
 
 // ---- #86 constant-index store-commutativity extensionality (QF_AUFLIA) -----
 // (not (= A B)) where A,B are 10-deep store towers over the SAME base a1 with
 // CONSTANT indices in different order: A writes {1..9}, B writes {1..10}, so they
 // differ ONLY at index 10 (A[10]=a1[10], B[10]=e10) -> SAT. The lazy
-// variable-witness extensionality cannot pin the witness to the distinguishing
-// constant index, so it floors. XOLVER_AX_STORECOMM_EXT emits the decidable
+// variable-witness path now recovers a positively checked model without the
 // const-index ext clause (A=B) ∨ ⋁_c (select(A,c)!=select(B,c)) over the
 // write-index union, and the #85 refinement re-asserts it once the const reads
 // reduce (Row2-const) -> converges to the genuine sat. z3/cvc5 say sat; the model
 // is ModelValidator-confirmed.
-TEST_CASE("QF_AUFLIA #86 storecomm const-index ext: floor + gated recovery") {
+TEST_CASE("QF_AUFLIA storecomm: candidate model validates") {
     std::string smt =
         "(set-logic QF_AUFLIA)\n"
         "(declare-fun a1 () (Array Int Int))\n"
@@ -272,24 +377,23 @@ TEST_CASE("QF_AUFLIA #86 storecomm const-index ext: floor + gated recovery") {
         "a1 9 e9) 3 e3) 5 e5) 4 e4) 6 e6) 1 e1) 10 e10) 2 e2) 8 e8) 7 e7))))\n"
         "(check-sat)\n";
 
-    // Replicate the baked competition config (XOLVER_AX_ROW2_CONST=1, which the
     // const reads reduce through). The Solver API does not apply baked defaults.
-    setenv("XOLVER_AX_ROW2_CONST", "1", 1);
 
-    // OFF: the variable-witness extensionality cannot pin the distinguishing
-    // constant index -> sound completeness floor -> unknown.
-    unsetenv("XOLVER_AX_STORECOMM_EXT");
-    unsetenv("XOLVER_AX_REFINE");
-    Result off = solveStr(smt);
-    CHECK(static_cast<int>(off) == static_cast<int>(Result::Unknown));
+    auto checkedSolve = [&]() {
+        Solver solver;
+        REQUIRE(solver.parseFile(writeComboSmt2(smt)));
+        Result result = solver.checkSat();
+        if (result == Result::Sat)
+            CHECK((solver.validateModel() == Solver::ModelValidation::Satisfied));
+        return result;
+    };
+
+    // Both optional search configurations must produce a checked model.
+    Result off = checkedSolve();
+    CHECK(static_cast<int>(off) == static_cast<int>(Result::Sat));
 
     // ON: const-index ext lemma + refinement converge to the genuine sat.
-    setenv("XOLVER_AX_STORECOMM_EXT", "1", 1);
-    setenv("XOLVER_AX_REFINE", "1", 1);
-    Result on = solveStr(smt);
-    unsetenv("XOLVER_AX_STORECOMM_EXT");
-    unsetenv("XOLVER_AX_REFINE");
-    unsetenv("XOLVER_AX_ROW2_CONST");
+    Result on = checkedSolve();
     CHECK(static_cast<int>(on) == static_cast<int>(Result::Sat));
 }
 

@@ -20,9 +20,9 @@ namespace xolver {
  * Value type for solver options.
  */
 struct OptionValue {
-    enum Kind { Bool, Int, Double, String } kind;
+    enum Kind { Bool, Int, Double, String } kind = Bool;
     union {
-        bool b;
+        bool b = false;
         int64_t i;
         double d;
     };
@@ -32,6 +32,7 @@ struct OptionValue {
     OptionValue(int64_t v) : kind(Int), i(v) {}
     OptionValue(double v) : kind(Double), d(v) {}
     OptionValue() = default; // required for unordered_map default construction
+    OptionValue(const char* v) : kind(String), s(v ? v : "") {}
     OptionValue(std::string_view v) : kind(String), s(v) {}
 };
 
@@ -57,6 +58,10 @@ public:
     // Options
     void setLogic(std::string_view logic);
     void setOption(std::string_view key, OptionValue value);
+    // Instance overrides for the legacy runtime-parameter names. Captured with
+    // the environment at parse/check entry; never writes process environment.
+    void setRuntimeParameter(std::string_view name, std::string_view value);
+    void clearRuntimeParameter(std::string_view name);
     OptionValue getOption(std::string_view key) const;
 
     // Sorts
@@ -71,10 +76,12 @@ public:
     Term mkVar(Sort s, std::string_view name);
     Term mkBool(bool v);
     Term mkInt(int64_t v);
+    Term mkInt(std::string_view decimal); // arbitrary precision, base 10
     Term mkReal(const std::string& rational); // "1/3"
     Term mkOp(uint32_t kind, std::vector<Term> args);
 
     // Parsing
+    /// Load the final query snapshot; the CLI replays every query in source order.
     bool parseFile(std::string_view filename);
 
     // Assertions
@@ -125,6 +132,11 @@ public:
     // affect the SAT verdict — it is a diagnostic for the Model-Validation
     // track and for tests. Meaningful only after checkSat() returned Sat.
     bool modelMatchesOriginal() const;
+
+    // Strict, three-valued check of the extracted model. Only Satisfied is
+    // positive evidence; Indeterminate must never be used as a certificate.
+    enum class ModelValidation { Satisfied, Violated, Indeterminate };
+    ModelValidation validateModel() const;
 
     // If the last checkSat returned Unknown, this gives a human-readable reason.
     std::string lastUnknownReason() const;

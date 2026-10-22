@@ -1,7 +1,7 @@
 #include <doctest/doctest.h>
 
-#include "theory/arith/logics/nra/reasoners/NlaCutGenerator.h"
-#include "theory/arith/kernel/poly/PolynomialKernel.h"
+#include "search/nra/reasoners/NlaCutGenerator.h"
+#include "algebra/poly/PolynomialKernel.h"
 
 #include <gmpxx.h>
 #include <unordered_map>
@@ -359,18 +359,25 @@ TEST_CASE("NlaCut math grid: lo_x * lo_y <= x*y <= hi_x * hi_y on non-neg quadra
 }
 
 // ---------- Phase C: NlaCutsRunner scaffold ----------
-#include "theory/arith/logics/nra/reasoners/NlaCutsRunner.h"
+#include "search/nra/reasoners/NlaCutsRunner.h"
 
-TEST_CASE("NlaCutsRunner: disabled by default emits nothing") {
+TEST_CASE("NlaCutsRunner: interval cuts and tangents satisfy their bounds") {
     auto k = createPolynomialKernel();
     if (!k) return;
     PolyId x = k->mkVar(k->getOrCreateVar("x"));
 
     NlaCutsRunner runner(*k);
-    // Default (env unset): runner returns empty.
     VarInterval xInt{x, mpq_class(2), mpq_class(5), {lit(1)}};
     auto cuts = runner.runShapeCuts({xInt});
-    CHECK(cuts.empty());
+    REQUIRE(cuts.size() == 2);
+    for (const auto& cut : cuts) {
+        CHECK(hasReason(cut, lit(1)));
+        for (long xv = 2; xv <= 5; ++xv)
+            CHECK(cutHoldsAt(*k, cut, {{"x", mpz_class(xv)}}));
+    }
     auto tans = runner.runTangents({{x, mpq_class(3)}}, {});
-    CHECK(tans.empty());
+    REQUIRE(tans.size() == 1);
+    CHECK(tans[0].reasons.empty());
+    for (long xv = -5; xv <= 8; ++xv)
+        CHECK(cutHoldsAt(*k, tans[0], {{"x", mpz_class(xv)}}));
 }

@@ -1,4 +1,4 @@
-// XOLVER_NRA_ICP — Q-side engine and RelationContractorQ semantics.
+// Q-side ICP engine and RelationContractorQ semantics.
 //
 // Each test seeds a closed-interval ReasonedBoxQ, builds a univariate
 // IcpConstraint, runs IcpEngineQ, and checks the soundness contract:
@@ -10,13 +10,13 @@
 #include <doctest/doctest.h>
 #include <gmpxx.h>
 
-#include "theory/arith/kernel/icp/IcpEngineQ.h"
-#include "theory/arith/kernel/icp/ContractorFactoryQ.h"
-#include "theory/arith/kernel/icp/contractors/RelationContractorQ.h"
-#include "theory/arith/kernel/icp/IcpTypes.h"
-#include "theory/arith/kernel/interval/ReasonedBoxQ.h"
-#include "theory/arith/kernel/poly/PolynomialKernel.h"
-#include "sat/SatSolver.h"
+#include "search/icp/IcpEngineQ.h"
+#include "search/icp/ContractorFactoryQ.h"
+#include "search/icp/contractors/RelationContractorQ.h"
+#include "search/icp/IcpTypes.h"
+#include "algebra/interval/ReasonedBoxQ.h"
+#include "algebra/poly/PolynomialKernel.h"
+#include "contracts/SatSolver.h"
 
 using namespace xolver;
 

@@ -1,14 +1,8 @@
-// Tests for Agent-1 (linear arithmetic) flag-gated techniques:
-//   XOLVER_LRA_PIVOT_HEUR — entering-var pivot heuristic + Bland fallback.
-//   XOLVER_LIA_REPAIR      — rounding-based LRA->LIA integrality repair.
-//
-// Both are default-OFF and sound regardless of value. These tests confirm the
-// ON path reaches the same verdicts as the OFF path (the flags must never
-// change a SAT/UNSAT answer).
+// Semantic regressions for bounded heuristic pivoting and integrality repair.
 
 #include <doctest/doctest.h>
 #include "xolver/Solver.h"
-#include "theory/arith/logics/lra/GeneralSimplex.h"
+#include "search/lra/GeneralSimplex.h"
 #include <cstdlib>
 #include <fstream>
 #include <filesystem>
@@ -59,24 +53,12 @@ GeneralSimplex::Result solveSampleLra(bool feasible) {
 
 } // namespace
 
-TEST_CASE("XOLVER_LRA_PIVOT_HEUR: verdict matches Bland-only path") {
-    // OFF
-    unsetenv("XOLVER_LRA_PIVOT_HEUR");
-    auto satOff = solveSampleLra(true);
-    auto unsatOff = solveSampleLra(false);
-    CHECK(satOff == GeneralSimplex::Result::Sat);
-    CHECK(unsatOff == GeneralSimplex::Result::Unsat);
-
-    // ON
-    setenv("XOLVER_LRA_PIVOT_HEUR", "1", 1);
-    auto satOn = solveSampleLra(true);
-    auto unsatOn = solveSampleLra(false);
-    CHECK(satOn == GeneralSimplex::Result::Sat);
-    CHECK(unsatOn == GeneralSimplex::Result::Unsat);
-    unsetenv("XOLVER_LRA_PIVOT_HEUR");
+TEST_CASE("Simplex pivot: feasible and infeasible systems") {
+    CHECK(solveSampleLra(true) == GeneralSimplex::Result::Sat);
+    CHECK(solveSampleLra(false) == GeneralSimplex::Result::Unsat);
 }
 
-TEST_CASE("XOLVER_LIA_REPAIR: SAT instance solved via repair") {
+TEST_CASE("Integrality repair: SAT instance solved via repair") {
     // LRA relaxation is fractional (x=2.5, y=3.5); round-to-nearest gives the
     // feasible integer point (x=3, y=4), so repair short-cuts branching.
     std::string path = writeTempSmt2(
@@ -90,7 +72,6 @@ TEST_CASE("XOLVER_LIA_REPAIR: SAT instance solved via repair") {
         "(assert (<= (+ x y) 50))\n"
         "(check-sat)\n",
         "repair_sat");
-    setenv("XOLVER_LIA_REPAIR", "1", 1);
     {
         Solver solver;
         solver.setLogic("QF_LIA");
@@ -98,17 +79,15 @@ TEST_CASE("XOLVER_LIA_REPAIR: SAT instance solved via repair") {
         Result r = solver.checkSat();
         CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
     }
-    unsetenv("XOLVER_LIA_REPAIR");
 }
 
-TEST_CASE("XOLVER_LIA_REPAIR: UNSAT instance still UNSAT") {
+TEST_CASE("Integrality repair: UNSAT instance still UNSAT") {
     std::string path = writeTempSmt2(
         "(set-logic QF_LIA)\n"
         "(declare-const x Int)\n"
         "(assert (= (* 2 x) 1))\n"
         "(check-sat)\n",
         "repair_unsat");
-    setenv("XOLVER_LIA_REPAIR", "1", 1);
     {
         Solver solver;
         solver.setLogic("QF_LIA");
@@ -116,5 +95,4 @@ TEST_CASE("XOLVER_LIA_REPAIR: UNSAT instance still UNSAT") {
         Result r = solver.checkSat();
         CHECK(static_cast<int>(r) == static_cast<int>(Result::Unsat));
     }
-    unsetenv("XOLVER_LIA_REPAIR");
 }

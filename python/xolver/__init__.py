@@ -36,6 +36,7 @@ from ._xolver import (  # noqa: F401
     Model,
     Kind,
     Result,
+    ModelValidation,
     Propagator,
     ObservedAtom,
     CheckEffort,
@@ -67,7 +68,7 @@ __all__ = [
     "And", "Or", "Not", "Implies", "Xor", "Ite", "If", "Distinct",
     "solve", "sat", "unsat", "unknown",
     # Low-level
-    "RawSolver", "Term", "Sort", "Model", "Kind", "Result", "result_to_string",
+    "RawSolver", "Term", "Sort", "Model", "Kind", "Result", "ModelValidation", "result_to_string",
     # One-step control
     "Propagator", "ObservedAtom", "CheckEffort", "CheckOutcome",
     # Helpers

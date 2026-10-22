@@ -1,6 +1,12 @@
 cmake_minimum_required(VERSION 3.16)
 project(Xolver VERSION 0.1.0 LANGUAGES CXX)
 
+# libpoly's pinned CMake files predate 3.5. CMake 4 requires an explicit policy
+# floor for such dependencies; the root project's own 3.16 policies still apply.
+if(CMAKE_VERSION VERSION_GREATER_EQUAL "4.0" AND NOT DEFINED CMAKE_POLICY_VERSION_MINIMUM)
+    set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -11,7 +17,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(XOLVER_BUILD_TESTS "Build unit tests and regression suite" ON)
 option(XOLVER_BUILD_TOOLS "Build CLI tools and utilities" ON)
 option(XOLVER_ENABLE_PROOFS "Enable UNSAT proof production (DRAT/LRAT + Alethe). Default OFF: the competition/no-proof path is the baseline and proof bookkeeping must not regress it. Build -DXOLVER_ENABLE_PROOFS=ON for the proof CI lane." OFF)
-option(XOLVER_ENABLE_TRACING "Enable trace/recording for learning" ON)
 option(XOLVER_ENABLE_LRA_PROFILE "Enable LRA solver profiling" OFF)
 option(XOLVER_BUILD_LIBPOLY_TESTS "Build libpoly submodule tests (slow)" OFF)
 option(XOLVER_ENABLE_LIA_PROFILE "Enable LIA solver profiling" OFF)
@@ -181,6 +186,25 @@ endif()
 # Submodules
 # ---------------------------------------------------------------------------
 add_subdirectory(third_party/SOMTParser)
+
+# The pinned SOMTParser uses SIZE_MAX without including <cstdint>. Older GCC
+# headers provided it transitively; GCC 15 no longer does. Keep the pinned
+# source revision reproducible and supply the missing standard header to its
+# compilation units, without modifying the submodule checkout.
+foreach(_somt_target somtparser somtparser_static somtparser_shared)
+        if(TARGET ${_somt_target})
+            get_target_property(_somt_alias ${_somt_target} ALIASED_TARGET)
+            if(NOT _somt_alias)
+                if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+                    target_compile_options(${_somt_target} PRIVATE -include cstdint)
+                endif()
+                # The pinned dependency lists GMP before MPFR. Static MPFR
+                # introduces further GMP references; retain a trailing GMP.
+                set_property(TARGET ${_somt_target} APPEND PROPERTY
+                    INTERFACE_LINK_LIBRARIES ${GMP_LIBRARIES})
+            endif()
+        endif()
+endforeach()
 
 # ---------------------------------------------------------------------------
 # Version macros

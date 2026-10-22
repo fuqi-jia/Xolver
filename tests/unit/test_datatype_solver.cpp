@@ -197,9 +197,20 @@ TEST_CASE("tester clash on applied ctor over mutual datatypes: is_node(leaf ..) 
         "  ((cons (car tree) (cdr Lst)) (null))\n"
         "  ((node (children Lst)) (leaf (data nat)))))\n"
         "(declare-fun x () nat)\n"
-        "(assert ((_ is node) (leaf (data x))))\n"
+        "(assert ((_ is node) (leaf x)))\n"
         "(check-sat)\n");
     CHECK(static_cast<int>(r) == static_cast<int>(Result::Unsat));
+}
+
+TEST_CASE("datatype selector rejects an argument of another sort") {
+    Solver solver;
+    const auto path = writeDtSmt2(
+        "(set-logic QF_DT)\n"
+        "(declare-datatypes ((nat 0)(tree 0)) "
+        "(((succ (pred nat)) (zero)) ((leaf (data nat)))))\n"
+        "(declare-const x nat)\n"
+        "(assert (= (data x) zero))\n");
+    CHECK_FALSE(solver.parseFile(path));
 }
 
 TEST_CASE("tester matches its own applied ctor: is_cons(cons ..) -> not unsat") {
@@ -218,20 +229,36 @@ TEST_CASE("tester matches its own applied ctor: is_cons(cons ..) -> not unsat") 
 
 // ---- (#76) Injectivity field-equality SYSTEM infeasibility ---------------
 
-TEST_CASE("injectivity system: mk(2,2)=mk(1+k,k-3) => k=1 AND k=5 -> not sat") {
+TEST_CASE("injectivity system: mk(2,2)=mk(1+k,k-3) => k=1 AND k=5 -> unsat") {
     // Constructor injectivity over a 2-equation linear SYSTEM: 1+k=2 (k=1) and
     // k-3=2 (k=5) are each individually satisfiable but jointly infeasible, so
-    // the two constructors can never be equal. The per-field floor cannot see
-    // this (each field involves k); the system floor (Gaussian elimination over
-    // the field equalities) must catch it. Previously a false SAT; now floored
-    // to Unknown (sound). MUST NOT be Sat.
+    // the two constructors can never be equal. Both field lemmas must reach
+    // SAT, even if combination also has a shared equality ready to publish.
     Result r = solveDt(
         "(set-logic QF_UFDTLIA)\n"
         "(declare-datatype Pair ((mk (fst Int) (snd Int))))\n"
         "(declare-fun k () Int)\n"
         "(assert (= (mk 2 2) (mk (+ 1 k) (+ k (- 2 5)))))\n"
         "(check-sat)\n");
-    CHECK(static_cast<int>(r) != static_cast<int>(Result::Sat));
+    CHECK((r == Result::Unsat));
+}
+
+TEST_CASE("injectivity: exact numeric constructor fields refute unequal constants") {
+    for (const char* logic : {"QF_UFDTLIA", "QF_UFDTNIA"}) {
+        const std::string preamble = std::string("(set-logic ") + logic + ")\n"
+            "(declare-datatype Pair ((mk (fst Int) (snd Int))))\n"
+            "(declare-const k Int)\n";
+        CHECK((solveDt(preamble +
+            "(assert (= (mk (+ 2 5) 1) (mk (- 1) k)))\n(check-sat)\n")
+            == Result::Unsat));
+        CHECK((solveDt(preamble +
+            "(assert (= (mk 922337203685477580812345 1)"
+            " (mk 922337203685477580812346 k)))\n(check-sat)\n")
+            == Result::Unsat));
+        CHECK((solveDt(preamble +
+            "(assert (= (mk 7 1) (mk 7 k)))\n(check-sat)\n")
+            != Result::Unsat));
+    }
 }
 
 TEST_CASE("injectivity system: consistent fields must NOT become false unsat") {

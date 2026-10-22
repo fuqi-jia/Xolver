@@ -1,5 +1,5 @@
 #include <doctest/doctest.h>
-#include "theory/arith/kernel/linear/LinearConstraintNormalizer.h"
+#include "algebra/linear/LinearConstraintNormalizer.h"
 
 using namespace xolver;
 

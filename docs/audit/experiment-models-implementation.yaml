@@ -1,0 +1,21 @@
+experiment: xolver-audit-models-implementation-r5
+description: Positive original-formula validation of all ten recovered array models.
+environment:
+  host: panda1
+  workdir: /pub/data/jiafq/xolver
+protocol:
+  inputs: {list: [array-models]}
+  timeout: 10m
+  memory: 4G
+  parallelism: 1
+trials:
+  - {name: model-check}
+run:
+  cmd: >-
+    python3 tools/remote/check_recovered_models.py
+    --solver /pub/data/jiafq/xolver/validation/implementation-r5/xolver
+    --output validation/models-implementation-r5/report.json
+measurements:
+  from: metrics.json
+  primary: positive
+  checks: ["inputs == 10", "positive == 10", "failures == 0"]

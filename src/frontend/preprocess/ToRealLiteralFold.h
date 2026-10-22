@@ -1,6 +1,6 @@
 #pragma once
 
-#include "expr/ir.h"
+#include "ir/NativeTerms.h"
 #include <gmpxx.h>
 #include <unordered_map>
 #include <vector>
@@ -29,7 +29,7 @@ namespace xolver {
  */
 class ToRealLiteralFold {
 public:
-    explicit ToRealLiteralFold(CoreIr& ir);
+    explicit ToRealLiteralFold(NativeTerms& ir);
 
     bool run();
     void commit();
@@ -42,7 +42,7 @@ private:
     // Build a fresh ConstReal whose payload is value.get_str().
     ExprId mkConstReal(const mpq_class& value);
 
-    CoreIr& ir_;
+    NativeTerms& ir_;
     SortId realSortId_;
     std::unordered_map<ExprId, ExprId> memo_;
     std::vector<std::pair<ScopeLevel, ExprId>> folded_;

@@ -16,9 +16,8 @@ static std::string writeTempSmt2(const std::string& name, const std::string& con
     return p.string();
 }
 
-TEST_CASE("NO: UF + LIA shared-variable congruence — unsat" * doctest::skip()) {
-    // Skipped: tracks the known unsoundness in uflia_003 — see KNOWN_FAILURES.md.
-    // Re-enable once EUF<->LIA Nelson-Oppen interface-variable propagation is fixed.
+TEST_CASE("NO: UF + LIA shared-variable congruence — unsat") {
+    // This is a soundness obligation even while completeness is evolving.
     auto path = writeTempSmt2("uf_lia_share_unsat",
         "(set-logic QF_UFLIA)\n"
         "(declare-fun f (Int) Int)\n"
@@ -124,4 +123,18 @@ TEST_CASE("NO: pure-EUF case in UFLIA logic (no arithmetic used) — sat") {
     REQUIRE(s.parseFile(path));
     auto r = s.checkSat();
     CHECK_RESULT(r, Result::Sat);
+}
+
+TEST_CASE("NO: concrete UF model preserves coinciding arithmetic witnesses") {
+    auto path = writeTempSmt2("shared_numeric_model",
+        "(set-logic QF_UFNIA)(declare-const i Int)(declare-const j Int)"
+        "(declare-const k Int)(declare-fun f (Int) Int)"
+        "(assert (not (<= i (f 5))))(assert (distinct 2 (+ 5 k)))"
+        "(assert (< 5 (- 0 i)))(assert (<= (+ k k) (f i)))"
+        "(assert (not (< (f (+ 5 (f (- 1)))) 1)))"
+        "(assert (= i (f i)))(assert (< j 1))(check-sat)");
+    Solver solver;
+    REQUIRE(solver.parseFile(path));
+    REQUIRE((solver.checkSat() == Result::Sat));
+    CHECK((solver.validateModel() == Solver::ModelValidation::Satisfied));
 }

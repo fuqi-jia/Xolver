@@ -1,6 +1,6 @@
 #pragma once
 
-#include "expr/ir.h"
+#include "ir/NativeTerms.h"
 #include <gmpxx.h>
 #include <string>
 #include <unordered_map>
@@ -12,7 +12,7 @@ namespace xolver {
 /**
  * UfApplyAckermann — Ackermannize scalar uninterpreted-function applications.
  *
- * TARGETED preprocessing (gated XOLVER_TARGETED_PP_UFACK, default-OFF), aimed at
+ * Targeted preprocessing for
  * the QF_UFNRA "hidden nonlinearity" family (Sledgehammer FFT translations): a
  * nonlinear/division term sits ONLY inside the argument of an uninterpreted
  * function, e.g. `(f3 (/ (* 2 f4) (f5 f6)))`, while the actual (un)satisfiability
@@ -43,7 +43,7 @@ namespace xolver {
  */
 class UfApplyAckermann {
 public:
-    explicit UfApplyAckermann(CoreIr& ir);
+    explicit UfApplyAckermann(NativeTerms& ir);
 
     bool run();          // returns didRewrite()
     void commit();
@@ -52,7 +52,7 @@ public:
     size_t congruences() const { return extra_.size(); }
 
 private:
-    CoreIr& ir_;
+    NativeTerms& ir_;
     bool didRewrite_ = false;
 
     std::unordered_map<ExprId, ExprId> memo_;

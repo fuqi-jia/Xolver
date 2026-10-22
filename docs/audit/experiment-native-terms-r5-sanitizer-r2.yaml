@@ -1,0 +1,18 @@
+experiment: xolver-native-terms-r5-sanitizer-r2
+description: Reproduce the archived purifier use-after-free and check the fix with ASan/UBSan.
+environment:
+  host: panda1
+  workdir: /pub/data/jiafq/xolver
+protocol:
+  inputs: {list: [purifier]}
+  timeout: 15m
+  memory: 0
+  parallelism: 1
+trials:
+  - {name: sanitizer}
+run:
+  cmd: python3 tools/remote/check_purifier_sanitizer.py
+measurements:
+  from: metrics.json
+  primary: fixed_pass
+  checks: ["baseline_use_after_free == 1", "fixed_pass == 1"]

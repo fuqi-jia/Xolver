@@ -1,13 +1,12 @@
-# Known gaps (not run by CTest)
+# Known gaps (checked by CTest)
 
 Oracle-verified (z3 + cvc5) SMT-LIB cases that xolver does **not yet solve** but
-must never answer *wrong* on. They are kept here as documentation + future
-regression seeds. They are **not** registered in `tests/CMakeLists.txt`, so the
-green regression suite stays green; move a case into `tests/regression/<logic>/`
-the day xolver solves it.
+must never answer *wrong* on. CTest's `known-gaps` entry permits `unknown`, but
+an opposite verdict, a crash, or a timeout fails. Move a case into
+`tests/regression/<logic>/` when it must also meet the completeness requirement.
 
 These are *completeness* gaps (xolver returns `unknown`), never soundness bugs —
-a wrong verdict would still be caught if one of these is ever promoted.
+a wrong verdict is checked on every test run, without waiting for promotion.
 
 ## ufdtnia/ — QF_UFDTNIA finite-datatype cardinality (one remaining)
 

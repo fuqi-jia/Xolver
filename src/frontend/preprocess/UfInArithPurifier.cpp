@@ -3,7 +3,7 @@
 
 namespace xolver {
 
-UfInArithPurifier::UfInArithPurifier(CoreIr& ir) : ir_(ir) {}
+UfInArithPurifier::UfInArithPurifier(NativeTerms& ir) : ir_(ir) {}
 
 bool UfInArithPurifier::isArithKind(Kind k) {
     switch (k) {
@@ -17,6 +17,7 @@ bool UfInArithPurifier::isArithKind(Kind k) {
         case Kind::Pow:
         case Kind::ToInt:
         case Kind::ToReal:
+        case Kind::IsInt:
         case Kind::Lt:
         case Kind::Leq:
         case Kind::Gt:
@@ -27,10 +28,22 @@ bool UfInArithPurifier::isArithKind(Kind k) {
     }
 }
 
+bool UfInArithPurifier::isArithPosition(const TermExpr& node, size_t child) const {
+    if (isArithKind(node.kind)) return true;
+    if (node.kind == Kind::Eq || node.kind == Kind::Distinct ||
+        (node.kind == Kind::Ite && child > 0)) {
+        // Comparisons themselves have Boolean sort; their operand sorts decide
+        // whether the application crosses into arithmetic.
+        const auto sort = ir_.sortKind(ir_.get(node.children[child]).sort);
+        return sort == SortKind::Int || sort == SortKind::Real;
+    }
+    return false;
+}
+
 ExprId UfInArithPurifier::rebuildLike(ExprId original,
                                        const std::vector<ExprId>& newChildren) {
     const auto& node = ir_.get(original);
-    CoreExpr e;
+    TermExpr e;
     e.kind = node.kind;
     e.sort = node.sort;
     e.payload = node.payload;
@@ -41,7 +54,7 @@ ExprId UfInArithPurifier::rebuildLike(ExprId original,
 }
 
 ExprId UfInArithPurifier::mkEq(ExprId a, ExprId b) {
-    CoreExpr e;
+    TermExpr e;
     e.kind = Kind::Eq;
     e.sort = ir_.boolSortId();
     e.children.push_back(a);
@@ -50,12 +63,12 @@ ExprId UfInArithPurifier::mkEq(ExprId a, ExprId b) {
 }
 
 ExprId UfInArithPurifier::purifyRec(ExprId root, bool rootInArithContext) {
-    if (auto it = memo_.find(root); it != memo_.end()) return it->second;
+    if (auto it = memo_.find(memoKey(root, rootInArithContext)); it != memo_.end())
+        return it->second;
 
     // Iterative post-order (two-visit work-stack) carrying the per-node
-    // arithmetic-context flag in the frame. memo_ is keyed by ExprId only, so
-    // the first DFS visit of a shared node fixes its purified form — exactly
-    // matching the former left-to-right recursion. Stack-safe on deep terms.
+    // arithmetic-context flag. A shared node can be retained as a UF argument
+    // and bridged as an arithmetic operand, independently of visitation order.
     struct Frame { ExprId e; bool inArithContext; bool processed; };
     std::vector<Frame> stack;
     stack.push_back({root, rootInArithContext, false});
@@ -63,43 +76,35 @@ ExprId UfInArithPurifier::purifyRec(ExprId root, bool rootInArithContext) {
     while (!stack.empty()) {
         Frame& frame = stack.back();
         ExprId e = frame.e;
-        if (memo_.find(e) != memo_.end()) { stack.pop_back(); continue; }
+        const bool inArithContext = frame.inArithContext;
+        const auto key = memoKey(e, inArithContext);
+        if (memo_.find(key) != memo_.end()) { stack.pop_back(); continue; }
 
-        const auto node = ir_.get(e);  // value copy: ir_.addShared() may relocate exprs_
+        const auto node = ir_.get(e);
 
         if (!frame.processed) {
             frame.processed = true;  // do NOT touch `frame` after a push_back
 
-            if (node.isLeaf()) { memo_[e] = e; stack.pop_back(); continue; }
-
-            // Which child positions are arithmetic contexts.
-            bool childInArith[4] = {false, false, false, false};
-            const bool arithNode =
-                isArithKind(node.kind) ||
-                ((node.kind == Kind::Eq || node.kind == Kind::Distinct) &&
-                 (node.sort == ir_.intSortId() || node.sort == ir_.realSortId()));
-            if (arithNode) {
-                for (size_t i = 0; i < node.children.size() && i < 4; ++i) childInArith[i] = true;
-            }
+            if (node.isLeaf()) { memo_[key] = e; stack.pop_back(); continue; }
 
             for (int i = static_cast<int>(node.children.size()) - 1; i >= 0; --i) {
                 ExprId c = node.children[i];
-                if (memo_.find(c) == memo_.end()) {
-                    bool ctx = (i < 4) ? childInArith[i] : false;
+                const bool ctx = isArithPosition(node, static_cast<size_t>(i));
+                if (memo_.find(memoKey(c, ctx)) == memo_.end()) {
                     stack.push_back({c, ctx, false});
                 }
             }
             continue;
         }
 
-        const bool inArithContext = frame.inArithContext;
         stack.pop_back();
 
         std::vector<ExprId> newChildren;
         newChildren.reserve(node.children.size());
         bool childrenChanged = false;
-        for (ExprId c : node.children) {
-            ExprId rc = memo_.at(c);
+        for (size_t i = 0; i < node.children.size(); ++i) {
+            const auto c = node.children[i];
+            ExprId rc = memo_.at(memoKey(c, isArithPosition(node, i)));
             if (rc != c) childrenChanged = true;
             newChildren.push_back(rc);
         }
@@ -114,14 +119,14 @@ ExprId UfInArithPurifier::purifyRec(ExprId root, bool rootInArithContext) {
             ExprId fresh = ir_.makeFreshVariable(node.sort, "ufbridge");
             ExprId eq = mkEq(fresh, rebuilt);
             generatedAssertions_.push_back(eq);
-            memo_[e] = fresh;
+            memo_[key] = fresh;
             changed_ = true;
         } else {
-            memo_[e] = rebuilt;
+            memo_[key] = rebuilt;
         }
     }
 
-    return memo_.at(root);
+    return memo_.at(memoKey(root, rootInArithContext));
 }
 
 bool UfInArithPurifier::run() {
@@ -146,7 +151,7 @@ void UfInArithPurifier::commit() {
     newAssertions.reserve(ir_.assertions().size() + generatedAssertions_.size());
 
     for (ExprId a : ir_.assertions()) {
-        auto it = memo_.find(a);
+        auto it = memo_.find(memoKey(a, false));
         if (it != memo_.end()) {
             newAssertions.push_back(it->second);
         } else {

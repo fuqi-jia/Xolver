@@ -1,8 +1,8 @@
 #include <doctest/doctest.h>
-#include "theory/arith/kernel/interval/IntervalEvaluator.h"
-#include "theory/arith/kernel/interval/ReasonedBox.h"
-#include "theory/arith/kernel/poly/PolynomialKernel.h"
-#include "sat/SatSolver.h"
+#include "algebra/interval/IntervalEvaluator.h"
+#include "algebra/interval/ReasonedBox.h"
+#include "algebra/poly/PolynomialKernel.h"
+#include "contracts/SatSolver.h"
 #include <gmpxx.h>
 
 using namespace xolver;

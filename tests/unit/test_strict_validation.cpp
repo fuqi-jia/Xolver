@@ -1,10 +1,11 @@
-// XOLVER_PP_STRICT_VALIDATION: emit `sat` only on a POSITIVELY-confirmed model.
 // A model the independent validator cannot fully evaluate (Indeterminate — e.g.
 // an uninterpreted function the validator has no interpretation for) must NOT
 // escape as sat; it is downgraded to `unknown`. This only ever turns
 // sat -> unknown, so it can never introduce a wrong answer.
 #include <doctest/doctest.h>
 #include "xolver/Solver.h"
+#include "search/lra/LraSolver.h"
+#include "search/coordination/TheoryLemmaDatabase.h"
 #include <cstdlib>
 #include <fstream>
 #include <filesystem>
@@ -13,10 +14,6 @@
 using namespace xolver;
 
 namespace {
-struct StrictEnv {
-    StrictEnv()  { setenv("XOLVER_PP_STRICT_VALIDATION", "1", 1); }
-    ~StrictEnv() { unsetenv("XOLVER_PP_STRICT_VALIDATION"); }
-};
 Result solveStr(const std::string& smt, const std::string& tag) {
     std::string path = (std::filesystem::temp_directory_path() /
                         ("xolver_sv_" + tag + ".smt2")).string();
@@ -27,8 +24,46 @@ Result solveStr(const std::string& smt, const std::string& tag) {
 }
 } // namespace
 
-TEST_CASE("strict-validation: confirmable models stay sat") {
-    StrictEnv guard;
+TEST_CASE("LRA model: delta materialization preserves ordinary and interface disequalities") {
+    NativeTerms terms;
+    terms.registerSort(0, SortKind::Real);
+    const auto x = terms.add({Kind::Variable, 0, {}, Payload(std::string("x"))});
+    const auto one = terms.add({Kind::ConstReal, 0, {}, Payload(std::string("1"))});
+    SharedTermRegistry shared;
+    shared.setNativeTerms(&terms);
+    const auto sx = shared.getOrCreate(x, 0, "x", false);
+    const auto sone = shared.getOrCreate(one, 0, "1", false);
+    LraSolver solver;
+    solver.setNativeTerms(&terms);
+    solver.setSharedTermRegistry(&shared);
+    TheoryLemmaDatabase lemmas;
+    LinearFormKey form;
+    form.terms.push_back({"x", mpq_class(1)});
+    TheoryAtomRecord positive{1, TheoryId::LRA, false, NullExpr,
+        LinearAtomPayload{form, Relation::Gt, RealValue::fromInt(0)}};
+    solver.assertLit(positive, true, 0, SatLit::positive(1));
+    REQUIRE(solver.check(lemmas, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Consistent);
+    SUBCASE("ordinary disequality") {
+        TheoryAtomRecord different{2, TheoryId::LRA, false, NullExpr,
+            LinearAtomPayload{form, Relation::Neq, RealValue::fromInt(1)}};
+        solver.assertLit(different, true, 0, SatLit::positive(2));
+    }
+    SUBCASE("interface disequality") {
+        REQUIRE(solver.assertInterfaceDisequality(sx, sone, SatLit::positive(2), 0).kind
+                == TheoryCheckResult::Kind::Consistent);
+    }
+    REQUIRE(solver.check(lemmas, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Consistent);
+    const auto model = solver.getModel();
+    REQUIRE(model.has_value());
+    const auto value = model->numericAssignments.at("x").tryAsRational();
+    REQUIRE(value.has_value());
+    CHECK(*value > 0);
+    CHECK(*value != 1);
+    REQUIRE(solver.sharedTermArithValue(sx).has_value());
+    CHECK(solver.sharedTermArithValue(sx)->tryAsRational() == value);
+}
+
+TEST_CASE("model validation: confirmable models stay sat") {
     // Pure boolean (values come from the SAT assignment, populated by the gate).
     CHECK(static_cast<int>(solveStr(
         "(declare-const p Bool)(assert (or p (not p)))(check-sat)\n", "bool"))
@@ -48,16 +83,6 @@ TEST_CASE("strict-validation: confirmable models stay sat") {
         == static_cast<int>(Result::Sat));
 }
 
-TEST_CASE("strict-validation: unconfirmable (UF) model is downgraded to unknown") {
-    StrictEnv guard;
-    // Genuinely sat, but the validator has no interpretation for the
-    // uninterpreted function f, so the model is Indeterminate -> unknown.
-    Result r = solveStr(
-        "(set-logic QF_UF)(declare-sort U 0)(declare-fun f (U) U)"
-        "(declare-const a U)(assert (= (f a) (f a)))(check-sat)\n", "uf");
-    CHECK(static_cast<int>(r) == static_cast<int>(Result::Unknown));
-}
-
 TEST_CASE("NIA validate-sat floor (DEFAULT-ON): genuine NIA sat stays sat") {
     // No env flag: NIA (nonlinear integer) sat-validation is default-on
     // (invariant 1). A genuine NIA sat with a fully-evaluable integer model
@@ -73,8 +98,7 @@ TEST_CASE("NIA validate-sat floor (DEFAULT-ON): genuine NIA sat stays sat") {
         == static_cast<int>(Result::Sat));
 }
 
-TEST_CASE("strict-validation: unsat is unaffected") {
-    StrictEnv guard;
+TEST_CASE("model validation: unsat is unaffected") {
     // The gate only ever touches a Sat verdict; unsat passes through.
     CHECK(static_cast<int>(solveStr(
         "(set-logic QF_LIA)(declare-const x Int)"

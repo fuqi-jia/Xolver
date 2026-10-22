@@ -4,7 +4,7 @@
 
 namespace xolver {
 
-BoolSubtermPurifier::BoolSubtermPurifier(CoreIr& ir)
+BoolSubtermPurifier::BoolSubtermPurifier(NativeTerms& ir)
     : ir_(ir), boolSortId_(ir.boolSortId()) {}
 
 bool BoolSubtermPurifier::isBoolComposite(ExprId e) const {
@@ -48,7 +48,7 @@ bool BoolSubtermPurifier::isBoolComposite(ExprId e) const {
 ExprId BoolSubtermPurifier::rebuildLike(ExprId original,
                                          const std::vector<ExprId>& newChildren) {
     const auto& node = ir_.get(original);
-    CoreExpr e;
+    TermExpr e;
     e.kind = node.kind;
     e.sort = node.sort;
     e.payload = node.payload;
@@ -59,7 +59,7 @@ ExprId BoolSubtermPurifier::rebuildLike(ExprId original,
 }
 
 ExprId BoolSubtermPurifier::mkEq(ExprId a, ExprId b) {
-    CoreExpr e;
+    TermExpr e;
     e.kind = Kind::Eq;
     e.sort = boolSortId_;
     e.children.push_back(a);
@@ -68,7 +68,7 @@ ExprId BoolSubtermPurifier::mkEq(ExprId a, ExprId b) {
 }
 
 ExprId BoolSubtermPurifier::mkAnd(ExprId a, ExprId b) {
-    CoreExpr e;
+    TermExpr e;
     e.kind = Kind::And;
     e.sort = boolSortId_;
     e.children.push_back(a);
@@ -77,7 +77,7 @@ ExprId BoolSubtermPurifier::mkAnd(ExprId a, ExprId b) {
 }
 
 ExprId BoolSubtermPurifier::mkOr(ExprId a, ExprId b) {
-    CoreExpr e;
+    TermExpr e;
     e.kind = Kind::Or;
     e.sort = boolSortId_;
     e.children.push_back(a);
@@ -86,7 +86,7 @@ ExprId BoolSubtermPurifier::mkOr(ExprId a, ExprId b) {
 }
 
 ExprId BoolSubtermPurifier::mkImplies(ExprId a, ExprId b) {
-    CoreExpr e;
+    TermExpr e;
     e.kind = Kind::Implies;
     e.sort = boolSortId_;
     e.children.push_back(a);
@@ -95,7 +95,7 @@ ExprId BoolSubtermPurifier::mkImplies(ExprId a, ExprId b) {
 }
 
 ExprId BoolSubtermPurifier::mkNot(ExprId a) {
-    CoreExpr e;
+    TermExpr e;
     e.kind = Kind::Not;
     e.sort = boolSortId_;
     e.children.push_back(a);
@@ -103,7 +103,7 @@ ExprId BoolSubtermPurifier::mkNot(ExprId a) {
 }
 
 ExprId BoolSubtermPurifier::mkDistinct(ExprId a, ExprId b) {
-    CoreExpr e;
+    TermExpr e;
     e.kind = Kind::Distinct;
     e.sort = boolSortId_;
     e.children.push_back(a);
@@ -128,14 +128,15 @@ static bool isAtomicBoolPos(Kind k, size_t i) {
 }
 
 ExprId BoolSubtermPurifier::purifyRec(ExprId root, bool rootInArgPosition) {
-    if (auto it = memo_.find(root); it != memo_.end()) return it->second;
+    const auto key = [](ExprId id, bool argument) {
+        return (uint64_t{id} << 1) | uint64_t{argument};
+    };
+    if (auto it = memo_.find(key(root, rootInArgPosition)); it != memo_.end())
+        return it->second;
 
     // Iterative post-order (two-visit work-stack) carrying the per-node
-    // inArgPosition flag in the frame. memo_ is keyed by ExprId only, so the
-    // first DFS visit of a shared node fixes its purified form — matching the
-    // former left-to-right recursion. Stack-safe at any depth, so the previous
-    // kMaxRecursionDepth bail-out (which silently skipped purification on deep
-    // terms) is no longer needed.
+    // argument flag in the frame. Include that context in the memo key so
+    // visiting a shared node in formula position cannot skip a later lift.
     struct Frame { ExprId e; bool inArgPosition; bool processed; };
     std::vector<Frame> stack;
     stack.push_back({root, rootInArgPosition, false});
@@ -143,32 +144,35 @@ ExprId BoolSubtermPurifier::purifyRec(ExprId root, bool rootInArgPosition) {
     while (!stack.empty()) {
         Frame& frame = stack.back();
         ExprId e = frame.e;
-        if (memo_.find(e) != memo_.end()) { stack.pop_back(); continue; }
+        const bool inArgPosition = frame.inArgPosition;
+        const auto cacheKey = key(e, inArgPosition);
+        if (memo_.find(cacheKey) != memo_.end()) { stack.pop_back(); continue; }
 
-        const auto node = ir_.get(e);  // value copy: ir_.addShared() may relocate exprs_
+        const auto node = ir_.get(e);
 
         if (!frame.processed) {
             frame.processed = true;  // do NOT touch `frame` after a push_back
-            if (node.isLeaf()) { memo_[e] = e; stack.pop_back(); continue; }
+            if (node.isLeaf()) { memo_[cacheKey] = e; stack.pop_back(); continue; }
             for (int i = static_cast<int>(node.children.size()) - 1; i >= 0; --i) {
                 ExprId c = node.children[i];
-                if (memo_.find(c) == memo_.end()) {
-                    bool childInArg = frame.inArgPosition ||
-                                      !isAtomicBoolPos(node.kind, static_cast<size_t>(i));
+                const bool childInArg = inArgPosition ||
+                                       !isAtomicBoolPos(node.kind, static_cast<size_t>(i));
+                if (memo_.find(key(c, childInArg)) == memo_.end()) {
                     stack.push_back({c, childInArg, false});
                 }
             }
             continue;
         }
 
-        const bool inArgPosition = frame.inArgPosition;
         stack.pop_back();
 
         std::vector<ExprId> newChildren;
         newChildren.reserve(node.children.size());
         bool childrenChanged = false;
-        for (ExprId c : node.children) {
-            ExprId rc = memo_.at(c);
+        for (size_t i = 0; i < node.children.size(); ++i) {
+            ExprId c = node.children[i];
+            const bool childInArg = inArgPosition || !isAtomicBoolPos(node.kind, i);
+            ExprId rc = memo_.at(key(c, childInArg));
             if (rc != c) childrenChanged = true;
             newChildren.push_back(rc);
         }
@@ -197,14 +201,14 @@ ExprId BoolSubtermPurifier::purifyRec(ExprId root, bool rootInArgPosition) {
             } else {
                 generatedAssertions_.push_back(mkEq(fresh, rebuilt));
             }
-            memo_[e] = fresh;
+            memo_[cacheKey] = fresh;
             changed_ = true;
         } else {
-            memo_[e] = rebuilt;
+            memo_[cacheKey] = rebuilt;
         }
     }
 
-    return memo_.at(root);
+    return memo_.at(key(root, rootInArgPosition));
 }
 
 bool BoolSubtermPurifier::run() {

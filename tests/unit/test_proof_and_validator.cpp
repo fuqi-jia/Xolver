@@ -8,10 +8,10 @@
 // and/or/not/ite/eq evaluation matches truth-table semantics.
 
 #include <doctest/doctest.h>
-#include "proof/ProofManager.h"
-#include "proof/ModelValidator.h"
-#include "expr/ir.h"
-#include "expr/types.h"
+#include "evidence/ProofManager.h"
+#include "evidence/ModelValidator.h"
+#include "ir/NativeTerms.h"
+#include "ir/types.h"
 
 using namespace xolver;
 
@@ -51,16 +51,17 @@ TEST_CASE("Proof: setSatProofFile is settable to empty and non-empty path") {
 // ModelValidator
 // -----------------------------------------------------------------------
 
-static ExprId mkBoolVar(CoreIr& ir, const std::string& name) {
-    CoreExpr e;
+static ExprId mkBoolVar(NativeTerms& ir, const std::string& name) {
+    ir.registerSort(0, SortKind::Bool);
+    TermExpr e;
     e.kind = Kind::Variable;
     e.sort = 0;  // bool sort id
     e.payload = Payload(std::string(name));
     return ir.add(std::move(e));
 }
 
-static ExprId mkOp(CoreIr& ir, Kind k, std::vector<ExprId> args) {
-    CoreExpr e;
+static ExprId mkOp(NativeTerms& ir, Kind k, std::vector<ExprId> args) {
+    TermExpr e;
     e.kind = k;
     e.sort = 0;
     for (auto a : args) e.children.push_back(a);
@@ -68,7 +69,7 @@ static ExprId mkOp(CoreIr& ir, Kind k, std::vector<ExprId> args) {
 }
 
 TEST_CASE("MV: AND truth table") {
-    CoreIr ir;
+    NativeTerms ir;
     ExprId p = mkBoolVar(ir, "p");
     ExprId q = mkBoolVar(ir, "q");
     ExprId pq = mkOp(ir, Kind::And, {p, q});
@@ -82,7 +83,7 @@ TEST_CASE("MV: AND truth table") {
 }
 
 TEST_CASE("MV: OR truth table") {
-    CoreIr ir;
+    NativeTerms ir;
     ExprId p = mkBoolVar(ir, "p");
     ExprId q = mkBoolVar(ir, "q");
     ExprId pq = mkOp(ir, Kind::Or, {p, q});
@@ -96,7 +97,7 @@ TEST_CASE("MV: OR truth table") {
 }
 
 TEST_CASE("MV: NOT flips") {
-    CoreIr ir;
+    NativeTerms ir;
     ExprId p = mkBoolVar(ir, "p");
     ExprId notp = mkOp(ir, Kind::Not, {p});
 
@@ -106,12 +107,8 @@ TEST_CASE("MV: NOT flips") {
     a[p] = false; CHECK(mv.eval(notp, ir, a) == true);
 }
 
-TEST_CASE("MV: ITE selects branch" * doctest::skip()) {
-    // KNOWN GAP: ModelValidator::eval has no Kind::Ite case in switch (Stage A
-    // skeleton). Falls through to `default: return true`, which silently
-    // validates ANY ITE — soundness gap. Once Kind::Ite is added to the switch
-    // in src/proof/ModelValidator.cpp, remove the skip().
-    CoreIr ir;
+TEST_CASE("MV: ITE selects branch") {
+    NativeTerms ir;
     ExprId c = mkBoolVar(ir, "c");
     ExprId t = mkBoolVar(ir, "t");
     ExprId e = mkBoolVar(ir, "e");
@@ -126,7 +123,7 @@ TEST_CASE("MV: ITE selects branch" * doctest::skip()) {
 }
 
 TEST_CASE("MV: Eq on Bool atoms — equivalence") {
-    CoreIr ir;
+    NativeTerms ir;
     ExprId p = mkBoolVar(ir, "p");
     ExprId q = mkBoolVar(ir, "q");
     ExprId eq = mkOp(ir, Kind::Eq, {p, q});
@@ -139,7 +136,7 @@ TEST_CASE("MV: Eq on Bool atoms — equivalence") {
 }
 
 TEST_CASE("MV: nested And of Or") {
-    CoreIr ir;
+    NativeTerms ir;
     ExprId p = mkBoolVar(ir, "p");
     ExprId q = mkBoolVar(ir, "q");
     ExprId r = mkBoolVar(ir, "r");

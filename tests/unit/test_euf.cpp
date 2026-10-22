@@ -1,8 +1,8 @@
 #include <doctest/doctest.h>
 #include "xolver/Solver.h"
-#include "expr/ir.h"
-#include "theory/euf/EufSolver.h"
-#include "theory/core/TheoryLemmaDatabase.h"
+#include "ir/NativeTerms.h"
+#include "search/euf/EufSolver.h"
+#include "search/coordination/TheoryLemmaDatabase.h"
 #include <fstream>
 #include <filesystem>
 #include <cstdlib>
@@ -427,12 +427,15 @@ static TheoryAtomRecord makeEufRecord(ExprId lhs, ExprId rhs,
 }
 
 TEST_CASE("EUF incremental: basic equality merge consistent") {
-    CoreIr ir;
-    ExprId a = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("a"))});
-    ExprId b = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("b"))});
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Other);
+    ir.registerSort(1, SortKind::Real);
+    ir.registerSort(2, SortKind::Int);
+    ExprId a = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("a"))});
+    ExprId b = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("b"))});
 
     EufSolver solver;
-    solver.setCoreIr(&ir);
+    solver.setNativeTerms(&ir);
     TheoryLemmaDatabase lemmaDb;
 
     solver.assertLit(makeEufRecord(a, b), true, 0, SatLit{1, true});
@@ -441,12 +444,15 @@ TEST_CASE("EUF incremental: basic equality merge consistent") {
 }
 
 TEST_CASE("EUF incremental: equality then disequality conflict") {
-    CoreIr ir;
-    ExprId a = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("a"))});
-    ExprId b = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("b"))});
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Other);
+    ir.registerSort(1, SortKind::Real);
+    ir.registerSort(2, SortKind::Int);
+    ExprId a = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("a"))});
+    ExprId b = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("b"))});
 
     EufSolver solver;
-    solver.setCoreIr(&ir);
+    solver.setNativeTerms(&ir);
     TheoryLemmaDatabase lemmaDb;
 
     solver.assertLit(makeEufRecord(a, b), true, 0, SatLit{1, true});
@@ -456,13 +462,16 @@ TEST_CASE("EUF incremental: equality then disequality conflict") {
 }
 
 TEST_CASE("EUF backtrack: out-of-order merge dropped past its level (no stale merge / no false conflict)") {
-    CoreIr ir;
-    ExprId a = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("a"))});
-    ExprId b = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("b"))});
-    ExprId c = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("c"))});
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Other);
+    ir.registerSort(1, SortKind::Real);
+    ir.registerSort(2, SortKind::Int);
+    ExprId a = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("a"))});
+    ExprId b = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("b"))});
+    ExprId c = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("c"))});
 
     EufSolver solver;
-    solver.setCoreIr(&ir);
+    solver.setNativeTerms(&ir);
     TheoryLemmaDatabase lemmaDb;
 
     // The SAT trail is asserted in non-decreasing decision-level order (as the
@@ -490,14 +499,17 @@ TEST_CASE("EUF backtrack: out-of-order merge dropped past its level (no stale me
 }
 
 TEST_CASE("EUF incremental: congruence closure conflict") {
-    CoreIr ir;
-    ExprId a = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("a"))});
-    ExprId b = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("b"))});
-    ExprId f_a = ir.add(CoreExpr{Kind::UFApply, 0, {a}, Payload(std::string("f"))});
-    ExprId f_b = ir.add(CoreExpr{Kind::UFApply, 0, {b}, Payload(std::string("f"))});
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Other);
+    ir.registerSort(1, SortKind::Real);
+    ir.registerSort(2, SortKind::Int);
+    ExprId a = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("a"))});
+    ExprId b = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("b"))});
+    ExprId f_a = ir.add(TermExpr{Kind::UFApply, 0, {a}, Payload(std::string("f"))});
+    ExprId f_b = ir.add(TermExpr{Kind::UFApply, 0, {b}, Payload(std::string("f"))});
 
     EufSolver solver;
-    solver.setCoreIr(&ir);
+    solver.setNativeTerms(&ir);
     TheoryLemmaDatabase lemmaDb;
 
     solver.assertLit(makeEufRecord(a, b), true, 0, SatLit{1, true});
@@ -511,11 +523,14 @@ TEST_CASE("EUF incremental: congruence closure conflict") {
 // ---------------------------------------------------------------------------
 
 TEST_CASE("EUF term manager: intern opaque Add node") {
-    CoreIr ir;
-    ExprId x = ir.add(CoreExpr{Kind::Variable, 1, {}, Payload(std::string("x"))});
-    ExprId one = ir.add(CoreExpr{Kind::ConstInt, 2, {}, Payload(int64_t(1))});
-    ExprId add_x1 = ir.add(CoreExpr{Kind::Add, 1, {x, one}, Payload{}});
-    ExprId f_add = ir.add(CoreExpr{Kind::UFApply, 1, {add_x1}, Payload(std::string("f"))});
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Other);
+    ir.registerSort(1, SortKind::Real);
+    ir.registerSort(2, SortKind::Int);
+    ExprId x = ir.add(TermExpr{Kind::Variable, 1, {}, Payload(std::string("x"))});
+    ExprId one = ir.add(TermExpr{Kind::ConstInt, 2, {}, Payload(int64_t(1))});
+    ExprId add_x1 = ir.add(TermExpr{Kind::Add, 1, {x, one}, Payload{}});
+    ExprId f_add = ir.add(TermExpr{Kind::UFApply, 1, {add_x1}, Payload(std::string("f"))});
 
     EufTermManager tm;
     EufTermId t = tm.intern(f_add, ir);
@@ -526,12 +541,15 @@ TEST_CASE("EUF term manager: intern opaque Add node") {
 }
 
 TEST_CASE("EUF term manager: intern nested opaque arithmetic") {
-    CoreIr ir;
-    ExprId x = ir.add(CoreExpr{Kind::Variable, 1, {}, Payload(std::string("x"))});
-    ExprId one = ir.add(CoreExpr{Kind::ConstInt, 2, {}, Payload(int64_t(1))});
-    ExprId add_x1 = ir.add(CoreExpr{Kind::Add, 1, {x, one}, Payload{}});
-    ExprId mul_2x1 = ir.add(CoreExpr{Kind::Mul, 1, {one, add_x1}, Payload{}});
-    ExprId g_mul = ir.add(CoreExpr{Kind::UFApply, 1, {mul_2x1}, Payload(std::string("g"))});
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Other);
+    ir.registerSort(1, SortKind::Real);
+    ir.registerSort(2, SortKind::Int);
+    ExprId x = ir.add(TermExpr{Kind::Variable, 1, {}, Payload(std::string("x"))});
+    ExprId one = ir.add(TermExpr{Kind::ConstInt, 2, {}, Payload(int64_t(1))});
+    ExprId add_x1 = ir.add(TermExpr{Kind::Add, 1, {x, one}, Payload{}});
+    ExprId mul_2x1 = ir.add(TermExpr{Kind::Mul, 1, {one, add_x1}, Payload{}});
+    ExprId g_mul = ir.add(TermExpr{Kind::UFApply, 1, {mul_2x1}, Payload(std::string("g"))});
 
     EufTermManager tm;
     EufTermId t = tm.intern(g_mul, ir);
@@ -540,12 +558,16 @@ TEST_CASE("EUF term manager: intern nested opaque arithmetic") {
 }
 
 TEST_CASE("EUF term manager: unsupported Ite returns NullEufTerm") {
-    CoreIr ir;
-    ExprId c = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("c"))});
-    ExprId t = ir.add(CoreExpr{Kind::Variable, 1, {}, Payload(std::string("t"))});
-    ExprId e = ir.add(CoreExpr{Kind::Variable, 1, {}, Payload(std::string("e"))});
-    ExprId ite = ir.add(CoreExpr{Kind::Ite, 1, {c, t, e}, Payload{}});
-    ExprId f_ite = ir.add(CoreExpr{Kind::UFApply, 1, {ite}, Payload(std::string("f"))});
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Other);
+    ir.registerSort(1, SortKind::Real);
+    ir.registerSort(2, SortKind::Int);
+    ir.registerSort(0, SortKind::Bool);
+    ExprId c = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("c"))});
+    ExprId t = ir.add(TermExpr{Kind::Variable, 1, {}, Payload(std::string("t"))});
+    ExprId e = ir.add(TermExpr{Kind::Variable, 1, {}, Payload(std::string("e"))});
+    ExprId ite = ir.add(TermExpr{Kind::Ite, 1, {c, t, e}, Payload{}});
+    ExprId f_ite = ir.add(TermExpr{Kind::UFApply, 1, {ite}, Payload(std::string("f"))});
 
     EufTermManager tm;
     EufTermId result = tm.intern(f_ite, ir);
@@ -553,15 +575,19 @@ TEST_CASE("EUF term manager: unsupported Ite returns NullEufTerm") {
 }
 
 TEST_CASE("EUF solver: assertLit with unsupported subterm sets pendingUnknown") {
-    CoreIr ir;
-    ExprId c = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("c"))});
-    ExprId t = ir.add(CoreExpr{Kind::Variable, 1, {}, Payload(std::string("t"))});
-    ExprId e = ir.add(CoreExpr{Kind::Variable, 1, {}, Payload(std::string("e"))});
-    ExprId ite = ir.add(CoreExpr{Kind::Ite, 1, {c, t, e}, Payload{}});
-    ExprId a = ir.add(CoreExpr{Kind::Variable, 1, {}, Payload(std::string("a"))});
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Other);
+    ir.registerSort(1, SortKind::Real);
+    ir.registerSort(2, SortKind::Int);
+    ir.registerSort(0, SortKind::Bool);
+    ExprId c = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("c"))});
+    ExprId t = ir.add(TermExpr{Kind::Variable, 1, {}, Payload(std::string("t"))});
+    ExprId e = ir.add(TermExpr{Kind::Variable, 1, {}, Payload(std::string("e"))});
+    ExprId ite = ir.add(TermExpr{Kind::Ite, 1, {c, t, e}, Payload{}});
+    ExprId a = ir.add(TermExpr{Kind::Variable, 1, {}, Payload(std::string("a"))});
 
     EufSolver solver;
-    solver.setCoreIr(&ir);
+    solver.setNativeTerms(&ir);
     TheoryLemmaDatabase lemmaDb;
 
     solver.assertLit(makeEufRecord(ite, a), true, 0, SatLit{1, true});
@@ -570,17 +596,20 @@ TEST_CASE("EUF solver: assertLit with unsupported subterm sets pendingUnknown") 
 }
 
 TEST_CASE("EUF solver: congruence through opaque Add") {
-    CoreIr ir;
-    ExprId x = ir.add(CoreExpr{Kind::Variable, 1, {}, Payload(std::string("x"))});
-    ExprId y = ir.add(CoreExpr{Kind::Variable, 1, {}, Payload(std::string("y"))});
-    ExprId one = ir.add(CoreExpr{Kind::ConstInt, 2, {}, Payload(int64_t(1))});
-    ExprId add_x1 = ir.add(CoreExpr{Kind::Add, 1, {x, one}, Payload{}});
-    ExprId add_y1 = ir.add(CoreExpr{Kind::Add, 1, {y, one}, Payload{}});
-    ExprId f_x1 = ir.add(CoreExpr{Kind::UFApply, 1, {add_x1}, Payload(std::string("f"))});
-    ExprId f_y1 = ir.add(CoreExpr{Kind::UFApply, 1, {add_y1}, Payload(std::string("f"))});
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Other);
+    ir.registerSort(1, SortKind::Real);
+    ir.registerSort(2, SortKind::Int);
+    ExprId x = ir.add(TermExpr{Kind::Variable, 1, {}, Payload(std::string("x"))});
+    ExprId y = ir.add(TermExpr{Kind::Variable, 1, {}, Payload(std::string("y"))});
+    ExprId one = ir.add(TermExpr{Kind::ConstInt, 2, {}, Payload(int64_t(1))});
+    ExprId add_x1 = ir.add(TermExpr{Kind::Add, 1, {x, one}, Payload{}});
+    ExprId add_y1 = ir.add(TermExpr{Kind::Add, 1, {y, one}, Payload{}});
+    ExprId f_x1 = ir.add(TermExpr{Kind::UFApply, 1, {add_x1}, Payload(std::string("f"))});
+    ExprId f_y1 = ir.add(TermExpr{Kind::UFApply, 1, {add_y1}, Payload(std::string("f"))});
 
     EufSolver solver;
-    solver.setCoreIr(&ir);
+    solver.setNativeTerms(&ir);
     TheoryLemmaDatabase lemmaDb;
 
     solver.assertLit(makeEufRecord(x, y), true, 0, SatLit{1, true});
@@ -644,16 +673,19 @@ TEST_CASE("QF_UFLRA: no false merge of distinct arithmetic terms") {
 }
 
 TEST_CASE("EUF incremental: nested congruence closure conflict") {
-    CoreIr ir;
-    ExprId a = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("a"))});
-    ExprId b = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("b"))});
-    ExprId g_a = ir.add(CoreExpr{Kind::UFApply, 0, {a}, Payload(std::string("g"))});
-    ExprId g_b = ir.add(CoreExpr{Kind::UFApply, 0, {b}, Payload(std::string("g"))});
-    ExprId f_g_a = ir.add(CoreExpr{Kind::UFApply, 0, {g_a}, Payload(std::string("f"))});
-    ExprId f_g_b = ir.add(CoreExpr{Kind::UFApply, 0, {g_b}, Payload(std::string("f"))});
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Other);
+    ir.registerSort(1, SortKind::Real);
+    ir.registerSort(2, SortKind::Int);
+    ExprId a = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("a"))});
+    ExprId b = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("b"))});
+    ExprId g_a = ir.add(TermExpr{Kind::UFApply, 0, {a}, Payload(std::string("g"))});
+    ExprId g_b = ir.add(TermExpr{Kind::UFApply, 0, {b}, Payload(std::string("g"))});
+    ExprId f_g_a = ir.add(TermExpr{Kind::UFApply, 0, {g_a}, Payload(std::string("f"))});
+    ExprId f_g_b = ir.add(TermExpr{Kind::UFApply, 0, {g_b}, Payload(std::string("f"))});
 
     EufSolver solver;
-    solver.setCoreIr(&ir);
+    solver.setNativeTerms(&ir);
     TheoryLemmaDatabase lemmaDb;
 
     solver.assertLit(makeEufRecord(a, b), true, 0, SatLit{1, true});
@@ -663,12 +695,15 @@ TEST_CASE("EUF incremental: nested congruence closure conflict") {
 }
 
 TEST_CASE("EUF incremental: push pop restores equality class") {
-    CoreIr ir;
-    ExprId a = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("a"))});
-    ExprId b = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("b"))});
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Other);
+    ir.registerSort(1, SortKind::Real);
+    ir.registerSort(2, SortKind::Int);
+    ExprId a = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("a"))});
+    ExprId b = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("b"))});
 
     EufSolver solver;
-    solver.setCoreIr(&ir);
+    solver.setNativeTerms(&ir);
     TheoryLemmaDatabase lemmaDb;
 
     solver.push();
@@ -680,12 +715,15 @@ TEST_CASE("EUF incremental: push pop restores equality class") {
 }
 
 TEST_CASE("EUF incremental: push pop removes disequality conflict") {
-    CoreIr ir;
-    ExprId a = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("a"))});
-    ExprId b = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("b"))});
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Other);
+    ir.registerSort(1, SortKind::Real);
+    ir.registerSort(2, SortKind::Int);
+    ExprId a = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("a"))});
+    ExprId b = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("b"))});
 
     EufSolver solver;
-    solver.setCoreIr(&ir);
+    solver.setNativeTerms(&ir);
     TheoryLemmaDatabase lemmaDb;
 
     solver.assertLit(makeEufRecord(a, b), true, 0, SatLit{1, true});
@@ -699,13 +737,16 @@ TEST_CASE("EUF incremental: push pop removes disequality conflict") {
 }
 
 TEST_CASE("EUF incremental: multiple push pop levels") {
-    CoreIr ir;
-    ExprId a = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("a"))});
-    ExprId b = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("b"))});
-    ExprId c = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("c"))});
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Other);
+    ir.registerSort(1, SortKind::Real);
+    ir.registerSort(2, SortKind::Int);
+    ExprId a = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("a"))});
+    ExprId b = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("b"))});
+    ExprId c = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("c"))});
 
     EufSolver solver;
-    solver.setCoreIr(&ir);
+    solver.setNativeTerms(&ir);
     TheoryLemmaDatabase lemmaDb;
 
     solver.assertLit(makeEufRecord(a, b), true, 0, SatLit{1, true});
@@ -724,12 +765,15 @@ TEST_CASE("EUF incremental: multiple push pop levels") {
 }
 
 TEST_CASE("EUF incremental: backtrack to level 0") {
-    CoreIr ir;
-    ExprId a = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("a"))});
-    ExprId b = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("b"))});
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Other);
+    ir.registerSort(1, SortKind::Real);
+    ir.registerSort(2, SortKind::Int);
+    ExprId a = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("a"))});
+    ExprId b = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("b"))});
 
     EufSolver solver;
-    solver.setCoreIr(&ir);
+    solver.setNativeTerms(&ir);
     TheoryLemmaDatabase lemmaDb;
 
     solver.assertLit(makeEufRecord(a, b), true, 0, SatLit{1, true});
@@ -742,11 +786,14 @@ TEST_CASE("EUF incremental: backtrack to level 0") {
 }
 
 TEST_CASE("EUF incremental: Bool true assignment consistent") {
-    CoreIr ir;
-    ExprId p = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("p"))});
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Other);
+    ir.registerSort(1, SortKind::Real);
+    ir.registerSort(2, SortKind::Int);
+    ExprId p = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("p"))});
 
     EufSolver solver;
-    solver.setCoreIr(&ir);
+    solver.setNativeTerms(&ir);
     TheoryLemmaDatabase lemmaDb;
 
     solver.assertLit(makeEufRecord(p, TrueSentinelExpr, Relation::Eq,
@@ -757,11 +804,14 @@ TEST_CASE("EUF incremental: Bool true assignment consistent") {
 }
 
 TEST_CASE("EUF incremental: Bool true and false conflict") {
-    CoreIr ir;
-    ExprId p = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("p"))});
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Other);
+    ir.registerSort(1, SortKind::Real);
+    ir.registerSort(2, SortKind::Int);
+    ExprId p = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("p"))});
 
     EufSolver solver;
-    solver.setCoreIr(&ir);
+    solver.setNativeTerms(&ir);
     TheoryLemmaDatabase lemmaDb;
 
     solver.assertLit(makeEufRecord(p, TrueSentinelExpr, Relation::Eq,
@@ -775,12 +825,15 @@ TEST_CASE("EUF incremental: Bool true and false conflict") {
 }
 
 TEST_CASE("EUF incremental: Bool congruence conflict") {
-    CoreIr ir;
-    ExprId p = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("p"))});
-    ExprId q = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("q"))});
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Other);
+    ir.registerSort(1, SortKind::Real);
+    ir.registerSort(2, SortKind::Int);
+    ExprId p = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("p"))});
+    ExprId q = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("q"))});
 
     EufSolver solver;
-    solver.setCoreIr(&ir);
+    solver.setNativeTerms(&ir);
     TheoryLemmaDatabase lemmaDb;
 
     solver.assertLit(makeEufRecord(p, q), true, 0, SatLit{1, true});
@@ -790,15 +843,18 @@ TEST_CASE("EUF incremental: Bool congruence conflict") {
 }
 
 TEST_CASE("EUF incremental: multi arg congruence conflict") {
-    CoreIr ir;
-    ExprId a = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("a"))});
-    ExprId b = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("b"))});
-    ExprId c = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("c"))});
-    ExprId f_ab = ir.add(CoreExpr{Kind::UFApply, 0, {a, b}, Payload(std::string("f"))});
-    ExprId f_cb = ir.add(CoreExpr{Kind::UFApply, 0, {c, b}, Payload(std::string("f"))});
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Other);
+    ir.registerSort(1, SortKind::Real);
+    ir.registerSort(2, SortKind::Int);
+    ExprId a = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("a"))});
+    ExprId b = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("b"))});
+    ExprId c = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("c"))});
+    ExprId f_ab = ir.add(TermExpr{Kind::UFApply, 0, {a, b}, Payload(std::string("f"))});
+    ExprId f_cb = ir.add(TermExpr{Kind::UFApply, 0, {c, b}, Payload(std::string("f"))});
 
     EufSolver solver;
-    solver.setCoreIr(&ir);
+    solver.setNativeTerms(&ir);
     TheoryLemmaDatabase lemmaDb;
 
     solver.assertLit(makeEufRecord(a, c), true, 0, SatLit{1, true});
@@ -808,15 +864,18 @@ TEST_CASE("EUF incremental: multi arg congruence conflict") {
 }
 
 TEST_CASE("EUF incremental: transitivity congruence conflict") {
-    CoreIr ir;
-    ExprId a = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("a"))});
-    ExprId b = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("b"))});
-    ExprId c = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("c"))});
-    ExprId f_a = ir.add(CoreExpr{Kind::UFApply, 0, {a}, Payload(std::string("f"))});
-    ExprId f_c = ir.add(CoreExpr{Kind::UFApply, 0, {c}, Payload(std::string("f"))});
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Other);
+    ir.registerSort(1, SortKind::Real);
+    ir.registerSort(2, SortKind::Int);
+    ExprId a = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("a"))});
+    ExprId b = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("b"))});
+    ExprId c = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("c"))});
+    ExprId f_a = ir.add(TermExpr{Kind::UFApply, 0, {a}, Payload(std::string("f"))});
+    ExprId f_c = ir.add(TermExpr{Kind::UFApply, 0, {c}, Payload(std::string("f"))});
 
     EufSolver solver;
-    solver.setCoreIr(&ir);
+    solver.setNativeTerms(&ir);
     TheoryLemmaDatabase lemmaDb;
 
     solver.assertLit(makeEufRecord(a, b), true, 0, SatLit{1, true});
@@ -827,15 +886,18 @@ TEST_CASE("EUF incremental: transitivity congruence conflict") {
 }
 
 TEST_CASE("EUF incremental: cyclic explanation conflict") {
-    CoreIr ir;
-    ExprId a = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("a"))});
-    ExprId b = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("b"))});
-    ExprId c = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("c"))});
-    ExprId f_a = ir.add(CoreExpr{Kind::UFApply, 0, {a}, Payload(std::string("f"))});
-    ExprId f_c = ir.add(CoreExpr{Kind::UFApply, 0, {c}, Payload(std::string("f"))});
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Other);
+    ir.registerSort(1, SortKind::Real);
+    ir.registerSort(2, SortKind::Int);
+    ExprId a = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("a"))});
+    ExprId b = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("b"))});
+    ExprId c = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("c"))});
+    ExprId f_a = ir.add(TermExpr{Kind::UFApply, 0, {a}, Payload(std::string("f"))});
+    ExprId f_c = ir.add(TermExpr{Kind::UFApply, 0, {c}, Payload(std::string("f"))});
 
     EufSolver solver;
-    solver.setCoreIr(&ir);
+    solver.setNativeTerms(&ir);
     TheoryLemmaDatabase lemmaDb;
 
     solver.assertLit(makeEufRecord(a, b), true, 0, SatLit{1, true});
@@ -847,12 +909,15 @@ TEST_CASE("EUF incremental: cyclic explanation conflict") {
 }
 
 TEST_CASE("EUF incremental: empty push pop consistent") {
-    CoreIr ir;
-    ExprId a = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("a"))});
-    ExprId b = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("b"))});
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Other);
+    ir.registerSort(1, SortKind::Real);
+    ir.registerSort(2, SortKind::Int);
+    ExprId a = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("a"))});
+    ExprId b = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("b"))});
 
     EufSolver solver;
-    solver.setCoreIr(&ir);
+    solver.setNativeTerms(&ir);
     TheoryLemmaDatabase lemmaDb;
 
     solver.push();
@@ -866,14 +931,17 @@ TEST_CASE("EUF incremental: late term interning triggers congruence") {
     // Terms f(a) and f(b) are interned lazily when their disequality is
     // asserted, *after* a=b has already been merged. This must still
     // trigger congruence closure.
-    CoreIr ir;
-    ExprId a = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("a"))});
-    ExprId b = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("b"))});
-    ExprId f_a = ir.add(CoreExpr{Kind::UFApply, 0, {a}, Payload(std::string("f"))});
-    ExprId f_b = ir.add(CoreExpr{Kind::UFApply, 0, {b}, Payload(std::string("f"))});
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Other);
+    ir.registerSort(1, SortKind::Real);
+    ir.registerSort(2, SortKind::Int);
+    ExprId a = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("a"))});
+    ExprId b = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("b"))});
+    ExprId f_a = ir.add(TermExpr{Kind::UFApply, 0, {a}, Payload(std::string("f"))});
+    ExprId f_b = ir.add(TermExpr{Kind::UFApply, 0, {b}, Payload(std::string("f"))});
 
     EufSolver solver;
-    solver.setCoreIr(&ir);
+    solver.setNativeTerms(&ir);
     TheoryLemmaDatabase lemmaDb;
 
     // First merge a=b (f terms not yet in egraph)
@@ -885,21 +953,8 @@ TEST_CASE("EUF incremental: late term interning triggers congruence") {
 }
 
 // ---------------------------------------------------------------------------
-// Flag-gated SOTA techniques: verify the flag-ON path preserves verdicts.
-// The env var is read in the relevant solver's constructor, so it must be set
-// before the Solver builds its theory solvers (i.e. before checkSat()).
-// ---------------------------------------------------------------------------
-
-namespace {
-struct ScopedEnv {
-    const char* key;
-    explicit ScopedEnv(const char* k) : key(k) { setenv(key, "1", 1); }
-    ~ScopedEnv() { unsetenv(key); }
-};
-} // namespace
-
-TEST_CASE("EUF XOLVER_UF_DISEQ_WATCH: chained-congruence diseq still UNSAT") {
-    ScopedEnv env("XOLVER_UF_DISEQ_WATCH");
+// Watched disequalities and constant-index read-over-write regressions.
+TEST_CASE("EUF watched disequalities: chained-congruence diseq still UNSAT") {
     std::string path = writeTempSmt2(
         "(set-logic QF_UF)\n"
         "(declare-sort U 0)\n"
@@ -918,8 +973,7 @@ TEST_CASE("EUF XOLVER_UF_DISEQ_WATCH: chained-congruence diseq still UNSAT") {
     CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Unsat));
 }
 
-TEST_CASE("EUF XOLVER_UF_DISEQ_WATCH: independent classes stay SAT") {
-    ScopedEnv env("XOLVER_UF_DISEQ_WATCH");
+TEST_CASE("EUF watched disequalities: independent classes stay SAT") {
     std::string path = writeTempSmt2(
         "(set-logic QF_UF)\n"
         "(declare-sort U 0)\n"
@@ -936,8 +990,7 @@ TEST_CASE("EUF XOLVER_UF_DISEQ_WATCH: independent classes stay SAT") {
     CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Sat));
 }
 
-TEST_CASE("AX XOLVER_AX_ROW2_CONST: distinct constant index Row2 UNSAT") {
-    ScopedEnv env("XOLVER_AX_ROW2_CONST");
+TEST_CASE("AX constant-index Row2: distinct constant index Row2 UNSAT") {
     std::string path = writeTempSmt2(
         "(set-logic QF_ALIA)\n"
         "(declare-const a (Array Int Int))\n"
@@ -951,8 +1004,7 @@ TEST_CASE("AX XOLVER_AX_ROW2_CONST: distinct constant index Row2 UNSAT") {
     CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Unsat));
 }
 
-TEST_CASE("AX XOLVER_AX_ROW2_CONST: distinct constant index read-through SAT") {
-    ScopedEnv env("XOLVER_AX_ROW2_CONST");
+TEST_CASE("AX constant-index Row2: distinct constant index read-through SAT") {
     std::string path = writeTempSmt2(
         "(set-logic QF_ALIA)\n"
         "(declare-const a (Array Int Int))\n"

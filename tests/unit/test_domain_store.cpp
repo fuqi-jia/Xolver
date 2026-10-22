@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
-#include "theory/arith/logics/nia/core/DomainStore.h"
-#include "sat/SatSolver.h"
+#include "search/nia/core/DomainStore.h"
+#include "contracts/SatSolver.h"
 #include <gmpxx.h>
 
 using namespace xolver;

@@ -13,13 +13,13 @@
 #include <doctest/doctest.h>
 #include <gmpxx.h>
 
-#include "theory/arith/kernel/icp/IcpEngineQ.h"
-#include "theory/arith/kernel/icp/ContractorFactoryQ.h"
-#include "theory/arith/kernel/icp/contractors/MixedQuadraticContractorQ.h"
-#include "theory/arith/kernel/icp/IcpTypes.h"
-#include "theory/arith/kernel/interval/ReasonedBoxQ.h"
-#include "theory/arith/kernel/poly/PolynomialKernel.h"
-#include "sat/SatSolver.h"
+#include "search/icp/IcpEngineQ.h"
+#include "search/icp/ContractorFactoryQ.h"
+#include "search/icp/contractors/MixedQuadraticContractorQ.h"
+#include "search/icp/IcpTypes.h"
+#include "algebra/interval/ReasonedBoxQ.h"
+#include "algebra/poly/PolynomialKernel.h"
+#include "contracts/SatSolver.h"
 
 using namespace xolver;
 

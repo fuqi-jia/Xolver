@@ -1,0 +1,6 @@
+(set-logic QF_ALL)
+(declare-heap (Int Int))
+(set-info :status unsat)
+(declare-const x Int)
+(assert (wand (wand false (pto x 1)) (pto x 1)))
+(check-sat)

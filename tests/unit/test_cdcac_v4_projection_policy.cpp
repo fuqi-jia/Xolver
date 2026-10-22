@@ -1,8 +1,8 @@
 #include <doctest/doctest.h>
-#include "theory/arith/logics/nra/core/CdcacTypes.h"
-#include "theory/arith/logics/nra/lazard/ProjectionPolicy.h"
-#include "theory/arith/logics/nra/preprocess/EquationalConstraintManager.h"
-#include "theory/arith/logics/nra/preprocess/NullificationAnalyzer.h"
+#include "search/nra/core/CdcacTypes.h"
+#include "search/nra/lazard/ProjectionPolicy.h"
+#include "search/nra/preprocess/EquationalConstraintManager.h"
+#include "search/nra/preprocess/NullificationAnalyzer.h"
 
 using namespace xolver;
 

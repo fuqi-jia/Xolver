@@ -1,0 +1,2495 @@
+{
+  "schema": "xolver-source-migration/1",
+  "moves": [
+    {
+      "from": "src/api/Solver.cpp",
+      "to": "src/runtime/Solver.cpp",
+      "before_sha256": "0c08be40cb50a366af3c83b03c5fa36cef8f569fb429f44d4531fb2175539526"
+    },
+    {
+      "from": "src/api/SolverImpl.h",
+      "to": "src/runtime/SolverImpl.h",
+      "before_sha256": "c092b91b528f85b844cd53e6df5ae24f79dbf56db0c59f508229a054d78b0d5c"
+    },
+    {
+      "from": "src/api/Solver_impl_checksat.cpp",
+      "to": "src/runtime/Solver_impl_checksat.cpp",
+      "before_sha256": "39284ce1b50c265ed36d2d582f0f41ed197442c6202cef10b72174be189ec867"
+    },
+    {
+      "from": "src/api/Solver_impl_model.cpp",
+      "to": "src/runtime/Solver_impl_model.cpp",
+      "before_sha256": "8aa3194d2610bcbc15fa5c47b9b508b05b8974e8e616a01bc2000fb8819160aa"
+    },
+    {
+      "from": "src/api/Solver_impl_solve.cpp",
+      "to": "src/runtime/Solver_impl_solve.cpp",
+      "before_sha256": "fd2631759685d8cfb4c48c1189c96d9f850963808ae85ec38a5e0e1d5953ee78"
+    },
+    {
+      "from": "src/experimental/learning/TraceRecorder.cpp",
+      "to": "src/search/experimental/learning/TraceRecorder.cpp",
+      "before_sha256": "f94e4a3592903527a59aa098fbbca298458fc694abfc45ed9af0595e2824c223"
+    },
+    {
+      "from": "src/experimental/learning/TraceRecorder.h",
+      "to": "src/search/experimental/learning/TraceRecorder.h",
+      "before_sha256": "a962cf27439c3a790ffed108c144481a10d83e499e3a2b4b124dfe122a1c58ab"
+    },
+    {
+      "from": "src/experimental/mcsat/MCSatEngine.h",
+      "to": "src/search/experimental/mcsat/MCSatEngine.h",
+      "before_sha256": "7f25f132b1eafaffa78d93ccb4986e44a798e938f6fc2504336df2ec96139cf8"
+    },
+    {
+      "from": "src/experimental/mcsat/MCSatTrail.cpp",
+      "to": "src/search/experimental/mcsat/MCSatTrail.cpp",
+      "before_sha256": "d5e5f73963c13a79fe305b905516d3cb9dd3a60b54ffbb496db56114282d9e71"
+    },
+    {
+      "from": "src/experimental/mcsat/MCSatTrail.h",
+      "to": "src/search/experimental/mcsat/MCSatTrail.h",
+      "before_sha256": "ebe8e418a7c4f90a37aa9a69f48236240ec93dabf54460fda6f82677865ca6a8"
+    },
+    {
+      "from": "src/experimental/mcsat/MCSatTypes.h",
+      "to": "src/search/experimental/mcsat/MCSatTypes.h",
+      "before_sha256": "7f45edbadd11790237ad0b6d38572e2ef2c7811aebd23b82d03a7bf6b62f81f6"
+    },
+    {
+      "from": "src/experimental/mcsat/McsatSolver.cpp",
+      "to": "src/search/experimental/mcsat/McsatSolver.cpp",
+      "before_sha256": "3d85b60167ad8c9c63c26ea8ea5c2f03251eed4fe921404c76befaba03680eed"
+    },
+    {
+      "from": "src/experimental/mcsat/McsatSolver.h",
+      "to": "src/search/experimental/mcsat/McsatSolver.h",
+      "before_sha256": "2fa69bad9f85eb58b1227de1c63f575d8b46b1f6ff8b35d38f1fcb056ca6ba5c"
+    },
+    {
+      "from": "src/experimental/omt/Optimize.cpp",
+      "to": "src/search/experimental/omt/Optimize.cpp",
+      "before_sha256": "199dec900aac14f2031db879810000f64c25517fb2f0309dd2098356bfd23fde"
+    },
+    {
+      "from": "src/experimental/omt/Optimize.h",
+      "to": "src/search/experimental/omt/Optimize.h",
+      "before_sha256": "42bce13e3d55f08d1f89eb5074c77d85f6b173248f17d9ab88e334ffaa420ddb"
+    },
+    {
+      "from": "src/experimental/search/LocalSearchAdvisor.cpp",
+      "to": "src/search/experimental/search/LocalSearchAdvisor.cpp",
+      "before_sha256": "cf570c29fecb0063077505b9edb38272a35464d35063c9ea1b0169673b941f62"
+    },
+    {
+      "from": "src/experimental/search/LocalSearchAdvisor.h",
+      "to": "src/search/experimental/search/LocalSearchAdvisor.h",
+      "before_sha256": "a92f66f4d8f863294286a738f872beadd245c4d57f676b05439fbf8ce27bb9cb"
+    },
+    {
+      "from": "src/expr/CoreIteLowerer.cpp",
+      "to": "src/frontend/preprocess/IteLowerer.cpp",
+      "before_sha256": "6709b6addf136606855eac935fc5c31a1c7db9468002ab419ee13786a30402e5"
+    },
+    {
+      "from": "src/expr/CoreIteLowerer.h",
+      "to": "src/frontend/preprocess/IteLowerer.h",
+      "before_sha256": "8f927e7367152ce3e7592b9dc63815812b9b4d702021296649c8ac9e0e36e8e4"
+    },
+    {
+      "from": "src/expr/Datatype.h",
+      "to": "src/ir/Datatype.h",
+      "before_sha256": "4d7f3eec92d65e46e52a169b1436aab9e929184f26f5a0f77095d2001a1d082f"
+    },
+    {
+      "from": "src/expr/Smt2Dumper.cpp",
+      "to": "src/ir/Smt2Dumper.cpp",
+      "before_sha256": "55ddc0b12507ad600fbe41240b3d73f721cf2f02661a6e79ee4a70c8573ad8da"
+    },
+    {
+      "from": "src/expr/Smt2Dumper.h",
+      "to": "src/ir/Smt2Dumper.h",
+      "before_sha256": "58f78829744425b19e61e8419e042910649cc1bb107c13a3883ec2e24125cfd3"
+    },
+    {
+      "from": "src/expr/ir.h",
+      "to": "src/ir/NativeTerms.h",
+      "before_sha256": "c527d5ead79231eabcbd1418ee5f3884cca4ac9383e8e278f12c8dc5878e1f48"
+    },
+    {
+      "from": "src/expr/payload.h",
+      "to": "src/ir/payload.h",
+      "before_sha256": "93ea70ef18d4fd77284ecc9c007ce532e3ed5177b30e19001b6aa70f71cfb9ea"
+    },
+    {
+      "from": "src/expr/rewriter.cpp",
+      "to": "src/frontend/parser/rewriter.cpp",
+      "before_sha256": "2934e5d7ae3ab82644d774600a846624c28eff2e009b0e9ac68f7a1423d0980a"
+    },
+    {
+      "from": "src/expr/rewriter.h",
+      "to": "src/frontend/parser/rewriter.h",
+      "before_sha256": "412cd75d6c88f581d103034c82e5240a8b57e2b1a1b4eee16f0a482e548b8e4f"
+    },
+    {
+      "from": "src/expr/types.h",
+      "to": "src/ir/types.h",
+      "before_sha256": "65c5ace4a81aba16be4744f8e3addae5d021f5c14cd2d5bbb95808414ad63ef3"
+    },
+    {
+      "from": "src/frontend/atomization/ArithAtomExtractor.cpp",
+      "to": "src/search/boolean/ArithAtomExtractor.cpp",
+      "before_sha256": "1d2d8f25176a884ebd82367c68d130599c88622abf0e9e06a29aa421ac7a7d46"
+    },
+    {
+      "from": "src/frontend/atomization/ArithAtomExtractor.h",
+      "to": "src/search/boolean/ArithAtomExtractor.h",
+      "before_sha256": "627bd80da31f36817ab6da60dc49c42ef486666f89deea67d6fe9573f4378d3c"
+    },
+    {
+      "from": "src/frontend/atomization/Atomizer.cpp",
+      "to": "src/search/boolean/Atomizer.cpp",
+      "before_sha256": "97563769639b9a3a9affa4c12a0c350d22f4a1df93853479da54043bfe68581d"
+    },
+    {
+      "from": "src/frontend/atomization/Atomizer.h",
+      "to": "src/search/boolean/Atomizer.h",
+      "before_sha256": "0201f04963a67b034b0c553f40d3782042321168097af2b028d05d94c87ea463"
+    },
+    {
+      "from": "src/frontend/atomization/EufAtomExtractor.cpp",
+      "to": "src/search/boolean/EufAtomExtractor.cpp",
+      "before_sha256": "b4e8beda8da68023547b6710375c6d196ac95b1cdba40b544373e1733f0f58e2"
+    },
+    {
+      "from": "src/frontend/atomization/EufAtomExtractor.h",
+      "to": "src/search/boolean/EufAtomExtractor.h",
+      "before_sha256": "ae809a782928f80ab420f8bb2fa11749200a717ca38eb9c3df25d1b9717eb33d"
+    },
+    {
+      "from": "src/frontend/factory/SolverRegistry.cpp",
+      "to": "src/runtime/factory/SolverRegistry.cpp",
+      "before_sha256": "ee1d3e97fe0354142c8efaac11d87e8cad1a64456639692eff61d58049475555"
+    },
+    {
+      "from": "src/frontend/factory/SolverRegistry.h",
+      "to": "src/runtime/factory/SolverRegistry.h",
+      "before_sha256": "9e2cf3b1ec9294fa4e7a88068f4e7fde2fc409cee916b12a82b42a1067538ef3"
+    },
+    {
+      "from": "src/frontend/factory/StrategyPresets.cpp",
+      "to": "src/runtime/factory/StrategyPresets.cpp",
+      "before_sha256": "b9394392d361ca4d4241e50bc16aae8f3b10be223d63ce8f42c515278ed932d5"
+    },
+    {
+      "from": "src/frontend/factory/StrategyPresets.h",
+      "to": "src/runtime/factory/StrategyPresets.h",
+      "before_sha256": "6a060b3414d913f7c123e94770643d70ad32608c1d7994dd806fea4f97c9b3ba"
+    },
+    {
+      "from": "src/frontend/factory/TheoryFactory.cpp",
+      "to": "src/runtime/factory/TheoryFactory.cpp",
+      "before_sha256": "74b20150dc42e5ee87eea88faf38ad512501d412897bff1c668a59d0bdce9fb2"
+    },
+    {
+      "from": "src/frontend/factory/TheoryFactory.h",
+      "to": "src/runtime/factory/TheoryFactory.h",
+      "before_sha256": "6d34e0a488611fff4b68e4be8fe909b099e97739ca766ed816623e80378adb37"
+    },
+    {
+      "from": "src/parser/SmtScript.cpp",
+      "to": "src/frontend/parser/SmtScript.cpp",
+      "before_sha256": "4ecc62f4ec742da5e969771d99f75cd4a0d5a166539fc4c6d51aaec776c6917e"
+    },
+    {
+      "from": "src/parser/adapter.cpp",
+      "to": "src/frontend/parser/adapter.cpp",
+      "before_sha256": "93ec3aa2262dc49efb46a8f14433ba58dd891802ffea1fa565776c69d24f129a"
+    },
+    {
+      "from": "src/parser/adapter.h",
+      "to": "src/frontend/parser/adapter.h",
+      "before_sha256": "54ca58243803d0daea19168dc2dda1adaf757257de741882f0cf2973732c71aa"
+    },
+    {
+      "from": "src/proof/AletheProof.cpp",
+      "to": "src/evidence/AletheProof.cpp",
+      "before_sha256": "494a36fee19f82b288757025bce9c986909950fa1feeae56d78ac42341a96754"
+    },
+    {
+      "from": "src/proof/AletheProof.h",
+      "to": "src/evidence/AletheProof.h",
+      "before_sha256": "af4e7ef88475487f6e5bcf26530e47b78a09612ca537560f588cf116f99fcb1a"
+    },
+    {
+      "from": "src/proof/ArithModelValidator.cpp",
+      "to": "src/evidence/ArithModelValidator.cpp",
+      "before_sha256": "1ae4722ef9a25b2eaab5e66ab97bada83b3e6987ba04168b07fbdfad248e765a"
+    },
+    {
+      "from": "src/proof/ArithModelValidator.h",
+      "to": "src/evidence/ArithModelValidator.h",
+      "before_sha256": "259b75697d6e763426b58cbc46324a005bfeccdfcbe372c8a4e77f79598389cc"
+    },
+    {
+      "from": "src/proof/BoolClausalProof.cpp",
+      "to": "src/evidence/BoolClausalProof.cpp",
+      "before_sha256": "1d5df68afe57bc7eefc468318ef9d421be47d2873b2e3bff117dd710c0604f61"
+    },
+    {
+      "from": "src/proof/BoolClausalProof.h",
+      "to": "src/evidence/BoolClausalProof.h",
+      "before_sha256": "bac3c03de557076788287c24fa555ae491e42b6df5db6e37f255f9f7618780fa"
+    },
+    {
+      "from": "src/proof/HeapCertificate.cpp",
+      "to": "src/evidence/HeapCertificate.cpp",
+      "before_sha256": "a8200d806fced992d992f722cbbd787e64c5885d077870283edca413fcbe1b01"
+    },
+    {
+      "from": "src/proof/HeapCertificate.h",
+      "to": "src/evidence/HeapCertificate.h",
+      "before_sha256": "5116670b8fd85538cbb27e509336fee99b67506f0bed809eea92e9f7a0dd2f5f"
+    },
+    {
+      "from": "src/proof/ModelValidator.cpp",
+      "to": "src/evidence/ModelValidator.cpp",
+      "before_sha256": "231c80bb53bd7ad69c55c66290c09f11c0cf9da3c6b4910cba67d9a2a4d02577"
+    },
+    {
+      "from": "src/proof/ModelValidator.h",
+      "to": "src/evidence/ModelValidator.h",
+      "before_sha256": "596f29c2e7e36a9b35af7835cf80c856b6db9c14780f94472cd120d4ada820d4"
+    },
+    {
+      "from": "src/proof/PresburgerCertificate.cpp",
+      "to": "src/evidence/PresburgerCertificate.cpp",
+      "before_sha256": "d2663c50c49b35b6b7856574bd7a1b49306988c89d852d0a5ef26ecbb20d5da1"
+    },
+    {
+      "from": "src/proof/PresburgerCertificate.h",
+      "to": "src/evidence/PresburgerCertificate.h",
+      "before_sha256": "cdb64d554ed9ea9b9b70449f021336bf1cb7a73244e7892bbc350cdd9189ec5c"
+    },
+    {
+      "from": "src/proof/ProofManager.cpp",
+      "to": "src/evidence/ProofManager.cpp",
+      "before_sha256": "ea90a46e5cd6ecaac58f7541a653ee4dace186d4cc42234734cce2adf31d7b6b"
+    },
+    {
+      "from": "src/proof/ProofManager.h",
+      "to": "src/evidence/ProofManager.h",
+      "before_sha256": "b0ad4f133abd487c3c5e3f9ef450ce1ba929a67309fdd33b60fd84e1a1a8f68e"
+    },
+    {
+      "from": "src/proof/TheoryProofSink.cpp",
+      "to": "src/evidence/TheoryProofSink.cpp",
+      "before_sha256": "316bfaf518f512038408fe831dbc082e08153993393583222cb1f2f498a259b1"
+    },
+    {
+      "from": "src/proof/TheoryProofSink.h",
+      "to": "src/evidence/TheoryProofSink.h",
+      "before_sha256": "5fb85f3339c52b81e2837e7482708e88ba0ac0cd1541af6bd65c7d78baf71e48"
+    },
+    {
+      "from": "src/sat/CadicalBackend.cpp",
+      "to": "src/search/sat/CadicalBackend.cpp",
+      "before_sha256": "9a92725e51c9cabf67f20e4fff093b7c2d1e52f1efc785579c3f287832a700d6"
+    },
+    {
+      "from": "src/sat/CadicalBackend.h",
+      "to": "src/search/sat/CadicalBackend.h",
+      "before_sha256": "badfa915f2abc723555f9e9955aff3989450dbc3d2c067cd1aa894930532ffce"
+    },
+    {
+      "from": "src/sat/CadicalTheoryPropagator.cpp",
+      "to": "src/search/sat/CadicalTheoryPropagator.cpp",
+      "before_sha256": "0fc2a846e3d72b48c145b6d7dfdf83dee1b69f56616f238c2d1537e4efb812f5"
+    },
+    {
+      "from": "src/sat/CadicalTheoryPropagator.h",
+      "to": "src/search/sat/CadicalTheoryPropagator.h",
+      "before_sha256": "1190532a472923c01fb1e73df81d4ef809c011d396ec0f7c068152d8fd1fce9b"
+    },
+    {
+      "from": "src/sat/RelevancyEngine.cpp",
+      "to": "src/search/sat/RelevancyEngine.cpp",
+      "before_sha256": "43e918b0c4c704c256175cc784f3b9f8899a797ed7101f06b95fce63de7ca752"
+    },
+    {
+      "from": "src/sat/RelevancyEngine.h",
+      "to": "src/search/sat/RelevancyEngine.h",
+      "before_sha256": "327fc64d9b54a313e594757906405a91985d70662e115088603adfb47e0b7661"
+    },
+    {
+      "from": "src/sat/SatSolver.h",
+      "to": "src/contracts/SatSolver.h",
+      "before_sha256": "9345cdd4a3cfdeb677eb89781eb9cd5df20e46e0e9a43d9730c8dd874abfa4ca"
+    },
+    {
+      "from": "src/theory/arith/ArithSolverBase.cpp",
+      "to": "src/search/arith/ArithSolverBase.cpp",
+      "before_sha256": "5431b24b642c2a5a60636550d8e33300cd46317a9ff04b8af7f1ef6915d00f16"
+    },
+    {
+      "from": "src/theory/arith/ArithSolverBase.h",
+      "to": "src/search/arith/ArithSolverBase.h",
+      "before_sha256": "e7b3ba82c44c1a11b7f3e7117a2f270284e689155957403c78e7d3e1f7c82b33"
+    },
+    {
+      "from": "src/theory/arith/Reasoner.h",
+      "to": "src/search/arith/Reasoner.h",
+      "before_sha256": "370e994c1e044425da6f39921343ec294445858556e2523d469cf7eff5035c59"
+    },
+    {
+      "from": "src/theory/arith/kernel/bit_blast/BitBlastEncoder.cpp",
+      "to": "src/search/bitblast/BitBlastEncoder.cpp",
+      "before_sha256": "0692565581566913e7d4e54cd474ba41fa0e6d7227c7cc0ae42b79dbf5c0d261"
+    },
+    {
+      "from": "src/theory/arith/kernel/bit_blast/BitBlastEncoder.h",
+      "to": "src/search/bitblast/BitBlastEncoder.h",
+      "before_sha256": "b79a1b9dd06c45344425969097692aa28049e387eb924013524ed80bb0c98dcf"
+    },
+    {
+      "from": "src/theory/arith/kernel/bit_blast/BitBlastSolver.cpp",
+      "to": "src/search/bitblast/BitBlastSolver.cpp",
+      "before_sha256": "6df7d3f3cd7718543c53ce419fe96bc21254b33519908ea9c24db2a06e318329"
+    },
+    {
+      "from": "src/theory/arith/kernel/bit_blast/BitBlastSolver.h",
+      "to": "src/search/bitblast/BitBlastSolver.h",
+      "before_sha256": "0ea465f10456daeb77e50cee175e86fa6d7fba159100a7cfab4fbef08e7b325e"
+    },
+    {
+      "from": "src/theory/arith/kernel/bit_blast/BitVec.h",
+      "to": "src/search/bitblast/BitVec.h",
+      "before_sha256": "cb27b47688a655b6bac8fcc31e8ba2afca64ddfebd898b7d574b2697e09c7ae9"
+    },
+    {
+      "from": "src/theory/arith/kernel/bit_blast/EagerBitBlastSolver.cpp",
+      "to": "src/search/bitblast/EagerBitBlastSolver.cpp",
+      "before_sha256": "1bb2b6c04aefe26d6e0f7c7bed0140e758946aa331a6922625ed0098cd643abb"
+    },
+    {
+      "from": "src/theory/arith/kernel/bit_blast/EagerBitBlastSolver.h",
+      "to": "src/search/bitblast/EagerBitBlastSolver.h",
+      "before_sha256": "4dc4f0232396a02c9cfe773f5a7b2d64bb17766e5ecc86f91dc8d748cd69654d"
+    },
+    {
+      "from": "src/theory/arith/kernel/bit_blast/PolyBitBlaster.cpp",
+      "to": "src/search/bitblast/PolyBitBlaster.cpp",
+      "before_sha256": "e1d7e0026764cf8f615b83a034e024f494e82babba57298e552c4941b99f7292"
+    },
+    {
+      "from": "src/theory/arith/kernel/bit_blast/PolyBitBlaster.h",
+      "to": "src/search/bitblast/PolyBitBlaster.h",
+      "before_sha256": "d45c90be07e9f733255f82e170da6abdeee91e99e37daaa3ac3a1e681c546400"
+    },
+    {
+      "from": "src/theory/arith/kernel/bit_blast/SpaceEstimator.cpp",
+      "to": "src/search/bitblast/SpaceEstimator.cpp",
+      "before_sha256": "71ea18527ebc37a36d648db34a30b54f356e81abd0e66ea762f9a64f4f9b0246"
+    },
+    {
+      "from": "src/theory/arith/kernel/bit_blast/SpaceEstimator.h",
+      "to": "src/search/bitblast/SpaceEstimator.h",
+      "before_sha256": "0d05d6fd948fcfd941b2e2bdb3c9e620d07c0adade4d5500ff81e480b2221414"
+    },
+    {
+      "from": "src/theory/arith/kernel/icp/Contractor.h",
+      "to": "src/search/icp/Contractor.h",
+      "before_sha256": "ec75a09425e674bf5f3cba25081ce8bd009604ed0fb989c458eb0d681fcd477a"
+    },
+    {
+      "from": "src/theory/arith/kernel/icp/ContractorFactory.cpp",
+      "to": "src/search/icp/ContractorFactory.cpp",
+      "before_sha256": "3d64a270e0811d8bbd19ed4b4b9f0edd3974d92e76294ec0c281dfaac29d2605"
+    },
+    {
+      "from": "src/theory/arith/kernel/icp/ContractorFactory.h",
+      "to": "src/search/icp/ContractorFactory.h",
+      "before_sha256": "6a100d832d1db3b5ab89541399696312604f0a27b85a8be073a2046aa42f6bb2"
+    },
+    {
+      "from": "src/theory/arith/kernel/icp/ContractorFactoryQ.cpp",
+      "to": "src/search/icp/ContractorFactoryQ.cpp",
+      "before_sha256": "a286d71a3dac85e9803edaa38ce8346a50319af2be5f8dcde1d4730bc44a8be8"
+    },
+    {
+      "from": "src/theory/arith/kernel/icp/ContractorFactoryQ.h",
+      "to": "src/search/icp/ContractorFactoryQ.h",
+      "before_sha256": "89c560b34bc991d3123ee580de84fc467f4689c05550c77c6858d002dc61cadd"
+    },
+    {
+      "from": "src/theory/arith/kernel/icp/IcpEngine.cpp",
+      "to": "src/search/icp/IcpEngine.cpp",
+      "before_sha256": "33eaef0dbd0ccadf7ed50624ddb7b187d7d116846bef6ee98a7fb2d701df1914"
+    },
+    {
+      "from": "src/theory/arith/kernel/icp/IcpEngine.h",
+      "to": "src/search/icp/IcpEngine.h",
+      "before_sha256": "9e945e2ed2eb6defab35f9dbbbead1f5142a6da7b9b76209ebb9940d93cfd33f"
+    },
+    {
+      "from": "src/theory/arith/kernel/icp/IcpEngineQ.cpp",
+      "to": "src/search/icp/IcpEngineQ.cpp",
+      "before_sha256": "9b55ad593052023b7ffb2a9103481ab9e749732af990c249d116dec11da42796"
+    },
+    {
+      "from": "src/theory/arith/kernel/icp/IcpEngineQ.h",
+      "to": "src/search/icp/IcpEngineQ.h",
+      "before_sha256": "778dbb1c37e7d1bbf22f49f8ebd891c66b2d276160239a6a4d1363b34ac83a67"
+    },
+    {
+      "from": "src/theory/arith/kernel/icp/IcpResult.h",
+      "to": "src/search/icp/IcpResult.h",
+      "before_sha256": "8defbf273a307549320998ee73d5b4fab3e9b7dba89834891d59f50ba57dea2a"
+    },
+    {
+      "from": "src/theory/arith/kernel/icp/IcpTypes.h",
+      "to": "src/search/icp/IcpTypes.h",
+      "before_sha256": "4eb67a1fdeb0768ed67130d480b9e629cca23b796a780bd205f89ecd47f74ce0"
+    },
+    {
+      "from": "src/theory/arith/kernel/icp/Worklist.cpp",
+      "to": "src/search/icp/Worklist.cpp",
+      "before_sha256": "3863f79658ddde892fa9c6442417f1a2a10cde3a107efc04ed6fdb091a470334"
+    },
+    {
+      "from": "src/theory/arith/kernel/icp/Worklist.h",
+      "to": "src/search/icp/Worklist.h",
+      "before_sha256": "9dcaf13af45bddecc5a82f3c8a5889a41a10ef65f838a9438751e2036ccdcce4"
+    },
+    {
+      "from": "src/theory/arith/kernel/icp/contractors/BilinearContractorQ.cpp",
+      "to": "src/search/icp/contractors/BilinearContractorQ.cpp",
+      "before_sha256": "313ae2b9329c6bd1da1ee0fb64d4e2d4a6d1c30ad6c696e53909d71a06ec0004"
+    },
+    {
+      "from": "src/theory/arith/kernel/icp/contractors/BilinearContractorQ.h",
+      "to": "src/search/icp/contractors/BilinearContractorQ.h",
+      "before_sha256": "06ee32ab3fc9240e8b16e78558143486bb7c35b9e4adce8aa2da4b78d78177d3"
+    },
+    {
+      "from": "src/theory/arith/kernel/icp/contractors/MixedQuadraticContractorQ.cpp",
+      "to": "src/search/icp/contractors/MixedQuadraticContractorQ.cpp",
+      "before_sha256": "1eb93fcb5d6cf2dd25acb5effb3a35082768276b2cde163bf1297dfe0e87fd21"
+    },
+    {
+      "from": "src/theory/arith/kernel/icp/contractors/MixedQuadraticContractorQ.h",
+      "to": "src/search/icp/contractors/MixedQuadraticContractorQ.h",
+      "before_sha256": "49e3b932022f08bdb3d0d5cbda8085dc704a103cc4c555c3f2e1b10834cf1ff2"
+    },
+    {
+      "from": "src/theory/arith/kernel/icp/contractors/MonomialMultivariateContractorQ.cpp",
+      "to": "src/search/icp/contractors/MonomialMultivariateContractorQ.cpp",
+      "before_sha256": "6058ec8327ede978a3d6209f150d00b16db0e2cdb24e84f129d1a4dfd0281204"
+    },
+    {
+      "from": "src/theory/arith/kernel/icp/contractors/MonomialMultivariateContractorQ.h",
+      "to": "src/search/icp/contractors/MonomialMultivariateContractorQ.h",
+      "before_sha256": "5abae2eeee2d6d3071eb42476d87972e0e74611985f06f6e9f351a2e6bb54949"
+    },
+    {
+      "from": "src/theory/arith/kernel/icp/contractors/MultivariateCauchyContractorQ.cpp",
+      "to": "src/search/icp/contractors/MultivariateCauchyContractorQ.cpp",
+      "before_sha256": "3e608b652c42d06871e2b7921cb010a295a7f47a28537f67360bd425ad9790fa"
+    },
+    {
+      "from": "src/theory/arith/kernel/icp/contractors/MultivariateCauchyContractorQ.h",
+      "to": "src/search/icp/contractors/MultivariateCauchyContractorQ.h",
+      "before_sha256": "d13d6751e877e3dce94a7eb508a979fdb45e3e37fec341dadd22b219ea45a430"
+    },
+    {
+      "from": "src/theory/arith/kernel/icp/contractors/RelationContractor.cpp",
+      "to": "src/search/icp/contractors/RelationContractor.cpp",
+      "before_sha256": "f2bb1af44972285d4f418a18ce074298008d29312f54aa187e4e676266d0e0e7"
+    },
+    {
+      "from": "src/theory/arith/kernel/icp/contractors/RelationContractor.h",
+      "to": "src/search/icp/contractors/RelationContractor.h",
+      "before_sha256": "f33eadaf89326d42f49426b39f40a95c20d2b584ca710fff76f7785b5f8740d3"
+    },
+    {
+      "from": "src/theory/arith/kernel/icp/contractors/RelationContractorQ.cpp",
+      "to": "src/search/icp/contractors/RelationContractorQ.cpp",
+      "before_sha256": "2f425497c3055fdd23fe72bb4cad4f3f5df8c36c2eb94a4cba580528ce05d89a"
+    },
+    {
+      "from": "src/theory/arith/kernel/icp/contractors/RelationContractorQ.h",
+      "to": "src/search/icp/contractors/RelationContractorQ.h",
+      "before_sha256": "292ee73dd5d84c05d21a05489547cfc3ef056c492213079043952f341a39f47f"
+    },
+    {
+      "from": "src/theory/arith/kernel/icp/contractors/SquareContractor.cpp",
+      "to": "src/search/icp/contractors/SquareContractor.cpp",
+      "before_sha256": "01f9940cb06ce98bfd8aca3dd270bb07c10a1a29b234e0b9be106249cad88b5b"
+    },
+    {
+      "from": "src/theory/arith/kernel/icp/contractors/SquareContractor.h",
+      "to": "src/search/icp/contractors/SquareContractor.h",
+      "before_sha256": "3f2a20deb622360c1c8d78b73ef6a62d7be8973218e1d6914edcfbb1da6ab589"
+    },
+    {
+      "from": "src/theory/arith/kernel/integer/IntegerReasoner.cpp",
+      "to": "src/search/linear/IntegerReasoner.cpp",
+      "before_sha256": "4376776fcd7022dd3b3839f79809a608e323bd3820823e0d3aa8ce9e1d6b2b1f"
+    },
+    {
+      "from": "src/theory/arith/kernel/integer/IntegerReasoner.h",
+      "to": "src/search/linear/IntegerReasoner.h",
+      "before_sha256": "e7dd10f9aba8f55a5380fd8061990e408e6bac80a5282c0f5a5f43e9d0665fd4"
+    },
+    {
+      "from": "src/theory/arith/kernel/interval/IntervalEvaluator.cpp",
+      "to": "src/algebra/interval/IntervalEvaluator.cpp",
+      "before_sha256": "184add21a3cc6c901a21782458b239cf0ff4b3590a05e75a181eba199b8c2af0"
+    },
+    {
+      "from": "src/theory/arith/kernel/interval/IntervalEvaluator.h",
+      "to": "src/algebra/interval/IntervalEvaluator.h",
+      "before_sha256": "594e4b572366fb3ec7482e4b8eb4b6602fa439a8394bc2760ef5698253d94a40"
+    },
+    {
+      "from": "src/theory/arith/kernel/interval/IntervalOperations.h",
+      "to": "src/algebra/interval/IntervalOperations.h",
+      "before_sha256": "c04be8f08aab70f1a314880bde803fb063412b29eaa2877dd129b573df98ab01"
+    },
+    {
+      "from": "src/theory/arith/kernel/interval/IntervalQ.h",
+      "to": "src/algebra/interval/IntervalQ.h",
+      "before_sha256": "0a8ad548db462f355198448b76aaa29df3353d0d822b5ec9010bca9fce54406c"
+    },
+    {
+      "from": "src/theory/arith/kernel/interval/IntervalQOps.h",
+      "to": "src/algebra/interval/IntervalQOps.h",
+      "before_sha256": "438f7e53b5db43d5ae93722a79577b6674092c15c6df3454cbffca9bd057a62b"
+    },
+    {
+      "from": "src/theory/arith/kernel/interval/IntervalQRoots.cpp",
+      "to": "src/algebra/interval/IntervalQRoots.cpp",
+      "before_sha256": "5a1a2d2ede3e84ee552ba5309638aa029bcee4d292f61b8d1994411a69d63ba0"
+    },
+    {
+      "from": "src/theory/arith/kernel/interval/IntervalQRoots.h",
+      "to": "src/algebra/interval/IntervalQRoots.h",
+      "before_sha256": "a3319920fe3fd4e65f0d591ed8db78c017674ffeb755b87aa133ad73b2f09880"
+    },
+    {
+      "from": "src/theory/arith/kernel/interval/IntervalTypes.h",
+      "to": "src/algebra/interval/IntervalTypes.h",
+      "before_sha256": "df27066d2ae7d89e7d5879d0e3dfd8454883d9f01a9048bab55a40fc4ee66610"
+    },
+    {
+      "from": "src/theory/arith/kernel/interval/ReasonedBox.cpp",
+      "to": "src/algebra/interval/ReasonedBox.cpp",
+      "before_sha256": "40db904f12205df32c23d0f0ef1b04310979a87b959aeaabb290011446fc7595"
+    },
+    {
+      "from": "src/theory/arith/kernel/interval/ReasonedBox.h",
+      "to": "src/algebra/interval/ReasonedBox.h",
+      "before_sha256": "608ce4641133dc653daaa4040dca8695f6d496e3e9dd4e7738d9c6e51076303b"
+    },
+    {
+      "from": "src/theory/arith/kernel/interval/ReasonedBoxQ.cpp",
+      "to": "src/algebra/interval/ReasonedBoxQ.cpp",
+      "before_sha256": "d4924043c69b9d932aa2219a584008c27ac3583011aea85826aa7f09202508ec"
+    },
+    {
+      "from": "src/theory/arith/kernel/interval/ReasonedBoxQ.h",
+      "to": "src/algebra/interval/ReasonedBoxQ.h",
+      "before_sha256": "1aca7b50289ff7eae16521b19aed219e5e60a7d6c8dea323f4813370bc88fcd1"
+    },
+    {
+      "from": "src/theory/arith/kernel/linear/BoundAxiomGenerator.cpp",
+      "to": "src/search/linear/BoundAxiomGenerator.cpp",
+      "before_sha256": "38ea9d53693c3799d4cdc0cc671cfc30e3f2df3a4a1b4019224f9c436b062b52"
+    },
+    {
+      "from": "src/theory/arith/kernel/linear/BoundAxiomGenerator.h",
+      "to": "src/search/linear/BoundAxiomGenerator.h",
+      "before_sha256": "ea2f7f72118373ae7c08400e9c4a5ba7721de74d631a85c687b7d6852f320d0f"
+    },
+    {
+      "from": "src/theory/arith/kernel/linear/DiffLogicDiseqSplitter.h",
+      "to": "src/search/linear/DiffLogicDiseqSplitter.h",
+      "before_sha256": "27477c5c6fa5a624545fadf1af51f1db7b8e02cadba1012f904fac3569849253"
+    },
+    {
+      "from": "src/theory/arith/kernel/linear/LinearAtomManager.cpp",
+      "to": "src/search/linear/LinearAtomManager.cpp",
+      "before_sha256": "25f8129cdb236d4dbe52c2813c06d21975e7b9f11f4b15431bf274fd30a4b029"
+    },
+    {
+      "from": "src/theory/arith/kernel/linear/LinearAtomManager.h",
+      "to": "src/search/linear/LinearAtomManager.h",
+      "before_sha256": "90b89a48aa140a971adc1c6c07479df3d8745647e08455af8fcb885185fbdbd1"
+    },
+    {
+      "from": "src/theory/arith/kernel/linear/LinearConstraintNormalizer.cpp",
+      "to": "src/algebra/linear/LinearConstraintNormalizer.cpp",
+      "before_sha256": "b724a7864ca20dc970c4e8675140709ea3b0538a232bb97acff246de1d4de197"
+    },
+    {
+      "from": "src/theory/arith/kernel/linear/LinearConstraintNormalizer.h",
+      "to": "src/algebra/linear/LinearConstraintNormalizer.h",
+      "before_sha256": "773833e8ff8146a9420c3e9090de30193f767e9dbdb309d3a8468bd8e7a72696"
+    },
+    {
+      "from": "src/theory/arith/kernel/linear/LinearConstraintTypes.h",
+      "to": "src/algebra/linear/LinearConstraintTypes.h",
+      "before_sha256": "acf859e06da0de62dbbcfeb55f2bb96d18bfbd6ecc6b10c44d3ab06e7bf70485"
+    },
+    {
+      "from": "src/theory/arith/kernel/linear/LinearExpr.cpp",
+      "to": "src/algebra/linear/LinearExpr.cpp",
+      "before_sha256": "b136c1761c10898e4e143f396b99b656c094c29419e608d9730ed9c9c7f7fa97"
+    },
+    {
+      "from": "src/theory/arith/kernel/linear/LinearExpr.h",
+      "to": "src/algebra/linear/LinearExpr.h",
+      "before_sha256": "2d766c4b176028ecf75eec3bd5541e2942d032cdd5a3b4ed289b5a7253369d01"
+    },
+    {
+      "from": "src/theory/arith/kernel/linear/LinearModelValidator.cpp",
+      "to": "src/search/linear/LinearModelValidator.cpp",
+      "before_sha256": "413dbefb0b6d24895787d051faa830c9b4754476273f718ecc9da12b5d07b4bf"
+    },
+    {
+      "from": "src/theory/arith/kernel/linear/LinearModelValidator.h",
+      "to": "src/search/linear/LinearModelValidator.h",
+      "before_sha256": "5c9726da43050c8611f08ec2fddd7af111ed60874ea0f291682c84423378405c"
+    },
+    {
+      "from": "src/theory/arith/kernel/linear/SimplexDiseqSplitter.h",
+      "to": "src/search/linear/SimplexDiseqSplitter.h",
+      "before_sha256": "cb5bfcca2b0013d493692eda7c8b1f6c6370c1944c53e38fd407c0a083e38e11"
+    },
+    {
+      "from": "src/theory/arith/kernel/linearizer/BernsteinPowerCutGenerator.cpp",
+      "to": "src/search/linearizer/BernsteinPowerCutGenerator.cpp",
+      "before_sha256": "f6c0baa0c1dae57d26fcd38319dff802283a43d63af6fe3d7aee5fb6a36c952b"
+    },
+    {
+      "from": "src/theory/arith/kernel/linearizer/BernsteinPowerCutGenerator.h",
+      "to": "src/search/linearizer/BernsteinPowerCutGenerator.h",
+      "before_sha256": "9cfd81379d6736978e22a6fcdaee3afd81e65651cab0c04c7701a91abe1b9c9f"
+    },
+    {
+      "from": "src/theory/arith/kernel/linearizer/BoundStore.h",
+      "to": "src/search/linearizer/BoundStore.h",
+      "before_sha256": "250961b04343b6d9da1d9219dbb2933ddbd1d7e99eb78f90d86f15237081d933"
+    },
+    {
+      "from": "src/theory/arith/kernel/linearizer/DomainStoreBoundStore.cpp",
+      "to": "src/search/linearizer/DomainStoreBoundStore.cpp",
+      "before_sha256": "5ff320ba407a1360bcec93d987e81e53ecd5b7477b3f8fc9954d3211076d45f8"
+    },
+    {
+      "from": "src/theory/arith/kernel/linearizer/DomainStoreBoundStore.h",
+      "to": "src/search/linearizer/DomainStoreBoundStore.h",
+      "before_sha256": "409c48adc2604eb490a613e54e0252b1cb195d594213f2fbbdb07d25c6864cdb"
+    },
+    {
+      "from": "src/theory/arith/kernel/linearizer/IncrementalLinearizer.cpp",
+      "to": "src/search/linearizer/IncrementalLinearizer.cpp",
+      "before_sha256": "24bec8b0cbfa865beb7fe7e4ba4aae652a3f8c64d845ae1f3394e6058c5a29b7"
+    },
+    {
+      "from": "src/theory/arith/kernel/linearizer/IncrementalLinearizer.h",
+      "to": "src/search/linearizer/IncrementalLinearizer.h",
+      "before_sha256": "c35a007dea9f44877e466f7078ad78dde517a51928d02de3e32289a050a23600"
+    },
+    {
+      "from": "src/theory/arith/kernel/linearizer/LinearizationCache.cpp",
+      "to": "src/search/linearizer/LinearizationCache.cpp",
+      "before_sha256": "f4b957b747918619e705465cdc1fb002c62570006c9674502afdaa8eea1b7793"
+    },
+    {
+      "from": "src/theory/arith/kernel/linearizer/LinearizationCache.h",
+      "to": "src/search/linearizer/LinearizationCache.h",
+      "before_sha256": "10ba4c8965e1084b99b15d01be6a83a98e5795c9cbfb16b4e8bcb209969d558c"
+    },
+    {
+      "from": "src/theory/arith/kernel/linearizer/LinearizationResult.h",
+      "to": "src/search/linearizer/LinearizationResult.h",
+      "before_sha256": "7898823a1a6fe1f2ec12dc55eb832f5c1bc5e6bc7efc7ae09e7bff0499f66f84"
+    },
+    {
+      "from": "src/theory/arith/kernel/linearizer/LinearizationTypes.h",
+      "to": "src/search/linearizer/LinearizationTypes.h",
+      "before_sha256": "c63672b57b362e3d8e3fab2e5b2dbb72a288649cab346888ed121cf267d64c23"
+    },
+    {
+      "from": "src/theory/arith/kernel/linearizer/McCormickGenerator.cpp",
+      "to": "src/search/linearizer/McCormickGenerator.cpp",
+      "before_sha256": "d146141ba924a2c3b37ff4f34c99dce8faf633c21873ca7fe63e8e0133dd435c"
+    },
+    {
+      "from": "src/theory/arith/kernel/linearizer/McCormickGenerator.h",
+      "to": "src/search/linearizer/McCormickGenerator.h",
+      "before_sha256": "5e828caa5dc88563cb4710dbef58596c05806d5a0014a76d3dc6d0ca88a3bf57"
+    },
+    {
+      "from": "src/theory/arith/kernel/linearizer/MonomialBoundGenerator.cpp",
+      "to": "src/search/linearizer/MonomialBoundGenerator.cpp",
+      "before_sha256": "a2938bdbe3fd7eeb4c006f4739ea2e6b06b81c8bd3f2d516b276c3c4932a5039"
+    },
+    {
+      "from": "src/theory/arith/kernel/linearizer/MonomialBoundGenerator.h",
+      "to": "src/search/linearizer/MonomialBoundGenerator.h",
+      "before_sha256": "f2ec07618eae5f80c76f6d4420701c90890826e6b600d04ce8773d1166a8baec"
+    },
+    {
+      "from": "src/theory/arith/kernel/linearizer/NonlinearTermAbstraction.cpp",
+      "to": "src/search/linearizer/NonlinearTermAbstraction.cpp",
+      "before_sha256": "1976cb76c0b2a236bd9e283c5b86384b2f69973c45e18f4371e3ddf988a36dd9"
+    },
+    {
+      "from": "src/theory/arith/kernel/linearizer/NonlinearTermAbstraction.h",
+      "to": "src/search/linearizer/NonlinearTermAbstraction.h",
+      "before_sha256": "72d3d34fb7255e22010b2603e3647783812f1de7c76b09880a78043411ab701d"
+    },
+    {
+      "from": "src/theory/arith/kernel/linearizer/PowerCutGenerator.cpp",
+      "to": "src/search/linearizer/PowerCutGenerator.cpp",
+      "before_sha256": "1bfec1a335c5d1fc67ebd512a6efaa1a422fa382adb42138002a2ab9a6bfa865"
+    },
+    {
+      "from": "src/theory/arith/kernel/linearizer/PowerCutGenerator.h",
+      "to": "src/search/linearizer/PowerCutGenerator.h",
+      "before_sha256": "134c6739b267552e5ecc8207685cc5f70d75a426c760e418642b0e7ea173102a"
+    },
+    {
+      "from": "src/theory/arith/kernel/linearizer/SquareCutGenerator.cpp",
+      "to": "src/search/linearizer/SquareCutGenerator.cpp",
+      "before_sha256": "bebfe8e773ed97cf363ff47bbb4dd96708c91816e16668ef8359e30f78cc9cc4"
+    },
+    {
+      "from": "src/theory/arith/kernel/linearizer/SquareCutGenerator.h",
+      "to": "src/search/linearizer/SquareCutGenerator.h",
+      "before_sha256": "affeb7edb0aab4dd9e9d5a66c37037a19fe680e1109b1e640321df836d1f7d7d"
+    },
+    {
+      "from": "src/theory/arith/kernel/poly/FlatMonomialMap.h",
+      "to": "src/algebra/poly/FlatMonomialMap.h",
+      "before_sha256": "f85419a181c87d37ced4c587d365717bfef087d938375e068724a95df2f23f60"
+    },
+    {
+      "from": "src/theory/arith/kernel/poly/LibPolyKernel.cpp",
+      "to": "src/algebra/poly/LibPolyKernel.cpp",
+      "before_sha256": "4920cbff4a88d76a9d676f999b452f15db660993fd2df85758a0a0fa33553615"
+    },
+    {
+      "from": "src/theory/arith/kernel/poly/LibPolyKernel.h",
+      "to": "src/algebra/poly/LibPolyKernel.h",
+      "before_sha256": "b360ded663ded10b52886456cfe28bc2259f6c2b9ba5e864725e7c278d169398"
+    },
+    {
+      "from": "src/theory/arith/kernel/poly/PolynomialConverter.cpp",
+      "to": "src/algebra/poly/PolynomialConverter.cpp",
+      "before_sha256": "6c27ee559bd740fbae8c760f64fd9f1907839c07a9e9c6b21bcded2e5c5a2581"
+    },
+    {
+      "from": "src/theory/arith/kernel/poly/PolynomialConverter.h",
+      "to": "src/algebra/poly/PolynomialConverter.h",
+      "before_sha256": "e5cb5f20177ebd609b1279377860ab444080d06aec1b8586314d06d678f1e76f"
+    },
+    {
+      "from": "src/theory/arith/kernel/poly/PolynomialKernel.cpp",
+      "to": "src/algebra/poly/PolynomialKernel.cpp",
+      "before_sha256": "a33697f90b495b9894d5f0ba011e30272571916118f2fb329bcf4d4b32d86fe4"
+    },
+    {
+      "from": "src/theory/arith/kernel/poly/PolynomialKernel.h",
+      "to": "src/algebra/poly/PolynomialKernel.h",
+      "before_sha256": "77becd89dad8c23d0b17facb296ae9a02ace3417e374f23d1925e66662bc9639"
+    },
+    {
+      "from": "src/theory/arith/kernel/poly/RationalPolynomial.cpp",
+      "to": "src/algebra/poly/RationalPolynomial.cpp",
+      "before_sha256": "f178f8cbf679033aabbf966c9fd1aa7de1df685e8e1c0c029d5f23d4adf9c99c"
+    },
+    {
+      "from": "src/theory/arith/kernel/poly/RationalPolynomial.h",
+      "to": "src/algebra/poly/RationalPolynomial.h",
+      "before_sha256": "57f084ddf641ced4abe70af16eb6528b1ce600867da845d5ab83334c618bcf4c"
+    },
+    {
+      "from": "src/theory/arith/kernel/presolve/AffineSubstitution.cpp",
+      "to": "src/search/presolve/AffineSubstitution.cpp",
+      "before_sha256": "1599e12a52ee37d3ebad5c8eda430b82daba4383ca9f86905bf5aa1d65b98396"
+    },
+    {
+      "from": "src/theory/arith/kernel/presolve/AffineSubstitution.h",
+      "to": "src/search/presolve/AffineSubstitution.h",
+      "before_sha256": "ee92d367a241362755b9e7f6c0e458d292f7b1066a8ad8acc8adef455201beff"
+    },
+    {
+      "from": "src/theory/arith/kernel/presolve/BoundChainComposer.cpp",
+      "to": "src/search/presolve/BoundChainComposer.cpp",
+      "before_sha256": "e66bd3139b1d1bee6ccd2b77e6b904a08fe6f4d803f3e816588b6d9c0d95ea12"
+    },
+    {
+      "from": "src/theory/arith/kernel/presolve/BoundChainComposer.h",
+      "to": "src/search/presolve/BoundChainComposer.h",
+      "before_sha256": "b3624e16b9ae4bae7e622dd1c3359abe4e35e47a16aa50feda0cf36d8b5ba35f"
+    },
+    {
+      "from": "src/theory/arith/kernel/presolve/IntLinearEqualityCoreHNF.cpp",
+      "to": "src/search/presolve/IntLinearEqualityCoreHNF.cpp",
+      "before_sha256": "b6d3ec9107e36aea855ca391fb194fa8e5551ef56b357e483e1101903f977e8a"
+    },
+    {
+      "from": "src/theory/arith/kernel/presolve/IntLinearEqualityCoreHNF.h",
+      "to": "src/search/presolve/IntLinearEqualityCoreHNF.h",
+      "before_sha256": "8a00d5ed04f874684717df62ef7ad7378ca28c6f55c8e1120e105e051df81496"
+    },
+    {
+      "from": "src/theory/arith/kernel/presolve/IntegerLinearAlgebra.cpp",
+      "to": "src/search/presolve/IntegerLinearAlgebra.cpp",
+      "before_sha256": "bc5f0ec8d84115dd5b64a4c74a849cc66bd0c5e5fc51c4941069eb4bd58c8a15"
+    },
+    {
+      "from": "src/theory/arith/kernel/presolve/IntegerLinearAlgebra.h",
+      "to": "src/search/presolve/IntegerLinearAlgebra.h",
+      "before_sha256": "c818c3948adb8626920a47a820a15d7455e12a86d765031ab4a870356582a542"
+    },
+    {
+      "from": "src/theory/arith/kernel/presolve/NonnegativePolynomialBoundExtractor.cpp",
+      "to": "src/search/presolve/NonnegativePolynomialBoundExtractor.cpp",
+      "before_sha256": "79bac87797cfd9c72a7973d2040e47b0e93b30288bf35ebf49b71f3452b1deca"
+    },
+    {
+      "from": "src/theory/arith/kernel/presolve/NonnegativePolynomialBoundExtractor.h",
+      "to": "src/search/presolve/NonnegativePolynomialBoundExtractor.h",
+      "before_sha256": "b1a52859170b0ca9a6b9b372e45b33c4f8880c6b7e108d2a85f6b2446ac18fcd"
+    },
+    {
+      "from": "src/theory/arith/kernel/presolve/PolynomialDefSubstitution.cpp",
+      "to": "src/search/presolve/PolynomialDefSubstitution.cpp",
+      "before_sha256": "1a88c072bff3469d6b2a5c2c058dcb704ac7e3bb3085193e292db65ef3505647"
+    },
+    {
+      "from": "src/theory/arith/kernel/presolve/PolynomialDefSubstitution.h",
+      "to": "src/search/presolve/PolynomialDefSubstitution.h",
+      "before_sha256": "2199f7423cbc81e8d689b5019da83c5394f63f800337385ec23fe62d2db4d3ca"
+    },
+    {
+      "from": "src/theory/arith/kernel/presolve/PolynomialEqualityCombination.cpp",
+      "to": "src/search/presolve/PolynomialEqualityCombination.cpp",
+      "before_sha256": "3fab72454cf2c75904d6e4e85911bd5d091cda34d7b98e213603b625a056a4cb"
+    },
+    {
+      "from": "src/theory/arith/kernel/presolve/PolynomialEqualityCombination.h",
+      "to": "src/search/presolve/PolynomialEqualityCombination.h",
+      "before_sha256": "9afa1c42c07c107bc7173b578ff7342c9a0e834a7d85ef1b0c056659d60d3bbd"
+    },
+    {
+      "from": "src/theory/arith/kernel/presolve/Presolve.h",
+      "to": "src/search/presolve/Presolve.h",
+      "before_sha256": "a23ca98010d1ee67f73f3a1d036605797f48f04a3af52f8c8fc542887252dde1"
+    },
+    {
+      "from": "src/theory/arith/kernel/presolve/PresolveEngine.cpp",
+      "to": "src/search/presolve/PresolveEngine.cpp",
+      "before_sha256": "c7268b74551f188b57a3aee7ad2a554146e33f748058cdf9b750f346936a937d"
+    },
+    {
+      "from": "src/theory/arith/kernel/presolve/PresolveSupport.cpp",
+      "to": "src/search/presolve/PresolveSupport.cpp",
+      "before_sha256": "9ed5a322836685c7baeb68600dbca86eafc6db94771d349d01fa5ea0cf5b073c"
+    },
+    {
+      "from": "src/theory/arith/kernel/presolve/UnivariatePolySignAnalyzer.cpp",
+      "to": "src/search/presolve/UnivariatePolySignAnalyzer.cpp",
+      "before_sha256": "65a3315320f7503373282121c5df681eaf6a79f67bec1ffaa6361e7dc9105d9a"
+    },
+    {
+      "from": "src/theory/arith/kernel/presolve/UnivariatePolySignAnalyzer.h",
+      "to": "src/search/presolve/UnivariatePolySignAnalyzer.h",
+      "before_sha256": "95b7ad2f2d3d929938679cd761b60e1101d6367317f4af04e5dbd8340a688c01"
+    },
+    {
+      "from": "src/theory/arith/kernel/refute/SignDefinitenessRefuter.cpp",
+      "to": "src/search/refute/SignDefinitenessRefuter.cpp",
+      "before_sha256": "51be8b4be9851f5eb255ceedd070c77d0c6a8fe5ce12ef4080a984e28cb75f8f"
+    },
+    {
+      "from": "src/theory/arith/kernel/refute/SignDefinitenessRefuter.h",
+      "to": "src/search/refute/SignDefinitenessRefuter.h",
+      "before_sha256": "65341557018bb992a0df9a61bb05d0de0e6deec03770d34c56f16f1edf0eff99"
+    },
+    {
+      "from": "src/theory/arith/kernel/search/CandidateModelSearch.cpp",
+      "to": "src/search/candidate/CandidateModelSearch.cpp",
+      "before_sha256": "6d1c0678989fedda3f65dac535f332553a8f0ec70839516674012f69e6ff33a8"
+    },
+    {
+      "from": "src/theory/arith/kernel/search/CandidateModelSearch.h",
+      "to": "src/search/candidate/CandidateModelSearch.h",
+      "before_sha256": "fad723c33e792910eff7209ae9b3e73ea66d69f9213fc9ea509ef4bf31e65dc2"
+    },
+    {
+      "from": "src/theory/arith/kernel/search/CompleteFiniteDomainEnumerator.cpp",
+      "to": "src/search/candidate/CompleteFiniteDomainEnumerator.cpp",
+      "before_sha256": "bd1953d61e8d5fcac1482bee127c04fb371b1b8778664b429a1583626d40d707"
+    },
+    {
+      "from": "src/theory/arith/kernel/search/CompleteFiniteDomainEnumerator.h",
+      "to": "src/search/candidate/CompleteFiniteDomainEnumerator.h",
+      "before_sha256": "f7760421bbb14b32d1bddf5299e41b38ee6550f25b72f0436b8432860389196a"
+    },
+    {
+      "from": "src/theory/arith/logics/dl/BellmanFord.h",
+      "to": "src/search/dl/BellmanFord.h",
+      "before_sha256": "eba5052111b11ddc3a1a7473e7eab2cf672c206b02b49c65cddd6398d58bd0aa"
+    },
+    {
+      "from": "src/theory/arith/logics/dl/DifferenceGraph.h",
+      "to": "src/search/dl/DifferenceGraph.h",
+      "before_sha256": "07eab0adbc226dcfdeb3ef245de9f9e1645997bf6b8bccb9fb8a3b0f6130b224"
+    },
+    {
+      "from": "src/theory/arith/logics/dl/DlExplanation.h",
+      "to": "src/search/dl/DlExplanation.h",
+      "before_sha256": "d2ec1dad00bb7956aed001d301c1e2e628b68d36217630104c07a9442a80dce7"
+    },
+    {
+      "from": "src/theory/arith/logics/dl/DlModel.h",
+      "to": "src/search/dl/DlModel.h",
+      "before_sha256": "f1098c209c0ffa5b7fd7ffe255583d3ea4558ea7cc2d9197160604b6679e7446"
+    },
+    {
+      "from": "src/theory/arith/logics/dl/DlWeight.h",
+      "to": "src/search/dl/DlWeight.h",
+      "before_sha256": "9e044130087d9da280b968c446b83279b72cea09f0132696c88d5001e2563d9f"
+    },
+    {
+      "from": "src/theory/arith/logics/dl/IdlSolver.cpp",
+      "to": "src/search/dl/IdlSolver.cpp",
+      "before_sha256": "8cda4170cc9e7d5bc20d0c0f070f1cf75399e4e1080a61bc3d597225f085fa04"
+    },
+    {
+      "from": "src/theory/arith/logics/dl/IdlSolver.h",
+      "to": "src/search/dl/IdlSolver.h",
+      "before_sha256": "b958052d8cb54235f9ff6574547a418e4b0f8045a7881701dcf65df8ead4f0a6"
+    },
+    {
+      "from": "src/theory/arith/logics/dl/IncrementalDiffGraph.h",
+      "to": "src/search/dl/IncrementalDiffGraph.h",
+      "before_sha256": "23f74061d44ba57369cb6d7be070480eccd9db9886ebaa3fca80de788fd71fa6"
+    },
+    {
+      "from": "src/theory/arith/logics/dl/RdlSolver.cpp",
+      "to": "src/search/dl/RdlSolver.cpp",
+      "before_sha256": "577eb70ff61f5d8fbef500cc5ce208ca15f040d35a51887849cbe8dbbcc8d4e1"
+    },
+    {
+      "from": "src/theory/arith/logics/dl/RdlSolver.h",
+      "to": "src/search/dl/RdlSolver.h",
+      "before_sha256": "1a0325717053505d8be32c82709a6345948d8bc48299ac8cb829bda7923be282"
+    },
+    {
+      "from": "src/theory/arith/logics/lia/GomoryCut.cpp",
+      "to": "src/search/lia/GomoryCut.cpp",
+      "before_sha256": "59ed0f31a1ce20c2156644fa833b5efef22daf72b4ce85e2a086363c34d9352f"
+    },
+    {
+      "from": "src/theory/arith/logics/lia/GomoryCut.h",
+      "to": "src/search/lia/GomoryCut.h",
+      "before_sha256": "03d3b98426c30c281b9c91de82c541cbf8749d7866c4bc8270c8340ae1301131"
+    },
+    {
+      "from": "src/theory/arith/logics/lia/InternalMilpEngine.cpp",
+      "to": "src/search/lia/InternalMilpEngine.cpp",
+      "before_sha256": "76f3faa8358a0d322d3a91e7cb75a812250a0b2c489f36113d9df28d81adf774"
+    },
+    {
+      "from": "src/theory/arith/logics/lia/InternalMilpEngine.h",
+      "to": "src/search/lia/InternalMilpEngine.h",
+      "before_sha256": "b28d8dee0e377e1699f734b71aaaefeef064a15c1ac22a0c60928e895f1b3e0d"
+    },
+    {
+      "from": "src/theory/arith/logics/lia/LiaSolver.cpp",
+      "to": "src/search/lia/LiaSolver.cpp",
+      "before_sha256": "3c3a27516f870122855f4d1c0df718720f9c4f12065ff250cb7de7ee286a9c3d"
+    },
+    {
+      "from": "src/theory/arith/logics/lia/LiaSolver.h",
+      "to": "src/search/lia/LiaSolver.h",
+      "before_sha256": "f8615c4d7721b8ee501958f6357b7f89ef13d067fb06d2c609bacd234c4de32b"
+    },
+    {
+      "from": "src/theory/arith/logics/lia/LiaSolverDetail.h",
+      "to": "src/search/lia/LiaSolverDetail.h",
+      "before_sha256": "318b76713a8a6952dd611dff80b6bb784a98da70e8ac9ccab90bc588389bf337"
+    },
+    {
+      "from": "src/theory/arith/logics/lia/LiaSolver_combination.cpp",
+      "to": "src/search/lia/LiaSolver_combination.cpp",
+      "before_sha256": "5eb769f3b66587bd2f29460681ee000c34e6e27f95ea86fdce8e9566fd8fe4ce"
+    },
+    {
+      "from": "src/theory/arith/logics/lia/LiaSolver_entailment.cpp",
+      "to": "src/search/lia/LiaSolver_entailment.cpp",
+      "before_sha256": "ace9e53ae4cd588871afddf2f091807ff65f68aca13c8c62ccd11580bd6616ba"
+    },
+    {
+      "from": "src/theory/arith/logics/lia/LiaSolver_integrality.cpp",
+      "to": "src/search/lia/LiaSolver_integrality.cpp",
+      "before_sha256": "a32f6f11e9226aa0b3a77236a8c1b902bfaf8fcc1ab45cd159f7aa9a775a8cfe"
+    },
+    {
+      "from": "src/theory/arith/logics/lia/LiaSolver_model.cpp",
+      "to": "src/search/lia/LiaSolver_model.cpp",
+      "before_sha256": "7195af62000d2153de614ea331568b7b84bf9dd485f1c1ba3007afbd1074946d"
+    },
+    {
+      "from": "src/theory/arith/logics/lra/DeltaRational.h",
+      "to": "src/search/lra/DeltaRational.h",
+      "before_sha256": "efe20bc4cabf505bd25d30c3b3a1311236e929f4e93612a9ec5ad31b14170380"
+    },
+    {
+      "from": "src/theory/arith/logics/lra/GeneralSimplex.cpp",
+      "to": "src/search/lra/GeneralSimplex.cpp",
+      "before_sha256": "bbc5a68543a985aa2ebd2a855b3b3373e0542949fcfc5492c54c1bcfc8a2179b"
+    },
+    {
+      "from": "src/theory/arith/logics/lra/GeneralSimplex.h",
+      "to": "src/search/lra/GeneralSimplex.h",
+      "before_sha256": "42f8f0f93868f35f4762a1b7fffcca2ea0737d7620a6fb7730fb38c0b4d79dae"
+    },
+    {
+      "from": "src/theory/arith/logics/lra/LraPropagationEngine.cpp",
+      "to": "src/search/lra/LraPropagationEngine.cpp",
+      "before_sha256": "5aaa724d541e125737f256860352a617dccb2de21e5b12ab4db38468ddcbf8b5"
+    },
+    {
+      "from": "src/theory/arith/logics/lra/LraPropagationEngine.h",
+      "to": "src/search/lra/LraPropagationEngine.h",
+      "before_sha256": "3361febbe037a6b4cb04b773da496ac75ecff3d3a94ab8c6900efa39f6056e30"
+    },
+    {
+      "from": "src/theory/arith/logics/lra/LraSolver.cpp",
+      "to": "src/search/lra/LraSolver.cpp",
+      "before_sha256": "130c798fde2f05b956a4753e05177ba7f7c7705b5b76fa55b4ef06457621b15e"
+    },
+    {
+      "from": "src/theory/arith/logics/lra/LraSolver.h",
+      "to": "src/search/lra/LraSolver.h",
+      "before_sha256": "26cf7504e6104b08a8d398a1e74476781ff44c0b358c2eff8e1d1ac3d474f95d"
+    },
+    {
+      "from": "src/theory/arith/logics/lra/SimplexSolver.h",
+      "to": "src/search/lra/SimplexSolver.h",
+      "before_sha256": "14c7fc322d524d7300e00a3a19a2f02d18bb3ba587b8975f7bfc80584557f0a1"
+    },
+    {
+      "from": "src/theory/arith/logics/lra/SparseTableau.cpp",
+      "to": "src/search/lra/SparseTableau.cpp",
+      "before_sha256": "819915e4c443478285502532fd7887e0310f706539c424515d8cb0966abd4ae0"
+    },
+    {
+      "from": "src/theory/arith/logics/lra/SparseTableau.h",
+      "to": "src/search/lra/SparseTableau.h",
+      "before_sha256": "74aead630f54dedde68e7e7fe950fa48150ea07ac6a76d58953d3e6a2975a517"
+    },
+    {
+      "from": "src/theory/arith/logics/mixed/LiraSolver.cpp",
+      "to": "src/search/mixed/LiraSolver.cpp",
+      "before_sha256": "f126c0644eabec492865cdcd259d6c00bcf315172197bb56d26780ceb7a1b72a"
+    },
+    {
+      "from": "src/theory/arith/logics/mixed/LiraSolver.h",
+      "to": "src/search/mixed/LiraSolver.h",
+      "before_sha256": "a7ee504a4eae6ba54baae1fbe106d5b3b5e0ad1a5dae0f9069436d8345fa1f5b"
+    },
+    {
+      "from": "src/theory/arith/logics/mixed/NiraSolver.cpp",
+      "to": "src/search/mixed/NiraSolver.cpp",
+      "before_sha256": "87019216ba1bea8b23fb0dc9db13ad02a1bed529d3cb37859e694d512bcd3073"
+    },
+    {
+      "from": "src/theory/arith/logics/mixed/NiraSolver.h",
+      "to": "src/search/mixed/NiraSolver.h",
+      "before_sha256": "ab303c3851918ee7c477a9bd7abe7e747877fb104b3955c9fbde8143465cac56"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/NiaSolver.cpp",
+      "to": "src/search/nia/NiaSolver.cpp",
+      "before_sha256": "9118e6e5a76b92d40d1ae58a8ebfa358ca353d7165acf068f3d01134390093ad"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/NiaSolver.h",
+      "to": "src/search/nia/NiaSolver.h",
+      "before_sha256": "c7b0a6e0dc698ac6583dc6162bf5ff07759797cde0d53262f5b4404f8a2fc5a5"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/NiaSolverDetail.h",
+      "to": "src/search/nia/NiaSolverDetail.h",
+      "before_sha256": "f11efc57c7c0402b3e2bbc9c9b0d8d112793cc8741d5a4bc22593776d5dc1558"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/NiaSolver_bitblast.cpp",
+      "to": "src/search/nia/NiaSolver_bitblast.cpp",
+      "before_sha256": "938b9c6d3e97a8303f332343acabed452d7fd86fd2ece4cfc05d36a38be486dd"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/NiaSolver_branch.cpp",
+      "to": "src/search/nia/NiaSolver_branch.cpp",
+      "before_sha256": "e49a9625b52040da25ac8b18353703fc29e729b07483688415623e50e621ca07"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/NiaSolver_combination.cpp",
+      "to": "src/search/nia/NiaSolver_combination.cpp",
+      "before_sha256": "d482bed7cbf8350202de8c010edf8b9bf0d500e25e0774877e7bd8bc64223c17"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/NiaSolver_engines.cpp",
+      "to": "src/search/nia/NiaSolver_engines.cpp",
+      "before_sha256": "3c3a154d5af3b12be50557fad81ed9443ee877f4a706c398bc1e99319c58a0e1"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/NiaSolver_farkas.cpp",
+      "to": "src/search/nia/NiaSolver_farkas.cpp",
+      "before_sha256": "4ab7a42cbc7ab5062d4491c08633d7f7a4e247e5b4f35f250b59284644bf3cdc"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/NiaSolver_linear.cpp",
+      "to": "src/search/nia/NiaSolver_linear.cpp",
+      "before_sha256": "8e66cb31f276614e2b635e3b4c55e136248e071293389b7812a0f8015a03c588"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/NiaSolver_localsearch.cpp",
+      "to": "src/search/nia/NiaSolver_localsearch.cpp",
+      "before_sha256": "ea0769980def6cfd466344d8020b7728055dc3dba9758544a471759df62aa088"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/NiaSolver_refute.cpp",
+      "to": "src/search/nia/NiaSolver_refute.cpp",
+      "before_sha256": "09245ce56774bfb8cce428b3ef421e078cb4b6fc56042053f1b3f6e78f9e2127"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/NiaTypes.h",
+      "to": "src/search/nia/NiaTypes.h",
+      "before_sha256": "101e262b447a0b389ee93948bd338cc3e978c834fe4ef21f8fd26b6d62f482e5"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/core/DomainStore.cpp",
+      "to": "src/search/nia/core/DomainStore.cpp",
+      "before_sha256": "07e6dc8db9371331f46fe59e5bc0f953ab0b423e0fec353696eda9a324ad31c0"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/core/DomainStore.h",
+      "to": "src/search/nia/core/DomainStore.h",
+      "before_sha256": "177098b57908c3a2acf397741535c35ac106c1fd00295da8673cebd039dff0b7"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/core/LinearNiaDomainReasoner.cpp",
+      "to": "src/search/nia/core/LinearNiaDomainReasoner.cpp",
+      "before_sha256": "69a6088578a3964a89fabaddeb0fc5052f93eb4e0fa0b1d7200fb2e104237668"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/core/LinearNiaDomainReasoner.h",
+      "to": "src/search/nia/core/LinearNiaDomainReasoner.h",
+      "before_sha256": "da689aa8bf1221f0ad44bbc949aa7ef452eedd85d918a6e41c363e67a2f2c485"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/farkas/FarkasOrBranchSolver.cpp",
+      "to": "src/search/nia/farkas/FarkasOrBranchSolver.cpp",
+      "before_sha256": "a6b221443721fbd2dbfaf11ce0b32b49e89f29928f9778b34dc04b1a1893618b"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/farkas/FarkasOrBranchSolver.h",
+      "to": "src/search/nia/farkas/FarkasOrBranchSolver.h",
+      "before_sha256": "2df97b036f123cdc2a4537e726f5e6b5b05170774d4bba7fcca47ec0edd4931e"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/farkas/FarkasOrDetector.cpp",
+      "to": "src/search/nia/farkas/FarkasOrDetector.cpp",
+      "before_sha256": "207abfc7415f20bcec367e499867c420035a1c086346bb8f0c9ca2c83ef436cd"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/farkas/FarkasOrDetector.h",
+      "to": "src/search/nia/farkas/FarkasOrDetector.h",
+      "before_sha256": "8e734dbef49fd4b7290d87c9adaefd379f895653e29a98eb7d2f711a3698be3f"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/farkas/FarkasOrModelAssembler.cpp",
+      "to": "src/search/nia/farkas/FarkasOrModelAssembler.cpp",
+      "before_sha256": "08990d61328e1e2f40bf306cde97a9c53a87a8c3736b6337788a29c51f196bbe"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/farkas/FarkasOrModelAssembler.h",
+      "to": "src/search/nia/farkas/FarkasOrModelAssembler.h",
+      "before_sha256": "3fc86a19bba4ff4f430c7e2ecc981871b297d6994213d00db9baea05e1a0da51"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/farkas/FarkasOrSolver.cpp",
+      "to": "src/search/nia/farkas/FarkasOrSolver.cpp",
+      "before_sha256": "f4b7e0940f95cee5dbf47d245df2729c3479238185e866a4517ff4e276846304"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/farkas/FarkasOrSolver.h",
+      "to": "src/search/nia/farkas/FarkasOrSolver.h",
+      "before_sha256": "6d67af407563b340fbc2ef5ac05d79a6a9f60c5e96973a25cd99fdffa71cd2d4"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/farkas/FarkasOrTypes.h",
+      "to": "src/search/nia/farkas/FarkasOrTypes.h",
+      "before_sha256": "9b919341963798ae10d892ba98d912825c9bd7a0dc572bed81d4321b9e57a527"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/farkas/LeafFarkasLia.cpp",
+      "to": "src/search/nia/farkas/LeafFarkasLia.cpp",
+      "before_sha256": "e6db829b88da13186fcf5b1d9d444d5b81113dfeda3c2a36ae147194e634bef3"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/farkas/LeafFarkasLia.h",
+      "to": "src/search/nia/farkas/LeafFarkasLia.h",
+      "before_sha256": "4cad6f9720986bd734241f65a280cf4e53dad8120979d1bdce05843890cec322"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/mcsat/NiaMcsatEngine.cpp",
+      "to": "src/search/nia/mcsat/NiaMcsatEngine.cpp",
+      "before_sha256": "3bcdd69d53a7d0568c17e4c8a824890d87094ad6f3cf0fcc44461d57189a8cab"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/mcsat/NiaMcsatEngine.h",
+      "to": "src/search/nia/mcsat/NiaMcsatEngine.h",
+      "before_sha256": "f8635293e85e76eefdff7d3b8202b2dcb4bec97b0d81070597387a431437af0b"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/newton/NewtonIntSqrtProver.h",
+      "to": "src/search/nia/newton/NewtonIntSqrtProver.h",
+      "before_sha256": "65c2a8416235f40c60917117e59de470321e8c7f5ac9ba73dfa839572cbf2bec"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/preprocess/NiaNormalizer.cpp",
+      "to": "src/search/nia/preprocess/NiaNormalizer.cpp",
+      "before_sha256": "c67b433631266162a53c910b8804087448a864e0f4b9712ad6c2dd38f1cb8271"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/preprocess/NiaNormalizer.h",
+      "to": "src/search/nia/preprocess/NiaNormalizer.h",
+      "before_sha256": "a60f87ddf917dca86569fe51e11624a72acd3b210018475e26b1b1aabe0d7d8b"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/preprocess/VariablePartition.cpp",
+      "to": "src/search/nia/preprocess/VariablePartition.cpp",
+      "before_sha256": "03981dd2348a35ebdcfe2ec1479c5ee29bcbfbf2460d79e45a79056fdce71ab2"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/preprocess/VariablePartition.h",
+      "to": "src/search/nia/preprocess/VariablePartition.h",
+      "before_sha256": "6639d507e8bec7788be4a012e22538012026ffcbe2fa4431ba43c55d000aba3a"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/reasoners/AlgebraicIntegerReasoner.cpp",
+      "to": "src/search/nia/reasoners/AlgebraicIntegerReasoner.cpp",
+      "before_sha256": "c6bd813a49175349ff4552a530c18f036e6c5c7745767317ef238b4bf0f4f4eb"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/reasoners/AlgebraicIntegerReasoner.h",
+      "to": "src/search/nia/reasoners/AlgebraicIntegerReasoner.h",
+      "before_sha256": "743072134d3070158e198a4bd01a81577f4bd25916610fcdbf0f3fc40eb920f6"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/reasoners/BoundedNiaSolver.cpp",
+      "to": "src/search/nia/reasoners/BoundedNiaSolver.cpp",
+      "before_sha256": "5c82122e6b61a218d43343c792ec0458762b94c0f7ec8f11968ca3fec7ef4db2"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/reasoners/BoundedNiaSolver.h",
+      "to": "src/search/nia/reasoners/BoundedNiaSolver.h",
+      "before_sha256": "f569b8dfb4eabec6be3974cf6e312bc58524e2b716a6c132a860d4388c3fd3f9"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/reasoners/ChainGraph.cpp",
+      "to": "src/search/nia/reasoners/ChainGraph.cpp",
+      "before_sha256": "1b5efe5e724156bd0c478adde7d0bddad4f0b776e19c2722bc5bb0360d96a203"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/reasoners/ChainGraph.h",
+      "to": "src/search/nia/reasoners/ChainGraph.h",
+      "before_sha256": "d4fae33b9aee4beeb47aac5e2a72258b4d23a593f2668265ee9e49685c083a11"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/reasoners/DioReasoner.cpp",
+      "to": "src/search/nia/reasoners/DioReasoner.cpp",
+      "before_sha256": "5bd2cbb0b8e526d09c4b94ee26d837986fdc947ffc677b0179bedd1fb9cdf036"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/reasoners/DioReasoner.h",
+      "to": "src/search/nia/reasoners/DioReasoner.h",
+      "before_sha256": "fe7532417ca320214da21f8c7deeee680d6a4760bf84e83c14c40312a2de5904"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/reasoners/GcdDivisibilityReasoner.cpp",
+      "to": "src/search/nia/reasoners/GcdDivisibilityReasoner.cpp",
+      "before_sha256": "89901ca66f60f46fec5fc1d41b7e6ca2edcedb574201463dd2b80c881b1eb920"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/reasoners/GcdDivisibilityReasoner.h",
+      "to": "src/search/nia/reasoners/GcdDivisibilityReasoner.h",
+      "before_sha256": "b6a18eda282853c875b69d69665532847d52a726371db83599f8a2a615e5e002"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/reasoners/GroebnerIdealReasoner.cpp",
+      "to": "src/search/nia/reasoners/GroebnerIdealReasoner.cpp",
+      "before_sha256": "4dae0560d3cd3e752f2f7e99bebf61e27b3d59f7135fd11333feeab050638304"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/reasoners/GroebnerIdealReasoner.h",
+      "to": "src/search/nia/reasoners/GroebnerIdealReasoner.h",
+      "before_sha256": "a4adf96b31b961d2845835927da2e2f4048de93106350c2e4c6ce346052e5ce4"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/reasoners/IntBoundProp.cpp",
+      "to": "src/search/nia/reasoners/IntBoundProp.cpp",
+      "before_sha256": "229cd66eecea13f47ecf4833c5364bb265925152b7c1934c2c7384a51cea2d9b"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/reasoners/IntBoundProp.h",
+      "to": "src/search/nia/reasoners/IntBoundProp.h",
+      "before_sha256": "a0c682e2558e6cf51d3c1cba94285d4873e00d6e743d936cdccf28660a2a8142"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/reasoners/ModEqConstFact.h",
+      "to": "src/contracts/ModEqConstFact.h",
+      "before_sha256": "0701e9d21a23fce2dcc470f702e574678df81b89e8cea4437b42be73a6980fcd"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/reasoners/ModEqConstReasoner.cpp",
+      "to": "src/search/nia/reasoners/ModEqConstReasoner.cpp",
+      "before_sha256": "8fca79ffe311b4c100d3b2876de6fa3dd018d6474a2c85c8431301e3f27da1cc"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/reasoners/ModEqConstReasoner.h",
+      "to": "src/search/nia/reasoners/ModEqConstReasoner.h",
+      "before_sha256": "2e24af12ae321fe7bd8b405acc5c23a47593a59a7ff9e1d72e52da5387f7b787"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/reasoners/ModularResidueReasoner.cpp",
+      "to": "src/search/nia/reasoners/ModularResidueReasoner.cpp",
+      "before_sha256": "27df32986037e1c7c4f1ea6d5efdb5029552417734116643e9b1a853e0d302e7"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/reasoners/ModularResidueReasoner.h",
+      "to": "src/search/nia/reasoners/ModularResidueReasoner.h",
+      "before_sha256": "6df16af169deec9920363db6cac55931fdc5bc01d4fb76f8014e7432b007ef39"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/reasoners/OmegaTest.cpp",
+      "to": "src/search/nia/reasoners/OmegaTest.cpp",
+      "before_sha256": "a29a4031d0b075104ca31244631e7f9a34f87829e4bc55991cdd773bdbc1a36e"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/reasoners/OmegaTest.h",
+      "to": "src/search/nia/reasoners/OmegaTest.h",
+      "before_sha256": "f956ca89c5bf1cae310e7930265d3432af68a7902b31eeceb42c5cf618eda0d0"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/reasoners/ProductPositivityReasoner.cpp",
+      "to": "src/search/nia/reasoners/ProductPositivityReasoner.cpp",
+      "before_sha256": "1e7338b0a240af4c0867d36e5f5cccb5300eab222e75c58d7d2896361e511391"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/reasoners/ProductPositivityReasoner.h",
+      "to": "src/search/nia/reasoners/ProductPositivityReasoner.h",
+      "before_sha256": "bd0e5f12f4df18e63a40e0b46f42fe50bed728848e62ef7fd6e7b6b70dbef92a"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/reasoners/SmallPrimeModular.cpp",
+      "to": "src/search/nia/reasoners/SmallPrimeModular.cpp",
+      "before_sha256": "2fe07ad5c38931e56693b2f93fc68e2cf3c51b3caafea52fc5372e47fad609e5"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/reasoners/SmallPrimeModular.h",
+      "to": "src/search/nia/reasoners/SmallPrimeModular.h",
+      "before_sha256": "4850b518fef25c809617a108840d925ddebc1b37cbf758939d0a12e34323e864"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/reasoners/SquareBoundReasoner.cpp",
+      "to": "src/search/nia/reasoners/SquareBoundReasoner.cpp",
+      "before_sha256": "aa3343853354b0cde846bfeb2d5687b41aa1ba6d57c74a0aab26a81cf736663f"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/reasoners/SquareBoundReasoner.h",
+      "to": "src/search/nia/reasoners/SquareBoundReasoner.h",
+      "before_sha256": "8720a71334ba1d4d91c0e28f7b7cf768fc956c849375bb6d669083457274588b"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/reasoners/SumOfSquaresBoundReasoner.cpp",
+      "to": "src/search/nia/reasoners/SumOfSquaresBoundReasoner.cpp",
+      "before_sha256": "36b69ef1d639a61e6e9aa6e2c30861b03514aaed9ce656d2540640e3a7ff9270"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/reasoners/SumOfSquaresBoundReasoner.h",
+      "to": "src/search/nia/reasoners/SumOfSquaresBoundReasoner.h",
+      "before_sha256": "7ae8e1b6146a56528e4b6ef5ceaf7cc1f525537ba3966be9d71c30fce3771469"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/reasoners/UnivariateIntegerReasoner.cpp",
+      "to": "src/search/nia/reasoners/UnivariateIntegerReasoner.cpp",
+      "before_sha256": "6277995fa35405563359023d3fab027e1b315ce69ddbd45ef292f6fea1252dd3"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/reasoners/UnivariateIntegerReasoner.h",
+      "to": "src/search/nia/reasoners/UnivariateIntegerReasoner.h",
+      "before_sha256": "99dd8e4d09d0da5d1ef0c7483d746abfba02db748711a3503a5bb3fa5b9435ea"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/search/IntegerModelValidator.cpp",
+      "to": "src/search/nia/search/IntegerModelValidator.cpp",
+      "before_sha256": "b2b95edd51224287d585dfbcbc67d3cd966a06d7b4faa2ef23f09bcc1b8d1ab7"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/search/IntegerModelValidator.h",
+      "to": "src/search/nia/search/IntegerModelValidator.h",
+      "before_sha256": "36c35cdf82368b8cbd4829ee1ad87c18270fcf190214aca8ef683b29e26eed38"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/search/NiaIcpAdapter.cpp",
+      "to": "src/search/nia/search/NiaIcpAdapter.cpp",
+      "before_sha256": "2a92d0c884edc554408a2c2c1e9a1e1dda738f318b9340e2274a8f47419580f1"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/search/NiaIcpAdapter.h",
+      "to": "src/search/nia/search/NiaIcpAdapter.h",
+      "before_sha256": "32ac2480a8ad8e7554c88ff0bfad40f950e2bbac1447a76e68f9b3e2be9271f8"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/search/NiaLinearDecider.cpp",
+      "to": "src/search/nia/search/NiaLinearDecider.cpp",
+      "before_sha256": "f21cee5ce4576b6de16fe6d3a1fce0bf23a0e0f2469ae96bef7a035d684735cd"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/search/NiaLinearDecider.h",
+      "to": "src/search/nia/search/NiaLinearDecider.h",
+      "before_sha256": "8d93692ba86fdd789f0878485828bbab31180ecdb059d180b0fdb9850f3102b9"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/search/NiaLinearizationAdapter.cpp",
+      "to": "src/search/nia/search/NiaLinearizationAdapter.cpp",
+      "before_sha256": "b7e84ea4ccf45bb3386b14fb547ef5697db81caa7c80542489239bfca34736cd"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/search/NiaLinearizationAdapter.h",
+      "to": "src/search/nia/search/NiaLinearizationAdapter.h",
+      "before_sha256": "a4a0d235c371caa165b77ea23725f96be45965429b842beb2ead225bae823b95"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/search/NiaLocalSearch.cpp",
+      "to": "src/search/nia/search/NiaLocalSearch.cpp",
+      "before_sha256": "86852884038c5b9efec6c2668c509738388dd09c13b65258060b45bdd12559ba"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/search/NiaLocalSearch.h",
+      "to": "src/search/nia/search/NiaLocalSearch.h",
+      "before_sha256": "efe384b596869a06816d3f54e390ea4e89fe9a7be6ae6b1132cdcf2e4670f37b"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/search/SmartInit.cpp",
+      "to": "src/search/nia/search/SmartInit.cpp",
+      "before_sha256": "c9d47278b60a902df4d7aee6a91c04b535698eeda3ce9611171979f17116e049"
+    },
+    {
+      "from": "src/theory/arith/logics/nia/search/SmartInit.h",
+      "to": "src/search/nia/search/SmartInit.h",
+      "before_sha256": "696251fb6950f59e2559c994c0fbe5ee4756ce47141b6de498c3331120208c3c"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/NraLinearizationAdapter.cpp",
+      "to": "src/search/nra/NraLinearizationAdapter.cpp",
+      "before_sha256": "3b1fb31ecc8d1b19e4bee84e08f31d0d0f507d2423b358ec0ded02b46d53539b"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/NraLinearizationAdapter.h",
+      "to": "src/search/nra/NraLinearizationAdapter.h",
+      "before_sha256": "5475351ff41fe8e1e8bdb5411f477fd552792f46a707dd16c2b148aa0b50e872"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/NraSolver.cpp",
+      "to": "src/search/nra/NraSolver.cpp",
+      "before_sha256": "d63b3d8805163c4f3dbf7f2051f8e125d08fa72ee7bbe167fd7279cfe0c134b7"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/NraSolver.h",
+      "to": "src/search/nra/NraSolver.h",
+      "before_sha256": "0788f3b9623183e3214842ec0f000a9df1903f0e6e3854b5219f193945505fff"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/NraSolver_cac.cpp",
+      "to": "src/search/nra/NraSolver_cac.cpp",
+      "before_sha256": "c862afa0dcb9135c0c27513707e85b6a005df7524d96a2d44f2938bb238c074e"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/NraSolver_stages.cpp",
+      "to": "src/search/nra/NraSolver_stages.cpp",
+      "before_sha256": "6b72c677b754a62bb3dd8c7fab062f622f9689df1369916121f1fda7475ce9ed"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/NraSquareSolver.cpp",
+      "to": "src/search/nra/NraSquareSolver.cpp",
+      "before_sha256": "ffb6eec290d2aceb0a352815ef1a4bbcd3eff752bdc73172ded0cb21dcb9d22c"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/NraSquareSolver.h",
+      "to": "src/search/nra/NraSquareSolver.h",
+      "before_sha256": "96a1218d29ef34746e9be28a2b9f9e0becb6e813cbabb468097950cbbf58219d"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/StructuralIntegerProbe.cpp",
+      "to": "src/search/nra/StructuralIntegerProbe.cpp",
+      "before_sha256": "366f06af86b28a15d379322b1f7176aece9fef9ee7b31017b22753c534242652"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/StructuralIntegerProbe.h",
+      "to": "src/search/nra/StructuralIntegerProbe.h",
+      "before_sha256": "e702ec3fd68a773e9d6387e09b4fdd2f4279922bb6bb3180ce6886330cd56b1c"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/backend/AlgebraBackend.h",
+      "to": "src/search/nra/backend/AlgebraBackend.h",
+      "before_sha256": "7a1df4eae3e4ec94e0263d591c4b8e8c737965828a31227f7a1c4ec8dcd2743c"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/backend/LibpolyAlgebraic.cpp",
+      "to": "src/search/nra/backend/LibpolyAlgebraic.cpp",
+      "before_sha256": "bbaa156436c93369b9fd484d343a2b9e29894699e480e4d3d5ccfe3b7cf4b7fe"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/backend/LibpolyBackend.cpp",
+      "to": "src/search/nra/backend/LibpolyBackend.cpp",
+      "before_sha256": "db755f7a80cf39f0fbaf40b56b3197a1f4801c3bd03a2aae739215f63ac74908"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/backend/LibpolyBackend.h",
+      "to": "src/search/nra/backend/LibpolyBackend.h",
+      "before_sha256": "2cef36604ef3207f9f8e87955e9d3e0fd713262cd5edddcbb53af0e0d72c35de"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/cac/CacEngine.cpp",
+      "to": "src/search/nra/cac/CacEngine.cpp",
+      "before_sha256": "e041d2e4ffcef1535d9812fb408e41608e550d0262b31916dee394f1b57e0cf8"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/cac/CacEngine.h",
+      "to": "src/search/nra/cac/CacEngine.h",
+      "before_sha256": "ac7bd91bdba03a63dce902be7bea239f7d13639dcac97e0f70c578611c9a6229"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/cac/Covering.cpp",
+      "to": "src/search/nra/cac/Covering.cpp",
+      "before_sha256": "7293bb206f0b94b31c15cf78c1ea2288cd983c760a289878075d0c5d036a2961"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/cac/Covering.h",
+      "to": "src/search/nra/cac/Covering.h",
+      "before_sha256": "cf41b9ea7a87b1f5996185e4d25a2914e15249c94fa1c7cb3aa79557c0d5f5d4"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/cac/SingleCellProjection.cpp",
+      "to": "src/search/nra/cac/SingleCellProjection.cpp",
+      "before_sha256": "5f3e6e57d86cee947d7248ba4e86828924f2f07e7d9096456a53a57bb66714a9"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/cac/SingleCellProjection.h",
+      "to": "src/search/nra/cac/SingleCellProjection.h",
+      "before_sha256": "3cd09e81d4f0f2b34c02238b50264eaeaf282c89025f9bac19be27a911c7f094"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/core/CdcacCache.cpp",
+      "to": "src/search/nra/core/CdcacCache.cpp",
+      "before_sha256": "3a891c63bd0fefef94921d89e0e14d56ca8f67e22170c5154bfd3f955008a6ca"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/core/CdcacCache.h",
+      "to": "src/search/nra/core/CdcacCache.h",
+      "before_sha256": "38c76aff7b0d4a9468df170aa165dad41273f9819a54f6556239c177723aec80"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/core/CdcacCell.h",
+      "to": "src/search/nra/core/CdcacCell.h",
+      "before_sha256": "4b7bd78626fe81504425d2889a66be259aee0c16443f07e51f286ff2e7c2fa44"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/core/CdcacCertificate.h",
+      "to": "src/search/nra/core/CdcacCertificate.h",
+      "before_sha256": "ba98b31c99f2d66f4680291e34a7ed721c7b32f2006dd974fa30e12b8154fabe"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/core/CdcacCommon.h",
+      "to": "src/search/nra/core/CdcacCommon.h",
+      "before_sha256": "3ef583423f6e2f9a9d7543853fb406d6249d427fa24faea20cb4317fa9372eb7"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/core/CdcacConstraint.h",
+      "to": "src/search/nra/core/CdcacConstraint.h",
+      "before_sha256": "aeb0f2771b7f4fd12c96c4c8d185a3e85afccb03234604cff8d5b6ba12c6f1a7"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/core/CdcacCore.cpp",
+      "to": "src/search/nra/core/CdcacCore.cpp",
+      "before_sha256": "0b6aaffc0e7c8877ecce9bceebcb26b96a13c72e9ba66134b3798c3751e10e2e"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/core/CdcacCore.h",
+      "to": "src/search/nra/core/CdcacCore.h",
+      "before_sha256": "1f919638173b7e6fa0296c92e06f06134aefa58142b3807c944d381526fcb919"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/core/CdcacFuzzer.cpp",
+      "to": "src/search/nra/core/CdcacFuzzer.cpp",
+      "before_sha256": "7cdd93ca5364c35f9eba3bdfd3b9435778999351caeff691cae69cbeaaba6b72"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/core/CdcacFuzzer.h",
+      "to": "src/search/nra/core/CdcacFuzzer.h",
+      "before_sha256": "f21be6c668b409e44d38c1209258c3802a50bd43ccfbcc0fca9d42def92f844e"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/core/CdcacObjective.h",
+      "to": "src/search/nra/core/CdcacObjective.h",
+      "before_sha256": "3b62fe7251d7122e3549b78041f069f908b51e8a9349365ff269ec45e289dbb2"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/core/CdcacResult.h",
+      "to": "src/search/nra/core/CdcacResult.h",
+      "before_sha256": "527b212ce956bdd82423b75989dc65c0f417b61a8202344a172c2be46d343c8d"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/core/CdcacSolver.cpp",
+      "to": "src/search/nra/core/CdcacSolver.cpp",
+      "before_sha256": "cb99132d4be12454e56c48fe76064ec7fc3430e1b610db7be270d0b113f60fb8"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/core/CdcacSolver.h",
+      "to": "src/search/nra/core/CdcacSolver.h",
+      "before_sha256": "a24645aaa765893bb87546166df7c5b1024737d795320baf9586748b280ac5e2"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/core/CdcacTypes.cpp",
+      "to": "src/search/nra/core/CdcacTypes.cpp",
+      "before_sha256": "fc803191cb0cbec249506608342af003f974e63c3fa6b736eabcc578605e5430"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/core/CdcacTypes.h",
+      "to": "src/search/nra/core/CdcacTypes.h",
+      "before_sha256": "ef84ad7b4a311c3218d75cb6e97d97ee9b5c53aa51154b47cabf83e718893303"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/core/CdcacValue.h",
+      "to": "src/search/nra/core/CdcacValue.h",
+      "before_sha256": "b1265d2bc56bfb98abb5418ee2b34f7084cda17e364b3039bca0da79f28d8d5f"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/core/HybridPartitionStats.cpp",
+      "to": "src/search/nra/core/HybridPartitionStats.cpp",
+      "before_sha256": "fc4d3d9b9e9de4de38bbd9df8be01004aa3bc37145723087e90b4402ff55d52b"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/core/HybridPartitionStats.h",
+      "to": "src/search/nra/core/HybridPartitionStats.h",
+      "before_sha256": "f378d8b9b630957dc04a045a5dc7284dc68698882aaa9139302a789c151b89fe"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/engine/CoveringManager.cpp",
+      "to": "src/search/nra/engine/CoveringManager.cpp",
+      "before_sha256": "5d901539b10c26385d489729d11f278919c1c9ea53e6ea9ec0af76921257def5"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/engine/CoveringManager.h",
+      "to": "src/search/nra/engine/CoveringManager.h",
+      "before_sha256": "1bde0d2ebf07dbb96c15bb039aed8a05220b33fe497759700f5f7ccd31aca79b"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/engine/NlsatEngine.cpp",
+      "to": "src/search/nra/engine/NlsatEngine.cpp",
+      "before_sha256": "dea8d3927caf2ba288f370a95ef71c3abc6bf2f08cac49ae3b1e96902d4031c7"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/engine/NlsatEngine.h",
+      "to": "src/search/nra/engine/NlsatEngine.h",
+      "before_sha256": "5b4ca06433c9963214eabd1ef88f462c9e85745f7c4a9ff42af646c09c94ffce"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/engine/ReasonManager.cpp",
+      "to": "src/search/nra/engine/ReasonManager.cpp",
+      "before_sha256": "65786851df6a08f5bc444e27c5246cca8944f56b072f476aeeabeb954555fabd"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/engine/ReasonManager.h",
+      "to": "src/search/nra/engine/ReasonManager.h",
+      "before_sha256": "0c6939bdfbdbd8faa9c852cb92455ea5184d357cf93b33e02fadd4ff2cdabd11"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/engine/ReasonMinimizer.cpp",
+      "to": "src/search/nra/engine/ReasonMinimizer.cpp",
+      "before_sha256": "b62ebef793e53ac9ec4e2ebbbf6226b61cd1aa497b361a45a30ed1f1b3a031e9"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/engine/ReasonMinimizer.h",
+      "to": "src/search/nra/engine/ReasonMinimizer.h",
+      "before_sha256": "4a7843ae3d4a8600c0100b30c8b2a3417e5ab7b02176f41e9359b08e71103c73"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/engine/SampleHeuristic.cpp",
+      "to": "src/search/nra/engine/SampleHeuristic.cpp",
+      "before_sha256": "db851f017a00e19660dc97c80fc8d92539cc0a0fdd25aac633fe6ce509c0005d"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/engine/SampleHeuristic.h",
+      "to": "src/search/nra/engine/SampleHeuristic.h",
+      "before_sha256": "3b8c00cc04e8eaa3d1992f04151ec0818016d8c91c0aa6a2512ea8c9948d381b"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/lazard/LazardLifter.cpp",
+      "to": "src/search/nra/lazard/LazardLifter.cpp",
+      "before_sha256": "574554b9fac7be6db062d18ca6238e7e1c36666023077c202a7dfb9917867ade"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/lazard/LazardLifter.h",
+      "to": "src/search/nra/lazard/LazardLifter.h",
+      "before_sha256": "b5d3fd04916cde82b1cb150b8154788be104811351a016e9f9a20dd795ae98c4"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/lazard/LazardProjectionClosure.cpp",
+      "to": "src/search/nra/lazard/LazardProjectionClosure.cpp",
+      "before_sha256": "ee5220f3792da3c89aaf649648f7de3a6ff4e5dd75d72ea1b2fc894a7fecf19e"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/lazard/LazardProjectionClosure.h",
+      "to": "src/search/nra/lazard/LazardProjectionClosure.h",
+      "before_sha256": "f2ca76f95db05c9c5a84adffce7ac2ed0d82efa58bb6a2a32779983f342cc93b"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/lazard/LazardProjectionOperator.cpp",
+      "to": "src/search/nra/lazard/LazardProjectionOperator.cpp",
+      "before_sha256": "37053fdcd08e4f5d81a588fc053aba8151c26ad3104d9ead457e2bed908ed6fc"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/lazard/LazardProjectionOperator.h",
+      "to": "src/search/nra/lazard/LazardProjectionOperator.h",
+      "before_sha256": "bc2f591595d48bad264d3f77fc921ba0e7a799f8c839bc6d038e0d0a129b2a28"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/lazard/LazardValuationEngine.cpp",
+      "to": "src/search/nra/lazard/LazardValuationEngine.cpp",
+      "before_sha256": "3e508525498db008d13b228d0b1e9c31f26b98c1cbae34d27f0b10906429123b"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/lazard/LazardValuationEngine.h",
+      "to": "src/search/nra/lazard/LazardValuationEngine.h",
+      "before_sha256": "6d5c8628b6917d3437237aa3dc77135fb568dd4b1de35ecf5daa1743e39c7852"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/lazard/LocalProjection.cpp",
+      "to": "src/search/nra/lazard/LocalProjection.cpp",
+      "before_sha256": "f693673299ff48bb5d5a2bec133edb796364211e173511b0dbe9987604d8fcca"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/lazard/LocalProjection.h",
+      "to": "src/search/nra/lazard/LocalProjection.h",
+      "before_sha256": "37732ffb0ca492bba9d983192c80d1494ef3f3b8ab04a3cb45379356ea163ed0"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/lazard/ProjectionClosure.cpp",
+      "to": "src/search/nra/lazard/ProjectionClosure.cpp",
+      "before_sha256": "9ab9e4ef496eb8aabdd918db85045381661c4db52fac9e5cf837f09ecbdefecc"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/lazard/ProjectionClosure.h",
+      "to": "src/search/nra/lazard/ProjectionClosure.h",
+      "before_sha256": "6cafd6c3a8016c574bd7561d6eb8d220d62e9a681369b8e0af543db373951b12"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/lazard/ProjectionPolicy.cpp",
+      "to": "src/search/nra/lazard/ProjectionPolicy.cpp",
+      "before_sha256": "90c2a08c1b334d02773f3552fcab08846e982e774d47c57cae25d7bbef975819"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/lazard/ProjectionPolicy.h",
+      "to": "src/search/nra/lazard/ProjectionPolicy.h",
+      "before_sha256": "9ec754a4b7ef6e9d16c68e8d4ef192a695db11da2bcb858e685a0eb37e899d33"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/lazard/RationalRootIsolation.cpp",
+      "to": "src/search/nra/lazard/RationalRootIsolation.cpp",
+      "before_sha256": "0226e8e202fa3797d3d882c308400c809a64a0ca1bc728efd93693be0ce8adf7"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/lazard/RationalRootIsolation.h",
+      "to": "src/search/nra/lazard/RationalRootIsolation.h",
+      "before_sha256": "706946505deacea8fa9e57f63a08b3ef901c057e4902f3b84be955ec9e9ef1f2"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/lazard/RootMembershipOracle.cpp",
+      "to": "src/search/nra/lazard/RootMembershipOracle.cpp",
+      "before_sha256": "776ae7a88a6acdad8af8177bc8a650f9fe8d5d8af2dc58b1684347ac911e5e9b"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/lazard/RootMembershipOracle.h",
+      "to": "src/search/nra/lazard/RootMembershipOracle.h",
+      "before_sha256": "3fcddf57a9d8cb47ac7712b437413ce94bce724f0b0fcc8f5e89fa480800cb5a"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/lazard/Squarefree.cpp",
+      "to": "src/search/nra/lazard/Squarefree.cpp",
+      "before_sha256": "36395ee40a0ba805a9ea9d0457618e3363902e7b018a28e664f843cfd18d3951"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/lazard/Squarefree.h",
+      "to": "src/search/nra/lazard/Squarefree.h",
+      "before_sha256": "53a0d5114cd45181bbb46b1343e86449c1277ce7ff5501c3904a69ae64831a7d"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/lazard/SubresultantChain.cpp",
+      "to": "src/search/nra/lazard/SubresultantChain.cpp",
+      "before_sha256": "d3f8e1c8a3e5aec28d5dae960ecdfbf10c9e44a9cde8f948cd12fcbb0399cc6c"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/lazard/SubresultantChain.h",
+      "to": "src/search/nra/lazard/SubresultantChain.h",
+      "before_sha256": "5ff546cb3cd514d652a0636908630362e8ddbcf735197d341f26a2b1505ed759"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/lazard/TowerAlgebraicKernel.cpp",
+      "to": "src/search/nra/lazard/TowerAlgebraicKernel.cpp",
+      "before_sha256": "c4913ced20ad7022da80a337e6d7f6823754b3d44e03b6380b400ea0c7b3740a"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/lazard/TowerAlgebraicKernel.h",
+      "to": "src/search/nra/lazard/TowerAlgebraicKernel.h",
+      "before_sha256": "75ed14a52ee51442c3feac0339bd5394c504ff292319f8eef1af7f62c9630c63"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/lazard/TowerPolyGcd.cpp",
+      "to": "src/search/nra/lazard/TowerPolyGcd.cpp",
+      "before_sha256": "70d042a1344dc9952a2e5e5b2c958bf151dbafc8a249231c53ccc35962eb5bdb"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/lazard/TowerPolyGcd.h",
+      "to": "src/search/nra/lazard/TowerPolyGcd.h",
+      "before_sha256": "147fe359bb0aa9286c17346b6bd26074e6e7c5720f57ab0e0324740894ac94b4"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/lazard/TowerRootIsolation.cpp",
+      "to": "src/search/nra/lazard/TowerRootIsolation.cpp",
+      "before_sha256": "d9b1b22cdfd780108b096da1b5672a02d619c4a4132da10c9fba816e53baee8c"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/lazard/TowerRootIsolation.h",
+      "to": "src/search/nra/lazard/TowerRootIsolation.h",
+      "before_sha256": "f68859aa6b93257d85e6fb24b315892e4ae811ed0ec5f3f8ab6a778d666face2"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/lazard/VarOrderHeuristic.cpp",
+      "to": "src/search/nra/lazard/VarOrderHeuristic.cpp",
+      "before_sha256": "b441491025867b7571962911e3d0bacd26154d050179950f0117bd0dc2dd3bb8"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/lazard/VarOrderHeuristic.h",
+      "to": "src/search/nra/lazard/VarOrderHeuristic.h",
+      "before_sha256": "bcd9470c59dcb7a6213aaec595de47394f3d40b654024f9e32e72b128c0c3853"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/preprocess/ActiveConstraintSet.cpp",
+      "to": "src/search/nra/preprocess/ActiveConstraintSet.cpp",
+      "before_sha256": "b1fed290a2ea9dea00c8a76e8d01ffcd09001a346c9bd5420cd40f39088d8264"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/preprocess/ActiveConstraintSet.h",
+      "to": "src/search/nra/preprocess/ActiveConstraintSet.h",
+      "before_sha256": "f4fbedcbdc6dfdf4f0f9614dbd1aca94f5e240770b49ea00c3c143528896dae2"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/preprocess/DegeneracyResolver.cpp",
+      "to": "src/search/nra/preprocess/DegeneracyResolver.cpp",
+      "before_sha256": "ff8b67a4b3527e1a0eec1ab840dbf9d550b39461fd55998ed5c33bf404f3cce2"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/preprocess/DegeneracyResolver.h",
+      "to": "src/search/nra/preprocess/DegeneracyResolver.h",
+      "before_sha256": "f0528c7f82a6ad059ce203b87223e3ae14f3b924d497f3f28085fb7761ef09d6"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/preprocess/EquationalConstraintManager.cpp",
+      "to": "src/search/nra/preprocess/EquationalConstraintManager.cpp",
+      "before_sha256": "2afc91ee198445a5d7ace8c52fbbc7f8e0b0be9053a8b59cb699d34cba76e5c3"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/preprocess/EquationalConstraintManager.h",
+      "to": "src/search/nra/preprocess/EquationalConstraintManager.h",
+      "before_sha256": "9819457555123cddb0ed3cc293d6222935a221756801bd48fc1bf44f41a78208"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/preprocess/GcdEngine.cpp",
+      "to": "src/search/nra/preprocess/GcdEngine.cpp",
+      "before_sha256": "7f14809b99f4c3efea9a6d8e2ca44a5a8606cabd50e6e7bc7bf18bf8f34cee74"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/preprocess/GcdEngine.h",
+      "to": "src/search/nra/preprocess/GcdEngine.h",
+      "before_sha256": "57a002cda8cbf52e6fd7afa41b07ad47b53bda82b4e30b4a7407a03b635d871f"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/preprocess/NullificationAnalyzer.cpp",
+      "to": "src/search/nra/preprocess/NullificationAnalyzer.cpp",
+      "before_sha256": "6a0f679e40c2abfafdcc005096b4d1012eaa868dd20eefdc9f053b2c6e6af180"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/preprocess/NullificationAnalyzer.h",
+      "to": "src/search/nra/preprocess/NullificationAnalyzer.h",
+      "before_sha256": "e7ff0af9b1bb04105741c39fec92b3e5a6dc741d0575bb9aa518884443a3abc2"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/preprocess/PolynomialNormalizer.cpp",
+      "to": "src/search/nra/preprocess/PolynomialNormalizer.cpp",
+      "before_sha256": "a6a2e23fba3f0762d8c3dc9f07984cb58d53ae1377248078adfb279815ac9d5e"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/preprocess/PolynomialNormalizer.h",
+      "to": "src/search/nra/preprocess/PolynomialNormalizer.h",
+      "before_sha256": "3956f01066b03442613847278fd31fd5774dd2880bce565c0912bb0647575e17"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/preprocess/SquarefreeEngine.cpp",
+      "to": "src/search/nra/preprocess/SquarefreeEngine.cpp",
+      "before_sha256": "9398cf9bbdbf79a41823219e5cc8d215f3f424977f6cb4cc7baf39b3fd3f62ff"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/preprocess/SquarefreeEngine.h",
+      "to": "src/search/nra/preprocess/SquarefreeEngine.h",
+      "before_sha256": "76a1032252ed93016d70d0658810e7e2c17cf12eda76dcb2117ada856e2a23a1"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/preprocess/SubresultantEngine.cpp",
+      "to": "src/search/nra/preprocess/SubresultantEngine.cpp",
+      "before_sha256": "8356ac6cbda165301a7fd5f8659f0510c907a267918355e840b6a2c8abd51301"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/preprocess/SubresultantEngine.h",
+      "to": "src/search/nra/preprocess/SubresultantEngine.h",
+      "before_sha256": "9444611fcea91d0d637bd450a3aa9cd2526733d484afc43a1b9db6fb9dd782a9"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/proof/CdcacProof.h",
+      "to": "src/search/nra/proof/CdcacProof.h",
+      "before_sha256": "e0147bd10b3cf2bb3c6ab71e3d3f7bc11ed5828ba89603b8ea7f0b16cf2b63e2"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/proof/CdcacProofChecker.cpp",
+      "to": "src/search/nra/proof/CdcacProofChecker.cpp",
+      "before_sha256": "a28d0dab4085de03c78d08e519cf2ea9fc0e39f513794255a75c5624df6541c4"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/proof/CdcacProofChecker.h",
+      "to": "src/search/nra/proof/CdcacProofChecker.h",
+      "before_sha256": "af9177c80ffa9d8818e63017eb3cf7bb89de54257f39bbcf64fd6d678cb99a3d"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/proof/CellCertificateValidator.cpp",
+      "to": "src/search/nra/proof/CellCertificateValidator.cpp",
+      "before_sha256": "61ad54992ac780ac9bec16192150958db55c1eb01430a7b02181629632287b6d"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/proof/CellCertificateValidator.h",
+      "to": "src/search/nra/proof/CellCertificateValidator.h",
+      "before_sha256": "dd93eba5b0ceaa4dc59027830d696ab49799db0a9a05d86b54b9bcedc319c845"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/reasoners/NlaCutGenerator.cpp",
+      "to": "src/search/nra/reasoners/NlaCutGenerator.cpp",
+      "before_sha256": "e8fe9868279a5eed68485c04ade51da71cc76bb712803799a0df98b5b5e29755"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/reasoners/NlaCutGenerator.h",
+      "to": "src/search/nra/reasoners/NlaCutGenerator.h",
+      "before_sha256": "f8c77218e1dad67f734f2e4a91fb6c4e2f931072077d31493b543fea7932628d"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/reasoners/NlaCutTypes.h",
+      "to": "src/search/nra/reasoners/NlaCutTypes.h",
+      "before_sha256": "6295f59840250a9c16f70d336f30bae58fc0bfda447b33f9a5c1c405eee70706"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/reasoners/NlaCutsRunner.cpp",
+      "to": "src/search/nra/reasoners/NlaCutsRunner.cpp",
+      "before_sha256": "a5efd107c749238570c3f047c4a045f574c72bd9ad3818dd06eca790c794e866"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/reasoners/NlaCutsRunner.h",
+      "to": "src/search/nra/reasoners/NlaCutsRunner.h",
+      "before_sha256": "05a644e7c27777689e5bf168cf232ecd5d217e03b47ec52765b8d9d0ad885b11"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/reasoners/NraLocalSearch.cpp",
+      "to": "src/search/nra/reasoners/NraLocalSearch.cpp",
+      "before_sha256": "4a6a26d41d53eb625c67d4c07f9dc9e0cc85836c29ea1a5be277167632dd1f7f"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/reasoners/NraLocalSearch.h",
+      "to": "src/search/nra/reasoners/NraLocalSearch.h",
+      "before_sha256": "fc8231480b73fbe412f333ae7a85522f2e757b02583e7b1214f05a5fa25ea8b3"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/reasoners/SubtropicalSatFinder.cpp",
+      "to": "src/search/nra/reasoners/SubtropicalSatFinder.cpp",
+      "before_sha256": "c3569926abb12e832919a4fadbd38f965ddf1dff41f87c7c450e9f1f9d111c06"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/reasoners/SubtropicalSatFinder.h",
+      "to": "src/search/nra/reasoners/SubtropicalSatFinder.h",
+      "before_sha256": "cc5d803c7a231679c15a38513b55e29328a4177f458b09de7dcf82eb7d3aee77"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/simplex/CertifiedSimplexFacts.h",
+      "to": "src/search/nra/simplex/CertifiedSimplexFacts.h",
+      "before_sha256": "db6d714ef86bb74749145b39c2fb14e3ff17c33850a34b83246de78c2fc8dc25"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/simplex/NraLinearExtractor.cpp",
+      "to": "src/search/nra/simplex/NraLinearExtractor.cpp",
+      "before_sha256": "76f00a96b842143a396446c24521f6c7d4f75756c9fac58d00c4e582d2c5f7d2"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/simplex/NraLinearExtractor.h",
+      "to": "src/search/nra/simplex/NraLinearExtractor.h",
+      "before_sha256": "8fca7546467192dd062dddcaa4d683ee87e405e8c94fe49dd70d1df2e6b8f69b"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/simplex/PolyStructureFacts.cpp",
+      "to": "src/search/nra/simplex/PolyStructureFacts.cpp",
+      "before_sha256": "974fe9589b736121847981965c7056626e36bff87c360a0e0f0253bbcd94b79f"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/simplex/PolyStructureFacts.h",
+      "to": "src/search/nra/simplex/PolyStructureFacts.h",
+      "before_sha256": "3b7d679061e0ef0ec544c3fa014978860f77252b7c55f70f6a7369c55b5e6eee"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/simplex/PolynomialIntervalPruner.cpp",
+      "to": "src/search/nra/simplex/PolynomialIntervalPruner.cpp",
+      "before_sha256": "5c22f0c2313c316610299dffe531a3ea1f0f83876e6a5ecdb00e66cc7d48b336"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/simplex/PolynomialIntervalPruner.h",
+      "to": "src/search/nra/simplex/PolynomialIntervalPruner.h",
+      "before_sha256": "259bd3bf65b74f01986c4f44bf1025f9aa44566d788feef11b57bdbb18258093"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/simplex/SimplexTableauFacts.cpp",
+      "to": "src/search/nra/simplex/SimplexTableauFacts.cpp",
+      "before_sha256": "c5a7b6b9112839d09fff84a90d64dba849024217b87d5192aed907b0f784a73e"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/simplex/SimplexTableauFacts.h",
+      "to": "src/search/nra/simplex/SimplexTableauFacts.h",
+      "before_sha256": "4385d8868782e2f1bb9b022fe83f7d392d4ea2956364ff7f2957a907fbd5577b"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/simplex/VarOrderSelector.cpp",
+      "to": "src/search/nra/simplex/VarOrderSelector.cpp",
+      "before_sha256": "a25855351a74c3b30d6b43a28c4febf86dc66be00a97778ab3706ed5fb82b1b7"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/simplex/VarOrderSelector.h",
+      "to": "src/search/nra/simplex/VarOrderSelector.h",
+      "before_sha256": "4d09723076e20c7cbe05fc817f7885ca9602ef8b989c6d816e9fd90f1ad30508"
+    },
+    {
+      "from": "src/theory/arith/presburger/Presburger.cpp",
+      "to": "src/decision/pa/Presburger.cpp",
+      "before_sha256": "99de7065de13e84ae6fb5713da55a8a65e3430dc6603a01e332817088802ce9e"
+    },
+    {
+      "from": "src/theory/arith/presburger/Presburger.h",
+      "to": "src/decision/pa/Presburger.h",
+      "before_sha256": "49a98e1fc740d36d6d28207672e7c2d99f37c9c9fb6e281f2eae507b8a195ef3"
+    },
+    {
+      "from": "src/theory/array/AniaProfile.h",
+      "to": "src/search/array/AniaProfile.h",
+      "before_sha256": "4a7bec97f740e2b3c9b1d2b608496fa165cd31ec5d493302adf3c49176a8bc81"
+    },
+    {
+      "from": "src/theory/array/ArrayModelCompletion.cpp",
+      "to": "src/search/array/ArrayModelCompletion.cpp",
+      "before_sha256": "f854a327df3818c539fdf5d0188a1fe7bf664a420e10ae9dabda3415d02d5b2b"
+    },
+    {
+      "from": "src/theory/array/ArrayModelCompletion.h",
+      "to": "src/search/array/ArrayModelCompletion.h",
+      "before_sha256": "ad3bfc574c903ef32c4bf2ca93e6555fcdeb1fc6121b5a5c4912e0859db4181b"
+    },
+    {
+      "from": "src/theory/array/ArrayReasoner.cpp",
+      "to": "src/search/array/ArrayReasoner.cpp",
+      "before_sha256": "1113a88a0856e0d487a329ff4d3e7ebf1f105cd0e4f48afb2960a252ded30b42"
+    },
+    {
+      "from": "src/theory/array/ArrayReasoner.h",
+      "to": "src/search/array/ArrayReasoner.h",
+      "before_sha256": "5cdf10e6fcaf141d71fa66ae957291a8e1009e500955456439fc0e762d0831db"
+    },
+    {
+      "from": "src/theory/combination/CareGraph.cpp",
+      "to": "src/search/combination/CareGraph.cpp",
+      "before_sha256": "3e98d0b260f7826ef7deeeccaf5963fc885558ae26217588ba692793ddb1b893"
+    },
+    {
+      "from": "src/theory/combination/CareGraph.h",
+      "to": "src/search/combination/CareGraph.h",
+      "before_sha256": "142e1f2badda290060218c220af3d45bcbc5bcc93506a107605e0ba3a3533886"
+    },
+    {
+      "from": "src/theory/combination/ConflictMinimizer.cpp",
+      "to": "src/search/combination/ConflictMinimizer.cpp",
+      "before_sha256": "b20d14f73796d1174bb21cf830fa8c5b641fb489cc55e8a26ab39164cc60ca8e"
+    },
+    {
+      "from": "src/theory/combination/ConflictMinimizer.h",
+      "to": "src/search/combination/ConflictMinimizer.h",
+      "before_sha256": "b9fb75a0428a8eaf3ad59f7dacce8409158888da7ba1e20504f43c632db02fc2"
+    },
+    {
+      "from": "src/theory/combination/ExplainableRollbackUnionFind.h",
+      "to": "src/search/combination/ExplainableRollbackUnionFind.h",
+      "before_sha256": "ae11406c3b396d16fa1b918458ff95dcca9286f51cde80b224a22be0aa799eb1"
+    },
+    {
+      "from": "src/theory/combination/Purifier.cpp",
+      "to": "src/search/combination/Purifier.cpp",
+      "before_sha256": "344713b81a43ea5ea6d9d9b50630376241ef45a09abd45c73d84abe44e7de7a7"
+    },
+    {
+      "from": "src/theory/combination/Purifier.h",
+      "to": "src/search/combination/Purifier.h",
+      "before_sha256": "751c7443c011d26bfba42dcd7ae6f00c88df35443aaecb629dd5f426c96fa928"
+    },
+    {
+      "from": "src/theory/combination/SharedEqualityManager.cpp",
+      "to": "src/search/combination/SharedEqualityManager.cpp",
+      "before_sha256": "0e8893083a05a87ebdd84abde8c31127edaa9fcb528c4debbc01e1f8d026a298"
+    },
+    {
+      "from": "src/theory/combination/SharedEqualityManager.h",
+      "to": "src/search/combination/SharedEqualityManager.h",
+      "before_sha256": "64e234770d5b46a3c0d0de0fe76dd222b4212734d541a21555b29ce9ac68928d"
+    },
+    {
+      "from": "src/theory/combination/SharedTermRegistry.cpp",
+      "to": "src/search/combination/SharedTermRegistry.cpp",
+      "before_sha256": "bd7096bea9e68290490c34a44536d0df234639a47358bf517a77d60cca7fa4a4"
+    },
+    {
+      "from": "src/theory/combination/SharedTermRegistry.h",
+      "to": "src/search/combination/SharedTermRegistry.h",
+      "before_sha256": "8f48fba168770f30c66e58154a218ee359314d4b2ae3c82a593b7541906d7334"
+    },
+    {
+      "from": "src/theory/core/ActiveLiteralSet.h",
+      "to": "src/contracts/ActiveLiteralSet.h",
+      "before_sha256": "02dd6bf9baf6b19e39c403732586cc0e07a74e5713c13f2f2efd4365a6f0b5f7"
+    },
+    {
+      "from": "src/theory/core/DebugTrace.h",
+      "to": "src/contracts/DebugTrace.h",
+      "before_sha256": "6ed2e5a74ddc1e547a6428dd12e72c9e011669a47497ba7253bf084ce79931a9"
+    },
+    {
+      "from": "src/theory/core/DerivedFact.cpp",
+      "to": "src/search/coordination/DerivedFact.cpp",
+      "before_sha256": "4b2f8128f09f955986c527a68c934854a9e6b39590603145b51e186c025840eb"
+    },
+    {
+      "from": "src/theory/core/DerivedFact.h",
+      "to": "src/search/coordination/DerivedFact.h",
+      "before_sha256": "3353e59f5930b74281a25d0d05fd94ab43c67ad8410e80b6b26d828f3c554d8b"
+    },
+    {
+      "from": "src/theory/core/DynamicAtomRegistrar.h",
+      "to": "src/contracts/DynamicAtomRegistrar.h",
+      "before_sha256": "0d37abfcb2faad18f76510468d96ac8a1551068c4e6c910d97b48fcbd407b131"
+    },
+    {
+      "from": "src/theory/core/LinearFormKey.h",
+      "to": "src/contracts/LinearFormKey.h",
+      "before_sha256": "362c092d25abf77f9bb80aa41f26c848ea0494c1a44df67b4f04d8273406ec0e"
+    },
+    {
+      "from": "src/theory/core/LogicFeatureDetector.cpp",
+      "to": "src/contracts/LogicFeatureDetector.cpp",
+      "before_sha256": "3b8e961ec00fa60950275affe4d9a21e08ccab7334ccab85b60122aa66985644"
+    },
+    {
+      "from": "src/theory/core/LogicFeatureDetector.h",
+      "to": "src/contracts/LogicFeatureDetector.h",
+      "before_sha256": "6f468b1f7eeee624596ec2b782cd2d93c785effe02bf67292462fa6b1a0decce"
+    },
+    {
+      "from": "src/theory/core/TheoryAssignmentView.h",
+      "to": "src/contracts/TheoryAssignmentView.h",
+      "before_sha256": "78dee2a877e6566dd9f2a156fbd1e737b9f32f955bf90fd48d54573eb821d215"
+    },
+    {
+      "from": "src/theory/core/TheoryAtomRegistry.cpp",
+      "to": "src/search/coordination/TheoryAtomRegistry.cpp",
+      "before_sha256": "0646e46f2abc5221c6c17ed03370031ef727e4e8a1638b521a184ab4759b2e76"
+    },
+    {
+      "from": "src/theory/core/TheoryAtomRegistry.h",
+      "to": "src/search/coordination/TheoryAtomRegistry.h",
+      "before_sha256": "fe4835f1d99d482c37e72a7fb076d7f100b750c4384a97c6fede9c3e3fd6a032"
+    },
+    {
+      "from": "src/theory/core/TheoryAtomTypes.h",
+      "to": "src/contracts/TheoryAtomTypes.h",
+      "before_sha256": "32edaabcd2855c447da273a9e85015ed0559b4452e3fab1b02944224e0afd931"
+    },
+    {
+      "from": "src/theory/core/TheoryLemmaDatabase.cpp",
+      "to": "src/search/coordination/TheoryLemmaDatabase.cpp",
+      "before_sha256": "6596e5e9107cf2c44b0069b1c7d44dc8121ba5b66bc16ea2062e24f7533f7389"
+    },
+    {
+      "from": "src/theory/core/TheoryLemmaDatabase.h",
+      "to": "src/search/coordination/TheoryLemmaDatabase.h",
+      "before_sha256": "413032d19f3e56d7205469ef6e025e8f79553895c928d8b7cd4cbb89d4a888a0"
+    },
+    {
+      "from": "src/theory/core/TheoryManager.cpp",
+      "to": "src/search/coordination/TheoryManager.cpp",
+      "before_sha256": "e6b57256fb3c9032c9062534151eb215b50c262112f7c086b8763e22ed15e2bd"
+    },
+    {
+      "from": "src/theory/core/TheoryManager.h",
+      "to": "src/search/coordination/TheoryManager.h",
+      "before_sha256": "8d645a253f64e2637738eb6acaf45029fa32538bb159b4033fae9c6e3532b445"
+    },
+    {
+      "from": "src/theory/core/TheoryPropagatorCallbacks.h",
+      "to": "src/contracts/TheoryPropagatorCallbacks.h",
+      "before_sha256": "15db4c4f34fad4eb41e175791d1a84417df4f8d93a5229bdb27e24cf11bb6b89"
+    },
+    {
+      "from": "src/theory/core/TheorySolver.h",
+      "to": "src/contracts/TheorySolver.h",
+      "before_sha256": "9bd9b67c8abd154cc5aaae7419e015f835067cfe4e9dd3c010ac5736f04bef1e"
+    },
+    {
+      "from": "src/theory/datatype/DtModelValidator.cpp",
+      "to": "src/search/datatype/DtModelValidator.cpp",
+      "before_sha256": "29c0c65a2bc93d617de9144a1c5f40907a0d4b77a40bcf443bef340497da773a"
+    },
+    {
+      "from": "src/theory/datatype/DtModelValidator.h",
+      "to": "src/search/datatype/DtModelValidator.h",
+      "before_sha256": "fcba9b03aa0b331ce6d8093ecc103878f13110c6e82af2b27362d2839ff2b6c8"
+    },
+    {
+      "from": "src/theory/datatype/DtReasoner.cpp",
+      "to": "src/search/datatype/DtReasoner.cpp",
+      "before_sha256": "70ddd0e08381642c5cae2a07858cafeede99fef9aa18bd65eec2fc632a57ce4f"
+    },
+    {
+      "from": "src/theory/datatype/DtReasoner.h",
+      "to": "src/search/datatype/DtReasoner.h",
+      "before_sha256": "24542e6ee6d44dbf8e48bfd8ada16ddf29dec11e5ce255f1352591687c606da5"
+    },
+    {
+      "from": "src/theory/euf/EufSolver.cpp",
+      "to": "src/search/euf/EufSolver.cpp",
+      "before_sha256": "6798e1004cc0d7538fd591579193a5658cd76683ac74c87071122d9910e50872"
+    },
+    {
+      "from": "src/theory/euf/EufSolver.h",
+      "to": "src/search/euf/EufSolver.h",
+      "before_sha256": "6a105c38698bcc869aa7d32ddda2611ec3772a6f23a6ead97c91953d18d3117b"
+    },
+    {
+      "from": "src/theory/euf/EufSolver_array.cpp",
+      "to": "src/search/euf/EufSolver_array.cpp",
+      "before_sha256": "74d14ac206e4990effbd50978fc00b3f47c0ce5e5da70ef2504858fd6ecfdf2e"
+    },
+    {
+      "from": "src/theory/euf/EufSolver_check.cpp",
+      "to": "src/search/euf/EufSolver_check.cpp",
+      "before_sha256": "1a31bbdca692b4acffabec892a91284d029e288e6a6228f4ef9e6634f7f86cc1"
+    },
+    {
+      "from": "src/theory/euf/EufSolver_diagnostics.cpp",
+      "to": "src/search/euf/EufSolver_diagnostics.cpp",
+      "before_sha256": "50816c997c740ca37e218ad40a9d939a509e388a4ea8141244df6a5d36df01c8"
+    },
+    {
+      "from": "src/theory/euf/EufSolver_model.cpp",
+      "to": "src/search/euf/EufSolver_model.cpp",
+      "before_sha256": "9af85fd628e071d123c13bbabd360bac34c94c2356fd18d68068ed05598afef2"
+    },
+    {
+      "from": "src/theory/euf/EufTermManager.cpp",
+      "to": "src/search/euf/EufTermManager.cpp",
+      "before_sha256": "07849abf19b903f3dbf7f6991d186a388e8406749ac7b9176f1f1a09236d80a4"
+    },
+    {
+      "from": "src/theory/euf/EufTermManager.h",
+      "to": "src/search/euf/EufTermManager.h",
+      "before_sha256": "ad8cd6cc869bf3bb76830a39cc3a4ecfcf330ce63ddc9cce4430f9c08d559247"
+    },
+    {
+      "from": "src/theory/euf/EufTypes.h",
+      "to": "src/search/euf/EufTypes.h",
+      "before_sha256": "6fd24da52e2c313bef058642b015634391832920170e32c32bb9f7e783d189a0"
+    },
+    {
+      "from": "src/theory/euf/IncrementalEGraph.cpp",
+      "to": "src/search/euf/IncrementalEGraph.cpp",
+      "before_sha256": "867bc2572ae53a9e941aceb116399350cfe5a00c77a265b7d207ebe7f4f51393"
+    },
+    {
+      "from": "src/theory/euf/IncrementalEGraph.h",
+      "to": "src/search/euf/IncrementalEGraph.h",
+      "before_sha256": "727e7375d3c39eadf72e1698561ec33e843cd73bcdd9c18434ea50a00f7435d4"
+    },
+    {
+      "from": "src/theory/euf/ProofForest.cpp",
+      "to": "src/search/euf/ProofForest.cpp",
+      "before_sha256": "0ee5f0d42e45afd2f8d5d12ba5752f20ccc4e881dc50876277ad57ae199906a0"
+    },
+    {
+      "from": "src/theory/euf/ProofForest.h",
+      "to": "src/search/euf/ProofForest.h",
+      "before_sha256": "7d464dcbd414660c307250d657b80f33373827f79468bb7c377ada982749df84"
+    },
+    {
+      "from": "src/theory/euf/RollbackSignatureTable.cpp",
+      "to": "src/search/euf/RollbackSignatureTable.cpp",
+      "before_sha256": "3904fba8f01881690ed7fd6a4d7586e9435204f4c98b7408c4d231e092e4514b"
+    },
+    {
+      "from": "src/theory/euf/RollbackSignatureTable.h",
+      "to": "src/search/euf/RollbackSignatureTable.h",
+      "before_sha256": "548b68026452f41f0fe297973aa5f8a559c84304347125d0ad20721cc6fb6ff2"
+    },
+    {
+      "from": "src/theory/euf/RollbackUnionFind.cpp",
+      "to": "src/search/euf/RollbackUnionFind.cpp",
+      "before_sha256": "ad6945c8fc7a6c4888800dfaf470b6328b2fe1dfd246d91ef3fdd4c2ec5dc016"
+    },
+    {
+      "from": "src/theory/euf/RollbackUnionFind.h",
+      "to": "src/search/euf/RollbackUnionFind.h",
+      "before_sha256": "f9c8542b5866919a0cb563203f3be0fd169dfa5ef1a35557ac65a85e18e032a9"
+    },
+    {
+      "from": "src/theory/separation/SymbolicHeap.cpp",
+      "to": "src/decision/sl/SymbolicHeap.cpp",
+      "before_sha256": "0fe90c935022be70cddac4a31c7ad3750fc7d202f5cd966b1f8bae60b7672100"
+    },
+    {
+      "from": "src/util/CaseStats.cpp",
+      "to": "src/base/CaseStats.cpp",
+      "before_sha256": "565130058609dd6433c55ee4419cf914d2515d6d3a9d4fd160687bf1f1baf187"
+    },
+    {
+      "from": "src/util/CaseStats.h",
+      "to": "src/base/CaseStats.h",
+      "before_sha256": "f6d146895b2df8fcec780cb42ab48d5e8e1fcc31770d9ee10423d6964d898044"
+    },
+    {
+      "from": "src/util/EnvParam.cpp",
+      "to": "src/base/EnvParam.cpp",
+      "before_sha256": "2f9778180222320d0de7f4f08957c69cca1b9d36825c7a2b00573ad8ded5e32a"
+    },
+    {
+      "from": "src/util/EnvParam.h",
+      "to": "src/base/EnvParam.h",
+      "before_sha256": "1a3190ee672b825d0969675d4ccfecc1ca2487778d21d1ebff75c29a5b635c50"
+    },
+    {
+      "from": "src/util/MpqUtils.h",
+      "to": "src/base/MpqUtils.h",
+      "before_sha256": "654f10c4083eb78d1ff20c66e5deb427d7562410ff1ab2ac09912a7eca35613e"
+    },
+    {
+      "from": "src/util/RealAlgebraicOps.h",
+      "to": "src/base/RealAlgebraicOps.h",
+      "before_sha256": "17f8aba46b5adb677db01f019a3df32f704f14246dd17c73ca791318b0ea6ddc"
+    },
+    {
+      "from": "src/util/RealValue.cpp",
+      "to": "src/base/RealValue.cpp",
+      "before_sha256": "72b61a75425b1e8c68c2f43ed77004b64c691de57daa5e0990fd8b38d56c1d45"
+    },
+    {
+      "from": "src/util/RealValue.h",
+      "to": "src/base/RealValue.h",
+      "before_sha256": "37f2d477febebf143983f3dbdc6f8b6fb24dd053950c7b6802a34af05d697220"
+    },
+    {
+      "from": "src/util/SmallVector.h",
+      "to": "src/base/SmallVector.h",
+      "before_sha256": "e92ec9ba9439997a9c697365be84038001d6f5385ba2058811821fdd7c1dd7c3"
+    },
+    {
+      "from": "src/util/SolveClock.cpp",
+      "to": "src/base/SolveClock.cpp",
+      "before_sha256": "0686607a17dafc59c6e6f5d6501e439acf0086c145027d285e2d3ab751a295b0"
+    },
+    {
+      "from": "src/util/SolveClock.h",
+      "to": "src/base/SolveClock.h",
+      "before_sha256": "5336146054c194c7a5a301758f2136071bdd2045feb80a60384749f3ba10c773"
+    },
+    {
+      "from": "src/util/Statistics.cpp",
+      "to": "src/base/Statistics.cpp",
+      "before_sha256": "651e52ed06713e8312bbab340ddebe40590d52ba3195ceba6957179bf6dd2563"
+    },
+    {
+      "from": "src/util/Statistics.h",
+      "to": "src/base/Statistics.h",
+      "before_sha256": "244fa114fe73c890639efb77ef31b49dbfdda1d618b9e0e4880b3e8c8e767f5b"
+    },
+    {
+      "from": "src/theory/arith/README.md",
+      "to": "src/search/arith/README.md",
+      "before_sha256": "7ed2d06d1be921a52f338ff9f5c688ffbaf355189f66056fc9a4f36b0df8686f"
+    },
+    {
+      "from": "src/theory/arith/logics/nra/lazard/LAZARD.md",
+      "to": "src/search/nra/lazard/LAZARD.md",
+      "before_sha256": "f37af88d8002996f5128c32718584c5cb1e7e4302b767215890ebf4085711412"
+    },
+    {
+      "from": "src/ir/ir.h",
+      "to": "src/ir/NativeTerms.h",
+      "before_sha256": "f8e44b6e14b84dafd18f91f5d5d042461243d07d49128f5f6434d6b6baec492a"
+    },
+    {
+      "from": "src/ir/CoreIteLowerer.h",
+      "to": "src/frontend/preprocess/IteLowerer.h",
+      "before_sha256": "d6421227bc23fa700f192b70fc46bd58b1e833e6f4e0f3e0ce893080c2c78fc5"
+    },
+    {
+      "from": "src/ir/CoreIteLowerer.cpp",
+      "to": "src/frontend/preprocess/IteLowerer.cpp",
+      "before_sha256": "5c6e21ded1e4d2c0c1c2f7a151e190d1bffda95b20e3776fe53d4750985fe106"
+    },
+    {
+      "from": "src/decision/pa/NativeInput.cpp",
+      "to": "src/ir/NativeTerms.cpp",
+      "before_sha256": "595598e880775e204095d886c087526cb81f040f4563dd9f7d507216ae5e216f"
+    },
+    {
+      "from": "src/decision/pa/NativeInput.h",
+      "to": "src/ir/NativeTerms.h",
+      "before_sha256": "3fbb2e6f84bb6f2a1caf201cb471b64d73e070718009813e0b7138adc06d5cdb"
+    }
+  ]
+}

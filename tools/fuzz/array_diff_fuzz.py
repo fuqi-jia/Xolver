@@ -4,18 +4,18 @@
 # DISAGREES with z3/cvc5 (unknown is allowed = sound-incomplete).
 import random, subprocess, sys, tempfile, os
 
-import os
 NLC = os.environ.get("XOLVER", "build/bin/xolver")
 Z3 = "/usr/local/bin/z3"
 CVC5 = "/usr/bin/cvc5"
 
 def run(cmd, f, timeout=10):
     try:
-        if cmd is NLC:
+        if cmd == NLC:
             out = subprocess.run([cmd, "solve", f], capture_output=True, text=True, timeout=timeout)
         else:
             out = subprocess.run([cmd, f], capture_output=True, text=True, timeout=timeout)
-        for line in out.stdout.splitlines():
+        if out.returncode != 0: return "error"
+        for line in reversed(out.stdout.splitlines()):
             t = line.strip()
             if t in ("sat", "unsat", "unknown"):
                 return t
@@ -86,7 +86,7 @@ def main():
     count = int(sys.argv[2]) if len(sys.argv) > 2 else 200
     logics = ["QF_ALIA", "QF_ALRA", "QF_AUFLIA", "QF_AUFLRA"]
     rng = random.Random(seed)
-    unsound = []; agree = 0; unk = 0; skipped = 0
+    unsound = []; agree = 0; unk = 0; skipped = 0; errors = 0
     for n in range(count):
         logic = rng.choice(logics)
         smt = gen(logic, rng)
@@ -94,10 +94,11 @@ def main():
             fp.write(smt); path = fp.name
         nlc = run(NLC, path); z = run(Z3, path); c = run(CVC5, path)
         os.unlink(path)
+        if nlc == "error": errors += 1
         # oracle: prefer agreement of z3 and cvc5
         if z in ("error","timeout") or c in ("error","timeout"):
             skipped += 1; continue
-        if z != c:
+        if z != c or z not in ("sat", "unsat"):
             skipped += 1; continue   # oracles disagree (shouldn't), skip
         oracle = z
         if nlc == "unknown":
@@ -109,10 +110,11 @@ def main():
                 unsound.append((logic, nlc, oracle, smt))
         else:
             skipped += 1
-    print(f"agree={agree} unknown={unk} skipped={skipped} UNSOUND={len(unsound)}")
+    print(f"agree={agree} unknown={unk} skipped={skipped} errors={errors} UNSOUND={len(unsound)}")
     for (logic, nlc, oracle, smt) in unsound[:8]:
         print(f"\n===== UNSOUND ({logic}): xolver={nlc} oracle={oracle} =====")
         print(smt)
-    sys.exit(1 if unsound else 0)
+    sys.exit(1 if unsound or errors else (0 if agree + unk else 2))
 
-main()
+if __name__ == '__main__':
+    main()

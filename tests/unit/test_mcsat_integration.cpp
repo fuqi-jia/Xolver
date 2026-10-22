@@ -4,13 +4,12 @@
 // asserted atoms at once, backtrack across decisions, and confirm the
 // soundness floor never produces UNSAT from heuristic failure.
 
-#include "experimental/mcsat/McsatSolver.h"
-#include "theory/arith/logics/nia/mcsat/NiaMcsatEngine.h"
-#include "theory/arith/logics/nra/engine/NlsatEngine.h"
-#include "theory/arith/kernel/poly/PolynomialKernel.h"
-#include "theory/core/TheoryAtomTypes.h"
-#include "theory/core/TheoryPropagatorCallbacks.h"
-#include "util/RealValue.h"
+#include "search/experimental/mcsat/McsatSolver.h"
+#include "search/nra/engine/NlsatEngine.h"
+#include "algebra/poly/PolynomialKernel.h"
+#include "contracts/TheoryAtomTypes.h"
+#include "contracts/TheoryPropagatorCallbacks.h"
+#include "base/RealValue.h"
 
 #include <doctest/doctest.h>
 #include <memory>
@@ -141,96 +140,6 @@ TEST_CASE("McsatSolver+NRA: x = 3 AND x + y = 4 solves (candidate set covers it)
     // Engine picks x=0 first — x=0 survives the y-free atom but fails
     // the x=3 atom immediately. Tries x=1, fails. ... x=3, succeeds.
     // Then y=1 satisfies both, found.
-    CHECK(r.kind == TheoryCheckResult::Kind::Consistent);
-}
-
-TEST_CASE("McsatSolver+NIA: 0 <= x <= 5 finds x=0") {
-    auto kernel = createPolynomialKernel();
-    VarId x = kernel->getOrCreateVar("x");
-    PolyId xp = kernel->mkVar(x);
-
-    auto engine = std::make_unique<nia_mcsat::NiaMcsatEngine>();
-    engine->setKernel(kernel.get());
-
-    McsatSolver solver;
-    solver.setEngine(std::move(engine), TheoryId::NIA);
-
-    solver.assertLit(polyAtom(xp, Relation::Geq, RealValue::fromInt(0), 1, TheoryId::NIA),
-                     true, 1, SatLit{1, true});
-    solver.assertLit(polyAtom(xp, Relation::Leq, RealValue::fromInt(5), 2, TheoryId::NIA),
-                     true, 1, SatLit{2, true});
-
-    StubLemmaStorage db;
-    auto r = solver.check(db);
-    CHECK(r.kind == TheoryCheckResult::Kind::Consistent);
-}
-
-TEST_CASE("McsatSolver+NIA: x >= 1 AND x <= -1 returns Unknown, never UNSAT") {
-    auto kernel = createPolynomialKernel();
-    VarId x = kernel->getOrCreateVar("x");
-    PolyId xp = kernel->mkVar(x);
-
-    auto engine = std::make_unique<nia_mcsat::NiaMcsatEngine>();
-    engine->setKernel(kernel.get());
-
-    McsatSolver solver;
-    solver.setEngine(std::move(engine), TheoryId::NIA);
-
-    solver.assertLit(polyAtom(xp, Relation::Geq, RealValue::fromInt(1), 1, TheoryId::NIA),
-                     true, 1, SatLit{1, true});
-    solver.assertLit(polyAtom(xp, Relation::Leq, RealValue::fromInt(-1), 2, TheoryId::NIA),
-                     true, 1, SatLit{2, true});
-
-    StubLemmaStorage db;
-    auto r = solver.check(db);
-    CHECK(r.kind == TheoryCheckResult::Kind::Unknown);
-}
-
-TEST_CASE("McsatSolver+NIA: x + y = 4 AND x - y = 2 → Consistent (DFS-driven)") {
-    auto kernel = createPolynomialKernel();
-    VarId x = kernel->getOrCreateVar("x");
-    VarId y = kernel->getOrCreateVar("y");
-    PolyId xPlusY = kernel->add(kernel->mkVar(x), kernel->mkVar(y));
-    PolyId xMinusY = kernel->sub(kernel->mkVar(x), kernel->mkVar(y));
-
-    auto engine = std::make_unique<nia_mcsat::NiaMcsatEngine>();
-    engine->setKernel(kernel.get());
-
-    McsatSolver solver;
-    solver.setEngine(std::move(engine), TheoryId::NIA);
-
-    solver.assertLit(polyAtom(xPlusY, Relation::Eq, RealValue::fromInt(4), 1, TheoryId::NIA),
-                     true, 1, SatLit{1, true});
-    solver.assertLit(polyAtom(xMinusY, Relation::Eq, RealValue::fromInt(2), 2, TheoryId::NIA),
-                     true, 1, SatLit{2, true});
-
-    StubLemmaStorage db;
-    auto r = solver.check(db);
-    // Limitation-(a) fix mirrored into NIA: integer DFS finds x=3, y=1
-    // and caches the full assignment. Sound — every atom validated.
-    CHECK(r.kind == TheoryCheckResult::Kind::Consistent);
-}
-
-TEST_CASE("McsatSolver+NIA: x = 3 AND x + y = 4 solves (candidate set covers it)") {
-    auto kernel = createPolynomialKernel();
-    VarId x = kernel->getOrCreateVar("x");
-    VarId y = kernel->getOrCreateVar("y");
-    PolyId xp = kernel->mkVar(x);
-    PolyId xPlusY = kernel->add(kernel->mkVar(x), kernel->mkVar(y));
-
-    auto engine = std::make_unique<nia_mcsat::NiaMcsatEngine>();
-    engine->setKernel(kernel.get());
-
-    McsatSolver solver;
-    solver.setEngine(std::move(engine), TheoryId::NIA);
-
-    solver.assertLit(polyAtom(xp, Relation::Eq, RealValue::fromInt(3), 1, TheoryId::NIA),
-                     true, 1, SatLit{1, true});
-    solver.assertLit(polyAtom(xPlusY, Relation::Eq, RealValue::fromInt(4), 2, TheoryId::NIA),
-                     true, 1, SatLit{2, true});
-
-    StubLemmaStorage db;
-    auto r = solver.check(db);
     CHECK(r.kind == TheoryCheckResult::Kind::Consistent);
 }
 

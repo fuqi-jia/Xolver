@@ -1,6 +1,6 @@
 // End-to-end P0→P1→P2a integration test for FarkasOrSolver.
 //
-// Build a CoreIr fragment that mirrors the Stroeder p21258 structure:
+// Build a NativeTerms fragment that mirrors the Stroeder p21258 structure:
 //   bounded globals: x ∈ [-1, 1], y ∈ [-1, 1]   (tightened from [-4,4] for test)
 //   one Or block with 2 branches:
 //     branch 0: λ_0, λ_1 ≥ 0
@@ -11,10 +11,10 @@
 //
 // Expected: solveCsp finds B = (0, 0), choice 0 → ray (0, 1), CT ≥ 2.
 
-#include "expr/ir.h"
-#include "theory/arith/logics/nia/farkas/FarkasOrDetector.h"
-#include "theory/arith/logics/nia/farkas/FarkasOrSolver.h"
-#include "theory/arith/logics/nia/farkas/FarkasOrTypes.h"
+#include "ir/NativeTerms.h"
+#include "search/nia/farkas/FarkasOrDetector.h"
+#include "search/nia/farkas/FarkasOrSolver.h"
+#include "search/nia/farkas/FarkasOrTypes.h"
 
 #include <doctest/doctest.h>
 
@@ -27,27 +27,33 @@ using namespace xolver::farkas;
 namespace {
 
 struct IrB {
-    CoreIr ir;
+    NativeTerms ir;
     SortId intSort;
     SortId realSort;
+    SortId boolSort;
     IrB() {
         intSort = ir.allocateSortId();
         realSort = ir.allocateSortId();
+        ir.registerSort(intSort, SortKind::Int);
+        ir.registerSort(realSort, SortKind::Real);
+        boolSort = ir.allocateSortId();
+        ir.registerSort(boolSort, SortKind::Bool);
         ir.setIntSortId(intSort);
         ir.setRealSortId(realSort);
     }
     ExprId v(std::string name, SortId s) {
-        CoreExpr e; e.kind = Kind::Variable; e.sort = s;
+        TermExpr e; e.kind = Kind::Variable; e.sort = s;
         e.payload = Payload(std::move(name));
         return ir.add(std::move(e));
     }
     ExprId c(int64_t n) {
-        CoreExpr e; e.kind = Kind::ConstReal; e.sort = realSort;
+        TermExpr e; e.kind = Kind::ConstReal; e.sort = realSort;
         e.payload = Payload(std::to_string(n));
         return ir.add(std::move(e));
     }
     ExprId mk(Kind k, std::vector<ExprId> ch) {
-        CoreExpr e; e.kind = k; e.sort = realSort;
+        TermExpr e; e.kind = k; e.sort = realSort;
+        if (e.isAtom() || k == Kind::And || k == Kind::Or || k == Kind::Not) e.sort = boolSort;
         for (auto x : ch) e.children.push_back(x);
         return ir.add(std::move(e));
     }

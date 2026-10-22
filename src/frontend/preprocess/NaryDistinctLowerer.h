@@ -1,6 +1,6 @@
 #pragma once
 
-#include "expr/ir.h"
+#include "ir/NativeTerms.h"
 #include <unordered_map>
 
 namespace xolver {
@@ -16,12 +16,12 @@ namespace xolver {
  */
 class NaryDistinctLowerer {
 public:
-    explicit NaryDistinctLowerer(CoreIr& ir);
+    explicit NaryDistinctLowerer(NativeTerms& ir);
 
     // Run lowering phase. Returns true if all n-ary distinct were lowered.
     bool run();
 
-    // Commit lowered assertions back to CoreIr.
+    // Commit lowered assertions back to NativeTerms.
     void commit();
 
 private:
@@ -31,7 +31,7 @@ private:
     ExprId mkAnd(ExprId a, ExprId b);
     ExprId mkTrue();
 
-    CoreIr& ir_;
+    NativeTerms& ir_;
     SortId boolSortId_;
     std::unordered_map<ExprId, ExprId> memo_;
     std::vector<std::pair<ScopeLevel, ExprId>> loweredAssertions_;

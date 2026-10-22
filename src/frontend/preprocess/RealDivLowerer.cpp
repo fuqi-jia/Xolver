@@ -2,12 +2,12 @@
 
 namespace xolver {
 
-RealDivLowerer::RealDivLowerer(CoreIr& ir) : ir_(ir) {}
+RealDivLowerer::RealDivLowerer(NativeTerms& ir) : ir_(ir) {}
 
 ExprId RealDivLowerer::rebuildLike(ExprId original,
                                    const std::vector<ExprId>& newChildren) {
     const auto& node = ir_.get(original);
-    CoreExpr e;
+    TermExpr e;
     e.kind = node.kind;
     e.sort = node.sort;
     e.payload = node.payload;
@@ -16,7 +16,7 @@ ExprId RealDivLowerer::rebuildLike(ExprId original,
 }
 
 ExprId RealDivLowerer::mkConstRealZero() {
-    CoreExpr e;
+    TermExpr e;
     e.kind = Kind::ConstReal;
     e.sort = ir_.realSortId();
     e.payload = Payload(std::string("0"));
@@ -24,7 +24,7 @@ ExprId RealDivLowerer::mkConstRealZero() {
 }
 
 ExprId RealDivLowerer::mkEq(ExprId a, ExprId b) {
-    CoreExpr e;
+    TermExpr e;
     e.kind = Kind::Eq;
     e.sort = ir_.boolSortId();
     e.children.push_back(a);
@@ -33,7 +33,7 @@ ExprId RealDivLowerer::mkEq(ExprId a, ExprId b) {
 }
 
 ExprId RealDivLowerer::mkNot(ExprId a) {
-    CoreExpr e;
+    TermExpr e;
     e.kind = Kind::Not;
     e.sort = ir_.boolSortId();
     e.children.push_back(a);
@@ -41,7 +41,7 @@ ExprId RealDivLowerer::mkNot(ExprId a) {
 }
 
 ExprId RealDivLowerer::mkImplies(ExprId a, ExprId b) {
-    CoreExpr e;
+    TermExpr e;
     e.kind = Kind::Implies;
     e.sort = ir_.boolSortId();
     e.children.push_back(a);
@@ -50,7 +50,7 @@ ExprId RealDivLowerer::mkImplies(ExprId a, ExprId b) {
 }
 
 ExprId RealDivLowerer::mkMul(ExprId a, ExprId b) {
-    CoreExpr e;
+    TermExpr e;
     e.kind = Kind::Mul;
     e.sort = ir_.realSortId();
     e.children.push_back(a);

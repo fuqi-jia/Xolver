@@ -1,6 +1,6 @@
 #pragma once
 
-#include "expr/ir.h"
+#include "ir/NativeTerms.h"
 #include <unordered_map>
 #include <vector>
 
@@ -19,12 +19,12 @@ namespace xolver {
  */
 class BoolSubtermPurifier {
 public:
-    explicit BoolSubtermPurifier(CoreIr& ir);
+    explicit BoolSubtermPurifier(NativeTerms& ir);
 
     // Run purification. Returns true if any change happened.
     bool run();
 
-    // Commit generated equivalence constraints to CoreIr.
+    // Commit generated equivalence constraints to NativeTerms.
     void commit();
 
 private:
@@ -42,9 +42,10 @@ private:
     ExprId mkNot(ExprId a);
     ExprId mkDistinct(ExprId a, ExprId b);
 
-    CoreIr& ir_;
+    NativeTerms& ir_;
     SortId boolSortId_;
-    std::unordered_map<ExprId, ExprId> memo_;
+    // A shared node can occur both as a formula and as a function argument.
+    std::unordered_map<uint64_t, ExprId> memo_;
     std::vector<ExprId> generatedAssertions_;
     bool changed_ = false;
 };

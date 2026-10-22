@@ -1,4 +1,3 @@
-// Soundness gate for the generic FormulaRewriter (XOLVER_PP_REWRITE).
 //
 // A wrong rewrite rule is instant unsoundness that ModelValidator cannot catch
 // when it yields a wrong UNSAT. So every rule is verified against a brute-force
@@ -6,7 +5,7 @@
 // evaluates identically to the original under EVERY assignment in a small grid.
 #include <doctest/doctest.h>
 #include "frontend/preprocess/FormulaRewriter.h"
-#include "expr/ir.h"
+#include "ir/NativeTerms.h"
 #include <gmpxx.h>
 #include <random>
 #include <variant>
@@ -25,9 +24,9 @@ using namespace xolver;
 
 namespace {
 
-// ---- a tiny CoreIr builder + evaluator used only by the oracle ----
+// ---- a tiny NativeTerms builder + evaluator used only by the oracle ----
 struct Harness {
-    CoreIr ir;
+    NativeTerms ir;
     SortId boolS, intS, realS;
 
     Harness() {
@@ -37,7 +36,7 @@ struct Harness {
     }
 
     ExprId mk(Kind k, SortId s, std::vector<ExprId> ch, Payload p = Payload()) {
-        CoreExpr e; e.kind = k; e.sort = s;
+        TermExpr e; e.kind = k; e.sort = s;
         e.children = SmallVector<ExprId,4>(ch.begin(), ch.end());
         e.payload = std::move(p);
         return ir.add(std::move(e));
@@ -54,8 +53,8 @@ using Asg = std::map<std::string, Val>;
 
 // Evaluate a (total) expression. Returns nullopt only for shapes the oracle's
 // generator never produces (so a nullopt in practice signals a test bug).
-std::optional<Val> eval(const CoreIr& ir, ExprId id, const Asg& asg) {
-    const CoreExpr& e = ir.get(id);
+std::optional<Val> eval(const NativeTerms& ir, ExprId id, const Asg& asg) {
+    const TermExpr& e = ir.get(id);
     auto asBool = [](const Val& v){ return std::get<bool>(v); };
     auto asNum  = [](const Val& v){ return std::get<mpq_class>(v); };
     switch (e.kind) {
@@ -303,7 +302,6 @@ TEST_CASE("rewriter: random equivalence oracle") {
 // uninterpreted-function applications (which the rewriter rebuilds and whose
 // numeric args it folds), or array select/store/const-array (rebuilt, with
 // numeric index/value args folded) plus eq/distinct reflexivity over those
-// sorts. This widened oracle covers them so XOLVER_PP_REWRITE is trustworthy
 // on QF_*RA / UF / array logics (prerequisite for default-on promotion).
 //
 // A self-contained typed value + evaluator (kept separate from the bool/int
@@ -315,17 +313,17 @@ TEST_CASE("rewriter: random equivalence oracle") {
 namespace {
 
 struct WHarness {
-    CoreIr ir;
+    NativeTerms ir;
     SortId boolS, intS, realS, arrS;  // arrS = (Array Int Int)
     WHarness() {
         boolS = ir.allocateSortId(); ir.registerSort(boolS, SortKind::Bool); ir.setBoolSortId(boolS);
         intS  = ir.allocateSortId(); ir.registerSort(intS,  SortKind::Int);  ir.setIntSortId(intS);
         realS = ir.allocateSortId(); ir.registerSort(realS, SortKind::Real); ir.setRealSortId(realS);
-        arrS  = ir.allocateSortId(); ir.registerSort(arrS,  SortKind::Array);
+        arrS  = ir.allocateSortId();
         ir.registerArraySort(arrS, intS, intS);
     }
     ExprId mk(Kind k, SortId s, std::vector<ExprId> ch, Payload p = Payload()) {
-        CoreExpr e; e.kind = k; e.sort = s;
+        TermExpr e; e.kind = k; e.sort = s;
         e.children = SmallVector<ExprId,4>(ch.begin(), ch.end());
         e.payload = std::move(p);
         return ir.add(std::move(e));
@@ -375,8 +373,8 @@ bool wArraysEqual(const WV& a, const WV& b) {
     return true;
 }
 
-std::optional<WV> weval(const CoreIr& ir, ExprId id, const WAsg& asg, UFModel& uf) {
-    const CoreExpr& e = ir.get(id);
+std::optional<WV> weval(const NativeTerms& ir, ExprId id, const WAsg& asg, UFModel& uf) {
+    const TermExpr& e = ir.get(id);
     auto num = [](mpq_class v){ WV w; w.k=WV::N; w.n=std::move(v); return w; };
     auto bl  = [](bool v){ WV w; w.k=WV::B; w.b=v; return w; };
     switch (e.kind) {
@@ -540,15 +538,12 @@ TEST_CASE("rewriter: random equivalence oracle over REALS + UF + ARRAYS") {
 } // namespace
 
 // End-to-end guard: with the flag ON, rewriting deep EUF f-chains must not
-// corrupt nodes. (Regression: rewriteRec held a reference into CoreIr's exprs_
+// corrupt nodes. (Regression: rewriteRec held a reference into NativeTerms's exprs_
 // across a child-rewrite that called ir_.add(), reallocating the vector; the
 // dangling read produced a garbage node and a wrong SAT at exactly the chain
 // depth where the realloc boundary fell — euf_055.)
-TEST_CASE("rewriter: deep EUF chains stay unsat under XOLVER_PP_REWRITE") {
-    struct EnvGuard {
-        EnvGuard()  { setenv("XOLVER_PP_REWRITE", "1", 1); }
-        ~EnvGuard() { unsetenv("XOLVER_PP_REWRITE"); }
-    } guard;
+TEST_CASE("rewriter: deep EUF chains stay unsat under the production path") {
+
 
     for (int depth = 1; depth <= 9; ++depth) {
         std::string fx = "x", fy = "y";

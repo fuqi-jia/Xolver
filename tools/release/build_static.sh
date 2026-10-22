@@ -6,7 +6,7 @@
 # Can be uploaded to any Linux server regardless of glibc version.
 #
 # Usage:
-#   ./tools/build_static.sh [build_dir]
+#   ./tools/release/build_static.sh [build_dir]
 #
 # Output:
 #   build_dir/bin/xolver   (statically linked, ~45MB)
@@ -14,8 +14,10 @@
 
 set -euo pipefail
 
-BUILD_DIR="${1:-build_static}"
-SRC_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+SRC_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+BUILD_DIR="${1:-${SRC_DIR}/build}"
+if [[ "$BUILD_DIR" != /* ]]; then BUILD_DIR="${SRC_DIR}/${BUILD_DIR}"; fi
+BUILD_DIR="$(realpath -m "$BUILD_DIR")"
 
 echo "=== Xolver Static Build ==="
 echo "Source:  ${SRC_DIR}"
@@ -30,28 +32,30 @@ if [[ ! -f "third_party/cadical/configure" ]]; then
     git submodule update --init --recursive
 fi
 
-# Clean build
-rm -rf "${BUILD_DIR}"
+# Incrementally reconfigure the project's build directory. Never delete a path
+# supplied by the caller, and serialize against other writers of this build.
 mkdir -p "${BUILD_DIR}"
-cd "${BUILD_DIR}"
+exec 9>"${BUILD_DIR}/.writer.lock"
+flock 9
 
 # Configure with static linking
 echo "[2/4] Configuring (Release, static, CaseStats enabled)..."
-cmake .. \
+cmake -S "${SRC_DIR}" -B "${BUILD_DIR}" \
     -DCMAKE_BUILD_TYPE=Release \
     -DXOLVER_STATIC_BUILD=ON \
     -DXOLVER_ENABLE_CASESTATS=ON \
-    -DXOLVER_BUILD_TESTS=OFF
+    -DXOLVER_BUILD_TESTS=OFF \
+    -DXOLVER_BUILD_TOOLS=ON
 
 # Build
 # WSL-safe: default to 2 jobs (unbounded -j$(nproc) has OOM-crashed WSL).
 # Override on a beefy build server with BUILD_JOBS=$(nproc) or similar.
 echo "[3/4] Building (-j${BUILD_JOBS:-2})..."
-cmake --build . -j"${BUILD_JOBS:-2}"
+cmake --build "${BUILD_DIR}" --target xolver-cli -j"${BUILD_JOBS:-2}"
 
 # Verify
 echo "[4/4] Verifying static binary..."
-BIN="${SRC_DIR}/${BUILD_DIR}/bin/xolver"
+BIN="${BUILD_DIR}/bin/xolver"
 if [[ ! -f "${BIN}" ]]; then
     echo "ERROR: Binary not found at ${BIN}"
     exit 1
@@ -74,4 +78,4 @@ echo "=== Build complete ==="
 echo "Binary: ${BIN}"
 echo ""
 echo "To package for servers:"
-echo "  python3 tools/package_dist.py --build-dir ${BUILD_DIR} --output xolver-static.tar.gz"
+echo "  python3 tools/release/package_dist.py --build-dir ${BUILD_DIR} --output xolver-static.tar.gz"

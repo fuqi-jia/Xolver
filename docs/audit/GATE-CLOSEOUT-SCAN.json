@@ -1,0 +1,30 @@
+{
+  "date": "2026-10-23",
+  "tracked_active_files_scanned": 820,
+  "retired_named_controls_checked": 166,
+  "retired_name_references": [],
+  "retained_preprocessor_conditions": {
+    "NDEBUG": 28,
+    "XOLVER_ENABLE_CASESTATS": 30,
+    "XOLVER_ENABLE_PROOFS": 55,
+    "XOLVER_HAS_LIBPOLY": 56,
+    "XOLVER_LIA_PROFILE": 10,
+    "XOLVER_LRA_PROFILE": 23,
+    "_WIN32": 1
+  },
+  "runtime_controls": 161,
+  "read_sites": 237,
+  "classification_counts": {
+    "diagnostic": 88,
+    "resource": 66,
+    "strategy": 7
+  },
+  "known_remaining_legacy_gates": 0,
+  "scope_limits": "Finite source review; correctness/input/resource guards retained. Historical docs and third-party sources excluded from retirement scan.",
+  "submodule_main": "ac3efd64c1b6ac88fd00803f8edf33a44e499194",
+  "closeout_experiment": "7da3c959bb36",
+  "closeout_run": "2d66d951cae6",
+  "validation": "closeout build and 833 relevant units passed; binaries byte-identical to batch12 r4; prior strict model-check timeout remains unresolved",
+  "format_only": "tests/tools/test_presburger.py: trailing blank line removed, Python AST verified unchanged",
+  "source_overlay_sha256": "3bb8804ebcb1057aa369b28585b5d3461701fe23930880df08a9a6e4430a20e3"
+}

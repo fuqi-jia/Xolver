@@ -1,6 +1,6 @@
 #pragma once
 
-#include "expr/ir.h"
+#include "ir/NativeTerms.h"
 #include <gmpxx.h>
 #include <unordered_map>
 #include <unordered_set>
@@ -11,12 +11,12 @@
 namespace xolver {
 
 /**
- * FormulaRewriter — a DAG-safe, memoized, fixpoint simplifier over CoreIr.
+ * FormulaRewriter — a DAG-safe, memoized, fixpoint simplifier over NativeTerms.
  *
  * This is the generic Xolver formula rewriter (plan.md §2, invariant 6). It is
  * the system-level "preprocessing / canonicalization" pass that the per-theory
  * stacks rely on. It is gated behind the XOLVER_PP_REWRITE env flag and is a
- * pure IR-to-IR transform: it only APPENDS CoreExpr nodes (CoreIr::add never
+ * pure IR-to-IR transform: it only APPENDS TermExpr nodes (NativeTerms::add never
  * mutates), so the originalAssertions_ snapshot taken before it runs keeps
  * referencing the original formula for ModelValidator.
  *
@@ -40,7 +40,7 @@ class FormulaRewriter {
 public:
     enum class Verdict { Normal, Unsat };
 
-    FormulaRewriter(CoreIr& ir, SortId boolSort);
+    FormulaRewriter(NativeTerms& ir, SortId boolSort);
 
     // Rewrite every current assertion. Returns Unsat iff some top-level
     // assertion simplifies to the boolean constant false (the conjunction of
@@ -92,7 +92,7 @@ private:
     // Negation of an already-normal-form expr (hash-consed).
     ExprId negate(ExprId e);
 
-    CoreIr& ir_;
+    NativeTerms& ir_;
     SortId boolSort_;
     SortId intSort_;
     SortId realSort_;
@@ -127,7 +127,6 @@ private:
     bool isProvablyNonNegative(ExprId e) const;
     bool tryGetLowerBound(ExprId e, mpz_class& out) const;
     // Returns true iff `v` has both lower and upper bounds equal to `out`.
-    bool tryGetTightValue(const std::string& v, mpz_class& out) const;
 };
 
 } // namespace xolver

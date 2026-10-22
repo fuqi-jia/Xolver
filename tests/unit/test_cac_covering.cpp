@@ -4,7 +4,7 @@
 
 #include <doctest/doctest.h>
 #include <gmpxx.h>
-#include "theory/arith/logics/nra/cac/Covering.h"
+#include "search/nra/cac/Covering.h"
 
 using namespace xolver;
 

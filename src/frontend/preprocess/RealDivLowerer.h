@@ -1,6 +1,6 @@
 #pragma once
 
-#include "expr/ir.h"
+#include "ir/NativeTerms.h"
 #include <vector>
 #include <unordered_map>
 
@@ -37,7 +37,7 @@ namespace xolver {
  */
 class RealDivLowerer {
 public:
-    explicit RealDivLowerer(CoreIr& ir);
+    explicit RealDivLowerer(NativeTerms& ir);
 
     bool run();
     void commit();
@@ -45,7 +45,7 @@ public:
     const std::vector<ExprId>& generatedAssertions() const { return generatedAssertions_; }
 
 private:
-    CoreIr& ir_;
+    NativeTerms& ir_;
     std::unordered_map<ExprId, ExprId> memo_;
     std::vector<ExprId> generatedAssertions_;
     bool changed_ = false;

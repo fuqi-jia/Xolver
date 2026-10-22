@@ -1,61 +1,28 @@
-# ---------------------------------------------------------------------------
-# Xolver core library
-# ---------------------------------------------------------------------------
-
-file(GLOB_RECURSE XOLVER_SOURCES CONFIGURE_DEPENDS
-    "api/*.cpp"
-    "parser/*.cpp"
-    "expr/*.cpp"
-    "frontend/*.cpp"
-    "frontend/**/*.cpp"
-    "sat/*.cpp"
-    "theory/*.cpp"
-    "theory/**/*.cpp"
-    "proof/*.cpp"
-    "util/*.cpp"
-    "experimental/*.cpp"
-    "experimental/**/*.cpp"
-)
-
-file(GLOB_RECURSE XOLVER_HEADERS CONFIGURE_DEPENDS
-    "${CMAKE_SOURCE_DIR}/include/xolver/*.h"
-    "api/*.h"
-    "parser/*.h"
-    "expr/*.h"
-    "frontend/*.h"
-    "frontend/**/*.h"
-    "sat/*.h"
-    "theory/*.h"
-    "theory/**/*.h"
-    "proof/*.h"
-    "util/*.h"
-    "experimental/*.h"
-    "experimental/**/*.h"
-)
-
-add_library(xolver_core STATIC
-    ${XOLVER_SOURCES}
-    ${XOLVER_HEADERS}
-)
-
-set_target_properties(xolver_core PROPERTIES
-    POSITION_INDEPENDENT_CODE ON
-)
-
-if(DEFINED XOLVER_CXX_FLAGS)
-    target_compile_options(xolver_core PRIVATE ${XOLVER_CXX_FLAGS})
+# Source ownership is explicit; configuration rejects undeclared sources and
+# reverse dependencies before C++ compilation. No recursive source globbing.
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+execute_process(
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/governance/architecture.py"
+    RESULT_VARIABLE XOLVER_ARCHITECTURE_STATUS
+    OUTPUT_VARIABLE XOLVER_ARCHITECTURE_REPORT)
+if(NOT XOLVER_ARCHITECTURE_STATUS EQUAL 0)
+    message(FATAL_ERROR "${XOLVER_ARCHITECTURE_REPORT}")
+endif()
+include(sources.cmake)
+execute_process(
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/governance/control_catalog.py"
+    RESULT_VARIABLE XOLVER_CONTROL_STATUS)
+if(NOT XOLVER_CONTROL_STATUS EQUAL 0)
+    message(FATAL_ERROR "Typed runtime control declarations are inconsistent")
 endif()
 
-target_include_directories(xolver_core
-    PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
-        $<INSTALL_INTERFACE:include>
-    PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${GMP_INCLUDE_DIRS}
-        ${MPFR_INCLUDE_DIRS}
-        ${LIBPOLY_INCLUDE_DIRS}
-)
+add_library(xolver_build_options INTERFACE)
+target_compile_options(xolver_build_options INTERFACE ${XOLVER_CXX_FLAGS})
+target_include_directories(xolver_build_options INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    ${GMP_INCLUDE_DIRS} ${MPFR_INCLUDE_DIRS} ${LIBPOLY_INCLUDE_DIRS})
 
 # ---------------------------------------------------------------------------
 # CaDiCaL: required SAT backend
@@ -65,56 +32,87 @@ if(NOT TARGET cadical)
                         "Run: git submodule update --init --recursive && "
                         "cd third_party/cadical && ./configure && make")
 endif()
-target_link_libraries(xolver_core PUBLIC cadical)
-target_compile_definitions(xolver_core PUBLIC XOLVER_HAS_CADICAL)
+target_compile_definitions(xolver_build_options INTERFACE XOLVER_HAS_CADICAL)
 
 # ---------------------------------------------------------------------------
 # libpoly: link the static target if available
 # ---------------------------------------------------------------------------
 if(TARGET static_polyxx)
-    target_link_libraries(xolver_core PUBLIC static_polyxx)
-    target_compile_definitions(xolver_core PUBLIC XOLVER_HAS_LIBPOLY)
+    set(XOLVER_POLY_TARGET static_polyxx)
+    target_compile_definitions(xolver_build_options INTERFACE XOLVER_HAS_LIBPOLY)
 elseif(TARGET polyxx)
-    target_link_libraries(xolver_core PUBLIC polyxx)
-    target_compile_definitions(xolver_core PUBLIC XOLVER_HAS_LIBPOLY)
+    set(XOLVER_POLY_TARGET polyxx)
+    target_compile_definitions(xolver_build_options INTERFACE XOLVER_HAS_LIBPOLY)
 elseif(TARGET poly_static)
-    target_link_libraries(xolver_core PUBLIC poly_static)
-    target_compile_definitions(xolver_core PUBLIC XOLVER_HAS_LIBPOLY)
+    set(XOLVER_POLY_TARGET poly_static)
+    target_compile_definitions(xolver_build_options INTERFACE XOLVER_HAS_LIBPOLY)
 elseif(TARGET poly)
-    target_link_libraries(xolver_core PUBLIC poly)
-    target_compile_definitions(xolver_core PUBLIC XOLVER_HAS_LIBPOLY)
+    set(XOLVER_POLY_TARGET poly)
+    target_compile_definitions(xolver_build_options INTERFACE XOLVER_HAS_LIBPOLY)
 endif()
 
-target_link_libraries(xolver_core
-    PUBLIC
-        somtparser
-        ${GMP_LIBRARIES}
-        ${MPFR_LIBRARIES}
-    PRIVATE
+target_link_libraries(xolver_build_options
+    INTERFACE
         nlohmann_json::nlohmann_json
 )
 
 if(XOLVER_ENABLE_PROOFS)
-    target_compile_definitions(xolver_core PUBLIC XOLVER_ENABLE_PROOFS)
-endif()
-
-if(XOLVER_ENABLE_TRACING)
-    target_compile_definitions(xolver_core PUBLIC XOLVER_ENABLE_TRACING)
+    target_compile_definitions(xolver_build_options INTERFACE XOLVER_ENABLE_PROOFS)
 endif()
 
 if(XOLVER_ENABLE_LRA_PROFILE)
-    target_compile_definitions(xolver_core PUBLIC XOLVER_LRA_PROFILE)
+    target_compile_definitions(xolver_build_options INTERFACE XOLVER_LRA_PROFILE)
 endif()
 
 if(XOLVER_ENABLE_LIA_PROFILE)
-    target_compile_definitions(xolver_core PUBLIC XOLVER_LIA_PROFILE)
-endif()
-
-# Incremental replay for LiaSolver (disable for baseline comparison)
-if(NOT DEFINED XOLVER_LIA_INCREMENTAL OR XOLVER_LIA_INCREMENTAL)
-    target_compile_definitions(xolver_core PUBLIC XOLVER_LIA_INCREMENTAL)
+    target_compile_definitions(xolver_build_options INTERFACE XOLVER_LIA_PROFILE)
 endif()
 
 if(XOLVER_ENABLE_CASESTATS)
-    target_compile_definitions(xolver_core PUBLIC XOLVER_ENABLE_CASESTATS)
+    target_compile_definitions(xolver_build_options INTERFACE XOLVER_ENABLE_CASESTATS)
 endif()
+
+# Separate archives can be built/linked without the runtime and search engines.
+# Their dependency direction is checked by architecture.py at configure and CI.
+foreach(layer base ir contracts algebra evidence decision frontend search runtime)
+    string(TOUPPER "${layer}" upper)
+    add_library(xolver_${layer} OBJECT ${XOLVER_${upper}_SOURCES})
+    set_target_properties(xolver_${layer} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    target_link_libraries(xolver_${layer} PRIVATE xolver_build_options)
+    if(layer MATCHES "^(algebra|search|runtime)$")
+        target_link_libraries(xolver_${layer} PRIVATE ${XOLVER_POLY_TARGET})
+    endif()
+    if(layer MATCHES "^(frontend|decision|runtime)$")
+        target_link_libraries(xolver_${layer} PRIVATE somtparser)
+    endif()
+    if(layer MATCHES "^(search|runtime)$")
+        target_link_libraries(xolver_${layer} PRIVATE cadical)
+    endif()
+    if(layer STREQUAL "ir")
+        # Native node storage consumes only the public IR headers.
+        # No frontend/parser headers are visible to this layer.
+        target_include_directories(xolver_ir PRIVATE
+            $<TARGET_PROPERTY:somtparser,INTERFACE_INCLUDE_DIRECTORIES>)
+    endif()
+endforeach()
+
+add_library(xolver_core STATIC
+    $<TARGET_OBJECTS:xolver_base> $<TARGET_OBJECTS:xolver_ir>
+    $<TARGET_OBJECTS:xolver_contracts> $<TARGET_OBJECTS:xolver_algebra>
+    $<TARGET_OBJECTS:xolver_evidence> $<TARGET_OBJECTS:xolver_decision>
+    $<TARGET_OBJECTS:xolver_frontend> $<TARGET_OBJECTS:xolver_search>
+    $<TARGET_OBJECTS:xolver_runtime>)
+target_link_libraries(xolver_core PUBLIC xolver_build_options
+    somtparser cadical ${XOLVER_POLY_TARGET} ${MPFR_LIBRARIES} ${GMP_LIBRARIES})
+set_target_properties(xolver_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+# Evidence-only archive: no search, parser, SAT, portfolio or decision objects.
+add_library(xolver_checkers STATIC
+    $<TARGET_OBJECTS:xolver_base> $<TARGET_OBJECTS:xolver_ir>
+    $<TARGET_OBJECTS:xolver_contracts> $<TARGET_OBJECTS:xolver_evidence>)
+target_link_libraries(xolver_checkers PUBLIC somtparser_ir gmpxx ${MPFR_LIBRARIES} ${GMP_LIBRARIES})
+target_include_directories(xolver_checkers PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    ${GMP_INCLUDE_DIRS} ${MPFR_INCLUDE_DIRS})
+set_target_properties(xolver_checkers PROPERTIES POSITION_INDEPENDENT_CODE ON)

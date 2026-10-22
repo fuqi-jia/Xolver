@@ -8,9 +8,41 @@
 // not crash. We assert the cross-backend minimal contract.
 
 #include <doctest/doctest.h>
-#include "sat/SatSolver.h"
+#include "contracts/SatSolver.h"
+#include <stdexcept>
 
 using namespace xolver;
+
+TEST_CASE("SAT: expired local deadline consumes assumptions and permits reuse") {
+    auto s = createSatSolver();
+    const auto p = s->newVar();
+    s->addClause({SatLit::positive(p)});
+    s->setDeadline(std::chrono::steady_clock::now());
+    CHECK((s->solve({SatLit::negative(p)}) == SatSolver::SolveResult::Unknown));
+    s->setDeadline(std::chrono::steady_clock::time_point::max());
+    CHECK((s->solve() == SatSolver::SolveResult::Sat));
+    CHECK(s->value(p));
+}
+
+TEST_CASE("SAT: local deadline interrupts an internal pigeonhole search") {
+    auto s = createSatSolver();
+    constexpr int pigeons = 16, holes = 15;
+    SatVar vars[pigeons][holes];
+    for (auto& row : vars) {
+        std::vector<SatLit> clause;
+        for (auto& v : row) { v = s->newVar(); clause.push_back(SatLit::positive(v)); }
+        s->addClause(clause);
+    }
+    for (int h = 0; h < holes; ++h)
+        for (int a = 0; a < pigeons; ++a)
+            for (int b = a + 1; b < pigeons; ++b)
+                s->addClause({SatLit::negative(vars[a][h]), SatLit::negative(vars[b][h])});
+    const auto start = std::chrono::steady_clock::now();
+    s->setDeadline(start + std::chrono::milliseconds(20));
+    const auto result = s->solve();
+    CHECK((result != SatSolver::SolveResult::Sat));
+    CHECK((std::chrono::steady_clock::now() - start < std::chrono::seconds(5)));
+}
 
 TEST_CASE("SAT: empty solver returns sat") {
     auto s = createSatSolver();
@@ -141,15 +173,12 @@ TEST_CASE("SAT: many variables one large clause") {
     CHECK(any_true);
 }
 
-TEST_CASE("SAT: addObservedVar requires ExternalPropagator setup" * doctest::skip()) {
-    // Skipped: CaDiCaL aborts when addObservedVar is called without an
-    // associated ExternalPropagator. This is expected backend behavior, not
-    // a bug — but means we can't test the API standalone here. Real coverage
-    // happens via CadicalTheoryPropagator integration tests.
+TEST_CASE("SAT: addObservedVar requires ExternalPropagator setup") {
+    // Invalid setup must fail at our boundary, without aborting the process.
     auto s = createSatSolver();
     REQUIRE(s);
     auto v = s->newVar();
-    s->addObservedVar(v);
+    CHECK_THROWS_AS(s->addObservedVar(v), std::logic_error);
     s->addClause({SatLit::positive(v)});
     auto r = s->solve();
     CHECK(static_cast<int>(r) == static_cast<int>(SatSolver::SolveResult::Sat));

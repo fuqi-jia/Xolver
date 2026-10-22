@@ -1,0 +1,19 @@
+experiment: xolver-overlay-architecture-r9
+description: Verify atomic source replacement and reject changed obsolete source.
+environment:
+  host: panda1
+  workdir: /pub/data/jiafq/xolver
+protocol:
+  inputs: {list: [overlay]}
+  timeout: 5m
+  memory: 1G
+  parallelism: 1
+trials:
+  - {name: tooling}
+run:
+  cmd: >-
+    python3 -c 'import json, os, unittest, sys; from pathlib import Path; root=Path("validation/overlay-architecture-r9"); root.mkdir(parents=True,exist_ok=True); tests=unittest.defaultTestLoader.discover("tests/tools",pattern="test_source_overlay.py"); result=unittest.TextTestRunner(stream=(root/"tests.log").open("w"),verbosity=2).run(tests); metrics={"tests":result.testsRun,"failures":len(result.failures),"errors":len(result.errors)}; (root/"metrics.json").write_text(json.dumps(metrics)+chr(10)); Path(os.environ["EOS_METRICS_FILE"]).write_text(json.dumps(metrics)+chr(10)); sys.exit(not result.wasSuccessful())'
+measurements:
+  from: metrics.json
+  primary: tests
+  checks: ["tests == 2", "failures == 0", "errors == 0"]

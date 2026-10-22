@@ -1,12 +1,10 @@
 #pragma once
 
-#include "expr/ir.h"
-#include "theory/arith/logics/nia/reasoners/ModEqConstFact.h"
+#include "ir/NativeTerms.h"
 #include <gmpxx.h>
 #include <optional>
 #include <string>
 #include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 namespace xolver {
@@ -43,13 +41,13 @@ struct DivModOrigin {
  */
 class IntDivModLowerer {
 public:
-    explicit IntDivModLowerer(CoreIr& ir);
+    explicit IntDivModLowerer(NativeTerms& ir);
 
     // Run lowering phase. Returns true if all div/mod were lowered successfully.
     // Does NOT commit assertions — caller must validate requirement and then call commit().
     bool run();
 
-    // Commit lowered assertions and side constraints to CoreIr.
+    // Commit lowered assertions and side constraints to NativeTerms.
     // Must only be called after run() succeeds and routing validation passes.
     void commit();
 
@@ -57,11 +55,6 @@ public:
     const std::string& unsupportedReason() const { return requirement_.reason; }
     const ArithmeticRequirement& requirement() const { return requirement_; }
     const std::vector<DivModOrigin>& origins() const { return origins_; }
-
-    // Track A Phase 1.1: assertions matched as `(= (mod x y) c)` and
-    // intercepted before lowering. The native ModEqConstReasoner consumes
-    // these directly. Empty when XOLVER_NIA_NATIVE_MODEQCONST is OFF.
-    const ModEqConstFactList& modEqConstFacts() const { return modEqConstFacts_; }
 
 private:
     ExprId lowerRec(ExprId e, ScopeLevel level);
@@ -78,34 +71,9 @@ private:
 
     void emitConstDivisorConstraints(const DivModDef& def, const mpz_class& k, ScopeLevel level);
     void emitVariableDivisorConstraints(const DivModDef& def, ScopeLevel level);
-    void emitVariableDivisorConstraintsPositiveDivisor(const DivModDef& def, ScopeLevel level);
     void emitUndefZeroConstraints(const DivModDef& def, ScopeLevel level);
 
-    // Track C1 Phase 2 helper: scan all top-level assertions for syntactic
-    // strict-positive lower bounds on integer variables (`(> v 0)`,
-    // `(>= v 1)`, `(> v c)` for c>=0, `(>= v c)` for c>=1) and record them in
-    // `positiveVars_`. Conservative: only top-level conjuncts; no SAT-level
-    // reasoning. Called once at the start of run().
-    void scanPositiveBounds(const std::vector<std::pair<ScopeLevel, ExprId>>& asserts);
-
-    // Track C1 Phase 2 helper: structural strict-positive check on a divisor
-    // expression `b` given `positiveVars_`. Returns true iff `b > 0` follows
-    // from the asserted positive bounds, by treating `b` as a product /
-    // power of positive subterms (or a positive constant). Conservative: a
-    // non-matching shape returns false (caller falls through to the
-    // EUF-needing undef path).
-    bool divisorIsProvenStrictlyPositive(ExprId b) const;
-
     void updateRequirement(bool needsNonlinear, bool needsEUF);
-
-    // Track A Phase 1.1/1.3: pattern-match `(= (mod x y) c)` shape (or
-    // symmetric) on the ORIGINAL pre-lowering assertion; if matched AND
-    // XOLVER_NIA_NATIVE_MODEQCONST is set, register a ModEqConstFact using
-    // the LOWERED assertion ExprId as the atom (since atomization sees the
-    // post-lowering form and only that ExprId is in TheoryAtomRegistry).
-    void tryInterceptModEqConst(ExprId originalAssertion,
-                                ExprId loweredAssertion,
-                                ScopeLevel level);
 
     // Check if term contains nonlinear subterms (Mul of two non-constants, Pow, etc.)
     bool containsNonlinear(ExprId e) const;
@@ -134,7 +102,7 @@ private:
     ExprId mkUndefModApp(ExprId a, ExprId b);
 
 private:
-    CoreIr& ir_;
+    NativeTerms& ir_;
     SortId boolSortId_;
     SortId intSortId_;
     std::unordered_map<ExprId, ExprId> memo_;
@@ -170,13 +138,10 @@ private:
     std::vector<GeneratedAssertion> generatedAssertions_;
     std::vector<DivModOrigin> origins_;
     ArithmeticRequirement requirement_;
-    std::unordered_set<std::string> positiveVars_;  // Track C1 Phase 2
     ExprId undefDivSym_ = NullExpr;
     ExprId undefModSym_ = NullExpr;
     std::vector<std::pair<ScopeLevel, ExprId>> loweredAssertions_;
 
-    // Track A Phase 1.1 — native ModEqConst fact storage.
-    ModEqConstFactList modEqConstFacts_;
 };
 
 } // namespace xolver

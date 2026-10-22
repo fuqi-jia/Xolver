@@ -1,6 +1,6 @@
 #include "doctest/doctest.h"
-#include "theory/arith/kernel/linear/BoundAxiomGenerator.h"
-#include "expr/types.h"
+#include "search/linear/BoundAxiomGenerator.h"
+#include "ir/types.h"
 #include <gmpxx.h>
 #include <vector>
 

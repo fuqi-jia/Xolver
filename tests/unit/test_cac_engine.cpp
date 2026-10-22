@@ -7,10 +7,10 @@
 #include <gmpxx.h>
 #include <algorithm>
 #include <vector>
-#include "theory/arith/logics/nra/cac/CacEngine.h"
+#include "search/nra/cac/CacEngine.h"
 #ifdef XOLVER_HAS_LIBPOLY
-#include "theory/arith/logics/nra/backend/LibpolyBackend.h"
-#include "theory/arith/kernel/poly/PolynomialKernel.h"
+#include "search/nra/backend/LibpolyBackend.h"
+#include "algebra/poly/PolynomialKernel.h"
 #endif
 
 using namespace xolver;
@@ -50,6 +50,19 @@ TEST_CASE("CAC engine: 1-var SAT  x^2 < 4 and x > 0") {
     CHECK(eng.solve().status == CacStatus::Sat);
 }
 
+TEST_CASE("CAC engine: each solve has its own search budget") {
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend backend(kernel.get());
+    const VarId x = kernel->getOrCreateVar("x");
+    RationalPolynomial positive; positive.addVar(x, 1, 1); positive.normalize();
+    CacEngine::Config cfg;
+    cfg.maxNodes = 1;
+    CacEngine engine(&backend, kernel.get(), {x}, {{positive, Relation::Gt}}, cfg);
+    REQUIRE(engine.solve().status == CacStatus::Sat);
+    CHECK(engine.solve().status == CacStatus::Sat);
+    CHECK(engine.lastUnknown().empty());
+}
+
 TEST_CASE("CAC engine: 2-var UNSAT  x^2+y^2 < 1 and x > 2") {
     auto kernel = createPolynomialKernel();
     LibpolyBackend backend(kernel.get());
@@ -78,7 +91,6 @@ TEST_CASE("CAC engine: 2-var SAT  x^2+y^2 < 4 and x > 0") {
 
 // ---- UNSAT core / origins tracking (task P5 foundation) --------------------
 // CacResult::unsatCore lists the constraint indices that DELINEATED the gap-free
-// covering. Used to minimize the learned conflict (XOLVER_NRA_CAC_MIN_CONFLICT)
 // and, under combination, to carry the interface-(dis)eq lits that participated.
 // Contract: on UNSAT it is non-empty, a subset of valid indices, and the
 // sub-conjunction over those indices is itself UNSAT (so the lemma stays sound).
@@ -127,7 +139,6 @@ TEST_CASE("CAC engine: unsatCore non-empty + in-range on a 2-var UNSAT") {
 }
 
 // ---- Early infeasibility probe (Track 1 #39) -------------------------------
-// XOLVER_NRA_CAC_EARLY_INFEAS / Config::earlyInfeas: at non-leaf levels, signAt
 // every constraint whose mainLevel ≤ current level; a definite-nonzero violation
 // excludes the cell on var without recursing. Soundness: SAT unchanged (the
 // probe only PRUNES); UNSAT verdict matches the baseline; signAt = Zero
@@ -142,7 +153,7 @@ TEST_CASE("CAC engine: early-infeas preserves UNSAT verdict + core (2-var)") {
     RationalPolynomial circ; circ.addVar(x, 2, 1); circ.addVar(y, 2, 1);
     circ = circ + K(-1); circ.normalize();                                   // x^2+y^2-1
     RationalPolynomial xg; xg.addVar(x, 1, 1); xg = xg + K(-2); xg.normalize(); // x-2
-    CacEngine::Config cfg; cfg.earlyInfeas = true;
+    CacEngine::Config cfg;
     CacEngine eng(&backend, kernel.get(), {x, y},
                   {{circ, Relation::Lt}, {xg, Relation::Gt}}, cfg);
     CacResult r = eng.solve();
@@ -161,7 +172,7 @@ TEST_CASE("CAC engine: early-infeas preserves SAT verdict (2-var)") {
     RationalPolynomial circ; circ.addVar(x, 2, 1); circ.addVar(y, 2, 1);
     circ = circ + K(-4); circ.normalize();                                   // x^2+y^2-4
     RationalPolynomial xg; xg.addVar(x, 1, 1); xg.normalize();               // x
-    CacEngine::Config cfg; cfg.earlyInfeas = true;
+    CacEngine::Config cfg;
     CacEngine eng(&backend, kernel.get(), {x, y},
                   {{circ, Relation::Lt}, {xg, Relation::Gt}}, cfg);
     CHECK(eng.solve().status == CacStatus::Sat);   // SAT pruning-invariant
@@ -177,7 +188,7 @@ TEST_CASE("CAC engine: early-infeas + var-independent unsat constraint (whole-ax
     // bounds (or both, depending on sample), without ever recursing into y.
     RationalPolynomial xg; xg.addVar(x, 1, 1); xg = xg + K(-5); xg.normalize(); // x-5
     RationalPolynomial xl; xl.addVar(x, 1, 1); xl = xl + K(1);  xl.normalize(); // x+1
-    CacEngine::Config cfg; cfg.earlyInfeas = true;
+    CacEngine::Config cfg;
     CacEngine eng(&backend, kernel.get(), {x, y},
                   {{xg, Relation::Gt}, {xl, Relation::Lt}}, cfg);
     CacResult r = eng.solve();
@@ -186,7 +197,6 @@ TEST_CASE("CAC engine: early-infeas + var-independent unsat constraint (whole-ax
 }
 
 // ---- Interval pruning (Track 2 #40) ---------------------------------------
-// XOLVER_NRA_CAC_PRUNE_INTERVALS / Config::pruneIntervals: after the level
 // loop completes a gap-free covering, drop cells whose intervals are subsumed
 // by another surviving cell BEFORE flattening into charPolys/origins. Sound:
 // the surviving cells still cover ℝ (the loop already proved gap-freeness;
@@ -200,7 +210,7 @@ TEST_CASE("CAC engine: prune-intervals preserves UNSAT verdict + core") {
     VarId x = kernel->getOrCreateVar("x");
     RationalPolynomial a; a.addVar(x, 1, 1); a.normalize();                  // x
     RationalPolynomial b; b.addVar(x, 1, 1); b = b + K(-1); b.normalize();   // x - 1
-    CacEngine::Config cfg; cfg.pruneIntervals = true;
+    CacEngine::Config cfg;
     CacEngine eng(&backend, kernel.get(), {x},
                   {{a, Relation::Lt}, {b, Relation::Gt}}, cfg);              // x<0 ∧ x>1
     CacResult r = eng.solve();
@@ -216,7 +226,7 @@ TEST_CASE("CAC engine: prune-intervals preserves SAT verdict") {
     RationalPolynomial circ; circ.addVar(x, 2, 1); circ.addVar(y, 2, 1);
     circ = circ + K(-4); circ.normalize();                                   // x^2+y^2-4
     RationalPolynomial xg; xg.addVar(x, 1, 1); xg.normalize();               // x
-    CacEngine::Config cfg; cfg.pruneIntervals = true;
+    CacEngine::Config cfg;
     CacEngine eng(&backend, kernel.get(), {x, y},
                   {{circ, Relation::Lt}, {xg, Relation::Gt}}, cfg);
     CHECK(eng.solve().status == CacStatus::Sat);
@@ -230,7 +240,7 @@ TEST_CASE("CAC engine: prune-intervals + early-infeas compose (2-var UNSAT)") {
     RationalPolynomial circ; circ.addVar(x, 2, 1); circ.addVar(y, 2, 1);
     circ = circ + K(-1); circ.normalize();                                   // x^2+y^2-1
     RationalPolynomial xg; xg.addVar(x, 1, 1); xg = xg + K(-2); xg.normalize(); // x-2
-    CacEngine::Config cfg; cfg.pruneIntervals = true; cfg.earlyInfeas = true;
+    CacEngine::Config cfg;
     CacEngine eng(&backend, kernel.get(), {x, y},
                   {{circ, Relation::Lt}, {xg, Relation::Gt}}, cfg);
     CacResult r = eng.solve();
@@ -273,7 +283,7 @@ TEST_CASE("CAC engine: inloop-prune preserves 1-var UNSAT (x^2<0)") {
     LibpolyBackend backend(kernel.get());
     VarId x = kernel->getOrCreateVar("x");
     RationalPolynomial xx; xx.addVar(x, 2, 1); xx.normalize();
-    CacEngine::Config cfg; cfg.inloopPrune = true;
+    CacEngine::Config cfg;
     CacEngine eng(&backend, kernel.get(), {x}, {{xx, Relation::Lt}}, cfg);
     CHECK(eng.solve().status == CacStatus::Unsat);
 }
@@ -286,7 +296,7 @@ TEST_CASE("CAC engine: inloop-prune preserves 2-var SAT") {
     RationalPolynomial circ; circ.addVar(x, 2, 1); circ.addVar(y, 2, 1);
     circ = circ + K(-4); circ.normalize();
     RationalPolynomial xg; xg.addVar(x, 1, 1); xg.normalize();
-    CacEngine::Config cfg; cfg.inloopPrune = true;
+    CacEngine::Config cfg;
     CacEngine eng(&backend, kernel.get(), {x, y},
                   {{circ, Relation::Lt}, {xg, Relation::Gt}}, cfg);
     CHECK(eng.solve().status == CacStatus::Sat);
@@ -300,7 +310,7 @@ TEST_CASE("CAC engine: inloop-prune preserves 2-var UNSAT + core") {
     RationalPolynomial circ; circ.addVar(x, 2, 1); circ.addVar(y, 2, 1);
     circ = circ + K(-1); circ.normalize();
     RationalPolynomial xg; xg.addVar(x, 1, 1); xg = xg + K(-2); xg.normalize();
-    CacEngine::Config cfg; cfg.inloopPrune = true;
+    CacEngine::Config cfg;
     CacEngine eng(&backend, kernel.get(), {x, y},
                   {{circ, Relation::Lt}, {xg, Relation::Gt}}, cfg);
     CacResult r = eng.solve();
@@ -317,7 +327,6 @@ TEST_CASE("CAC engine: inloop-prune composes with prune+early-infeas") {
     circ = circ + K(-1); circ.normalize();
     RationalPolynomial xg; xg.addVar(x, 1, 1); xg = xg + K(-2); xg.normalize();
     CacEngine::Config cfg;
-    cfg.inloopPrune = true; cfg.pruneIntervals = true; cfg.earlyInfeas = true;
     CacEngine eng(&backend, kernel.get(), {x, y},
                   {{circ, Relation::Lt}, {xg, Relation::Gt}}, cfg);
     CacResult r = eng.solve();

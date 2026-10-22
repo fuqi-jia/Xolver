@@ -1,0 +1,18 @@
+experiment: xolver-native-terms-r8-scheduling
+description: Diagnose whether complete nonlinear projection blocks Boolean search on a partial assignment.
+environment:
+  host: panda1
+  workdir: /pub/data/jiafq/xolver
+protocol:
+  inputs: {list: [nra_155_unsat_hycomp_ballcount_197var]}
+  timeout: 3m
+  memory: 4G
+  parallelism: 1
+trials:
+  - name: partial-projection-declined
+run:
+  cmd: XOLVER_NRA_CAC_ALL_EFFORTS=0 XOLVER_NRA_CDCAC_MAX_VARS=1 python3 tools/remote/profile_case.py --binary validation/native-terms-r8/xolver --case tests/regression/nra/{input}.smt2 --output validation/native-terms-r8/scheduling-ablation --timeout 45
+measurements:
+  from: metrics.json
+  primary: samples
+  checks: ["profile_completed == 1"]

@@ -7,7 +7,7 @@
 // the output, so these golden strings are the in-tree guard for that contract.
 
 #include <doctest/doctest.h>
-#include "proof/AletheProof.h"
+#include "evidence/AletheProof.h"
 
 using namespace xolver::proof;
 

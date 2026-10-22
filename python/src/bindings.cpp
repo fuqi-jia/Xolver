@@ -12,7 +12,7 @@
 #include <pybind11/operators.h>
 
 #include <xolver/xolver.h>
-#include "expr/ir.h"  // xolver::Kind — the mkOp opcode enum
+#include "ir/NativeTerms.h"  // xolver::Kind — the mkOp opcode enum
 
 #include <iostream>
 #include <sstream>
@@ -121,6 +121,10 @@ PYBIND11_MODULE(_xolver, m) {
         .value("Unsat", Result::Unsat)
         .value("Unknown", Result::Unknown);
     m.def("result_to_string", &xolver::toString, py::arg("result"));
+    py::enum_<Solver::ModelValidation>(m, "ModelValidation")
+        .value("Satisfied", Solver::ModelValidation::Satisfied)
+        .value("Violated", Solver::ModelValidation::Violated)
+        .value("Indeterminate", Solver::ModelValidation::Indeterminate);
 
     // ----- Kind (mkOp opcode set) ---------------------------------------
     // Curated subset of expr/ir.h Kind needed to build formulas; values come
@@ -141,6 +145,7 @@ PYBIND11_MODULE(_xolver, m) {
     py::class_<Sort>(m, "Sort", "Opaque handle for a solver sort.")
         .def(py::init<>())
         .def("id", &Sort::id)
+        .def("context", &Sort::context)
         .def("is_null", &Sort::isNull)
         .def(py::self == py::self)
         .def(py::self != py::self)
@@ -153,6 +158,7 @@ PYBIND11_MODULE(_xolver, m) {
     py::class_<Term>(m, "Term", "Opaque handle for a solver term.")
         .def(py::init<>())
         .def("id", &Term::id)
+        .def("context", &Term::context)
         .def("is_null", &Term::isNull)
         .def(py::self == py::self)
         .def(py::self != py::self)
@@ -230,6 +236,8 @@ PYBIND11_MODULE(_xolver, m) {
         .def("set_logic",
              [](Solver& s, const std::string& logic) { s.setLogic(logic); },
              py::arg("logic"))
+        .def("set_runtime_parameter", &Solver::setRuntimeParameter)
+        .def("clear_runtime_parameter", &Solver::clearRuntimeParameter)
         .def("set_option",
              [](Solver& s, const std::string& key, const py::object& v) {
                  // bool BEFORE int — Python bool is a subclass of int.
@@ -271,7 +279,10 @@ PYBIND11_MODULE(_xolver, m) {
              [](Solver& s, Sort srt, const std::string& name) { return s.mkVar(srt, name); },
              py::arg("sort"), py::arg("name"))
         .def("mk_bool", &Solver::mkBool, py::arg("value"))
-        .def("mk_int", &Solver::mkInt, py::arg("value"))
+        .def("mk_int", [](Solver& s, const py::int_& value) {
+            if (PyBool_Check(value.ptr())) return s.mkInt(static_cast<int64_t>(value.cast<bool>()));
+            return s.mkInt(py::str(py::handle(value)).cast<std::string>());
+        }, py::arg("value"))
         .def("mk_real", &Solver::mkReal, py::arg("rational"))
         .def("mk_op",
              [](Solver& s, Kind k, std::vector<Term> args) {
@@ -302,6 +313,7 @@ PYBIND11_MODULE(_xolver, m) {
 
         // Results
         .def("get_model", &Solver::getModel)
+        .def("validate_model", &Solver::validateModel)
         .def("get_value", &Solver::getValue, py::arg("t"))
         .def("get_unsat_core", &Solver::getUnsatCore)
         .def("unsat_core_requested", &Solver::unsatCoreRequested)

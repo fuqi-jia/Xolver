@@ -1,6 +1,7 @@
+#include "base/RuntimeConfig.h"
 #include "frontend/preprocess/FormulaRewriter.h"
-#include "util/EnvParam.h"
-#include "util/MpqUtils.h"
+#include "base/EnvParam.h"
+#include "base/MpqUtils.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -15,8 +16,8 @@ namespace {
 // Read a node as a rational constant, if it is one. Handles both numeric
 // representations used in this codebase (ConstInt:int64 or string, ConstReal:
 // string or int64) plus a single Neg wrapper over a constant.
-std::optional<mpq_class> tryRational(const CoreIr& ir, ExprId e) {
-    const CoreExpr& n = ir.get(e);
+std::optional<mpq_class> tryRational(const NativeTerms& ir, ExprId e) {
+    const TermExpr& n = ir.get(e);
     switch (n.kind) {
         case Kind::ConstInt: {
             if (auto* i = std::get_if<int64_t>(&n.payload.value)) return mpq_class(*i);
@@ -61,7 +62,7 @@ std::size_t FormulaRewriter::ConsKeyHash::operator()(const ConsKey& k) const {
     return h;
 }
 
-FormulaRewriter::FormulaRewriter(CoreIr& ir, SortId boolSort)
+FormulaRewriter::FormulaRewriter(NativeTerms& ir, SortId boolSort)
     : ir_(ir), boolSort_(boolSort),
       intSort_(ir.intSortId()), realSort_(ir.realSortId()) {}
 
@@ -107,7 +108,7 @@ void FormulaRewriter::scanNonNegativeVars() {
     nonNegVars_.clear();
     varLowerBound_.clear();
     auto tryConstInt = [&](ExprId e, mpz_class& out) -> bool {
-        const CoreExpr& n = ir_.get(e);
+        const TermExpr& n = ir_.get(e);
         // Accept both ConstInt and ConstReal-with-integer-value: the parser
         // can store small literals like `1` as ConstReal even when the
         // containing expression is Int-typed.
@@ -139,7 +140,7 @@ void FormulaRewriter::scanNonNegativeVars() {
         }
     };
     auto constGe = [&](ExprId e, const mpq_class& bound) -> bool {
-        const CoreExpr& n = ir_.get(e);
+        const TermExpr& n = ir_.get(e);
         if (n.kind != Kind::ConstInt && n.kind != Kind::ConstReal) return false;
         if (auto* iv = std::get_if<int64_t>(&n.payload.value))
             return mpq_class(*iv) >= bound;
@@ -149,13 +150,13 @@ void FormulaRewriter::scanNonNegativeVars() {
         return false;
     };
     auto varName = [&](ExprId e) -> std::optional<std::string> {
-        const CoreExpr& n = ir_.get(e);
+        const TermExpr& n = ir_.get(e);
         if (n.kind != Kind::Variable) return std::nullopt;
         if (auto* s = std::get_if<std::string>(&n.payload.value)) return *s;
         return std::nullopt;
     };
     auto mark = [&](ExprId atom) {
-        const CoreExpr& a = ir_.get(atom);
+        const TermExpr& a = ir_.get(atom);
         if (a.children.size() != 2) return;
         // (>= v c) -> v >= c; (> v c) -> v >= c+1 for integer v
         // (<= c v) -> v >= c; (< c v) -> v >= c+1 for integer v
@@ -199,7 +200,7 @@ void FormulaRewriter::scanNonNegativeVars() {
         }
     };
     std::function<void(ExprId)> walk = [&](ExprId e) {
-        const CoreExpr& n = ir_.get(e);
+        const TermExpr& n = ir_.get(e);
         if (n.kind == Kind::And) {
             for (ExprId c : n.children) walk(c);
             return;
@@ -209,17 +210,8 @@ void FormulaRewriter::scanNonNegativeVars() {
     for (const auto& [_, e] : ir_.getScopedAssertions()) walk(e);
 }
 
-bool FormulaRewriter::tryGetTightValue(const std::string& v, mpz_class& out) const {
-    auto lo = varLowerBound_.find(v);
-    auto hi = varUpperBound_.find(v);
-    if (lo == varLowerBound_.end() || hi == varUpperBound_.end()) return false;
-    if (lo->second != hi->second) return false;
-    out = lo->second;
-    return true;
-}
-
 bool FormulaRewriter::tryGetLowerBound(ExprId e, mpz_class& out) const {
-    const CoreExpr& n = ir_.get(e);
+    const TermExpr& n = ir_.get(e);
     if (n.kind == Kind::ConstInt) {
         if (auto* iv = std::get_if<int64_t>(&n.payload.value)) {
             out = mpz_class(*iv);
@@ -239,7 +231,7 @@ bool FormulaRewriter::tryGetLowerBound(ExprId e, mpz_class& out) const {
 }
 
 bool FormulaRewriter::isProvablyNonNegative(ExprId e) const {
-    const CoreExpr& n = ir_.get(e);
+    const TermExpr& n = ir_.get(e);
     if (n.kind == Kind::ConstInt) {
         if (auto* iv = std::get_if<int64_t>(&n.payload.value)) return *iv >= 0;
     }
@@ -256,7 +248,7 @@ ExprId FormulaRewriter::rewriteRec(ExprId root) {
 
     // Iterative post-order (two-visit work-stack) to avoid stack overflow on
     // deeply nested terms. simplifyNode()/mk() call ir_.add(), which reallocates
-    // CoreIr's exprs_ vector — so all node fields are copied per step before any
+    // NativeTerms's exprs_ vector — so all node fields are copied per step before any
     // add. Behavior-identical to the former recursion.
     struct Frame { ExprId e; bool processed; };
     std::vector<Frame> stack;
@@ -269,29 +261,8 @@ ExprId FormulaRewriter::rewriteRec(ExprId root) {
 
         if (!frame.processed) {
             frame.processed = true;
-            const CoreExpr& node = ir_.get(e);
+            const TermExpr& node = ir_.get(e);
             if (node.children.empty()) {
-                // Tight-bound substitution (XOLVER_PP_TIGHT_BOUND_SUBST):
-                // Variable with lower == upper bound -> ConstInt(value).
-                // Sound: the bound atoms in the formula constrain v to the
-                // single integer value c, so substituting v with c
-                // everywhere is logically equivalent. Closes the VeryMax
-                // Farkas lambda pattern `(<= 0 lam) ∧ (< lam 1)` -> lam = 0.
-                static const bool tightSubst =
-                    xolver::env::diag("XOLVER_PP_TIGHT_BOUND_SUBST");
-                if (tightSubst && node.kind == Kind::Variable) {
-                    if (auto* s = std::get_if<std::string>(&node.payload.value)) {
-                        mpz_class val;
-                        if (tryGetTightValue(*s, val)) {
-                            ExprId folded = mkIntOrReal(mpq_class(val), node.sort);
-                            if (folded != NullExpr) {
-                                memo_[e] = folded;
-                                stack.pop_back();
-                                continue;
-                            }
-                        }
-                    }
-                }
                 memo_[e] = e;
                 stack.pop_back();
                 continue;
@@ -309,7 +280,7 @@ ExprId FormulaRewriter::rewriteRec(ExprId root) {
         Payload payload;
         std::vector<ExprId> kids;
         {
-            const CoreExpr& node = ir_.get(e);
+            const TermExpr& node = ir_.get(e);
             kind = node.kind;
             sort = node.sort;
             payload = node.payload;
@@ -330,7 +301,7 @@ ExprId FormulaRewriter::mk(Kind kind, SortId sort, std::vector<ExprId> children,
                            Payload payload) {
     ConsKey key{kind, sort, children, payload.value};
     if (auto it = cons_.find(key); it != cons_.end()) return it->second;
-    CoreExpr e;
+    TermExpr e;
     e.kind = kind;
     e.sort = sort;
     e.children = SmallVector<ExprId, 4>(children.begin(), children.end());
@@ -369,7 +340,7 @@ bool FormulaRewriter::isBoolConst(ExprId e, bool& out) const {
     if (e == TrueSentinelExpr)  { out = true;  return true; }
     if (e == FalseSentinelExpr) { out = false; return true; }
     if (e == NullExpr) return false;
-    const CoreExpr& n = ir_.get(e);
+    const TermExpr& n = ir_.get(e);
     if (n.kind == Kind::ConstBool) {
         if (auto* b = std::get_if<bool>(&n.payload.value)) { out = *b; return true; }
     }
@@ -382,7 +353,7 @@ bool FormulaRewriter::isFalse(ExprId e) const { bool b; return isBoolConst(e, b)
 bool FormulaRewriter::isProvablyBool(ExprId e) const {
     if (e == TrueSentinelExpr || e == FalseSentinelExpr) return true;
     if (e == NullExpr) return false;
-    const CoreExpr& n = ir_.get(e);
+    const TermExpr& n = ir_.get(e);
     if (n.sort == boolSort_ && boolSort_ != NullSort) return true;
     auto sk = ir_.sortKind(n.sort);
     if (sk && *sk == SortKind::Bool) return true;
@@ -401,7 +372,7 @@ bool FormulaRewriter::isProvablyBool(ExprId e) const {
 ExprId FormulaRewriter::negate(ExprId e) {
     bool b;
     if (isBoolConst(e, b)) return mkBool(!b);
-    const CoreExpr& n = ir_.get(e);
+    const TermExpr& n = ir_.get(e);
     if (n.kind == Kind::Not && n.children.size() == 1) return n.children[0];
     return mk(Kind::Not, n.sort, {e}, Payload());
 }
@@ -426,7 +397,7 @@ ExprId FormulaRewriter::simplifyNode(Kind kind, SortId sort,
             std::vector<ExprId> flat;
             flat.reserve(children.size());
             for (ExprId c : children) {
-                const CoreExpr& cn = ir_.get(c);
+                const TermExpr& cn = ir_.get(c);
                 if (cn.kind == kind) {
                     for (ExprId gc : cn.children) flat.push_back(gc);
                 } else {
@@ -517,8 +488,8 @@ ExprId FormulaRewriter::simplifyNode(Kind kind, SortId sort,
                 // which collapses to `(= x_01^3 x_10^3)` and then, via the
                 // odd-power injection below, to `(= x_01 x_10)` -- contradicting
                 // (distinct x_01 x_10).
-                const CoreExpr& an = ir_.get(a);
-                const CoreExpr& bn = ir_.get(b);
+                const TermExpr& an = ir_.get(a);
+                const TermExpr& bn = ir_.get(b);
                 if (an.kind == Kind::Add && bn.kind == Kind::Add &&
                     an.children.size() >= 2 && bn.children.size() >= 2) {
                     std::vector<ExprId> la, rb;
@@ -581,9 +552,9 @@ ExprId FormulaRewriter::simplifyNode(Kind kind, SortId sort,
                 // this k (odd k is always sound over Z; even k requires both
                 // bases to be provably non-negative).
                 auto isPowLike = [&](ExprId eid, ExprId& base, mpz_class& expOut) -> bool {
-                    const CoreExpr& e = ir_.get(eid);
+                    const TermExpr& e = ir_.get(eid);
                     if (e.kind == Kind::Pow && e.children.size() == 2) {
-                        const CoreExpr& exp = ir_.get(e.children[1]);
+                        const TermExpr& exp = ir_.get(e.children[1]);
                         if (exp.kind != Kind::ConstInt) return false;
                         if (auto* i = std::get_if<int64_t>(&exp.payload.value)) {
                             if (*i < 2) return false;
@@ -671,7 +642,7 @@ ExprId FormulaRewriter::simplifyNode(Kind kind, SortId sort,
         case Kind::Neg: {
             if (children.size() != 1) break;
             ExprId a = children[0];
-            const CoreExpr& an = ir_.get(a);
+            const TermExpr& an = ir_.get(a);
             if (an.kind == Kind::Neg && an.children.size() == 1) return an.children[0]; // -(-x)→x
             if (auto v = tryRational(ir_, a)) {
                 ExprId folded = mkIntOrReal(-(*v), sort);
@@ -683,7 +654,7 @@ ExprId FormulaRewriter::simplifyNode(Kind kind, SortId sort,
             if (children.empty()) break;
             std::vector<ExprId> flat;
             for (ExprId c : children) {
-                const CoreExpr& cn = ir_.get(c);
+                const TermExpr& cn = ir_.get(c);
                 if (cn.kind == Kind::Add) for (ExprId gc : cn.children) flat.push_back(gc);
                 else flat.push_back(c);
             }
@@ -768,7 +739,7 @@ ExprId FormulaRewriter::simplifyNode(Kind kind, SortId sort,
             if (children.empty()) break;
             std::vector<ExprId> flat;
             for (ExprId c : children) {
-                const CoreExpr& cn = ir_.get(c);
+                const TermExpr& cn = ir_.get(c);
                 if (cn.kind == Kind::Mul) for (ExprId gc : cn.children) flat.push_back(gc);
                 else flat.push_back(c);
             }
@@ -815,7 +786,7 @@ ExprId FormulaRewriter::simplifyNode(Kind kind, SortId sort,
             if (children.size() != 2) break;
             ExprId E = children[0];
             ExprId V = children[1];
-            const CoreExpr& vN = ir_.get(V);
+            const TermExpr& vN = ir_.get(V);
             if (vN.kind != Kind::Variable) break;
             std::string vname;
             if (auto* s = std::get_if<std::string>(&vN.payload.value)) vname = *s;
@@ -826,7 +797,7 @@ ExprId FormulaRewriter::simplifyNode(Kind kind, SortId sort,
             // Decompose E into a list of summands by flattening top-level Add.
             std::function<void(ExprId, std::vector<ExprId>&)> flattenAdd =
                 [&](ExprId e, std::vector<ExprId>& out) {
-                    const CoreExpr& en = ir_.get(e);
+                    const TermExpr& en = ir_.get(e);
                     if (en.kind == Kind::Add) {
                         for (ExprId c : en.children) flattenAdd(c, out);
                     } else {
@@ -837,7 +808,7 @@ ExprId FormulaRewriter::simplifyNode(Kind kind, SortId sort,
             flattenAdd(E, summands);
             // For each summand, check if V is one of its Mul factors.
             auto isMultipleOfV = [&](ExprId s) -> bool {
-                const CoreExpr& sn = ir_.get(s);
+                const TermExpr& sn = ir_.get(s);
                 if (sn.kind == Kind::Mul) {
                     for (ExprId c : sn.children) if (c == V) return true;
                 }
@@ -848,7 +819,7 @@ ExprId FormulaRewriter::simplifyNode(Kind kind, SortId sort,
             for (ExprId s : summands) {
                 if (isMultipleOfV(s)) continue;       // drops
                 // Otherwise must be an Int constant to be summable.
-                const CoreExpr& sn = ir_.get(s);
+                const TermExpr& sn = ir_.get(s);
                 if (sn.kind == Kind::ConstInt) {
                     if (auto* iv = std::get_if<int64_t>(&sn.payload.value)) {
                         constSum += mpz_class(*iv);

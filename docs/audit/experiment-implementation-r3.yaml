@@ -1,0 +1,18 @@
+experiment: xolver-audit-implementation-r3
+description: Query configuration isolation, PA quantifier elimination, symbolic heap solver, array recovery.
+environment:
+  host: panda1
+  workdir: /pub/data/jiafq/xolver
+protocol:
+  inputs: {list: [implementation]}
+  timeout: 90m
+  memory: 16G
+  parallelism: 1
+trials:
+  - {name: native}
+run:
+  cmd: XOLVER_REGRESSION_TIMEOUT=240 XOLVER_REGRESSION_JOBS=1 bash tools/remote/validate.sh implementation-r3
+measurements:
+  from: metrics.json
+  primary: unit_rc
+  checks: ["unit_rc == 0", "regression_rc == 0", "tools_rc == 0", "known_gaps_rc == 0"]

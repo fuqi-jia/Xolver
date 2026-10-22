@@ -1,6 +1,6 @@
 #pragma once
 
-#include "expr/ir.h"
+#include "ir/NativeTerms.h"
 #include <vector>
 #include <unordered_map>
 
@@ -21,14 +21,14 @@ namespace xolver {
  */
 class UfInArithPurifier {
 public:
-    explicit UfInArithPurifier(CoreIr& ir);
+    explicit UfInArithPurifier(NativeTerms& ir);
 
     bool run();
     void commit();
 
 private:
-    CoreIr& ir_;
-    std::unordered_map<ExprId, ExprId> memo_;
+    NativeTerms& ir_;
+    std::unordered_map<uint64_t, ExprId> memo_;
     std::vector<ExprId> generatedAssertions_;
     bool changed_ = false;
 
@@ -37,6 +37,10 @@ private:
     ExprId mkEq(ExprId a, ExprId b);
 
     static bool isArithKind(Kind k);
+    bool isArithPosition(const TermExpr& node, size_t child) const;
+    static uint64_t memoKey(ExprId id, bool arithmetic) {
+        return (uint64_t{id} << 1) | uint64_t{arithmetic};
+    }
 };
 
 } // namespace xolver

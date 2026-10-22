@@ -1,0 +1,24 @@
+experiment: xolver-pa-piecewise-models-r16
+description: Check every exported free integer/Boolean assignment against the original mixed quantified query with both oracles.
+environment:
+  host: panda1
+  workdir: /pub/data/jiafq/xolver
+protocol:
+  inputs: {list: [mixed-pa-models]}
+  timeout: 45m
+  memory: 8G
+  parallelism: 1
+trials:
+  - {name: models}
+run:
+  cmd: >-
+    python3 build/pa-models-r16/fuzz_presburger_models.py
+    --suite piecewise --n 120
+    --solver /pub/data/jiafq/xolver/validation/native-terms-r16/xolver
+    --z3 /pub/data/jiafq/xolver/dependencies/oracles/z3
+    --cvc5 /pub/data/jiafq/z3-native-audit-tools-20260924-r3/cvc5/bin/cvc5
+    --output validation/pa-piecewise-models-r16
+measurements:
+  from: metrics.json
+  primary: models_checked
+  checks: ["checked == 120", "models_checked > 0", "model_skips == 0", "bad_models == 0", "unsound == 0", "errors == 0", "unknown == 0", "timeouts == 0", "oracle_disagreements == 0"]

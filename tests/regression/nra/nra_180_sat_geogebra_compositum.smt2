@@ -7,7 +7,10 @@ RightTriangle-Bottema8.1b:
 This problem was added to SMT-LIB by Tereso del Rio and Matthew England.| )
 (set-info :category "industrial")
 (set-info :license "https://creativecommons.org/licenses/by/4.0/")
-(set-info :status unknown)
+; Exact witness: v8=v19=v20=1; v15=v16=sqrt(5)/2; v17=sqrt(2)/2;
+; v18=sqrt(2); m=(sqrt(5)+sqrt(2)/2)/(sqrt(2)+2)>0.
+; Checked independently in docs/audit/evidence/check_nra180_witness.py.
+(set-info :status sat)
 (set-logic QF_NRA)
 (declare-fun m () Real)
 (declare-fun v15 () Real)

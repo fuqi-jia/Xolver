@@ -1,0 +1,1473 @@
+{
+  "schema": "xolver-typed-controls/2",
+  "controls": [
+    {
+      "name": "ARITH_STAGE_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "ARITH_STAGE_ENTER",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "ARITH_STAGE_PROF",
+      "reads": [
+        {
+          "kind": "ProfilePath"
+        }
+      ],
+      "legacy_text": false,
+      "semantics": "optional profiling destination; true selects caller default path"
+    },
+    {
+      "name": "BB_ASSERT_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "EUF_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "EUF_VERIFY",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "NIA_BITBLAST_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "NIA_BITBLAST_PROF",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "NIA_DOM_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "NIA_EAGER_BB_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "NIA_EAGER_BB_GATE_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "NIA_OPP_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "SOLVE_PHASE_PROF",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_ANIA_PROF",
+      "reads": [
+        {
+          "kind": "Flag"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_ARRAY_NOARR_DOWNGRADE_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_ASSERT_PF_INV",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_AX_COMPLETE_BUDGET",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_AX_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_AX_R2D_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_AX_REFINE_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_AX_STORECOMM_EXT_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_CMS_WIDTH_PROBE_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_COMB_CONFLICT_TRACE",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false,
+      "semantics": "diagnostic enabled when present, including an empty or zero value"
+    },
+    {
+      "name": "XOLVER_COMB_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_DECIDE_PROBE",
+      "reads": [
+        {
+          "kind": "Period"
+        }
+      ],
+      "legacy_text": false,
+      "semantics": "nonnegative sampling interval; zero disables; true or 1 selects 2000"
+    },
+    {
+      "name": "XOLVER_DIAG_AM",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_DIAG_AMV",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_DIAG_AMV_DEEP",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_DIAG_CMS",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_DIAG_FI",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_DIAG_PF_INV",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_DT_HC_STATS",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_DT_VALIDATE_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_DT_VALIDATE_PER_ASSERT",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_DUMP_FINAL_ASSERTS",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_ENTAIL_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_EUF_HOTPROFILE",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_EUF_PROP_BUDGET",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_L4R_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_LIA_CUT_MAXBITS",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_LIA_CUT_MAXPERSOLVE",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_LIA_DUMP_DIR",
+      "reads": [
+        {
+          "kind": "Path"
+        }
+      ],
+      "legacy_text": false,
+      "semantics": "filesystem path; empty disables unless caller supplies fallback"
+    },
+    {
+      "name": "XOLVER_LIA_MILP_BRANCH_BUDGET",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_LRA_BETA_EVERY",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_LRA_BOUND_AXIOMS_DIAG",
+      "reads": [
+        {
+          "kind": "Boolean"
+        }
+      ],
+      "legacy_text": false,
+      "semantics": "canonical Boolean; caller supplies missing/invalid default"
+    },
+    {
+      "name": "XOLVER_LRA_BOUND_AXIOMS_MAXGROUP",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_LRA_PROFILE_EVERY",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_LRA_VERIFY_BETA",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NIA_ARITH_VALUE_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NIA_BB_EARLY_MIN_ACTIVE",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false,
+      "semantics": "checked decimal integer; invalid/overflow uses caller default"
+    },
+    {
+      "name": "XOLVER_NIA_BB_ENTRY_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NIA_BITBLAST_CONFLICTS",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NIA_BITBLAST_GATE_BUDGET",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NIA_BITBLAST_MAX_BITWIDTH",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NIA_BITBLAST_MAX_ITERS",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NIA_BOUNDED_ENUM_THRESHOLD",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NIA_CT_DIAG",
+      "reads": [
+        {
+          "kind": "Path"
+        }
+      ],
+      "legacy_text": false,
+      "semantics": "filesystem path; empty disables unless caller supplies fallback"
+    },
+    {
+      "name": "XOLVER_NIA_CT_SMT",
+      "reads": [
+        {
+          "kind": "Path"
+        }
+      ],
+      "legacy_text": false,
+      "semantics": "filesystem path; empty disables unless caller supplies fallback"
+    },
+    {
+      "name": "XOLVER_NIA_EAGER_BITBLAST_BUDGET",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NIA_EAGER_BITBLAST_BUDGET_MS",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NIA_EAGER_BITBLAST_BUDGET_PCT",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NIA_EAGER_BITBLAST_CONFLICTS",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NIA_EAGER_BITBLAST_UNSAT_CAP",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_COMBO_CAP",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_DUMP",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_DUMP_FILE",
+      "reads": [
+        {
+          "kind": "Path"
+        }
+      ],
+      "legacy_text": false,
+      "semantics": "filesystem path; empty disables unless caller supplies fallback"
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_EAGER_BUDGET_MS",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_EAGER_PCT",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_FAILDIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false,
+      "semantics": "diagnostic enabled when present, including an empty or zero value"
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_OR_MAX_B",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_OR_TRACE",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_OUTER_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_REFUTE_DOM_CAP",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_REFUTE_LEAF_CAP",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_REFUTE_MAX_LEAF_VARS",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_REJECT_DUMP",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_REJECT_FILE",
+      "reads": [
+        {
+          "kind": "Path"
+        }
+      ],
+      "legacy_text": false,
+      "semantics": "filesystem path; empty disables unless caller supplies fallback"
+    },
+    {
+      "name": "XOLVER_NIA_FARKAS_VALIDATE_BUDGET",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NIA_LINDECIDE_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NIA_LINEAR_DOWNGRADE_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NIA_LS_BUDGET_MS",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NIA_LS_TOTAL_MS",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NIA_MODULAR_DIAG",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NIA_MODULAR_ENUM_BUDGET",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NIA_MODULAR_MAX_ENUM",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NIA_MODULAR_MAX_VARS",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NIA_MODULAR_MODULI",
+      "reads": [
+        {
+          "kind": "Moduli"
+        }
+      ],
+      "legacy_text": false,
+      "semantics": "comma-separated distinct integers in [2,100]; invalid list uses default set"
+    },
+    {
+      "name": "XOLVER_NIA_MODULAR_MODULUS_CAP",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NIA_PRESOLVE_BUDGET_MS",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NIA_SHARED_EQ_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NO_DEBUG",
+      "reads": [
+        {
+          "kind": "Boolean"
+        }
+      ],
+      "legacy_text": false,
+      "semantics": "canonical Boolean; caller supplies missing/invalid default"
+    },
+    {
+      "name": "XOLVER_NO_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_BOUNDCHAIN_MAX_ATOMS",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_BOUNDCHAIN_MAX_WORK",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_DEADLINE_MS",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_DUMP",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_INSTR",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_SAT_FIRST_ALG_DEG",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_SAT_FIRST_BUDGET",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_SAT_FIRST_MAX_BITS",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_SAT_FIRST_MAX_DEG",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_SAT_FIRST_MS",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_SAT_FIRST_TOWER_CAP",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_CAC_TRACE",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_CDCAC_GUARD_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_CDCAC_MAX_DEGREE",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_CDCAC_MAX_VARS",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_EQ_CASCADE_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_EQ_CASCADE_DYADIC_DEPTH",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_HYB_PARTITION_STATS",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_ICP_DIAG",
+      "reads": [
+        {
+          "kind": "Boolean"
+        }
+      ],
+      "legacy_text": false,
+      "semantics": "canonical Boolean; caller supplies missing/invalid default"
+    },
+    {
+      "name": "XOLVER_NRA_KERNEL_STATS",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_LAZARD_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_LAZARD_MAX_COEFF_BITS",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_LIBPOLY_FIREWALL_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_LIBPOLY_MAX_COEFF_BITS",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_LINEAR_DOWNGRADE_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_LS_BUDGET_MS",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_LS_MAX_DEN",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_LS_MAX_ROUNDS",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_LS_NOISE_PCT",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_LS_SA_PCT",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_LS_STATS",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_LS_TOP_VARS",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_NLSAT_DFS_BUDGET",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_NLSAT_FALLBACK_DEG_CAP",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_NLSAT_ISO_BUDGET",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_NLSAT_MAX_CORE_POLYS",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_NLSAT_MAX_CORE_VARS",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_NLSAT_MAX_ELIM_DEG",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_NLSAT_ROOT_DEG_CAP",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_PRESOLVE_BUDGET_MS",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_PROJECTION",
+      "reads": [
+        {
+          "kind": "Projection"
+        }
+      ],
+      "legacy_text": false,
+      "semantics": "automatic, collins, lazard; case-insensitive; invalid selects automatic"
+    },
+    {
+      "name": "XOLVER_NRA_PROJ_MAX_COEFF_BITS",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_PROJ_MAX_DEG",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_PROJ_MAX_TERMS",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_SIGN_REFUTE_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_STAGE_TIMING",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_STAGE_TRACE",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_STAGE_TRACE_FILE",
+      "reads": [
+        {
+          "kind": "Path"
+        }
+      ],
+      "legacy_text": false,
+      "semantics": "filesystem path; empty disables unless caller supplies fallback"
+    },
+    {
+      "name": "XOLVER_NRA_SUBTROP_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_NRA_TOWER_DIAG",
+      "reads": [
+        {
+          "kind": "Path"
+        }
+      ],
+      "legacy_text": false,
+      "semantics": "filesystem path; empty disables unless caller supplies fallback"
+    },
+    {
+      "name": "XOLVER_PA_RESIDUES",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_PA_WORK",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_PP_SOLVE_EQS_BUDGET",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_PP_SOLVE_EQS_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_PRESOLVE_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_PROP_CHECK_EVERY",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_SAT_LEMMA_MGMT",
+      "reads": [
+        {
+          "kind": "Capacity"
+        }
+      ],
+      "legacy_text": false,
+      "semantics": "nonnegative entry capacity; zero means unbounded; true selects 100000"
+    },
+    {
+      "name": "XOLVER_SAT_PROF",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_SAT_SAMPLE",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_SAT_SIZE_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_SELFPROF",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false,
+      "semantics": "diagnostic enabled when present, including an empty or zero value"
+    },
+    {
+      "name": "XOLVER_TARGETED_PP_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_TARGETED_PP_DUMP",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_THEORY_ENTAIL_PROP_EVERY",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_TMCHECK_HB",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_WALLCLOCK_MS",
+      "reads": [
+        {
+          "kind": "Long"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_WALLCLOCK_SCALE",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
+      "name": "XOLVER_WISA_DIAG",
+      "reads": [
+        {
+          "kind": "Presence"
+        }
+      ],
+      "legacy_text": false
+    }
+  ]
+}

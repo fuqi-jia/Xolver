@@ -1,0 +1,18 @@
+experiment: xolver-audit-formal-kernels-r3
+description: Coq compiler and independent kernel replay of certificate-rule theorems.
+environment:
+  host: panda1
+  workdir: /pub/data/jiafq/xolver
+protocol:
+  inputs: {list: [certificate-rules]}
+  timeout: 10m
+  memory: 4G
+  parallelism: 1
+trials:
+  - {name: coq}
+run:
+  cmd: bash tools/remote/check_formal.sh
+measurements:
+  from: metrics.json
+  primary: closed_theorems
+  checks: ["coqc_rc == 0", "coqchk_rc == 0", "closed_theorems == 6"]

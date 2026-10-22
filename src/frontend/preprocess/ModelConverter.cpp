@@ -1,33 +1,21 @@
 #include "frontend/preprocess/ModelConverter.h"
-#include "util/MpqUtils.h"
+#include "base/MpqUtils.h"
 #include <gmpxx.h>
 
 namespace xolver {
 
 void ModelConverter::registerElimination(std::string name, SortId sort, ExprId definingExpr) {
-    steps_.push_back({StepKind::Elim, std::move(name), sort, definingExpr, Rel::Ge});
-}
-
-void ModelConverter::registerUncElimination(std::string name, SortId sort, ExprId definingExpr) {
-    steps_.push_back({StepKind::UncElim, std::move(name), sort, definingExpr, Rel::Ge});
-}
-
-void ModelConverter::registerWitness(std::string name, SortId sort, Rel rel, ExprId boundExpr) {
-    steps_.push_back({StepKind::Witness, std::move(name), sort, boundExpr, rel});
-}
-
-void ModelConverter::registerBoolElimination(std::string name, ExprId definingExpr) {
-    steps_.push_back({StepKind::BoolElim, std::move(name), NullSort, definingExpr, Rel::Ge});
+    steps_.push_back({std::move(name), sort, definingExpr});
 }
 
 std::optional<bool> ModelConverter::evalBool(
-    ExprId root, const CoreIr& ir,
+    ExprId root, const NativeTerms& ir,
     const std::unordered_map<std::string, bool>& boolEnv,
     const std::unordered_map<std::string, mpq_class>& env) {
     const SortId boolSort = ir.boolSortId();
     std::unordered_map<ExprId, bool> val;
 
-    auto boolOperands = [&](const CoreExpr& n) -> bool {
+    auto boolOperands = [&](const TermExpr& n) -> bool {
         return !n.children.empty() && ir.get(n.children[0]).sort == boolSort;
     };
 
@@ -39,7 +27,7 @@ std::optional<bool> ModelConverter::evalBool(
         Frame& frame = stack.back();
         ExprId e = frame.e;
         if (val.count(e)) { stack.pop_back(); continue; }
-        const CoreExpr node = ir.get(e);
+        const TermExpr node = ir.get(e);
 
         if (!frame.processed) {
             frame.processed = true;
@@ -127,10 +115,9 @@ std::optional<bool> ModelConverter::evalBool(
 }
 
 std::optional<mpq_class> ModelConverter::evalRational(
-    ExprId root, const CoreIr& ir,
+    ExprId root, const NativeTerms& ir,
     const std::unordered_map<std::string, mpq_class>& env,
-    const std::unordered_map<std::string, bool>* boolEnv,
-    bool permissiveMissingVar) {
+    const std::unordered_map<std::string, bool>* boolEnv) {
     std::unordered_map<ExprId, mpq_class> val;
 
     auto parseConst = [](const Payload& p) -> std::optional<mpq_class> {
@@ -150,7 +137,7 @@ std::optional<mpq_class> ModelConverter::evalRational(
         ExprId e = frame.e;
         if (val.count(e)) { stack.pop_back(); continue; }
 
-        const CoreExpr node = ir.get(e);
+        const TermExpr node = ir.get(e);
 
         if (!frame.processed) {
             frame.processed = true;
@@ -159,16 +146,8 @@ std::optional<mpq_class> ModelConverter::evalRational(
                     auto* nm = std::get_if<std::string>(&node.payload.value);
                     if (!nm) return std::nullopt;
                     auto it = env.find(*nm);
-                    if (it == env.end()) {
-                        if (!permissiveMissingVar) return std::nullopt;
-                        // Permissive (UncElim / Witness): treat missing var
-                        // as 0 — sound because by construction the variable
-                        // was also dropped as unconstrained, so any value
-                        // satisfies the post-elim formula.
-                        val[e] = mpq_class(0);
-                    } else {
-                        val[e] = it->second;
-                    }
+                    if (it == env.end()) return std::nullopt;
+                    val[e] = it->second;
                     stack.pop_back();
                     continue;
                 }
@@ -286,7 +265,7 @@ std::optional<mpq_class> ModelConverter::evalRational(
 
 bool ModelConverter::reconstruct(std::unordered_map<std::string, RealValue>& numAsg,
                                  std::unordered_map<std::string, std::string>& strAsg,
-                                 const CoreIr& ir) const {
+                                 const NativeTerms& ir) const {
     // Rational environment from the current (solver-produced + already
     // reconstructed) assignment. Prefer the typed channel; fall back to the
     // string channel for vars only present there. Algebraic values are not
@@ -312,37 +291,9 @@ bool ModelConverter::reconstruct(std::unordered_map<std::string, RealValue>& num
     bool allOk = true;
     // Newest step first: a term may reference a later-eliminated variable.
     for (auto it = steps_.rbegin(); it != steps_.rend(); ++it) {
-        if (it->kind == StepKind::BoolElim) {
-            auto bv = evalBool(it->expr, ir, boolEnv, env);
-            if (!bv) { allOk = false; continue; }
-            strAsg[it->name] = *bv ? "true" : "false";
-            boolEnv[it->name] = *bv;
-            continue;
-        }
-
-        // Elim: strict (any missing free var = solver bug).
-        // UncElim / Witness: permissive (free vars in the bound that were
-        // themselves dropped as unconstrained default to 0 — sound, any
-        // value satisfies the post-elim formula).
-        bool permissive = (it->kind == StepKind::UncElim ||
-                           it->kind == StepKind::Witness);
-        auto vb = evalRational(it->expr, ir, env, &boolEnv, permissive);
+        auto vb = evalRational(it->expr, ir, env, &boolEnv);
         if (!vb) { allOk = false; continue; }
-
-        mpq_class value;
-        if (it->kind == StepKind::Elim || it->kind == StepKind::UncElim) {
-            value = *vb;                              // x == defining term
-        } else {
-            // Witness: pick any value satisfying  x ⋈ bound.  vt±1 satisfies the
-            // strict relations for both Int (integral) and Real.
-            switch (it->rel) {
-                case Rel::Ge: value = *vb; break;          // x >= b   -> b
-                case Rel::Le: value = *vb; break;          // x <= b   -> b
-                case Rel::Gt: value = *vb + 1; break;      // x >  b   -> b+1
-                case Rel::Lt: value = *vb - 1; break;      // x <  b   -> b-1
-                case Rel::Ne: value = *vb + 1; break;      // x != b   -> b+1
-            }
-        }
+        const mpq_class value = *vb;
         numAsg[it->name] = RealValue::fromMpq(value);
         strAsg[it->name] = value.get_str();           // bare mpq form
         env[it->name] = value;

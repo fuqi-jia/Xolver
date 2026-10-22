@@ -1,6 +1,7 @@
+#include "base/RuntimeConfig.h"
 #include "frontend/preprocess/targeted/ReadOnlyArrayElim.h"
-#include "util/EnvParam.h"
-#include "expr/Smt2Dumper.h"
+#include "base/EnvParam.h"
+#include "ir/Smt2Dumper.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -8,7 +9,7 @@
 
 namespace xolver {
 
-ReadOnlyArrayElim::ReadOnlyArrayElim(CoreIr& ir) : ir_(ir) {}
+ReadOnlyArrayElim::ReadOnlyArrayElim(NativeTerms& ir) : ir_(ir) {}
 
 bool ReadOnlyArrayElim::isArraySort(SortId s) const {
     auto k = ir_.sortKind(s);
@@ -16,7 +17,7 @@ bool ReadOnlyArrayElim::isArraySort(SortId s) const {
 }
 
 bool ReadOnlyArrayElim::intConstVal(ExprId e, mpz_class& out) const {
-    const CoreExpr& n = ir_.get(e);
+    const TermExpr& n = ir_.get(e);
     if (n.kind == Kind::ConstInt) {
         if (auto* p = std::get_if<int64_t>(&n.payload.value)) { out = *p; return true; }
     } else if (n.kind == Kind::ConstReal) {
@@ -31,12 +32,7 @@ bool ReadOnlyArrayElim::intConstVal(ExprId e, mpz_class& out) const {
 void ReadOnlyArrayElim::scanNode(ExprId e, std::unordered_set<ExprId>& seen) {
     if (bailed_) return;
     if (!seen.insert(e).second) return;
-    // A `(= S W)` to be replaced by `false` is opaque to the read-only scan:
-    // its subtree (the store-expression S etc.) is discarded, so it need not
-    // satisfy the read-only fragment rules. Reads of W referenced elsewhere are
-    // scanned via their other occurrences.
-    if (falseEqNodes_.count(e)) return;
-    const CoreExpr& n = ir_.get(e);
+    const TermExpr& n = ir_.get(e);
 
     // (a) Any store / const-array means the array is written: not read-only.
     if (n.kind == Kind::Store || n.kind == Kind::ConstArray) { bailed_ = true; return; }
@@ -63,43 +59,6 @@ void ReadOnlyArrayElim::scanNode(ExprId e, std::unordered_set<ExprId>& seen) {
     }
 }
 
-bool ReadOnlyArrayElim::collectFalseEqs() {
-    // Gather all Store array-operands (a Variable used as child 0 of a Store is a
-    // "written" array — NOT free) and all array-sorted equalities.
-    std::unordered_set<ExprId> storeOperands;
-    std::vector<ExprId> arrayEqs;
-    std::unordered_set<ExprId> seen;
-    std::vector<ExprId> work;
-    for (const auto& [level, eid] : ir_.getScopedAssertions()) { (void)level; work.push_back(eid); }
-    while (!work.empty()) {
-        ExprId e = work.back(); work.pop_back();
-        if (!seen.insert(e).second) continue;
-        const CoreExpr& n = ir_.get(e);
-        if (n.kind == Kind::Store && !n.children.empty()) storeOperands.insert(n.children[0]);
-        if (n.children.size() == 2 && isArraySort(ir_.get(n.children[0]).sort)) {
-            if (n.kind == Kind::Eq) arrayEqs.push_back(e);
-            else if (n.kind == Kind::Distinct) return false;  // array Distinct: not handled yet
-        }
-        for (ExprId c : n.children) work.push_back(c);
-    }
-    if (arrayEqs.empty()) return true;   // store-free R1 path: nothing to do here
-    // An array equality is falsifiable iff at least one side is an array Variable
-    // that is never a Store operand (a free array): W can always be chosen != S
-    // at an unread index, so the equality is false. Mark W free + the Eq for
-    // `false` replacement. Bail on any array equality with no free-variable side.
-    for (ExprId eqNode : arrayEqs) {
-        const CoreExpr& n = ir_.get(eqNode);
-        ExprId a = n.children[0], b = n.children[1];
-        ExprId w = NullExpr;
-        if (ir_.get(a).kind == Kind::Variable && !storeOperands.count(a)) w = a;
-        else if (ir_.get(b).kind == Kind::Variable && !storeOperands.count(b)) w = b;
-        if (w == NullExpr) return false;            // non-falsifiable array eq -> bail
-        freeArrayVars_.insert(w);
-        falseEqNodes_.insert(eqNode);
-    }
-    return true;
-}
-
 bool ReadOnlyArrayElim::safeToEliminate() {
     // There must be at least one array sort in play, else nothing to do.
     bool anyArray = false;
@@ -121,7 +80,7 @@ bool ReadOnlyArrayElim::analyzeRead(ExprId arr, ExprId idx, ReadKey& key) {
     key.path.push_back(idx);
     ExprId cur = arr;
     for (int depth = 0; depth < 16; ++depth) {
-        const CoreExpr& n = ir_.get(cur);
+        const TermExpr& n = ir_.get(cur);
         if (n.kind == Kind::Variable && isArraySort(n.sort)) {
             key.base = cur;
             return true;
@@ -142,18 +101,7 @@ ExprId ReadOnlyArrayElim::rewriteRec(ExprId e) {
     if (it != memo_.end()) return it->second;
     if (!inProgress_.insert(e).second) return e;     // defensive cycle guard
 
-    // Write-array mode: `(= S W)` with W a free read-only array var -> `false`
-    // (W can always differ from S). Drops the whole store-expression S.
-    if (falseEqNodes_.count(e)) {
-        ExprId f = ir_.addShared(CoreExpr{Kind::ConstBool, ir_.boolSortId(), {}, Payload(false)});
-        inProgress_.erase(e);
-        memo_[e] = f;
-        didRewrite_ = true;
-        usedWriteArray_ = true;
-        return f;
-    }
-
-    const CoreExpr& n = ir_.get(e);
+    const TermExpr& n = ir_.get(e);
     ExprId r;
     if (n.kind == Kind::Select && n.children.size() == 2 && !isArraySort(n.sort)) {
         // Scalar leaf read: rewrite operands, then Ackermannize.
@@ -167,7 +115,8 @@ ExprId ReadOnlyArrayElim::rewriteRec(ExprId e) {
                 readVar_.emplace(key, fv);
                 readList_.emplace_back(key, fv);
                 std::string nm;
-                if (auto* s = std::get_if<std::string>(&ir_.get(fv).payload.value)) nm = *s;
+                const auto nativeView = ir_.get(fv);
+                if (auto* s = std::get_if<std::string>(&nativeView.payload.value)) nm = *s;
                 // arr/idx are the (rewritten) operands of the outermost scalar
                 // select — exactly the (array-operand, index) the validator keys
                 // its select override on, and hash-cons-stable in the original
@@ -180,12 +129,12 @@ ExprId ReadOnlyArrayElim::rewriteRec(ExprId e) {
             didRewrite_ = true;
         } else {
             // Should not happen after safeToEliminate(); rebuild conservatively.
-            const CoreExpr& on = ir_.get(e);
+            const TermExpr& on = ir_.get(e);
             if (arr == on.children[0] && idx == on.children[1]) r = e;
-            else r = ir_.addShared(CoreExpr{Kind::Select, n.sort, {arr, idx}, {}});
+            else r = ir_.addShared(TermExpr{Kind::Select, n.sort, {arr, idx}, {}});
         }
     } else {
-        CoreExpr copy = n;
+        TermExpr copy = n;
         bool changed = false;
         for (auto& c : copy.children) {
             ExprId nc = rewriteRec(c);
@@ -204,7 +153,7 @@ ExprId ReadOnlyArrayElim::rewriteRec(ExprId e) {
         if (changed && (copy.kind == Kind::Add || copy.kind == Kind::Mul)) {
             SmallVector<ExprId, 4> flat;
             for (ExprId c : copy.children) {
-                const CoreExpr& cn = ir_.get(c);
+                const TermExpr& cn = ir_.get(c);
                 if (cn.kind == copy.kind)
                     for (ExprId gc : cn.children) flat.push_back(gc);
                 else
@@ -239,10 +188,10 @@ void ReadOnlyArrayElim::buildCongruences() {
                     if (ca != cb) { provablyDistinct = true; break; }
                     continue;                                  // equal constants
                 }
-                eqs.push_back(ir_.addShared(CoreExpr{Kind::Eq, boolS, {a, b}, {}}));
+                eqs.push_back(ir_.addShared(TermExpr{Kind::Eq, boolS, {a, b}, {}}));
             }
             if (provablyDistinct) continue;                    // antecedent unsatisfiable
-            ExprId cons = ir_.addShared(CoreExpr{Kind::Eq, boolS,
+            ExprId cons = ir_.addShared(TermExpr{Kind::Eq, boolS,
                           {readList_[i].second, readList_[j].second}, {}});
             if (eqs.empty()) {
                 // All index pairs equal (syntactically, or value-equal constants
@@ -254,9 +203,9 @@ void ReadOnlyArrayElim::buildCongruences() {
             }
             ExprId ante = eqs.size() == 1
                 ? eqs[0]
-                : ir_.addShared(CoreExpr{Kind::And, boolS,
+                : ir_.addShared(TermExpr{Kind::And, boolS,
                           SmallVector<ExprId, 4>(eqs.begin(), eqs.end()), {}});
-            extra_.push_back(ir_.addShared(CoreExpr{Kind::Implies, boolS, {ante, cons}, {}}));
+            extra_.push_back(ir_.addShared(TermExpr{Kind::Implies, boolS, {ante, cons}, {}}));
         }
     }
 }
@@ -269,21 +218,9 @@ bool ReadOnlyArrayElim::run() {
     readVar_.clear();
     readList_.clear();
     reads_.clear();
-    falseEqNodes_.clear();
-    freeArrayVars_.clear();
-    usedWriteArray_ = false;
     didRewrite_ = false;
     bailed_ = false;
 
-    // Pass 1: identify falsifiable array equalities (write-array mode). Must run
-    // before safeToEliminate so its scan can treat those equalities as opaque.
-    // Gated SEPARATELY (XOLVER_TARGETED_PP_WRITEARRAY, default-OFF): it is a
-    // RELAXATION that suppresses UNSAT, so it regresses array-extensionality
-    // UNSAT cases (e.g. QF_AX) and only pays off once the residual NIA is
-    // solvable. R1 (store-free) is unaffected when this is off.
-    if (xolver::env::diag("XOLVER_TARGETED_PP_WRITEARRAY")) {
-        if (!collectFalseEqs()) return false;
-    }
     if (!safeToEliminate()) return false;
 
     for (const auto& [level, eid] : ir_.getScopedAssertions()) {
@@ -293,7 +230,7 @@ bool ReadOnlyArrayElim::run() {
     if (!didRewrite_) return false;
     buildCongruences();
 
-    if (xolver::env::diag("XOLVER_TARGETED_PP_DIAG")) {
+    if (xolver::config::read<xolver::config::ReadKind::Presence>("XOLVER_TARGETED_PP_DIAG")) {
         std::fprintf(stderr,
             "[ROAE] reads=%zu congruences=%zu exprTableNow=%zu\n",
             readVar_.size(), extra_.size(), ir_.size());
@@ -316,7 +253,7 @@ void ReadOnlyArrayElim::commit() {
     for (ExprId c : extra_) {
         ir_.addAssertion(c, baseLevel);
     }
-    if (xolver::env::diag("XOLVER_TARGETED_PP_DUMP")) {
+    if (xolver::config::read<xolver::config::ReadKind::Presence>("XOLVER_TARGETED_PP_DUMP")) {
         for (const auto& [level, eid] : rewritten_) {
             (void)level;
             std::fprintf(stderr, "[ROAE-ASSERT] %s\n",

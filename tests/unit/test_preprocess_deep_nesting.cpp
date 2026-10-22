@@ -4,7 +4,7 @@
 // Each case builds a depth-200k chain and runs the pass: the former recursion
 // SIGSEGV'd the runner; the iterative version completes.
 #include <doctest/doctest.h>
-#include "expr/ir.h"
+#include "ir/NativeTerms.h"
 #include "frontend/preprocess/IntDivModConstantFold.h"
 #include "frontend/preprocess/ToRealLiteralFold.h"
 #include "frontend/preprocess/NaryDistinctLowerer.h"
@@ -13,8 +13,8 @@
 #include "frontend/preprocess/UfInArithPurifier.h"
 #include "frontend/preprocess/BoolSubtermPurifier.h"
 #include "frontend/preprocess/UnconditionalConstantPropagation.h"
-#include "theory/core/LogicFeatureDetector.h"
-#include "proof/ModelValidator.h"
+#include "contracts/LogicFeatureDetector.h"
+#include "evidence/ModelValidator.h"
 
 using namespace xolver;
 
@@ -22,7 +22,7 @@ namespace {
 
 constexpr int kDeep = 200000;
 
-void setupSorts(CoreIr& ir, SortId& boolSort, SortId& intSort, SortId& realSort) {
+void setupSorts(NativeTerms& ir, SortId& boolSort, SortId& intSort, SortId& realSort) {
     boolSort = ir.allocateSortId();
     ir.registerSort(boolSort, SortKind::Bool);
     ir.setBoolSortId(boolSort);
@@ -36,60 +36,60 @@ void setupSorts(CoreIr& ir, SortId& boolSort, SortId& intSort, SortId& realSort)
 
 // Build a left-deep chain  (op (op (op x c) c) c) ...  of the given depth,
 // then assert  (<= chain 0).  Returns nothing; the assertion is registered.
-void addDeepAssertion(CoreIr& ir, SortId boolSort, SortId numSort, Kind op) {
-    ExprId x = ir.add(CoreExpr{Kind::Variable, numSort, {}, Payload(std::string("x"))});
+void addDeepAssertion(NativeTerms& ir, SortId boolSort, SortId numSort, Kind op) {
+    ExprId x = ir.add(TermExpr{Kind::Variable, numSort, {}, Payload(std::string("x"))});
     ExprId chain = x;
     for (int i = 0; i < kDeep; ++i) {
         ExprId c = (numSort == ir.intSortId())
-                       ? ir.add(CoreExpr{Kind::ConstInt, numSort, {}, Payload(int64_t(1))})
-                       : ir.add(CoreExpr{Kind::ConstReal, numSort, {}, Payload(std::string("1"))});
-        chain = ir.add(CoreExpr{op, numSort, {chain, c}, {}});
+                       ? ir.add(TermExpr{Kind::ConstInt, numSort, {}, Payload(int64_t(1))})
+                       : ir.add(TermExpr{Kind::ConstReal, numSort, {}, Payload(std::string("1"))});
+        chain = ir.add(TermExpr{op, numSort, {chain, c}, {}});
     }
     ExprId zero = (numSort == ir.intSortId())
-                      ? ir.add(CoreExpr{Kind::ConstInt, numSort, {}, Payload(int64_t(0))})
-                      : ir.add(CoreExpr{Kind::ConstReal, numSort, {}, Payload(std::string("0"))});
-    ir.addAssertion(ir.add(CoreExpr{Kind::Leq, boolSort, {chain, zero}, {}}));
+                      ? ir.add(TermExpr{Kind::ConstInt, numSort, {}, Payload(int64_t(0))})
+                      : ir.add(TermExpr{Kind::ConstReal, numSort, {}, Payload(std::string("0"))});
+    ir.addAssertion(ir.add(TermExpr{Kind::Leq, boolSort, {chain, zero}, {}}));
 }
 
 } // namespace
 
 TEST_CASE("IntDivModConstantFold: deep nesting does not overflow") {
-    CoreIr ir; SortId b, i, r; setupSorts(ir, b, i, r);
+    NativeTerms ir; SortId b, i, r; setupSorts(ir, b, i, r);
     addDeepAssertion(ir, b, i, Kind::Add);
     IntDivModConstantFold pass(ir);
     REQUIRE(pass.run());
 }
 
 TEST_CASE("ToRealLiteralFold: deep nesting does not overflow") {
-    CoreIr ir; SortId b, i, r; setupSorts(ir, b, i, r);
+    NativeTerms ir; SortId b, i, r; setupSorts(ir, b, i, r);
     addDeepAssertion(ir, b, r, Kind::Add);
     ToRealLiteralFold pass(ir);
     REQUIRE(pass.run());
 }
 
 TEST_CASE("NaryDistinctLowerer: deep nesting does not overflow") {
-    CoreIr ir; SortId b, i, r; setupSorts(ir, b, i, r);
+    NativeTerms ir; SortId b, i, r; setupSorts(ir, b, i, r);
     addDeepAssertion(ir, b, i, Kind::Add);
     NaryDistinctLowerer pass(ir);
     REQUIRE(pass.run());
 }
 
 TEST_CASE("IntDivModLowerer: deep nesting does not overflow") {
-    CoreIr ir; SortId b, i, r; setupSorts(ir, b, i, r);
+    NativeTerms ir; SortId b, i, r; setupSorts(ir, b, i, r);
     addDeepAssertion(ir, b, i, Kind::Add);
     IntDivModLowerer pass(ir);
     REQUIRE(pass.run());
 }
 
 TEST_CASE("FormulaRewriter: deep nesting does not overflow") {
-    CoreIr ir; SortId b, i, r; setupSorts(ir, b, i, r);
+    NativeTerms ir; SortId b, i, r; setupSorts(ir, b, i, r);
     addDeepAssertion(ir, b, i, Kind::Add);
     FormulaRewriter pass(ir, b);
     pass.run();  // must not segfault; verdict is irrelevant here
 }
 
 TEST_CASE("UfInArithPurifier: deep nesting does not overflow") {
-    CoreIr ir; SortId b, i, r; setupSorts(ir, b, i, r);
+    NativeTerms ir; SortId b, i, r; setupSorts(ir, b, i, r);
     addDeepAssertion(ir, b, i, Kind::Add);
     UfInArithPurifier pass(ir);
     pass.run();  // returns bool changed_; just must not segfault
@@ -97,7 +97,7 @@ TEST_CASE("UfInArithPurifier: deep nesting does not overflow") {
 }
 
 TEST_CASE("BoolSubtermPurifier: deep nesting does not overflow") {
-    CoreIr ir; SortId b, i, r; setupSorts(ir, b, i, r);
+    NativeTerms ir; SortId b, i, r; setupSorts(ir, b, i, r);
     addDeepAssertion(ir, b, i, Kind::Add);
     BoolSubtermPurifier pass(ir);
     pass.run();  // returns bool changed_; just must not segfault
@@ -112,14 +112,14 @@ TEST_CASE("BoolSubtermPurifier: bool comparison arg of a UF app is lifted") {
     // BoolSubtermPurifier must lift a comparison in an argument position to a
     // fresh Bool var (p <-> (a<=b)). Before the fix isBoolComposite skipped bool
     // atoms, so run() returned false (no change) for this exact input.
-    CoreIr ir; SortId b, i, r; setupSorts(ir, b, i, r);
-    ExprId x  = ir.add(CoreExpr{Kind::Variable, i, {}, Payload(std::string("x"))});
-    ExprId y  = ir.add(CoreExpr{Kind::Variable, i, {}, Payload(std::string("y"))});
-    ExprId le = ir.add(CoreExpr{Kind::Leq, b, {x, y}, {}});               // (<= x y) : Bool
-    ExprId f  = ir.add(CoreExpr{Kind::UFApply, i, {le},
+    NativeTerms ir; SortId b, i, r; setupSorts(ir, b, i, r);
+    ExprId x  = ir.add(TermExpr{Kind::Variable, i, {}, Payload(std::string("x"))});
+    ExprId y  = ir.add(TermExpr{Kind::Variable, i, {}, Payload(std::string("y"))});
+    ExprId le = ir.add(TermExpr{Kind::Leq, b, {x, y}, {}});               // (<= x y) : Bool
+    ExprId f  = ir.add(TermExpr{Kind::UFApply, i, {le},
                                 Payload(std::string("f"))});             // f(<=) : Int
-    ExprId one = ir.add(CoreExpr{Kind::ConstInt, i, {}, Payload(int64_t(1))});
-    ir.addAssertion(ir.add(CoreExpr{Kind::Eq, b, {f, one}, {}}));         // (= (f (<= x y)) 1)
+    ExprId one = ir.add(TermExpr{Kind::ConstInt, i, {}, Payload(int64_t(1))});
+    ir.addAssertion(ir.add(TermExpr{Kind::Eq, b, {f, one}, {}}));         // (= (f (<= x y)) 1)
     BoolSubtermPurifier pass(ir);
     REQUIRE(pass.run());   // comparison in arg position purified (false before d4b83fc)
     pass.commit();
@@ -130,7 +130,7 @@ TEST_CASE("BoolSubtermPurifier: bool comparison arg of a UF app is lifted") {
         std::vector<ExprId> stk{a};
         while (!stk.empty()) {
             ExprId e = stk.back(); stk.pop_back();
-            const CoreExpr& n = ir.get(e);
+            const TermExpr& n = ir.get(e);
             if (n.kind == Kind::UFApply) {
                 for (ExprId c : n.children) {
                     Kind ck = ir.get(c).kind;
@@ -149,10 +149,10 @@ TEST_CASE("UnconditionalConstantPropagation: deep nesting does not overflow") {
     // Runs UNCONDITIONALLY on the default path (Cap. 8a). A binding x=5 plus a
     // 200k-deep chain over x makes substituteRec/constantFoldRec recurse the
     // full term tree (former crash on insertion_sort / large QF_LRA).
-    CoreIr ir; SortId b, i, r; setupSorts(ir, b, i, r);
-    ExprId x = ir.add(CoreExpr{Kind::Variable, i, {}, Payload(std::string("x"))});
-    ir.addAssertion(ir.add(CoreExpr{Kind::Eq, b,
-        {x, ir.add(CoreExpr{Kind::ConstInt, i, {}, Payload(int64_t(5))})}, {}}));  // x = 5
+    NativeTerms ir; SortId b, i, r; setupSorts(ir, b, i, r);
+    ExprId x = ir.add(TermExpr{Kind::Variable, i, {}, Payload(std::string("x"))});
+    ir.addAssertion(ir.add(TermExpr{Kind::Eq, b,
+        {x, ir.add(TermExpr{Kind::ConstInt, i, {}, Payload(int64_t(5))})}, {}}));  // x = 5
     addDeepAssertion(ir, b, i, Kind::Add);   // (<= (+ ... x ...) 0) over a var named "x"
     UnconditionalConstantPropagation cprop(ir);
     REQUIRE(cprop.run());          // must not segfault
@@ -168,19 +168,19 @@ TEST_CASE("UnconditionalConstantPropagation: wide top-level And survives ir_.add
     // a wide top-level (and (= x 5) (<= (* x y0) 0) (<= (* x y1) 0) ...): each
     // conjunct substitutes x->5 and rebuilds (ir_.add), forcing a realloc mid-loop.
     constexpr int kWide = 4000;
-    CoreIr ir; SortId b, i, r; setupSorts(ir, b, i, r);
-    ExprId x = ir.add(CoreExpr{Kind::Variable, i, {}, Payload(std::string("x"))});
-    ExprId five = ir.add(CoreExpr{Kind::ConstInt, i, {}, Payload(int64_t(5))});
-    ExprId zero = ir.add(CoreExpr{Kind::ConstInt, i, {}, Payload(int64_t(0))});
+    NativeTerms ir; SortId b, i, r; setupSorts(ir, b, i, r);
+    ExprId x = ir.add(TermExpr{Kind::Variable, i, {}, Payload(std::string("x"))});
+    ExprId five = ir.add(TermExpr{Kind::ConstInt, i, {}, Payload(int64_t(5))});
+    ExprId zero = ir.add(TermExpr{Kind::ConstInt, i, {}, Payload(int64_t(0))});
     std::vector<ExprId> conj;
-    conj.push_back(ir.add(CoreExpr{Kind::Eq, b, {x, five}, {}}));  // x = 5 (source of binding)
+    conj.push_back(ir.add(TermExpr{Kind::Eq, b, {x, five}, {}}));  // x = 5 (source of binding)
     for (int k = 0; k < kWide; ++k) {
-        ExprId yk = ir.add(CoreExpr{Kind::Variable, i, {},
+        ExprId yk = ir.add(TermExpr{Kind::Variable, i, {},
             Payload(std::string("y") + std::to_string(k))});
-        ExprId prod = ir.add(CoreExpr{Kind::Mul, i, {x, yk}, {}});  // x * yk -> substitute -> rebuild
-        conj.push_back(ir.add(CoreExpr{Kind::Leq, b, {prod, zero}, {}}));
+        ExprId prod = ir.add(TermExpr{Kind::Mul, i, {x, yk}, {}});  // x * yk -> substitute -> rebuild
+        conj.push_back(ir.add(TermExpr{Kind::Leq, b, {prod, zero}, {}}));
     }
-    CoreExpr bigAnd; bigAnd.kind = Kind::And; bigAnd.sort = b;
+    TermExpr bigAnd; bigAnd.kind = Kind::And; bigAnd.sort = b;
     for (ExprId c : conj) bigAnd.children.push_back(c);
     ir.addAssertion(ir.add(std::move(bigAnd)));
     UnconditionalConstantPropagation cprop(ir);
@@ -190,7 +190,7 @@ TEST_CASE("UnconditionalConstantPropagation: wide top-level And survives ir_.add
 
 TEST_CASE("LogicFeatureDetector: deep nesting does not overflow") {
     // scanExpr was recursive on children; a deep formula overflowed the stack.
-    CoreIr ir; SortId b, i, r; setupSorts(ir, b, i, r);
+    NativeTerms ir; SortId b, i, r; setupSorts(ir, b, i, r);
     addDeepAssertion(ir, b, i, Kind::Add);   // (<= (+ ... ) 0), 200k-deep
     LogicFeatureDetector det(ir);
     LogicFeatures f = det.detect();          // must not segfault
@@ -200,11 +200,11 @@ TEST_CASE("LogicFeatureDetector: deep nesting does not overflow") {
 TEST_CASE("ModelValidator: deep boolean nesting does not overflow") {
     // ModelValidator::eval recursed on boolean structure; a deep (not (not ...))
     // chain overflowed. Build a 200k-deep Not chain over a bool variable.
-    CoreIr ir; SortId b, i, r; setupSorts(ir, b, i, r);
-    ExprId bv = ir.add(CoreExpr{Kind::Variable, b, {}, Payload(std::string("p"))});
+    NativeTerms ir; SortId b, i, r; setupSorts(ir, b, i, r);
+    ExprId bv = ir.add(TermExpr{Kind::Variable, b, {}, Payload(std::string("p"))});
     ExprId chain = bv;
     for (int k = 0; k < kDeep; ++k) {
-        chain = ir.add(CoreExpr{Kind::Not, b, {chain}, {}});
+        chain = ir.add(TermExpr{Kind::Not, b, {chain}, {}});
     }
     ir.addAssertion(chain);
     ModelValidator mv;
@@ -217,17 +217,17 @@ TEST_CASE("ModelValidator: deep boolean nesting does not overflow") {
 TEST_CASE("IntDivModLowerer: deep all-constant term does not overflow") {
     // evalIntConstTerm recursed on Neg/Add/Sub/Mul children; a deep constant
     // term (here a div numerator) overflowed. (div (+ 1 (+ 1 ...)) 2).
-    CoreIr ir; SortId b, i, r; setupSorts(ir, b, i, r);
-    ExprId one = ir.add(CoreExpr{Kind::ConstInt, i, {}, Payload(int64_t(1))});
+    NativeTerms ir; SortId b, i, r; setupSorts(ir, b, i, r);
+    ExprId one = ir.add(TermExpr{Kind::ConstInt, i, {}, Payload(int64_t(1))});
     ExprId sum = one;
     for (int k = 0; k < kDeep; ++k) {
-        ExprId c = ir.add(CoreExpr{Kind::ConstInt, i, {}, Payload(int64_t(1))});
-        sum = ir.add(CoreExpr{Kind::Add, i, {sum, c}, {}});
+        ExprId c = ir.add(TermExpr{Kind::ConstInt, i, {}, Payload(int64_t(1))});
+        sum = ir.add(TermExpr{Kind::Add, i, {sum, c}, {}});
     }
-    ExprId two = ir.add(CoreExpr{Kind::ConstInt, i, {}, Payload(int64_t(2))});
-    ExprId d = ir.add(CoreExpr{Kind::Div, i, {sum, two}, {}});
-    ExprId zero = ir.add(CoreExpr{Kind::ConstInt, i, {}, Payload(int64_t(0))});
-    ir.addAssertion(ir.add(CoreExpr{Kind::Geq, b, {d, zero}, {}}));
+    ExprId two = ir.add(TermExpr{Kind::ConstInt, i, {}, Payload(int64_t(2))});
+    ExprId d = ir.add(TermExpr{Kind::Div, i, {sum, two}, {}});
+    ExprId zero = ir.add(TermExpr{Kind::ConstInt, i, {}, Payload(int64_t(0))});
+    ir.addAssertion(ir.add(TermExpr{Kind::Geq, b, {d, zero}, {}}));
     IntDivModLowerer pass(ir);
     pass.run();                              // must not segfault (evalIntConstTerm)
     CHECK(true);

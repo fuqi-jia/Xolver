@@ -1,0 +1,23 @@
+experiment: xolver-audit-performance-native-terms-r9
+description: Alternating paired runs, 48 inputs selected from pre-change evidence, three repetitions.
+environment:
+  host: panda1
+  workdir: /pub/data/jiafq/xolver
+protocol:
+  inputs: {list: [paired-regression]}
+  timeout: 90m
+  memory: 8G
+  parallelism: 1
+trials:
+  - {name: paired}
+run:
+  cmd: >-
+    python3 tools/remote/paired_suite.py
+    --baseline /pub/data/jiafq/xolver/validation/architecture-r9/xolver
+    --candidate /pub/data/jiafq/xolver/validation/native-terms-r9/xolver
+    --corpus docs/audit/paired-corpus-r2.txt
+    --output validation/performance-native-terms-r9
+measurements:
+  from: metrics.json
+  primary: geomean_speedup
+  checks: ["errors == 0", "disagreements == 0", "comparable > 0"]

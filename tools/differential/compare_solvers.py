@@ -41,7 +41,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-RESULT_RE = re.compile(r"\b(unsat|sat|unknown)\b")
+RESULT_RE = re.compile(r"^(unsat|sat|unknown)[ \t]*$", re.M)
 LOGIC_RE = re.compile(r"\(set-logic\s+([A-Za-z0-9_]+)\s*\)")
 
 SOLVED = {"sat", "unsat"}
@@ -95,7 +95,7 @@ def detect_solvers(xolver_path: str) -> List[SolverSpec]:
 def parse_verdict(stdout: str, stderr: str) -> str:
     # Take the LAST standalone token (final (check-sat) answer), matching
     # run_regression.py's convention; ignore anything inside (error ...).
-    text = (stdout or "") + "\n" + (stderr or "")
+    text = stdout or ""
     matches = RESULT_RE.findall(text)
     return matches[-1] if matches else ""
 
@@ -136,7 +136,7 @@ def run_one(spec: SolverSpec, smt2: Path, timeout_s: float) -> RunResult:
         return RunResult(str(smt2), logic, spec.name, "error", time.perf_counter() - start)
     elapsed = time.perf_counter() - start
     verdict = parse_verdict(proc.stdout, proc.stderr)
-    if not verdict:
+    if proc.returncode != 0 or not verdict:
         verdict = "error"
     elif verdict not in SOLVED and verdict != "unknown":
         verdict = "error"

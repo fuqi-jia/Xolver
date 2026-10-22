@@ -1,13 +1,43 @@
 #include <doctest/doctest.h>
-#include "theory/arith/logics/nra/reasoners/NraLocalSearch.h"
-#include "theory/arith/kernel/poly/PolynomialKernel.h"
-#include "sat/SatSolver.h"
+#include "base/EnvParam.h"
+#include "search/nra/reasoners/NraLocalSearch.h"
+#include "algebra/poly/PolynomialKernel.h"
+#include "contracts/SatSolver.h"
 #include <gmpxx.h>
 #include <chrono>
 
 using namespace xolver;
 
 static SatLit mkReason(SatVar v) { return SatLit::positive(v); }
+
+TEST_CASE("NraLocalSearch: denominator cap follows each query snapshot") {
+    auto kernel = createPolynomialKernel();
+    const auto vx = kernel->getOrCreateVar("x");
+    const auto x = kernel->mkVar(vx);
+    const auto poly = kernel->sub(
+        kernel->mul(kernel->mkConst(mpq_class(4)), kernel->pow(x, 2)),
+        kernel->mkOne());
+    // Only +/-1/2 satisfy this equation. Isolate a single greedy walk from
+    // random escape moves, so changing the allowed denominator changes whether
+    // that walk can find a model, independently of wall-clock timing.
+    for (int cap : {1, 2, 1}) {
+        CAPTURE(cap);
+        env::Scope scope(env::Snapshot::capture({
+            {"XOLVER_NRA_LS_MAX_DEN", std::to_string(cap)},
+            {"XOLVER_NRA_LS_SA_PCT", "0"},
+            {"XOLVER_NRA_LS_NOISE_PCT", "0"},
+            {"XOLVER_WALLCLOCK_SCALE", "0"}}));
+        NraLocalSearch search(*kernel);
+        search.setBudgetMs(0);
+        search.setMaxRounds(1);
+        const auto model = search.tryFindModel({{poly, Relation::Eq, mkReason(1)}}, {vx});
+        REQUIRE(model.has_value() == (cap == 2));
+        if (model) {
+            const mpq_class value = model->at(vx);
+            CHECK(4 * value * value == 1);
+        }
+    }
+}
 
 // =============================================================================
 // Phase A scaffold contract
@@ -130,10 +160,10 @@ TEST_CASE("NraLocalSearch: composes per-var moves (x > 1 ∧ y < 5 ∧ x < y)") 
 }
 
 // =============================================================================
-// Equality relaxation (Phase B) — strict equality still found, relax-flag off
+// Strict equality candidates
 // =============================================================================
 
-TEST_CASE("NraLocalSearch: equality x − 3 = 0 found exactly (no eqRelax)") {
+TEST_CASE("NraLocalSearch: equality x − 3 = 0 found exactly") {
     auto kernel = createPolynomialKernel();
     NraLocalSearch ls(*kernel);
     VarId vx = kernel->getOrCreateVar("x");
@@ -143,25 +173,6 @@ TEST_CASE("NraLocalSearch: equality x − 3 = 0 found exactly (no eqRelax)") {
     auto m = ls.tryFindModel({c}, {vx});
     REQUIRE(m.has_value());
     CHECK((*m)[vx] == 3);
-}
-
-TEST_CASE("NraLocalSearch: eqRelax flag accepts a model within ε-band") {
-    auto kernel = createPolynomialKernel();
-    NraLocalSearch ls(*kernel);
-    ls.setEqRelax(true);
-    VarId vx = kernel->getOrCreateVar("x");
-    PolyId x = kernel->mkVar(vx);
-    // (x − 3) = 0 with EqRelax should still produce x = 3 via boundary or
-    // restoration; the contract is "model satisfies relaxed predicate". We
-    // verify the returned model's evaluation is within ε of 0.
-    PolyId poly = kernel->sub(x, kernel->mkConst(mpq_class(3)));
-    NraLocalSearch::Constraint c{poly, Relation::Eq, mkReason(1)};
-    auto m = ls.tryFindModel({c}, {vx});
-    REQUIRE(m.has_value());
-    const mpq_class v = (*m)[vx];
-    mpq_class err = v - 3;
-    if (err < 0) err = -err;
-    CHECK(err <= mpq_class(1, 1024));   // default epsilon
 }
 
 // =============================================================================

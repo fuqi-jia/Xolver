@@ -1,0 +1,23 @@
+experiment: xolver-audit-presburger-r3
+description: Quantified PA arithmetic differential against Z3 and cvc5.
+environment:
+  host: panda1
+  workdir: /pub/data/jiafq/xolver
+protocol:
+  inputs: {list: [presburger]}
+  timeout: 90m
+  memory: 8G
+  parallelism: 1
+trials:
+  - {name: quantified}
+run:
+  cmd: >-
+    python3 tools/fuzz/fuzz_presburger.py --n 300
+    --solver /pub/data/jiafq/xolver/validation/implementation-r2/xolver
+    --z3 /pub/data/jiafq/xolver/dependencies/oracles/z3
+    --cvc5 /pub/data/jiafq/z3-native-audit-tools-20260924-r3/cvc5/bin/cvc5
+    --output validation/pa-r3
+measurements:
+  from: metrics.json
+  primary: checked
+  checks: ["checked > 0", "unsound == 0", "errors == 0", "oracle_disagreements == 0"]

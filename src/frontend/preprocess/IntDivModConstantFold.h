@@ -1,6 +1,6 @@
 #pragma once
 
-#include "expr/ir.h"
+#include "ir/NativeTerms.h"
 #include <unordered_map>
 #include <vector>
 
@@ -31,7 +31,7 @@ namespace xolver {
  */
 class IntDivModConstantFold {
 public:
-    explicit IntDivModConstantFold(CoreIr& ir);
+    explicit IntDivModConstantFold(NativeTerms& ir);
 
     bool run();
     void commit();
@@ -65,19 +65,19 @@ private:
     ExprId mkMod2(ExprId a, ExprId M);
     ExprId mkIte3(ExprId c, ExprId a, ExprId b);
 
-    // Structural hash-cons for nodes THIS pass builds. CoreIr::add does not
+    // Structural hash-cons for nodes THIS pass builds. NativeTerms::add does not
     // dedup (it appends), so two independently-rebuilt-but-identical arguments
     // (e.g. `-x` reconstructed on both sides of a goal) would get distinct
     // ExprIds and never compare equal. Routing the pass's own constructors
     // through this cache makes them collapse, which is what lets the
     // symbolic-modular rewrite produce a SINGLE canonical `(mod (-x) M)` that
     // both sides share. Keyed by (kind, sort, children, payload).
-    ExprId cons(CoreExpr e);
+    ExprId cons(TermExpr e);
     std::unordered_map<std::string, ExprId> consCache_;
 
     ExprId mkConstInt(int64_t v);
 
-    CoreIr& ir_;
+    NativeTerms& ir_;
     SortId intSortId_;
     std::unordered_map<ExprId, ExprId> memo_;
     std::vector<std::pair<ScopeLevel, ExprId>> folded_;

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "expr/ir.h"
+#include "ir/NativeTerms.h"
 #include "frontend/preprocess/ModelConverter.h"
 #include <cstdint>
 #include <string>
@@ -32,20 +32,11 @@ namespace xolver {
  */
 class SolveEqs {
 public:
-    SolveEqs(CoreIr& ir, ModelConverter& mc);
+    SolveEqs(NativeTerms& ir, ModelConverter& mc);
 
     // Eliminate as many variables as possible (fixpoint, bounded). Returns true
     // if any variable was eliminated.
     bool run();
-
-    // Enable general linear ±1-pivot elimination (XOLVER_PP_SOLVE_EQS_GAUSS).
-    // When on, the pass additionally solves a general linear equality
-    // Σ aᵢ·xᵢ = c for any variable xⱼ whose coefficient is ±1 (so the
-    // reconstruction xⱼ = ∓(Σᵢ≠ⱼ aᵢ·xᵢ − c) is exact and integer-preserving —
-    // no division introduced). This unlocks the Farkas-style `expr = expr`
-    // equalities that the bare-var path (`x = t`) cannot touch. Off by default;
-    // independently gated for ablation.
-    void setGeneralLinear(bool b) { generalLinear_ = b; }
 
     // Replace the IR assertion list with the substituted conjuncts.
     void commit();
@@ -70,14 +61,7 @@ private:
     // Substitute Variable named `name` by `replacement` throughout `e` (memoized).
     ExprId substitute(ExprId e, const std::string& name, ExprId replacement);
 
-    // General ±1-pivot elimination: if conjunct `idx` is a linear equality with
-    // a variable whose coefficient is ±1 (and that variable is safe to
-    // eliminate), isolate it, build the exact linear replacement, substitute it
-    // out, drop the equality, and register the elimination. Returns true on
-    // success (caller restarts the scan). Only fires when generalLinear_ is set.
-    bool tryGeneralEliminate(size_t idx);
-
-    CoreIr& ir_;
+    NativeTerms& ir_;
     ModelConverter& mc_;
     SortId boolSortId_;
     SortId intSortId_;
@@ -88,7 +72,6 @@ private:
     std::unordered_map<ExprId, ExprId> substMemo_;  // cleared per substitution
     size_t eliminated_ = 0;
     bool didRun_ = false;
-    bool generalLinear_ = false;     // XOLVER_PP_SOLVE_EQS_GAUSS
 
     // Substitution-work guard (see run()). Counts node-visits across all
     // substitute() calls; when it exceeds workBudget_ the elimination loop stops
@@ -99,15 +82,6 @@ private:
     uint64_t substWork_ = 0;
     uint64_t workBudget_ = 40'000'000;
 
-    // Densification guard for general ±1-pivot elimination (see run()). When the
-    // live formula DAG grows past growthCap_× its initial size, general
-    // elimination is fanning out hub variables (UNSAT-harmful) and is disabled
-    // for the rest of the pass. growthCap_ tuned so SAT-helpful elimination
-    // (which shrinks: ratio<1) never trips and Petri-net densification (ratio
-    // ~1.9+) does; env-overridable via XOLVER_PP_SOLVE_EQS_GROWTH_CAP.
-    bool gaussDensifyAbort_ = false;
-    double growthCap_ = 1.30;
-    static constexpr size_t kGrowthCheckEvery_ = 4;
 };
 
 } // namespace xolver

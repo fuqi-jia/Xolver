@@ -1,0 +1,3 @@
+tests/regression/lira/lira_020_unsat_is_int_variant_eq.smt2
+tests/regression/nra/nra_155_unsat_hycomp_ballcount_197var.smt2
+tests/regression/nra/nra_200_sat_metitarski_polypaver-bench-sqrt-3d-.smt2

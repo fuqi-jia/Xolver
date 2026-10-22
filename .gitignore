@@ -110,7 +110,8 @@ bin/xolver
 
 # Internal campaign / agent artifacts — kept LOCALLY, untracked on the public repo
 .nra_wip_backup/
-docs/
+docs/*
+!docs/audit/
 !docs/cac/
 .github/prompts/
 adam-warlock-terra-us-agent.md
@@ -191,3 +192,11 @@ _skbuild/
 
 # Externally-built proof checkers (drat-trim / carcara) from tools/proof/install_checkers.sh
 /.proof-checkers/
+
+# Server validation output and staged dependency sources are reproducible.
+/validation/
+/dependencies/
+
+# Full validation archives and frozen input copies stay in local/server storage.
+# Keep concise audit reports and provenance in docs/audit instead.
+/docs/audit/evidence/

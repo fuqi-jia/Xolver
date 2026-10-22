@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
-#include "theory/arith/logics/nra/core/HybridPartitionStats.h"
-#include "theory/arith/kernel/poly/PolynomialKernel.h"
+#include "search/nra/core/HybridPartitionStats.h"
+#include "algebra/poly/PolynomialKernel.h"
 #include <gmpxx.h>
 
 using namespace xolver;

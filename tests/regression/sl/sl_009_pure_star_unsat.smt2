@@ -1,0 +1,6 @@
+(set-logic ALL)
+(declare-heap (Int Int))
+(set-info :status unsat)
+(declare-const x Int)
+(assert (sep (< x 0) (> x 1)))
+(check-sat)

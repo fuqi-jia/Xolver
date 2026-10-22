@@ -8,7 +8,7 @@
 // implemented).
 
 #include <doctest/doctest.h>
-#include "util/RealValue.h"
+#include "base/RealValue.h"
 
 #include <functional>
 #include <gmpxx.h>
@@ -104,6 +104,46 @@ TEST_CASE("RealValue: mixed comparison total order") {
     CHECK(r2.compare(threeHalves) == -1);                  // √2 < 3/2
     CHECK(threeHalves.compare(r2) == 1);
     CHECK(r2.compare(r2) == 0);
+}
+
+TEST_CASE("RealValue: algebraic root selection respects open endpoints") {
+    // x(x-1) has roots 0 and 1. The excluded endpoint 0 must not be selected.
+    AlgebraicNumber a{{mpz_class(0), mpz_class(-1), mpz_class(1)},
+                      mpq_class(0), mpq_class(2), true, true};
+    auto one = RealValue::fromAlgebraic(a);
+    CHECK(one.sign() == 1);
+    CHECK(one.compare(RealValue::fromInt(1)) == 0);
+    CHECK((one + RealValue::fromInt(1)).compare(RealValue::fromInt(2)) == 0);
+    // Exclude the right endpoint instead.
+    a.lower = -1; a.upper = 1;
+    auto zero = RealValue::fromAlgebraic(a);
+    CHECK(zero.sign() == 0);
+    CHECK(zero.compare(RealValue::fromInt(0)) == 0);
+    a.lower = 0; a.lowerOpen = false;
+    CHECK(RealValue::fromAlgebraic(a).compare(RealValue::fromInt(0)) == 0);
+    // A purported isolating interval with both roots cannot denote a value.
+    a.upperOpen = false;
+    CHECK_THROWS_AS(RealValue::fromAlgebraic(a).sign(), std::domain_error);
+}
+
+TEST_CASE("RealValue: separated and touching isolation intervals order exactly") {
+    const auto positive = RealValue::fromAlgebraic(sqrt2());
+    auto other = sqrt2(); other.lower = -2; other.upper = -1;
+    const auto negative = RealValue::fromAlgebraic(other);
+    for (const auto& point : {RealValue::fromInt(-2), RealValue::fromInt(-1),
+                             RealValue::fromInt(1), RealValue::fromInt(2)}) {
+        CHECK(positive.compare(point) == -point.compare(positive));
+        CHECK(negative.compare(point) == -point.compare(negative));
+    }
+    CHECK(positive > RealValue::fromInt(1));
+    CHECK(positive < RealValue::fromInt(2));
+    CHECK(negative < RealValue::fromInt(-1));
+    CHECK(negative > RealValue::fromInt(-2));
+    CHECK(negative < positive);
+    // Touching closed endpoints can denote the same root.
+    AlgebraicNumber left{{mpz_class(-1), mpz_class(1)}, 0, 1, true, false};
+    AlgebraicNumber right{{mpz_class(-1), mpz_class(1)}, 1, 2, false, true};
+    CHECK(RealValue::fromAlgebraic(left) == RealValue::fromAlgebraic(right));
 }
 
 TEST_CASE("RealValue: sign from a touching interval") {

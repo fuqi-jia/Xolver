@@ -6,7 +6,7 @@ namespace xolver {
 namespace {
 
 // tryAsConstNumeric: integer or rational-string ConstReal -> mpq.
-std::optional<mpq_class> tryAsConstNumeric(const CoreIr& ir, ExprId e) {
+std::optional<mpq_class> tryAsConstNumeric(const NativeTerms& ir, ExprId e) {
     const auto& node = ir.get(e);
     if (node.kind == Kind::ConstInt) {
         if (auto* v = std::get_if<int64_t>(&node.payload.value)) {
@@ -28,7 +28,7 @@ std::optional<mpq_class> tryAsConstNumeric(const CoreIr& ir, ExprId e) {
 
 } // namespace
 
-ToRealLiteralFold::ToRealLiteralFold(CoreIr& ir)
+ToRealLiteralFold::ToRealLiteralFold(NativeTerms& ir)
     : ir_(ir), realSortId_(ir.realSortId()) {}
 
 bool ToRealLiteralFold::run() {
@@ -85,7 +85,7 @@ ExprId ToRealLiteralFold::foldRec(ExprId root) {
 
         ExprId rebuilt = e;
         if (changed) {
-            CoreExpr fresh;
+            TermExpr fresh;
             fresh.kind = node.kind;
             fresh.sort = node.sort;
             for (ExprId c : newChildren) fresh.children.push_back(c);
@@ -137,7 +137,7 @@ ExprId ToRealLiteralFold::tryFoldDivOfConsts(ExprId node) {
 }
 
 ExprId ToRealLiteralFold::mkConstReal(const mpq_class& value) {
-    CoreExpr fresh;
+    TermExpr fresh;
     fresh.kind = Kind::ConstReal;
     fresh.sort = realSortId_;
     fresh.payload = Payload(value.get_str());

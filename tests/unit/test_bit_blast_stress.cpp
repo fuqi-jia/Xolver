@@ -5,8 +5,8 @@
 #include <gmpxx.h>
 #include <random>
 #include <vector>
-#include "sat/SatSolver.h"
-#include "theory/arith/kernel/bit_blast/BitBlastEncoder.h"
+#include "contracts/SatSolver.h"
+#include "search/bitblast/BitBlastEncoder.h"
 
 using namespace xolver;
 using namespace xolver::bitblast;

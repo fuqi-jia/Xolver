@@ -3,7 +3,7 @@
 
 namespace xolver {
 
-ToIntDefinitionalLowerer::ToIntDefinitionalLowerer(CoreIr& ir)
+ToIntDefinitionalLowerer::ToIntDefinitionalLowerer(NativeTerms& ir)
     : ir_(ir),
       boolSortId_(ir.boolSortId()),
       intSortId_(ir.intSortId()),
@@ -59,8 +59,8 @@ ExprId ToIntDefinitionalLowerer::rewriteRec(ExprId root, ScopeLevel level) {
         }
 
         // Snapshot by value: getOrLowerToInt()/mk*() below call ir_.addShared(),
-        // which may relocate CoreExpr storage and invalidate references.
-        const CoreExpr node = ir_.get(e);
+        // which may relocate TermExpr storage and invalidate references.
+        const TermExpr node = ir_.get(e);
 
         if (!frame.processed) {
             frame.processed = true;  // do NOT touch `frame` after a push_back
@@ -125,7 +125,7 @@ ExprId ToIntDefinitionalLowerer::rewriteRec(ExprId root, ScopeLevel level) {
         if (!changed) {
             rewriteMemo_[e] = e;
         } else {
-            CoreExpr fresh;
+            TermExpr fresh;
             fresh.kind = node.kind;
             fresh.sort = node.sort;
             fresh.children = std::move(newChildren);
@@ -151,11 +151,11 @@ ExprId ToIntDefinitionalLowerer::getOrLowerToInt(ExprId arg, ScopeLevel level) {
         return arg;
     }
 
-    ExprId i_t = ir_.makeFreshVariable(intSortId_, "__nlc_floor");
+    ExprId i_t = ir_.makeFreshVariable(intSortId_, "__nlc_floor", /*routingAuxiliary=*/true);
     // r_t is a fresh Real proxy for the original argument; the bridge
     // equality routes through the atomizer to whichever arithmetic theory
     // owns the original expression.
-    ExprId r_t = ir_.makeFreshVariable(realSortId_, "__nlc_floor_r");
+    ExprId r_t = ir_.makeFreshVariable(realSortId_, "__nlc_floor_r", /*routingAuxiliary=*/true);
 
     // Soundness side-effects: track what kind of bridge we are introducing
     // so the Solver can upgrade the declared logic.
@@ -182,7 +182,7 @@ ExprId ToIntDefinitionalLowerer::getOrLowerToInt(ExprId arg, ScopeLevel level) {
 // ---------------------------------------------------------------------------
 
 ExprId ToIntDefinitionalLowerer::mkConstInt(int64_t v) {
-    CoreExpr e;
+    TermExpr e;
     e.kind = Kind::ConstInt;
     e.sort = intSortId_;
     e.payload = Payload(v);
@@ -190,7 +190,7 @@ ExprId ToIntDefinitionalLowerer::mkConstInt(int64_t v) {
 }
 
 ExprId ToIntDefinitionalLowerer::mkConstReal(const std::string& s) {
-    CoreExpr e;
+    TermExpr e;
     e.kind = Kind::ConstReal;
     e.sort = realSortId_;
     e.payload = Payload(s);
@@ -198,7 +198,7 @@ ExprId ToIntDefinitionalLowerer::mkConstReal(const std::string& s) {
 }
 
 ExprId ToIntDefinitionalLowerer::mkToReal(ExprId child) {
-    CoreExpr e;
+    TermExpr e;
     e.kind = Kind::ToReal;
     e.sort = realSortId_;
     e.children.push_back(child);
@@ -206,7 +206,7 @@ ExprId ToIntDefinitionalLowerer::mkToReal(ExprId child) {
 }
 
 ExprId ToIntDefinitionalLowerer::mkLeq(ExprId a, ExprId b) {
-    CoreExpr e;
+    TermExpr e;
     e.kind = Kind::Leq;
     e.sort = boolSortId_;
     e.children.push_back(a);
@@ -215,7 +215,7 @@ ExprId ToIntDefinitionalLowerer::mkLeq(ExprId a, ExprId b) {
 }
 
 ExprId ToIntDefinitionalLowerer::mkLt(ExprId a, ExprId b) {
-    CoreExpr e;
+    TermExpr e;
     e.kind = Kind::Lt;
     e.sort = boolSortId_;
     e.children.push_back(a);
@@ -224,7 +224,7 @@ ExprId ToIntDefinitionalLowerer::mkLt(ExprId a, ExprId b) {
 }
 
 ExprId ToIntDefinitionalLowerer::mkEq(ExprId a, ExprId b) {
-    CoreExpr e;
+    TermExpr e;
     e.kind = Kind::Eq;
     e.sort = boolSortId_;
     e.children.push_back(a);
@@ -233,7 +233,7 @@ ExprId ToIntDefinitionalLowerer::mkEq(ExprId a, ExprId b) {
 }
 
 ExprId ToIntDefinitionalLowerer::mkAdd(ExprId a, ExprId b) {
-    CoreExpr e;
+    TermExpr e;
     e.kind = Kind::Add;
     e.sort = realSortId_;
     e.children.push_back(a);

@@ -1,0 +1,77 @@
+{
+  "scope": "src/app/include/tests/tools/python; manual read of declarations, control reads and constructor bodies; not a formal whole-program proof",
+  "findings": [
+    {
+      "name": "NraSolver::enableSubtropical_",
+      "sites": [
+        "src/search/nra/NraSolver.h",
+        "src/search/nra/NraSolver_stages.cpp"
+      ],
+      "kind": "constant_internal_gate",
+      "effect": "constant true private field, sole early-return read and no setter or assignment; retain validated candidate search and combination applicability checks",
+      "status": "accepted removed at step42",
+      "source_sha256": {
+        "src/search/nra/NraSolver.h": "d25c4da0df3c8d71be86c970da554c0ac33702edbb653824d809a5b50026039e",
+        "src/search/nra/NraSolver_stages.cpp": "d9ed8734811b4334f9670693f923768ce7d534724327356b1495dc9ed0b6ab08"
+      }
+    },
+    {
+      "name": "NraSolver::enableSignRefute_",
+      "sites": [
+        "src/search/nra/NraSolver.h",
+        "src/search/nra/NraSolver_stages.cpp"
+      ],
+      "kind": "constant_internal_gate",
+      "effect": "constant true private field, sole early-return read and no setter or assignment; retain sign-definiteness algorithm, explanations and combination applicability checks",
+      "status": "accepted removed at step43",
+      "source_sha256": {
+        "src/search/nra/NraSolver.h": "d25c4da0df3c8d71be86c970da554c0ac33702edbb653824d809a5b50026039e",
+        "src/search/nra/NraSolver_stages.cpp": "d9ed8734811b4334f9670693f923768ce7d534724327356b1495dc9ed0b6ab08"
+      }
+    },
+    {
+      "name": "CadicalTheoryPropagator::decideSteer_",
+      "sites": [
+        "src/search/sat/CadicalTheoryPropagator.h"
+      ],
+      "kind": "unused_gate_residue",
+      "effect": "declaration-only private false field with obsolete XOLVER_LRA_DECIDE comment; no read or write in src/app/include/tests/tools/python. XOLVER_LRA_DECIDE itself is live and read locally in CadicalTheoryPropagator.cpp; this finding covers only the redundant member, not the decision heuristic or its named control.",
+      "status": "identified, not removed",
+      "source_sha256": {
+        "src/search/sat/CadicalTheoryPropagator.h": "96d30c694b958dcb79d24ae5dc8e09371eeb553e5bcd65dea30fcf85130e829e"
+      }
+    },
+    {
+      "name": "NraSolver::enableCac_",
+      "sites": [
+        "src/search/nra/NraSolver.h",
+        "src/search/nra/NraSolver_cac.cpp"
+      ],
+      "kind": "constant_internal_gate",
+      "effect": "constant true private field, one early-return guard and one diagnostic-stream read; no setter or assignment in src/app/include/tests/tools/python; retain CAC algorithm and applicability checks",
+      "status": "accepted removed at step45",
+      "source_sha256": {
+        "src/search/nra/NraSolver.h": "d25c4da0df3c8d71be86c970da554c0ac33702edbb653824d809a5b50026039e",
+        "src/search/nra/NraSolver_cac.cpp": "a10092b611d2dba5abd5d90db7e7a60cd05d66be63e7ee9e54bea82a3e4f690b"
+      }
+    },
+    {
+      "name": "CacEngine::Config::inloopPrune",
+      "sites": [
+        "src/search/nra/cac/CacEngine.h",
+        "src/search/nra/cac/CacEngine.cpp",
+        "src/search/nra/NraSolver_cac.cpp",
+        "tests/unit/test_cac_engine.cpp"
+      ],
+      "kind": "internal_algorithm_gate",
+      "effect": "Config defaults false; NraSolver always enables it via a constant-true local and four tests opt in. A live guard controls interval-subsumption pruning. The old named control survives only in comments, so the named-control inventory does not count this independent internal gate. Retain the used algorithm when removing the switch; do not classify it as an unused default-off experiment.",
+      "status": "identified, not removed",
+      "source_sha256": {
+        "src/search/nra/cac/CacEngine.h": "dc922d0a588e2de5a36b59a039366f0d2b2fe3900f8763bd208270f3ba8b5c38",
+        "src/search/nra/cac/CacEngine.cpp": "2d04f1e17bb3d1f3f29a1ec96c1adf331709c3773d4e9c67b71ae1afa7d7d06e",
+        "src/search/nra/NraSolver_cac.cpp": "f38555c2fab21568b5e714e303ed9aec5c386cea2410c6750ef3847ad1872fa9",
+        "tests/unit/test_cac_engine.cpp": "5bbd1dd039dc1f7262f224b26c978ae004be171c16256b6e5075b8d2701588bc"
+      }
+    }
+  ]
+}

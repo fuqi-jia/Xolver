@@ -3,7 +3,7 @@
 
 namespace xolver {
 
-NaryDistinctLowerer::NaryDistinctLowerer(CoreIr& ir)
+NaryDistinctLowerer::NaryDistinctLowerer(NativeTerms& ir)
     : ir_(ir), boolSortId_(ir.boolSortId()) {
 }
 
@@ -69,7 +69,7 @@ ExprId NaryDistinctLowerer::lowerRec(ExprId root) {
         } else if (!changed) {
             memo_[e] = e;
         } else {
-            CoreExpr ne;
+            TermExpr ne;
             ne.kind = node.kind;
             ne.sort = node.sort;
             for (ExprId c : newChildren) ne.children.push_back(c);
@@ -97,7 +97,7 @@ ExprId NaryDistinctLowerer::lowerDistinct(const std::vector<ExprId>& children) {
 }
 
 ExprId NaryDistinctLowerer::mkDistinct(ExprId a, ExprId b) {
-    CoreExpr e;
+    TermExpr e;
     e.kind = Kind::Distinct;
     e.sort = boolSortId_;
     e.children.push_back(a);
@@ -106,7 +106,7 @@ ExprId NaryDistinctLowerer::mkDistinct(ExprId a, ExprId b) {
 }
 
 ExprId NaryDistinctLowerer::mkAnd(ExprId a, ExprId b) {
-    CoreExpr e;
+    TermExpr e;
     e.kind = Kind::And;
     e.sort = boolSortId_;
     e.children.push_back(a);
@@ -115,7 +115,7 @@ ExprId NaryDistinctLowerer::mkAnd(ExprId a, ExprId b) {
 }
 
 ExprId NaryDistinctLowerer::mkTrue() {
-    CoreExpr e;
+    TermExpr e;
     e.kind = Kind::ConstBool;
     e.sort = boolSortId_;
     e.payload = Payload(true);

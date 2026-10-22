@@ -41,9 +41,9 @@
 #include <random>
 #include <sstream>
 
-#include "theory/arith/kernel/poly/PolynomialKernel.h"
-#include "theory/arith/kernel/poly/RationalPolynomial.h"
-#include "theory/arith/logics/nra/lazard/SubresultantChain.h"
+#include "algebra/poly/PolynomialKernel.h"
+#include "algebra/poly/RationalPolynomial.h"
+#include "search/nra/lazard/SubresultantChain.h"
 
 // NB: this test never includes LibPolyKernel.h directly — the libpoly include
 // path is PRIVATE to xolver_core. pscChain is exposed on the PolynomialKernel
@@ -405,7 +405,6 @@ TEST_CASE("pscChain: randomized differential CAD-equivalence vs determinant (~30
 // ---------------------------------------------------------------------------
 // Task 3: the gated public entry point principalSubresultantCoefficients.
 //
-// The flag XOLVER_NRA_LIBPOLY_PSC selects the libpoly path ONLY when a non-null
 // kernel is also supplied (`kernel != nullptr && flag ON`). The flag is read
 // once per process via a function-local `static const bool`, so we set the env
 // var ON for the whole process and exploit the kernel-null short-circuit to get
@@ -419,7 +418,6 @@ TEST_CASE("pscChain: randomized differential CAD-equivalence vs determinant (~30
 // ---------------------------------------------------------------------------
 TEST_CASE("principalSubresultantCoefficients: gated ON (libpoly) == OFF (determinant) up to scale") {
     // Set the flag ON before the first call so the process-static read sees it.
-    setenv("XOLVER_NRA_LIBPOLY_PSC", "1", /*overwrite=*/1);
 
     auto kernelPtr = createPolynomialKernel();
     PolynomialKernel& kernel = *kernelPtr;
@@ -457,7 +455,6 @@ TEST_CASE("principalSubresultantCoefficients: gated ON (libpoly) == OFF (determi
                       << ": libpoly path differs from determinant");
     }
 
-    unsetenv("XOLVER_NRA_LIBPOLY_PSC");
 }
 
 #endif  // XOLVER_HAS_LIBPOLY

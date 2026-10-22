@@ -1,8 +1,8 @@
 #include <doctest/doctest.h>
-#include "theory/arith/logics/nra/simplex/NraLinearExtractor.h"
-#include "theory/arith/logics/nra/core/CdcacTypes.h"
-#include "theory/arith/logics/nra/core/CdcacConstraint.h"
-#include "theory/arith/kernel/poly/PolynomialKernel.h"
+#include "search/nra/simplex/NraLinearExtractor.h"
+#include "search/nra/core/CdcacTypes.h"
+#include "search/nra/core/CdcacConstraint.h"
+#include "algebra/poly/PolynomialKernel.h"
 #include <set>
 #include <algorithm>
 
@@ -44,9 +44,9 @@ TEST_CASE("extractor: x*y - 1 is nonlinear") {
     CHECK(cc.nonlinear.size() == 1);
 }
 
-#include "theory/arith/logics/nra/simplex/SimplexTableauFacts.h"
-#include "theory/arith/logics/lra/GeneralSimplex.h"
-#include "theory/arith/logics/lra/SparseTableau.h"
+#include "search/nra/simplex/SimplexTableauFacts.h"
+#include "search/lra/GeneralSimplex.h"
+#include "search/lra/SparseTableau.h"
 
 TEST_CASE("deriveBasicInterval: x = 1 - y over y in [0,1] -> [0,1]") {
     // xb = rhs + sum coeff*col ; here rhs=1, one term coeff=-1 with col bounds [0,1]
@@ -71,7 +71,7 @@ TEST_CASE("tableau facts: x>=1 and x<=1 (single-var) -> fixed; bounded both side
     PolyId xm1 = kernel->sub(x, one);
     auto cc = classifyConstraints(*kernel, {
         mkC(xm1, Relation::Geq, 1), mkC(xm1, Relation::Leq, 2) });
-    SimplexTableauFacts f = computeSimplexTableauFacts(*kernel, cc.linear);
+    SimplexTableauFacts f = computeSimplexTableauFacts(cc.linear);
     CHECK(!f.linearSubsetUnsat());
     CHECK(f.hasLower(xv)); CHECK(f.hasUpper(xv)); CHECK(f.isFixed(xv));
 }
@@ -84,7 +84,7 @@ TEST_CASE("tableau facts: x>=1 and x<=0 (single-var) -> linearSubsetUnsat, no fa
     auto cc = classifyConstraints(*kernel, {
         mkC(kernel->sub(x, one), Relation::Geq, 1),   // x >= 1
         mkC(x,                   Relation::Leq, 2) }); // x <= 0
-    SimplexTableauFacts f = computeSimplexTableauFacts(*kernel, cc.linear);
+    SimplexTableauFacts f = computeSimplexTableauFacts(cc.linear);
     CHECK(f.linearSubsetUnsat());
     CHECK(!f.hasLower(xv));  // no ordering facts on UNSAT
 }
@@ -132,7 +132,7 @@ TEST_CASE("tableau facts: an ORIGINAL variable acquires a row-derived bound (end
     auto cc = classifyConstraints(*kernel, {
         mkC(kernel->sub(kernel->add(x, y), five), Relation::Eq, 1),   // x + y - 5 = 0  (multi-var -> aux row)
         mkC(kernel->sub(y, two),                  Relation::Eq, 2) }); // y - 2 = 0      (single-var -> y fixed)
-    SimplexTableauFacts f = computeSimplexTableauFacts(*kernel, cc.linear);
+    SimplexTableauFacts f = computeSimplexTableauFacts(cc.linear);
     REQUIRE(!f.linearSubsetUnsat());
     REQUIRE(f.isBasic(xv));            // construction forces x basic; if this fails, adjust the construction
     // x has NO direct bound atom, so these bounds can ONLY be row-derived:
@@ -141,7 +141,7 @@ TEST_CASE("tableau facts: an ORIGINAL variable acquires a row-derived bound (end
     CHECK(f.isFixed(xv));             // x = 5 - 2 = 3
 }
 
-#include "theory/arith/logics/nra/simplex/PolyStructureFacts.h"
+#include "search/nra/simplex/PolyStructureFacts.h"
 
 TEST_CASE("structure: xy+xz-3 -> fixing x linearizes; fixing y/z does not") {
     auto kernel = createPolynomialKernel();
@@ -180,91 +180,4 @@ TEST_CASE("structure: x*y^2 -> fixing y linearizes, fixing x does not") {
     CHECK(f.linearizationGain(yv) == 1);
     CHECK(f.linearizationGain(xv) == 0);
     CHECK(f.maxDegree(yv) == 2);
-}
-
-#include "theory/arith/logics/nra/simplex/VarOrderSelector.h"
-
-static int posOf(const std::vector<std::string>& v, const std::string& n) {
-    return (int)(std::find(v.begin(), v.end(), n) - v.begin());
-}
-
-TEST_CASE("varorder: highest total degree goes last (projected first)") {
-    auto kernel = createPolynomialKernel();
-    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
-    PolyId y = kernel->mkVar(kernel->getOrCreateVar("y"));
-    PolyId z = kernel->mkVar(kernel->getOrCreateVar("z"));
-    PolyId three = kernel->mkConst(mpq_class(3)), two = kernel->mkConst(mpq_class(2));
-    PolyId core = kernel->sub(kernel->add(kernel->mul(x, y), kernel->mul(x, z)), three);
-    PolyId ym2 = kernel->sub(y, two), zm2 = kernel->sub(z, two);
-    // Integer constant only: libpoly's integer-ring polynomials cannot represent a
-    // non-integer rational (mkConst(1/2) returns NullPoly -> sub() derefs null -> SIGSEGV).
-    // x-1 still makes degree(x) contribute, so x ties on total-degree with y,z, then
-    // wins the frontScore tie-break (x linearizes xy+xz) to land LAST.
-    PolyId xm1 = kernel->sub(x, kernel->mkConst(mpq_class(1)));
-    auto C = [](PolyId p, Relation r, int l){ CdcacConstraint c; c.poly=p; c.rel=r; c.reason=SatLit::positive(l); return c; };
-    std::vector<CdcacConstraint> cons = {
-        C(core, Relation::Eq, 1), C(ym2, Relation::Geq, 2),
-        C(zm2, Relation::Geq, 3), C(xm1, Relation::Leq, 4) };
-    std::vector<std::string> names = {"x", "y", "z"};
-    auto order = computeCdcacVarOrder(*kernel, cons, names);
-    REQUIRE(order.size() == 3);
-    CHECK(order.back() == "x");                               // x has the highest degSum
-    std::set<std::string> got(order.begin(), order.end());
-    CHECK(got == std::set<std::string>{"x", "y", "z"});
-}
-
-TEST_CASE("varorder: within equal degree, higher linearization-gain var is later") {
-    auto kernel = createPolynomialKernel();
-    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
-    PolyId y = kernel->mkVar(kernel->getOrCreateVar("y"));
-    PolyId a = kernel->mkVar(kernel->getOrCreateVar("a"));
-    PolyId b = kernel->mkVar(kernel->getOrCreateVar("b"));
-    PolyId one = kernel->mkConst(mpq_class(1));
-    PolyId c1 = kernel->sub(kernel->mul(a, x), one);                       // a*x - 1  (fixing a linearizes)
-    PolyId c2 = kernel->sub(kernel->mul(kernel->mul(b, x), y), one);       // b*x*y - 1 (fixing b leaves x*y)
-    auto C = [](PolyId p, Relation r, int l){ CdcacConstraint c; c.poly=p; c.rel=r; c.reason=SatLit::positive(l); return c; };
-    std::vector<CdcacConstraint> cons = { C(c1, Relation::Eq, 1), C(c2, Relation::Eq, 2) };
-    std::vector<std::string> names = {"a", "b", "x", "y"};                  // a,b,y degSum 1; x degSum 2
-    auto order = computeCdcacVarOrder(*kernel, cons, names);
-    CHECK(order.back() == "x");                                            // highest degree last
-    CHECK(posOf(order, "a") > posOf(order, "b"));                          // a linearizes -> later than b
-    std::set<std::string> got(order.begin(), order.end());
-    CHECK(got == std::set<std::string>{"a","b","x","y"});
-}
-
-TEST_CASE("varorder: all-linear input is a valid deterministic permutation") {
-    auto kernel = createPolynomialKernel();
-    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
-    PolyId y = kernel->mkVar(kernel->getOrCreateVar("y"));
-    auto C = [](PolyId p, Relation r, int l){ CdcacConstraint c; c.poly=p; c.rel=r; c.reason=SatLit::positive(l); return c; };
-    std::vector<CdcacConstraint> cons = { C(x, Relation::Geq, 1), C(y, Relation::Leq, 2) };
-    std::vector<std::string> names = {"x", "y"};
-    auto order = computeCdcacVarOrder(*kernel, cons, names);
-    std::set<std::string> got(order.begin(), order.end());
-    CHECK(got == std::set<std::string>{"x", "y"});
-}
-
-#include "theory/arith/logics/nra/core/CdcacSolver.h"
-#include <cstdlib>
-
-TEST_CASE("cdcac varorder flag: same verdict on/off for xy + x^2 - 2 = 0 and y>=1") {
-    auto run = [](bool on) {
-        if (on) setenv("XOLVER_NRA_VARORDER_SIMPLEX", "1", 1);
-        else    unsetenv("XOLVER_NRA_VARORDER_SIMPLEX");
-        auto kernel = createPolynomialKernel();
-        CdcacSolver solver(kernel.get());
-        PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
-        PolyId y = kernel->mkVar(kernel->getOrCreateVar("y"));
-        PolyId one = kernel->mkConst(mpq_class(1)), two = kernel->mkConst(mpq_class(2));
-        PolyId core = kernel->sub(kernel->add(kernel->mul(x, y), kernel->pow(x, 2)), two);
-        PolyId ym1 = kernel->sub(y, one);
-        solver.assertConstraint(core, Relation::Eq,  SatLit::positive(1), 0);
-        solver.assertConstraint(ym1,  Relation::Geq, SatLit::positive(2), 0);
-        auto r = solver.check(CdcacEffort::Full, nullptr);
-        return r.kind;
-    };
-    auto off = run(false);
-    auto on  = run(true);
-    unsetenv("XOLVER_NRA_VARORDER_SIMPLEX");
-    CHECK(off == on);   // order must not change the verdict on a decidable case
 }

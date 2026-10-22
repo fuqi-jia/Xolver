@@ -1,11 +1,11 @@
 #include <doctest/doctest.h>
-#include "theory/arith/logics/nra/core/CdcacSolver.h"
-#include "theory/arith/logics/nra/core/CdcacTypes.h"
-#include "theory/arith/logics/nra/engine/CoveringManager.h"
-#include "theory/arith/logics/nra/engine/ReasonManager.h"
-#include "theory/arith/logics/nra/backend/LibpolyBackend.h"
-#include "theory/arith/logics/nra/core/CdcacCommon.h"   // VanishResult
-#include "theory/arith/kernel/poly/PolynomialKernel.h"
+#include "search/nra/core/CdcacSolver.h"
+#include "search/nra/core/CdcacTypes.h"
+#include "search/nra/engine/CoveringManager.h"
+#include "search/nra/engine/ReasonManager.h"
+#include "search/nra/backend/LibpolyBackend.h"
+#include "search/nra/core/CdcacCommon.h"   // VanishResult
+#include "algebra/poly/PolynomialKernel.h"
 
 using namespace xolver;
 

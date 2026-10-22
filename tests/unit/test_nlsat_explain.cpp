@@ -12,11 +12,11 @@
 // reasons) or Found (with a value that satisfies the constraint). The
 // engine never reports the WRONG verdict.
 
-#include "experimental/mcsat/MCSatTrail.h"
-#include "theory/arith/logics/nra/engine/NlsatEngine.h"
-#include "theory/arith/kernel/poly/PolynomialKernel.h"
-#include "theory/core/TheoryAtomTypes.h"
-#include "util/RealValue.h"
+#include "search/experimental/mcsat/MCSatTrail.h"
+#include "search/nra/engine/NlsatEngine.h"
+#include "algebra/poly/PolynomialKernel.h"
+#include "contracts/TheoryAtomTypes.h"
+#include "base/RealValue.h"
 
 #include <doctest/doctest.h>
 #include <memory>

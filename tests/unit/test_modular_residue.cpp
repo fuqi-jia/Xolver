@@ -1,8 +1,9 @@
 #include <doctest/doctest.h>
-#include "theory/arith/logics/nia/reasoners/ModularResidueReasoner.h"
-#include "theory/arith/kernel/poly/PolynomialKernel.h"
-#include "sat/SatSolver.h"
+#include "search/nia/reasoners/ModularResidueReasoner.h"
+#include "algebra/poly/PolynomialKernel.h"
+#include "contracts/SatSolver.h"
 #include <gmpxx.h>
+#include <unordered_map>
 
 using namespace xolver;
 
@@ -23,6 +24,34 @@ void addBounds(std::vector<NormalizedNiaConstraint>& cs, PolynomialKernel& k,
 }
 
 } // namespace
+
+TEST_CASE("ModularResidue: polynomial congruence cannot refute a satisfiable integer system") {
+    auto k = createPolynomialKernel();
+    auto b = var(*k, "b"), x = var(*k, "x"), y = var(*k, "y");
+    auto q = var(*k, "q"), r = var(*k, "r");
+    auto xy = k->mul(x, y);
+    std::vector<NormalizedNiaConstraint> cs {
+        {k->sub(k->sub(xy, k->mul(b, q)), r), Relation::Eq, rl(1)},
+        {k->sub(k->sub(xy, k->mul(b, b)), cst(*k, 1)), Relation::Eq, rl(2)},
+        {k->sub(r, cst(*k, 1)), Relation::Neq, rl(3)}
+    };
+    // Polynomial remainder 1 modulo b proves a congruence, not r = 1.
+    // Modulus 1 and unbounded quotient/remainder values defeat finite-grid
+    // sampling; both assignments satisfy every original constraint exactly.
+    const std::vector<std::unordered_map<std::string, mpz_class>> witnesses {
+        {{"b", 1}, {"x", 1}, {"y", 2}, {"q", 2}, {"r", 0}},
+        {{"b", 2}, {"x", 1}, {"y", 5}, {"q", -100}, {"r", 205}}
+    };
+    for (const auto& witness : witnesses) {
+        for (const auto& c : cs) {
+            auto value = k->evalInteger(c.poly, witness);
+            REQUIRE(value.has_value());
+            CHECK((c.rel == Relation::Eq ? *value == 0 : *value != 0));
+        }
+    }
+    ModularResidueReasoner reasoner(*k);
+    CHECK(reasoner.run(cs).kind != NiaReasoningKind::Conflict);
+}
 
 // s = x^2 (mod 4) is always 0 or 1, never 2.  With R := s mod 4 (a div/mod
 // group) and the asserted equality R = 2, the system is UNSAT and the only

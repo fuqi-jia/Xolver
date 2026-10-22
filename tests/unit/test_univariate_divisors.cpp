@@ -1,5 +1,5 @@
 #include <doctest/doctest.h>
-#include "theory/arith/logics/nia/reasoners/UnivariateIntegerReasoner.h"
+#include "search/nia/reasoners/UnivariateIntegerReasoner.h"
 #include <gmpxx.h>
 
 // Direct tests for UnivariateIntegerReasoner::completeDivisors — the RRT divisor

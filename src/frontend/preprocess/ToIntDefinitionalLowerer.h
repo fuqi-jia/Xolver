@@ -1,6 +1,6 @@
 #pragma once
 
-#include "expr/ir.h"
+#include "ir/NativeTerms.h"
 #include <unordered_map>
 #include <vector>
 
@@ -38,7 +38,7 @@ namespace xolver {
  */
 class ToIntDefinitionalLowerer {
 public:
-    explicit ToIntDefinitionalLowerer(CoreIr& ir);
+    explicit ToIntDefinitionalLowerer(NativeTerms& ir);
 
     bool run();
     void commit();
@@ -65,7 +65,7 @@ private:
     bool refersToIntVar(ExprId e) const;
     bool refersToRealVar(ExprId e) const;
 
-    CoreIr& ir_;
+    NativeTerms& ir_;
     SortId boolSortId_;
     SortId intSortId_;
     SortId realSortId_;

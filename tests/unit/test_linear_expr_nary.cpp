@@ -1,10 +1,10 @@
 #include <doctest/doctest.h>
-#include "theory/arith/kernel/linear/LinearExpr.h"
-#include "expr/ir.h"
+#include "algebra/linear/LinearExpr.h"
+#include "ir/NativeTerms.h"
 
 // Directly exercises extractLinearExpr's n-ary handling of Sub/Mul/Div.
 // The production frontend (SOMTParser) binarizes these, so end-to-end .smt2
-// tests never feed n-ary nodes here; these build the CoreExpr nodes by hand to
+// tests never feed n-ary nodes here; these build the TermExpr nodes by hand to
 // lock in the variadic contract (so linearization does not silently depend on
 // the frontend's binarization).
 
@@ -13,12 +13,13 @@ using namespace xolver;
 namespace {
 
 struct Builder {
-    CoreIr ir;
-    ExprId cint(int64_t v) { CoreExpr e; e.kind = Kind::ConstInt; e.payload = Payload(v); return ir.add(std::move(e)); }
-    ExprId creal(std::string s) { CoreExpr e; e.kind = Kind::ConstReal; e.payload = Payload(std::move(s)); return ir.add(std::move(e)); }
-    ExprId var(std::string n) { CoreExpr e; e.kind = Kind::Variable; e.payload = Payload(std::move(n)); return ir.add(std::move(e)); }
+    NativeTerms ir;
+    Builder() { ir.registerSort(0, SortKind::Int); ir.registerSort(1, SortKind::Real); }
+    ExprId cint(int64_t v) { TermExpr e; e.kind = Kind::ConstInt; e.sort = 0; e.payload = Payload(v); return ir.add(std::move(e)); }
+    ExprId creal(std::string s) { TermExpr e; e.kind = Kind::ConstReal; e.sort = 1; e.payload = Payload(std::move(s)); return ir.add(std::move(e)); }
+    ExprId var(std::string n) { TermExpr e; e.kind = Kind::Variable; e.sort = 1; e.payload = Payload(std::move(n)); return ir.add(std::move(e)); }
     ExprId op(Kind k, std::vector<ExprId> ch) {
-        CoreExpr e; e.kind = k;
+        TermExpr e; e.kind = k; e.sort = 1;
         for (ExprId c : ch) e.children.push_back(c);
         return ir.add(std::move(e));
     }

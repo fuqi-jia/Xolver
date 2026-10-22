@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
 #include "xolver/Solver.h"
-#include "expr/Smt2Dumper.h"
+#include "ir/Smt2Dumper.h"
 #include <fstream>
 #include <filesystem>
 #include <iostream>

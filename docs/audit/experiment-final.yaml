@@ -1,0 +1,18 @@
+experiment: xolver-audit-final-r2
+description: Final source including proof-export repair; serial regression on one allocated CPU.
+environment:
+  host: panda1
+  workdir: /pub/data/jiafq/xolver
+protocol:
+  inputs: {list: [final]}
+  timeout: 90m
+  memory: 16G
+  parallelism: 1
+trials:
+  - {name: proofs-on}
+run:
+  cmd: XOLVER_REGRESSION_TIMEOUT=240 XOLVER_REGRESSION_JOBS=1 bash tools/remote/validate.sh final
+measurements:
+  from: metrics.json
+  primary: unit_rc
+  checks: ["unit_rc == 0", "regression_rc == 0", "tools_rc == 0", "known_gaps_rc == 0"]

@@ -1,7 +1,7 @@
 #include <doctest/doctest.h>
-#include "theory/combination/ConflictMinimizer.h"
-#include "theory/core/TheoryLemmaDatabase.h"
-#include "theory/core/TheoryAtomTypes.h"
+#include "search/combination/ConflictMinimizer.h"
+#include "search/coordination/TheoryLemmaDatabase.h"
+#include "contracts/TheoryAtomTypes.h"
 #include <cstdlib>
 
 using namespace xolver;
@@ -68,4 +68,21 @@ TEST_CASE("TheoryLemmaDatabase: FIFO eviction under XOLVER_SAT_LEMMA_MGMT") {
     CHECK_FALSE(db.contains(mkLemma(2)));
     CHECK(db.contains(mkLemma(1)));
     unsetenv("XOLVER_SAT_LEMMA_MGMT");
+}
+
+TEST_CASE("TheoryLemmaDatabase: exact clauses and installation are distinct") {
+    TheoryLemmaDatabase db;
+    TheoryLemma a{{{1, true}, {2, false}}};
+    TheoryLemma reordered{{{2, false}, {1, true}, {1, true}}};
+    TheoryLemma opposite{{{1, true}, {2, true}}};
+    CHECK(db.insertIfNew(a));
+    CHECK_FALSE(db.insertIfNew(reordered));
+    CHECK_FALSE(db.isInstalled(a));
+    CHECK_FALSE(db.contains(opposite));
+    db.markInstalled(reordered);
+    CHECK(db.isInstalled(a));
+    CHECK_FALSE(db.isInstalled(opposite));
+    CHECK(db.insertIfNew(opposite));
+    CHECK(db.insertIfNew(TheoryLemma{}));
+    CHECK(db.contains(TheoryLemma{}));
 }

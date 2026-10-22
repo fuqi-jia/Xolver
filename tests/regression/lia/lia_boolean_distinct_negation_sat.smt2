@@ -1,0 +1,8 @@
+(set-logic QF_LIA)
+(set-info :status sat)
+(declare-const p Bool)
+(declare-const q Bool)
+(assert p)
+(assert q)
+(assert (distinct (not p) q))
+(check-sat)

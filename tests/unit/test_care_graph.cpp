@@ -1,31 +1,31 @@
 #include <doctest/doctest.h>
-#include "theory/combination/CareGraph.h"
-#include "theory/combination/SharedTermRegistry.h"
-#include "expr/ir.h"
+#include "search/combination/CareGraph.h"
+#include "search/combination/SharedTermRegistry.h"
+#include "ir/NativeTerms.h"
 
 using namespace xolver;
 
 namespace {
 
-ExprId addVar(CoreIr& ir, SortId sort, const std::string& name) {
-    CoreExpr e;
+ExprId addVar(NativeTerms& ir, SortId sort, const std::string& name) {
+    TermExpr e;
     e.kind = Kind::Variable;
     e.sort = sort;
     e.payload.value = name;
     return ir.add(e);
 }
 
-ExprId addConstInt(CoreIr& ir, SortId sort, int64_t v) {
-    CoreExpr e;
+ExprId addConstInt(NativeTerms& ir, SortId sort, int64_t v) {
+    TermExpr e;
     e.kind = Kind::ConstInt;
     e.sort = sort;
     e.payload.value = v;
     return ir.add(e);
 }
 
-ExprId addNode(CoreIr& ir, Kind k, SortId sort, std::initializer_list<ExprId> kids,
+ExprId addNode(NativeTerms& ir, Kind k, SortId sort, std::initializer_list<ExprId> kids,
                const std::string& fnName = "") {
-    CoreExpr e;
+    TermExpr e;
     e.kind = k;
     e.sort = sort;
     for (ExprId c : kids) e.children.push_back(c);
@@ -36,8 +36,11 @@ ExprId addNode(CoreIr& ir, Kind k, SortId sort, std::initializer_list<ExprId> ki
 } // namespace
 
 TEST_CASE("CareGraph: only inference-bearing operands are care-relevant") {
-    CoreIr ir;
+    NativeTerms ir;
     const SortId intSort = 1, arrSort = 2, boolSort = 3;
+    ir.registerSort(intSort, SortKind::Int);
+    ir.registerSort(boolSort, SortKind::Bool);
+    ir.registerArraySort(arrSort, intSort, intSort);
 
     ExprId x   = addVar(ir, intSort, "x");
     ExprId i   = addVar(ir, intSort, "i");
@@ -54,7 +57,7 @@ TEST_CASE("CareGraph: only inference-bearing operands are care-relevant") {
     ir.addAssertion(gt);
 
     SharedTermRegistry reg;
-    reg.setCoreIr(&ir);
+    reg.setNativeTerms(&ir);
     SharedTermId stX = reg.getOrCreate(x, intSort, "x", false);
     SharedTermId stI = reg.getOrCreate(i, intSort, "i", false);
     SharedTermId stY = reg.getOrCreate(y, intSort, "y", false);
@@ -80,8 +83,10 @@ TEST_CASE("CareGraph: only inference-bearing operands are care-relevant") {
 }
 
 TEST_CASE("CareGraph: Eq/Distinct operands and internal bridge vars are cared") {
-    CoreIr ir;
+    NativeTerms ir;
     const SortId intSort = 1, boolSort = 3;
+    ir.registerSort(intSort, SortKind::Int);
+    ir.registerSort(boolSort, SortKind::Bool);
 
     ExprId p = addVar(ir, intSort, "p");
     ExprId q = addVar(ir, intSort, "q");
@@ -90,7 +95,7 @@ TEST_CASE("CareGraph: Eq/Distinct operands and internal bridge vars are cared") 
     ir.addAssertion(eqpq);
 
     SharedTermRegistry reg;
-    reg.setCoreIr(&ir);
+    reg.setNativeTerms(&ir);
     SharedTermId stP = reg.getOrCreate(p, intSort, "p", false);
     SharedTermId stQ = reg.getOrCreate(q, intSort, "q", false);
     SharedTermId stR = reg.getOrCreate(r, intSort, "r", false);

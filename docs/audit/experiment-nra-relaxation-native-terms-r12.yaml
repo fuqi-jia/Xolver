@@ -1,0 +1,24 @@
+experiment: xolver-nra-relaxation-native-terms-r12
+description: Nonlinear relaxation differential with known witnesses, affine contradictions and mixed Boolean formulas.
+environment:
+  host: panda1
+  workdir: /pub/data/jiafq/xolver
+protocol:
+  inputs: {list: [nonlinear-relaxation]}
+  seeds: [20261021, 43]
+  timeout: 60m
+  memory: 8G
+  parallelism: 1
+trials:
+  - {name: exact}
+run:
+  cmd: >-
+    python3 tools/fuzz/fuzz_nra_relaxation.py --seed {seed} --n 160
+    --solver /pub/data/jiafq/xolver/validation/native-terms-r12/xolver
+    --z3 /pub/data/jiafq/xolver/dependencies/oracles/z3
+    --cvc5 /pub/data/jiafq/z3-native-audit-tools-20260924-r3/cvc5/bin/cvc5
+    --output validation/nra-relaxation-native-terms-r12/{seed}
+measurements:
+  from: metrics.json
+  primary: checked
+  checks: ["checked > 0", "unsound == 0", "errors == 0", "oracle_disagreements == 0", "known_disagreements == 0"]

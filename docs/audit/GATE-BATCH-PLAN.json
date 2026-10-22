@@ -1,0 +1,1817 @@
+{
+  "policy": "Remove obsolete algorithm switches and unused paths in batches. Preserve MCSAT/NLSAT implementations and direct tests; remove their environment switches under the latest user continuation. Resource budgets, diagnostics and typed strategies remain. Complete gate cleanup before general bug work.",
+  "baseline_source_step": 47,
+  "inventory_exhaustive": false,
+  "batches": [
+    {
+      "batch": 1,
+      "module": "NIA local search",
+      "items": [
+        {
+          "name": "XOLVER_NIA_LOCALSEARCH",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": "1 when process environment does not already define this name",
+          "sites": [
+            "src/search/nia/search/NiaLocalSearch.cpp"
+          ],
+          "status": "source removed; archived strict validation failed on 2 baseline-reproduced model issues"
+        },
+        {
+          "name": "XOLVER_NIA_LS_BILINEAR_PAIR",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nia/search/NiaLocalSearch.cpp"
+          ],
+          "status": "source removed; archived strict validation failed on 2 baseline-reproduced model issues"
+        },
+        {
+          "name": "XOLVER_NIA_LS_BILINEAR_SUBST",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nia/search/NiaLocalSearch.cpp"
+          ],
+          "status": "source removed; archived strict validation failed on 2 baseline-reproduced model issues"
+        },
+        {
+          "name": "XOLVER_NIA_LS_BRANCH_HINT",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nia/NiaSolver_branch.cpp"
+          ],
+          "status": "source removed; archived strict validation failed on 2 baseline-reproduced model issues"
+        },
+        {
+          "name": "XOLVER_NIA_LS_DIVERSIFY",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nia/search/NiaLocalSearch.cpp"
+          ],
+          "status": "source removed; archived strict validation failed on 2 baseline-reproduced model issues"
+        },
+        {
+          "name": "XOLVER_NIA_LS_FS_JUMP",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nia/search/NiaLocalSearch.cpp"
+          ],
+          "status": "source removed; archived strict validation failed on 2 baseline-reproduced model issues"
+        },
+        {
+          "name": "XOLVER_NIA_LS_MODULAR_ESCALATE",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nia/search/NiaLocalSearch.cpp"
+          ],
+          "status": "source removed; archived strict validation failed on 2 baseline-reproduced model issues"
+        },
+        {
+          "name": "XOLVER_NIA_LS_MULTI_SCALE",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nia/search/NiaLocalSearch.cpp"
+          ],
+          "status": "source removed; archived strict validation failed on 2 baseline-reproduced model issues"
+        },
+        {
+          "name": "XOLVER_NIA_LS_PIN_EQ",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nia/search/NiaLocalSearch.cpp"
+          ],
+          "status": "source removed; archived strict validation failed on 2 baseline-reproduced model issues"
+        },
+        {
+          "name": "XOLVER_NIA_LS_QUAD_CRITICAL",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nia/search/NiaLocalSearch.cpp"
+          ],
+          "status": "source removed; archived strict validation failed on 2 baseline-reproduced model issues"
+        },
+        {
+          "name": "XOLVER_NIA_LS_TABU",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nia/search/NiaLocalSearch.cpp"
+          ],
+          "status": "source removed; archived strict validation failed on 2 baseline-reproduced model issues"
+        },
+        {
+          "name": "XOLVER_NIA_LS_TWO_LEVEL",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nia/search/NiaLocalSearch.cpp"
+          ],
+          "status": "source removed; archived strict validation failed on 2 baseline-reproduced model issues"
+        },
+        {
+          "name": "XOLVER_NIA_LS_VIOLATION_CORE",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nia/search/NiaLocalSearch.cpp"
+          ],
+          "status": "source removed; archived strict validation failed on 2 baseline-reproduced model issues"
+        },
+        {
+          "name": "XOLVER_NIA_LS_WARM_START",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nia/search/NiaLocalSearch.cpp"
+          ],
+          "status": "source removed; archived strict validation failed on 2 baseline-reproduced model issues"
+        }
+      ],
+      "count": 14,
+      "status": "413 units and ASan passed;267 differential cases no verdict regression;2 strict model failures reproduced in baseline;original failed run retained"
+    },
+    {
+      "batch": 2,
+      "module": "Linear arithmetic",
+      "items": [
+        {
+          "name": "XOLVER_LIA_CUTS",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": "1 when process environment does not already define this name",
+          "sites": [
+            "src/search/lia/LiaSolver.cpp"
+          ],
+          "status": "source removed; archive verified; 523 units passed; strict suite failed on 2 existing model issues"
+        },
+        {
+          "name": "XOLVER_LIA_DIO",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/lia/LiaSolver.cpp"
+          ],
+          "status": "source removed; archive verified; 523 units passed; strict suite failed on 2 existing model issues"
+        },
+        {
+          "name": "XOLVER_LIA_ENTAIL_GEN",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": null,
+          "sites": [
+            "src/search/lia/LiaSolver_entailment.cpp"
+          ],
+          "status": "source removed; archive verified; 523 units passed; strict suite failed on 2 existing model issues"
+        },
+        {
+          "name": "XOLVER_LIA_GMI_CUTS",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/lia/LiaSolver.cpp"
+          ],
+          "status": "source removed; archive verified; 523 units passed; strict suite failed on 2 existing model issues"
+        },
+        {
+          "name": "XOLVER_LIA_INCREMENTAL",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/lia/LiaSolver.cpp"
+          ],
+          "status": "source removed; archive verified; 523 units passed; strict suite failed on 2 existing model issues"
+        },
+        {
+          "name": "XOLVER_LIA_LP_DUALITY",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": null,
+          "sites": [
+            "src/search/lia/LiaSolver.cpp"
+          ],
+          "status": "source removed; archive verified; 523 units passed; strict suite failed on 2 existing model issues"
+        },
+        {
+          "name": "XOLVER_LIA_REPAIR",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": "1 when process environment does not already define this name",
+          "sites": [
+            "src/search/lia/LiaSolver.cpp"
+          ],
+          "status": "source removed; archive verified; 523 units passed; strict suite failed on 2 existing model issues"
+        },
+        {
+          "name": "XOLVER_LRA_BOUND_AXIOMS",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": "1 when process environment does not already define this name",
+          "sites": [
+            "src/search/linear/BoundAxiomGenerator.cpp"
+          ],
+          "status": "source removed; archive verified; 523 units passed; strict suite failed on 2 existing model issues"
+        },
+        {
+          "name": "XOLVER_LRA_DECIDE",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": "1 when process environment does not already define this name",
+          "sites": [
+            "src/search/sat/CadicalTheoryPropagator.cpp"
+          ],
+          "status": "source removed; archive verified; 523 units passed; strict suite failed on 2 existing model issues"
+        },
+        {
+          "name": "XOLVER_LRA_INCREMENTAL_BETA",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/lra/GeneralSimplex.cpp"
+          ],
+          "status": "source removed; archive verified; 523 units passed; strict suite failed on 2 existing model issues"
+        },
+        {
+          "name": "XOLVER_LRA_PIVOT_HEUR",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": "1 when process environment does not already define this name",
+          "sites": [
+            "src/search/lra/GeneralSimplex.cpp"
+          ],
+          "status": "source removed; archive verified; 523 units passed; strict suite failed on 2 existing model issues"
+        },
+        {
+          "name": "XOLVER_LRA_PROP",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": "1 when process environment does not already define this name",
+          "sites": [
+            "src/search/lra/LraSolver.cpp"
+          ],
+          "status": "source removed; archive verified; 523 units passed; strict suite failed on 2 existing model issues"
+        },
+        {
+          "name": "XOLVER_SIMPLEX_IMPLIED_EQ",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/lia/LiaSolver.cpp",
+            "src/search/lra/LraSolver.cpp"
+          ],
+          "status": "source removed; archive verified; 523 units passed; strict suite failed on 2 existing model issues"
+        },
+        {
+          "name": "lia-ultra-safe-mode",
+          "classification": "internal_cli_gate",
+          "status": "source removed; archive verified; 523 units passed; strict suite failed on 2 existing model issues"
+        },
+        {
+          "name": "lia-single-var-tightening",
+          "classification": "internal_cli_gate",
+          "status": "source removed; archive verified; 523 units passed; strict suite failed on 2 existing model issues"
+        },
+        {
+          "name": "lia-gcd-ineq-tightening",
+          "classification": "internal_cli_gate",
+          "status": "source removed; archive verified; 523 units passed; strict suite failed on 2 existing model issues"
+        },
+        {
+          "name": "lia-eq-gcd-normalization",
+          "classification": "internal_cli_gate",
+          "status": "source removed; archive verified; 523 units passed; strict suite failed on 2 existing model issues"
+        },
+        {
+          "name": "CadicalTheoryPropagator::decideSteer_",
+          "classification": "unused_residue",
+          "status": "source removed; archive verified; 523 units passed; strict suite failed on 2 existing model issues"
+        }
+      ],
+      "count": 18,
+      "status": "source applied; static checks passed; server validation pending"
+    },
+    {
+      "batch": 3,
+      "module": "Integer theory integration",
+      "items": [
+        {
+          "name": "XOLVER_NIA_BB_ARRAY",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": null,
+          "sites": [
+            "src/search/nia/NiaSolver_bitblast.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NIA_BILINEAR_FACTOR",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nia/reasoners/AlgebraicIntegerReasoner.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NIA_CDCAC",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": "1 when process environment does not already define this name",
+          "sites": [
+            "src/search/nia/NiaSolver.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NIA_DIO",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nia/NiaSolver_engines.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NIA_EAGER_BITBLAST",
+          "classification": "legacy_gate",
+          "snapshot_default": "true",
+          "cli_default": "1 when process environment does not already define this name",
+          "sites": [
+            "src/runtime/Solver_impl_checksat.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NIA_EAGER_LIA",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": null,
+          "sites": [
+            "src/runtime/Solver_impl_checksat.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NIA_FARKAS_DNF_BLOCKS",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": null,
+          "sites": [
+            "src/search/nia/farkas/FarkasOrDetector.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NIA_FARKAS_OR_UNSAT_EMIT",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": null,
+          "sites": [
+            "src/search/nia/NiaSolver_farkas.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NIA_GROBNER",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nia/NiaSolver.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NIA_IFACE_LIFECYCLE",
+          "classification": "legacy_gate",
+          "snapshot_default": "true",
+          "cli_default": "1 when process environment does not already define this name",
+          "sites": [
+            "src/search/nia/NiaSolver.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NIA_IFACE_PROP",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nia/NiaSolver_linear.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NIA_INT_BOUND_PROP",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nia/NiaSolver.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NIA_LINEAR_DOWNGRADE",
+          "classification": "legacy_gate",
+          "snapshot_default": "true",
+          "cli_default": null,
+          "sites": [
+            "src/runtime/Solver_impl_checksat.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NIA_LINEAR_PROP",
+          "classification": "review",
+          "snapshot_default": "false / 0",
+          "cli_default": null,
+          "sites": [
+            "src/search/coordination/TheoryManager.cpp",
+            "src/search/nia/NiaSolver.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NIA_MCSAT",
+          "classification": "review",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/runtime/factory/TheoryFactory.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NIA_NATIVE_MODEQCONST",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/frontend/preprocess/IntDivModLowerer.cpp",
+            "src/search/nia/NiaSolver_refute.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NIA_NLA_CUTS",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": "1 when process environment does not already define this name",
+          "sites": [
+            "src/search/nia/NiaSolver_refute.cpp",
+            "src/search/nra/reasoners/NlaCutsRunner.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NIA_NO_DISEQ",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/coordination/TheoryManager.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NIA_NO_PROP",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/coordination/TheoryManager.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NIA_OMEGA",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nia/NiaSolver.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NIA_ROW2_DEMAND",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/coordination/TheoryManager.cpp",
+            "src/search/euf/EufSolver_check.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NIA_SECANT",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nia/NiaSolver_engines.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NIA_SHARED_ARITH_VALUE",
+          "classification": "legacy_gate",
+          "snapshot_default": "1",
+          "cli_default": null,
+          "sites": [
+            "src/search/nia/NiaSolver_combination.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NIA_SMALL_PRIME_MODULAR",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nia/NiaSolver.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NIA_ZOHAR_PLUGIN",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/runtime/Solver_impl_checksat.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "NiaSolver::ctElim",
+          "classification": "internal_algorithm_gate",
+          "snapshot_default": "constant true",
+          "cli_default": null,
+          "sites": [
+            "src/search/nia/NiaSolver_farkas.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        }
+      ],
+      "count": 26
+    },
+    {
+      "batch": 4,
+      "module": "CAC and algebraic engine",
+      "items": [
+        {
+          "name": "XOLVER_NRA_CAC_COMBINATION",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nra/NraSolver.cpp",
+            "src/search/nra/NraSolver_cac.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_NRA_CAC_EARLY_INFEAS",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nra/NraSolver_cac.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_NRA_CAC_INT",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nia/mcsat/NiaMcsatEngine.cpp",
+            "src/search/nra/core/CdcacCore.cpp"
+          ],
+          "status": "switch removed batch12; implementation retained except dead integer sampling; final strict suite blocked by1model-check timeout; old/new solves independently reproduce timeout on the same case"
+        },
+        {
+          "name": "XOLVER_NRA_CAC_INT_COVER",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nra/core/CdcacCore.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_NRA_CAC_LAZARD_DEDUP",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nra/lazard/LazardProjectionOperator.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_NRA_CAC_MIN_CONFLICT",
+          "classification": "legacy_gate",
+          "snapshot_default": "true",
+          "cli_default": null,
+          "sites": [
+            "src/search/nra/NraSolver_cac.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_NRA_CAC_NLSAT",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nra/core/CdcacCore.cpp"
+          ],
+          "status": "switch removed batch12; implementation retained except dead integer sampling; final strict suite blocked by1model-check timeout; old/new solves independently reproduce timeout on the same case"
+        },
+        {
+          "name": "XOLVER_NRA_CAC_NO_COLLINS",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nra/NraSolver_cac.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_NRA_CAC_ONLY",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nra/NraSolver_cac.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_NRA_CAC_PRUNE_INTERVALS",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nra/NraSolver_cac.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_NRA_CAC_RATIONAL_FALLBACK",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nra/NraSolver_cac.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_NRA_CAC_SAT_ALGEBRAIC",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nra/NraSolver_cac.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_NRA_CAC_SAT_FIRST",
+          "classification": "legacy_gate",
+          "snapshot_default": "false（NLSAT/LOOKAHEAD 可强制 true）",
+          "cli_default": null,
+          "sites": [
+            "src/search/nra/core/CdcacCore.cpp"
+          ],
+          "status": "switch removed batch12; implementation retained except dead integer sampling; final strict suite blocked by1model-check timeout; old/new solves independently reproduce timeout on the same case"
+        },
+        {
+          "name": "XOLVER_NRA_CAC_SAT_FIRST_ALG",
+          "classification": "legacy_gate",
+          "snapshot_default": "true",
+          "cli_default": null,
+          "sites": [
+            "src/search/nra/core/CdcacCore.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_NRA_CAC_SAT_FIRST_LOOKAHEAD",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nra/core/CdcacCore.cpp"
+          ],
+          "status": "switch removed batch12; implementation retained except dead integer sampling; final strict suite blocked by1model-check timeout; old/new solves independently reproduce timeout on the same case"
+        },
+        {
+          "name": "XOLVER_NRA_CAC_SAT_SAMPLE",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nra/cac/CacEngine.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_NRA_CAC_VAR_ORDER",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nra/NraSolver_cac.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_NRA_CAC_VAR_ORDER_DESC",
+          "classification": "review",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nra/NraSolver_cac.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_NRA_LAZARD_CELL_CERT",
+          "classification": "review",
+          "snapshot_default": "true",
+          "cli_default": null,
+          "sites": [
+            "src/search/nra/core/CdcacCore.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_NRA_LAZARD_LIFT",
+          "classification": "legacy_gate",
+          "snapshot_default": "false（Projection=Lazard 会重配）",
+          "cli_default": "1 when process environment does not already define this name",
+          "sites": [
+            "src/search/nra/core/CdcacCore.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_NRA_LIBPOLY_PSC",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": "1 when process environment does not already define this name",
+          "sites": [
+            "src/search/nra/lazard/SubresultantChain.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_NRA_MCSAT",
+          "classification": "review",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/runtime/factory/TheoryFactory.cpp"
+          ],
+          "status": "switch removed batch12; implementation retained except dead integer sampling; final strict suite blocked by1model-check timeout; old/new solves independently reproduce timeout on the same case"
+        },
+        {
+          "name": "XOLVER_NRA_MCSAT_NO_CDCAC",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nra/engine/NlsatEngine.cpp"
+          ],
+          "status": "switch removed batch12; implementation retained except dead integer sampling; final strict suite blocked by1model-check timeout; old/new solves independently reproduce timeout on the same case"
+        },
+        {
+          "name": "XOLVER_NRA_NLSAT_ROOT_CANDIDATES",
+          "classification": "legacy_gate",
+          "snapshot_default": "0",
+          "cli_default": null,
+          "sites": [
+            "src/search/nra/engine/NlsatEngine.cpp"
+          ],
+          "status": "switch removed batch12; implementation retained except dead integer sampling; final strict suite blocked by1model-check timeout; old/new solves independently reproduce timeout on the same case"
+        },
+        {
+          "name": "XOLVER_NRA_VARORDER_ASC",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": null,
+          "sites": [
+            "src/search/nra/core/CdcacSolver.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_NRA_VARORDER_SIMPLEX",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nra/core/CdcacSolver.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "CacEngine::Config::inloopPrune",
+          "classification": "internal_gate",
+          "status": "source removed in batch04-06; server validation pending"
+        }
+      ],
+      "count": 27
+    },
+    {
+      "batch": 5,
+      "module": "Real nonlinear reasoning",
+      "items": [
+        {
+          "name": "XOLVER_NRA_EQ_CASCADE",
+          "classification": "legacy_gate",
+          "snapshot_default": "true",
+          "cli_default": null,
+          "sites": [
+            "src/search/nra/NraSolver_stages.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NRA_GROBNER",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nra/NraSolver.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NRA_ICP",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nra/NraSolver_stages.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NRA_INT_PROBE",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nra/NraSolver_stages.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NRA_LINEARIZE",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nra/NraSolver_cac.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NRA_LINEAR_DOWNGRADE",
+          "classification": "legacy_gate",
+          "snapshot_default": "true",
+          "cli_default": null,
+          "sites": [
+            "src/runtime/Solver_impl_checksat.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NRA_LS_EQ_RELAX",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nra/NraSolver.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NRA_MCCORMICK_PARTIAL",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/linearizer/McCormickGenerator.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NRA_NLA_CUTS",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": "1 when process environment does not already define this name",
+          "sites": [
+            "src/search/nra/NraSolver_cac.cpp",
+            "src/search/nra/reasoners/NlaCutsRunner.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NRA_NLEXT_BERNSTEIN",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/linearizer/IncrementalLinearizer.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NRA_NLEXT_HIGHER",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/linearizer/IncrementalLinearizer.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NRA_NLEXT_MONO_BOUND",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/linearizer/IncrementalLinearizer.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NRA_NLEXT_POWER",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/linearizer/IncrementalLinearizer.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NRA_NLEXT_TANGENT_PERTURB",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nra/NraSolver_cac.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NRA_OSF_PRUNE",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nra/NraSolver_stages.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NRA_PREELIM",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nra/NraSolver.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NRA_SIGN_SPLIT",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/nra/NraSolver_stages.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        },
+        {
+          "name": "XOLVER_NRA_SQUARE_CASCADE",
+          "classification": "legacy_gate",
+          "snapshot_default": "true",
+          "cli_default": null,
+          "sites": [
+            "src/search/nra/NraSolver_stages.cpp"
+          ],
+          "status": "source removed; merged batch03-05 static checks passed; server validation pending"
+        }
+      ],
+      "count": 18
+    },
+    {
+      "batch": 6,
+      "module": "Arrays, UF and datatypes",
+      "items": [
+        {
+          "name": "XOLVER_ARRAY_COMB_VALIDATE_SAT",
+          "classification": "review",
+          "snapshot_default": "false (unset)",
+          "cli_default": null,
+          "sites": [
+            "src/runtime/Solver_impl_checksat.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_ARRAY_CONGR_EXT",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": "1 when process environment does not already define this name",
+          "sites": [
+            "src/search/euf/EufSolver_array.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_ARRAY_NOARR_DOWNGRADE",
+          "classification": "legacy_gate",
+          "snapshot_default": "true",
+          "cli_default": null,
+          "sites": [
+            "src/runtime/Solver_impl_checksat.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_AX_FIXPOINT",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": null,
+          "sites": [
+            "src/search/euf/EufSolver.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_AX_LAZY",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": null,
+          "sites": [
+            "src/search/array/ArrayReasoner.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_AX_REFINE",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": "1 when process environment does not already define this name",
+          "sites": [
+            "src/search/euf/EufSolver.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_AX_ROW2_CONST",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": "1 when process environment does not already define this name",
+          "sites": [
+            "src/search/array/ArrayReasoner.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_AX_ROW2_DISEQ",
+          "classification": "legacy_gate",
+          "snapshot_default": "true",
+          "cli_default": null,
+          "sites": [
+            "src/search/array/ArrayReasoner.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_AX_ROW2_SPLIT",
+          "classification": "legacy_gate",
+          "snapshot_default": "true",
+          "cli_default": null,
+          "sites": [
+            "src/search/coordination/TheoryManager.cpp",
+            "src/search/euf/EufSolver_check.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_AX_STORECOMM_EXT",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": "1 when process environment does not already define this name",
+          "sites": [
+            "src/search/array/ArrayReasoner.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_AX_STORE_MODEL",
+          "classification": "legacy_gate",
+          "snapshot_default": "true",
+          "cli_default": null,
+          "sites": [
+            "src/search/euf/EufSolver.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_AX_STORE_NOOP",
+          "classification": "legacy_gate",
+          "snapshot_default": "true",
+          "cli_default": null,
+          "sites": [
+            "src/search/array/ArrayReasoner.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_DT_SELECTOR_SEMANTIC_BRIDGE",
+          "classification": "review",
+          "snapshot_default": "true",
+          "cli_default": null,
+          "sites": [
+            "src/runtime/Solver_impl_model.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_DT_VALIDATOR_STRICT",
+          "classification": "review",
+          "snapshot_default": "false (unset)",
+          "cli_default": null,
+          "sites": [
+            "src/search/euf/EufSolver_check.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_EUF_INCREMENTAL_PROP",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": null,
+          "sites": [
+            "src/search/euf/EufSolver.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_EUF_INCREMENTAL_PROP_VERIFY",
+          "classification": "review",
+          "snapshot_default": "false (unset)",
+          "cli_default": null,
+          "sites": [
+            "src/search/euf/EufSolver.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_EUF_MINLEVEL_HEAP",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": null,
+          "sites": [
+            "src/search/euf/EufSolver.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_EUF_PROP",
+          "classification": "legacy_gate",
+          "snapshot_default": "true",
+          "cli_default": null,
+          "sites": [
+            "src/search/euf/EufSolver.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_EUF_PROP_COMB",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": "1 when process environment does not already define this name",
+          "sites": [
+            "src/search/coordination/TheoryManager.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_EUF_PROP_DEDUP",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": null,
+          "sites": [
+            "src/search/euf/EufSolver.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_EUF_UF_MODEL",
+          "classification": "review",
+          "snapshot_default": "EufSolver true；TheoryManager false",
+          "cli_default": null,
+          "sites": [
+            "src/search/coordination/TheoryManager.cpp",
+            "src/search/euf/EufSolver.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_UF_DISEQ_WATCH",
+          "classification": "legacy_gate",
+          "snapshot_default": "true",
+          "cli_default": null,
+          "sites": [
+            "src/search/euf/EufSolver.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        },
+        {
+          "name": "XOLVER_UF_FAST_CC",
+          "classification": "legacy_gate",
+          "snapshot_default": "true",
+          "cli_default": "1 when process environment does not already define this name",
+          "sites": [
+            "src/search/euf/IncrementalEGraph.cpp"
+          ],
+          "status": "source removed in batch04-06; server validation pending"
+        }
+      ],
+      "count": 23
+    },
+    {
+      "batch": 7,
+      "module": "Theory combination and SAT",
+      "items": [
+        {
+          "name": "XOLVER_COMB_ARRANGE_INTERNAL",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": null,
+          "sites": [
+            "src/search/coordination/TheoryManager.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_COMB_ARRAY_BRIDGE_MODEL",
+          "classification": "legacy_gate",
+          "snapshot_default": "1",
+          "cli_default": null,
+          "sites": [
+            "src/runtime/Solver_impl_model.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_COMB_ARRAY_NIA",
+          "classification": "legacy_gate",
+          "snapshot_default": "1",
+          "cli_default": null,
+          "sites": [
+            "src/runtime/Solver_impl_checksat.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_COMB_CAREGRAPH",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": null,
+          "sites": [
+            "src/search/coordination/TheoryManager.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_COMB_DECIDE_FREE_ATOMS",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/search/sat/CadicalTheoryPropagator.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_COMB_DEMAND_ARRANGE",
+          "classification": "legacy_gate",
+          "snapshot_default": "true",
+          "cli_default": null,
+          "sites": [
+            "src/search/coordination/TheoryManager.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_COMB_EQ_DISEQ_PHASE",
+          "classification": "legacy_gate",
+          "snapshot_default": "true",
+          "cli_default": null,
+          "sites": [
+            "src/search/coordination/TheoryManager.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_COMB_MODEL_BASED",
+          "classification": "legacy_gate",
+          "snapshot_default": "true",
+          "cli_default": "1 when process environment does not already define this name",
+          "sites": [
+            "src/search/coordination/TheoryManager.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_COMB_PUBLISH_ON_LEMMA",
+          "classification": "review",
+          "snapshot_default": "combinationMode_",
+          "cli_default": null,
+          "sites": [
+            "src/search/coordination/TheoryManager.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_COMB_SAT_FLOOR",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": null,
+          "sites": [
+            "src/search/combination/Purifier.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_COMB_SCALAR_BACKFILL",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": "1 when process environment does not already define this name",
+          "sites": [
+            "src/search/coordination/TheoryManager.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_COMB_UFARG_ARITH_APART",
+          "classification": "legacy_gate",
+          "snapshot_default": "true",
+          "cli_default": null,
+          "sites": [
+            "src/search/coordination/TheoryManager.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_COMB_UFARG_ARRANGE",
+          "classification": "review",
+          "snapshot_default": "false / true",
+          "cli_default": "1 when process environment does not already define this name",
+          "sites": [
+            "src/search/combination/Purifier.cpp",
+            "src/search/coordination/TheoryManager.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_COMB_UF_CONGRUENCE",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": null,
+          "sites": [
+            "src/runtime/factory/TheoryFactory.cpp",
+            "src/search/coordination/TheoryManager.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_COMB_VALIDATE_SAT",
+          "classification": "review",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "src/runtime/Solver_impl_checksat.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_SAT_DEFER_EARLY_CONFLICT",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": null,
+          "sites": [
+            "src/search/sat/CadicalTheoryPropagator.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_SAT_MIN",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": "1 when process environment does not already define this name",
+          "sites": [
+            "src/search/coordination/TheoryManager.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        }
+      ],
+      "count": 17
+    },
+    {
+      "batch": 8,
+      "module": "Preprocessing and runtime",
+      "items": [
+        {
+          "name": "XOLVER_CMS_WIDTH_PROBE",
+          "classification": "legacy_gate",
+          "snapshot_default": "QF_UFNIA/UFNIA 时 true，其余 false",
+          "cli_default": null,
+          "sites": [
+            "src/runtime/Solver_impl_checksat.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_ESCALATING_BOUNDED_SAT",
+          "classification": "review",
+          "snapshot_default": "0",
+          "cli_default": null,
+          "sites": [
+            "src/runtime/Solver.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_NO_BAKED_DEFAULTS",
+          "classification": "legacy_gate",
+          "snapshot_default": "false",
+          "cli_default": null,
+          "sites": [
+            "app/main.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_NO_EXPAND_FUNCTIONS",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": null,
+          "sites": [
+            "src/runtime/Solver_impl_solve.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_PP_AND_FLATTEN",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": null,
+          "sites": [
+            "src/runtime/Solver_impl_checksat.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_PP_AUTO_EUF_PROMOTE",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": null,
+          "sites": [
+            "src/runtime/Solver_impl_checksat.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_PP_BOUNDED_ENUM",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": null,
+          "sites": [
+            "src/runtime/Solver_impl_checksat.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_PP_INLINE_SINGLE_DEFS_INT",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": null,
+          "sites": [
+            "src/frontend/preprocess/DefinedVariableSubstitution.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_PP_MONOMIAL_SHARE",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": null,
+          "sites": [
+            "src/runtime/Solver_impl_checksat.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_PP_NEWTON_INT_SQRT",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": null,
+          "sites": [
+            "src/runtime/Solver_impl_checksat.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_PP_PG_CNF",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": "1 when process environment does not already define this name",
+          "sites": [
+            "src/runtime/Solver_impl_checksat.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_PP_PURE_DEFINED_VAR_SUBST",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": null,
+          "sites": [
+            "src/runtime/Solver_impl_checksat.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_PP_REWRITE",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": "1 when process environment does not already define this name",
+          "sites": [
+            "src/runtime/Solver_impl_checksat.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_PP_ROW_FOLD",
+          "classification": "legacy_gate",
+          "snapshot_default": "0",
+          "cli_default": null,
+          "sites": [
+            "src/runtime/Solver_impl_checksat.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_PP_SOLVE_EQS",
+          "classification": "legacy_gate",
+          "snapshot_default": "库：QF_LIA/LIA/QF_NIA/NIA/QF_LRA/LRA 默认 true；其余 false，另限 base scope 且非 algebraic-model logic",
+          "cli_default": "1 when process environment does not already define this name",
+          "sites": [
+            "src/runtime/Solver_impl_checksat.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_PP_SOLVE_EQS_GAUSS",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": null,
+          "sites": [
+            "src/runtime/Solver_impl_checksat.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_PP_STORE_TOWER_MULTISET",
+          "classification": "legacy_gate",
+          "snapshot_default": "0",
+          "cli_default": null,
+          "sites": [
+            "src/runtime/Solver_impl_checksat.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_PP_STRICT_VALIDATION",
+          "classification": "review",
+          "snapshot_default": "false (unset)",
+          "cli_default": null,
+          "sites": [
+            "src/runtime/Solver_impl_checksat.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_PP_TIGHT_BOUND_SUBST",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": null,
+          "sites": [
+            "src/frontend/preprocess/FormulaRewriter.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_PP_UNCONSTRAINED_ELIM",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": null,
+          "sites": [
+            "src/runtime/Solver_impl_checksat.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_PP_UNIVARIATE_CYCLE_SOLVE",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": null,
+          "sites": [
+            "src/frontend/preprocess/DefinedVariableSubstitution.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_PP_VALIDATE_NONLINEAR_SAT",
+          "classification": "review",
+          "snapshot_default": "false (unset)",
+          "cli_default": null,
+          "sites": [
+            "src/runtime/Solver_impl_checksat.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_PP_VALIDATOR_MEMO",
+          "classification": "legacy_gate",
+          "snapshot_default": "true",
+          "cli_default": "1 when process environment does not already define this name",
+          "sites": [
+            "src/runtime/Solver_impl_model.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_RELEVANCY",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": null,
+          "sites": [
+            "src/runtime/Solver_impl_checksat.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_STRAT_PRESETS",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": "1 when process environment does not already define this name",
+          "sites": [
+            "src/runtime/Solver_impl_checksat.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_TARGETED_PP",
+          "classification": "legacy_gate",
+          "snapshot_default": "0",
+          "cli_default": "1 when process environment does not already define this name",
+          "sites": [
+            "src/runtime/Solver_impl_checksat.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_TARGETED_PP_UFACK",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": "1 when process environment does not already define this name",
+          "sites": [
+            "src/runtime/Solver_impl_checksat.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        },
+        {
+          "name": "XOLVER_TARGETED_PP_WRITEARRAY",
+          "classification": "legacy_gate",
+          "snapshot_default": "false (unset)",
+          "cli_default": null,
+          "sites": [
+            "src/frontend/preprocess/targeted/ReadOnlyArrayElim.cpp"
+          ],
+          "status": "source removed batch07-08; server validation pending"
+        }
+      ],
+      "count": 28
+    }
+  ],
+  "bug_priority": "Latest user instruction: remove all gates first, then investigate and fix remaining bugs. Preserve known reproductions; do not start negative-mod or multi-check-sat bug work during gate cleanup.",
+  "current_validation": {
+    "status": "strict failed:833units passed;902pairs0wrong/errors/regressions,77model checks with1timeout;candidate5/baseline6timeouts. Separate15attempts reproduce13timeouts across old and new binaries. No invalid model reported.",
+    "known_planned_removed": 171,
+    "known_planned_retained_by_user": 0,
+    "retained_implementations": [
+      "MCSAT",
+      "NLSAT"
+    ],
+    "additional_removed_outside_plan": 8,
+    "remaining_named_controls": 161,
+    "read_sites": 237,
+    "experiment": "6448777d785e",
+    "run": "f728115343ae",
+    "archive": "evidence/gate-batch-12/gate-batch-12-results.tar.gz",
+    "unit_tests": 833,
+    "assertions": 243658,
+    "cases": 902,
+    "model_checks": 77,
+    "model_timeouts": 1,
+    "wrong_answers": 0,
+    "regressions": 0,
+    "candidate_timeout": 5,
+    "baseline_timeout": 6
+  },
+  "previous_validation": {
+    "experiment": "a9182f5840e0",
+    "run": "c05d7e724fa0",
+    "status": "strict passed",
+    "units": 828,
+    "pairs": 902,
+    "model_checks": 76,
+    "external_model_replays": 18,
+    "known_planned_removed": 164,
+    "known_planned_retained_by_user": 7,
+    "residual_removed": 2,
+    "note": "Historical per-item status strings describe initial attempts; this final run validates the assembled source with repaired defects."
+  },
+  "closeout": {
+    "date": "2026-10-23",
+    "remaining_legacy_gates": 0,
+    "extra_removed": "XOLVER_ENABLE_TRACING (unused build option)",
+    "retired_tool": "tools/tuning/autotune.py",
+    "strict_suite_status": "batch12 r4 remains failed: one model-check timeout",
+    "validation": {
+      "experiment": "7da3c959bb36",
+      "run": "2d66d951cae6",
+      "status": "success",
+      "unit_cases": 833,
+      "assertions": 243658,
+      "failed": 0,
+      "unselected_cases": 666,
+      "build": "Panda1, existing /pub/data/jiafq/xolver/build, serialized writer lock, j4",
+      "cpp_comments_only_files": 13,
+      "solver_sha256": "ad847f38920967abf8ada8b1846f557ff78ac4b8a60bbb083aa0fcf74295cee2",
+      "unit_binary_sha256": "dc8a3778013439de0db96466c39f59641db543aef95be566807b8ca2273c49be",
+      "byte_identical_to_batch12_r4": true,
+      "prior_strict_suite": "failed: one of 77 model checks timed out; not waived, fixed or rerun to green"
+    }
+  }
+}

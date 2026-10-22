@@ -1,5 +1,5 @@
 ; Tester on a DIFFERENT applied constructor over mutually-recursive datatypes:
-; (_ is node) (leaf (data x)). leaf and node are both `tree` constructors;
+; (_ is node) (leaf x). leaf and node are both `tree` constructors;
 ; is_node(leaf ...) is definitionally false -> unsat. Exercises the 3-way mutual
 ; declare-datatypes (nat/list/tree) form from the SMT-COMP QF_DT benchmark, where
 ; the tester clash on an applied constructor was left unrefuted (false SAT).
@@ -10,5 +10,5 @@
   ((cons (car tree) (cdr list)) (null))
   ((node (children list)) (leaf (data nat)))))
 (declare-fun x () nat)
-(assert ((_ is node) (leaf (data x))))
+(assert ((_ is node) (leaf x)))
 (check-sat)

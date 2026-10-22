@@ -4,10 +4,10 @@
 // src/experimental/mcsat/MCSatTrail.h: O(1) lookup, LIFO backtrack,
 // dedup-on-push, and clear semantics.
 
-#include "experimental/mcsat/MCSatTrail.h"
-#include "expr/types.h"
-#include "sat/SatSolver.h"
-#include "util/RealValue.h"
+#include "search/experimental/mcsat/MCSatTrail.h"
+#include "ir/types.h"
+#include "contracts/SatSolver.h"
+#include "base/RealValue.h"
 
 #include <doctest/doctest.h>
 

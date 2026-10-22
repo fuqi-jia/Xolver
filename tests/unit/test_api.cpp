@@ -1,7 +1,7 @@
 #include <doctest/doctest.h>
 #include <xolver/Solver.h>
 #include <xolver/Result.h>
-#include "expr/ir.h"
+#include "ir/NativeTerms.h"
 #include <sstream>
 #include <iostream>
 #include <fstream>

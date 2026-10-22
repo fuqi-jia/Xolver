@@ -1,43 +1,31 @@
-// Unit test: CoreIr::add vs CoreIr::addShared
-//
-// addShared MUST dedup identical (kind, sort, children, payload) tuples.
-// add MUST always allocate a fresh ExprId (parser-path uniqueness).
-//
-// These invariants are load-bearing for the iter-62 opt-in hash-cons
-// design: parser uses add (so distinct ITE branches / let bindings /
-// tseitin proxies stay distinct), preprocess passes use addShared (so
-// synthesized atoms fuse with parser atoms for cross-pass SAT-lit
-// unification). Violations cause:
-//   - add deduping  -> calypto false-SAT (iter-61 post-mortem)
-//                   -> incremental-ITE false-SAT (parallel agent's
-//                      experiment)
-//   - addShared NOT deduping -> Newton lemmas get fresh ExprIds vs
-//      parser-built atoms, atomizer assigns distinct SAT lits, CDCL
-//      cannot propagate -> sqrtmodinv UNSAT lost.
+// Native construction keeps explicit fresh allocations separate, while shared
+// construction uses SOMTParser structural equality. Binder declarations retain
+// identity; equal numeric constants can be shared across distinct allocations.
 
-#include "expr/ir.h"
+#include "ir/NativeTerms.h"
 #include <doctest/doctest.h>
 
 using namespace xolver;
 
 namespace {
 
-SortId mkIntSort(CoreIr& ir) {
+SortId mkIntSort(NativeTerms& ir) {
     SortId s = ir.allocateSortId();
+    ir.registerSort(s, SortKind::Int);
     ir.setIntSortId(s);
     return s;
 }
 
-ExprId mkConstInt(CoreIr& ir, int64_t v, SortId intSort, bool shared) {
-    CoreExpr e;
+ExprId mkConstInt(NativeTerms& ir, int64_t v, SortId intSort, bool shared) {
+    TermExpr e;
     e.kind = Kind::ConstInt;
     e.sort = intSort;
     e.payload = Payload(v);
     return shared ? ir.addShared(std::move(e)) : ir.add(std::move(e));
 }
 
-ExprId mkAdd(CoreIr& ir, ExprId a, ExprId b, SortId intSort, bool shared) {
-    CoreExpr e;
+ExprId mkAdd(NativeTerms& ir, ExprId a, ExprId b, SortId intSort, bool shared) {
+    TermExpr e;
     e.kind = Kind::Add;
     e.sort = intSort;
     e.children.push_back(a);
@@ -47,8 +35,8 @@ ExprId mkAdd(CoreIr& ir, ExprId a, ExprId b, SortId intSort, bool shared) {
 
 }  // namespace
 
-TEST_CASE("CoreIr::add ALWAYS allocates fresh ExprId — parser path uniqueness") {
-    CoreIr ir;
+TEST_CASE("NativeTerms::add ALWAYS allocates fresh ExprId — parser path uniqueness") {
+    NativeTerms ir;
     SortId intSort = mkIntSort(ir);
 
     ExprId five_a = mkConstInt(ir, 5, intSort, /*shared=*/false);
@@ -60,8 +48,8 @@ TEST_CASE("CoreIr::add ALWAYS allocates fresh ExprId — parser path uniqueness"
     CHECK(add_a != add_b);  // same children but distinct parents
 }
 
-TEST_CASE("CoreIr::addShared DEDUPS identical (kind, sort, children, payload)") {
-    CoreIr ir;
+TEST_CASE("NativeTerms::addShared DEDUPS identical (kind, sort, children, payload)") {
+    NativeTerms ir;
     SortId intSort = mkIntSort(ir);
 
     // Two ConstInt(5, Int) — should collapse to same ExprId.
@@ -74,8 +62,8 @@ TEST_CASE("CoreIr::addShared DEDUPS identical (kind, sort, children, payload)") 
     CHECK(five_a != six);
 }
 
-TEST_CASE("CoreIr::addShared dedups compound nodes with structurally-equal children") {
-    CoreIr ir;
+TEST_CASE("NativeTerms::addShared dedups compound nodes with structurally-equal children") {
+    NativeTerms ir;
     SortId intSort = mkIntSort(ir);
 
     ExprId five = mkConstInt(ir, 5, intSort, /*shared=*/true);
@@ -91,7 +79,7 @@ TEST_CASE("CoreIr::addShared dedups compound nodes with structurally-equal child
 }
 
 TEST_CASE("addShared dedups across add()'d children — opt-in path participation") {
-    CoreIr ir;
+    NativeTerms ir;
     SortId intSort = mkIntSort(ir);
 
     // Parser-style: allocate ConstInt(5) via add() (fresh each time).
@@ -104,28 +92,29 @@ TEST_CASE("addShared dedups across add()'d children — opt-in path participatio
     ExprId add_b = mkAdd(ir, five_parser1, five_parser1, intSort, /*shared=*/true);
     CHECK(add_a == add_b);  // dedup via addShared
 
-    // But if preprocess builds Add with a DIFFERENT ExprId (even same content),
-    // it does NOT dedup with add_a (because children ExprIds differ structurally).
+    // Native structural sharing identifies equal constants even when their
+    // construction handles differ. Bound declarations are tested separately.
     ExprId add_c = mkAdd(ir, five_parser1, five_parser2, intSort, /*shared=*/true);
-    CHECK(add_a != add_c);
+    CHECK(add_a == add_c);
 }
 
 TEST_CASE("addShared dedup is sort-aware") {
-    CoreIr ir;
+    NativeTerms ir;
     SortId intSort  = mkIntSort(ir);
     SortId realSort = ir.allocateSortId();
+    ir.registerSort(realSort, SortKind::Real);
     ir.setRealSortId(realSort);
 
     // Same value 5, different sort -> different ExprIds.
-    CoreExpr e1;
+    TermExpr e1;
     e1.kind = Kind::ConstInt;
     e1.sort = intSort;
     e1.payload = Payload(int64_t(5));
     ExprId five_int = ir.addShared(std::move(e1));
 
-    CoreExpr e2;
-    e2.kind = Kind::ConstInt;
-    e2.sort = realSort;  // wrong sort, but tests dedup keying
+    TermExpr e2;
+    e2.kind = Kind::ConstReal;
+    e2.sort = realSort;  // equal numerical value in a different native sort
     e2.payload = Payload(int64_t(5));
     ExprId five_real = ir.addShared(std::move(e2));
 

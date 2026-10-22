@@ -1,0 +1,18 @@
+experiment: xolver-gate-closeout
+description: Remove unused tracing build option and obsolete flag-flip tool; verify unchanged C++ tokens, rebuild shared directory and rerun relevant units. The previous strict model-check timeout remains unresolved.
+environment:
+  host: panda1
+  workdir: /pub/data/jiafq/xolver
+protocol:
+  inputs: {list: [gate-closeout]}
+  timeout: 40m
+  memory: 8G
+  parallelism: 1
+trials:
+  - {name: validate}
+run:
+  cmd: bash build/bootstrap/validate-gate-closeout.sh gate-closeout build/gate-closeout-source.tar.gz validation/gate-batch-12-r4/xolver
+measurements:
+  from: metrics.json
+  primary: unit_rc
+  checks: ["unit_rc == 0", "cpp_source_equivalent == 1", "build_rc == 0"]

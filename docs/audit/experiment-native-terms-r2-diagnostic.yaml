@@ -1,0 +1,14 @@
+experiment: xolver-native-terms-r2-diagnostic
+description: Diagnose all unit tests against the frozen native DAG migration binary.
+environment:
+  host: panda1
+  workdir: /pub/data/jiafq/xolver
+protocol:
+  inputs: {list: [unit]}
+  timeout: 25m
+  memory: 8G
+  parallelism: 1
+trials:
+  - {name: native}
+run:
+  cmd: timeout 1200 validation/native-terms-r2/xolver_unit_tests > validation/native-terms-r2/unit-diagnostic.log 2>&1

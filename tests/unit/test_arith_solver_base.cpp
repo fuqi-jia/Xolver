@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
-#include "theory/arith/ArithSolverBase.h"
-#include "theory/core/TheoryLemmaDatabase.h"
+#include "search/arith/ArithSolverBase.h"
+#include "search/coordination/TheoryLemmaDatabase.h"
 
 using namespace xolver;
 

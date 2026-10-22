@@ -1,12 +1,12 @@
 #include <doctest/doctest.h>
 #include "xolver/Solver.h"
-#include "theory/arith/logics/lia/LiaSolver.h"
-#include "theory/core/TheoryAtomRegistry.h"
-#include "frontend/atomization/Atomizer.h"
-#include "theory/core/TheoryLemmaDatabase.h"
-#include "theory/arith/kernel/linear/LinearExpr.h"
-#include "theory/arith/kernel/linear/LinearConstraintNormalizer.h"
-#include "theory/arith/logics/lra/GeneralSimplex.h"
+#include "search/lia/LiaSolver.h"
+#include "search/coordination/TheoryAtomRegistry.h"
+#include "search/boolean/Atomizer.h"
+#include "search/coordination/TheoryLemmaDatabase.h"
+#include "algebra/linear/LinearExpr.h"
+#include "algebra/linear/LinearConstraintNormalizer.h"
+#include "search/lra/GeneralSimplex.h"
 #include <fstream>
 #include <filesystem>
 
@@ -103,10 +103,12 @@ TEST_CASE("LIA: branch split round-trip") {
 }
 
 TEST_CASE("LIA: model validation passes for integer model") {
-    CoreIr ir;
-    ExprId x = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("x"))});
-    ExprId zero = ir.add(CoreExpr{Kind::ConstInt, 0, {}, Payload(int64_t(0))});
-    ExprId eq0 = ir.add(CoreExpr{Kind::Eq, 0, {x, zero}, {}});
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Int);
+    ir.registerSort(1, SortKind::Bool);
+    ExprId x = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("x"))});
+    ExprId zero = ir.add(TermExpr{Kind::ConstInt, 0, {}, Payload(int64_t(0))});
+    ExprId eq0 = ir.add(TermExpr{Kind::Eq, 1, {x, zero}, {}});
 
     std::unordered_map<std::string, mpq_class> coeffs;
     mpq_class rhs;
@@ -131,12 +133,14 @@ TEST_CASE("LIA: model validation passes for integer model") {
 }
 
 TEST_CASE("LIA: model validation fails for fractional integer var") {
-    CoreIr ir;
-    ExprId x = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("x"))});
-    ExprId zero = ir.add(CoreExpr{Kind::ConstInt, 0, {}, Payload(int64_t(0))});
-    ExprId two = ir.add(CoreExpr{Kind::ConstInt, 0, {}, Payload(int64_t(2))});
-    ExprId le2 = ir.add(CoreExpr{Kind::Leq, 0, {x, two}, {}});
-    ExprId ge0 = ir.add(CoreExpr{Kind::Geq, 0, {x, zero}, {}});
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Int);
+    ir.registerSort(1, SortKind::Bool);
+    ExprId x = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("x"))});
+    ExprId zero = ir.add(TermExpr{Kind::ConstInt, 0, {}, Payload(int64_t(0))});
+    ExprId two = ir.add(TermExpr{Kind::ConstInt, 0, {}, Payload(int64_t(2))});
+    ExprId le2 = ir.add(TermExpr{Kind::Leq, 1, {x, two}, {}});
+    ExprId ge0 = ir.add(TermExpr{Kind::Geq, 1, {x, zero}, {}});
 
     std::unordered_map<std::string, mpq_class> coeffs1, coeffs2;
     mpq_class rhs1, rhs2;

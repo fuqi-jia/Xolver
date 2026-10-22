@@ -7,10 +7,10 @@
 // independent of the high-level strict-validation gate.
 
 #include <doctest/doctest.h>
-#include "theory/arith/logics/dl/IdlSolver.h"
-#include "theory/arith/logics/dl/RdlSolver.h"
-#include "theory/core/TheoryLemmaDatabase.h"
-#include "expr/types.h"
+#include "search/dl/IdlSolver.h"
+#include "search/dl/RdlSolver.h"
+#include "search/coordination/TheoryLemmaDatabase.h"
+#include "ir/types.h"
 #include <gmpxx.h>
 
 using namespace xolver;

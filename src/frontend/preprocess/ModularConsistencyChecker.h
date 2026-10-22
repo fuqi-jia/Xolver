@@ -1,6 +1,6 @@
 #pragma once
 
-#include "expr/ir.h"
+#include "ir/NativeTerms.h"
 #include <gmpxx.h>
 #include <optional>
 #include <unordered_map>
@@ -39,7 +39,7 @@ namespace xolver {
  */
 class ModularConsistencyChecker {
 public:
-    explicit ModularConsistencyChecker(CoreIr& ir);
+    explicit ModularConsistencyChecker(NativeTerms& ir);
 
     void run();
 
@@ -71,7 +71,7 @@ private:
     ExprId mkIntConst(const mpz_class& v);
     ExprId mkEq(ExprId a, ExprId b);
 
-    CoreIr& ir_;
+    NativeTerms& ir_;
     SortId boolSortId_;
     SortId intSortId_;
 };

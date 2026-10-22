@@ -1,5 +1,5 @@
 #include "frontend/preprocess/ArithCastNormalizer.h"
-#include "util/MpqUtils.h"
+#include "base/MpqUtils.h"
 #include <gmpxx.h>
 
 namespace xolver {
@@ -71,7 +71,7 @@ ExprId ArithCastNormalizer::rewriteRec(ExprId root) {
                 const auto& arg = ir_.get(node.children[0]);
                 if (arg.kind == Kind::ConstInt) {
                     if (auto* v = std::get_if<int64_t>(&arg.payload.value)) {
-                        CoreExpr ne;
+                        TermExpr ne;
                         ne.kind = Kind::ConstReal;
                         ne.sort = node.sort;
                         ne.payload = Payload(mpq_class(*v).get_str());
@@ -87,7 +87,7 @@ ExprId ArithCastNormalizer::rewriteRec(ExprId root) {
                         mpz_class z = q.get_num() / q.get_den();
                         if (q < 0 && q.get_num() % q.get_den() != 0) z -= 1;
                         if (z.fits_slong_p()) {
-                            CoreExpr ne;
+                            TermExpr ne;
                             ne.kind = Kind::ConstInt;
                             ne.sort = node.sort;
                             ne.payload = Payload(static_cast<int64_t>(z.get_si()));
@@ -171,7 +171,7 @@ ExprId ArithCastNormalizer::rewriteRec(ExprId root) {
                     const auto childNode = ir_.get(c);
                     if (realContext && childNode.kind == Kind::ConstInt) {
                         if (auto* v = std::get_if<int64_t>(&childNode.payload.value)) {
-                            CoreExpr ne;
+                            TermExpr ne;
                             ne.kind = Kind::ConstReal;
                             ne.sort = ir_.realSortId();
                             ne.payload = Payload(mpq_class(*v).get_str());
@@ -182,7 +182,7 @@ ExprId ArithCastNormalizer::rewriteRec(ExprId root) {
                                childNode.sort == ir_.intSortId()) {
                         // ConstReal node that was classified as Int (e.g. IntOrReal parser constant)
                         if (auto* s = std::get_if<std::string>(&childNode.payload.value)) {
-                            CoreExpr ne;
+                            TermExpr ne;
                             ne.kind = Kind::ConstReal;
                             ne.sort = ir_.realSortId();
                             ne.payload = Payload(*s);
@@ -195,7 +195,7 @@ ExprId ArithCastNormalizer::rewriteRec(ExprId root) {
                     if (rc != c) changed = true;
                 }
                 if (changed) {
-                    CoreExpr ne;
+                    TermExpr ne;
                     ne.kind = node.kind;
                     ne.sort = node.sort;
                     ne.children = std::move(newChildren);

@@ -1,0 +1,18 @@
+experiment: xolver-audit-e927757f-baseline
+description: Original source baseline; persistent build directory, server only.
+environment:
+  host: panda1
+  workdir: /pub/data/jiafq/xolver
+protocol:
+  inputs: {list: [baseline]}
+  timeout: 90m
+  memory: 16G
+  parallelism: 1
+trials:
+  - {name: proofs-on}
+run:
+  cmd: bash /pub/data/jiafq/xolver/tools/remote/validate.sh baseline
+measurements:
+  from: metrics.json
+  primary: unit_rc
+  checks: ["unit_rc == 0", "regression_rc == 0"]

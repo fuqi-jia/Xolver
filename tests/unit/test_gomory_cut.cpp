@@ -1,11 +1,11 @@
-// Soundness verification for the GMI cut derivation (XOLVER_LIA_CUTS core).
+// Soundness verification for the integer cut derivations.
 // For a row x_i = beta_i + Σ chat_j y_j (y_j >= 0 integer, x_i integer), the
 // derived cut Σ gamma_j y_j >= 1 must (a) be violated at the current point
 // y = 0, and (b) hold for EVERY integer-feasible point. (b) is checked by brute
 // force over a bounded box — the "localized per-cut validity check".
 
 #include <doctest/doctest.h>
-#include "theory/arith/logics/lia/GomoryCut.h"
+#include "search/lia/GomoryCut.h"
 #include <gmpxx.h>
 #include <vector>
 

@@ -33,6 +33,11 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             cmake build-essential libgmp-dev libmpfr-dev python3
 
+      - name: Validate typed control contracts
+        run: |
+          python3 -B tools/governance/control_catalog.py
+          python3 -B tests/tools/test_control_catalog.py
+
       - name: Configure (Release)
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 
@@ -84,6 +89,11 @@ jobs:
       # ubuntu-latest). Binaries land under .proof-checkers/.
       - name: Install proof checkers
         run: bash tools/proof/install_checkers.sh
+
+      - name: Validate typed control contracts
+        run: |
+          python3 -B tools/governance/control_catalog.py
+          python3 -B tests/tools/test_control_catalog.py
 
       - name: Configure (Release, proofs ON)
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DXOLVER_ENABLE_PROOFS=ON

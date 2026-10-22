@@ -1,7 +1,7 @@
 #include <doctest/doctest.h>
-#include "theory/arith/logics/nra/backend/LibpolyBackend.h"
-#include "theory/arith/logics/nra/core/CdcacCore.h"
-#include "theory/arith/kernel/poly/PolynomialKernel.h"
+#include "search/nra/backend/LibpolyBackend.h"
+#include "search/nra/core/CdcacCore.h"
+#include "algebra/poly/PolynomialKernel.h"
 
 using namespace xolver;
 

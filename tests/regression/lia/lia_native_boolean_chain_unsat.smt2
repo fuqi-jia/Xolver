@@ -1,0 +1,5 @@
+(set-logic QF_LIA)
+(set-info :status unsat)
+(declare-const p Bool)
+(assert (= p true false))
+(check-sat)

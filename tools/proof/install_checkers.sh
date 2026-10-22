@@ -1,44 +1,45 @@
 #!/usr/bin/env bash
-# Reproducibly install the INDEPENDENT external proof checkers Xolver's proofs
-# are validated against. These are separate tools (separate authors) — Xolver
-# never grades its own proof; an outside checker must accept it.
-#
-#   * drat-trim + lrat-check  — the Boolean-core checkers (DRAT/LRAT).
-#       drat-trim does full forward RUP and is ADVERSARIALLY SOUND (it rejects a
-#       bogus proof of a SAT formula); it is the gate. See
-#       docs/proof/refs/checker-soundness-test.sh.
-#   * carcara                 — the Alethe checker for theory sub-proofs (Phase C+).
-#
-# Usage: install_checkers.sh [install-dir]   (default: ./.proof-checkers)
-# Prints the resolved binary paths on success.
+# Install pinned external proof checkers, retaining one incremental source tree.
+# Usage: install_checkers.sh [install-dir] (default: ./.proof-checkers)
 set -euo pipefail
-# Resolve the script's own dir ABSOLUTELY before any cd — the soundness self-test
-# below is reached relative to it, and we cd into $DEST first (a relative $0 would
-# then resolve under $DEST and vanish, as it did in CI).
 HERE="$(cd "$(dirname "$0")" && pwd)"
 DEST="${1:-$(pwd)/.proof-checkers}"
 mkdir -p "$DEST"
-cd "$DEST"
+DEST="$(cd "$DEST" && pwd)"
+exec 9>"$DEST/.install.lock"
+flock 9
+DRAT_REV="${XOLVER_DRAT_TRIM_REV:-2e3b2dc0ecf938addbd779d42877b6ed69d9a985}"
+CARCARA_REV="${XOLVER_CARCARA_REV:-20bf49c5ce31089ac83118574c888669355aaae1}"
 
-echo "== drat-trim / lrat-check =="
-if [ ! -x "$DEST/drat-trim/drat-trim" ]; then
-  rm -rf "$DEST/drat-trim"
-  git clone --depth 1 https://github.com/marijnheule/drat-trim.git
-  ( cd drat-trim && make drat-trim && cc -O2 -o lrat-check lrat-check.c )
+if [ ! -d "$DEST/drat-trim/.git" ]; then
+  # An existing non-repository directory is preserved; git clone will refuse it.
+  git clone https://github.com/marijnheule/drat-trim.git "$DEST/drat-trim"
 fi
+if [ -n "$(git -C "$DEST/drat-trim" diff --name-only HEAD 2>/dev/null)" ]; then
+  echo 'drat-trim has local source changes; refusing to overwrite them' >&2
+  exit 1
+fi
+if ! git -C "$DEST/drat-trim" cat-file -e "$DRAT_REV^{commit}" 2>/dev/null; then
+  git -C "$DEST/drat-trim" fetch --depth 1 origin "$DRAT_REV"
+fi
+git -C "$DEST/drat-trim" checkout --detach "$DRAT_REV"
+"${CC:-cc}" -D_DEFAULT_SOURCE -std=c99 -O2 \
+  "$DEST/drat-trim/drat-trim.c" -o "$DEST/drat-trim/drat-trim"
+cc -O2 -o "$DEST/drat-trim/lrat-check" "$DEST/drat-trim/lrat-check.c"
+printf '%s\n' "$DRAT_REV" > "$DEST/drat-trim.revision"
 echo "DRAT_TRIM=$DEST/drat-trim/drat-trim"
 echo "LRAT_CHECK=$DEST/drat-trim/lrat-check"
 
-echo "== carcara (Alethe) =="
 if command -v cargo >/dev/null 2>&1; then
-  if [ ! -x "$DEST/carcara/bin/carcara" ]; then
-    cargo install --git https://github.com/ufmg-smite/carcara.git --root "$DEST/carcara" -j 2
+  if [ ! -x "$DEST/carcara/bin/carcara" ] || \
+     [ "$(cat "$DEST/carcara.revision" 2>/dev/null || true)" != "$CARCARA_REV" ]; then
+    cargo install --locked --git https://github.com/ufmg-smite/carcara.git \
+      --rev "$CARCARA_REV" --root "$DEST/carcara" --force -j 2
+    printf '%s\n' "$CARCARA_REV" > "$DEST/carcara.revision"
   fi
   echo "CARCARA=$DEST/carcara/bin/carcara"
 else
-  echo "CARCARA=SKIPPED (cargo not found; needed only for the Phase C+ Alethe gate)"
+  echo 'CARCARA=UNAVAILABLE (cargo not found; theory proof checking is unavailable)'
 fi
-
-echo "== self-test the Boolean-core gate is adversarially sound =="
 bash "$HERE/../../docs/proof/refs/checker-soundness-test.sh" "$DEST/drat-trim/drat-trim"
 echo "checkers ready under: $DEST"

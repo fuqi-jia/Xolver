@@ -1,26 +1,29 @@
 #pragma once
 
 #include <cstdint>
+#include <limits>
 
 namespace xolver {
 
 /**
  * Opaque handle for a solver term.
- * Internally wraps an ExprId (0 = null).
+ * Internally wraps an ExprId (UINT32_MAX = null; zero is a valid term).
  */
 class Term {
 public:
     Term() = default;
-    explicit Term(uint32_t id) : id_(id) {}
+    explicit Term(uint32_t id, uint64_t context = 0) : id_(id), context_(context) {}
 
     uint32_t id() const { return id_; }
-    bool isNull() const { return id_ == 0; }
+    uint64_t context() const { return context_; }
+    bool isNull() const { return id_ == std::numeric_limits<uint32_t>::max(); }
 
-    bool operator==(const Term& o) const { return id_ == o.id_; }
-    bool operator!=(const Term& o) const { return id_ != o.id_; }
+    bool operator==(const Term& o) const { return id_ == o.id_ && context_ == o.context_; }
+    bool operator!=(const Term& o) const { return !(*this == o); }
 
 private:
-    uint32_t id_ = 0;
+    uint32_t id_ = std::numeric_limits<uint32_t>::max();
+    uint64_t context_ = 0;
 };
 
 } // namespace xolver

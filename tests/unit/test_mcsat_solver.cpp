@@ -7,13 +7,12 @@
 //      pickValue successfully and check() returns Consistent.
 //   3. Backtrack clears framework-side pending state.
 
-#include "experimental/mcsat/McsatSolver.h"
-#include "theory/arith/logics/nia/mcsat/NiaMcsatEngine.h"
-#include "theory/arith/logics/nra/engine/NlsatEngine.h"
-#include "theory/arith/kernel/poly/PolynomialKernel.h"
-#include "theory/core/TheoryAtomTypes.h"
-#include "theory/core/TheoryPropagatorCallbacks.h"  // TheoryLemmaStorage
-#include "util/RealValue.h"
+#include "search/experimental/mcsat/McsatSolver.h"
+#include "search/nra/engine/NlsatEngine.h"
+#include "algebra/poly/PolynomialKernel.h"
+#include "contracts/TheoryAtomTypes.h"
+#include "contracts/TheoryPropagatorCallbacks.h"  // TheoryLemmaStorage
+#include "base/RealValue.h"
 
 #include <doctest/doctest.h>
 #include <memory>
@@ -98,26 +97,6 @@ TEST_CASE("McsatSolver: NlsatEngine drives a trivial SAT path") {
     auto r = solver.check(db);
     // pickValue should return 0 for x; validateModel sees x=0, returns
     // true; framework reports Consistent (sat-shape).
-    CHECK(r.kind == TheoryCheckResult::Kind::Consistent);
-}
-
-TEST_CASE("McsatSolver: NiaMcsatEngine drives a trivial SAT path") {
-    auto kernel = createPolynomialKernel();
-    VarId x = kernel->getOrCreateVar("x");
-    PolyId xPoly = kernel->mkVar(x);
-
-    auto engine = std::make_unique<nia_mcsat::NiaMcsatEngine>();
-    engine->setKernel(kernel.get());
-
-    McsatSolver solver;
-    solver.setEngine(std::move(engine), TheoryId::NIA);
-
-    auto atom = trivialPolyAtom(xPoly, Relation::Geq, RealValue::fromInt(0));
-    atom.theory = TheoryId::NIA;
-    solver.assertLit(atom, true, 1, SatLit{1, true});
-
-    StubLemmaStorage db;
-    auto r = solver.check(db);
     CHECK(r.kind == TheoryCheckResult::Kind::Consistent);
 }
 

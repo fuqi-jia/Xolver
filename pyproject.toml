@@ -35,8 +35,9 @@ Source = "https://github.com/fuqi-jia/Xolver"
 # via the install() rule in python/CMakeLists.txt.
 wheel.packages = ["python/xolver"]
 cmake.version = ">=3.16"
-# Keep build output out of the source tree.
-build-dir = "build/skbuild/{wheel_tag}"
+# Reconfigure the project's one persistent build directory for the chosen
+# Python ABI. Serialize wheel and CMake writers; do not create a build per tag.
+build-dir = "build"
 # Only the bits the extension needs — never build the CLI/tests in the wheel.
 [tool.scikit-build.cmake.define]
 XOLVER_BUILD_PYTHON = "ON"

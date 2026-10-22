@@ -4,7 +4,7 @@
 
 #include <doctest/doctest.h>
 #include <gmpxx.h>
-#include "theory/arith/kernel/refute/SignDefinitenessRefuter.h"
+#include "search/refute/SignDefinitenessRefuter.h"
 
 using namespace xolver;
 

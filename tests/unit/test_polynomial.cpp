@@ -1,9 +1,9 @@
 #include <gmpxx.h>
 #include <doctest/doctest.h>
-#include "theory/arith/kernel/poly/PolynomialKernel.h"
-#include "theory/arith/kernel/poly/PolynomialConverter.h"
-#include "theory/arith/kernel/poly/RationalPolynomial.h"
-#include "expr/ir.h"
+#include "algebra/poly/PolynomialKernel.h"
+#include "algebra/poly/PolynomialConverter.h"
+#include "algebra/poly/RationalPolynomial.h"
+#include "ir/NativeTerms.h"
 
 using namespace xolver;
 
@@ -207,17 +207,19 @@ TEST_CASE("RationalPolynomial: toPrimitiveInteger negative coefficients") {
 // ============================================================================
 
 TEST_CASE("PolynomialConverter: linear expression") {
-    CoreIr ir;
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Real);
+    ir.registerSort(1, SortKind::Int);
 
     // Build: 2*x + 3*y
-    ExprId x = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("x"))});
-    ExprId y = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("y"))});
-    ExprId two = ir.add(CoreExpr{Kind::ConstInt, 0, {}, Payload(int64_t(2))});
-    ExprId three = ir.add(CoreExpr{Kind::ConstInt, 0, {}, Payload(int64_t(3))});
+    ExprId x = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("x"))});
+    ExprId y = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("y"))});
+    ExprId two = ir.add(TermExpr{Kind::ConstInt, 1, {}, Payload(int64_t(2))});
+    ExprId three = ir.add(TermExpr{Kind::ConstInt, 1, {}, Payload(int64_t(3))});
 
-    ExprId mul1 = ir.add(CoreExpr{Kind::Mul, 0, {two, x}, {}});
-    ExprId mul2 = ir.add(CoreExpr{Kind::Mul, 0, {three, y}, {}});
-    ExprId addExpr = ir.add(CoreExpr{Kind::Add, 0, {mul1, mul2}, {}});
+    ExprId mul1 = ir.add(TermExpr{Kind::Mul, 0, {two, x}, {}});
+    ExprId mul2 = ir.add(TermExpr{Kind::Mul, 0, {three, y}, {}});
+    ExprId addExpr = ir.add(TermExpr{Kind::Add, 0, {mul1, mul2}, {}});
 
     auto kernel = createPolynomialKernel();
     PolynomialConverter conv(*kernel);
@@ -230,11 +232,13 @@ TEST_CASE("PolynomialConverter: linear expression") {
 }
 
 TEST_CASE("PolynomialConverter: power expression") {
-    CoreIr ir;
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Real);
+    ir.registerSort(1, SortKind::Int);
 
-    ExprId x = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("x"))});
-    ExprId two = ir.add(CoreExpr{Kind::ConstInt, 0, {}, Payload(int64_t(2))});
-    ExprId powExpr = ir.add(CoreExpr{Kind::Pow, 0, {x, two}, {}});
+    ExprId x = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("x"))});
+    ExprId two = ir.add(TermExpr{Kind::ConstInt, 1, {}, Payload(int64_t(2))});
+    ExprId powExpr = ir.add(TermExpr{Kind::Pow, 0, {x, two}, {}});
 
     auto kernel = createPolynomialKernel();
     PolynomialConverter conv(*kernel);
@@ -246,15 +250,17 @@ TEST_CASE("PolynomialConverter: power expression") {
 }
 
 TEST_CASE("PolynomialConverter: rational coefficient denominator clearing") {
-    CoreIr ir;
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Real);
+    ir.registerSort(1, SortKind::Int);
 
     // Build: (1/2)*x + y  ->  scale 1/2? No, primitive integer: x + 2y, scale 1/2
-    ExprId x = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("x"))});
-    ExprId y = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("y"))});
-    ExprId half = ir.add(CoreExpr{Kind::ConstReal, 0, {}, Payload(std::string("1/2"))});
+    ExprId x = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("x"))});
+    ExprId y = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("y"))});
+    ExprId half = ir.add(TermExpr{Kind::ConstReal, 0, {}, Payload(std::string("1/2"))});
 
-    ExprId mul1 = ir.add(CoreExpr{Kind::Mul, 0, {half, x}, {}});
-    ExprId addExpr = ir.add(CoreExpr{Kind::Add, 0, {mul1, y}, {}});
+    ExprId mul1 = ir.add(TermExpr{Kind::Mul, 0, {half, x}, {}});
+    ExprId addExpr = ir.add(TermExpr{Kind::Add, 0, {mul1, y}, {}});
 
     auto kernel = createPolynomialKernel();
     PolynomialConverter conv(*kernel);
@@ -274,17 +280,19 @@ TEST_CASE("PolynomialConverter: rational coefficient denominator clearing") {
 }
 
 TEST_CASE("PolynomialConverter: mixed rational and integer coefficients") {
-    CoreIr ir;
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Real);
+    ir.registerSort(1, SortKind::Int);
 
     // Build: (1/2)*x + (1/3)*y  ->  primitive: 3x + 2y, scale = 1/6
-    ExprId x = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("x"))});
-    ExprId y = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("y"))});
-    ExprId half = ir.add(CoreExpr{Kind::ConstReal, 0, {}, Payload(std::string("1/2"))});
-    ExprId third = ir.add(CoreExpr{Kind::ConstReal, 0, {}, Payload(std::string("1/3"))});
+    ExprId x = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("x"))});
+    ExprId y = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("y"))});
+    ExprId half = ir.add(TermExpr{Kind::ConstReal, 0, {}, Payload(std::string("1/2"))});
+    ExprId third = ir.add(TermExpr{Kind::ConstReal, 0, {}, Payload(std::string("1/3"))});
 
-    ExprId mul1 = ir.add(CoreExpr{Kind::Mul, 0, {half, x}, {}});
-    ExprId mul2 = ir.add(CoreExpr{Kind::Mul, 0, {third, y}, {}});
-    ExprId addExpr = ir.add(CoreExpr{Kind::Add, 0, {mul1, mul2}, {}});
+    ExprId mul1 = ir.add(TermExpr{Kind::Mul, 0, {half, x}, {}});
+    ExprId mul2 = ir.add(TermExpr{Kind::Mul, 0, {third, y}, {}});
+    ExprId addExpr = ir.add(TermExpr{Kind::Add, 0, {mul1, mul2}, {}});
 
     auto kernel = createPolynomialKernel();
     PolynomialConverter conv(*kernel);
@@ -299,15 +307,17 @@ TEST_CASE("PolynomialConverter: mixed rational and integer coefficients") {
 }
 
 TEST_CASE("PolynomialConverter: rational coefficient in power") {
-    CoreIr ir;
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Real);
+    ir.registerSort(1, SortKind::Int);
 
     // Build: ((1/2)*x)^2  ->  (1/4)*x^2  ->  primitive: x^2, scale = 1/4
-    ExprId x = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("x"))});
-    ExprId half = ir.add(CoreExpr{Kind::ConstReal, 0, {}, Payload(std::string("1/2"))});
-    ExprId two = ir.add(CoreExpr{Kind::ConstInt, 0, {}, Payload(int64_t(2))});
+    ExprId x = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("x"))});
+    ExprId half = ir.add(TermExpr{Kind::ConstReal, 0, {}, Payload(std::string("1/2"))});
+    ExprId two = ir.add(TermExpr{Kind::ConstInt, 1, {}, Payload(int64_t(2))});
 
-    ExprId mul1 = ir.add(CoreExpr{Kind::Mul, 0, {half, x}, {}});
-    ExprId powExpr = ir.add(CoreExpr{Kind::Pow, 0, {mul1, two}, {}});
+    ExprId mul1 = ir.add(TermExpr{Kind::Mul, 0, {half, x}, {}});
+    ExprId powExpr = ir.add(TermExpr{Kind::Pow, 0, {mul1, two}, {}});
 
     auto kernel = createPolynomialKernel();
     PolynomialConverter conv(*kernel);
@@ -323,17 +333,19 @@ TEST_CASE("PolynomialConverter: rational coefficient in power") {
 }
 
 TEST_CASE("PolynomialConverter: constraint conversion") {
-    CoreIr ir;
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Real);
+    ir.registerSort(1, SortKind::Int);
 
     // Build constraint: (1/2)*x + y = 1
     // diff = (1/2)*x + y - 1  ->  primitive: x + 2y - 2, scale = 1/2
-    ExprId x = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("x"))});
-    ExprId y = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("y"))});
-    ExprId half = ir.add(CoreExpr{Kind::ConstReal, 0, {}, Payload(std::string("1/2"))});
-    ExprId one = ir.add(CoreExpr{Kind::ConstInt, 0, {}, Payload(int64_t(1))});
+    ExprId x = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("x"))});
+    ExprId y = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("y"))});
+    ExprId half = ir.add(TermExpr{Kind::ConstReal, 0, {}, Payload(std::string("1/2"))});
+    ExprId one = ir.add(TermExpr{Kind::ConstInt, 1, {}, Payload(int64_t(1))});
 
-    ExprId mul1 = ir.add(CoreExpr{Kind::Mul, 0, {half, x}, {}});
-    ExprId lhs = ir.add(CoreExpr{Kind::Add, 0, {mul1, y}, {}});
+    ExprId mul1 = ir.add(TermExpr{Kind::Mul, 0, {half, x}, {}});
+    ExprId lhs = ir.add(TermExpr{Kind::Add, 0, {mul1, y}, {}});
 
     auto kernel = createPolynomialKernel();
     PolynomialConverter conv(*kernel);
@@ -349,14 +361,16 @@ TEST_CASE("PolynomialConverter: constraint conversion") {
 }
 
 TEST_CASE("PolynomialConverter: zero polynomial simplification") {
-    CoreIr ir;
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Real);
+    ir.registerSort(1, SortKind::Int);
     auto kernel = createPolynomialKernel();
     PolynomialConverter conv(*kernel);
 
-    ExprId x = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("x"))});
+    ExprId x = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("x"))});
 
     // x - x = 0  ->  tautology for Eq/Leq/Geq, conflict for Neq/Lt/Gt
-    ExprId subExpr = ir.add(CoreExpr{Kind::Sub, 0, {x, x}, {}});
+    ExprId subExpr = ir.add(TermExpr{Kind::Sub, 0, {x, x}, {}});
 
     // diff = (x-x) - (x-x) = 0
     auto ccEq  = conv.convertConstraint(subExpr, subExpr, Relation::Eq, ir);
@@ -379,16 +393,18 @@ TEST_CASE("PolynomialConverter: zero polynomial simplification") {
 }
 
 TEST_CASE("PolynomialConverter: division by numeric constant") {
-    CoreIr ir;
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Real);
+    ir.registerSort(1, SortKind::Int);
     auto kernel = createPolynomialKernel();
     PolynomialConverter conv(*kernel);
 
     // (x + y) / 3  ->  (1/3)x + (1/3)y  ->  primitive: x + y, scale = 1/3
-    ExprId x = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("x"))});
-    ExprId y = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("y"))});
-    ExprId three = ir.add(CoreExpr{Kind::ConstInt, 0, {}, Payload(int64_t(3))});
-    ExprId addExpr = ir.add(CoreExpr{Kind::Add, 0, {x, y}, {}});
-    ExprId divExpr = ir.add(CoreExpr{Kind::Div, 0, {addExpr, three}, {}});
+    ExprId x = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("x"))});
+    ExprId y = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("y"))});
+    ExprId three = ir.add(TermExpr{Kind::ConstInt, 1, {}, Payload(int64_t(3))});
+    ExprId addExpr = ir.add(TermExpr{Kind::Add, 0, {x, y}, {}});
+    ExprId divExpr = ir.add(TermExpr{Kind::Div, 0, {addExpr, three}, {}});
 
     auto res = conv.convert(divExpr, ir);
     CHECK(res.ok());
@@ -402,30 +418,34 @@ TEST_CASE("PolynomialConverter: division by numeric constant") {
 }
 
 TEST_CASE("PolynomialConverter: division by variable is unsupported") {
-    CoreIr ir;
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Real);
+    ir.registerSort(1, SortKind::Int);
     auto kernel = createPolynomialKernel();
     PolynomialConverter conv(*kernel);
 
     // 2 / x  ->  unsupported non-polynomial
-    ExprId x = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("x"))});
-    ExprId two = ir.add(CoreExpr{Kind::ConstInt, 0, {}, Payload(int64_t(2))});
-    ExprId divExpr = ir.add(CoreExpr{Kind::Div, 0, {two, x}, {}});
+    ExprId x = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("x"))});
+    ExprId two = ir.add(TermExpr{Kind::ConstInt, 1, {}, Payload(int64_t(2))});
+    ExprId divExpr = ir.add(TermExpr{Kind::Div, 0, {two, x}, {}});
 
     auto res = conv.convert(divExpr, ir);
     CHECK(!res.ok());
 }
 
 TEST_CASE("PolynomialConverter: power expansion") {
-    CoreIr ir;
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Real);
+    ir.registerSort(1, SortKind::Int);
     auto kernel = createPolynomialKernel();
     PolynomialConverter conv(*kernel);
 
     // (x + y)^2  ->  x^2 + 2xy + y^2
-    ExprId x = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("x"))});
-    ExprId y = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("y"))});
-    ExprId two = ir.add(CoreExpr{Kind::ConstInt, 0, {}, Payload(int64_t(2))});
-    ExprId addExpr = ir.add(CoreExpr{Kind::Add, 0, {x, y}, {}});
-    ExprId powExpr = ir.add(CoreExpr{Kind::Pow, 0, {addExpr, two}, {}});
+    ExprId x = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("x"))});
+    ExprId y = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("y"))});
+    ExprId two = ir.add(TermExpr{Kind::ConstInt, 1, {}, Payload(int64_t(2))});
+    ExprId addExpr = ir.add(TermExpr{Kind::Add, 0, {x, y}, {}});
+    ExprId powExpr = ir.add(TermExpr{Kind::Pow, 0, {addExpr, two}, {}});
 
     auto res = conv.convert(powExpr, ir);
     CHECK(res.ok());
@@ -438,16 +458,18 @@ TEST_CASE("PolynomialConverter: power expansion") {
 }
 
 TEST_CASE("PolynomialConverter: power zero") {
-    CoreIr ir;
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Real);
+    ir.registerSort(1, SortKind::Int);
     auto kernel = createPolynomialKernel();
     PolynomialConverter conv(*kernel);
 
     // (x + y)^0  ->  1
-    ExprId x = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("x"))});
-    ExprId y = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("y"))});
-    ExprId zero = ir.add(CoreExpr{Kind::ConstInt, 0, {}, Payload(int64_t(0))});
-    ExprId addExpr = ir.add(CoreExpr{Kind::Add, 0, {x, y}, {}});
-    ExprId powExpr = ir.add(CoreExpr{Kind::Pow, 0, {addExpr, zero}, {}});
+    ExprId x = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("x"))});
+    ExprId y = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("y"))});
+    ExprId zero = ir.add(TermExpr{Kind::ConstInt, 1, {}, Payload(int64_t(0))});
+    ExprId addExpr = ir.add(TermExpr{Kind::Add, 0, {x, y}, {}});
+    ExprId powExpr = ir.add(TermExpr{Kind::Pow, 0, {addExpr, zero}, {}});
 
     auto res = conv.convert(powExpr, ir);
     CHECK(res.ok());

@@ -8,14 +8,14 @@
 // explicit work-stack it completes. Depth is chosen well past the ~tens-of-
 // thousands recursion limit of an 8MB stack (the CLI segfaults from ~100k).
 #include <doctest/doctest.h>
-#include "expr/ir.h"
+#include "ir/NativeTerms.h"
 #include "frontend/preprocess/ToIntDefinitionalLowerer.h"
 
 using namespace xolver;
 
 namespace {
 
-void setupBasicSorts(CoreIr& ir, SortId& boolSort, SortId& intSort, SortId& realSort) {
+void setupBasicSorts(NativeTerms& ir, SortId& boolSort, SortId& intSort, SortId& realSort) {
     boolSort = ir.allocateSortId();
     ir.registerSort(boolSort, SortKind::Bool);
     ir.setBoolSortId(boolSort);
@@ -30,22 +30,22 @@ void setupBasicSorts(CoreIr& ir, SortId& boolSort, SortId& intSort, SortId& real
 } // namespace
 
 TEST_CASE("ToIntDefinitionalLowerer: deep nesting does not overflow the stack") {
-    CoreIr ir;
+    NativeTerms ir;
     SortId boolSort, intSort, realSort;
     setupBasicSorts(ir, boolSort, intSort, realSort);
 
     // Build a left-deep real chain  (+ (+ (+ x 1) 1) 1) ...  of depth N,
     // wrap it in (to_int chain), and assert (= (to_int chain) 3).
     const int N = 300000;
-    ExprId x = ir.add(CoreExpr{Kind::Variable, realSort, {}, Payload(std::string("x"))});
+    ExprId x = ir.add(TermExpr{Kind::Variable, realSort, {}, Payload(std::string("x"))});
     ExprId chain = x;
     for (int i = 0; i < N; ++i) {
-        ExprId one = ir.add(CoreExpr{Kind::ConstReal, realSort, {}, Payload(std::string("1"))});
-        chain = ir.add(CoreExpr{Kind::Add, realSort, {chain, one}, {}});
+        ExprId one = ir.add(TermExpr{Kind::ConstReal, realSort, {}, Payload(std::string("1"))});
+        chain = ir.add(TermExpr{Kind::Add, realSort, {chain, one}, {}});
     }
-    ExprId toInt = ir.add(CoreExpr{Kind::ToInt, intSort, {chain}, {}});
-    ExprId three = ir.add(CoreExpr{Kind::ConstInt, intSort, {}, Payload(int64_t(3))});
-    ExprId eq = ir.add(CoreExpr{Kind::Eq, boolSort, {toInt, three}, {}});
+    ExprId toInt = ir.add(TermExpr{Kind::ToInt, intSort, {chain}, {}});
+    ExprId three = ir.add(TermExpr{Kind::ConstInt, intSort, {}, Payload(int64_t(3))});
+    ExprId eq = ir.add(TermExpr{Kind::Eq, boolSort, {toInt, three}, {}});
     ir.addAssertion(eq);
 
     ToIntDefinitionalLowerer t2i(ir);

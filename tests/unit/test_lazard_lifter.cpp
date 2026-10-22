@@ -5,8 +5,8 @@
 
 #include <doctest/doctest.h>
 #include <gmpxx.h>
-#include "theory/arith/logics/nra/lazard/LazardLifter.h"
-#include "theory/arith/logics/nra/lazard/RationalRootIsolation.h"   // countRealRootsIn
+#include "search/nra/lazard/LazardLifter.h"
+#include "search/nra/lazard/RationalRootIsolation.h"   // countRealRootsIn
 
 using namespace xolver;
 

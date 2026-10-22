@@ -1,0 +1,8 @@
+(set-logic ALL)
+(declare-heap (Int Int))
+(set-info :status sat)
+(declare-const x Int)
+(assert (= (as sep.nil Int) 0))
+(assert (= x (- 5)))
+(assert (pto (div x (- 2)) (mod x (- 2))))
+(check-sat)

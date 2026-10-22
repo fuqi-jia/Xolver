@@ -1,0 +1,17 @@
+experiment: xolver-python-native-terms-r12
+environment:
+  host: panda1
+  workdir: /pub/data/jiafq/xolver
+protocol:
+  inputs: {list: [verification]}
+  timeout: 40m
+  memory: 8G
+  parallelism: 1
+trials:
+  - {name: native}
+run:
+  cmd: XOLVER_BUILD_JOBS=4 bash tools/remote/build_python.sh python-native-terms-r12 && bash tools/remote/test_python.sh python-native-terms-r12
+measurements:
+  from: metrics.json
+  primary: pytest_rc
+  checks: ["pytest_rc == 0"]

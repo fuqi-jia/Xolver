@@ -1,7 +1,7 @@
 #include <doctest/doctest.h>
 
-#include "theory/arith/logics/nia/reasoners/ChainGraph.h"
-#include "theory/arith/kernel/poly/PolynomialKernel.h"
+#include "search/nia/reasoners/ChainGraph.h"
+#include "algebra/poly/PolynomialKernel.h"
 
 #include <gmpxx.h>
 #include <vector>

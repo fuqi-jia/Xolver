@@ -1,8 +1,8 @@
 #include <doctest/doctest.h>
-#include "theory/arith/kernel/icp/contractors/SquareContractor.h"
-#include "theory/arith/kernel/interval/ReasonedBox.h"
-#include "theory/arith/kernel/poly/PolynomialKernel.h"
-#include "sat/SatSolver.h"
+#include "search/icp/contractors/SquareContractor.h"
+#include "algebra/interval/ReasonedBox.h"
+#include "algebra/poly/PolynomialKernel.h"
+#include "contracts/SatSolver.h"
 #include <gmpxx.h>
 
 using namespace xolver;
@@ -10,8 +10,8 @@ using namespace xolver;
 // Regression for a false-UNSAT in SquareContractor: for the sign=-1 normal
 // form (-x^2 + c) REL 0 the contractor must rewrite to "x^2 flip(REL) c"
 // keeping c UNCHANGED. A prior `c = -c` turned x^2 = 16 (i.e. -x^2 + 16 = 0)
-// into c<0 => a spurious Conflict. Reachable only with XOLVER_NIA_ICP, but a
-// hard soundness bug there (false UNSAT under the --allon config).
+// into c<0 => a spurious Conflict. Keep the sign regression independently of
+// the stage scheduling and the engine-level propagation tests.
 
 static SatLit reason(SatVar v) { return SatLit::positive(v); }
 static PolyId var(PolynomialKernel& k, const char* n) { return k.mkVar(k.getOrCreateVar(n)); }

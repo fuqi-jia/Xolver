@@ -1,6 +1,7 @@
+#include "base/RuntimeConfig.h"
 #include "frontend/preprocess/SolveEqs.h"
-#include "theory/arith/kernel/linear/LinearExpr.h"
-#include "util/EnvParam.h"
+#include "algebra/linear/LinearExpr.h"
+#include "base/EnvParam.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -9,17 +10,13 @@
 
 namespace xolver {
 
-SolveEqs::SolveEqs(CoreIr& ir, ModelConverter& mc)
+SolveEqs::SolveEqs(NativeTerms& ir, ModelConverter& mc)
     : ir_(ir), mc_(mc),
       boolSortId_(ir.boolSortId()), intSortId_(ir.intSortId()), realSortId_(ir.realSortId()) {
     {
-        long long v = env::paramLong("XOLVER_PP_SOLVE_EQS_BUDGET",
+        long long v = config::read<config::ReadKind::Long>("XOLVER_PP_SOLVE_EQS_BUDGET",
                                      static_cast<long>(workBudget_));
         if (v > 0) workBudget_ = static_cast<uint64_t>(v);
-    }
-    {
-        double v = env::paramDouble("XOLVER_PP_SOLVE_EQS_GROWTH_CAP", growthCap_);
-        if (v > 0.0) growthCap_ = v;
     }
 }
 
@@ -119,11 +116,7 @@ ExprId SolveEqs::substitute(ExprId root, const std::string& name, ExprId replace
         if (!changed) {
             substMemo_[e] = e;
         } else {
-            CoreExpr fresh;
-            fresh.kind = node.kind;
-            fresh.sort = node.sort;
-            fresh.children = std::move(newChildren);
-            fresh.payload = node.payload;
+            TermExpr fresh{node.kind, node.sort, std::move(newChildren), node.payload};
             substMemo_[e] = ir_.addShared(std::move(fresh));
         }
     }
@@ -175,7 +168,7 @@ bool SolveEqs::run() {
     // over all conjuncts. Compared start vs end to see how much elimination
     // grows the formula — the Option-C signal for whether general elimination
     // is densifying (UNSAT-harmful) vs shrinking (SAT-helpful).
-    const bool diag = xolver::env::diag("XOLVER_PP_SOLVE_EQS_DIAG");
+    const bool diag = xolver::config::read<xolver::config::ReadKind::Presence>("XOLVER_PP_SOLVE_EQS_DIAG");
     auto dagSize = [&]() -> uint64_t {
         std::unordered_set<ExprId> seen;
         std::vector<ExprId> st;
@@ -187,18 +180,7 @@ bool SolveEqs::run() {
         }
         return seen.size();
     };
-    // Densification guard (general ±1-pivot only). General elimination SHRINKS
-    // the formula when it is genuinely simplifying (QF_LIA convert: ratio ~0.82)
-    // but GROWS it when it fans a hub variable's definition into many
-    // constraints (SMPT Petri-net Farkas systems, e.g. CircularTrains: ratio
-    // ~1.9–2.2). A grown formula keeps SAT model-search cheap but obscures the
-    // short UNSAT (Farkas) certificate, turning fast UNSATs into timeouts. So
-    // when the live DAG exceeds the initial size by growthCap_, we stop doing
-    // further general eliminations (bare-var elimination, which never densifies,
-    // continues). Measured periodically — recomputing the DAG every elimination
-    // would be quadratic. Only meaningful when general elimination is enabled.
-    const uint64_t dag0 = (generalLinear_ || diag) ? dagSize() : 0;
-    size_t lastGrowthCheck_ = 0;
+    const uint64_t dag0 = diag ? dagSize() : 0;
 
     // Variables feeding an uninterpreted-function/array argument are shared
     // terms in Nelson-Oppen combination; eliminating them is unsound. Pin them.
@@ -219,25 +201,10 @@ bool SolveEqs::run() {
         // verdict, only a simplification). Budget is generous enough to complete
         // the small formulas the pass actually helps; env-overridable for tuning.
         if (substWork_ > workBudget_) {
-            if (eliminated_ > 0 && std::getenv("XOLVER_PP_SOLVE_EQS_DIAG"))
+            if (eliminated_ > 0 && xolver::config::read<xolver::config::ReadKind::Presence>("XOLVER_PP_SOLVE_EQS_DIAG"))
                 std::fprintf(stderr, "[SolveEqs] work budget hit after %zu elims; stopping\n",
                              eliminated_);
             break;
-        }
-        // Periodic densification check (general elimination only). Once the live
-        // formula has grown past growthCap_×, further general eliminations are
-        // fanning out hub variables (UNSAT-harmful); disable them. Bare-var
-        // elimination continues (it never densifies). Checked every few
-        // eliminations to keep the DAG recomputation off the hot path.
-        if (generalLinear_ && !gaussDensifyAbort_ && dag0 > 0 &&
-            eliminated_ >= lastGrowthCheck_ + kGrowthCheckEvery_) {
-            lastGrowthCheck_ = eliminated_;
-            if ((double)dagSize() > (double)dag0 * growthCap_) {
-                gaussDensifyAbort_ = true;
-                if (xolver::env::diag("XOLVER_PP_SOLVE_EQS_DIAG"))
-                    std::fprintf(stderr, "[SolveEqs] densify cap hit after %zu elims; "
-                                 "general elimination disabled\n", eliminated_);
-            }
         }
         progress = false;
         for (size_t idx = 0; idx < conjuncts_.size(); ++idx) {
@@ -254,13 +221,6 @@ bool SolveEqs::run() {
             } else if (auto n2 = asNumericVar(rhs); n2 && !occurs(*n2, lhs) && isLinearReconstructable(lhs)) {
                 varName = *n2; defExpr = lhs; varSort = ir_.get(rhs).sort;
             } else {
-                // Bare-variable path did not match. Try the general ±1-pivot
-                // linear elimination on this equality (Farkas-style
-                // `expr = expr`), which the bare-var form cannot reach.
-                if (generalLinear_ && tryGeneralEliminate(idx)) {
-                    progress = true;
-                    break;  // indices shifted; restart scan
-                }
                 continue;
             }
 
@@ -286,150 +246,6 @@ bool SolveEqs::run() {
                      (unsigned long long)substWork_);
     }
     return eliminated_ > 0;
-}
-
-bool SolveEqs::tryGeneralEliminate(size_t idx) {
-    if (gaussDensifyAbort_) return false;   // densification cap reached
-    ExprId c = conjuncts_[idx].second;
-
-    // Parse the equality into a canonical linear form Σ coeffs[v]·v = rhs.
-    // Returns false for anything nonlinear (e.g. the bilinear Farkas products
-    // in QF_NIA SAT14) — those are correctly skipped.
-    std::unordered_map<std::string, mpq_class> coeffs;
-    mpq_class rhs;
-    Relation rel;
-    if (!extractLinearConstraint(c, ir_, coeffs, rhs, rel)) return false;
-    if (rel != Relation::Eq) return false;
-
-    // Collect every variable's ExprId + sort from this equality's tree. The
-    // replacement we build reuses these exact (hash-consed) variable nodes, so
-    // we never need to reconstruct a Variable from its name (sort-agnostically).
-    std::unordered_map<std::string, ExprId> varExpr;
-    {
-        std::vector<ExprId> stack{c};
-        while (!stack.empty()) {
-            ExprId e = stack.back();
-            stack.pop_back();
-            const auto& node = ir_.get(e);
-            if (node.kind == Kind::Variable) {
-                if (auto* nm = std::get_if<std::string>(&node.payload.value))
-                    varExpr.emplace(*nm, e);
-            }
-            for (ExprId ch : node.children) stack.push_back(ch);
-        }
-    }
-
-    // Deterministic order: sort variable names so pivot choice is reproducible
-    // (unordered_map iteration order is not).
-    std::vector<std::string> names;
-    names.reserve(coeffs.size());
-    for (const auto& kv : coeffs)
-        if (kv.second != 0) names.push_back(kv.first);
-    std::sort(names.begin(), names.end());
-
-    // Helper: build a constant node of the given sort from an exact rational.
-    // Mirrors FormulaRewriter::mkIntOrReal — refuses non-integer/oversized Int
-    // literals (returns NullExpr) so we never emit an unsound or lossy constant.
-    auto mkConst = [&](const mpq_class& v, SortId sort) -> ExprId {
-        if (sort == realSortId_ && realSortId_ != NullSort) {
-            CoreExpr e; e.kind = Kind::ConstReal; e.sort = sort;
-            e.payload = Payload(v.get_str());
-            return ir_.addShared(std::move(e));
-        }
-        if (sort == intSortId_ && intSortId_ != NullSort) {
-            if (v.get_den() != 1) return NullExpr;
-            mpz_class num = v.get_num();
-            if (!num.fits_slong_p()) return NullExpr;
-            CoreExpr e; e.kind = Kind::ConstInt; e.sort = sort;
-            e.payload = Payload(static_cast<int64_t>(num.get_si()));
-            return ir_.addShared(std::move(e));
-        }
-        return NullExpr;
-    };
-
-    // Try each ±1-coefficient variable as the pivot, in deterministic order,
-    // and build its exact replacement. Use the first that succeeds.
-    for (const std::string& pivot : names) {
-        const mpq_class& cj = coeffs[pivot];
-        if (cj != 1 && cj != -1) continue;          // need |coeff| == 1 (exact)
-        if (unsafeVars_.count(pivot)) continue;     // UF/array shared (N-O)
-        auto pit = varExpr.find(pivot);
-        if (pit == varExpr.end()) continue;
-        SortId sort = ir_.get(pit->second).sort;
-        if (sort != intSortId_ && sort != realSortId_) continue;
-
-        // All other variables must share the pivot's sort (avoid Int/Real mixing
-        // through ToReal — keep the replacement homogeneous and reconstructable).
-        bool sortOk = true;
-        for (const std::string& v : names) {
-            if (v == pivot) continue;
-            auto vit = varExpr.find(v);
-            if (vit == varExpr.end() || ir_.get(vit->second).sort != sort) { sortOk = false; break; }
-        }
-        if (!sortOk) continue;
-
-        // xⱼ = (rhs − Σᵢ≠ⱼ aᵢ·xᵢ) / cⱼ, with cⱼ = ±1:
-        //   cⱼ = +1 →  xⱼ = Σᵢ≠ⱼ (−aᵢ)·xᵢ + rhs
-        //   cⱼ = −1 →  xⱼ = Σᵢ≠ⱼ ( aᵢ)·xᵢ − rhs
-        const bool pivotPos = (cj == 1);
-        SmallVector<ExprId, 4> terms;
-        bool buildOk = true;
-        for (const std::string& v : names) {
-            if (v == pivot) continue;
-            mpq_class tc = pivotPos ? -coeffs[v] : coeffs[v];
-            if (tc == 0) continue;
-            ExprId vexpr = varExpr[v];
-            ExprId term;
-            if (tc == 1) {
-                term = vexpr;
-            } else if (tc == -1) {
-                CoreExpr neg; neg.kind = Kind::Neg; neg.sort = sort;
-                neg.children.push_back(vexpr);
-                term = ir_.addShared(std::move(neg));
-            } else {
-                ExprId kc = mkConst(tc, sort);
-                if (kc == NullExpr) { buildOk = false; break; }
-                CoreExpr mul; mul.kind = Kind::Mul; mul.sort = sort;
-                mul.children.push_back(kc);
-                mul.children.push_back(vexpr);
-                term = ir_.addShared(std::move(mul));
-            }
-            terms.push_back(term);
-        }
-        if (!buildOk) continue;
-
-        mpq_class constTerm = pivotPos ? rhs : -rhs;
-        ExprId replacement;
-        if (terms.empty()) {
-            replacement = mkConst(constTerm, sort);
-            if (replacement == NullExpr) continue;
-        } else {
-            if (constTerm != 0) {
-                ExprId kc = mkConst(constTerm, sort);
-                if (kc == NullExpr) continue;
-                terms.push_back(kc);
-            }
-            if (terms.size() == 1) {
-                replacement = terms[0];
-            } else {
-                CoreExpr add; add.kind = Kind::Add; add.sort = sort;
-                add.children = terms;
-                replacement = ir_.addShared(std::move(add));
-            }
-        }
-
-        // Eliminate: drop this equality, substitute pivot ↦ replacement
-        // everywhere else, and record the (exact, linear) definition for model
-        // replay. The pivot cannot occur in `replacement` (it was excluded), so
-        // no self-reference is created.
-        conjuncts_.erase(conjuncts_.begin() + static_cast<long>(idx));
-        substMemo_.clear();
-        for (auto& cj2 : conjuncts_) cj2.second = substitute(cj2.second, pivot, replacement);
-        mc_.registerElimination(pivot, sort, replacement);
-        ++eliminated_;
-        return true;
-    }
-    return false;
 }
 
 void SolveEqs::commit() {

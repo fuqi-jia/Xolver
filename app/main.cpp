@@ -13,6 +13,14 @@
 #include <csignal>
 #include <sys/time.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include "xolver/Proof.h"
+#include <iterator>
+#include <vector>
+#include <cerrno>
+#include <limits>
+#include "xolver/Script.h"
+#include "base/RuntimeConfig.h"
 
 // XOLVER_SELFPROF: poor-man's CPU profiler. ITIMER_PROF fires SIGPROF on the
 // thread consuming CPU (the large-stack solve worker), so the backtrace lands
@@ -28,7 +36,7 @@ static void xolverSelfprofHandler(int) {
     backtrace_symbols_fd(bt, n, 2);
 }
 static void xolverMaybeInstallSelfprof() {
-    if (!std::getenv("XOLVER_SELFPROF")) return;
+    if (!xolver::config::read<xolver::config::ReadKind::Presence>("XOLVER_SELFPROF")) return;
     struct sigaction sa{};
     sa.sa_handler = xolverSelfprofHandler;
     sigemptyset(&sa.sa_mask);
@@ -46,7 +54,7 @@ static void printUsage(const char* prog) {
               << "  solve <file.smt2>      Solve SMT-LIB input\n"
               << "  bench <dir>            Run benchmark suite\n"
               << "  trace <file.json>      View / replay trace\n"
-              << "  model-check <model>    Validate model against assertions\n"
+              << "  model-check <file>     Solve and positively validate the extracted model\n"
               << "  proof-check <proof>    Check proof certificate\n"
               << "  version                Print version\n"
               << "\nOptions:\n"
@@ -57,13 +65,9 @@ static void printUsage(const char* prog) {
               << "  --seed <n>             Random seed for reproducibility\n"
               << "  --timeout <seconds>    Per-solve wall-clock budget (0 = none)\n"
               << "  --dump-stats <file>    Dump per-case stats JSON (requires XOLVER_ENABLE_CASESTATS)\n"
+              << "  --produce-pa-certificate <file> Export native QE obligations for independent Isabelle replay\n"
               << "  --certify <file>       On sat, write a re-checkable certificate (independently re-validated model)\n"
               << "  --unsat-core           On unsat, print the core assertions (subset that proves unsat)\n"
-              << "  --lia-safe-mode        Disable aggressive LIA reasoning (GCD tighten, bound rounding, eq norm)\n"
-              << "  --lia-ultra-safe-mode  Disable ALL integer reasoning (LRA relaxation only)\n"
-              << "  --lia-enable-single-var-tightening   Re-enable single-var bound tightening\n"
-              << "  --lia-enable-gcd-ineq-tightening     Re-enable GCD inequality tightening\n"
-              << "  --lia-enable-eq-gcd-normalization    Re-enable equality GCD normalization\n"
               << "  --parse-only           Parse the file and exit (print parse-ok); no solve\n"
               << "  --features             Print the instance feature vector (JSON) and exit; no solve\n"
               << "  -v, --verbose          Verbose output\n";
@@ -116,9 +120,10 @@ inline int runWithLargeStack(std::function<int()> fn) {
 }  // namespace
 
 // --certify: persist a portable, independently re-checkable SAT certificate.
-// Xolver already re-validates every `sat` internally (ModelValidator) before it
-// is emitted (the soundness invariant); --certify makes that moat first-class by
-// running a SECOND independent re-check (caller side: modelMatchesOriginal) and
+// Certification requires a positive result from the independent evaluator;
+// an indeterminate diagnostic is not evidence. This is an in-process check,
+// not an externally or formally checked proof of the implementation.
+// Running the strict check (caller side: validateModel) and
 // writing the validated model as a self-contained SMT-LIB artifact. A third
 // party reloads the original formula, binds these define-funs, and evaluates the
 // assertions to confirm `sat` without trusting Xolver. Returns true iff written.
@@ -136,8 +141,8 @@ static bool writeSatCertificate(const xolver::Solver& solver,
         << "; generated-by: Xolver " << XOLVER_VERSION_MAJOR << "."
         << XOLVER_VERSION_MINOR << "." << XOLVER_VERSION_PATCH << "\n"
         << "; verdict: sat\n"
-        << "; certification: model independently re-validated against the original\n"
-        << ";   assertions by ModelValidator (exact GMP/MPFR/libpoly; no floating point).\n"
+        << "; certification: positive in-process evaluation by an independent evaluator\n"
+        << ";   (exact GMP/MPFR/libpoly). Not an external or formal proof check.\n"
         << "; replay: assert the original formula, bind the model below, evaluate to true.\n"
         << ";\n"
         << "; --- model (SMT-LIB get-model response) ---\n";
@@ -145,6 +150,7 @@ static bool writeSatCertificate(const xolver::Solver& solver,
     out.flush();
     return static_cast<bool>(out);
 }
+
 
 static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
     int fileIdx = defaultMode ? 1 : 2;
@@ -159,11 +165,13 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
     std::optional<std::string> logicOpt;
     std::optional<std::string> certifyPath;
     std::optional<std::string> proofBase;
+    std::optional<std::string> paCertificate;
     bool checkModel = false;
     bool verbose = false;
     bool parseOnly = false;
     bool produceModels = false;
     bool featuresOnly = false;
+    try {
     for (int i = fileIdx + 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "--parse-only") {
@@ -179,11 +187,15 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
             // reads XOLVER_WALLCLOCK_MS at solve time (api/Solver.cpp), so setting
             // it here before solve() takes effect. <=0 means no limit (the default).
             long long secs = std::stoll(argv[++i]);
-            if (secs > 0)
-                setenv("XOLVER_WALLCLOCK_MS",
-                       std::to_string(secs * 1000).c_str(), /*overwrite=*/1);
+            if (secs > std::numeric_limits<long long>::max() / 1000)
+                throw std::invalid_argument("timeout is too large");
+            solver.setRuntimeParameter("XOLVER_WALLCLOCK_MS",
+                                       std::to_string(secs > 0 ? secs * 1000 : 0));
         } else if (arg == "--dump-stats" && i + 1 < argc) {
             solver.setDumpStatsPath(argv[++i]);
+        } else if (arg == "--produce-pa-certificate" && i + 1 < argc) {
+            paCertificate = argv[++i];
+            solver.setOption("produce-pa-certificate", xolver::OptionValue(true));
         } else if (arg == "--certify" && i + 1 < argc) {
             certifyPath = argv[++i];
         } else if (arg == "--unsat-core") {
@@ -209,16 +221,6 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
             else base = std::string(argv[fileIdx]) + ".proof";
             proofBase = base;
             solver.setOption("produce-proofs", xolver::OptionValue(std::string_view(base)));
-        } else if (arg == "--lia-safe-mode") {
-            solver.setOption("lia-safe-mode", xolver::OptionValue(true));
-        } else if (arg == "--lia-ultra-safe-mode") {
-            solver.setOption("lia-ultra-safe-mode", xolver::OptionValue(true));
-        } else if (arg == "--lia-enable-single-var-tightening") {
-            solver.setOption("lia-enable-single-var-tightening", xolver::OptionValue(true));
-        } else if (arg == "--lia-enable-gcd-ineq-tightening") {
-            solver.setOption("lia-enable-gcd-ineq-tightening", xolver::OptionValue(true));
-        } else if (arg == "--lia-enable-eq-gcd-normalization") {
-            solver.setOption("lia-enable-eq-gcd-normalization", xolver::OptionValue(true));
         } else if (arg == "-v" || arg == "--verbose") {
             verbose = true;
         } else if (arg == "--check-model") {
@@ -227,19 +229,82 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
             std::cerr << "Warning: unknown option " << arg << "\n";
         }
     }
+    } catch (const std::exception& error) {
+        std::cerr << "Invalid solve option: " << error.what() << '\n';
+        return EXIT_FAILURE;
+    }
 
     // Silence the solver's internal stderr diagnostics by default. Kept live
     // for --verbose (debugging) and --check-model (whose MODEL_MISMATCH report
     // goes to stderr). The buffer must outlive every write, so it is static.
     static NullStreambuf nullCerr;
-    if (!verbose && !checkModel && !certifyPath) {
+    if (!verbose && !checkModel && !certifyPath && !paCertificate) {
         std::cerr.rdbuf(&nullCerr);
     }
 
     // Parse + solve + emit on a large-stack worker thread so deeply-nested
     // inputs survive any remaining recursive walker (see runWithLargeStack).
+    auto exportPA = [&]() -> bool {
+        if (!paCertificate) return true;
+        const auto certificate = solver.getProof().presburger();
+        if (certificate.empty()) {
+            std::cerr << "no completed PA decision: certificate unavailable\n";
+            return false;
+        }
+        // Exclusive creation prevents a stale result or another writer's file
+        // from being mistaken for evidence produced by this invocation.
+        int fd = open(paCertificate->c_str(), O_WRONLY | O_CREAT | O_EXCL, 0600);
+        if (fd < 0) {
+            std::cerr << "cannot create new PA certificate: " << std::strerror(errno) << "\n";
+            return false;
+        }
+        size_t offset = 0;
+        while (offset < certificate.size()) {
+            ssize_t count = write(fd, certificate.data() + offset, certificate.size() - offset);
+            if (count < 0 && errno == EINTR) continue;
+            if (count <= 0) { close(fd); std::cerr << "PA certificate write failed\n"; return false; }
+            offset += static_cast<size_t>(count);
+        }
+        if (close(fd) != 0) { std::cerr << "PA certificate close failed\n"; return false; }
+        std::cerr << "PA obligations exported (generated-unchecked)\n";
+        return true;
+    };
     auto body = [&]() -> int {
       try {
+        if (paCertificate && (parseOnly || featuresOnly))
+            throw std::invalid_argument("PA certificate export requires solving");
+        std::ifstream scriptInput(argv[fileIdx]);
+        if (!scriptInput) return EXIT_FAILURE;
+        const std::string source{std::istreambuf_iterator<char>(scriptInput), {}};
+        const auto snapshots = xolver::smtQuerySnapshots(source);
+        if (snapshots.size() > 1 && !parseOnly && !featuresOnly) {
+            if (certifyPath || proofBase || paCertificate) {
+                std::cerr << "certificate/proof export requires a single query per invocation\n";
+                return EXIT_FAILURE;
+            }
+            for (const auto& snapshot : snapshots) {
+                struct TemporaryQuery {
+                    char path[32] = "/tmp/xolver-query-XXXXXX";
+                    int fd = mkstemp(path);
+                    ~TemporaryQuery() { if (fd >= 0) { close(fd); unlink(path); } }
+                } temp;
+                if (temp.fd < 0) return EXIT_FAILURE;
+                size_t offset = 0;
+                while (offset < snapshot.size()) {
+                    const ssize_t written = write(temp.fd, snapshot.data() + offset,
+                                                  snapshot.size() - offset);
+                    if (written < 0 && errno == EINTR) continue;
+                    if (written <= 0) return EXIT_FAILURE;
+                    offset += static_cast<size_t>(written);
+                }
+                std::vector<char*> args(argv, argv + argc);
+                args[fileIdx] = temp.path;
+                args.push_back(nullptr);
+                const int rc = cmdSolve(argc, args.data());
+                if (rc != EXIT_SUCCESS) return rc;
+            }
+            return EXIT_SUCCESS;
+        }
         if (!solver.parseFile(argv[fileIdx])) {
             std::cerr << "Error: failed to parse " << argv[fileIdx] << "\n";
             return EXIT_FAILURE;
@@ -280,9 +345,12 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
             auto scriptCmds = solver.scriptResponseCommands();
             using K = xolver::Solver::ScriptResponseCommand::Kind;
             bool interactive = false;
+            size_t queryCount = 0;
             for (const auto& c : scriptCmds)
                 if (c.kind == K::Echo || c.kind == K::GetInfo ||
-                    c.kind == K::GetValue) { interactive = true; break; }
+                    c.kind == K::GetValue) interactive = true;
+                else if (c.kind == K::CheckSat) ++queryCount;
+            interactive = interactive || queryCount > 1;
             if (interactive) {
                 xolver::Result r = xolver::Result::Unknown;
                 bool solved = false, modelDumped = false;
@@ -342,7 +410,7 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
                     }
                 }
                 std::cout.flush();
-                return EXIT_SUCCESS;
+                return exportPA() ? EXIT_SUCCESS : EXIT_FAILURE;
             }
         }
 
@@ -351,6 +419,7 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
         // competition harness (which greps stdout) is not confused.
         xolver::Result r = solver.checkSat();
         std::cout << toString(r) << "\n";
+        if (!exportPA()) return EXIT_FAILURE;
         // Model-Validation track: if the input requested a model and we found
         // one, emit the SMT-LIB get-model response on stdout right after `sat`.
         if (r == xolver::Result::Sat && (solver.modelRequested() || produceModels)) {
@@ -391,23 +460,18 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
         if (checkModel && r == xolver::Result::Sat && !solver.modelMatchesOriginal()) {
             std::cerr << "MODEL_MISMATCH\n";
         }
-        // --certify: surface the certified-SAT moat. On `sat`, run a SECOND,
-        // independent re-validation (the internal ModelValidator gate already
-        // passed) and persist a portable certificate. A re-check disagreement
-        // here means a validator bug, not a normal outcome — alarm loudly and
-        // fail rather than write a false certificate. unsat/unknown have no SAT
-        // model to certify (proof certificates are Track C2, separate).
+        // Only positive validation can authorize a SAT certificate. A missing
+        // interpretation or unsupported term must fail certification.
         if (certifyPath) {
             if (r == xolver::Result::Sat) {
-                if (solver.modelMatchesOriginal()) {
+                if (solver.validateModel() == xolver::Solver::ModelValidation::Satisfied) {
                     if (writeSatCertificate(solver, argv[fileIdx], *certifyPath))
                         std::cerr << "(certified-sat " << *certifyPath << ")\n";
                     else
                         return EXIT_FAILURE;
                 } else {
-                    std::cerr << "CERTIFICATION_FAILED (independent re-validation "
-                                 "disagreed with the sat verdict; no certificate "
-                                 "written — please report)\n";
+                    std::cerr << "CERTIFICATION_FAILED (model violated or not fully "
+                                 "evaluable; no certificate written)\n";
                     return EXIT_FAILURE;
                 }
             } else {
@@ -475,6 +539,11 @@ static int cmdModelCheck(int argc, char* argv[]) {
 
     xolver::Result r = solver.checkSat();
     if (r == xolver::Result::Sat) {
+        if (solver.validateModel() != xolver::Solver::ModelValidation::Satisfied) {
+            std::cout << "unknown\n";
+            std::cerr << "model-check: model violated or not fully evaluable\n";
+            return EXIT_FAILURE;
+        }
         std::cout << "sat\n";
         auto model = solver.getModel();
         for (const auto& [varId, value] : model.values()) {
@@ -485,7 +554,7 @@ static int cmdModelCheck(int argc, char* argv[]) {
     } else {
         std::cout << "unknown\n";
     }
-    return EXIT_SUCCESS;
+    return r == xolver::Result::Sat ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
 namespace {
@@ -510,6 +579,11 @@ std::string resolveChecker(const std::string& flagVal, const char* envVar,
     return dflt;
 }
 bool proofFileExists(const std::string& p) { std::ifstream f(p); return f.good(); }
+std::string shellQuote(const std::string& arg) {
+    std::string out = "'";
+    for (char c : arg) out += c == '\'' ? "'\\''" : std::string(1, c);
+    return out + "'";
+}
 }  // namespace
 
 // proof-check <base> [--drat-trim P] [--carcara P]
@@ -546,7 +620,8 @@ static int cmdProofCheck(int argc, char* argv[]) {
     // the Boolean skeleton.
     if (proofFileExists(base + ".alethe") && proofFileExists(base + ".smt2")) {
         const std::string car = resolveChecker(carcara, "XOLVER_CARCARA", "carcara");
-        auto [code, out] = runChecker(car + " check \"" + base + ".alethe\" \"" + base + ".smt2\"");
+        auto [code, out] = runChecker(shellQuote(car) + " check " + shellQuote(base + ".alethe") +
+                                      " " + shellQuote(base + ".smt2"));
         if (code == 0) {
             std::cout << "verified (alethe/carcara): " << base << ".alethe\n";
             return EXIT_SUCCESS;
@@ -560,8 +635,23 @@ static int cmdProofCheck(int argc, char* argv[]) {
     // Fall back to the propositional DRAT proof.
     if (proofFileExists(base + ".drat") && proofFileExists(base + ".cnf")) {
         const std::string dt = resolveChecker(dratTrim, "XOLVER_DRAT_TRIM", "drat-trim");
-        auto [code, out] = runChecker(dt + " \"" + base + ".cnf\" \"" + base + ".drat\"");
+        auto [code, out] = runChecker(shellQuote(dt) + " " + shellQuote(base + ".cnf") +
+                                      " " + shellQuote(base + ".drat"));
         if (code == 0 && out.find("s VERIFIED") != std::string::npos) {
+            // DRAT checks only the supplied CNF. Theory lemmas supplied as
+            // axioms do not become certified by checking the Boolean skeleton.
+            std::ifstream cnf(base + ".cnf");
+            std::string line;
+            bool complete = false;
+            while (std::getline(cnf, line)) {
+                if (line.rfind("c xolver-proof:", 0) == 0)
+                    complete = line.find(", 0 theory lemmas assumed as axioms") != std::string::npos;
+                if (line.rfind("p cnf ", 0) == 0) break;
+            }
+            if (!complete) {
+                std::cerr << "verified-skeleton only: theory lemmas or provenance unchecked\n";
+                return EXIT_FAILURE;
+            }
             std::cout << "verified (drat/drat-trim): " << base << ".drat\n";
             return EXIT_SUCCESS;
         }
@@ -584,89 +674,11 @@ static int cmdVersion() {
     return EXIT_SUCCESS;
 }
 
-// Competition default configuration, BAKED INTO THE BINARY.
-//
-// The SMT-COMP harness invokes the bare `xolver` binary with no wrapper script,
-// so the campaign-validated lever set (formerly tools/run.sh CANDFLAGS=allopt)
-// must be turned on here. The 2026-06-09 panda differential over 70540 cases
-// measured this set at +3273 decided vs the default config (recovers 3405,
-// regresses 132) with 0 wrong answers on HEAD (the one allon false-UNSAT,
-// QF_NRA exp-problem-10-2-chunk-0333, is fixed by 579b4bb and verified SAT here).
-//
-// Each flag self-gates to its theory (e.g. XOLVER_NIA_* only affects NIA), so
-// enabling them globally is safe. setenv(..., 0) does NOT overwrite an existing
-// value, so the config stays fully overridable for ablation/testing
-// (XOLVER_X=0 disables flag X; the differential harness still works).
-//
-// Excluded deliberately: XOLVER_DECIDE_PROBE (diagnostic print only, not a
-// solving lever); CF_NRA_AGGR / SAT_LEMMA_MGMT / floors (known to regress or
-// hang per the campaign). Targeted preprocessing for the 5 weak combined logics
-// (XOLVER_TARGETED_PP = read-only-array elim, +11 QF_ANIA; XOLVER_TARGETED_PP_UFACK
-// = UF-application Ackermann, +1 QF_UFNRA) is baked ON here — both gate-validated
-// 0-unsound. width-probe (QF_UFNIA shift family) is already code-default-ON.
-static void xolverBakeCompetitionDefaults() {
-    // Opt-out hatch: XOLVER_NO_BAKED_DEFAULTS=1 leaves every flag at its code
-    // default (used to reproduce the pre-bake binary for differentials).
-    if (const char* off = std::getenv("XOLVER_NO_BAKED_DEFAULTS");
-        off && *off && *off != '0')
-        return;
-    static const char* kFlags[] = {
-        // CF_NIA
-        "XOLVER_NIA_CDCAC", "XOLVER_NIA_EAGER_BITBLAST",
-        "XOLVER_NIA_IFACE_LIFECYCLE", "XOLVER_NIA_LOCALSEARCH",
-        // CF_NRA
-        "XOLVER_NRA_LAZARD_LIFT", "XOLVER_NRA_LIBPOLY_PSC",
-        // CF_LIA
-        "XOLVER_LIA_CUTS", "XOLVER_LIA_REPAIR",
-        // CF_LRA
-        "XOLVER_LRA_BOUND_AXIOMS", "XOLVER_LRA_DECIDE",
-        "XOLVER_LRA_PIVOT_HEUR", "XOLVER_LRA_PROP",
-        // CF_COMB
-        "XOLVER_COMB_MODEL_BASED", "XOLVER_COMB_SCALAR_BACKFILL",
-        "XOLVER_COMB_UFARG_ARRANGE", "XOLVER_UF_FAST_CC",
-        // #16 EUF entailment propagation in combination: gap-neutral (fuzz 4/7 vs
-        // baseline 5/6) + 0-unsound (full reg + combination fuzz) — the L9 firewall
-        // guards the soundness-sensitive class. Promoted on that gate.
-        "XOLVER_EUF_PROP_COMB",
-        // CF_ARRAY
-        "XOLVER_ARRAY_CONGR_EXT", "XOLVER_AX_ROW2_CONST",
-        // #85/#86 array completeness (multistore refinement + storecomm const-ext):
-        // gap-NEUTRAL + 0-unsound on the combination fuzz, recover their target
-        // unknowns->sat. STORECOMM_EXT needs REFINE+ROW2_CONST to converge.
-        "XOLVER_AX_REFINE", "XOLVER_AX_STORECOMM_EXT",
-        // #10/#38 NLA cuts: gap-neutral + 0-unsound (per-lever fuzz bisection).
-        "XOLVER_NIA_NLA_CUTS", "XOLVER_NRA_NLA_CUTS",
-        // CF_PP
-        "XOLVER_PP_LET_ELIM", "XOLVER_PP_PG_CNF", "XOLVER_PP_REWRITE",
-        "XOLVER_PP_SOLVE_EQS", "XOLVER_PP_VALIDATOR_MEMO",
-        // CF_SAT (DECIDE_PROBE excluded — diagnostic only)
-        "XOLVER_SAT_MIN", "XOLVER_STRAT_PRESETS",
-        // Targeted preprocessing for the 5 weak combined logics
-        "XOLVER_TARGETED_PP", "XOLVER_TARGETED_PP_UFACK",
-    };
-    for (const char* f : kFlags) setenv(f, "1", /*overwrite=*/0);
-}
-
-// Server-bake-pending levers (roadmap A9+B4). UPDATE 2026-06-24 (#10/#38): the
-// promotion decision was driven by a per-lever COMBINATION-FUZZ gap bisection
-// (random cases, not just the at-ceiling curated suite). Result:
-//   XOLVER_NRA_NLA_CUTS   — gap-neutral, 0-unsound -> BAKED above
-//   XOLVER_NIA_NLA_CUTS   — gap-neutral, 0-unsound -> BAKED above
-//   XOLVER_AX_LAZY        — *** COMPLETENESS REGRESSION *** fuzz gaps 5 -> 13 at
-//                           n=120 (the curated suite's "0-regression" MISSED it
-//                           because it is at the PASS ceiling). NOT baked — lazy
-//                           completion floors cases the eager path solves. Keep OFF.
-// (XOLVER_AX_REFINE / XOLVER_AX_STORECOMM_EXT were also gap-neutral 0-unsound and
-//  are baked above for the #85/#86 completeness recovery; their only residual risk
-//  is the broad per-accept re-scan's cost on LARGE QF_ANIA arrays, which WSL cannot
-//  measure — revert from kFlags if a cluster run shows a net solved-count drop.)
-
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         printUsage(argv[0]);
         return EXIT_FAILURE;
     }
-    xolverBakeCompetitionDefaults();
     xolverMaybeInstallSelfprof();
 
     const char* cmd = argv[1];

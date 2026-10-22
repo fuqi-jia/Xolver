@@ -1,10 +1,10 @@
-#include "expr/ir.h"
-#include "expr/CoreIteLowerer.h"
+#include "ir/NativeTerms.h"
+#include "frontend/preprocess/IteLowerer.h"
 #include <doctest/doctest.h>
 
 using namespace xolver;
 
-static bool containsIte(const CoreIr& ir, ExprId eid) {
+static bool containsIte(const NativeTerms& ir, ExprId eid) {
     if (eid == NullExpr) return false;
     const auto& e = ir.get(eid);
     if (e.kind == Kind::Ite) return true;
@@ -14,7 +14,7 @@ static bool containsIte(const CoreIr& ir, ExprId eid) {
     return false;
 }
 
-static size_t countKind(const CoreIr& ir, ExprId eid, Kind kind) {
+static size_t countKind(const NativeTerms& ir, ExprId eid, Kind kind) {
     if (eid == NullExpr) return 0;
     const auto& e = ir.get(eid);
     size_t cnt = (e.kind == kind) ? 1 : 0;
@@ -24,24 +24,24 @@ static size_t countKind(const CoreIr& ir, ExprId eid, Kind kind) {
     return cnt;
 }
 
-static size_t countVariables(const CoreIr& ir, ExprId eid) {
+static size_t countVariables(const NativeTerms& ir, ExprId eid) {
     return countKind(ir, eid, Kind::Variable);
 }
 
-TEST_CASE("CoreIteLowerer: lowerBoolIte produces 1 fresh var + 4 guarded assertions") {
-    CoreIr ir;
+TEST_CASE("IteLowerer: lowerBoolIte produces 1 fresh var + 4 guarded assertions") {
+    NativeTerms ir;
     SortId boolSort = ir.allocateSortId();
     ir.registerSort(boolSort, SortKind::Bool);
     ir.setBoolSortId(boolSort);
 
-    ExprId c = ir.add(CoreExpr{Kind::Variable, boolSort, {}, Payload(std::string("c"))});
-    ExprId p = ir.add(CoreExpr{Kind::Variable, boolSort, {}, Payload(std::string("p"))});
-    ExprId q = ir.add(CoreExpr{Kind::Variable, boolSort, {}, Payload(std::string("q"))});
-    ExprId ite = ir.add(CoreExpr{Kind::Ite, boolSort, {c, p, q}, Payload{}});
+    ExprId c = ir.add(TermExpr{Kind::Variable, boolSort, {}, Payload(std::string("c"))});
+    ExprId p = ir.add(TermExpr{Kind::Variable, boolSort, {}, Payload(std::string("p"))});
+    ExprId q = ir.add(TermExpr{Kind::Variable, boolSort, {}, Payload(std::string("q"))});
+    ExprId ite = ir.add(TermExpr{Kind::Ite, boolSort, {c, p, q}, Payload{}});
 
     ir.addAssertion(ite);
 
-    CoreIteLowerer lowerer(ir);
+    IteLowerer lowerer(ir);
     std::vector<ExprId> lowered;
     for (ExprId a : ir.assertions()) {
         lowered.push_back(lowerer.lowerAssertion(a));
@@ -68,8 +68,8 @@ TEST_CASE("CoreIteLowerer: lowerBoolIte produces 1 fresh var + 4 guarded asserti
     CHECK(freshCount == 1);  // one fresh Bool var for the ITE
 }
 
-TEST_CASE("CoreIteLowerer: lowerTermIte produces 1 fresh term + 2 guarded assertions") {
-    CoreIr ir;
+TEST_CASE("IteLowerer: lowerTermIte produces 1 fresh term + 2 guarded assertions") {
+    NativeTerms ir;
     SortId boolSort = ir.allocateSortId();
     SortId intSort = ir.allocateSortId();
     ir.registerSort(boolSort, SortKind::Bool);
@@ -77,17 +77,17 @@ TEST_CASE("CoreIteLowerer: lowerTermIte produces 1 fresh term + 2 guarded assert
     ir.setBoolSortId(boolSort);
     ir.setIntSortId(intSort);
 
-    ExprId c = ir.add(CoreExpr{Kind::Variable, boolSort, {}, Payload(std::string("c"))});
-    ExprId x = ir.add(CoreExpr{Kind::ConstInt, intSort, {}, Payload(int64_t(1))});
-    ExprId y = ir.add(CoreExpr{Kind::ConstInt, intSort, {}, Payload(int64_t(2))});
-    ExprId ite = ir.add(CoreExpr{Kind::Ite, intSort, {c, x, y}, Payload{}});
+    ExprId c = ir.add(TermExpr{Kind::Variable, boolSort, {}, Payload(std::string("c"))});
+    ExprId x = ir.add(TermExpr{Kind::ConstInt, intSort, {}, Payload(int64_t(1))});
+    ExprId y = ir.add(TermExpr{Kind::ConstInt, intSort, {}, Payload(int64_t(2))});
+    ExprId ite = ir.add(TermExpr{Kind::Ite, intSort, {c, x, y}, Payload{}});
 
     // (= z (ite c x y))
-    ExprId z = ir.add(CoreExpr{Kind::Variable, intSort, {}, Payload(std::string("z"))});
-    ExprId eq = ir.add(CoreExpr{Kind::Eq, boolSort, {z, ite}, Payload{}});
+    ExprId z = ir.add(TermExpr{Kind::Variable, intSort, {}, Payload(std::string("z"))});
+    ExprId eq = ir.add(TermExpr{Kind::Eq, boolSort, {z, ite}, Payload{}});
     ir.addAssertion(eq);
 
-    CoreIteLowerer lowerer(ir);
+    IteLowerer lowerer(ir);
     std::vector<ExprId> lowered;
     for (ExprId a : ir.assertions()) {
         lowered.push_back(lowerer.lowerAssertion(a));
@@ -116,8 +116,8 @@ TEST_CASE("CoreIteLowerer: lowerTermIte produces 1 fresh term + 2 guarded assert
     CHECK(freshCount == 1);  // one fresh term for the ITE
 }
 
-TEST_CASE("CoreIteLowerer: shared ITE is lowered only once") {
-    CoreIr ir;
+TEST_CASE("IteLowerer: shared ITE is lowered only once") {
+    NativeTerms ir;
     SortId boolSort = ir.allocateSortId();
     SortId intSort = ir.allocateSortId();
     ir.registerSort(boolSort, SortKind::Bool);
@@ -125,20 +125,20 @@ TEST_CASE("CoreIteLowerer: shared ITE is lowered only once") {
     ir.setBoolSortId(boolSort);
     ir.setIntSortId(intSort);
 
-    ExprId c = ir.add(CoreExpr{Kind::Variable, boolSort, {}, Payload(std::string("c"))});
-    ExprId x = ir.add(CoreExpr{Kind::ConstInt, intSort, {}, Payload(int64_t(1))});
-    ExprId y = ir.add(CoreExpr{Kind::ConstInt, intSort, {}, Payload(int64_t(2))});
-    ExprId ite = ir.add(CoreExpr{Kind::Ite, intSort, {c, x, y}, Payload{}});
+    ExprId c = ir.add(TermExpr{Kind::Variable, boolSort, {}, Payload(std::string("c"))});
+    ExprId x = ir.add(TermExpr{Kind::ConstInt, intSort, {}, Payload(int64_t(1))});
+    ExprId y = ir.add(TermExpr{Kind::ConstInt, intSort, {}, Payload(int64_t(2))});
+    ExprId ite = ir.add(TermExpr{Kind::Ite, intSort, {c, x, y}, Payload{}});
 
     // (= z1 ite) and (= z2 ite)
-    ExprId z1 = ir.add(CoreExpr{Kind::Variable, intSort, {}, Payload(std::string("z1"))});
-    ExprId z2 = ir.add(CoreExpr{Kind::Variable, intSort, {}, Payload(std::string("z2"))});
-    ExprId eq1 = ir.add(CoreExpr{Kind::Eq, boolSort, {z1, ite}, Payload{}});
-    ExprId eq2 = ir.add(CoreExpr{Kind::Eq, boolSort, {z2, ite}, Payload{}});
+    ExprId z1 = ir.add(TermExpr{Kind::Variable, intSort, {}, Payload(std::string("z1"))});
+    ExprId z2 = ir.add(TermExpr{Kind::Variable, intSort, {}, Payload(std::string("z2"))});
+    ExprId eq1 = ir.add(TermExpr{Kind::Eq, boolSort, {z1, ite}, Payload{}});
+    ExprId eq2 = ir.add(TermExpr{Kind::Eq, boolSort, {z2, ite}, Payload{}});
     ir.addAssertion(eq1);
     ir.addAssertion(eq2);
 
-    CoreIteLowerer lowerer(ir);
+    IteLowerer lowerer(ir);
     std::vector<ExprId> lowered;
     for (ExprId a : ir.assertions()) {
         lowered.push_back(lowerer.lowerAssertion(a));
@@ -165,8 +165,8 @@ TEST_CASE("CoreIteLowerer: shared ITE is lowered only once") {
     CHECK(freshCount == 1);  // still only one fresh term
 }
 
-TEST_CASE("CoreIteLowerer: nested ITE linear scale") {
-    CoreIr ir;
+TEST_CASE("IteLowerer: nested ITE linear scale") {
+    NativeTerms ir;
     SortId boolSort = ir.allocateSortId();
     SortId intSort = ir.allocateSortId();
     ir.registerSort(boolSort, SortKind::Bool);
@@ -174,25 +174,25 @@ TEST_CASE("CoreIteLowerer: nested ITE linear scale") {
     ir.setBoolSortId(boolSort);
     ir.setIntSortId(intSort);
 
-    ExprId c1 = ir.add(CoreExpr{Kind::Variable, boolSort, {}, Payload(std::string("c1"))});
-    ExprId c2 = ir.add(CoreExpr{Kind::Variable, boolSort, {}, Payload(std::string("c2"))});
-    ExprId c3 = ir.add(CoreExpr{Kind::Variable, boolSort, {}, Payload(std::string("c3"))});
-    ExprId a = ir.add(CoreExpr{Kind::ConstInt, intSort, {}, Payload(int64_t(1))});
-    ExprId b = ir.add(CoreExpr{Kind::ConstInt, intSort, {}, Payload(int64_t(2))});
-    ExprId d = ir.add(CoreExpr{Kind::ConstInt, intSort, {}, Payload(int64_t(3))});
+    ExprId c1 = ir.add(TermExpr{Kind::Variable, boolSort, {}, Payload(std::string("c1"))});
+    ExprId c2 = ir.add(TermExpr{Kind::Variable, boolSort, {}, Payload(std::string("c2"))});
+    ExprId c3 = ir.add(TermExpr{Kind::Variable, boolSort, {}, Payload(std::string("c3"))});
+    ExprId a = ir.add(TermExpr{Kind::ConstInt, intSort, {}, Payload(int64_t(1))});
+    ExprId b = ir.add(TermExpr{Kind::ConstInt, intSort, {}, Payload(int64_t(2))});
+    ExprId d = ir.add(TermExpr{Kind::ConstInt, intSort, {}, Payload(int64_t(3))});
 
     // ite(c2, a, b)
-    ExprId ite2 = ir.add(CoreExpr{Kind::Ite, intSort, {c2, a, b}, Payload{}});
+    ExprId ite2 = ir.add(TermExpr{Kind::Ite, intSort, {c2, a, b}, Payload{}});
     // ite(c3, a, d)
-    ExprId ite3 = ir.add(CoreExpr{Kind::Ite, intSort, {c3, a, d}, Payload{}});
+    ExprId ite3 = ir.add(TermExpr{Kind::Ite, intSort, {c3, a, d}, Payload{}});
     // ite(c1, ite2, ite3)
-    ExprId ite1 = ir.add(CoreExpr{Kind::Ite, intSort, {c1, ite2, ite3}, Payload{}});
+    ExprId ite1 = ir.add(TermExpr{Kind::Ite, intSort, {c1, ite2, ite3}, Payload{}});
 
-    ExprId z = ir.add(CoreExpr{Kind::Variable, intSort, {}, Payload(std::string("z"))});
-    ExprId eq = ir.add(CoreExpr{Kind::Eq, boolSort, {z, ite1}, Payload{}});
+    ExprId z = ir.add(TermExpr{Kind::Variable, intSort, {}, Payload(std::string("z"))});
+    ExprId eq = ir.add(TermExpr{Kind::Eq, boolSort, {z, ite1}, Payload{}});
     ir.addAssertion(eq);
 
-    CoreIteLowerer lowerer(ir);
+    IteLowerer lowerer(ir);
     std::vector<ExprId> lowered;
     for (ExprId a : ir.assertions()) {
         lowered.push_back(lowerer.lowerAssertion(a));
@@ -219,8 +219,8 @@ TEST_CASE("CoreIteLowerer: nested ITE linear scale") {
     CHECK(freshCount == 3);  // 3 fresh terms for 3 ITEs
 }
 
-TEST_CASE("CoreIteLowerer: ite(c, t, t) -> t optimization") {
-    CoreIr ir;
+TEST_CASE("IteLowerer: ite(c, t, t) -> t optimization") {
+    NativeTerms ir;
     SortId boolSort = ir.allocateSortId();
     SortId intSort = ir.allocateSortId();
     ir.registerSort(boolSort, SortKind::Bool);
@@ -228,15 +228,15 @@ TEST_CASE("CoreIteLowerer: ite(c, t, t) -> t optimization") {
     ir.setBoolSortId(boolSort);
     ir.setIntSortId(intSort);
 
-    ExprId c = ir.add(CoreExpr{Kind::Variable, boolSort, {}, Payload(std::string("c"))});
-    ExprId t = ir.add(CoreExpr{Kind::ConstInt, intSort, {}, Payload(int64_t(42))});
-    ExprId ite = ir.add(CoreExpr{Kind::Ite, intSort, {c, t, t}, Payload{}});
+    ExprId c = ir.add(TermExpr{Kind::Variable, boolSort, {}, Payload(std::string("c"))});
+    ExprId t = ir.add(TermExpr{Kind::ConstInt, intSort, {}, Payload(int64_t(42))});
+    ExprId ite = ir.add(TermExpr{Kind::Ite, intSort, {c, t, t}, Payload{}});
 
-    ExprId z = ir.add(CoreExpr{Kind::Variable, intSort, {}, Payload(std::string("z"))});
-    ExprId eq = ir.add(CoreExpr{Kind::Eq, boolSort, {z, ite}, Payload{}});
+    ExprId z = ir.add(TermExpr{Kind::Variable, intSort, {}, Payload(std::string("z"))});
+    ExprId eq = ir.add(TermExpr{Kind::Eq, boolSort, {z, ite}, Payload{}});
     ir.addAssertion(eq);
 
-    CoreIteLowerer lowerer(ir);
+    IteLowerer lowerer(ir);
     std::vector<ExprId> lowered;
     for (ExprId a : ir.assertions()) {
         lowered.push_back(lowerer.lowerAssertion(a));

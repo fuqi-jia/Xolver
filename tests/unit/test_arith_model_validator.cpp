@@ -1,12 +1,12 @@
 #include <doctest/doctest.h>
-#include "proof/ArithModelValidator.h"
-#include "expr/ir.h"
+#include "evidence/ArithModelValidator.h"
+#include "ir/NativeTerms.h"
 
 using namespace xolver;
 
 namespace {
 struct Fix {
-    CoreIr ir;
+    NativeTerms ir;
     SortId boolS, intS, realS;
     Fix() {
         boolS = ir.allocateSortId(); ir.registerSort(boolS, SortKind::Bool); ir.setBoolSortId(boolS);
@@ -14,11 +14,11 @@ struct Fix {
         realS = ir.allocateSortId(); ir.registerSort(realS, SortKind::Real);  ir.setRealSortId(realS);
     }
     ExprId var(const std::string& n, SortId s) {
-        return ir.add(CoreExpr{Kind::Variable, s, {}, Payload(n)});
+        return ir.add(TermExpr{Kind::Variable, s, {}, Payload(n)});
     }
-    ExprId cint(int64_t v) { return ir.add(CoreExpr{Kind::ConstInt, intS, {}, Payload(v)}); }
+    ExprId cint(int64_t v) { return ir.add(TermExpr{Kind::ConstInt, intS, {}, Payload(v)}); }
     ExprId bin(Kind k, ExprId a, ExprId b, SortId s) {
-        CoreExpr e; e.kind = k; e.sort = s; e.children.push_back(a); e.children.push_back(b);
+        TermExpr e; e.kind = k; e.sort = s; e.children.push_back(a); e.children.push_back(b);
         return ir.add(std::move(e));
     }
 };
@@ -52,7 +52,7 @@ TEST_CASE("ArithModelValidator: violated model") {
 TEST_CASE("ArithModelValidator: distinct violation (matches the UFLRA model-bug shape)") {
     Fix f;
     ExprId a = f.var("a", f.realS), b = f.var("b", f.realS);
-    CoreExpr d; d.kind = Kind::Distinct; d.sort = f.boolS;
+    TermExpr d; d.kind = Kind::Distinct; d.sort = f.boolS;
     d.children.push_back(a); d.children.push_back(b);
     ExprId distinct = f.ir.add(std::move(d));
 
@@ -76,14 +76,14 @@ TEST_CASE("ArithModelValidator: UFApply evaluated via function interpretation") 
     Fix f;
     ExprId x = f.var("x", f.intS);
     // (f x): UFApply "f" over Int.
-    CoreExpr app; app.kind = Kind::UFApply; app.sort = f.intS;
+    TermExpr app; app.kind = Kind::UFApply; app.sort = f.intS;
     app.children.push_back(x); app.payload = Payload(std::string("f"));
     ExprId fx = f.ir.add(std::move(app));
     ExprId a1 = f.bin(Kind::Eq, fx, f.cint(5), f.boolS);  // (= (f x) 5)
 
     ArithModelValidator::NumAssignment num{{"x", 2}};
     ArithModelValidator::FuncInterpMap interps;
-    TheorySolver::TheoryModel::FuncInterp fi;
+    TheoryModel::FuncInterp fi;
     fi.argSorts = {"Int"}; fi.retSort = "Int"; fi.deflt = "0";
     fi.entries.push_back({{"2"}, "5"});  // f(2) = 5
     interps["f"] = fi;
@@ -103,6 +103,18 @@ TEST_CASE("ArithModelValidator: UFApply evaluated via function interpretation") 
         v.setFunctionInterps(&interps);
         CHECK(v.validate({a1}) == ArithModelValidator::Verdict::Violated);
     }
+    SUBCASE("an opaque numeric result is not a concrete value") {
+        interps["f"].entries[0].value = "@unresolved";
+        ArithModelValidator v(f.ir, num, {});
+        v.setFunctionInterps(&interps);
+        CHECK(v.validate({a1}) == ArithModelValidator::Verdict::Indeterminate);
+    }
+    SUBCASE("a fractional integer result is not a typed model") {
+        interps["f"].entries[0].value = "3/2";
+        ArithModelValidator v(f.ir, num, {});
+        v.setFunctionInterps(&interps);
+        CHECK(v.validate({a1}) == ArithModelValidator::Verdict::Indeterminate);
+    }
     SUBCASE("arg not in table -> default value") {
         ArithModelValidator::NumAssignment num2{{"x", 9}};  // f(9) -> deflt "0"
         ArithModelValidator v(f.ir, num2, {});
@@ -116,10 +128,10 @@ TEST_CASE("ArithModelValidator: Int div/mod use Euclidean semantics") {
     Fix f;
     ExprId x = f.var("x", f.intS);
     // (= (div x 3) 2) ∧ (= (mod x 3) 1) — x=7 satisfies (7/3=2, 7%3=1).
-    CoreExpr dv; dv.kind = Kind::Div; dv.sort = f.intS;
+    TermExpr dv; dv.kind = Kind::Div; dv.sort = f.intS;
     dv.children.push_back(x); dv.children.push_back(f.cint(3));
     ExprId divv = f.ir.add(std::move(dv));
-    CoreExpr md; md.kind = Kind::Mod; md.sort = f.intS;
+    TermExpr md; md.kind = Kind::Mod; md.sort = f.intS;
     md.children.push_back(x); md.children.push_back(f.cint(3));
     ExprId modv = f.ir.add(std::move(md));
     ExprId a1 = f.bin(Kind::Eq, divv, f.cint(2), f.boolS);
@@ -137,7 +149,7 @@ TEST_CASE("ArithModelValidator: indeterminate on uninterpreted function") {
     // (= (f x) 3) — UFApply is unsupported → indeterminate, not Violated
     ExprId fsym = f.var("f", f.intS);
     ExprId x = f.var("x", f.intS);
-    CoreExpr app; app.kind = Kind::UFApply; app.sort = f.intS;
+    TermExpr app; app.kind = Kind::UFApply; app.sort = f.intS;
     app.children.push_back(fsym); app.children.push_back(x);
     app.payload = Payload(std::string("f"));
     ExprId fa = f.ir.add(std::move(app));
@@ -148,9 +160,8 @@ TEST_CASE("ArithModelValidator: indeterminate on uninterpreted function") {
     CHECK(v.validate({eq}) == ArithModelValidator::Verdict::Indeterminate);
 }
 
-// --- XOLVER_PP_VALIDATOR_MEMO (eval memoization) ---
 
-TEST_CASE("ArithModelValidator: eval memo yields identical verdicts") {
+TEST_CASE("ArithModelValidator: shared-expression evaluation distinguishes all three verdicts") {
     Fix f;
     ExprId x = f.var("x", f.intS), y = f.var("y", f.intS);
     ExprId sum = f.bin(Kind::Add, x, y, f.intS);
@@ -159,18 +170,14 @@ TEST_CASE("ArithModelValidator: eval memo yields identical verdicts") {
     ExprId indetA = f.bin(Kind::Geq, f.var("z", f.intS), f.cint(0), f.boolS);  // z unassigned
 
     ArithModelValidator::NumAssignment num{{"x", 3}, {"y", 2}};
-    auto verdict = [&](ExprId a, bool memo) {
+    auto verdict = [&](ExprId a) {
         ArithModelValidator v(f.ir, num, {});
-        v.setEvalMemo(memo);
         return v.validate({a});
     };
     // Memo must not change the verdict for any of the three outcomes.
-    CHECK(verdict(satA, false)   == verdict(satA, true));
-    CHECK(verdict(vioA, false)   == verdict(vioA, true));
-    CHECK(verdict(indetA, false) == verdict(indetA, true));
-    CHECK(verdict(satA, true)   == ArithModelValidator::Verdict::Satisfied);
-    CHECK(verdict(vioA, true)   == ArithModelValidator::Verdict::Violated);
-    CHECK(verdict(indetA, true) == ArithModelValidator::Verdict::Indeterminate);
+    CHECK(verdict(satA)   == ArithModelValidator::Verdict::Satisfied);
+    CHECK(verdict(vioA)   == ArithModelValidator::Verdict::Violated);
+    CHECK(verdict(indetA) == ArithModelValidator::Verdict::Indeterminate);
 }
 
 TEST_CASE("ArithModelValidator: eval memo prevents shared-DAG blowup") {
@@ -184,6 +191,5 @@ TEST_CASE("ArithModelValidator: eval memo prevents shared-DAG blowup") {
 
     ArithModelValidator::NumAssignment num{{"x", 1}};
     ArithModelValidator v(f.ir, num, {});
-    v.setEvalMemo(true);
     CHECK(v.validate({assertion}) == ArithModelValidator::Verdict::Satisfied);
 }

@@ -1,0 +1,18 @@
+experiment: xolver-audit-proofs-implementation-r5
+description: External DRAT checking; report CNF, skeleton and absent-proof coverage separately.
+environment:
+  host: panda1
+  workdir: /pub/data/jiafq/xolver
+protocol:
+  inputs: {list: [proof-corpus]}
+  timeout: 30m
+  memory: 8G
+  parallelism: 1
+trials:
+  - {name: drat}
+run:
+  cmd: XOLVER_PROOF_SOLVER=/pub/data/jiafq/xolver/validation/implementation-r5/xolver bash tools/remote/test_proofs.sh proofs-implementation-r5
+measurements:
+  from: metrics.json
+  primary: cnf_complete
+  checks: ["proof_rc == 0", "rejected == 0", "errors == 0"]

@@ -1,0 +1,10 @@
+(set-logic ALL)
+(set-info :status sat)
+(declare-heap (Int Int))
+(declare-const x Int)
+(declare-const y Int)
+(assert (= x (- 4)))
+(assert (= y 2))
+; nil = -5 makes the antecedent unallocatable; the empty heap is a model.
+(assert (and sep.emp (wand (pto (+ x (- 1)) 1) (pto (+ y 0) 1))))
+(check-sat)

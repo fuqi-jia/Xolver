@@ -8,7 +8,7 @@
 
 namespace xolver {
 
-IntDivModConstantFold::IntDivModConstantFold(CoreIr& ir)
+IntDivModConstantFold::IntDivModConstantFold(NativeTerms& ir)
     : ir_(ir), intSortId_(ir.intSortId()) {}
 
 bool IntDivModConstantFold::run() {
@@ -67,7 +67,7 @@ ExprId IntDivModConstantFold::foldRec(ExprId root) {
         }
         ExprId rebuilt = e;
         if (changed) {
-            CoreExpr fresh;
+            TermExpr fresh;
             fresh.kind = node.kind;
             fresh.sort = node.sort;
             fresh.children = std::move(newChildren);
@@ -86,7 +86,7 @@ ExprId IntDivModConstantFold::foldRec(ExprId root) {
 
 namespace {
 
-std::optional<mpz_class> extractIntConst(const CoreExpr& n) {
+std::optional<mpz_class> extractIntConst(const TermExpr& n) {
     if (n.kind == Kind::ConstInt) {
         if (auto* v = std::get_if<int64_t>(&n.payload.value)) return mpz_class(*v);
         return std::nullopt;
@@ -137,20 +137,20 @@ ExprId IntDivModConstantFold::tryFoldDivMod(ExprId e) {
 }
 
 ExprId IntDivModConstantFold::mkMul2(ExprId a, ExprId b) {
-    CoreExpr m; m.kind = Kind::Mul; m.sort = intSortId_;
+    TermExpr m; m.kind = Kind::Mul; m.sort = intSortId_;
     m.children.push_back(a); m.children.push_back(b);
     return cons(std::move(m));
 }
 
 ExprId IntDivModConstantFold::mkMod2(ExprId a, ExprId M) {
-    CoreExpr m; m.kind = Kind::Mod; m.sort = intSortId_;
+    TermExpr m; m.kind = Kind::Mod; m.sort = intSortId_;
     m.children.push_back(a); m.children.push_back(M);
     return cons(std::move(m));
 }
 
 ExprId IntDivModConstantFold::mkIte3(ExprId c, ExprId a, ExprId b) {
     if (a == b) return a;  // identical-branch collapse
-    CoreExpr e; e.kind = Kind::Ite; e.sort = intSortId_;
+    TermExpr e; e.kind = Kind::Ite; e.sort = intSortId_;
     e.children.push_back(c); e.children.push_back(a); e.children.push_back(b);
     return cons(std::move(e));
 }
@@ -158,7 +158,7 @@ ExprId IntDivModConstantFold::mkIte3(ExprId c, ExprId a, ExprId b) {
 // True iff `e` is an integer constant equal to `want` — robust to the parser
 // carrying int-valued literals via ConstReal (see extractIntConst's note), which
 // is why `(* x 1)` failed to fold and broke hash-cons canonicalization.
-static bool isIntConstEq(const CoreExpr& n, int64_t want) {
+static bool isIntConstEq(const TermExpr& n, int64_t want) {
     if (n.kind == Kind::ConstInt) {
         if (auto* v = std::get_if<int64_t>(&n.payload.value)) return *v == want;
     } else if (n.kind == Kind::ConstReal) {
@@ -190,13 +190,13 @@ ExprId IntDivModConstantFold::distribute(ExprId e) {
         SmallVector<ExprId, 4> nc; bool ch = false;
         for (ExprId c : n.children) { ExprId d = distribute(c); if (d != c) ch = true; nc.push_back(d); }
         if (!ch) return e;
-        CoreExpr f; f.kind = n.kind; f.sort = n.sort; f.children = std::move(nc); f.payload = n.payload;
+        TermExpr f; f.kind = n.kind; f.sort = n.sort; f.children = std::move(nc); f.payload = n.payload;
         return ir_.add(std::move(f));
     }
     if (n.kind == Kind::Neg && n.children.size() == 1) {
         ExprId d = distribute(n.children[0]);
         if (d == n.children[0]) return e;
-        CoreExpr f; f.kind = Kind::Neg; f.sort = n.sort; f.children.push_back(d);
+        TermExpr f; f.kind = Kind::Neg; f.sort = n.sort; f.children.push_back(d);
         return ir_.add(std::move(f));
     }
     if (n.kind == Kind::Mul && n.children.size() == 2) {
@@ -204,7 +204,7 @@ ExprId IntDivModConstantFold::distribute(ExprId e) {
         ExprId b = distribute(n.children[1]);
         auto distOver = [&](ExprId factor, ExprId sumId, bool factorLeft) -> ExprId {
             const auto& sn = ir_.get(sumId);
-            CoreExpr f; f.kind = sn.kind; f.sort = intSortId_; f.payload = sn.payload;
+            TermExpr f; f.kind = sn.kind; f.sort = intSortId_; f.payload = sn.payload;
             for (ExprId si : sn.children) {
                 ExprId prod = factorLeft ? mkMul2(factor, si) : mkMul2(si, factor);
                 f.children.push_back(distribute(prod));
@@ -246,7 +246,7 @@ bool IntDivModConstantFold::termHasFactor(ExprId t, ExprId M) const {
 
 ExprId IntDivModConstantFold::mkAddN(const std::vector<ExprId>& ts) {
     if (ts.size() == 1) return ts[0];
-    CoreExpr a; a.kind = Kind::Add; a.sort = intSortId_;
+    TermExpr a; a.kind = Kind::Add; a.sort = intSortId_;
     for (ExprId t : ts) a.children.push_back(t);
     return cons(std::move(a));
 }
@@ -265,7 +265,7 @@ ExprId IntDivModConstantFold::rebuildAddSub(
     ExprId posSum = pos.empty() ? mkConstInt(0) : mkAddN(pos);
     if (neg.empty()) return posSum;
     ExprId negSum = mkAddN(neg);
-    CoreExpr s; s.kind = Kind::Sub; s.sort = intSortId_;
+    TermExpr s; s.kind = Kind::Sub; s.sort = intSortId_;
     s.children.push_back(posSum); s.children.push_back(negSum);
     return cons(std::move(s));
 }
@@ -328,7 +328,7 @@ ExprId IntDivModConstantFold::trySymbolicModSimplify(ExprId e, int depth) {
     return mkMod2(p2, M);
 }
 
-ExprId IntDivModConstantFold::cons(CoreExpr e) {
+ExprId IntDivModConstantFold::cons(TermExpr e) {
     std::string key = std::to_string((int)e.kind) + ":" + std::to_string((uint32_t)e.sort);
     for (ExprId c : e.children) { key += ','; key += std::to_string((uint32_t)c); }
     if (auto* v = std::get_if<int64_t>(&e.payload.value)) { key += "#i"; key += std::to_string(*v); }
@@ -341,7 +341,7 @@ ExprId IntDivModConstantFold::cons(CoreExpr e) {
 }
 
 ExprId IntDivModConstantFold::mkConstInt(int64_t v) {
-    CoreExpr e;
+    TermExpr e;
     e.kind = Kind::ConstInt;
     e.sort = intSortId_;
     e.payload = Payload(v);

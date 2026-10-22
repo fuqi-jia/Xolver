@@ -1,0 +1,18 @@
+experiment: xolver-native-terms-r11-profile
+description: Diagnose the remaining NRA unknown with stage samples and verbose reason.
+environment:
+  host: panda1
+  workdir: /pub/data/jiafq/xolver
+protocol:
+  inputs: {list: [nra_155_unsat_hycomp_ballcount_197var]}
+  timeout: 3m
+  memory: 8G
+  parallelism: 1
+trials:
+  - {name: profile}
+run:
+  cmd: python3 build/profile_case_r11.py --binary validation/native-terms-r11/xolver --case tests/regression/nra/{input}.smt2 --output validation/native-terms-r11/profile --timeout 60 --verbose
+measurements:
+  from: metrics.json
+  primary: samples
+  checks: ["profile_completed == 1"]

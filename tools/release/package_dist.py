@@ -8,7 +8,7 @@ Produces a self-contained tar.gz with:
 - CaseStats schema compatibility wrapper
 
 Usage:
-    python3 tools/package_dist.py --build-dir build_old --output xolver-dist.tar.gz
+    python3 tools/release/package_dist.py --build-dir build --output xolver-dist.tar.gz
 
 Server requirements (Ubuntu 22.04+):
     sudo apt-get install -y libgmp10 libmpfr6 python3
@@ -16,11 +16,14 @@ Server requirements (Ubuntu 22.04+):
 
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 import tarfile
 import tempfile
 from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def check_binary(binary: Path):
@@ -47,7 +50,7 @@ def check_binary(binary: Path):
 
 def main():
     parser = argparse.ArgumentParser(description="Package Xolver for server deployment")
-    parser.add_argument("--build-dir", default="build_old", help="Build directory containing xolver binary")
+    parser.add_argument("--build-dir", default=str(REPO_ROOT / "build"), help="Build directory containing xolver binary")
     parser.add_argument("--output", default="xolver-dist.tar.gz", help="Output tar.gz path")
     args = parser.parse_args()
 
@@ -69,34 +72,24 @@ def main():
 
         # Binary
         (dist / "bin").mkdir()
-        subprocess.run(["cp", str(binary), str(dist / "bin" / "xolver")], check=True)
-        subprocess.run(["chmod", "+x", str(dist / "bin" / "xolver")], check=True)
+        shutil.copy2(binary, dist / "bin" / "xolver")
+        (dist / "bin" / "xolver").chmod(0o755)
 
         # Python scripts
         (dist / "tools").mkdir()
         for script in [
-            "run_benchmark.py",
-            "analyze_benchmark.py",
-            "bench_server.py",
-            "freeze_baseline.py",
-            "compare_benchmarks.py",
-            "lia_mismatch_replay.py",
-            "run_lia_ablation.sh",
-            # The per-panda differential driver + the helper it sources. Without
-            # these the deployed tarball has no run.sh and deploy_one_panda.sh's
-            # `bash tools/run.sh` finds nothing (and CANDFLAGS variants like
-            # `wallclock` never reach the node).
-            "run.sh",
-            "diff_common.sh",
-            # diff_common.sh::emit_node_sqlite runs `python3 $here/diff_ingest.py`
-            # ON THE PANDA at the end of each logic. Without it the per-node sqlite
-            # emission errors out (rich CSV still survives, but it's a visible
-            # failure). stdlib-only, so safe to ship.
-            "diff_ingest.py",
+            "regression/run_benchmark.py",
+            "regression/run_regression.py",
+            "differential/analyze_benchmark.py",
+            "differential/freeze_baseline.py",
+            "differential/compare_benchmarks.py",
+            "differential/diff_common.sh",
+            "differential/diff_ingest.py",
         ]:
-            src = Path("tools") / script
-            if src.exists():
-                subprocess.run(["cp", str(src), str(dist / "tools" / script)], check=True)
+            src = REPO_ROOT / "tools" / script
+            dst = dist / "tools" / script
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dst)  # A missing required tool must fail packaging.
 
         # README
         readme = dist / "README.txt"
@@ -107,10 +100,10 @@ Server setup:
     sudo apt-get install -y libgmp10 libmpfr6 python3
 
 Run benchmark:
-    python3 tools/run_benchmark.py --solver ./bin/xolver --logic QF_LIA -j 128 -t 100
+    python3 tools/regression/run_benchmark.py --solver ./bin/xolver --logic QF_LIA -j 4 -t 100
 
 Analyze results:
-    python3 tools/analyze_benchmark.py --current <run_dir> --output <analysis_dir>
+    python3 tools/differential/analyze_benchmark.py --current <run_dir> --output <analysis_dir>
 
 External dependencies on this binary:
 {chr(10).join("  " + e for e in externals)}

@@ -1,0 +1,24 @@
+experiment: xolver-pa-isabelle-r1
+description: Independent HOL replay of original PA queries, with false verdict and model controls.
+environment:
+  host: panda1
+  workdir: /pub/data/jiafq/xolver
+protocol:
+  inputs: {list: [pa-kernel-replay]}
+  timeout: 30m
+  memory: 16G
+  parallelism: 1
+trials:
+  - {name: kernel}
+run:
+  cmd: >-
+    python3 build/pa-kernel-r1/test_pa_isabelle.py
+    --solver /pub/data/jiafq/xolver/validation/native-terms-r12/xolver
+    --isabelle /pub/data/jiafq/xolver/dependencies/isabelle/Isabelle2025-2/bin/isabelle
+    --cache /pub/data/jiafq/xolver/build/isabelle
+    --pa-report /pub/data/jiafq/xolver/validation/pa-native-terms-r12/report.json
+    --output /pub/data/jiafq/xolver/validation/pa-isabelle-r1
+measurements:
+  from: metrics.json
+  primary: verified_claims
+  checks: ["passed == 1"]

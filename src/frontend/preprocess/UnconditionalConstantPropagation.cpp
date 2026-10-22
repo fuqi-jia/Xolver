@@ -3,7 +3,7 @@
 
 namespace xolver {
 
-UnconditionalConstantPropagation::UnconditionalConstantPropagation(CoreIr& ir)
+UnconditionalConstantPropagation::UnconditionalConstantPropagation(NativeTerms& ir)
     : ir_(ir),
       boolSortId_(ir.boolSortId()),
       intSortId_(ir.intSortId()),
@@ -87,7 +87,7 @@ bool UnconditionalConstantPropagation::run() {
 ExprId UnconditionalConstantPropagation::substituteAssertion(ExprId assertion) {
     // Value copy, not a reference: substituteRec(child) below calls ir_.addShared()
     // (and materializeConstant), which reallocates exprs_ and would dangle a
-    // `const CoreExpr&` and its children iterators mid-loop (use-after-free).
+    // `const TermExpr&` and its children iterators mid-loop (use-after-free).
     const auto node = ir_.get(assertion);
     if (node.kind == Kind::And) {
         // Per-conjunct: source-of-binding conjuncts are kept verbatim;
@@ -117,7 +117,7 @@ ExprId UnconditionalConstantPropagation::substituteAssertion(ExprId assertion) {
             newChildren.push_back(rewritten);
         }
         if (!changed) return assertion;
-        CoreExpr fresh;
+        TermExpr fresh;
         fresh.kind = node.kind;
         fresh.sort = node.sort;
         for (ExprId c : newChildren) fresh.children.push_back(c);
@@ -167,7 +167,7 @@ ExprId UnconditionalConstantPropagation::constantFoldRec(ExprId root) {
         }
         ExprId rebuilt = e;
         if (changed) {
-            CoreExpr fresh;
+            TermExpr fresh;
             fresh.kind = node.kind;
             fresh.sort = node.sort;
             for (ExprId c : newChildren) fresh.children.push_back(c);
@@ -231,7 +231,7 @@ ExprId UnconditionalConstantPropagation::tryFoldArithmetic(ExprId e) {
         if (kept.size() == 1) return kept[0];
         if (kept.size() == node.children.size()) return e;
         // Otherwise rebuild a smaller Mul with the kept children.
-        CoreExpr fresh;
+        TermExpr fresh;
         fresh.kind = Kind::Mul;
         fresh.sort = node.sort;
         for (ExprId c : kept) fresh.children.push_back(c);
@@ -260,7 +260,7 @@ ExprId UnconditionalConstantPropagation::tryFoldArithmetic(ExprId e) {
         if (allConst) return materializeConstant(sum, node.sort);
         if (kept.size() == 1) return kept[0];
         if (kept.size() == node.children.size()) return e;
-        CoreExpr fresh;
+        TermExpr fresh;
         fresh.kind = Kind::Add;
         fresh.sort = node.sort;
         for (ExprId c : kept) fresh.children.push_back(c);
@@ -302,7 +302,7 @@ ExprId UnconditionalConstantPropagation::tryFoldRelation(ExprId e) {
     if (node.children.size() < 2) return e;
 
     // Identity folds first: same-ExprId operands collapse the relation
-    // regardless of value (CoreIr DAG-dedups identical sub-expressions,
+    // regardless of value (NativeTerms DAG-dedups identical sub-expressions,
     // so `(= (f 2) (f 2))` and `(distinct (f 2) (f 2))` arise from
     // substitution + arithmetic constant-fold under UF arguments).
     bool allChildrenEqual = node.children.size() >= 2;
@@ -378,7 +378,7 @@ ExprId UnconditionalConstantPropagation::tryFoldBoolean(ExprId e) {
         if (kept.empty()) return mkBool(true);
         if (kept.size() == 1) return kept[0];
         if (kept.size() == node.children.size()) return e;
-        CoreExpr fresh;
+        TermExpr fresh;
         fresh.kind = Kind::And;
         fresh.sort = boolSortId_;
         for (ExprId c : kept) fresh.children.push_back(c);
@@ -400,7 +400,7 @@ ExprId UnconditionalConstantPropagation::tryFoldBoolean(ExprId e) {
         if (kept.empty()) return mkBool(false);
         if (kept.size() == 1) return kept[0];
         if (kept.size() == node.children.size()) return e;
-        CoreExpr fresh;
+        TermExpr fresh;
         fresh.kind = Kind::Or;
         fresh.sort = boolSortId_;
         for (ExprId c : kept) fresh.children.push_back(c);
@@ -420,7 +420,7 @@ ExprId UnconditionalConstantPropagation::mkBool(bool value) {
     std::string key = std::to_string(boolSortId_) + "#B:" + (value ? "1" : "0");
     auto it = boolConstCache_.find(key);
     if (it != boolConstCache_.end()) return it->second;
-    CoreExpr fresh;
+    TermExpr fresh;
     fresh.kind = Kind::ConstBool;
     fresh.sort = boolSortId_;
     fresh.payload = Payload(value);
@@ -635,7 +635,7 @@ ExprId UnconditionalConstantPropagation::substituteRec(ExprId root) {
         if (!changed) {
             substMemo_[e] = e;
         } else {
-            CoreExpr fresh;
+            TermExpr fresh;
             fresh.kind = node.kind;
             fresh.sort = node.sort;
             for (ExprId c : newChildren) fresh.children.push_back(c);
@@ -661,7 +661,7 @@ ExprId UnconditionalConstantPropagation::materializeConstant(
         key += "I:" + std::to_string(iv);
         auto it = constCache_.find(key);
         if (it != constCache_.end()) return it->second;
-        CoreExpr fresh;
+        TermExpr fresh;
         fresh.sort = sort;
         fresh.kind = Kind::ConstInt;
         fresh.payload = Payload(iv);
@@ -672,7 +672,7 @@ ExprId UnconditionalConstantPropagation::materializeConstant(
     key += "R:" + value.get_str();
     auto it = constCache_.find(key);
     if (it != constCache_.end()) return it->second;
-    CoreExpr fresh;
+    TermExpr fresh;
     fresh.sort = sort;
     fresh.kind = Kind::ConstReal;
     fresh.payload = Payload(value.get_str());

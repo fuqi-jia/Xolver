@@ -1,9 +1,9 @@
 // Bit-blast module: BitVec readback + encoder ops + GA sorting + solver modes.
 #include <doctest/doctest.h>
 #include <gmpxx.h>
-#include "sat/SatSolver.h"
-#include "theory/arith/kernel/bit_blast/BitVec.h"
-#include "theory/arith/kernel/bit_blast/BitBlastEncoder.h"
+#include "contracts/SatSolver.h"
+#include "search/bitblast/BitVec.h"
+#include "search/bitblast/BitBlastEncoder.h"
 
 using namespace xolver;
 using namespace xolver::bitblast;
@@ -114,8 +114,8 @@ TEST_CASE("Encoder: relZero Geq + Leq pins value to 0 (Eq)") {
     CHECK(readBitVec(*sat, x) == 0);
 }
 
-#include "theory/arith/kernel/bit_blast/PolyBitBlaster.h"
-#include "theory/arith/kernel/poly/PolynomialKernel.h"
+#include "search/bitblast/PolyBitBlaster.h"
+#include "algebra/poly/PolynomialKernel.h"
 
 TEST_CASE("PolyBitBlaster: encode 2*x*y + 3 == 0 with x=3,y forced") {
     auto kernel = createPolynomialKernel();
@@ -156,8 +156,8 @@ TEST_CASE("PolyBitBlaster: Greedy-Addition narrows max intermediate width") {
     CHECK(w <= 5u);   // balanced GA tree, not the 6 of a linear chain
 }
 
-#include "theory/arith/kernel/bit_blast/SpaceEstimator.h"
-#include "theory/arith/logics/nia/core/DomainStore.h"
+#include "search/bitblast/SpaceEstimator.h"
+#include "search/nia/core/DomainStore.h"
 
 TEST_CASE("SpaceEstimator: bitsToCover") {
     using bitblast::SpaceEstimator;
@@ -194,79 +194,8 @@ TEST_CASE("SpaceEstimator: boxIsComplete only when all vars hard-bounded") {
     CHECK(plan2.width.at("y") == SpaceEstimator::bitsToCover(mpz_class(0), mpz_class(15)));
 }
 
-TEST_CASE("SpaceEstimator: bitsToHold = ceil(log2 n) (distinct-group sizing)") {
-    using bitblast::SpaceEstimator;
-    CHECK(SpaceEstimator::bitsToHold(mpz_class(1)) == 1u);
-    CHECK(SpaceEstimator::bitsToHold(mpz_class(2)) == 1u);
-    CHECK(SpaceEstimator::bitsToHold(mpz_class(3)) == 2u);
-    CHECK(SpaceEstimator::bitsToHold(mpz_class(7)) == 3u);   // distinct(x1..x7): 7 values -> 3 bits
-    CHECK(SpaceEstimator::bitsToHold(mpz_class(8)) == 3u);
-    CHECK(SpaceEstimator::bitsToHold(mpz_class(9)) == 4u);
-    CHECK(SpaceEstimator::bitsToHold(mpz_class(64)) == 6u);
-    CHECK(SpaceEstimator::bitsToHold(mpz_class(65)) == 7u);
-}
-
-TEST_CASE("SpaceEstimator: distinct graph raises width to hold the clique") {
-    auto kernel = createPolynomialKernel();
-    // A 70-way distinct clique: each var must differ from 69 others, so its
-    // closed distinct-set has 70 members -> needs ceil(log2 70) = 7 bits, which
-    // EXCEEDS the heuristic base (6). All vars unbounded so DG is the binding signal.
-    const int N = 70;
-    std::vector<VarId> vs;
-    std::vector<std::string> names;
-    for (int i = 0; i < N; ++i) {
-        names.push_back("d" + std::to_string(i));
-        vs.push_back(kernel->getOrCreateVar(names.back()));
-    }
-    std::vector<NormalizedNiaConstraint> cs;
-    uint32_t r = 1000;
-    for (int i = 0; i < N; ++i)
-        for (int j = i + 1; j < N; ++j) {
-            PolyId diff = kernel->sub(kernel->mkVar(vs[i]), kernel->mkVar(vs[j])); // di - dj
-            cs.push_back({diff, Relation::Neq, SatLit{r++, true}});
-        }
-    DomainStore d;   // all unbounded
-    bitblast::SpaceEstimator est(*kernel);
-    auto plan = est.estimate(cs, d);
-    CHECK(plan.boxIsComplete == false);
-    for (const auto& n : names) {
-        REQUIRE(plan.width.count(n) == 1);
-        CHECK(plan.width.at(n) == 7u);   // DG (7) beats base (6)
-    }
-}
-
-TEST_CASE("SpaceEstimator: vote unifies unbounded widths when one dominates") {
-    auto kernel = createPolynomialKernel();
-    // 8 small-coefficient vars (width = base B_MA = 7 for m=0 multiplications) +
-    // 2 huge-coefficient vars (CM -> clipped to 16). 7 covers 8/10 > Gamma(0.5)*10,
-    // so Vote unifies ALL unbounded vars to 7 (the dominant width), lowering the
-    // two outliers.
-    std::vector<NormalizedNiaConstraint> cs;
-    uint32_t r = 2000;
-    for (int i = 0; i < 8; ++i) {
-        VarId a = kernel->getOrCreateVar("a" + std::to_string(i));
-        PolyId p = kernel->sub(kernel->mkVar(a), kernel->mkConst(mpz_class(i)));  // a_i - i
-        cs.push_back({p, Relation::Eq, SatLit{r++, true}});
-    }
-    mpz_class big = mpz_class(1) << 20;
-    std::vector<std::string> bnames = {"b0", "b1"};
-    for (const auto& bn : bnames) {
-        VarId b = kernel->getOrCreateVar(bn);
-        PolyId p = kernel->sub(kernel->mul(kernel->mkConst(big), kernel->mkVar(b)),
-                               kernel->mkConst(mpz_class(1)));                     // 2^20*b - 1
-        cs.push_back({p, Relation::Eq, SatLit{r++, true}});
-    }
-    DomainStore d;   // all unbounded
-    bitblast::SpaceEstimator est(*kernel);
-    auto plan = est.estimate(cs, d);
-    CHECK(plan.boxIsComplete == false);
-    CHECK(plan.width.at("a0") == 7u);
-    CHECK(plan.width.at("b0") == 7u);   // was 16, unified down by Vote
-    CHECK(plan.width.at("b1") == 7u);
-}
-
-#include "theory/arith/kernel/bit_blast/BitBlastSolver.h"
-#include "theory/arith/logics/nia/search/IntegerModelValidator.h"
+#include "search/bitblast/BitBlastSolver.h"
+#include "search/nia/search/IntegerModelValidator.h"
 
 // SOUNDNESS REGRESSION (reviewer's counterexample): bounds live ONLY in
 // DomainStore, NOT in cs. The solver must still confine the search to the box
@@ -407,7 +336,7 @@ TEST_CASE("BitBlastSolver: domain-only variable inconsistency is detected") {
     CHECK(r.status != bitblast::BitBlastResult::Status::Sat);
 }
 
-#include "theory/arith/logics/nia/NiaSolver.h"
+#include "search/nia/NiaSolver.h"
 #include <algorithm>
 
 // Real registration check: the bit-blast stage must appear by name in the NIA
@@ -426,103 +355,4 @@ TEST_CASE("NiaSolver: bit-blast stage registered between bounded and local-searc
     REQUIRE(ls != names.end());
     CHECK(bd < bb);    // after bounded
     CHECK(bb < ls);    // before local-search
-}
-
-// Phase D: dispatch-cache stages are present at the FRONT (after pending)
-// and at the TAIL (before branch). Default-OFF flag XOLVER_NIA_DISPATCH_CACHE
-// gates their behaviour; registration order is unconditional so we can pin
-// the pipeline shape here.
-TEST_CASE("NiaSolver D: dispatch-cache stages registered at front + tail") {
-    auto kernel = createPolynomialKernel();
-    NiaSolver solver(std::move(kernel));
-    auto names = solver.reasonerNames();
-    auto pend = std::find(names.begin(), names.end(), "nia.pending");
-    auto dcL  = std::find(names.begin(), names.end(), "nia.dispatch-cache");
-    auto norm = std::find(names.begin(), names.end(), "nia.normalize");
-    auto dcR  = std::find(names.begin(), names.end(), "nia.dispatch-cache-record");
-    auto br   = std::find(names.begin(), names.end(), "nia.branch");
-    REQUIRE(pend != names.end());
-    REQUIRE(dcL  != names.end());
-    REQUIRE(norm != names.end());
-    REQUIRE(dcR  != names.end());
-    REQUIRE(br   != names.end());
-    CHECK(pend < dcL);     // pending first
-    CHECK(dcL  < norm);    // lookup BEFORE normalize
-    CHECK(dcR  < br);      // record BEFORE branch (tail stage)
-    // Record must be after every regular reasoner — at minimum after
-    // bounded / local-search / bit-blast.
-    auto bd = std::find(names.begin(), names.end(), "nia.bounded");
-    auto bb = std::find(names.begin(), names.end(), "nia.bit-blast");
-    auto ls = std::find(names.begin(), names.end(), "nia.local-search");
-    CHECK(bd < dcR);
-    CHECK(bb < dcR);
-    CHECK(ls < dcR);
-}
-
-// I3: per-cluster bit-blast budget — env knobs that mirror the existing
-// setters, so a caller (eg. a wrapper script tuning per-cluster) can adjust
-// budget without recompiling. Defaults remain unchanged.
-//
-// These tests pin the env-read contract by setting the env vars BEFORE
-// constructing the solver and confirming the solver respects them via a
-// behavioural proxy (smaller maxIters => smaller-budget unbounded UNSAT path
-// still returns Unknown; smaller maxBW => contiguous box only narrows).
-TEST_CASE("BitBlastSolver I3: XOLVER_NIA_BITBLAST_MAX_ITERS honored") {
-    setenv("XOLVER_NIA_BITBLAST_MAX_ITERS", "1", 1);
-    auto kernel = createPolynomialKernel();
-    VarId vx = kernel->getOrCreateVar("x");
-    PolyId p = kernel->sub(kernel->pow(kernel->mkVar(vx), 2), kernel->mkConst(2));
-    std::vector<NormalizedNiaConstraint> cs{{p, Relation::Eq, SatLit{200, true}}};
-    DomainStore d;   // unbounded
-    IntegerModelValidator validator(*kernel);
-    bitblast::BitBlastSolver solver(*kernel);
-    auto r = solver.solve(cs, d, validator);
-    // With maxIters=1, the unbounded loop runs at most 1 K-stage and returns
-    // Unknown (no SAT model in width 2). Verdict-preservation: still Unknown,
-    // never an unsoundness from the cap.
-    CHECK(r.status == bitblast::BitBlastResult::Status::Unknown);
-    unsetenv("XOLVER_NIA_BITBLAST_MAX_ITERS");
-}
-
-TEST_CASE("BitBlastSolver I3: XOLVER_NIA_BITBLAST_MAX_BITWIDTH clamps width plan") {
-    setenv("XOLVER_NIA_BITBLAST_MAX_BITWIDTH", "8", 1);
-    auto kernel = createPolynomialKernel();
-    VarId vx = kernel->getOrCreateVar("x");
-    VarId vy = kernel->getOrCreateVar("y");
-    PolyId p = kernel->sub(kernel->mul(kernel->mkVar(vx), kernel->mkVar(vy)), kernel->mkConst(6));
-    std::vector<NormalizedNiaConstraint> cs{{p, Relation::Eq, SatLit{300, true}}};
-    DomainStore d;
-    for (auto n : {"x","y"}) {
-        d.addLowerBound(n, mpz_class(1), SatLit{301,true});
-        d.addUpperBound(n, mpz_class(6), SatLit{302,true});
-    }
-    IntegerModelValidator validator(*kernel);
-    bitblast::BitBlastSolver solver(*kernel);   // env clamps maxBW to 8 (default 128)
-    auto r = solver.solve(cs, d, validator);
-    // x*y=6 with x,y in [1,6] fits comfortably in 8 bits; still SAT.
-    CHECK(r.status == bitblast::BitBlastResult::Status::Sat);
-    unsetenv("XOLVER_NIA_BITBLAST_MAX_BITWIDTH");
-}
-
-TEST_CASE("BitBlastSolver I3: env clamps refuse invalid values") {
-    // Out-of-range or non-numeric -> ignored, default kept.
-    setenv("XOLVER_NIA_BITBLAST_MAX_ITERS", "9999", 1);   // > 64 cap
-    setenv("XOLVER_NIA_BITBLAST_MAX_BITWIDTH", "4", 1);  // < 8 lower bound
-    auto kernel = createPolynomialKernel();
-    VarId vx = kernel->getOrCreateVar("x");
-    VarId vy = kernel->getOrCreateVar("y");
-    PolyId p = kernel->sub(kernel->mul(kernel->mkVar(vx), kernel->mkVar(vy)), kernel->mkConst(6));
-    std::vector<NormalizedNiaConstraint> cs{{p, Relation::Eq, SatLit{400, true}}};
-    DomainStore d;
-    for (auto n : {"x","y"}) {
-        d.addLowerBound(n, mpz_class(1), SatLit{401,true});
-        d.addUpperBound(n, mpz_class(6), SatLit{402,true});
-    }
-    IntegerModelValidator validator(*kernel);
-    bitblast::BitBlastSolver solver(*kernel);
-    auto r = solver.solve(cs, d, validator);
-    // With invalid env values, defaults are kept and x*y=6 in [1,6] is SAT.
-    CHECK(r.status == bitblast::BitBlastResult::Status::Sat);
-    unsetenv("XOLVER_NIA_BITBLAST_MAX_ITERS");
-    unsetenv("XOLVER_NIA_BITBLAST_MAX_BITWIDTH");
 }

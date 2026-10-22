@@ -1,0 +1,21 @@
+{
+  "experiment": "7da3c959bb36",
+  "run": "2d66d951cae6",
+  "status": "success",
+  "unit_cases": 833,
+  "assertions": 243658,
+  "failed": 0,
+  "unselected_cases": 666,
+  "build": "Panda1, existing /pub/data/jiafq/xolver/build, serialized writer lock, j4",
+  "cpp_comments_only_files": 13,
+  "solver_sha256": "ad847f38920967abf8ada8b1846f557ff78ac4b8a60bbb083aa0fcf74295cee2",
+  "unit_binary_sha256": "dc8a3778013439de0db96466c39f59641db543aef95be566807b8ca2273c49be",
+  "byte_identical_to_batch12_r4": true,
+  "prior_strict_suite": "failed: one of 77 model checks timed out; not waived, fixed or rerun to green",
+  "evidence_archive": {
+    "local": "docs/audit/evidence/gate-closeout/gate-closeout-results.tar.gz",
+    "server": "/pub/data/jiafq/xolver/validation/gate-closeout-results.tar.gz",
+    "sha256": "c0141bf88f01bb7a2b0e8b711efdcc396a60e5e2eeffa116f8789e6ab91bf28e",
+    "verified_members": 1042
+  }
+}

@@ -13,7 +13,7 @@ oracle_solver / oracle_verdict / oracle_time_ms straight from the baseline.
         --baseline-sqlite results/2026-06-XX/full.sqlite \\
         --xolver build/bin/xolver --xolver-git-tip <new-tip> \\
         --out results/2026-06-YY/full_xolver_refresh.sqlite \\
-        --candflags "XOLVER_EUF_PROP=1 XOLVER_NIA_LOCALSEARCH=1 ..." \\
+        --candflags "XOLVER_NRA_CAC_DEADLINE_MS=2000" \\
         --panda-list 1,2,3,4,5,7,8,9,10,14 -j 200
 
 Then diff_merge.py / diff_report.py run unchanged (same schema).

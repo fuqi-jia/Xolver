@@ -1,0 +1,18 @@
+experiment: xolver-native-terms-r16
+description: Correct Boolean distinct constants/polarity and freeze validation inputs before allowing later overlays.
+environment:
+  host: panda1
+  workdir: /pub/data/jiafq/xolver
+protocol:
+  inputs: {list: [native-terms]}
+  timeout: 100m
+  memory: 16G
+  parallelism: 1
+trials:
+  - {name: native}
+run:
+  cmd: bash tools/remote/build.sh build/native-terms-r16-source.tar.gz && XOLVER_REGRESSION_TIMEOUT=240 XOLVER_REGRESSION_JOBS=1 bash tools/remote/validate.sh native-terms-r16
+measurements:
+  from: metrics.json
+  primary: unit_rc
+  checks: ["checker_rc == 0", "architecture_rc == 0", "unit_rc == 0", "regression_rc == 0", "tools_rc == 0", "known_gaps_rc == 0", "input_integrity_rc == 0"]

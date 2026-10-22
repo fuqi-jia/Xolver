@@ -2,31 +2,32 @@
 // eliminated by solve-eqs). The reconstructed model must give eliminated vars
 // the value of their defining term under the rest of the model.
 #include <doctest/doctest.h>
-#include "expr/ir.h"
+#include "ir/NativeTerms.h"
 #include "frontend/preprocess/ModelConverter.h"
-#include "util/RealValue.h"
+#include "base/RealValue.h"
+#include "base/EnvParam.h"
 
 using namespace xolver;
 
 namespace {
-void setupSorts(CoreIr& ir, SortId& b, SortId& i, SortId& r) {
+void setupSorts(NativeTerms& ir, SortId& b, SortId& i, SortId& r) {
     b = ir.allocateSortId(); ir.registerSort(b, SortKind::Bool); ir.setBoolSortId(b);
     i = ir.allocateSortId(); ir.registerSort(i, SortKind::Int);  ir.setIntSortId(i);
     r = ir.allocateSortId(); ir.registerSort(r, SortKind::Real); ir.setRealSortId(r);
 }
-ExprId var(CoreIr& ir, SortId s, const char* n) {
-    return ir.add(CoreExpr{Kind::Variable, s, {}, Payload(std::string(n))});
+ExprId var(NativeTerms& ir, SortId s, const char* n) {
+    return ir.add(TermExpr{Kind::Variable, s, {}, Payload(std::string(n))});
 }
-ExprId cint(CoreIr& ir, SortId s, int64_t v) {
-    return ir.add(CoreExpr{Kind::ConstInt, s, {}, Payload(v)});
+ExprId cint(NativeTerms& ir, SortId s, int64_t v) {
+    return ir.add(TermExpr{Kind::ConstInt, s, {}, Payload(v)});
 }
-ExprId add(CoreIr& ir, SortId s, ExprId a, ExprId b) {
-    return ir.add(CoreExpr{Kind::Add, s, {a, b}, {}});
+ExprId add(NativeTerms& ir, SortId s, ExprId a, ExprId b) {
+    return ir.add(TermExpr{Kind::Add, s, {a, b}, {}});
 }
 } // namespace
 
 TEST_CASE("ModelConverter: reconstructs x = y + 1 from the model of y") {
-    CoreIr ir; SortId b, i, r; setupSorts(ir, b, i, r);
+    NativeTerms ir; SortId b, i, r; setupSorts(ir, b, i, r);
     ExprId t = add(ir, i, var(ir, i, "y"), cint(ir, i, 1));   // y + 1
 
     ModelConverter mc;
@@ -46,7 +47,7 @@ TEST_CASE("ModelConverter: reverse-order replay resolves chained eliminations") 
     // Eliminated in order:  x = y + 1   (registered first),
     //                       y = z + 2   (registered second).
     // Over {z = 10}, reverse replay must give y = 12 then x = 13.
-    CoreIr ir; SortId b, i, r; setupSorts(ir, b, i, r);
+    NativeTerms ir; SortId b, i, r; setupSorts(ir, b, i, r);
     ExprId tx = add(ir, i, var(ir, i, "y"), cint(ir, i, 1));   // y + 1
     ExprId ty = add(ir, i, var(ir, i, "z"), cint(ir, i, 2));   // z + 2
 
@@ -67,7 +68,7 @@ TEST_CASE("ModelConverter: missing dependency leaves reconstruct() false") {
     // x = w + 1 but w is not in the model and not eliminated -> cannot rebuild.
     // STRICT Elim path (SolveEqs): a missing free var is a solver bug, so
     // reconstruct() must fail loudly rather than invent a value (a39f26c).
-    CoreIr ir; SortId b, i, r; setupSorts(ir, b, i, r);
+    NativeTerms ir; SortId b, i, r; setupSorts(ir, b, i, r);
     ExprId t = add(ir, i, var(ir, i, "w"), cint(ir, i, 1));
 
     ModelConverter mc;

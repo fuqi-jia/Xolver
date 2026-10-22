@@ -5,10 +5,10 @@
 // actually satisfy every enabled edge (slack >= 0).
 
 #include <doctest/doctest.h>
-#include "theory/arith/logics/dl/IncrementalDiffGraph.h"
-#include "theory/arith/logics/dl/DifferenceGraph.h"
-#include "theory/arith/logics/dl/BellmanFord.h"
-#include "sat/SatSolver.h"
+#include "search/dl/IncrementalDiffGraph.h"
+#include "search/dl/DifferenceGraph.h"
+#include "search/dl/BellmanFord.h"
+#include "contracts/SatSolver.h"
 #include <random>
 #include <vector>
 

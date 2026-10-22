@@ -1,0 +1,6 @@
+(set-info :status unsat)
+(set-logic QF_UFDTLIA)
+(declare-datatype Pair ((mk (fst Int) (snd Int))))
+(declare-fun k () Int)
+(assert (= (mk 2 2) (mk (+ 1 k) (+ k (- 2 5)))))
+(check-sat)

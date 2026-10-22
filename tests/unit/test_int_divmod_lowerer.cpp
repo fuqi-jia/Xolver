@@ -1,11 +1,11 @@
-#include "expr/ir.h"
+#include "ir/NativeTerms.h"
 #include "frontend/preprocess/IntDivModLowerer.h"
-#include "theory/core/LogicFeatureDetector.h"
+#include "contracts/LogicFeatureDetector.h"
 #include <doctest/doctest.h>
 
 using namespace xolver;
 
-static bool containsKind(const CoreIr& ir, ExprId eid, Kind kind) {
+static bool containsKind(const NativeTerms& ir, ExprId eid, Kind kind) {
     if (eid == NullExpr) return false;
     const auto& e = ir.get(eid);
     if (e.kind == kind) return true;
@@ -15,7 +15,7 @@ static bool containsKind(const CoreIr& ir, ExprId eid, Kind kind) {
     return false;
 }
 
-static bool containsIntDiv(const CoreIr& ir, ExprId eid) {
+static bool containsIntDiv(const NativeTerms& ir, ExprId eid) {
     if (eid == NullExpr) return false;
     const auto& e = ir.get(eid);
     if (e.kind == Kind::Div && e.sort == ir.intSortId()) return true;
@@ -25,7 +25,7 @@ static bool containsIntDiv(const CoreIr& ir, ExprId eid) {
     return false;
 }
 
-static bool containsIntMod(const CoreIr& ir, ExprId eid) {
+static bool containsIntMod(const NativeTerms& ir, ExprId eid) {
     if (eid == NullExpr) return false;
     const auto& e = ir.get(eid);
     if (e.kind == Kind::Mod && e.sort == ir.intSortId()) return true;
@@ -35,7 +35,7 @@ static bool containsIntMod(const CoreIr& ir, ExprId eid) {
     return false;
 }
 
-static size_t countFreshDivModVars(const CoreIr& ir) {
+static size_t countFreshDivModVars(const NativeTerms& ir) {
     size_t count = 0;
     for (ExprId id = 0; id < ir.size(); ++id) {
         const auto& e = ir.get(id);
@@ -51,7 +51,7 @@ static size_t countFreshDivModVars(const CoreIr& ir) {
     return count;
 }
 
-static size_t countUndefSymbols(const CoreIr& ir) {
+static size_t countUndefSymbols(const NativeTerms& ir) {
     size_t count = 0;
     for (ExprId id = 0; id < ir.size(); ++id) {
         const auto& e = ir.get(id);
@@ -67,8 +67,8 @@ static size_t countUndefSymbols(const CoreIr& ir) {
     return count;
 }
 
-static CoreIr makeIrWithInt() {
-    CoreIr ir;
+static NativeTerms makeIrWithInt() {
+    NativeTerms ir;
     SortId boolSort = ir.allocateSortId();
     SortId intSort = ir.allocateSortId();
     ir.registerSort(boolSort, SortKind::Bool);
@@ -78,28 +78,28 @@ static CoreIr makeIrWithInt() {
     return ir;
 }
 
-static ExprId mkIntVar(CoreIr& ir, const char* name) {
-    return ir.add(CoreExpr{Kind::Variable, ir.intSortId(), {}, Payload(std::string(name))});
+static ExprId mkIntVar(NativeTerms& ir, const char* name) {
+    return ir.add(TermExpr{Kind::Variable, ir.intSortId(), {}, Payload(std::string(name))});
 }
 
-static ExprId mkIntConst(CoreIr& ir, int64_t v) {
-    return ir.add(CoreExpr{Kind::ConstInt, ir.intSortId(), {}, Payload(v)});
+static ExprId mkIntConst(NativeTerms& ir, int64_t v) {
+    return ir.add(TermExpr{Kind::ConstInt, ir.intSortId(), {}, Payload(v)});
 }
 
-static ExprId mkDiv(CoreIr& ir, ExprId a, ExprId b) {
-    return ir.add(CoreExpr{Kind::Div, ir.intSortId(), {a, b}, Payload{}});
+static ExprId mkDiv(NativeTerms& ir, ExprId a, ExprId b) {
+    return ir.add(TermExpr{Kind::Div, ir.intSortId(), {a, b}, Payload{}});
 }
 
-static ExprId mkMod(CoreIr& ir, ExprId a, ExprId b) {
-    return ir.add(CoreExpr{Kind::Mod, ir.intSortId(), {a, b}, Payload{}});
+static ExprId mkMod(NativeTerms& ir, ExprId a, ExprId b) {
+    return ir.add(TermExpr{Kind::Mod, ir.intSortId(), {a, b}, Payload{}});
 }
 
-static ExprId mkEq(CoreIr& ir, ExprId a, ExprId b) {
-    return ir.add(CoreExpr{Kind::Eq, ir.boolSortId(), {a, b}, Payload{}});
+static ExprId mkEq(NativeTerms& ir, ExprId a, ExprId b) {
+    return ir.add(TermExpr{Kind::Eq, ir.boolSortId(), {a, b}, Payload{}});
 }
 
-static ExprId mkLe(CoreIr& ir, ExprId a, ExprId b) {
-    return ir.add(CoreExpr{Kind::Leq, ir.boolSortId(), {a, b}, Payload{}});
+static ExprId mkLe(NativeTerms& ir, ExprId a, ExprId b) {
+    return ir.add(TermExpr{Kind::Leq, ir.boolSortId(), {a, b}, Payload{}});
 }
 
 // ---------------------------------------------------------------------------
@@ -107,7 +107,7 @@ static ExprId mkLe(CoreIr& ir, ExprId a, ExprId b) {
 // ---------------------------------------------------------------------------
 
 TEST_CASE("IntDivModLowerer: constant divisor div") {
-    CoreIr ir = makeIrWithInt();
+    NativeTerms ir = makeIrWithInt();
     ExprId x = mkIntVar(ir, "x");
     ExprId three = mkIntConst(ir, 3);
     ExprId divExpr = mkDiv(ir, x, three);
@@ -132,7 +132,7 @@ TEST_CASE("IntDivModLowerer: constant divisor div") {
 }
 
 TEST_CASE("IntDivModLowerer: constant divisor mod") {
-    CoreIr ir = makeIrWithInt();
+    NativeTerms ir = makeIrWithInt();
     ExprId x = mkIntVar(ir, "x");
     ExprId five = mkIntConst(ir, 5);
     ExprId modExpr = mkMod(ir, x, five);
@@ -153,7 +153,7 @@ TEST_CASE("IntDivModLowerer: constant divisor mod") {
 }
 
 TEST_CASE("IntDivModLowerer: negative constant divisor") {
-    CoreIr ir = makeIrWithInt();
+    NativeTerms ir = makeIrWithInt();
     ExprId x = mkIntVar(ir, "x");
     ExprId negThree = mkIntConst(ir, -3);
     ExprId modExpr = mkMod(ir, x, negThree);
@@ -174,7 +174,7 @@ TEST_CASE("IntDivModLowerer: negative constant divisor") {
 }
 
 TEST_CASE("IntDivModLowerer: div and mod share same def") {
-    CoreIr ir = makeIrWithInt();
+    NativeTerms ir = makeIrWithInt();
     ExprId x = mkIntVar(ir, "x");
     ExprId four = mkIntConst(ir, 4);
     ExprId divExpr = mkDiv(ir, x, four);
@@ -201,7 +201,7 @@ TEST_CASE("IntDivModLowerer: div and mod share same def") {
 // ---------------------------------------------------------------------------
 
 TEST_CASE("IntDivModLowerer: variable divisor requires nonlinear + EUF") {
-    CoreIr ir = makeIrWithInt();
+    NativeTerms ir = makeIrWithInt();
     ExprId x = mkIntVar(ir, "x");
     ExprId y = mkIntVar(ir, "y");
     ExprId divExpr = mkDiv(ir, x, y);
@@ -225,7 +225,7 @@ TEST_CASE("IntDivModLowerer: variable divisor requires nonlinear + EUF") {
 }
 
 TEST_CASE("IntDivModLowerer: variable divisor mod") {
-    CoreIr ir = makeIrWithInt();
+    NativeTerms ir = makeIrWithInt();
     ExprId x = mkIntVar(ir, "x");
     ExprId y = mkIntVar(ir, "y");
     ExprId modExpr = mkMod(ir, x, y);
@@ -248,7 +248,7 @@ TEST_CASE("IntDivModLowerer: variable divisor mod") {
 // ---------------------------------------------------------------------------
 
 TEST_CASE("IntDivModLowerer: zero constant divisor emits undef") {
-    CoreIr ir = makeIrWithInt();
+    NativeTerms ir = makeIrWithInt();
     ExprId x = mkIntVar(ir, "x");
     ExprId zero = mkIntConst(ir, 0);
     ExprId divExpr = mkDiv(ir, x, zero);
@@ -270,7 +270,7 @@ TEST_CASE("IntDivModLowerer: zero constant divisor emits undef") {
 // ---------------------------------------------------------------------------
 
 TEST_CASE("IntDivModLowerer: scopes are respected") {
-    CoreIr ir = makeIrWithInt();
+    NativeTerms ir = makeIrWithInt();
     ExprId x = mkIntVar(ir, "x");
     ExprId three = mkIntConst(ir, 3);
     ExprId divExpr = mkDiv(ir, x, three);
@@ -294,7 +294,7 @@ TEST_CASE("IntDivModLowerer: scopes are respected") {
 // ---------------------------------------------------------------------------
 
 TEST_CASE("IntDivModLowerer: real division is untouched") {
-    CoreIr ir;
+    NativeTerms ir;
     SortId boolSort = ir.allocateSortId();
     SortId realSort = ir.allocateSortId();
     ir.registerSort(boolSort, SortKind::Bool);
@@ -302,10 +302,10 @@ TEST_CASE("IntDivModLowerer: real division is untouched") {
     ir.setBoolSortId(boolSort);
     ir.setRealSortId(realSort);
 
-    ExprId x = ir.add(CoreExpr{Kind::Variable, realSort, {}, Payload(std::string("x"))});
-    ExprId two = ir.add(CoreExpr{Kind::ConstReal, realSort, {}, Payload(std::string("2.0"))});
-    ExprId divExpr = ir.add(CoreExpr{Kind::Div, realSort, {x, two}, Payload{}});
-    ExprId eq = ir.add(CoreExpr{Kind::Eq, boolSort, {divExpr, two}, Payload{}});
+    ExprId x = ir.add(TermExpr{Kind::Variable, realSort, {}, Payload(std::string("x"))});
+    ExprId two = ir.add(TermExpr{Kind::ConstReal, realSort, {}, Payload(std::string("2.0"))});
+    ExprId divExpr = ir.add(TermExpr{Kind::Div, realSort, {x, two}, Payload{}});
+    ExprId eq = ir.add(TermExpr{Kind::Eq, boolSort, {divExpr, two}, Payload{}});
     ir.addAssertion(eq);
 
     IntDivModLowerer lowerer(ir);
@@ -324,7 +324,7 @@ TEST_CASE("IntDivModLowerer: real division is untouched") {
 // ---------------------------------------------------------------------------
 
 TEST_CASE("IntDivModLowerer: linear dividend + const divisor is linear") {
-    CoreIr ir = makeIrWithInt();
+    NativeTerms ir = makeIrWithInt();
     ExprId x = mkIntVar(ir, "x");
     ExprId three = mkIntConst(ir, 3);
     ExprId divExpr = mkDiv(ir, x, three);
@@ -338,10 +338,10 @@ TEST_CASE("IntDivModLowerer: linear dividend + const divisor is linear") {
 }
 
 TEST_CASE("IntDivModLowerer: nonlinear dividend + const divisor is nonlinear") {
-    CoreIr ir = makeIrWithInt();
+    NativeTerms ir = makeIrWithInt();
     ExprId x = mkIntVar(ir, "x");
     ExprId y = mkIntVar(ir, "y");
-    ExprId xy = ir.add(CoreExpr{Kind::Mul, ir.intSortId(), {x, y}, Payload{}});
+    ExprId xy = ir.add(TermExpr{Kind::Mul, ir.intSortId(), {x, y}, Payload{}});
     ExprId three = mkIntConst(ir, 3);
     ExprId divExpr = mkDiv(ir, xy, three);
     ExprId eq = mkEq(ir, divExpr, mkIntConst(ir, 1));
@@ -354,7 +354,7 @@ TEST_CASE("IntDivModLowerer: nonlinear dividend + const divisor is nonlinear") {
 }
 
 TEST_CASE("IntDivModLowerer: lowering produces constraints detectable by LogicFeatureDetector") {
-    CoreIr ir = makeIrWithInt();
+    NativeTerms ir = makeIrWithInt();
     ExprId x = mkIntVar(ir, "x");
     ExprId three = mkIntConst(ir, 3);
     ExprId modExpr = mkMod(ir, x, three);
@@ -382,10 +382,10 @@ TEST_CASE("IntDivModLowerer: lowering produces constraints detectable by LogicFe
 }
 
 TEST_CASE("IntDivModLowerer: nonlinear dividend lowering keeps hasNonlinear true for detector") {
-    CoreIr ir = makeIrWithInt();
+    NativeTerms ir = makeIrWithInt();
     ExprId x = mkIntVar(ir, "x");
     ExprId y = mkIntVar(ir, "y");
-    ExprId xy = ir.add(CoreExpr{Kind::Mul, ir.intSortId(), {x, y}, Payload{}});
+    ExprId xy = ir.add(TermExpr{Kind::Mul, ir.intSortId(), {x, y}, Payload{}});
     ExprId three = mkIntConst(ir, 3);
     ExprId modExpr = mkMod(ir, xy, three);
     ExprId eq = mkEq(ir, modExpr, mkIntConst(ir, 1));

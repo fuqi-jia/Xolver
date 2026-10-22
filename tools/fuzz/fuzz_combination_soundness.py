@@ -10,23 +10,26 @@ Deterministic (seeded). WSL-friendly: small formulas, short timeouts.
 
 Usage: python3 tools/fuzz_combination_soundness.py [--n N] [--seed S] [--solver PATH]
 """
-import argparse, random, subprocess, sys, tempfile, os
+import argparse, random, subprocess, sys, tempfile, os, json
+from pathlib import Path
 
 def run(cmd, inp, timeout):
     try:
         p = subprocess.run(cmd, input=inp, capture_output=True, text=True, timeout=timeout)
-        out = (p.stdout + " " + p.stderr).strip().lower()
+        if p.returncode != 0: return "error"
+        out = p.stdout.strip().lower()
     except subprocess.TimeoutExpired:
         return "timeout"
     except Exception:
         return "error"
     # first verdict token
-    for tok in out.split():
+    for tok in reversed(out.splitlines()):
+        tok = tok.strip()
         if tok in ("sat", "unsat", "unknown"):
             return tok
     if "error" in out or "unexpected" in out or "unsupported" in out:
         return "error"
-    return "unknown"
+    return "error"
 
 class Gen:
     def __init__(self, rng, logic):
@@ -160,11 +163,15 @@ def main():
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--solver", default="build/bin/xolver")
     ap.add_argument("--timeout", type=float, default=6.0)
+    ap.add_argument("--z3", default="z3")
+    ap.add_argument("--cvc5", default="cvc5")
+    ap.add_argument("--report", type=Path)
+    ap.add_argument("--failures-dir", type=Path, default=Path("validation/fuzz-failures"))
     args = ap.parse_args()
     rng = random.Random(args.seed)
     logics = ["QF_AUFLIA", "QF_ALIA", "QF_UFLIA",
               "QF_AUFLRA", "QF_ALRA", "QF_UFLRA", "QF_UFDTLIA"]
-    unsound, gaps, checked = [], [], 0
+    unsound, gaps, checked, errors, timeouts, oracle_skips = [], [], 0, 0, 0, 0
     tmpf = os.path.join(tempfile.gettempdir(), f"fuzz_{os.getpid()}.smt2")
     for idx in range(args.n):
         logic = rng.choice(logics)
@@ -172,27 +179,51 @@ def main():
         with open(tmpf, "w") as fh:
             fh.write(smt)
         xo = run([args.solver, "solve", tmpf], "", args.timeout)
+        if xo == "error":
+            errors += 1
+            args.failures_dir.mkdir(parents=True, exist_ok=True)
+            (args.failures_dir / f"seed-{args.seed}-case-{idx}-error.smt2").write_text(smt)
+        if xo == "timeout":
+            timeouts += 1
+            args.failures_dir.mkdir(parents=True, exist_ok=True)
+            (args.failures_dir / f"seed-{args.seed}-case-{idx}-timeout.smt2").write_text(smt)
         if xo not in ("sat", "unsat", "unknown"):
             continue
-        z3 = run(["z3", "-in"], smt, args.timeout)
-        cv = run(["cvc5", "--lang", "smt2"], smt, args.timeout)
+        z3 = run([args.z3, "-in"], smt, args.timeout)
+        cv = run([args.cvc5, "--lang", "smt2"], smt, args.timeout)
         defs = {"sat", "unsat"}
         if z3 in defs and cv in defs and z3 == cv:
             checked += 1
             if xo in defs and xo != z3:
                 unsound.append((smt, xo, z3, cv))
+                args.failures_dir.mkdir(parents=True, exist_ok=True)
+                (args.failures_dir / f"seed-{args.seed}-case-{idx}-unsound.smt2").write_text(smt)
                 print(f"\n!!!!! UNSOUND #{idx} ({logic}): xolver={xo} z3={z3} cvc5={cv}\n{smt}")
             elif xo == "unknown":
                 gaps.append((smt, xo, z3, cv))
+                args.failures_dir.mkdir(parents=True, exist_ok=True)
+                (args.failures_dir / f"seed-{args.seed}-case-{idx}-gap.smt2").write_text(
+                    f"; z3={z3} cvc5={cv} xolver={xo}; seed={args.seed} case={idx}\n"
+                    f"(set-info :status {z3})\n" + smt)
+        else:
+            oracle_skips += 1
+            args.failures_dir.mkdir(parents=True, exist_ok=True)
+            (args.failures_dir / f"seed-{args.seed}-case-{idx}-oracle-skip.smt2").write_text(
+                f"; z3={z3} cvc5={cv} xolver={xo}; seed={args.seed} case={idx}\n" + smt)
         if idx % 50 == 0:
             print(f"[{idx}/{args.n}] checked={checked} unsound={len(unsound)} gaps={len(gaps)}", file=sys.stderr)
     print(f"\n==== DONE: generated={args.n} oracle-agreed={checked} "
-          f"UNSOUND={len(unsound)} GAPS={len(gaps)} ====")
+          f"UNSOUND={len(unsound)} GAPS={len(gaps)} ERRORS={errors} TIMEOUTS={timeouts} ORACLE_SKIPS={oracle_skips} ====")
     if gaps and not unsound:
         print("\n--- sample completeness GAPS (xolver unknown, oracles agree) ---")
         for smt, xo, z3, cv in gaps[:3]:
             print(f"[{z3}]\n{smt}")
-    sys.exit(1 if unsound else 0)
+    if args.report:
+        args.report.parent.mkdir(parents=True, exist_ok=True)
+        args.report.write_text(json.dumps(dict(generated=args.n, seed=args.seed, checked=checked,
+            unsound=len(unsound), gaps=len(gaps), errors=errors, timeouts=timeouts,
+            oracle_skips=oracle_skips), indent=2) + "\n")
+    sys.exit(1 if unsound or errors else (0 if checked else 2))
 
 if __name__ == "__main__":
     main()

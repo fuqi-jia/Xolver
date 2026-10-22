@@ -1,0 +1,6 @@
+(set-logic QF_LIA)
+(set-info :status unsat)
+(declare-const x Int)
+(assert (= x 2))
+(assert (let ((x 1) (y x)) (= y x)))
+(check-sat)

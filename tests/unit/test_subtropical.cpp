@@ -1,5 +1,5 @@
-// Subtropical SAT-fast-path finder (src/theory/arith/logics/nra/reasoners/
-// SubtropicalSatFinder). The finder is INCOMPLETE and produces only a candidate
+// Subtropical candidate finder (search/nra/reasoners/SubtropicalSatFinder).
+// The finder is INCOMPLETE and produces only a candidate
 // direction; soundness is the caller's job (exact validation). These tests
 // check that (a) when it reports `found`, the materialized assignment really
 // satisfies every constraint for a large enough base, (b) it bails on
@@ -7,7 +7,7 @@
 
 #include <doctest/doctest.h>
 #include <gmpxx.h>
-#include "theory/arith/logics/nra/reasoners/SubtropicalSatFinder.h"
+#include "search/nra/reasoners/SubtropicalSatFinder.h"
 
 using namespace xolver;
 
