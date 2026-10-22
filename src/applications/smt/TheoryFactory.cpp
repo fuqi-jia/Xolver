@@ -468,63 +468,32 @@ void buildUnsupportedUF(BuildContext& c) {
 // Fallback when no builder is registered for the logic string: route by the
 // detected features. Not registered in the table — called directly.
 void buildFeatureRouted(BuildContext& c) {
-    auto& registry = *c.registry;
-    auto& theoryManager = *c.theoryManager;
-    auto& result = *c.result;
-    const LogicFeatures& features = c.features;
-    if (features.hasUF) {
-        result.success = false;
-    } else if (features.hasMixedIntReal) {
-        if (features.hasNonlinear) {
-            auto polyKernel = createPolynomialKernel();
-            result.polyKernelRaw = polyKernel.get();
-            auto nira = std::make_unique<NiraSolver>(std::move(polyKernel));
-            nira->setRegistry(&registry);
-            theoryManager.registerSolver(std::move(nira));
-        } else {
-            auto lira = std::make_unique<LiraSolver>();
-            lira->setRegistry(&registry);
-            lira->setNativeTerms(c.ir);
-            theoryManager.registerSolver(std::move(lira));
-        }
-    } else if (features.hasIntVar && features.hasNonlinear) {
-        auto polyKernel = createPolynomialKernel();
-        result.polyKernelRaw = polyKernel.get();
-        auto nia = std::make_unique<NiaSolver>(std::move(polyKernel));
-        nia->setRegistry(&registry);
-        theoryManager.registerSolver(std::move(nia));
-        auto lia = std::make_unique<LiaSolver>();
-        lia->setRegistry(&registry);
-        theoryManager.registerSolver(std::move(lia));
-    } else if (features.hasIntVar) {
-        auto lia = std::make_unique<LiaSolver>();
-        lia->setRegistry(&registry);
-        theoryManager.registerSolver(std::move(lia));
-    } else if (features.hasRealVar && features.hasNonlinear) {
-        auto polyKernel = createPolynomialKernel();
-        result.polyKernelRaw = polyKernel.get();
-        auto lra = std::make_unique<LraSolver>();
-        lra->setRegistry(&registry);
-        auto nra = std::make_unique<NraSolver>(std::move(polyKernel));
-        theoryManager.registerSolver(std::move(nra));
-        theoryManager.registerSolver(std::move(lra));
-    } else if (features.hasRealVar) {
-        buildLRA(c);
-    } else if (features.hasInt || features.hasReal) {
-        // Substitution can remove the last arithmetic variable while leaving
-        // constant relations, e.g. x=1 and x=0 becomes 1=0. Those atoms still
-        // require an arithmetic solver; treating them as free SAT literals
-        // admits a false model. Preserve the arithmetic domain without using
-        // literal sorts to override a remaining variable's routing above.
-        if (features.hasNonlinear) {
-            if (features.hasReal) buildNRA(c);
-            else buildNIA(c);
-        } else if (features.hasReal) buildLRA(c);
-        else buildLIA(c);
+    if (c.features.hasUF) {
+        c.result->success = false;
+        return;
+    }
+    switch (featureArithmeticTheory(c.features)) {
+    case TheoryId::LIA: buildLIA(c); break;
+    case TheoryId::LRA: buildLRA(c); break;
+    case TheoryId::NIA: buildNIA(c); break;
+    case TheoryId::NRA: buildNRA(c); break;
+    case TheoryId::LIRA: buildLIRA(c); break;
+    case TheoryId::NIRA: buildNIRA(c); break;
+    default: break;
     }
 }
 
 } // namespace
+
+TheoryId featureArithmeticTheory(const LogicFeatures& f) {
+    if (f.hasMixedIntReal) return f.hasNonlinear ? TheoryId::NIRA : TheoryId::LIRA;
+    // Literal sorts must not override the domain of a remaining variable.
+    if (f.hasIntVar) return f.hasNonlinear ? TheoryId::NIA : TheoryId::LIA;
+    if (f.hasRealVar) return f.hasNonlinear ? TheoryId::NRA : TheoryId::LRA;
+    if (f.hasReal) return f.hasNonlinear ? TheoryId::NRA : TheoryId::LRA;
+    if (f.hasInt) return f.hasNonlinear ? TheoryId::NIA : TheoryId::LIA;
+    return TheoryId::Bool;
+}
 
 void SolverRegistry::ensureBuiltinsRegistered() {
     static std::once_flag once;

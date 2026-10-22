@@ -50,7 +50,7 @@ def main():
 
     allowed = {'.json', '.log', '.xml', '.txt', '.rc', '.sha256', '.stdout',
                '.stderr', '.smt2', '.cnf', '.drat', '.drat-output', '.alethe',
-               '.carcara-output', '.thy', '.ML', '.v', '.py', '.sh', '.md', '.yaml'}
+               '.carcara-output', '.queries', '.thy', '.ML', '.v', '.py', '.sh', '.md', '.yaml'}
     records = []
     manifest_path = args.output.with_suffix('.manifest.json')
     args.output.parent.mkdir(parents=True, exist_ok=True)

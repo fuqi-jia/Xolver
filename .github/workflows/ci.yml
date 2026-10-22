@@ -133,4 +133,5 @@ jobs:
           path: |
             proof-gate-corpus.txt
             .proof-artifacts/
+          include-hidden-files: true
           retention-days: 7

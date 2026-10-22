@@ -20,6 +20,10 @@ namespace xolver {
  * TheoryFactory.cpp). setupSolvers looks up the registered builder for `logic`
  * and runs it. SolverSetupResult and BuildContext are defined in SolverRegistry.h.
  */
+// Shared fallback selection for solver construction and atom registration.
+// Constants still belong to arithmetic after preprocessing removes variables.
+TheoryId featureArithmeticTheory(const LogicFeatures& features);
+
 SolverSetupResult setupSolvers(
     const std::string& logic,
     const LogicFeatures& features,

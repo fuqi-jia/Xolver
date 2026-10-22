@@ -285,7 +285,7 @@
       "from": "src/runtime/factory/TheoryFactory.cpp",
       "to": "src/applications/smt/TheoryFactory.cpp",
       "before_sha256": "39ab48977faf5de0534afaddebbe08400cbebf71e85d1012ff02eb840f0b79f6",
-      "after_sha256": "53b7d1a4ff86a6b3b2854a293765ee2d7265422a1f90c2f328c6944687b18c86",
+      "after_sha256": "5409b189bd08a78afaee53beb0630144182f6a40248147cb467a76e9a00fdf7a",
       "normalized_tokens_equal_after_include_migration": false,
       "post_migration_change": "CI correctness repair; see CI-REPAIR.md"
     },
@@ -293,8 +293,8 @@
       "from": "src/runtime/factory/TheoryFactory.h",
       "to": "src/applications/smt/TheoryFactory.h",
       "before_sha256": "50630b7363f65d484d601b9c84bbdff61562d0a84fa83fce34a5bd83d9da72a0",
-      "after_sha256": "1d0b9511158a5eef57429695f48f9b032f286666edf29db6d8e35f23f68fb10c",
-      "normalized_tokens_equal_after_include_migration": true
+      "after_sha256": "04e6d745e6e5dfa253c31b9d279ec6c957cbf2ce87fc56f3f6cad974ba530422",
+      "normalized_tokens_equal_after_include_migration": false
     },
     {
       "from": "src/search/nia/search/NiaLinearDecider.cpp",

@@ -128,9 +128,10 @@ is not evidence of semantic equivalence or performance improvement.
 See [APPLICATION-VALIDATION.json](APPLICATION-VALIDATION.json) for exact server
 experiments, binaries and retained failures. The pre-repair migration run built all targets,
 passed 833 selected existing tests and all six new application-dispatch tests,
-and had no wrong answers or verdict regressions in 902 paired cases. Broader
-acceptance remains failed: the native selection retains three baseline failures
-and the PA text suite retains six baseline parser errors. No full-suite success
-or performance improvement is claimed.
+and had no wrong answers or verdict regressions in 902 paired cases. That pre-repair
+selection failed broader acceptance: it retained three native baseline failures
+and six PA parser errors. Those historical records do not claim full-suite success.
 
-Subsequent CI repairs and their validation are tracked in [CI-REPAIR.md](CI-REPAIR.md).
+Subsequent CI repairs resolved those failures. The final 1507-unit / 850-regression /
+115-PA server validation and proof coverage limits are tracked in
+[CI-REPAIR.md](CI-REPAIR.md).

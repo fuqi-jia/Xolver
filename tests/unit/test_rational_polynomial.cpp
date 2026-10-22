@@ -174,3 +174,19 @@ TEST_CASE("RatPoly: pseudoRemainder of x² by (x - 1)") {
     // r should be lower-degree in x.
     CHECK(r.degree(VX) < divisor.degree(VX));
 }
+
+TEST_CASE("RatPoly: batched append and in-place arithmetic preserve self aliases") {
+    auto p = RationalPolynomial::fromVar(VX, 2, mpq_class(1, 3));
+    p.appendTerms(p);
+    p.normalize();
+    REQUIRE(p.coefficients(VX).size() == 3);
+    CHECK(p.coefficients(VX)[2].constantValue() == mpq_class(2, 3));
+    p += p;
+    CHECK(p.coefficients(VX)[2].constantValue() == mpq_class(4, 3));
+    p -= p;
+    CHECK(p.isZero());
+    p = RationalPolynomial::fromConstant(mpq_class(7, 5));
+    p.appendTerms(p, true);
+    p.normalize();
+    CHECK(p.isZero());
+}

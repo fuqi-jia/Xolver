@@ -1,0 +1,84 @@
+{
+  "status": "server-pass; GitHub preflight/main status tracked in PR",
+  "pull_request": "https://github.com/fuqi-jia/Xolver/pull/28",
+  "date": "2026-10-23",
+  "host": "Panda1 (192.168.20.110)",
+  "persistent_build": "/pub/data/jiafq/xolver/build",
+  "source_manifest": "ci-repair-r8/source-manifest.json in evidence archive",
+  "submodules": {
+    "SOMTParser": "7e53cb1056843d4fa4e6a8d80f9724e880753a34"
+  },
+  "frozen_binaries": {
+    "xolver": "b84b02d62f1826094ba9c18ccbd8efccd582f1e30d23e69e5b8454c88144f71e",
+    "xolver_unit_tests": "e2944280ea1387700cc3c265dd342cc6445435386af488e716fff9edf160b1c5"
+  },
+  "build_and_tools": {
+    "experiment": "xolver-ci-repair-r8",
+    "id": "762bc2d4bbf4",
+    "build_rc": 0,
+    "native_rc": 0,
+    "tools_rc": 0,
+    "focused_units": 116
+  },
+  "full_validation": {
+    "experiment": "xolver-ci-complete-r2",
+    "id": "c02beb0108bb",
+    "unit_rc": 0,
+    "regression_rc": 0,
+    "pa_rc": 0,
+    "proof_rc": 0,
+    "units": {
+      "total": 1507,
+      "passed": 1507,
+      "failed": 0,
+      "skipped": 0,
+      "assertions": 575758
+    },
+    "regression": {
+      "total": 850,
+      "passed": 850,
+      "per_case_timeout_seconds": 240
+    },
+    "pa": {
+      "total": 115,
+      "correct": 115,
+      "wrong": 0,
+      "errors": 0,
+      "unknown": 0,
+      "timeouts": 0,
+      "certificate_schemas": 115,
+      "model_pins": 15,
+      "z3_cvc5_checks": 230
+    },
+    "proof_drat": {
+      "files": 104,
+      "complete_files": 22,
+      "skeleton_files": 72,
+      "no_proof_files": 10,
+      "skipped_files": 0,
+      "rejected": 0,
+      "errors": 0,
+      "incremental_queries": "both exported and checked"
+    },
+    "limits": [
+      "Server has no Carcara; GitHub checks Alethe separately.",
+      "PA schema/model checks are not a formal end-to-end proof.",
+      "Intermittent NRA search performance has no claimed root-cause fix."
+    ]
+  },
+  "architecture": {
+    "files": 545,
+    "layers": 11,
+    "violations": 0
+  },
+  "controls": {
+    "typed_controls": 161,
+    "sites": 237
+  },
+  "evidence": {
+    "archive": "evidence/ci-repair/ci-repair-results.tar.gz",
+    "manifest": "evidence/ci-repair/ci-repair-results.tar.manifest.json",
+    "verified_members": 7916,
+    "sha256": "2c2d0e52b19ac138bbdb8c3016a373136193c62dcb4cd7a8ef2ec366dedec2fa"
+  }
+}

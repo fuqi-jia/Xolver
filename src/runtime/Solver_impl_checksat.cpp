@@ -1025,29 +1025,10 @@ Result Solver::Impl::checkSatGround() {
             atomizer.setCombinationArithTheory(TheoryId::NIA);
             if (polyKernelRaw) atomizer.setPolynomialKernel(polyKernelRaw);
         } else {
-            // No declared logic: route by detected features.
-            // Use hasIntVar / hasRealVar (not hasInt / hasReal) to avoid
-            // mis-routing caused by integer/real constant literals.
-            if (features.hasMixedIntReal) {
-                if (features.hasNonlinear) {
-                    atomizer.setDefaultTheory(TheoryId::NIRA);
-                    if (polyKernelRaw) atomizer.setPolynomialKernel(polyKernelRaw);
-                } else {
-                    atomizer.setDefaultTheory(TheoryId::LIRA);
-                }
-            } else if (features.hasIntVar && features.hasNonlinear) {
-                atomizer.setDefaultTheory(TheoryId::NIA);
-                if (polyKernelRaw) atomizer.setPolynomialKernel(polyKernelRaw);
-            } else if (features.hasIntVar) {
-                atomizer.setDefaultTheory(TheoryId::LIA);
-            } else if (features.hasRealVar && features.hasNonlinear) {
-                atomizer.setDefaultTheory(TheoryId::NRA);
-                if (polyKernelRaw) atomizer.setPolynomialKernel(polyKernelRaw);
-            } else if (features.hasRealVar) {
-                atomizer.setDefaultTheory(TheoryId::LRA);
-            } else {
-                atomizer.setDefaultTheory(TheoryId::Bool);
-            }
+            // Use the same domain selection as the solver factory, including
+            // constant arithmetic left behind by variable elimination.
+            atomizer.setDefaultTheory(featureArithmeticTheory(features));
+            if (polyKernelRaw) atomizer.setPolynomialKernel(polyKernelRaw);
         }
 
         // subformula (each assertion is a positive root) so the monotone

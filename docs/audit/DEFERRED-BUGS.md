@@ -119,3 +119,20 @@ checks pass. This does not resolve the previously documented intermittent NRA
 model-check timeout. Broad application-migration acceptance remains failed due
 to the native and parser cases; the successful architecture/attribution run
 does not waive them. See `APPLICATION-VALIDATION.json` and retained raw evidence.
+
+## CI repair follow-up (2026-10-23)
+
+The historical failures above remain part of the audit trail. The follow-up
+repairs the two native SL cases, and the comparison-chain failure was positively
+identified as false SAT: elimination removed arithmetic variables, leaving
+constant constraints routed as Boolean atoms. Solver construction and atom
+registration now share the arithmetic-domain selection. The independently
+failing `CDCL(T): boolean + LRA unsat` has the same cause.
+
+SOMTParser subsequently merged PR 63 and main now contains textual n-ary integer
+division. Xolver advances its submodule to `7e53cb1056843d4fa4e6a8d80f9724e880753a34`;
+there is no local dependency patch. Both formerly failing SL tests and the two
+incorrect SAT tests pass in server run `xolver-ci-repair-r8`. Full acceptance is
+recorded separately in `CI-REPAIR.md`; the older failed selections are not
+retroactively relabeled. The intermittent NRA behavior above is not claimed as
+fixed by this work.
