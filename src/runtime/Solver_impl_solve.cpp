@@ -1,4 +1,4 @@
-#include "decision/pa/Presburger.h"
+#include "ir/NativeFeatures.h"
 #include "base/RuntimeConfig.h"
 #include "base/EnvParam.h"
 #include "runtime/SolverImpl.h"
@@ -62,9 +62,9 @@ bool Solver::Impl::parseFile(std::string_view filename) {
         if (!nextParser->parseStr(queries.back())) return false;
         // Auto-detect logic from the parsed file.
         auto opts = nextParser->getOptions();
-        // Quantified queries go directly from SOMTParser's DAG to PA's own
-        // affine/divisibility IR. Do not duplicate the complete input graph.
-        const bool quantified = pa::hasQuantifiers(nextParser->getAssertions());
+        // Keep binders and explicit SL syntax intact for their solver entry
+        // points. Ground preprocessing must not run across these boundaries.
+        const bool quantified = nativeFeatures(nextParser->getAssertions()).quantified;
         const auto paOption = options.find("produce-pa-certificate");
         const bool recordPA = paOption != options.end() && paOption->second.kind == OptionValue::Bool && paOption->second.b;
         FrontendAdapter adapter(*nextParser);

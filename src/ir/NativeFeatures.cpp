@@ -1,0 +1,32 @@
+#include "ir/NativeFeatures.h"
+#include <somtparser/ir/node.h>
+#include <unordered_set>
+
+namespace xolver {
+NativeFeatures nativeFeatures(const std::vector<SOMTParser::Node>& roots) {
+    using K = SOMTParser::NODE_KIND;
+    NativeFeatures features;
+    auto work = roots;
+    std::unordered_set<SOMTParser::Node> visited;
+    while (!work.empty()) {
+        auto node = std::move(work.back()); work.pop_back();
+        if (!node || !visited.insert(node).second) continue;
+        auto sort = node->getSort();
+        if (sort) {
+            features.real |= sort->isReal();
+            features.otherSort |= !sort->isBool() && !sort->isInt() &&
+                                  !sort->isIntOrReal() && !sort->isReal();
+        }
+        switch (node->getKind()) {
+        case K::NT_FORALL: case K::NT_EXISTS: features.quantified = true; break;
+        case K::NT_SEP_EMP: case K::NT_SEP_NIL: case K::NT_SEP_PTO:
+        case K::NT_SEP_STAR: case K::NT_SEP_WAND: features.spatial = true; break;
+        case K::NT_UF_APPLY: case K::NT_FUNC_APPLY: case K::NT_FUNC_REC_APPLY:
+            features.function = true; break;
+        default: break;
+        }
+        for (auto child : SOMTParser::children(node)) work.push_back(std::move(child));
+    }
+    return features;
+}
+} // namespace xolver

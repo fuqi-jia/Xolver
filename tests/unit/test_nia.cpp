@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
 #include "xolver/Solver.h"
-#include "search/nia/search/NiaLinearDecider.h"
+#include "applications/smt/qfnia/NiaLinearDecider.h"
 #include "search/coordination/TheoryAtomRegistry.h"
 #include "search/boolean/Atomizer.h"
 #include "search/coordination/TheoryManager.h"

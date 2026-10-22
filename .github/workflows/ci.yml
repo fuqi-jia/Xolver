@@ -19,7 +19,7 @@ concurrency:
 jobs:
   build-test:
     name: build-test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
       - name: Checkout (with submodules)
@@ -28,10 +28,8 @@ jobs:
           submodules: recursive   # CaDiCaL + libpoly + SOMTParser
 
       - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            cmake build-essential libgmp-dev libmpfr-dev python3
+        timeout-minutes: 8
+        run: bash tools/ci/install_dependencies.sh
 
       - name: Validate typed control contracts
         run: |
@@ -48,12 +46,14 @@ jobs:
         run: cmake --build build -j2
 
       - name: Unit tests (doctest)
-        run: ./build/tests/xolver_unit_tests
+        timeout-minutes: 30
+        run: ./build/tests/xolver_unit_tests --duration=true
 
-      # Use all runner cores. The only slow case is the heavy MetiTarski instance
-      # nra_200 (genuinely minutes-class on the shared runner, not a contention
-      # artifact), so the 240s per-case wall — not the job count — is what keeps it
-      # green; everything else finishes in milliseconds.
+      - name: Architecture and validation harness tests
+        run: ctest --test-dir build --output-on-failure -R '^(architecture|standalone-evidence|regression-harness)$'
+
+      # Each regression has its own deadline; a timeout remains a failure.
+      # Keep the longer allowance for the MetiTarski polynomial instances.
       - name: Regression suite (xolver vs embedded :status)
         run: |
           python3 tools/regression/run_regression.py \
@@ -71,7 +71,7 @@ jobs:
   # and only counted. This is the unsat-side analogue of the regression gate.
   proof-gate:
     name: proof-gate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
       - name: Checkout (with submodules)
@@ -80,15 +80,22 @@ jobs:
           submodules: recursive
 
       - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            cmake build-essential libgmp-dev libmpfr-dev python3
+        timeout-minutes: 8
+        run: bash tools/ci/install_dependencies.sh
 
       # drat-trim (single C file, fast) + carcara (Rust; cargo is preinstalled on
       # ubuntu-latest). Binaries land under .proof-checkers/.
+      - name: Restore pinned proof checkers
+        uses: actions/cache@v4
+        with:
+          path: .proof-checkers
+          key: proof-checkers-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tools/proof/install_checkers.sh') }}
+
       - name: Install proof checkers
-        run: bash tools/proof/install_checkers.sh
+        timeout-minutes: 15
+        run: |
+          bash tools/proof/install_checkers.sh
+          test -x .proof-checkers/carcara/bin/carcara
 
       - name: Validate typed control contracts
         run: |
@@ -96,14 +103,18 @@ jobs:
           python3 -B tests/tools/test_control_catalog.py
 
       - name: Configure (Release, proofs ON)
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DXOLVER_ENABLE_PROOFS=ON
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DXOLVER_ENABLE_PROOFS=ON -DXOLVER_BUILD_TESTS=OFF
 
       - name: Build
-        run: cmake --build build -j2
+        run: cmake --build build -j2 --target xolver-cli
 
       # Gate every UNSAT across the proof-bearing lanes (Boolean DRAT + LRA/EUF/
       # IDL/RDL Alethe). run_proof_corpus.sh exits non-zero on any REJECTED.
-      - name: Proof corpus gate (0 REJECTED)
+      - name: Validate proof certificates
+        timeout-minutes: 15
+        env:
+          XOLVER_PROOF_WORKDIR: .proof-artifacts
+          XOLVER_PROOF_TIMEOUT: 30
         run: |
           DT="$PWD/.proof-checkers/drat-trim/drat-trim"
           CAR="$PWD/.proof-checkers/carcara/bin/carcara"
@@ -113,3 +124,13 @@ jobs:
             | sort -u > proof-gate-corpus.txt
           echo "Gating $(wc -l < proof-gate-corpus.txt) UNSAT instances with drat-trim + Carcara"
           bash tools/proof/run_proof_corpus.sh build/bin/xolver "$DT" proof-gate-corpus.txt "$CAR"
+
+      - name: Retain proof validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: proof-validation
+          path: |
+            proof-gate-corpus.txt
+            .proof-artifacts/
+          retention-days: 7

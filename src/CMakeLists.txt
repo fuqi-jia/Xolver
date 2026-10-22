@@ -74,34 +74,41 @@ endif()
 
 # Separate archives can be built/linked without the runtime and search engines.
 # Their dependency direction is checked by architecture.py at configure and CI.
-foreach(layer base ir contracts algebra evidence decision frontend search runtime)
+set(XOLVER_CORE_OBJECTS)
+# Preserve archive member order while automatically including a layer when its
+# first compiled source is added (quantifiers is currently header-only).
+foreach(layer base ir contracts algebra evidence logic quantifiers applications frontend search runtime)
     string(TOUPPER "${layer}" upper)
+    if(NOT XOLVER_${upper}_SOURCES)
+        add_library(xolver_${layer} INTERFACE)
+        target_link_libraries(xolver_${layer} INTERFACE xolver_build_options)
+        if(layer MATCHES "^(ir|logic|quantifiers|applications)$")
+            target_link_libraries(xolver_${layer} INTERFACE somtparser_ir)
+        endif()
+        continue()
+    endif()
     add_library(xolver_${layer} OBJECT ${XOLVER_${upper}_SOURCES})
+    list(APPEND XOLVER_CORE_OBJECTS $<TARGET_OBJECTS:xolver_${layer}>)
     set_target_properties(xolver_${layer} PROPERTIES POSITION_INDEPENDENT_CODE ON)
     target_link_libraries(xolver_${layer} PRIVATE xolver_build_options)
-    if(layer MATCHES "^(algebra|search|runtime)$")
+    if(layer MATCHES "^(algebra|search|applications|runtime)$")
         target_link_libraries(xolver_${layer} PRIVATE ${XOLVER_POLY_TARGET})
     endif()
-    if(layer MATCHES "^(frontend|decision|runtime)$")
+    if(layer MATCHES "^(frontend|runtime)$")
         target_link_libraries(xolver_${layer} PRIVATE somtparser)
     endif()
     if(layer MATCHES "^(search|runtime)$")
         target_link_libraries(xolver_${layer} PRIVATE cadical)
     endif()
-    if(layer STREQUAL "ir")
+    if(layer MATCHES "^(ir|logic|quantifiers|applications)$")
         # Native node storage consumes only the public IR headers.
         # No frontend/parser headers are visible to this layer.
-        target_include_directories(xolver_ir PRIVATE
+        target_include_directories(xolver_${layer} PRIVATE
             $<TARGET_PROPERTY:somtparser,INTERFACE_INCLUDE_DIRECTORIES>)
     endif()
 endforeach()
 
-add_library(xolver_core STATIC
-    $<TARGET_OBJECTS:xolver_base> $<TARGET_OBJECTS:xolver_ir>
-    $<TARGET_OBJECTS:xolver_contracts> $<TARGET_OBJECTS:xolver_algebra>
-    $<TARGET_OBJECTS:xolver_evidence> $<TARGET_OBJECTS:xolver_decision>
-    $<TARGET_OBJECTS:xolver_frontend> $<TARGET_OBJECTS:xolver_search>
-    $<TARGET_OBJECTS:xolver_runtime>)
+add_library(xolver_core STATIC ${XOLVER_CORE_OBJECTS})
 target_link_libraries(xolver_core PUBLIC xolver_build_options
     somtparser cadical ${XOLVER_POLY_TARGET} ${MPFR_LIBRARIES} ${GMP_LIBRARIES})
 set_target_properties(xolver_core PROPERTIES POSITION_INDEPENDENT_CODE ON)

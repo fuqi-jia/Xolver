@@ -1,5 +1,5 @@
 #include <doctest/doctest.h>
-#include "decision/sl/NativeInductive.h"
+#include "applications/sv/sl/NativeInductive.h"
 #include <somtparser/frontend/parser.h>
 
 using namespace xolver;

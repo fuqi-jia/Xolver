@@ -1,0 +1,1 @@
+Quantified nonlinear real arithmetic application. The shared first-order framework is in `logic/first_order`; theory-specific quantifier algorithms belong in `quantifiers/real`. There is no quantified-real backend yet. The existing `qfnra` CDCL(T) components are restricted to quantifier-free input, even when the declared logic is `NRA`.

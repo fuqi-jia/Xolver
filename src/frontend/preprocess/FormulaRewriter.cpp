@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <functional>
 #include <iostream>
+#include <iterator>
 #include <optional>
 
 namespace xolver {
@@ -68,6 +69,7 @@ FormulaRewriter::FormulaRewriter(NativeTerms& ir, SortId boolSort)
 
 FormulaRewriter::Verdict FormulaRewriter::run() {
     memo_.clear();
+    sharedAssociative_.clear();
     cons_.clear();
     rewritten_.clear();
     changed_ = false;
@@ -246,48 +248,59 @@ ExprId FormulaRewriter::rewriteRec(ExprId root) {
     if (root == NullExpr) return root;
     if (auto it = memo_.find(root); it != memo_.end()) return it->second;
 
-    // Iterative post-order (two-visit work-stack) to avoid stack overflow on
-    // deeply nested terms. simplifyNode()/mk() call ir_.add(), which reallocates
-    // NativeTerms's exprs_ vector — so all node fields are copied per step before any
-    // add. Behavior-identical to the former recursion.
-    struct Frame { ExprId e; bool processed; };
-    std::vector<Frame> stack;
-    stack.push_back({root, false});
-
+    // Flatten maximal singly-used associative chains before the postorder
+    // rewrite. Flattening every prefix bottom-up retains O(n^2) child slots
+    // for a depth-n sum, even though its final flat form has only n operands.
+    // Shared subexpressions stay memoized, so DAG sharing is preserved.
+    std::unordered_map<ExprId, unsigned> uses;
+    std::vector<ExprId> pending{root};
+    uses[root] = 1;
+    while (!pending.empty()) {
+        const auto e = pending.back(); pending.pop_back();
+        for (auto child : ir_.get(e).children) {
+            if (child == NullExpr) continue;
+            auto [it, fresh] = uses.emplace(child, 1);
+            if (fresh) pending.push_back(child);
+            else it->second = 2;
+        }
+    }
+    struct Frame { ExprId e; bool processed = false; std::vector<ExprId> children; };
+    std::vector<Frame> stack{{root, false, {}}};
     while (!stack.empty()) {
-        Frame& frame = stack.back();
-        ExprId e = frame.e;
-        if (memo_.find(e) != memo_.end()) { stack.pop_back(); continue; }
-
+        auto& frame = stack.back();
+        const auto e = frame.e;
+        if (memo_.count(e)) { stack.pop_back(); continue; }
+        const auto node = ir_.get(e);
         if (!frame.processed) {
             frame.processed = true;
-            const TermExpr& node = ir_.get(e);
             if (node.children.empty()) {
                 memo_[e] = e;
                 stack.pop_back();
                 continue;
             }
-            for (int i = static_cast<int>(node.children.size()) - 1; i >= 0; --i) {
-                ExprId c = node.children[i];
-                if (c != NullExpr && memo_.find(c) == memo_.end()) stack.push_back({c, false});
+            const bool associative = node.kind == Kind::Add || node.kind == Kind::Mul ||
+                                     node.kind == Kind::And || node.kind == Kind::Or;
+            std::vector<ExprId> todo(std::make_reverse_iterator(node.children.end()), std::make_reverse_iterator(node.children.begin()));
+            while (!todo.empty()) {
+                const auto child = todo.back(); todo.pop_back();
+                if (child == NullExpr) { frame.children.push_back(child); continue; }
+                const auto n = ir_.get(child);
+                if (associative && uses.at(child) == 1 && !memo_.count(child) &&
+                    n.kind == node.kind && n.sort == node.sort) {
+                    todo.insert(todo.end(), std::make_reverse_iterator(n.children.end()), std::make_reverse_iterator(n.children.begin()));
+                } else frame.children.push_back(child);
             }
+            // Copy before push_back can invalidate the frame reference.
+            const auto children = frame.children;
+            for (auto it = children.rbegin(); it != children.rend(); ++it)
+                if (*it != NullExpr && !memo_.count(*it)) stack.push_back({*it, false, {}});
             continue;
         }
-
+        auto children = std::move(frame.children);
         stack.pop_back();
-        Kind kind;
-        SortId sort;
-        Payload payload;
-        std::vector<ExprId> kids;
-        {
-            const TermExpr& node = ir_.get(e);
-            kind = node.kind;
-            sort = node.sort;
-            payload = node.payload;
-            kids.reserve(node.children.size());
-            for (ExprId c : node.children) kids.push_back(c == NullExpr ? NullExpr : memo_.at(c));
-        }
-        memo_[e] = simplifyNode(kind, sort, std::move(kids), payload);
+        for (auto& child : children) if (child != NullExpr) child = memo_.at(child);
+        memo_[e] = simplifyNode(node.kind, node.sort, std::move(children), node.payload);
+        if (uses.at(e) > 1) sharedAssociative_.insert(memo_[e]);
     }
 
     return memo_.at(root);
@@ -655,7 +668,8 @@ ExprId FormulaRewriter::simplifyNode(Kind kind, SortId sort,
             std::vector<ExprId> flat;
             for (ExprId c : children) {
                 const TermExpr& cn = ir_.get(c);
-                if (cn.kind == Kind::Add) for (ExprId gc : cn.children) flat.push_back(gc);
+                if (cn.kind == Kind::Add && !sharedAssociative_.count(c))
+                    for (ExprId gc : cn.children) flat.push_back(gc);
                 else flat.push_back(c);
             }
             mpq_class constSum = 0;
@@ -740,7 +754,8 @@ ExprId FormulaRewriter::simplifyNode(Kind kind, SortId sort,
             std::vector<ExprId> flat;
             for (ExprId c : children) {
                 const TermExpr& cn = ir_.get(c);
-                if (cn.kind == Kind::Mul) for (ExprId gc : cn.children) flat.push_back(gc);
+                if (cn.kind == Kind::Mul && !sharedAssociative_.count(c))
+                    for (ExprId gc : cn.children) flat.push_back(gc);
                 else flat.push_back(c);
             }
             mpq_class constProd = 1;

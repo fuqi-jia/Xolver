@@ -562,3 +562,26 @@ TEST_CASE("rewriter: deep EUF chains stay unsat under the production path") {
         CHECK(static_cast<int>(r) == static_cast<int>(Result::Unsat));
     }
 }
+
+TEST_CASE("rewriter: shared arithmetic DAGs retain bounded storage") {
+    Harness h;
+    const auto x = h.intVar("shared-x");
+    auto sum = x;
+    constexpr unsigned depth = 26;
+    for (unsigned i = 0; i < depth; ++i) sum = h.mk(Kind::Add, h.intS, {sum, sum});
+    FormulaRewriter rw(h.ir, h.boolS);
+    const auto result = rw.rewrite(sum);
+    // This input has 27 nodes, but expanding its shared edges would create
+    // 2^26 operands. Check space and the arithmetic meaning independently.
+    std::size_t edges = 0;
+    std::vector<mpz_class> values(h.ir.size());
+    for (ExprId i = 0; i < h.ir.size(); ++i) {
+        const auto node = h.ir.get(i);
+        edges += node.children.size();
+        if (node.kind == Kind::Variable) values[i] = 3;
+        else if (node.kind == Kind::Add)
+            for (auto child : node.children) values[i] += values.at(child);
+    }
+    CHECK(edges < 12 * depth);
+    CHECK(values.at(result) == mpz_class(3) * (mpz_class(1) << depth));
+}

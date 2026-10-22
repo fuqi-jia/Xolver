@@ -98,6 +98,7 @@ private:
     SortId realSort_;
 
     std::unordered_map<ExprId, ExprId> memo_;
+    std::unordered_set<ExprId> sharedAssociative_;
     std::unordered_map<ConsKey, ExprId, ConsKeyHash> cons_;
     std::vector<std::pair<ScopeLevel, ExprId>> rewritten_;
     bool changed_ = false;

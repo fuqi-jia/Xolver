@@ -4,7 +4,7 @@
 // asserted atoms at once, backtrack across decisions, and confirm the
 // soundness floor never produces UNSAT from heuristic failure.
 
-#include "search/experimental/mcsat/McsatSolver.h"
+#include "applications/smt/qfnra/McsatSolver.h"
 #include "search/nra/engine/NlsatEngine.h"
 #include "algebra/poly/PolynomialKernel.h"
 #include "contracts/TheoryAtomTypes.h"

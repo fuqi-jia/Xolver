@@ -1,26 +1,12 @@
 #include "base/RuntimeConfig.h"
 #include "base/EnvParam.h"
 #include "runtime/SolverImpl.h"
-#include "decision/pa/Presburger.h"
-#include "evidence/PresburgerTrace.h"
-#include "decision/sl/NativeSeparation.h"
-#include "decision/sl/NativeInductive.h"
+#include "ir/NativeFeatures.h"
+#include "applications/smt/Solver.h"
+#include "applications/sv/sl/Solver.h"
 #include "search/array/ArrayModelCompletion.h"
 
 namespace xolver {
-namespace {
-std::optional<TheoryModel> presburgerModel(const pa::Decision& decision) {
-    if (!decision.modelAvailable) return std::nullopt;
-    TheoryModel model;
-    for (const auto& [name, value] : decision.model) {
-        model.assignments.emplace(name, value);
-        if (value != "true" && value != "false")
-            model.numericAssignments.emplace(name, RealValue::fromMpq(mpq_class(value)));
-    }
-    return model;
-}
-}
-
 // Relocated Solver::Impl method definitions (declared in SolverImpl.h).
 
 Result Solver::Impl::checkSatInternal() {
@@ -32,49 +18,30 @@ Result Solver::Impl::checkSatInternal() {
         roaeReads_.clear();
         originalAssertions_.clear();
         if (parser && parser->getHeapLocationSort()) {
-            // Preserve spatial connectives, including Boolean contexts around
-            // them. Neither ground preprocessing nor PA may abstract them away.
+            // declare-heap explicitly selects SL semantics in SMT-LIB. Arrays
+            // or symbols named heap/pointer alone never enter this application.
             auto& terms = ensureIr();
             originalAssertions_ = terms.assertions();
             originalAssertions_.insert(originalAssertions_.end(),
                                        assumptionRoots_.begin(), assumptionRoots_.end());
             std::vector<SOMTParser::Node> roots;
             for (auto id : originalAssertions_) roots.push_back(terms.native(id));
-            const auto definitions = parser->getRecursiveDefinitions();
-            sl::NativeDecision decision;
-            if (definitions.empty()) {
-                decision = sl::decideNative(parser->getHeapLocationSort(), parser->getHeapDataSort(),
-                                           roots, parser->getDeclaredVariables());
-            } else {
-                const auto& logic = parser->getOptions()->logic;
-                // These SL-COMP logics assign least-fixed-point semantics to
-                // define-fun-rec predicates. ALL keeps ordinary SMT equations.
-                const bool inductive = logic == "QF_SHID" || logic == "SHID" ||
-                    logic == "QF_SHIDLIA" || logic == "SHIDLIA" ||
-                    logic == "QF_SHLID" || logic == "QF_SHLS";
-                if (!inductive) {
-                    decision.reason = "ordinary recursive equations are outside the SL inductive semantics; "
-                                      "an explicit SHID logic is required for least-fixed-point predicates";
-                } else {
-                    std::vector<sl::InductiveDefinition> environment;
-                    for (const auto& definition : definitions)
-                        environment.push_back({definition.symbol, definition.definition->getFuncBody(),
+            sl::Request request;
+            request.location = parser->getHeapLocationSort();
+            request.data = parser->getHeapDataSort();
+            request.assertions = std::move(roots);
+            request.declarations = parser->getDeclaredVariables();
+            const auto& declaredLogic = parser->getOptions()->logic;
+            if (declaredLogic == "QF_SHID" || declaredLogic == "SHID" ||
+                declaredLogic == "QF_SHIDLIA" || declaredLogic == "SHIDLIA" ||
+                declaredLogic == "QF_SHLID" || declaredLogic == "QF_SHLS")
+                request.recursion = sl::RecursiveSemantics::LeastFixedPoint;
+            for (const auto& definition : parser->getRecursiveDefinitions())
+                request.definitions.push_back({definition.symbol, definition.definition->getFuncBody(),
                                                definition.definition->getFuncParams()});
-                    decision = sl::decideInductiveNative(parser->getHeapLocationSort(), parser->getHeapDataSort(),
-                        roots, parser->getDeclaredVariables(), environment);
-                }
-            }
-            lastUnknownReason_ = decision.reason;
-            if (decision.model) {
-                TheoryModel model;
-                model.separation = decision.model;
-                for (const auto& [name, value] : decision.model->assignments) {
-                    model.assignments.emplace(name, value);
-                    if (!decision.model->booleans.count(name))
-                        model.numericAssignments.emplace(name, RealValue::fromMpq(mpq_class(value)));
-                }
-                lastModel_ = std::move(model);
-            }
+            auto decision = sl::solve(request);
+            lastUnknownReason_ = std::move(decision.reason);
+            lastModel_ = std::move(decision.model);
             if (decision.result == Result::Unsat && assumptionRoots_.empty()) {
                 lastUnsatCore_.clear();
                 for (auto root : originalAssertions_) lastUnsatCore_.emplace_back(root, contextId_);
@@ -104,32 +71,45 @@ Result Solver::Impl::checkSatInternal() {
         // the assertion list is rewritten by lowering.
         originalAssertions_ = ir->assertions();
 
-        // Quantified integer arithmetic must be handled before any ground
+        // First-order formulas must be handled before any ground
         // rewriting, substitution or SAT abstraction can cross a binder.
         auto quantifiedRoots = originalAssertions_;
         quantifiedRoots.insert(quantifiedRoots.end(), assumptionRoots_.begin(), assumptionRoots_.end());
         const auto nativeRoots = ir->native(quantifiedRoots);
-        if (recordPA || pa::hasQuantifiers(nativeRoots)) {
-            originalAssertions_ = quantifiedRoots;
-            pa::Limits limits;
+        applications::smt::Problem problem{nativeRoots, {}, {.elimination = recordPA}};
+        if (recordPA || nativeFeatures(nativeRoots).quantified) {
             const long work = config::read<config::ReadKind::Long>("XOLVER_PA_WORK", 2000000);
             const long residues = config::read<config::ReadKind::Long>("XOLVER_PA_RESIDUES", 100000);
-            if (work >= 0) limits.work = static_cast<size_t>(work);
-            if (residues >= 0) limits.residues = static_cast<size_t>(residues);
-            auto decision = pa::decide(nativeRoots, limits, {.elimination = recordPA});
-            if (decision.trace) lastProof_.setPresburger(pa::serializeTrace(*decision.trace, decision.result));
-            lastUnknownReason_ = decision.reason;
-            lastModel_ = presburgerModel(decision);
-            // There is no PA core minimizer yet. The entire assertion set is
-            // a valid conservative core; an empty core would be false evidence.
-            if (decision.result == Result::Unsat && assumptionRoots_.empty()) {
-                lastUnsatCore_.clear();
-                for (auto root : originalAssertions_)
-                    lastUnsatCore_.emplace_back(root, contextId_);
-            }
-            return decision.result;
+            if (work >= 0) problem.integerLimits.work = static_cast<size_t>(work);
+            if (residues >= 0) problem.integerLimits.residues = static_cast<size_t>(residues);
         }
+        bool usedGround = false;
+        applications::smt::Solver application([&](const applications::smt::Problem&) {
+            usedGround = true;
+            SolverAnswer answer;
+            answer.result = checkSatGround();
+            answer.reason = std::move(lastUnknownReason_);
+            answer.model = std::move(lastModel_);
+            answer.proof = std::move(lastProof_);
+            return answer;
+        });
+        auto answer = application.solve(problem);
+        lastUnknownReason_ = std::move(answer.reason);
+        lastModel_ = std::move(answer.model);
+        lastProof_ = std::move(answer.proof);
+        if (!usedGround) {
+            originalAssertions_ = quantifiedRoots;
+            // A full-assertion core is conservative until the logical backend
+            // supplies a smaller core. Assumptions have their own core API.
+            if (answer.result == Result::Unsat && assumptionRoots_.empty()) {
+                lastUnsatCore_.clear();
+                for (auto root : originalAssertions_) lastUnsatCore_.emplace_back(root, contextId_);
+            }
+        }
+        return answer.result;
+}
 
+Result Solver::Impl::checkSatGround() {
         // Lowering can introduce an arithmetic sort absent from the input:
         // e.g. (is_int r) creates an Int witness in an otherwise Real DAG.
         getOrCreateBoolSort();

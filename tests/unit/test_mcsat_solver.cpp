@@ -7,7 +7,7 @@
 //      pickValue successfully and check() returns Consistent.
 //   3. Backtrack clears framework-side pending state.
 
-#include "search/experimental/mcsat/McsatSolver.h"
+#include "applications/smt/qfnra/McsatSolver.h"
 #include "search/nra/engine/NlsatEngine.h"
 #include "algebra/poly/PolynomialKernel.h"
 #include "contracts/TheoryAtomTypes.h"

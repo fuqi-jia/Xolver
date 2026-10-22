@@ -1,0 +1,1 @@
+Real-arithmetic quantifier processing. Reserved algorithm location, above reusable real-algebraic arithmetic and projection/search infrastructure. Existing CAD/CAC engines are not thereby a complete quantified NRA application.
