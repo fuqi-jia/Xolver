@@ -8,6 +8,7 @@ Current interfaces and behavior:
 - [Quantifier algorithms](../src/quantifiers/README.md)
 - [Python API](../python/README.md)
 - [Proof tooling and evidence boundaries](../tools/proof/README.md)
+- [Server validation](../tools/remote/README.md)
 - [Known-gap test contract](../tests/known_gaps/README.md)
 
 `audit/`, `agents/`, `phase-d/`, `euf-deep/` and `preprocess-deep/` contain

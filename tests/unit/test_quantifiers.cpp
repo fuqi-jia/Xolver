@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 #include "applications/smt/Solver.h"
 #include "quantifiers/boolean/Diagram.h"
+#include "quantifiers/FiniteFormula.h"
 #include "quantifiers/bitvector/Circuit.h"
 #include <somtparser/frontend/parser.h>
 
@@ -145,4 +146,17 @@ TEST_CASE("quantifiers: budgets stop computation without a logical verdict") {
         CHECK(answer.result == Result::Unknown);
         CHECK(answer.reason.find("budget") != std::string::npos);
     }
+}
+
+TEST_CASE("quantifiers: fixed interpretation evaluates without changing the model") {
+    SOMTParser::Parser parser;
+    REQUIRE(parser.parseStr("(set-logic ALL)(declare-const x (_ BitVec 4))"
+        "(assert (= (bvadd x #x1) #x0))(assert (forall ((y (_ BitVec 4))) (= (bvadd y x) y)))"));
+    TheoryModel model;
+    model.assignments["x"] = "(_ bv15 4)";
+    CHECK(quantifiers::finiteValue(parser.getAssertions()[0], model) == std::optional<std::string>("true"));
+    CHECK(quantifiers::finiteValue(parser.getAssertions()[1], model) == std::optional<std::string>("false"));
+    CHECK(model.assignments.at("x") == "(_ bv15 4)");
+    model.assignments["x"] = "(_ bv1 3)";
+    CHECK_FALSE(quantifiers::finiteValue(parser.getAssertions()[0], model));
 }

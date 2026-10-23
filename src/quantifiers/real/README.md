@@ -15,7 +15,8 @@ formulas permit short-circuiting. Free variables form the outer existential
 block; models retain exact rational or isolated algebraic values.
 
 Nullification is handled using the full coefficient projection. Algebraic root
-isolation reports completion separately from an empty root set. Failed sign,
+isolation reports completion separately from an empty root set. Rational-prefix
+isolation is cross-checked by an independent exact Sturm root count. Failed sign,
 comparison or isolation operations cannot be interpreted as false formulas.
 Work, polynomial count, projection matrix size, node and recursion budgets apply.
 

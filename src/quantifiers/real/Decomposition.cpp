@@ -1,6 +1,7 @@
 #include "quantifiers/real/Problem.h"
 #include "search/nra/backend/LibpolyBackend.h"
 #include "search/nra/lazard/SubresultantChain.h"
+#include "search/nra/lazard/RationalRootIsolation.h"
 #include <algorithm>
 #include <map>
 #include <optional>
@@ -158,8 +159,26 @@ class Decomposition {
                 const auto univariate = algebra_.specializeToUnivariate(pid, sample_, variable);
                 if (univariate == NullUniPolyId) throw Unsupported("real specialization did not complete");
                 isolated = algebra_.isolateRealRoots(univariate);
-                if (isolated.crashOccurred || !algebra_.validateRootIsolation(univariate, isolated))
+                if (isolated.crashOccurred || !isolated.complete || !algebra_.validateRootIsolation(univariate, isolated))
                     throw Unsupported("real root isolation did not validate");
+                // Independently count every distinct real root using a Sturm
+                // chain over a Cauchy bound. An ordered list alone does not
+                // establish that isolation returned all roots.
+                const auto& coefficients = algebra_.getUni(univariate);
+                Poly rational;
+                mpq_class bound = 2;
+                for (std::size_t i = 0; i < coefficients.size(); ++i) {
+                    resources_.tick();
+                    const auto degree = coefficients.size() - 1 - i;
+                    if (degree) rational.addVar(variable, degree, coefficients[i]);
+                    else rational.addConstant(coefficients[i]);
+                    const mpq_class ratio = abs(mpq_class(coefficients[i]) / mpq_class(coefficients.front()));
+                    if (ratio + 2 > bound) bound = ratio + 2;
+                }
+                rational.normalize();
+                const auto count = countRealRootsIn(rational, variable, -bound, bound);
+                if (count < 0 || static_cast<std::size_t>(count) != isolated.roots.size())
+                    throw Unsupported("real root isolation disagrees with exact Sturm count");
             } else {
                 isolated = algebra_.isolateRealRootsAlgebraic(pid, sample_, variable);
                 if (isolated.crashOccurred) throw Unsupported("real algebraic isolation did not complete");

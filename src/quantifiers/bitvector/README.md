@@ -12,7 +12,8 @@ Division by zero and signed minimum divided by minus one follow SMT-LIB
 fixed-width semantics. Integer conversions, arrays, UF and mixed arithmetic
 require separate domain support and return `unknown` here.
 
-Free-variable models use `(_ bvN width)` terms. Wide words are subject to the
+Free-variable models use `(_ bvN width)` terms. `finiteValue` evaluates a term
+in a fixed interpretation without searching for another model. Wide words are subject to the
 same work and memory budgets as small words; there is no fixed maximum word
 width imposed by the algorithm.
 

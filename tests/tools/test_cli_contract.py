@@ -93,6 +93,21 @@ class CliEvidenceContract(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(result.stdout.splitlines(), ['sat', '((x 1))', 'sat', '((x 2))'])
 
+    def test_bitvector_models_and_values_preserve_width_and_query_scope(self):
+        path = self.root / 'bitvector-values.smt2'
+        path.write_text('(set-logic BV)(set-option :produce-models true)'
+                        '(declare-const x (_ BitVec 4))(declare-const unused (_ BitVec 4))'
+                        '(push 1)(assert (= (bvadd x #x1) #x0))(check-sat)'
+                        '(get-value (x (bvadd x #x1)))(get-model)(pop 1)'
+                        '(assert (= x #x2))(check-sat)(get-value (x))')
+        result = subprocess.run([SOLVER, 'solve', str(path)], capture_output=True,
+                                text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertRegex(result.stdout, r'\(\(x \(_ bv15 4\)\)\(\(bvadd x (?:#x1|#b0001)\) \(_ bv0 4\)\)\)')
+        self.assertIn('(define-fun x () (_ BitVec 4) (_ bv15 4))', result.stdout)
+        self.assertIn('(define-fun unused () (_ BitVec 4) (_ bv0 4))', result.stdout)
+        self.assertTrue(result.stdout.rstrip().endswith('((x (_ bv2 4)))'), result.stdout)
+
     def test_proof_export_with_synthesized_theory_atoms(self):
         regression = Path(__file__).resolve().parents[1] / 'regression'
         for case in [

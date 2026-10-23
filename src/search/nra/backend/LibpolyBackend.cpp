@@ -190,6 +190,7 @@ RootSet LibpolyBackend::isolateRealRoots(UniPolyId p) {
         if (a != 0) {
             RootSet result;
             result.roots.push_back(RealAlg::fromRational(-b / a));
+            result.complete = true;
             return result;
         }
     }
@@ -254,6 +255,7 @@ RootSet LibpolyBackend::isolateRealRoots(UniPolyId p) {
         result.roots.push_back(RealAlg::fromAlgebraic(std::move(ar)));
     }
 
+    result.complete = true;
     return result;
 #endif
 }

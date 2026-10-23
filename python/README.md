@@ -1,10 +1,10 @@
 # Xolver for Python
 
-Python bindings for **Xolver**, a competition-grade SMT solver for quantifier-free
-nonlinear arithmetic and its combinations with uninterpreted functions, arrays,
-and datatypes. The design invariant is **soundness over completeness**: every
-`sat` is independently re-validated and incomplete reasoning returns `unknown`
-rather than risk a wrong answer.
+Python bindings for **Xolver**, an SMT solver with exact arithmetic and
+theory-combination support. The high-level API builds Boolean, integer and real
+terms; the low-level API also accepts SMT-LIB. Model validation has three outcomes:
+satisfied, violated and indeterminate. A `sat` verdict alone does not assert
+independent model verification.
 
 ## Install
 

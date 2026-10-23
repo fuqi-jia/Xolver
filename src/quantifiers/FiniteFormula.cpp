@@ -3,6 +3,7 @@
 #include <somtparser/ir/node.h>
 #include <algorithm>
 #include <map>
+#include <sstream>
 #include <unordered_map>
 
 namespace xolver::quantifiers {
@@ -16,6 +17,7 @@ class Compiler {
     boolean::Diagram diagram_;
     bitvector::Circuit circuit_;
     bool bitvectors_;
+    const TheoryModel* interpretation_ = nullptr;
     std::unordered_map<Node, Word> bindings_, free_, cache_;
     std::map<std::string, Node> names_;
     void arity(const Node& n, std::size_t count) {
@@ -51,6 +53,38 @@ class Compiler {
         for (auto& bit : bits) bit = diagram_.variable();
         return bits;
     }
+    static mpz_class literal(std::string text, std::size_t size) {
+        int base = 10;
+        if (text.starts_with("(_")) {
+            std::istringstream input(text);
+            std::string open, numeral, close, extra;
+            std::size_t declaredWidth = 0;
+            if (!(input >> open >> numeral >> declaredWidth >> close) || open != "(_" ||
+                !numeral.starts_with("bv") || declaredWidth != size || close != ")" || (input >> extra))
+                throw Unsupported("invalid indexed bit-vector value");
+            text = numeral.substr(2);
+        } else if (text.starts_with("#b")) { base = 2; text.erase(0, 2); }
+        else if (text.starts_with("#x")) { base = 16; text.erase(0, 2); }
+        else if (text.starts_with("bv")) text.erase(0, 2);
+        mpz_class value;
+        if (mpz_set_str(value.get_mpz_t(), text.c_str(), base) || value < 0)
+            throw Unsupported("invalid bit-vector literal");
+        return value;
+    }
+    Word assigned(const Node& node) {
+        const auto size = width(node);
+        const auto found = interpretation_->assignments.find(node->getName());
+        if (found == interpretation_->assignments.end()) return circuit_.constant(0, size);
+        const auto& text = found->second;
+        if (node->getSort()->isBool()) {
+            if (text != "true" && text != "false") throw Unsupported("invalid Boolean model value");
+            return {Bit(text == "true")};
+        }
+        const auto value = literal(text, size);
+        if (value != 0 && mpz_sizeinbase(value.get_mpz_t(), 2) > size)
+            throw Unsupported("bit-vector model value exceeds its width");
+        return circuit_.constant(value, size);
+    }
     Bit formula(const Node& n) {
         if (!n || !n->getSort() || !n->getSort()->isBool())
             throw Unsupported("finite-domain assertion must be Boolean");
@@ -79,6 +113,7 @@ class Compiler {
             return term(n->getChild(kind == Kind::NT_LET_CHAIN ? count - 1 : 0));
         }
         if (kind == Kind::NT_VAR) {
+            if (interpretation_) return assigned(n);
             if (auto it = free_.find(n); it != free_.end()) return it->second;
             const auto [it, inserted] = names_.emplace(n->getName(), n);
             if (!inserted && it->second != n) throw Unsupported("ambiguous free symbol identity");
@@ -95,15 +130,8 @@ class Compiler {
             }
             if (!n->getSort()->isBv() || !bitvectors_)
                 throw Unsupported("non-finite-domain constant");
-            auto text = n->getName();
-            int base = 10;
-            if (text.starts_with("#b")) { base = 2; text.erase(0, 2); }
-            else if (text.starts_with("#x")) { base = 16; text.erase(0, 2); }
-            else if (text.starts_with("bv")) text.erase(0, 2);
-            mpz_class value;
-            if (mpz_set_str(value.get_mpz_t(), text.c_str(), base) || value < 0)
-                throw Unsupported("invalid bit-vector literal");
-            return circuit_.constant(value, width(n));
+            const auto size = width(n);
+            return circuit_.constant(literal(n->getName(), size), size);
         }
         if (kind == Kind::NT_FORALL || kind == Kind::NT_EXISTS) {
             if (count < 2) throw Unsupported("empty finite-domain binder");
@@ -293,6 +321,17 @@ class Compiler {
 public:
     Compiler(Limits limits, bool bitvectors)
         : resources_(limits), diagram_(resources_), circuit_(diagram_), bitvectors_(bitvectors) {}
+    std::string value(const Node& node, const TheoryModel& interpretation) {
+        interpretation_ = &interpretation;
+        const auto bits = term(node);
+        mpz_class value = 0;
+        for (std::size_t i = 0; i < bits.size(); ++i) {
+            if (bits[i] > 1) throw std::logic_error("finite evaluation contains a free variable");
+            if (bits[i]) mpz_setbit(value.get_mpz_t(), i);
+        }
+        return node->getSort()->isBool() ? (value == 0 ? "false" : "true") :
+            "(_ bv" + value.get_str() + " " + std::to_string(bits.size()) + ")";
+    }
     SolverAnswer solve(const Roots& roots) {
         Bit result = 1;
         for (const auto& root : roots) result = diagram_.conjunction(result, formula(root));
@@ -322,4 +361,10 @@ SolverAnswer solveFinite(const Roots& roots, Limits limits, bool bitvectors) {
 }
 SolverAnswer boolean::solve(const Roots& roots, Limits limits) { return solveFinite(roots, limits, false); }
 SolverAnswer bitvector::solve(const Roots& roots, Limits limits) { return solveFinite(roots, limits, true); }
+std::optional<std::string> finiteValue(const Node& node, const TheoryModel& interpretation, Limits limits) {
+    try { return Compiler(limits, true).value(node, interpretation); }
+    catch (const Exhausted&) { return std::nullopt; }
+    catch (const Unsupported&) { return std::nullopt; }
+    catch (const std::bad_alloc&) { return std::nullopt; }
+}
 }
