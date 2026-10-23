@@ -36,7 +36,7 @@ other application families; SV/SL and SV/PA are also independent.
 | Shared SMT integer reasoning | `applications/smt/common/lia` |
 | SMT mixed linear feasibility | `applications/smt/qflira` |
 | Heap search, recursive semantics and pure-constraint translation | `applications/sv/sl` |
-| Transition frames, invariant inference and safety certificates | `applications/sv/verification` |
+| Transition frames, exact successor images, invariant inference and safety certificates | `applications/sv/verification` |
 | Native binder compilation and domain-specific elimination | `quantifiers` |
 | CRT, integer witnesses and polynomial operations | `algebra` |
 | SAT, simplex, ICP, root isolation and reusable search | `search` |
@@ -118,7 +118,7 @@ flowchart TD
     SMT --> Affine
     Opt --> Rational[Exact rational tableau and linear algebra]
     CP[CP global constraints] --> Oracle[Injected decision oracle]
-    SV[SV reachability, k-induction and invariant inference] --> Oracle
+    SV[SV symbolic fixed points, k-induction and invariant inference] --> Oracle
     DE[ODE / PDE polynomial candidates] --> Real[quantifiers/real]
     Real --> Identities[Polynomial coefficient identities]
     Identities --> Rational
@@ -136,6 +136,13 @@ strengthen safety proofs. The SL application owns heap entailments and
 least-fixed-point predicate induction; it uses the integer quantifier algorithms
 directly for pure arithmetic. Neither application delegates arbitrary formulas
 to the PA application. See [SV call flow and contracts](../src/applications/sv/README.md).
+
+Exact image construction and invariant/certificate checking share verification's
+private transition helper. SL's induction, invariant and unfolding procedures
+share definition expansion and capture avoidance in `sl/InductiveExpansion`.
+Predicate relation proofs use simultaneous least-fixed-point induction and
+structural heap rules. Every supplied certificate lemma is rechecked; candidate
+inference may discard open lemmas, certificate validation cannot.
 
 ## Capability and evidence boundaries
 

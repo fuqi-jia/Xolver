@@ -132,6 +132,30 @@ Node Transition::next(Node n) {
         substitutions[a] = b;
     return substitute(n, substitutions, memo, nodes);
 }
+Node Transition::image(Node predicate) {
+    std::map<Node, Node> replacements, memo;
+    NativeAssertions binders;
+    auto bind = [&](Node n) {
+        auto name = nodes.fresh(n->getSort())->getName();
+        auto v = nodes.make(n->getSort(), K::NT_QUANT_VAR, {}, name);
+        binders.push_back(v);
+        return v;
+    };
+    for (auto [current, following] : system_.state) {
+        replacements[current] = bind(current);
+        replacements[following] = current;
+    }
+    for (auto input : system_.inputs)
+        replacements[input] = bind(input);
+    NativeAssertions body{substitute(predicate, replacements, memo, nodes)};
+    for (auto n : system_.transition)
+        body.push_back(substitute(n, replacements, memo, nodes));
+    auto result = nodes.all(std::move(body));
+    if (binders.empty())
+        return result;
+    binders.insert(binders.begin(), result);
+    return nodes.logical(K::NT_EXISTS, std::move(binders));
+}
 Node Transition::simplePath(std::size_t depth) {
     at(nodes.boolean(true), depth);
     NativeAssertions distinct;

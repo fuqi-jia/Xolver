@@ -11,8 +11,8 @@ backend support does not restrict the shape of these contracts.
 | `counting` | Native assertions and an explicit projected tuple | Exact Bool/BV and linear integer projection; infinite-domain detection |
 | `cp` | Native constraints, variable domains and global constraints | Domains, all-different, tables, element and cardinality constraints |
 | `milp` | Rational linear constraints, integer/continuous variables, bounds and objective | Exact rational simplex and integer branch and bound |
-| `sv/verification` | Conditions and transition systems | Candidate invariant inference, bounded reachability, k-induction and certificate replay |
-| `sv/pa`, `sv/sl` | Presburger or explicit heap semantics | Integer elimination, heap entailments and recursive predicate induction |
+| `sv/verification` | Conditions and transition systems | Symbolic reachable-region synthesis, candidate invariants, k-induction and certificate replay |
+| `sv/pa`, `sv/sl` | Presburger or explicit heap semantics | Integer elimination, heap entailments and simultaneous predicate induction |
 | `de/ode`, `de/pde` | Native equations, coordinates, parameters and derivative applications | Parametric polynomial solution search with exact substitution checks |
 
 The CLI's SMT session supplies the stateful ground callback. The application

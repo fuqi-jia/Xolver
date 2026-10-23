@@ -18,6 +18,8 @@ class Transition {
     native::Node at(native::Node, std::size_t frame, bool transition = false);
     NativeAssertions at(const NativeAssertions &, std::size_t frame, bool transition = false);
     native::Node next(native::Node);
+    // Exact existential image over state and edge inputs; parameters stay free.
+    native::Node image(native::Node);
     native::Node simplePath(std::size_t depth);
 };
 } // namespace xolver::applications::sv::verification::detail

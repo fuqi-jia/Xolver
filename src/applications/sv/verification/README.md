@@ -21,6 +21,7 @@ Heap entailments use the separate SL application.
 | `InvariantSolver` | Check `I => C`, `C /\ T => C'`, and `C => P` (indices 0, 1, 2) |
 | `InferenceSolver` | Houdini elimination of candidate conjuncts; recheck survivors whenever assumptions weaken |
 | `SafetySolver` | Increasing-depth reachability, invariant strengthening, k-induction and simple-path completion |
+| `ReachabilitySolver` | Exact existential successor images and symbolic reachable-region closure |
 | `CertificateSolver` | Rebuild and solve all conditions required by a supplied safety certificate |
 
 `SafetySolver` checks `I(s0) /\ T(s0,u0,s1) /\ ... /\ !P(sk)` at increasing
@@ -29,6 +30,21 @@ with state/input frame symbols, the full path query and an optional backend mode
 A certificate is returned only if an inductive invariant implies `P`, a k-step
 induction condition holds after checking its base, or the absence of a simple
 initial path proves that the checked depths cover every reachable state.
+
+`ReachabilitySolver` accepts the same transition semantics without a candidate
+invariant. It computes `E0 = I`, `E(k+1)(x) = exists s,u. Ek(s) /\ T(s,u,x)` and
+`Rk = E0 or ... or Ek`. State and edge-input binders are fresh at every image;
+parameters remain free and immutable. A satisfiable bounded path gives a concrete
+counterexample. After all bases through `k` are checked, unsatisfiability of
+`Rk /\ T /\ !Rk'` proves safety and produces `Rk` as an inductive-invariant
+certificate for the existing `CertificateSolver`. No finite-state or rectangular
+region assumption is used. Images can contain quantifiers; the oracle determines
+which theory combinations it can decide. A closure query returning unknown does
+not stop the bounded search; depth/work/query exhaustion remains explicit.
+
+[Symbolic reachability examples](../../../../tests/unit/test_sv_reachability.cpp)
+include an infinite reachable region with arbitrarily long spurious k-induction
+paths, quantified inputs, immutable parameters, and finite graphs checked by BFS.
 
 Supplied invariants are candidates, not trusted assumptions. Inference keeps
 only candidates whose initiation and preservation queries are unsatisfiable.
@@ -63,3 +79,5 @@ The induction rules follow the standard base/step formulation described in
 [Gurfinkel and Ivrii, K-Induction without Unrolling](https://fmcad.org/FMCAD17/preprints/s6p3.pdf).
 Candidate elimination follows the Houdini approach discussed in
 [Lahiri and Vanegue, ExplainHoudini](https://www.microsoft.com/en-us/research/publication/explainhoudini-making-houdini-inference-transparent/).
+The image/fixed-point construction is described in [MIT's Symbolic Model Checking
+lecture](https://ocw.mit.edu/courses/6-820-fundamentals-of-program-analysis-fall-2015/9d27e0c54dbbd68526a2d050e8f788d6_MIT6_820F15_L24.pdf).
