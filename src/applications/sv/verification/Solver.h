@@ -18,6 +18,8 @@ struct TransitionSystem {
     NativeAssertions initial, transition;
     std::shared_ptr<SOMTParser::DAGNode> invariant, safety;
     NativeAssertions parameters;
+    // Fresh nondeterministic inputs for each transition; never state predicates.
+    NativeAssertions inputs;
 };
 enum class Status { Valid, Invalid, Unknown, InvalidInput };
 struct Answer {

@@ -47,6 +47,8 @@ if(XOLVER_BUILD_TOOLS)
     # Export original SL formulas and concrete model pins for external checking.
     add_executable(xolver_sl_cases sl_cases.cpp)
     target_link_libraries(xolver_sl_cases PRIVATE xolver_core gmpxx)
+    add_executable(xolver_sv_cases sv_cases.cpp)
+    target_link_libraries(xolver_sv_cases PRIVATE xolver_core gmpxx)
 endif()
 
 # ---------------------------------------------------------------------------

@@ -285,13 +285,16 @@ set(XOLVER_APPLICATIONS_SOURCES
     "applications/smt/qfuf/EufSolver_model.cpp"
     "applications/sv/pa/Presburger.cpp"
     "applications/sv/sl/BooleanHeap.cpp"
+    "applications/sv/sl/Entailment.cpp"
     "applications/sv/sl/NativeArithmetic.cpp"
     "applications/sv/sl/NativeInductive.cpp"
     "applications/sv/sl/NativeSeparation.cpp"
     "applications/sv/sl/NativeSpatialSearch.cpp"
     "applications/sv/sl/Solver.cpp"
     "applications/sv/sl/SymbolicHeap.cpp"
+    "applications/sv/verification/ModelChecking.cpp"
     "applications/sv/verification/Solver.cpp"
+    "applications/sv/verification/Transition.cpp"
 )
 
 set(XOLVER_RUNTIME_SOURCES

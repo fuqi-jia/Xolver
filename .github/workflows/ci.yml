@@ -77,12 +77,27 @@ jobs:
       - name: Quantified-domain algorithm tests
         if: ${{ !cancelled() && steps.test_build.outcome == 'success' }}
         timeout-minutes: 5
-        run: ./build/tests/xolver_unit_tests --test-case='quantifiers:*,application dispatch:*,theory applications:*,application prototypes:*,application foundations:*' --duration=true
+        run: ./build/tests/xolver_unit_tests --test-case='quantifiers:*,application dispatch:*,theory applications:*,application prototypes:*,application foundations:*,SV *' --duration=true
 
       - name: Unit tests (doctest)
         if: ${{ !cancelled() && steps.test_build.outcome == 'success' }}
         timeout-minutes: 30
         run: ./build/tests/xolver_unit_tests --duration=true
+
+      - name: Independent SV proof-obligation checks
+        if: ${{ !cancelled() && steps.test_build.outcome == 'success' }}
+        timeout-minutes: 5
+        run: |
+          python3 tools/fuzz/check_sv_obligations.py --generator build/tests/xolver_sv_cases \
+            --z3 /usr/bin/z3 --cvc5 .validation-oracles/cvc5 --output sv-validation
+
+      - name: Retain SV validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sv-validation
+          path: sv-validation/
+          retention-days: 7
 
       - name: Architecture and validation harness tests
         if: ${{ !cancelled() && steps.test_build.outcome == 'success' }}
