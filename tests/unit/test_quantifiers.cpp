@@ -1,5 +1,5 @@
 #include <doctest/doctest.h>
-#include "applications/smt/Solver.h"
+#include "applications/smt/FirstOrderSolver.h"
 #include "quantifiers/boolean/Diagram.h"
 #include "quantifiers/FiniteFormula.h"
 #include "quantifiers/bitvector/Circuit.h"
@@ -10,8 +10,7 @@ namespace {
 SolverAnswer quantified(const std::string& text, quantifiers::Limits limits = {}) {
     SOMTParser::Parser parser;
     if (!parser.parseStr("(set-logic ALL)" + text)) throw std::runtime_error("quantifier test input did not parse");
-    applications::smt::Solver solver({});
-    return solver.solve({parser.getAssertions(), {}, {}, limits});
+    return applications::smt::solveFirstOrder(parser.getAssertions(), {}, {}, limits);
 }
 void cases(const std::vector<std::pair<std::string, Result>>& inputs) {
     for (const auto& [formula, expected] : inputs) {

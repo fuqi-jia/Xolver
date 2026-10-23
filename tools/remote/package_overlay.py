@@ -13,10 +13,12 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("output", type=Path)
     p.add_argument("--since", type=Path)
+    p.add_argument("--base", default="HEAD", help="source revision already present on the server")
     args = p.parse_args()
+    base = subprocess.check_output(["git", "rev-parse", "--verify", args.base + "^{commit}"]).decode().strip()
     before = json.loads(args.since.read_text())["files"] if args.since else {}
     names = set()
-    for command in (["git", "diff", "--name-only", "-z"],
+    for command in (["git", "diff", base, "--name-only", "-z"],
                     ["git", "ls-files", "--others", "--exclude-standard", "-z"]):
         names.update(subprocess.check_output(command).decode().split("\0"))
     # A previous overlay can contain a file since restored to HEAD. Include
@@ -35,20 +37,20 @@ def main():
     # reach the server too. A source-move list alone misses retired tests and
     # helpers, leaving stale code in recursive builds.
     deleted = set(filter(None, subprocess.check_output([
-        "git", "diff", "--name-only", "--diff-filter=D", "-z"
+        "git", "diff", base, "--name-only", "--diff-filter=D", "-z"
     ]).decode().split("\0")))
     deleted.update(name for name in before if not Path(name).exists())
     for name in sorted(deleted):
         if name.startswith("docs/audit/evidence/") or any(name.startswith(p) for p in module_roots):
             continue
         removed[name] = before.get(name) or move_preimages.get(name) or hashlib.sha256(
-            subprocess.check_output(["git", "show", "HEAD:" + name])).hexdigest()
+            subprocess.check_output(["git", "show", base + ":" + name])).hexdigest()
     for line in module_states:
         revision, directory, *_ = line.strip(" +-U").split()
         submodules[directory] = revision
         # The dependency can now contain committed upstream/PR changes. Diff
         # against the superproject's pin, not just its dirty working tree.
-        pinned = subprocess.check_output(["git", "rev-parse", "HEAD:" + directory]).decode().strip()
+        pinned = subprocess.check_output(["git", "rev-parse", base + ":" + directory]).decode().strip()
         for command in (["git", "-C", directory, "diff", pinned, "--name-only", "-z"],
                         ["git", "-C", directory, "ls-files", "--others", "--exclude-standard", "-z"]):
             names.update(directory + "/" + n for n in subprocess.check_output(command).decode().split("\0") if n)
@@ -79,7 +81,7 @@ def main():
         entry = tarfile.TarInfo(".xolver-overlay.json")
         entry.size = len(metadata)
         archive.addfile(entry, io.BytesIO(metadata))
-    record = {"base": subprocess.check_output(["git", "rev-parse", "HEAD"]).decode().strip(),
+    record = {"base": base, "head": subprocess.check_output(["git", "rev-parse", "HEAD"]).decode().strip(),
               "archive_sha256": hashlib.sha256(args.output.read_bytes()).hexdigest(),
               "delta_from": str(args.since) if args.since else None,
               "members": changed, "files": hashes, "removed": removed,

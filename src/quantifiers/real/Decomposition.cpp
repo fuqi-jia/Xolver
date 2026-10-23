@@ -147,6 +147,11 @@ class Decomposition {
         for (auto id : byLevel_.at(level)) {
             resources_.tick();
             const auto& polynomial = polynomials_.at(id);
+            const auto dimension = static_cast<std::size_t>(polynomial.degree(variable)) + 1;
+            resources_.nodes(dimension);
+            if (dimension > std::numeric_limits<std::size_t>::max() / dimension)
+                throw Exhausted("real root computation exceeds addressable work budget");
+            resources_.tick(dimension * dimension);
             bool nullified = true;
             for (const auto& coefficient : polynomial.coefficients(variable))
                 if (sign(coefficient) != Sign::Zero) nullified = false;

@@ -1,6 +1,6 @@
 #pragma once
 #include "algebra/poly/RationalPolynomial.h"
-#include "quantifiers/FiniteFormula.h"
+#include "quantifiers/real/Solver.h"
 #include <string>
 #include <vector>
 
