@@ -74,7 +74,7 @@ TEST_CASE("application dispatch: independent applications share the typed abstra
     static_assert(std::is_base_of_v<applications::Solver, applications::smt::Solver>);
     static_assert(std::is_base_of_v<applications::Solver, pa::Solver>);
     static_assert(std::is_base_of_v<applications::Solver, sl::Solver>);
-    static_assert(std::is_base_of_v<applications::Solver, Optimize>);
+    static_assert(std::is_base_of_v<applications::Solver, applications::omt::Solver>);
     pa::Solver integer;
     applications::TypedSolver<pa::Problem, pa::Decision>& typed = integer;
     SOMTParser::Parser parser;

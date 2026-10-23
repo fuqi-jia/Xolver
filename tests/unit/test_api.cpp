@@ -9,6 +9,26 @@
 
 using namespace xolver;
 
+TEST_CASE("API: automatic UF arithmetic selection is scoped to the query") {
+    auto path = std::filesystem::temp_directory_path() / "xolver_auto_uf_arithmetic.smt2";
+    {
+        std::ofstream out(path);
+        out << "(set-logic ALL)(declare-fun f (Int) Int)(assert (= (f 2) 4))(check-sat)";
+    }
+    Solver solver;
+    REQUIRE(solver.parseFile(path.string()));
+    for (int repeat = 0; repeat < 2; ++repeat) {
+        auto result = solver.checkSat();
+        INFO(solver.lastUnknownReason());
+        REQUIRE((result == Result::Sat));
+        CHECK((solver.validateModel() == Solver::ModelValidation::Satisfied));
+        std::ostringstream features;
+        solver.dumpFeatures(features);
+        CHECK(features.str().find("\"logic\":\"ALL\"") != std::string::npos);
+    }
+    std::filesystem::remove(path);
+}
+
 // #12.a: the sequential-command foundation. parseFile must retain the script's
 // response/control commands (echo / check-sat / get-value / get-info) in source
 // order, while the bulk set-logic/declare/assert commands are NOT logged (so the

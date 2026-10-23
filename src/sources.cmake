@@ -29,6 +29,7 @@ set(XOLVER_ALGEBRA_SOURCES
     "algebra/interval/ReasonedBoxQ.cpp"
     "algebra/linear/LinearConstraintNormalizer.cpp"
     "algebra/linear/LinearExpr.cpp"
+    "algebra/linear/RationalSystem.cpp"
     "algebra/poly/LibPolyKernel.cpp"
     "algebra/poly/PolynomialConstraint.cpp"
     "algebra/poly/PolynomialConverter.cpp"
@@ -231,17 +232,24 @@ set(XOLVER_QUANTIFIERS_SOURCES
 )
 
 set(XOLVER_APPLICATIONS_SOURCES
+    "applications/counting/Solver.cpp"
+    "applications/cp/Solver.cpp"
+    "applications/de/Solver.cpp"
+    "applications/milp/Solver.cpp"
     "applications/omt/Optimize.cpp"
     "applications/smt/FirstOrderSolver.cpp"
+    "applications/smt/LogicSolver.cpp"
     "applications/smt/Solver.cpp"
     "applications/smt/SolverRegistry.cpp"
     "applications/smt/TheoryFactory.cpp"
+    "applications/smt/common/finite/Solver.cpp"
     "applications/smt/common/lia/LiaSolver.cpp"
     "applications/smt/common/lia/LiaSolver_combination.cpp"
     "applications/smt/common/lia/LiaSolver_entailment.cpp"
     "applications/smt/common/lia/LiaSolver_integrality.cpp"
     "applications/smt/common/lia/LiaSolver_model.cpp"
     "applications/smt/lia/Solver.cpp"
+    "applications/smt/qffp/Engine.cpp"
     "applications/smt/qfidl/IdlSolver.cpp"
     "applications/smt/qflia/Builder.cpp"
     "applications/smt/qflira/InternalMilpEngine.cpp"
@@ -262,6 +270,7 @@ set(XOLVER_APPLICATIONS_SOURCES
     "applications/smt/qfnra/NraSolver_cac.cpp"
     "applications/smt/qfnra/NraSolver_stages.cpp"
     "applications/smt/qfrdl/RdlSolver.cpp"
+    "applications/smt/qfs/Engine.cpp"
     "applications/smt/qfuf/EufSolver.cpp"
     "applications/smt/qfuf/EufSolver_array.cpp"
     "applications/smt/qfuf/EufSolver_check.cpp"
@@ -275,6 +284,7 @@ set(XOLVER_APPLICATIONS_SOURCES
     "applications/sv/sl/NativeSpatialSearch.cpp"
     "applications/sv/sl/Solver.cpp"
     "applications/sv/sl/SymbolicHeap.cpp"
+    "applications/sv/verification/Solver.cpp"
 )
 
 set(XOLVER_RUNTIME_SOURCES

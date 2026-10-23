@@ -1,6 +1,6 @@
 # Xolver
 
-Xolver is an SMT solver for quantifier-free nonlinear arithmetic and its combinations with uninterpreted functions, arrays, and algebraic datatypes. Dedicated native algorithms handle quantified Boolean, fixed-width bit-vector, Presburger and polynomial real arithmetic formulas. Separation logic has an independent heap semantics and solver entry. A CaDiCaL-driven CDCL(T) core orchestrates theory solvers that reason over exact rational (GMP/MPFR) and real-algebraic (libpoly) arithmetic, with no floating point on the decision path. Incomplete reasoning yields `unknown` rather than an unsound verdict.
+Xolver is an SMT solver for quantifier-free nonlinear arithmetic and its combinations with uninterpreted functions, arrays, and algebraic datatypes. Dedicated native algorithms handle quantified Boolean, fixed-width bit-vector, Presburger and polynomial real arithmetic formulas. Separation logic has an independent heap semantics and solver entry. A CaDiCaL-driven CDCL(T) core orchestrates theory solvers that reason over exact rational (GMP/MPFR) and real-algebraic (libpoly) arithmetic, for conclusive arithmetic results. Incomplete reasoning yields `unknown` rather than an unsound verdict.
 
 At SMT-COMP 2026, Xolver competed as a Standalone Solver and received two awards: **Single Query Track Largest Contribution — UNSAT Performance Winner** and **QF_NIRA Winner**.
 
@@ -16,12 +16,16 @@ At SMT-COMP 2026, Xolver competed as a Standalone Solver and received two awards
 | Nonlinear             | `QF_NRA`, `QF_NIA`, `QF_NIRA`                                                   |
 | UF + arithmetic       | `QF_UFLRA`, `QF_UFLIA`, `QF_UFNRA`, `QF_UFNIA`                                  |
 | Arrays                | `QF_AX`, `QF_ALIA`, `QF_ALRA`, `QF_AUFLIA`, `QF_AUFLRA`, `QF_ANIA`, `QF_AUFNIA` |
+| Bit-vectors           | `QF_BV`, `BV`, finite `QF_UFBV`, `QF_ABV`, `QF_AUFBV` combinations |
+| Native FP / strings    | Partial `QF_FP`, `QF_BVFP`, `QF_S`, `QF_SLIA`; see capability table below |
 | Datatypes             | `QF_DT`, `QF_UFDT`, `QF_UFDTNIA`                                                |
 
 Quantified algorithms accept arbitrary binder alternation within their supported
 signatures: Boolean formulas (QBF), fixed-width bit-vectors (QBV), Presburger
 integer arithmetic (`LIA`), and polynomial real arithmetic (`LRA`, `NRA`).
-Ground bit-vector formulas use the finite-domain backend. See the
+Ground bit-vector formulas and finite UF/array combinations use native encodings.
+FP predicates and Unicode string operations have native backends with explicit
+limits; see the [SMT entry contracts](src/applications/smt/README.md) and the
 [operator and resource boundaries](src/quantifiers/README.md).
 
 ---
@@ -45,9 +49,10 @@ The [architecture and call-flow diagrams](docs/ARCHITECTURE.md) describe applica
 selection, quantifier algorithms and reusable search infrastructure.
 `applications/Solver.h` provides the abstract identity and typed `solve` interface.
 Each application owns its input and result semantics; SMT and SV applications
-are independent. CP, MILP optimization, counting, ODE and PDE are reserved
-application interfaces with no solver implementation. OMT exposes an API but
-has no objective-search algorithm.
+are independent. OMT, projected counting, CP, MILP, verification conditions,
+ODE and PDE have typed problem/result contracts and executable backends.
+[Application contracts](src/applications/README.md) distinguish general interfaces
+from the capabilities of the available algorithms.
 
 SOMTParser's DAG is the shared formula representation. `NativeTerms` provides
 handles, scopes, metadata and ground-term construction. Quantifier and SL

@@ -12,7 +12,15 @@ struct NativeFeatures {
     bool real = false;
     bool integer = false;
     bool integerVariable = false;
+    // Nonliteral values include UF results and casts, not only free variables.
+    bool integerValue = false;
+    bool realValue = false;
     bool bitvector = false;
+    bool floatingPoint = false;
+    bool strings = false;
+    bool arrays = false;
+    bool finiteArray = false;
+    bool collections = false;
     bool otherSort = false;
     bool function = false;
 };

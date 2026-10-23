@@ -95,4 +95,24 @@ bool Diagram::evaluate(Id root, const std::vector<bool>& values) const {
     }
     return root == True;
 }
+mpz_class Diagram::count(Id root, std::vector<Variable> variables) {
+    std::sort(variables.begin(),variables.end());
+    if(std::adjacent_find(variables.begin(),variables.end())!=variables.end())
+        throw Unsupported("count projection contains duplicate Boolean variables");
+    resources.tick(variables.size());
+    std::map<std::pair<Id,std::size_t>,mpz_class> memo;
+    std::function<mpz_class(Id,std::size_t)> visit=[&](Id id,std::size_t start)->mpz_class {
+        Resources::Frame frame(resources);
+        if(id==False)return 0;
+        if(id==True)return mpz_class(1)<<(variables.size()-start);
+        const auto key=std::pair{id,start};if(auto it=memo.find(key);it!=memo.end())return it->second;
+        const auto node=nodes_.at(id);
+        auto pos=std::lower_bound(variables.begin()+start,variables.end(),node.variable);
+        if(pos==variables.end() || *pos!=node.variable)throw Unsupported("count formula contains an unprojected variable");
+        const auto rank=std::size_t(pos-variables.begin());
+        mpz_class count=visit(node.low,rank+1)+visit(node.high,rank+1);
+        count<<=rank-start;memo[key]=count;return count;
+    };
+    return visit(root,0);
+}
 }

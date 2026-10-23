@@ -4,6 +4,7 @@
 #include <map>
 #include <tuple>
 #include <vector>
+#include <gmpxx.h>
 
 namespace xolver::quantifiers::boolean {
 // Reduced ordered BDDs. IDs 0 and 1 denote false and true; variables are ordered
@@ -26,6 +27,7 @@ public:
     Id eliminate(Id root, const std::vector<Variable>& variables, bool universal);
     std::vector<bool> witness(Id root) const;
     bool evaluate(Id root, const std::vector<bool>& values) const;
+    mpz_class count(Id root, std::vector<Variable> variables);
     std::size_t size() const { return nodes_.size(); }
     Resources& resources;
 private:

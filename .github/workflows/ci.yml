@@ -42,23 +42,55 @@ jobs:
       # -j2 keeps peak compiler memory bounded — Solver.cpp / NiaSolver.cpp are
       # large -O3 translation units. Bump once the build is split / a runner with
       # more RAM is used.
-      - name: Build
+      - name: Build CLI
+        id: cli_build
+        run: cmake --build build -j2 --target xolver-cli
+
+      - name: Retain executable for failure reproduction
+        uses: actions/upload-artifact@v4
+        with:
+          name: xolver-cli
+          path: build/bin/xolver
+          retention-days: 1
+
+      - name: Native-theory differential and model checks
+        timeout-minutes: 12
+        run: |
+          bash tools/ci/install_dependencies.sh z3 cvc5
+          python3 tools/fuzz/fuzz_theory_applications.py --solver build/bin/xolver \
+            --output theory-validation --count 32 --timeout 10
+
+      - name: Retain native-theory validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: theory-validation
+          path: theory-validation/
+          retention-days: 7
+
+      - name: Build test targets
+        id: test_build
+        if: ${{ !cancelled() && steps.cli_build.outcome == 'success' }}
         run: cmake --build build -j2
 
       - name: Quantified-domain algorithm tests
+        if: ${{ !cancelled() && steps.test_build.outcome == 'success' }}
         timeout-minutes: 5
-        run: ./build/tests/xolver_unit_tests --test-case='quantifiers:*,application dispatch:*' --duration=true
+        run: ./build/tests/xolver_unit_tests --test-case='quantifiers:*,application dispatch:*,theory applications:*,application prototypes:*' --duration=true
 
       - name: Unit tests (doctest)
+        if: ${{ !cancelled() && steps.test_build.outcome == 'success' }}
         timeout-minutes: 30
         run: ./build/tests/xolver_unit_tests --duration=true
 
       - name: Architecture and validation harness tests
+        if: ${{ !cancelled() && steps.test_build.outcome == 'success' }}
         run: ctest --test-dir build --output-on-failure -R '^(architecture|standalone-evidence|regression-harness)$'
 
       # Each regression has its own deadline; a timeout remains a failure.
       # Keep the longer allowance for the MetiTarski polynomial instances.
       - name: Regression suite (xolver vs embedded :status)
+        if: ${{ !cancelled() && steps.cli_build.outcome == 'success' }}
         run: |
           python3 tools/regression/run_regression.py \
             --root tests/regression \
@@ -67,6 +99,7 @@ jobs:
             -j "$(nproc)"
 
       - name: Quantified-domain differential checks
+        if: ${{ !cancelled() && steps.cli_build.outcome == 'success' }}
         timeout-minutes: 12
         run: |
           bash tools/ci/install_dependencies.sh z3 cvc5

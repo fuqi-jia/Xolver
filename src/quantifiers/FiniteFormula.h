@@ -13,4 +13,19 @@ namespace bitvector { SolverAnswer solve(const Roots&, Limits = {}); }
 // Unmentioned finite symbols use zero/false, matching model completion.
 std::optional<std::string> finiteValue(const std::shared_ptr<SOMTParser::DAGNode>&,
                                      const TheoryModel&, Limits = {});
+struct FiniteObjective {
+    std::shared_ptr<SOMTParser::DAGNode> term;
+    bool maximize = false;
+    bool signedOrder = false;
+};
+struct FiniteAnalysis {
+    SolverAnswer answer;
+    std::optional<mpz_class> count;
+    std::vector<mpz_class> objectives;
+};
+// Projection is explicit: an empty projection counts satisfiable formulas as
+// one. Hidden free symbols are existentially abstracted. Objectives use exact
+// lexicographic optimization over finite values; they do not count functions.
+FiniteAnalysis analyzeFinite(const Roots&, const std::optional<Roots>& projection,
+                             const std::vector<FiniteObjective>&, Limits = {});
 }
