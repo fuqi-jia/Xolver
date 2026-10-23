@@ -32,3 +32,16 @@ formula representations do not belong in an `applications/common` folder.
 
 See [architecture and query flow](../../docs/ARCHITECTURE.md) and the README in
 each application for capability and evidence limits.
+
+[Executable C++ examples](../../tests/unit/test_application_prototypes.cpp) cover
+all application families, including projected counts, lexicographic objectives,
+mixed integer/continuous constraints, verification conditions and initial/boundary
+data for differential equations. Run them with:
+
+```sh
+./build/tests/xolver_unit_tests --test-case='application prototypes:*'
+```
+
+The [SMT theory examples](../../tests/unit/test_theory_applications.cpp) and
+[external model validation](../../tools/fuzz/fuzz_theory_applications.py) exercise
+native parsing, theory combinations and serialized interpretations.

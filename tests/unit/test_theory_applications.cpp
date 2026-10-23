@@ -79,3 +79,28 @@ TEST_CASE("theory applications: Unicode strings, regex and arithmetic") {
         Result::Unsat);
     check(R"((declare-const s String)(assert (= (str.len s) 1000)))", Result::Unknown);
 }
+TEST_CASE("theory applications: compound sorts cannot hide unsupported finite domains") {
+    for (const auto &source :
+         {"(declare-const a (Array Bool RoundingMode))(declare-const b (Array Bool "
+          "RoundingMode))(assert (distinct a b))",
+          "(declare-datatype Box ((box (value (_ FloatingPoint 2 3)))))"
+          "(declare-const a Box)(declare-const b Box)(assert (distinct a b))",
+          "(declare-datatype Box ((box (value (_ BitVec 2)))))"
+          "(declare-const a Box)(declare-const b Box)(assert (distinct a b))"}) {
+        SOMTParser::Parser parser;
+        preserveNativeTheories(*parser.getOptions());
+        REQUIRE(parser.parseStr(std::string("(set-logic ALL)") + source));
+        bool groundCalled = false;
+        applications::smt::Solver solver([&](const applications::smt::Problem &) {
+            groundCalled = true;
+            SolverAnswer result;
+            result.result = Result::Sat;
+            return result;
+        });
+        auto result = solver.solve({parser.getAssertions(), {}, {}, {}});
+        INFO(source);
+        CHECK_FALSE(groundCalled);
+        CHECK(result.result == Result::Unknown);
+        CHECK_FALSE(result.reason.empty());
+    }
+}

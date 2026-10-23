@@ -8,6 +8,7 @@ NativeFeatures nativeFeatures(const std::vector<SOMTParser::Node> &roots) {
     NativeFeatures features;
     auto work = roots;
     std::unordered_set<SOMTParser::Node> visited;
+    std::unordered_set<std::shared_ptr<SOMTParser::Sort>> visitedSorts;
     while (!work.empty()) {
         auto node = std::move(work.back());
         work.pop_back();
@@ -31,23 +32,24 @@ NativeFeatures nativeFeatures(const std::vector<SOMTParser::Node> &roots) {
             }
             features.collections |=
                 sort->isSet() || sort->isBag() || sort->isSeq() || sort->isRelation();
-            // A BV domain can be present only in an array signature (e.g. a=b).
-            // Such formulas must not enter an infinite-domain array abstraction.
+            // Finite domains can occur only in a compound sort signature.
+            // Those formulas must not enter an infinite-domain abstraction.
             std::vector<std::shared_ptr<SOMTParser::Sort>> sorts{sort};
-            std::unordered_set<std::shared_ptr<SOMTParser::Sort>> seenSorts;
             while (!sorts.empty()) {
                 auto s = sorts.back();
                 sorts.pop_back();
-                if (!s || !seenSorts.insert(s).second)
+                if (!s || !visitedSorts.insert(s).second)
                     continue;
                 features.bitvector |= s->isBv();
-                features.floatingPoint |= s->isFp();
+                features.floatingPoint |= s->isFp() || s->isRoundingMode();
                 features.strings |= s->isStr();
                 features.collections |= s->isSet() || s->isBag() || s->isSeq() || s->isRelation();
-                if (s->isArray()) {
-                    sorts.push_back(s->getIndexSort());
-                    sorts.push_back(s->getElemSort());
-                }
+                for (const auto &child : s->children)
+                    sorts.push_back(child);
+                if (s->dt_constructors)
+                    for (const auto &constructor : *s->dt_constructors)
+                        for (const auto &selector : constructor.selectors)
+                            sorts.push_back(selector.sort);
             }
             features.otherSort |= !sort->isBool() && !sort->isInt() && !sort->isIntOrReal() &&
                                   !sort->isReal() && !sort->isBv();

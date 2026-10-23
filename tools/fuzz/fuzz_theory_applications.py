@@ -146,7 +146,8 @@ def cases(seed, count):
         yield f'regex-{i}', (f'(declare-const s String)(assert (= s {string(a)}))'
                              '(assert (str.in_re s (re.* (re.union (str.to_re "a")'
                              ' (str.to_re "b")))))'), all(c in 'ab' for c in a)
-    yield 'free-fp', '(declare-const x (_ FloatingPoint 8 24))(assert (fp.isSubnormal x))', True
+    yield 'free-fp', ('(declare-const x (_ FloatingPoint 8 24))(declare-const unused RoundingMode)'
+                      '(assert (fp.isSubnormal x))'), True
     yield 'free-string', '(declare-const s String)(assert (str.contains s "abc"))', True
     yield 'free-array', ('(declare-const a (Array (_ BitVec 2) (_ BitVec 3)))'
                          '(assert (= (select a #b00) #b101))(assert (= (select a #b11) #b011))'), True

@@ -1785,10 +1785,12 @@ std::string Solver::getValueResponse(size_t scriptIndex) const {
             if (!value) return {};
             val = *value;
         } else if (t->getKind() == SOMTParser::NODE_KIND::NT_VAR && t->getSort() &&
-                   (t->getSort()->isFp() || t->getSort()->isStr())) {
+                   (t->getSort()->isFp() || t->getSort()->isStr() || t->getSort()->isRoundingMode())) {
             const auto found = model.assignments.find(t->getName());
             if (found != model.assignments.end() && found->second.starts_with("#smt:")) val = found->second.substr(5);
+            else if (found != model.assignments.end()) return {};
             else if (t->getSort()->isStr()) val = "\"\"";
+            else if (t->getSort()->isRoundingMode()) val = "RNE";
             else val = "(_ +zero " + std::to_string(t->getSort()->getExponentWidth()) + " " +
                        std::to_string(t->getSort()->getSignificandWidth()) + ")";
         } else if (t->isVInt() || t->isVReal()) {
@@ -2004,6 +2006,7 @@ void Solver::dumpModel(std::ostream& os) const {
     unconstrainedValue = [&](const std::shared_ptr<SOMTParser::Sort>& sort) -> std::string {
         if (sort->isBv()) return "(_ bv0 " + std::to_string(sort->getBitWidth()) + ")";
         if (sort->isStr()) return "\"\"";
+        if (sort->isRoundingMode()) return "RNE";
         if (sort->isFp()) return "(_ +zero " + std::to_string(sort->getExponentWidth()) + " " +
                                   std::to_string(sort->getSignificandWidth()) + ")";
         if (sort->isArray())
@@ -2077,7 +2080,7 @@ void Solver::dumpModel(std::ostream& os) const {
                           << ")\n";
                 continue;
             }
-            if (var->getSort() && (var->getSort()->isFp() || var->getSort()->isStr())) {
+            if (var->getSort() && (var->getSort()->isFp() || var->getSort()->isStr() || var->getSort()->isRoundingMode())) {
                 if (!raw.empty() && !raw.starts_with("#smt:")) { os << "(error \"invalid native model literal\")\n"; return; }
                 scalarBuf << "  (define-fun " << name << " () " << smtSort << " "
                           << (raw.empty() ? unconstrainedValue(var->getSort()) : raw.substr(5)) << ")\n";

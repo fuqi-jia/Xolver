@@ -8,6 +8,7 @@
 #include "applications/smt/qfbv/Solver.h"
 #include "applications/sv/verification/Solver.h"
 #include "ir/NativeBuilder.h"
+#include "quantifiers/FiniteFormula.h"
 #include <doctest/doctest.h>
 #include <somtparser/frontend/parser.h>
 
@@ -62,6 +63,54 @@ TEST_CASE("application prototypes: lexicographic bit-vector optimization") {
     CHECK((signedAnswer.objectiveValues[0] == RealValue::fromInt(-8)));
     applications::smt::qfbv::Solver satisfiable;
     CHECK((satisfiable.solve({p.getAssertions(), {}, {}, {}}).result == Result::Sat));
+}
+TEST_CASE("application prototypes: counts and optima agree with exhaustive assignments") {
+    native::Nodes nodes({});
+    auto sort = nodes.bvSort(3);
+    auto x = nodes.make(sort, native::K::NT_VAR, {}, "x");
+    auto y = nodes.make(sort, native::K::NT_VAR, {}, "y");
+    auto sum = nodes.make(sort, native::K::NT_BV_ADD, {x, y});
+    applications::counting::Solver counter;
+    applications::omt::Solver optimizer;
+    for (int target = 0; target < 8; ++target) {
+        INFO(target);
+        auto constraint = nodes.all({nodes.equal(sum, nodes.bv(target, 3)),
+                                     nodes.logical(native::K::NT_BV_ULT, {y, nodes.bv(5, 3)})});
+        int count = 0, minimumSignedX = 8, minimumY = 8;
+        for (int a = 0; a < 8; ++a)
+            for (int b = 0; b < 5; ++b)
+                if ((a + b) % 8 == target) {
+                    ++count;
+                    const int signedX = a < 4 ? a : a - 8;
+                    if (signedX < minimumSignedX || (signedX == minimumSignedX && b < minimumY)) {
+                        minimumSignedX = signedX;
+                        minimumY = b;
+                    }
+                }
+        auto cardinality = counter.solve({{constraint}, {x, y}, {}});
+        REQUIRE(cardinality.status == applications::counting::Status::Exact);
+        CHECK(cardinality.count == count);
+        auto projected = counter.solve({{constraint}, {x}, {}});
+        REQUIRE(projected.status == applications::counting::Status::Exact);
+        CHECK(projected.count == count); // Each x has exactly one possible y.
+        using namespace applications::omt;
+        auto optimum = optimizer.solve({{constraint},
+                                        {{x, Direction::Minimize, Order::SignedBitVector},
+                                         {y, Direction::Minimize, Order::UnsignedBitVector}},
+                                        Priority::Lexicographic,
+                                        {}});
+        INFO(optimum.reason);
+        REQUIRE(optimum.status == Status::Optimal);
+        REQUIRE(optimum.objectiveValues.size() == 2);
+        CHECK(optimum.objectiveValues[0] == RealValue::fromInt(minimumSignedX));
+        CHECK(optimum.objectiveValues[1] == RealValue::fromInt(minimumY));
+        REQUIRE(optimum.model);
+        CHECK(quantifiers::finiteValue(constraint, *optimum.model) == "true");
+        CHECK(quantifiers::finiteValue(x, *optimum.model) ==
+              "(_ bv" + std::to_string((minimumSignedX + 8) % 8) + " 3)");
+        CHECK(quantifiers::finiteValue(y, *optimum.model) ==
+              "(_ bv" + std::to_string(minimumY) + " 3)");
+    }
 }
 TEST_CASE("application prototypes: CP domains and verification conditions") {
     native::Nodes b({});
