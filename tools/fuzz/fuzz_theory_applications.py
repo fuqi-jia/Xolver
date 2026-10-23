@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import random
 import shutil
+import subprocess
 import sys
 
 from fuzz_quantifiers import invoke
@@ -188,6 +189,11 @@ def main():
         for engine, result in results.items():
             if result['verdict'] != expected:
                 failures.append(dict(case=name, engine=engine, expected=expected, actual=result['verdict']))
+        if results['xolver']['verdict'] == 'unknown':
+            diagnostic = subprocess.run(commands['xolver'] + [str(source), '--features'],
+                                        capture_output=True, text=True, timeout=args.timeout)
+            row['features'] = dict(stdout=diagnostic.stdout, stderr=diagnostic.stderr,
+                                   returncode=diagnostic.returncode)
         if results['xolver']['verdict'] == 'sat':
             query = args.output / (name + '-model.smt2')
             query.write_text(prefix + '(check-sat)(get-model)\n')
