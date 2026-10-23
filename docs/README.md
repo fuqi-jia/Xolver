@@ -17,6 +17,10 @@ hashes, measurements and unresolved issues describe the recorded revisions.
 Proof research and phase plans under `proof/` are design evidence; executable
 proof behavior is documented in the proof tooling reference above.
 
+The campaign rules, NIA investigations, elimination studies and roadmaps in this
+directory are research records. Their measurements and plans apply to the
+revisions named in each document, rather than the current capability contract.
+
 Current feature documentation describes the checked-out version's capabilities,
 interfaces and limits. Change narratives belong in commits and pull requests;
 validation provenance belongs in the run records.

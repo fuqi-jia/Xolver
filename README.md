@@ -86,7 +86,7 @@ CLI at `build/bin/xolver`. CMake options: `XOLVER_BUILD_TESTS`, `XOLVER_BUILD_TO
 ## Testing
 
 ```bash
-cd build && ctest                          # unit + per-logic regression
+ctest --test-dir build                     # unit + per-logic regression
 ./build/tests/xolver_unit_tests            # unit only
 python3 tools/regression/run_regression.py --root tests/regression --solver build/bin/xolver
 ```
