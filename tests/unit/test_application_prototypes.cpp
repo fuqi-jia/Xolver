@@ -89,10 +89,10 @@ TEST_CASE("application prototypes: counts and optima agree with exhaustive assig
                 }
         auto cardinality = counter.solve({{constraint}, {x, y}, {}});
         REQUIRE(cardinality.status == applications::counting::Status::Exact);
-        CHECK(cardinality.count == count);
+        CHECK((cardinality.count == count));
         auto projected = counter.solve({{constraint}, {x}, {}});
         REQUIRE(projected.status == applications::counting::Status::Exact);
-        CHECK(projected.count == count); // Each x has exactly one possible y.
+        CHECK((projected.count == count)); // Each x has exactly one possible y.
         using namespace applications::omt;
         auto optimum = optimizer.solve({{constraint},
                                         {{x, Direction::Minimize, Order::SignedBitVector},

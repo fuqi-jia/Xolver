@@ -21,6 +21,9 @@ NativeFeatures nativeFeatures(const std::vector<SOMTParser::Node> &roots) {
             features.integerVariable |=
                 (sort->isInt() || sort->isIntOrReal()) &&
                 (node->getKind() == K::NT_VAR || node->getKind() == K::NT_QUANT_VAR);
+            features.integerValue |=
+                (sort->isInt() || sort->isIntOrReal()) && node->getKind() != K::NT_CONST;
+            features.realValue |= sort->isReal() && node->getKind() != K::NT_CONST;
             features.bitvector |= sort->isBv();
             features.floatingPoint |= sort->isFp() || sort->isRoundingMode();
             features.strings |= sort->isStr() || sort->isReg();

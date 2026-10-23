@@ -100,7 +100,7 @@ TEST_CASE("theory applications: compound sorts cannot hide unsupported finite do
         auto result = solver.solve({parser.getAssertions(), {}, {}, {}});
         INFO(source);
         CHECK_FALSE(groundCalled);
-        CHECK(result.result == Result::Unknown);
+        CHECK((result.result == Result::Unknown));
         CHECK_FALSE(result.reason.empty());
     }
 }

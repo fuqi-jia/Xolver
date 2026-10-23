@@ -150,6 +150,7 @@ def cases(seed, count):
     yield 'free-fp', ('(declare-const x (_ FloatingPoint 8 24))(declare-const unused RoundingMode)'
                       '(assert (fp.isSubnormal x))'), True
     yield 'free-string', '(declare-const s String)(assert (str.contains s "abc"))', True
+    yield 'empty-string', '(declare-const s String)(assert (= (str.len s) 0))', True
     yield 'free-array', ('(declare-const a (Array (_ BitVec 2) (_ BitVec 3)))'
                          '(assert (= (select a #b00) #b101))(assert (= (select a #b11) #b011))'), True
     yield 'free-uf', ('(declare-fun f ((_ BitVec 3)) (_ BitVec 3))'
@@ -158,6 +159,10 @@ def cases(seed, count):
                         '(assert (select a true))(assert (not (select a false)))'), True
     yield 'constant-integer-uf', ('(declare-fun f (Int) Int)'
                                  '(assert (= (f 2) 4))'), True
+    yield 'constant-integer-uf-conflict', ('(declare-fun f (Int) Int)'
+                                          '(assert (= (f 2) 4))(assert (= (f 2) 5))'), False
+    yield 'constant-real-uf', ('(declare-fun f (Real) Real)'
+                               '(assert (= (f 2.0) (/ 1.0 2.0)))'), True
 
 
 def main():
@@ -182,7 +187,9 @@ def main():
         prefix = '(set-logic ALL)\n(set-option :produce-models true)\n' + body + '\n'
         source = args.output / (name + '.smt2')
         source.write_text(prefix + '(check-sat)\n')
-        results = {engine: invoke(command, source, args.timeout) for engine, command in commands.items()}
+        results = {engine: invoke(command, source, args.timeout,
+                                  ('--verbose',) if engine == 'xolver' else ())
+                   for engine, command in commands.items()}
         row = dict(case=name, expected=expected, sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
                    engines=results)
         total += 1
@@ -197,7 +204,7 @@ def main():
         if results['xolver']['verdict'] == 'sat':
             query = args.output / (name + '-model.smt2')
             query.write_text(prefix + '(check-sat)(get-model)\n')
-            candidate = invoke(commands['xolver'], query, args.timeout)
+            candidate = invoke(commands['xolver'], query, args.timeout, ('--verbose',))
             row['model'] = candidate
             try:
                 if candidate['verdict'] != 'sat':

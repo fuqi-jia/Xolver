@@ -97,7 +97,7 @@ class Engine {
     Nodes b;
     NativeAssertions roots, atoms;
     std::vector<Node> vars;
-    std::map<Node, Text> assignment, forced;
+    std::map<Node, Text> assignment;
     std::set<Text> literals;
     std::map<Node, Node> cache;
     bool equalityOnly = true;
@@ -401,9 +401,8 @@ class Engine {
                         }
                     }
         }
-        forced = assignment;
         auto candidates = literals;
-        candidates.insert({});
+        candidates.insert(Text{});
         candidates.insert(U"a");
         for (std::size_t i = 0, added = 0; added < vars.size(); ++i) {
             auto s = std::string("@") + std::to_string(i);

@@ -82,10 +82,11 @@ def cases(seed, count):
             yield f'real-tower-{i}', quantify(body, [('x', 'Real'), ('y', 'Real')], [False, False]), True
 
 
-def invoke(command, source, timeout):
+def invoke(command, source, timeout, trailing_args=()):
     start = time.monotonic()
     try:
-        p = subprocess.run(command + [str(source)], capture_output=True, text=True, timeout=timeout)
+        p = subprocess.run(command + [str(source)] + list(trailing_args),
+                           capture_output=True, text=True, timeout=timeout)
         verdicts = re.findall(r'^(sat|unsat|unknown)\s*$', p.stdout, re.M)
         return dict(verdict=verdicts[0] if p.returncode == 0 and len(verdicts) == 1 else 'error',
                     returncode=p.returncode, stdout=p.stdout, stderr=p.stderr,

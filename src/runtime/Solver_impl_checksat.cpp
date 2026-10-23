@@ -111,6 +111,11 @@ Result Solver::Impl::checkSatInternal() {
 }
 
 Result Solver::Impl::checkSatGround() {
+        struct AutomaticLogicRestore {
+            std::string& logic;
+            bool automatic;
+            ~AutomaticLogicRestore() { if (automatic) logic = "ALL"; }
+        } restoreLogic{logic, logic == "ALL"};
         // Lowering can introduce an arithmetic sort absent from the input:
         // e.g. (is_int r) creates an Int witness in an otherwise Real DAG.
         getOrCreateBoolSort();
@@ -561,6 +566,30 @@ Result Solver::Impl::checkSatGround() {
         // Detect features from NativeTerms for safe routing
         LogicFeatureDetector detector(*ir);
         LogicFeatures features = detector.detect();
+        // ALL must select the same UF/arithmetic combination for both the
+        // theory factory and the atomizer. Arithmetic-only feature routing
+        // cannot handle the equalities linking a UF application to its value.
+        if (logic == "ALL" && features.hasUF && !features.hasArray && !features.hasDatatype) {
+            const auto domain = nativeFeatures(ir->native(originalAssertions_));
+            if (domain.integerValue && domain.realValue) {
+                lastUnknownReason_ = "automatic UF/mixed-arithmetic combination is unavailable";
+                return Result::Unknown;
+            }
+            const auto arithmetic = domain.realValue
+                ? (features.hasNonlinear ? TheoryId::NRA : TheoryId::LRA)
+                : domain.integerValue ? (features.hasNonlinear ? TheoryId::NIA : TheoryId::LIA)
+                                      : featureArithmeticTheory(features);
+            switch (arithmetic) {
+            case TheoryId::Bool: logic = "QF_UF"; break;
+            case TheoryId::LIA: logic = "QF_UFLIA"; break;
+            case TheoryId::LRA: logic = "QF_UFLRA"; break;
+            case TheoryId::NIA: logic = "QF_UFNIA"; break;
+            case TheoryId::NRA: logic = "QF_UFNRA"; break;
+            default:
+                lastUnknownReason_ = "automatic UF/mixed-arithmetic combination is unavailable";
+                return Result::Unknown;
+            }
+        }
         phase("detect-done");
         if (xolver::config::read<xolver::config::ReadKind::Presence>("XOLVER_DUMP_FINAL_ASSERTS")) {
             int di = 0;
