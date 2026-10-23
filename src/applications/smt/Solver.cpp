@@ -10,8 +10,8 @@ SolverAnswer Solver::solve(const Problem& problem) {
         answer.reason = "spatial operators require an explicit separation-logic request";
         return answer;
     }
-    if (features.quantified || problem.integerEvidence.elimination || problem.integerEvidence.model)
-        return solveFirstOrder(problem.assertions, problem.integerLimits, problem.integerEvidence);
+    if (features.quantified || features.bitvector || problem.integerEvidence.elimination || problem.integerEvidence.model)
+        return solveFirstOrder(problem.assertions, problem.integerLimits, problem.integerEvidence, problem.quantifierLimits);
     if (ground_) return ground_(problem);
     answer.reason = "SMT ground session is not attached";
     return answer;

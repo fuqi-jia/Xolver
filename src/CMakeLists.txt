@@ -76,13 +76,13 @@ endif()
 # Their dependency direction is checked by architecture.py at configure and CI.
 set(XOLVER_CORE_OBJECTS)
 # Preserve archive member order while automatically including a layer when its
-# first compiled source is added (quantifiers is currently header-only).
-foreach(layer base ir contracts algebra evidence logic quantifiers applications frontend search runtime)
+# first compiled source is added.
+foreach(layer base ir contracts algebra evidence quantifiers applications frontend search runtime)
     string(TOUPPER "${layer}" upper)
     if(NOT XOLVER_${upper}_SOURCES)
         add_library(xolver_${layer} INTERFACE)
         target_link_libraries(xolver_${layer} INTERFACE xolver_build_options)
-        if(layer MATCHES "^(ir|logic|quantifiers|applications)$")
+        if(layer MATCHES "^(ir|quantifiers|applications)$")
             target_link_libraries(xolver_${layer} INTERFACE somtparser_ir)
         endif()
         continue()
@@ -100,7 +100,7 @@ foreach(layer base ir contracts algebra evidence logic quantifiers applications 
     if(layer MATCHES "^(search|runtime)$")
         target_link_libraries(xolver_${layer} PRIVATE cadical)
     endif()
-    if(layer MATCHES "^(ir|logic|quantifiers|applications)$")
+    if(layer MATCHES "^(ir|quantifiers|applications)$")
         # Native node storage consumes only the public IR headers.
         # No frontend/parser headers are visible to this layer.
         target_include_directories(xolver_${layer} PRIVATE

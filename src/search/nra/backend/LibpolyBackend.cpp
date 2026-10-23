@@ -441,6 +441,7 @@ RootSet LibpolyBackend::isolateRealRootsAlgebraic(
         }
     }
 
+    result.complete = true;
     return result;
 #endif
 }

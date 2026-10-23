@@ -2042,6 +2042,13 @@ void Solver::dumpModel(std::ostream& os) const {
                 auto it = tm->assignments.find(name);
                 if (it != tm->assignments.end()) raw = it->second;
             }
+            if (var->getSort() && var->getSort()->isBv()) {
+                const auto width = var->getSort()->getBitWidth();
+                scalarBuf << "  (define-fun " << name << " () " << smtSort << " "
+                          << (raw.empty() ? "(_ bv0 " + std::to_string(width) + ")" : raw)
+                          << ")\n";
+                continue;
+            }
             std::string valTerm;
             if (raw.empty()) {
                 // Unconstrained.

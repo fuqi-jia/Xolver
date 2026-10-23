@@ -41,7 +41,7 @@ class ArchitectureTests(unittest.TestCase):
             "applications/sv/sl/Solver.h": '#include "applications/sv/pa/Solver.h"',
             "applications/sv/pa/Solver.h": "#pragma once"}))
 
-    def test_logical_framework_cannot_call_an_application(self):
+    def test_unowned_logic_directory_rejected(self):
         self.assertTrue(self.inspect({
             "logic/first_order/Solver.h": '#include "applications/smt/Solver.h"',
             "applications/smt/Solver.h": "#pragma once"}))
@@ -80,10 +80,10 @@ class ArchitectureTests(unittest.TestCase):
             "search/sat/Test.h": '#include "quantifiers/boolean/Eliminate.h"',
             "quantifiers/boolean/Eliminate.h": "#pragma once"}))
 
-    def test_quantifiers_cannot_depend_on_logical_or_application_driver(self):
+    def test_quantifiers_cannot_depend_on_application_driver(self):
         self.assertTrue(self.inspect({
-            "quantifiers/integer/Test.h": '#include "logic/first_order/Solver.h"',
-            "logic/first_order/Solver.h": "#pragma once"}))
+            "quantifiers/integer/Test.h": '#include "applications/smt/Solver.h"',
+            "applications/smt/Solver.h": "#pragma once"}))
 
     def test_untyped_read_rejected(self):
         self.assertTrue(self.inspect({"search/Test.cpp": 'auto v = env::flag("XOLVER_BAD");'}))

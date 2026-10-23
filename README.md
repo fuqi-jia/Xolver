@@ -1,6 +1,6 @@
 # Xolver
 
-Xolver is an SMT solver for quantifier-free nonlinear arithmetic and its combinations with uninterpreted functions, arrays, and algebraic datatypes. Dedicated native paths also handle quantified Presburger arithmetic and quantifier-free separation logic. A CaDiCaL-driven CDCL(T) core orchestrates theory solvers that reason over exact rational (GMP/MPFR) and real-algebraic (libpoly) arithmetic, with no floating point on the decision path. Incomplete reasoning yields `unknown` rather than an unsound verdict.
+Xolver is an SMT solver for quantifier-free nonlinear arithmetic and its combinations with uninterpreted functions, arrays, and algebraic datatypes. Dedicated native algorithms handle quantified Boolean, fixed-width bit-vector, Presburger and polynomial real arithmetic formulas. Separation logic has an independent heap semantics and solver entry. A CaDiCaL-driven CDCL(T) core orchestrates theory solvers that reason over exact rational (GMP/MPFR) and real-algebraic (libpoly) arithmetic, with no floating point on the decision path. Incomplete reasoning yields `unknown` rather than an unsound verdict.
 
 At SMT-COMP 2026, Xolver competed as a Standalone Solver and received two awards: **Single Query Track Largest Contribution — UNSAT Performance Winner** and **QF_NIRA Winner**.
 
@@ -18,6 +18,12 @@ At SMT-COMP 2026, Xolver competed as a Standalone Solver and received two awards
 | Arrays                | `QF_AX`, `QF_ALIA`, `QF_ALRA`, `QF_AUFLIA`, `QF_AUFLRA`, `QF_ANIA`, `QF_AUFNIA` |
 | Datatypes             | `QF_DT`, `QF_UFDT`, `QF_UFDTNIA`                                                |
 
+Quantified algorithms accept arbitrary binder alternation within their supported
+signatures: Boolean formulas (QBF), fixed-width bit-vectors (QBV), Presburger
+integer arithmetic (`LIA`), and polynomial real arithmetic (`LRA`, `NRA`).
+Ground bit-vector formulas use the finite-domain backend. See the
+[operator and resource boundaries](src/quantifiers/README.md).
+
 ---
 
 ## Architecture
@@ -27,8 +33,7 @@ flowchart TD
     Input[CLI / public API] --> Session[Runtime query session]
     Session --> SMT[applications/smt]
     Session -->|explicit SL request| SL[applications/sv/sl]
-    SMT --> Logic[logic: first-order framework]
-    Logic --> Quantifiers[quantifiers: integer / Boolean / bit-vector / real]
+    SMT --> Quantifiers[quantifiers: integer / Boolean / bit-vector / real]
     SL -->|translated pure integer constraints| Quantifiers
     SMT -->|quantifier-free session| Search[search: CDCL-T / simplex / ICP / CAD]
     Quantifiers --> Search
@@ -36,20 +41,17 @@ flowchart TD
     Search --> Algebra
 ```
 
-The [architecture and actual call-flow diagrams](docs/audit/APPLICATION-ARCHITECTURE.md)
-separate applications, logical frameworks, quantifier algorithms and reusable
-search/mathematics. `applications/Solver.h` provides the common abstract identity
-and typed `solve` interface. Each application owns its input and result semantics;
-SMT and SV applications do not call each other. QBF/QBV/real quantifier directories
-are planned locations, not implemented backends.
+The [architecture and call-flow diagrams](docs/ARCHITECTURE.md) describe application
+selection, quantifier algorithms and reusable search infrastructure.
+`applications/Solver.h` provides the abstract identity and typed `solve` interface.
+Each application owns its input and result semantics; SMT and SV applications
+are independent. CP, MILP optimization, counting, ODE and PDE are reserved
+application interfaces with no solver implementation. OMT exposes an API but
+has no objective-search algorithm.
 
-
-There is one shared general formula representation: the SOMTParser DAG.
-`NativeTerms` supplies handles, scopes and metadata; its temporary `Kind`/`TermExpr`
-read/construction interfaces still serve legacy ground consumers. PA and SL
-consume native nodes directly and build their own theory representations.
-The old CoreIR graph is removed; compatibility-interface cleanup remains in scope.
-
+SOMTParser's DAG is the shared formula representation. `NativeTerms` provides
+handles, scopes, metadata and ground-term construction. Quantifier and SL
+algorithms consume native nodes and build domain-specific representations.
 
 Xolver uses [SOMTParser](https://github.com/fuqi-jia/SOMTParser) as its frontend for SMT-LIB parsing, type checking, expression management, and rewriting.
 
@@ -93,9 +95,10 @@ The regression harness compares stdout verdicts with the embedded `:status`;
 it does not invoke z3/cvc5. Differential tools run those oracles separately.
 Opposite verdicts and crashes always fail, including known-gap cases.
 
-The [gate cleanup audit](docs/audit/GATE-CLOSEOUT.md) records the current source
-and validation status. The latest broad server run has one unresolved NRA
-model-check timeout; full PA/SL completion remains separate work.
+Algorithm tests exercise scope preservation, quantifier alternation, exact
+arithmetic, models and resource exhaustion. Differential tools compare verdicts
+with independent solvers. [Validation records](docs/README.md) identify the
+source revisions, binaries, inputs and results of individual runs.
 
 ---
 
@@ -104,12 +107,11 @@ model-check timeout; full PA/SL completion remains separate work.
 | Path | Contents |
 | --- | --- |
 | `src/base/` | Exact values, resource budgets and typed process configuration |
-| `src/ir/` | SOMTParser DAG handles, sorts and temporary compatibility interfaces |
+| `src/ir/` | SOMTParser DAG handles, sorts and ground-term interfaces |
 | `src/contracts/` | Theory-specific formulas, models and solver contracts |
 | `src/algebra/` | Polynomial representation and exact algebraic operations |
 | `src/evidence/` | Independent model checks and proof/certificate serialization |
 | `src/applications/` | SMT, OMT, CP, MILP, DE, SV and counting application entries |
-| `src/logic/` | Shared first-order framework and theory capability interface |
 | `src/quantifiers/` | Quantifier algorithms above search and algebra |
 | `src/frontend/` | Parser integration and ground preprocessing |
 | `src/search/` | Reusable SAT, theory search, combination and numeric search engines |
@@ -126,33 +128,22 @@ Apache License 2.0 — see [`LICENSE`](LICENSE). Third-party dependency manifest
 
 Xolver does not call, wrap, link, or include source from any existing SMT solver. Comments citing cvc5, z3, or others are algorithmic attribution for published algorithms (CDCAC, Lazard projection, Nelson–Oppen); the implementations are independently written.
 
-Xolver was developed through a **researcher-led, AI coding-agent-assisted workflow**. The author defined the overall solver architecture, algorithm design and selection, task decomposition, integration, testing, and validation. AI coding agents (Claude Opus 4.7 / Sonnet 4.6, ChatGPT 5.5, Kimi 2.6) carried out much of the code implementation under this coordination, with role-specialised agents for individual theory lanes (LRA/LIA, NRA, NIA, EUF/arrays, combination, and infrastructure).
+Xolver is developed through a researcher-led workflow with AI assistance for
+implementation, review and testing.
 
 Candidate models can be checked against the original formula using exact
-arithmetic. Validation is three-valued: a model may satisfy, violate, or be
-indeterminate. Legacy solving paths do not all require positive validation;
-`--certify` requires it. UNSAT proof coverage is partial, and a checked Boolean
-skeleton does not certify assumed theory lemmas or preprocessing.
+arithmetic. Model validation distinguishes satisfaction, violation and an
+indeterminate result; `--certify` requires positive validation. UNSAT evidence
+coverage is partial. A checked Boolean skeleton does not certify assumed theory
+lemmas or preprocessing. See [proof tooling](tools/proof/README.md).
 
-The [verification architecture audit](docs/audit/ARCHITECTURE.md) records the
-remaining work, runtime-control inventory, fixes, and preparation for Presburger
-arithmetic and separation logic. The [current native-DAG implementation](docs/audit/NATIVE-TERMS.md)
-uses SOMTParser nodes directly and reconstructs free-variable models for its
-budgeted quantified PA procedure. [Independent PA replay](docs/audit/PA-ISABELLE.md)
-checks selected original claims in Isabelle.
-The [Boolean separation-logic core](docs/audit/SEPARATION-BOOLEAN.md) adds nested
-negation, star and wand, typed heap records and a standalone concrete-heap
-checker to the earlier symbolic-heap API. Direct native SL parser/runtime
-integration combines linear integer terms, constant div/mod and ite/abs with
-Boolean connectives, star and wand over integer addresses/data. It exports
-checked heap models and evaluates arithmetic `get-value` against the existing
-model. [R33 server validation](docs/audit/VALIDATION-NATIVE-TERMS.md) records the
-full test suites, arithmetic differential checks, semantic replays and a
-reproduced unconstrained-nil inconsistency in the installed cvc5 oracle.
-PA certificate coverage, further theory combinations, quantified and inductive
-SL, and remaining unknown/performance cases are solver work still in progress.
-The current task targets SMT solving and validation; a formal refinement proof
-of the C++ implementation is not a delivery requirement.
+[Quantifier algorithms](src/quantifiers/README.md) support separate Boolean,
+bit-vector, integer and real domains. Mixed quantified theories, uninterpreted
+functions, arrays and transcendental arithmetic are outside these algorithms'
+signatures. General quantified and inductive SL has incomplete coverage. Work,
+memory and time limits can produce `unknown`; an unresolved search does not
+establish unsatisfiability. End-to-end formal verification of the C++ solver is
+not provided.
 
 ### Citation
 

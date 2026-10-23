@@ -1,20 +1,35 @@
 # Quantifier algorithms
 
-This layer is above `search` and `algebra`, and below `logic` and `applications`.
-It may use SAT, bit-blasting and arithmetic kernels; none of those lower layers
-may include this layer. Thus a quantifier algorithm can use algebra without
-creating an include cycle or moving the algorithm into algebra.
+This layer sits above `search` and `algebra` and below `applications`. Algorithms
+consume SOMTParser native nodes and use domain-specific representations. Lower
+layers cannot depend on this layer.
 
-| Directory | Domain | Status |
+| Directory | Domain | Algorithm and output |
 | --- | --- | --- |
-| `integer` | Integer/Boolean affine and divisibility formulas | Migrated existing elimination, native binder compilation, models and traces |
-| `boolean` | QBF | Planned; no backend |
-| `bitvector` | QBV | Planned; no backend |
-| `real` | Quantified real arithmetic | Planned; no backend |
+| `integer` | Boolean and affine/divisibility integer formulas | Scoped elimination, free-variable models and optional traces |
+| `boolean` | QBF | Reduced ordered BDDs with existential/universal abstraction |
+| `bitvector` | Bool and fixed-width BitVec | Modular circuits, BDD abstraction and free-variable models |
+| `real` | Bool and polynomial Real | Scoped prenex compilation, full CAD and exact algebraic models |
 
-`integer/Elimination.h` consumes typed affine/divisibility formulas without
-SOMTParser. `integer/NativeFormula.h` compiles native syntax, preserves binder
-scopes and invokes projection within each scope. Numeric congruence, CRT and
-witness calculations are lower-level mathematics in `algebra/integer`.
-Both compilation and projection share the same resource accounting. A trace
-is not automatically a proof of the complete input translation.
+The finite-domain compiler is `FiniteFormula.cpp`; real syntax compilation is
+`real/NativeFormula.cpp`. Integer compilation and elimination are exposed by
+`integer/NativeFormula.h` and `integer/Elimination.h`. Algorithms preserve binder
+identity, shadowing and arbitrary quantifier alternation. Free variables are
+existential for satisfiability; models contain their values, not Skolem functions
+for bound variables.
+
+Integer numeric congruence, CRT and witness calculations belong to
+`algebra/integer`. Real polynomial operations and root isolation use the algebra
+and search infrastructure. Fixed-width circuits use Boolean diagrams; the
+integer bit-blaster's width-growing semantics are a different contract.
+
+`Limits` supplies work, node, recursion, projection-polynomial and projection
+matrix budgets to Boolean/BV/real algorithms. Integer algorithms have `pa::Limits`.
+Zero disables the corresponding limit. The global solve deadline also applies.
+These are resource limits, not switches selecting unimplemented algorithms.
+
+Unsupported theory combinations or operators are reported explicitly. Quantified
+UF, arrays, integer/real mixtures and integer/bit-vector conversions are outside
+these signatures. An incomplete primitive computation cannot establish a
+logical verdict. Integer traces have limited certificate coverage; Boolean/BV
+and real quantifier solving do not emit independently replayable UNSAT proofs.

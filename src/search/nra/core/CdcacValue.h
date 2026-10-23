@@ -62,6 +62,8 @@ struct RootSet {
     int numRoots() const { return static_cast<int>(roots.size()); }
     bool empty() const { return roots.empty(); }
     bool crashOccurred = false;
+    // Empty roots are conclusive only when the producer completed isolation.
+    bool complete = false;
 };
 
 struct Bound {

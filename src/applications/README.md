@@ -5,17 +5,17 @@ shared logical foundations, SAT implementations or mathematical primitives.
 
 | Directory | Responsibility | Current implementation |
 | --- | --- | --- |
-| `smt` | Satisfiability and per-logic theory composition | Existing QF solvers; quantified integer arithmetic |
-| `omt` | Optimization modulo theories | Existing `Optimize` interface skeleton; no objective search yet |
+| `smt` | Satisfiability and per-logic theory composition | QF theory combinations; quantified Boolean, bit-vector, integer and real arithmetic |
+| `omt` | Optimization modulo theories | `Optimize` interface; no objective search yet |
 | `cp` | Constraint programming | Reserved; no algorithm yet |
 | `milp` | Mixed-integer linear optimization | Reserved; no objective optimizer yet |
 | `de/ode`, `de/pde` | Differential equation applications | Reserved; no algorithm yet |
-| `sv/pa`, `sv/sl` | Dedicated PA and separation-logic problems | Existing native implementations, with their documented limits |
+| `sv/pa`, `sv/sl` | Dedicated PA and separation-logic problems | Native arithmetic and heap solvers with domain-specific models |
 | `counting` | Model counting | Reserved; no algorithm yet |
 
 `Solver.h` defines the common abstract `Solver` identity and lifetime, and
 `TypedSolver<Input, Output>` supplies a virtual `solve(const Input&)`. SMT, PA,
-SL and the existing OMT skeleton implement this interface. There is no default
+SL and the OMT interface implement this interface. There is no default
 solver that silently returns `unknown`. The different result types are deliberate:
 an optimum, a count and a satisfiability decision have different meanings.
 
@@ -29,4 +29,4 @@ no `applications/common/` and no dependency between SMT, OMT, SV or other famili
 Cross-application mathematics belongs to the appropriate lower layer, after its
 application-specific assumptions and input conversion have been separated.
 
-See [the dependency and call-flow diagrams](../../docs/audit/APPLICATION-ARCHITECTURE.md).
+See [the dependency and call-flow diagrams](../../docs/ARCHITECTURE.md).

@@ -1,1 +1,1 @@
-Mixed-integer linear optimization application. No objective optimizer is implemented yet. The existing `smt/qflira/InternalMilpEngine` is a feasibility component, not a MILP optimizer; it remains private to its current consumer. Extract shared machinery only when an actual second consumer needs it.
+Mixed-integer linear optimization has no objective optimizer. `smt/qflira/InternalMilpEngine` solves feasibility subproblems for the SMT application and belongs to that application.

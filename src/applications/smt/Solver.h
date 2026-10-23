@@ -2,6 +2,7 @@
 #include "applications/Solver.h"
 #include "contracts/SolverAnswer.h"
 #include "contracts/IntegerArithmetic.h"
+#include "quantifiers/Resources.h"
 #include <functional>
 
 namespace xolver::applications::smt {
@@ -9,6 +10,7 @@ struct Problem {
     std::vector<std::shared_ptr<SOMTParser::DAGNode>> assertions;
     pa::Limits integerLimits;
     pa::EvidenceRequest integerEvidence;
+    quantifiers::Limits quantifierLimits;
 };
 class Solver final : public TypedSolver<Problem, SolverAnswer> {
 public:

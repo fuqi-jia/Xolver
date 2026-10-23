@@ -222,10 +222,12 @@ set(XOLVER_SEARCH_SOURCES
 )
 
 set(XOLVER_QUANTIFIERS_SOURCES
-)
-
-set(XOLVER_LOGIC_SOURCES
-    "logic/first_order/Solver.cpp"
+    "quantifiers/FiniteFormula.cpp"
+    "quantifiers/bitvector/Circuit.cpp"
+    "quantifiers/boolean/Diagram.cpp"
+    "quantifiers/real/Decomposition.cpp"
+    "quantifiers/real/NativeFormula.cpp"
+    "quantifiers/real/Solver.cpp"
 )
 
 set(XOLVER_APPLICATIONS_SOURCES
