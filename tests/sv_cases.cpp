@@ -1,6 +1,6 @@
 #include "applications/smt/Solver.h"
 #include "applications/sv/sl/Entailment.h"
-#include "applications/sv/verification/ModelChecking.h"
+#include "applications/sv/verification/Reachability.h"
 #include "ir/NativeSubstitution.h"
 #include <filesystem>
 #include <fstream>
@@ -75,6 +75,7 @@ struct Export {
                          {"heap", heap},
                          {"symbols", symbols},
                          {"expected", result == Result::Sat ? "sat" : "unsat"}});
+        write(output / "cases.json", cases.dump(2) + "\n");
     }
 };
 DecisionOracle decide = [](const NativeAssertions &q) {
@@ -93,9 +94,7 @@ void safety(Export &out) {
     s.initial = {b.equal(x, num(0))};
     s.transition = {b.equal(xp, b.make(integer, native::K::NT_ADD, {x, num(1)}))};
     s.safety = b.logical(native::K::NT_GE, {x, num(0)});
-    auto check = [&](const std::string &group, NativeAssertions candidates = {},
-                     v::SafetyMethod method = v::SafetyMethod::Induction) {
-        auto answer = v::SafetySolver(decide, {6}, method).solve({s, candidates});
+    auto replay = [&](const v::SafetyAnswer &answer, const std::string &group) {
         if (answer.status != v::SafetyStatus::Safe)
             throw std::runtime_error(group + ": expected safety proof; " + answer.reason);
         require(bool(answer.certificate), "missing safety certificate");
@@ -107,6 +106,10 @@ void safety(Export &out) {
         require(v::CertificateSolver(recording).solve({s, *answer.certificate}).status ==
                     v::Status::Valid,
                 "safety certificate rejected");
+    };
+    auto check = [&](const std::string &group, NativeAssertions candidates = {},
+                     v::SafetyMethod method = v::SafetyMethod::Induction) {
+        replay(v::SafetySolver(decide, {6}, method).solve({s, candidates}), group);
     };
     check("integer-induction");
     check("candidate-invariant", {s.safety, b.equal(x, num(0))});
@@ -146,6 +149,14 @@ void safety(Export &out) {
     require(unsafe.status == v::SafetyStatus::Unsafe && unsafe.counterexample,
             "expected fresh-input counterexample");
     out.query(unsafe.counterexample->query, Result::Sat, "reachable-counterexample");
+    s = copy;
+    auto mode = b.make(SOMTParser::SortManager::getBool(), native::K::NT_VAR, {}, "mode");
+    auto mp = b.make(SOMTParser::SortManager::getBool(), native::K::NT_VAR, {}, "mp");
+    s.state.push_back({mode, mp});
+    s.initial.push_back(mode);
+    s.transition = {b.equal(mode, mp),
+                    b.any({b.negate(mode), b.logical(native::K::NT_GE, {xp, num(0)})})};
+    replay(v::ReachabilitySolver(decide, {3}).solve(s), "symbolic-fixed-point");
 }
 void separation(Export &out) {
     const std::vector<std::pair<std::string, std::string>> examples{
@@ -191,6 +202,77 @@ void separation(Export &out) {
                 "SL certificate rejected");
     }
 }
+void relations(Export &out) {
+    SOMTParser::Parser parser;
+    require(parser.parseStr("(set-logic ALL)(declare-heap (Int Int))(declare-const n Int)"
+                            "(define-fun-rec p ((n Int)) Bool (or (and (= n 0) sep.emp) "
+                            "(and (> n 0) (sep (pto n (- n 1)) (p (- n 1))))))"
+                            "(define-fun-rec q ((n Int)) Bool (or (and (<= n 0) sep.emp) "
+                            "(and (>= n 1) (sep (q (- n 1)) (pto n (- n 1))))))"
+                            "(assert (p n))"),
+            "cannot parse relational evidence");
+    sl::EntailmentProblem problem;
+    auto &c = problem.context;
+    c.location = parser.getHeapLocationSort();
+    c.data = parser.getHeapDataSort();
+    c.declarations = parser.getDeclaredVariables();
+    c.assertions = parser.getAssertions();
+    c.recursion = sl::RecursiveSemantics::LeastFixedPoint;
+    for (const auto &d : parser.getRecursiveDefinitions())
+        c.definitions.push_back(
+            {d.symbol, d.definition->getFuncBody(), d.definition->getFuncParams()});
+    problem.conclusion = parser.mkExpr("(q n)");
+    auto result = sl::EntailmentSolver({3000000, 256}).solve(problem);
+    require(result.status == sl::EntailmentStatus::Valid && result.certificate,
+            "expected predicate inclusion proof");
+    require(result.certificate->method == sl::EntailmentProof::StructuralInduction,
+            "expected structural induction certificate");
+    auto proof = sl::proveRelationalNative(c.location, c.data, c.assertions, problem.conclusion,
+                                           c.declarations, c.definitions,
+                                           result.certificate->relations, {3000000, 256});
+    require(proof.complete && proof.proved, "predicate inclusion replay failed");
+    for (const auto &q : proof.obligations)
+        out.query(q, Result::Unsat, "sl-relation-premise", true);
+    // Independent ground expansions have exact recursive semantics at these
+    // arguments. Original recursive equations are not reinterpreted by cvc5.
+    native::Nodes b({});
+    auto emp = b.logical(native::K::NT_SEP_EMP, {});
+    auto p = emp, q = emp;
+    for (int n = -1; n <= 4; ++n) {
+        if (n > 0) {
+            auto cell = b.logical(native::K::NT_SEP_PTO, {b.numeral(n), b.numeral(n - 1)});
+            p = b.logical(native::K::NT_SEP_STAR, {cell, p});
+            q = b.logical(native::K::NT_SEP_STAR, {q, cell});
+        }
+        auto pv = n < 0 ? b.boolean(false) : p;
+        auto qv = n < 0 ? emp : q;
+        auto literal = n < 0 ? "(- 1)" : std::to_string(n);
+        auto pc = parser.mkExpr("(p " + literal + ")"), qc = parser.mkExpr("(q " + literal + ")");
+        auto cell = b.logical(native::K::NT_SEP_PTO, {b.numeral(100), b.numeral(9)});
+        struct Pair {
+            native::Node a, z, groundA, groundZ;
+        };
+        std::size_t pattern = 0;
+        for (const auto &item :
+             std::vector<Pair>{{pc, qc, pv, qv},
+                               {qc, pc, qv, pv},
+                               {b.negate(pc), b.negate(qc), b.negate(pv), b.negate(qv)},
+                               {b.logical(native::K::NT_SEP_STAR, {cell, pc}), qc,
+                                b.logical(native::K::NT_SEP_STAR, {cell, pv}), qv}}) {
+            c.assertions = {item.a};
+            problem.conclusion = item.z;
+            auto checked = sl::EntailmentSolver({3000000, 256}).solve(problem);
+            if (checked.status != sl::EntailmentStatus::Valid &&
+                checked.status != sl::EntailmentStatus::Invalid)
+                throw std::runtime_error("ground relational query n=" + literal + " pattern=" +
+                                         std::to_string(pattern) + ": " + checked.reason);
+            out.query({item.groundA, b.negate(item.groundZ)},
+                      checked.status == sl::EntailmentStatus::Valid ? Result::Unsat : Result::Sat,
+                      "sl-exact-ground-expansion-" + literal + "-" + std::to_string(pattern++),
+                      true);
+        }
+    }
+}
 } // namespace
 int main(int argc, char **argv) {
     if (argc != 2)
@@ -200,5 +282,6 @@ int main(int argc, char **argv) {
         return 3;
     safety(out);
     separation(out);
+    relations(out);
     write(out.output / "cases.json", out.cases.dump(2) + "\n");
 }

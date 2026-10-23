@@ -1,4 +1,5 @@
 #pragma once
+#include "applications/sv/sl/NativeRelations.h"
 #include "applications/sv/sl/Solver.h"
 
 namespace xolver::sl {
@@ -7,11 +8,15 @@ struct EntailmentProblem {
     // universally quantified by refuting antecedents AND NOT conclusion.
     Request context;
     std::shared_ptr<SOMTParser::DAGNode> conclusion;
+    std::vector<PredicateRelation> lemmaCandidates;
 };
 enum class EntailmentStatus { Valid, Invalid, Unknown, InvalidInput };
+enum class EntailmentProof { Unfolding, StructuralInduction };
 struct EntailmentCertificate {
     std::vector<PredicateInvariant> invariants;
     std::optional<std::size_t> unfoldingDepth;
+    EntailmentProof method = EntailmentProof::Unfolding;
+    std::vector<PredicateRelation> relations;
 };
 struct EntailmentAnswer {
     EntailmentStatus status = EntailmentStatus::Unknown;
@@ -19,6 +24,7 @@ struct EntailmentAnswer {
     std::optional<EntailmentCertificate> certificate;
     InductiveInference inference;
     std::string reason;
+    RelationInference relations;
 };
 class EntailmentSolver final
     : public applications::TypedSolver<EntailmentProblem, EntailmentAnswer> {
@@ -45,6 +51,21 @@ class InductiveInvariantSolver final
     }
     std::string_view name() const noexcept override { return "separation-invariants"; }
     InductiveInference solve(const Request &) override;
+};
+struct RelationProblem {
+    Request context;
+    std::vector<PredicateRelation> candidates;
+};
+class RelationSolver final : public applications::TypedSolver<RelationProblem, RelationInference> {
+    Limits limits_;
+
+  public:
+    explicit RelationSolver(Limits limits = {}) : limits_(limits) {}
+    applications::Family family() const noexcept override {
+        return applications::Family::SoftwareVerification;
+    }
+    std::string_view name() const noexcept override { return "separation-predicate-relations"; }
+    RelationInference solve(const RelationProblem &) override;
 };
 struct EntailmentCertificateProblem {
     EntailmentProblem problem;
