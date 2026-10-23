@@ -42,6 +42,15 @@ data for differential equations. Run them with:
 ./build/tests/xolver_unit_tests --test-case='application prototypes:*'
 ```
 
+The [application algorithm tests](../../tests/unit/test_application_foundations.cpp)
+exercise exact optimization, independent mixed-integer reference enumeration,
+open bounds, projected integer counts, CP constraints, inductive invariants and
+parametric differential equations:
+
+```sh
+./build/tests/xolver_unit_tests --test-case='application foundations:*'
+```
+
 The [SMT theory examples](../../tests/unit/test_theory_applications.cpp) and
 [external model validation](../../tools/fuzz/fuzz_theory_applications.py) exercise
 native parsing, theory combinations and serialized interpretations.

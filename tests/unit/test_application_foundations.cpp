@@ -57,6 +57,10 @@ TEST_CASE(
                        {"z", VariableKind::Continuous, -2, 4}};
         p.objective = {random(), random(), random()};
         p.objectiveOffset = mpq_class(random(), 2);
+        // Keep the public input unreduced to exercise boundary normalization;
+        // GMP arithmetic in the independent reference requires canonical inputs.
+        mpq_class offset = p.objectiveOffset;
+        offset.canonicalize();
         p.maximize = sample % 2;
         for (int i = 0; i < 4; ++i)
             p.constraints.push_back(
@@ -79,8 +83,8 @@ TEST_CASE(
                 if (!feasible || lo > hi)
                     continue;
                 mpq_class z = ((p.objective[2] > 0) == p.maximize) ? hi : lo;
-                mpq_class value = p.objectiveOffset + p.objective[0] * x + p.objective[1] * y +
-                                  p.objective[2] * z;
+                mpq_class value =
+                    offset + p.objective[0] * x + p.objective[1] * y + p.objective[2] * z;
                 if (!expected || (p.maximize ? value > *expected : value < *expected))
                     expected = value;
             }
@@ -92,10 +96,25 @@ TEST_CASE(
         }
         REQUIRE(r.status == Status::Optimal);
         REQUIRE(r.objectiveValue);
+        INFO("actual objective: ", r.objectiveValue->get_str(),
+             "; reference objective: ", expected->get_str());
         CHECK((*r.objectiveValue == *expected));
         REQUIRE(r.assignment.size() == 3);
         CHECK((r.assignment[0].get_den() == 1));
         CHECK((r.assignment[1].get_den() == 1));
+        mpq_class value = offset;
+        for (std::size_t j = 0; j < r.assignment.size(); ++j) {
+            CHECK((r.assignment[j] >= *p.variables[j].lower));
+            CHECK((r.assignment[j] <= *p.variables[j].upper));
+            value += p.objective[j] * r.assignment[j];
+        }
+        CHECK((value == *r.objectiveValue));
+        for (const auto &constraint : p.constraints) {
+            mpq_class lhs = 0;
+            for (std::size_t j = 0; j < r.assignment.size(); ++j)
+                lhs += constraint.coefficients[j] * r.assignment[j];
+            CHECK((lhs <= constraint.rhs));
+        }
     }
 }
 TEST_CASE("application foundations: arithmetic OMT strict bounds, disjunctions and lexicographic "

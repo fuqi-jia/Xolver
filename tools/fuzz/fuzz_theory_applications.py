@@ -218,7 +218,7 @@ def main():
     args.output.mkdir(parents=True, exist_ok=False)
     commands = {'xolver': [str(args.solver.resolve()), 'solve'],
                 'z3': [str(Path(args.z3).resolve())],
-                'cvc5': [str(Path(args.cvc5).resolve()), '--lang=smt2', '--fp-exp']}
+                'cvc5': [str(Path(args.cvc5).resolve()), '--lang=smt2', '--fp-exp', '--arrays-exp']}
     versions = {}
     for name, command in commands.items():
         if name == 'xolver':
