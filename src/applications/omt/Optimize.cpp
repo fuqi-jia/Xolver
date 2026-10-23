@@ -1,4 +1,6 @@
 #include "applications/omt/Optimize.h"
+#include "applications/omt/Linear.h"
+#include "ir/NativeFeatures.h"
 #include "quantifiers/FiniteFormula.h"
 #include <somtparser/ir/node.h>
 namespace xolver::applications::omt {
@@ -8,6 +10,12 @@ Answer Solver::solve(const Problem &problem) {
         answer.reason = "objective priority backend unavailable";
         return answer;
     }
+    auto roots = problem.assertions;
+    for (const auto &objective : problem.objectives)
+        if (objective.expression) roots.push_back(objective.expression);
+    const auto features = nativeFeatures(roots);
+    if (!features.bitvector && (features.real || features.integer))
+        return solveLinear(problem);
     std::vector<quantifiers::FiniteObjective> objectives;
     for (const auto &objective : problem.objectives) {
         auto term = objective.expression;

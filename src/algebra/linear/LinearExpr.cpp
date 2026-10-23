@@ -1,6 +1,5 @@
 #include "base/MpqUtils.h"
 #include "algebra/linear/LinearExpr.h"
-#include "base/MpqUtils.h"
 #include "ir/payload.h"
 #include <cassert>
 #include <algorithm>
@@ -99,6 +98,9 @@ bool extractLinearExpr(ExprId root, const NativeTerms& ir,
                 break;
             }
             case Kind::Div: {
+                // Integer div is Euclidean division, not rational scaling.
+                // Its quotient/remainder constraints must be lowered first.
+                if (ir.sortKind(e.sort) == SortKind::Int) return false;
                 // SMT-LIB '/' is variadic and left-associative:
                 //   (/ a b c ..) == a / b / c / .. == a / (b*c*..)
                 // Linear iff every denominator is a nonzero constant; the numerator
@@ -138,7 +140,7 @@ bool extractLinearExpr(ExprId root, const NativeTerms& ir,
                 }
                 if (arg.kind == Kind::ConstReal) {
                     if (auto* s = std::get_if<std::string>(&arg.payload.value)) {
-                        mpq_class q(*s);
+                        mpq_class q = mpqFromString(*s);
                         // floor for positive, ceil for negative
                         mpz_class z = q.get_num() / q.get_den();
                         if (q < 0 && q.get_num() % q.get_den() != 0) {

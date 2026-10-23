@@ -27,6 +27,7 @@ set(XOLVER_ALGEBRA_SOURCES
     "algebra/interval/IntervalQRoots.cpp"
     "algebra/interval/ReasonedBox.cpp"
     "algebra/interval/ReasonedBoxQ.cpp"
+    "algebra/linear/Formula.cpp"
     "algebra/linear/LinearConstraintNormalizer.cpp"
     "algebra/linear/LinearExpr.cpp"
     "algebra/linear/RationalSystem.cpp"
@@ -207,6 +208,7 @@ set(XOLVER_SEARCH_SOURCES
     "search/nra/simplex/NraLinearExtractor.cpp"
     "search/nra/simplex/PolyStructureFacts.cpp"
     "search/nra/simplex/SimplexTableauFacts.cpp"
+    "search/optimization/LinearProgram.cpp"
     "search/presolve/AffineSubstitution.cpp"
     "search/presolve/BoundChainComposer.cpp"
     "search/presolve/IntLinearEqualityCoreHNF.cpp"
@@ -232,10 +234,12 @@ set(XOLVER_QUANTIFIERS_SOURCES
 )
 
 set(XOLVER_APPLICATIONS_SOURCES
+    "applications/counting/Linear.cpp"
     "applications/counting/Solver.cpp"
     "applications/cp/Solver.cpp"
     "applications/de/Solver.cpp"
     "applications/milp/Solver.cpp"
+    "applications/omt/Linear.cpp"
     "applications/omt/Optimize.cpp"
     "applications/smt/FirstOrderSolver.cpp"
     "applications/smt/LogicSolver.cpp"
@@ -252,6 +256,7 @@ set(XOLVER_APPLICATIONS_SOURCES
     "applications/smt/qffp/Engine.cpp"
     "applications/smt/qfidl/IdlSolver.cpp"
     "applications/smt/qflia/Builder.cpp"
+    "applications/smt/qflira/Engine.cpp"
     "applications/smt/qflira/InternalMilpEngine.cpp"
     "applications/smt/qflira/LiraSolver.cpp"
     "applications/smt/qflra/LraSolver.cpp"
