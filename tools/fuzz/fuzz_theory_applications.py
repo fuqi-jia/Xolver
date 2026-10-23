@@ -153,6 +153,10 @@ def cases(seed, count):
                          '(assert (= (select a #b00) #b101))(assert (= (select a #b11) #b011))'), True
     yield 'free-uf', ('(declare-fun f ((_ BitVec 3)) (_ BitVec 3))'
                       '(assert (= (f #b000) #b101))(assert (= (f #b001) #b011))'), True
+    yield 'bool-array', ('(declare-const a (Array Bool Bool))'
+                        '(assert (select a true))(assert (not (select a false)))'), True
+    yield 'constant-integer-uf', ('(declare-fun f (Int) Int)'
+                                 '(assert (= (f 2) 4))'), True
 
 
 def main():

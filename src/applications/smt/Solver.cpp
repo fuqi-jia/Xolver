@@ -25,7 +25,7 @@ SolverAnswer Solver::solve(const Problem &problem) {
     if (features.strings)
         return strings::solve(problem.assertions, problem.quantifierLimits);
     if (features.finiteArray || (features.bitvector && (features.arrays || features.function)) ||
-        (features.function && !features.otherSort && !features.real && !features.integerVariable &&
+        (features.function && !features.otherSort && !features.real && !features.integer &&
          !features.quantified))
         return finite::solve(problem.assertions, problem.quantifierLimits);
     if (features.quantified || features.bitvector || problem.integerEvidence.elimination ||

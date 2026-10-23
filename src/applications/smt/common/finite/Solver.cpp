@@ -177,6 +177,11 @@ class Lowering {
             throw Unsupported("finite model reconstruction failed");
         return *text;
     }
+    static std::string token(Node n, const TheoryModel &model) {
+        const auto text = value(n, model);
+        // Share Boolean tokens with the independent array model checker.
+        return n->getSort()->isBool() ? (text == "true" ? "#b:1" : "#b:0") : "#smt:" + text;
+    }
 
   public:
     Lowering(const NativeAssertions &roots, std::size_t work) : nodes(roots, work) {}
@@ -195,11 +200,10 @@ class Lowering {
                 TheoryModel::ArrayInterp array;
                 array.indexSort = v.sort->getIndexSort()->toString();
                 array.elemSort = v.sort->getElemSort()->toString();
-                array.defaultVal = "#smt:" + value(v.cells[0], encoded);
+                array.defaultVal = token(v.cells[0], encoded);
                 for (std::size_t i = 1; i < v.cells.size(); ++i)
-                    array.entries.emplace_back("#smt:" +
-                                                   value(index(v.sort->getIndexSort(), i), encoded),
-                                               "#smt:" + value(v.cells[i], encoded));
+                    array.entries.emplace_back(token(index(v.sort->getIndexSort(), i), encoded),
+                                               token(v.cells[i], encoded));
                 answer.model->arrayInterps[input->getName()] = std::move(array);
             }
         }
@@ -209,12 +213,12 @@ class Lowering {
                 f.retSort = app.output->getSort()->toString();
                 for (auto arg : app.args)
                     f.argSorts.push_back(arg->getSort()->toString());
-                f.deflt = "#smt:" + value(app.output, encoded);
+                f.deflt = token(app.output, encoded);
             }
             TheoryModel::FuncEntry entry;
             for (auto arg : app.args)
-                entry.args.push_back("#smt:" + value(arg, encoded));
-            entry.value = "#smt:" + value(app.output, encoded);
+                entry.args.push_back(token(arg, encoded));
+            entry.value = token(app.output, encoded);
             f.entries.push_back(std::move(entry));
         }
         return answer;
