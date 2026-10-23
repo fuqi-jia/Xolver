@@ -10,6 +10,8 @@ contract, with ODE requiring one independent coordinate.
 `Solver` searches polynomial function candidates over coordinates and declared real parameters, up to a configurable total
 degree and monomial budget. It substitutes their derivatives into every obligation,
 universally quantifies coordinates and parameters, and solves for coefficients.
+Polynomial identities with linear coefficient equations use exact coefficient
+matching and Gaussian elimination; other obligations use quantified real solving.
 Each returned function passes another exact substitution check. `Solved` means
 these functions satisfy the supplied equations, not uniqueness or completeness.
 An unsuccessful bounded ansatz returns unknown, never a claim that the original

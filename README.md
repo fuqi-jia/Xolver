@@ -24,7 +24,7 @@ Quantified algorithms accept arbitrary binder alternation within their supported
 signatures: Boolean formulas (QBF), fixed-width bit-vectors (QBV), Presburger
 integer arithmetic (`LIA`), and polynomial real arithmetic (`LRA`, `NRA`).
 Ground bit-vector formulas and finite UF/array combinations use native encodings.
-FP predicates and Unicode string operations have native backends with explicit
+FP predicates, concrete rounded arithmetic and Unicode string operations have native backends with explicit
 limits; see the [SMT entry contracts](src/applications/smt/README.md) and the
 [operator and resource boundaries](src/quantifiers/README.md).
 

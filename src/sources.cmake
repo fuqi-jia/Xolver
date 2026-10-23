@@ -229,6 +229,7 @@ set(XOLVER_QUANTIFIERS_SOURCES
     "quantifiers/bitvector/Circuit.cpp"
     "quantifiers/boolean/Diagram.cpp"
     "quantifiers/real/Decomposition.cpp"
+    "quantifiers/real/Identities.cpp"
     "quantifiers/real/NativeFormula.cpp"
     "quantifiers/real/Solver.cpp"
 )

@@ -3,6 +3,7 @@
 #include "ir/types.h"
 #include "ir/NativeTerms.h"
 #include "contracts/LinearFormKey.h"
+#include "base/WorkBudget.h"
 #include <gmpxx.h>
 #include <string>
 #include <vector>
@@ -18,7 +19,7 @@ namespace xolver {
 bool extractLinearExpr(ExprId eid, const NativeTerms& ir,
                        std::unordered_map<std::string, mpq_class>& coeffs,
                        mpq_class& constant,
-                       const mpq_class& mul = mpq_class(1));
+                       const mpq_class& mul = mpq_class(1), WorkBudget* budget = nullptr);
 
 // ============================================================================
 // Extract a linear constraint from TermExpr (Eq, Lt, Leq, Gt, Geq, Distinct).

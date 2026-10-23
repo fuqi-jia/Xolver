@@ -110,6 +110,15 @@ def cases(seed, count):
         yield f'fp-class-{bits}', ('(declare-const x (_ FloatingPoint 2 3))'
                                   f'(assert (= x ((_ to_fp 2 3) (_ bv{bits} 5))))'
                                   f'(assert ({op} x))'), expected
+    for i in range(count):
+        lo = rng.randrange(-8, 8)
+        hi = lo + rng.randrange(0, 7)
+        prefix = ('(declare-const x Int)(declare-const r Real)'
+                  '(assert (= (to_real x) r))'
+                  f'(assert (> r (/ {integer(lo)} 2)))'
+                  f'(assert (< r (/ {integer(hi)} 2)))')
+        expected = any(lo < 2 * x < hi for x in range(-8, 12))
+        yield f'mixed-linear-{i}', prefix, expected
     # Every free result is checked by replaying the emitted interpretation in
     # both external solvers; satisfiability alone would not test rounding.
     formats = [(2, 3), (3, 4), (5, 11), (8, 24)]
@@ -209,7 +218,14 @@ def main():
     args.output.mkdir(parents=True, exist_ok=False)
     commands = {'xolver': [str(args.solver.resolve()), 'solve'],
                 'z3': [str(Path(args.z3).resolve())],
-                'cvc5': [str(Path(args.cvc5).resolve()), '--lang=smt2']}
+                'cvc5': [str(Path(args.cvc5).resolve()), '--lang=smt2', '--fp-exp']}
+    versions = {}
+    for name, command in commands.items():
+        if name == 'xolver':
+            continue
+        version = subprocess.run([command[0], '--version'], capture_output=True, text=True, timeout=10)
+        versions[name] = dict(version=version.stdout.splitlines()[0] if version.stdout else version.stderr[:200],
+                              sha256=hashlib.sha256(Path(command[0]).read_bytes()).hexdigest())
     failures, total, models = [], 0, 0
     for name, body, expected_bool in cases(args.seed, args.count):
         expected = 'sat' if expected_bool else 'unsat'
@@ -252,7 +268,7 @@ def main():
                 failures.append(dict(case=name, model_error=str(error)))
         with (args.output / 'cases.jsonl').open('a') as stream:
             stream.write(json.dumps(row) + '\n')
-    summary = dict(cases=total, models=models, failures=failures, commands=commands, seed=args.seed,
+    summary = dict(cases=total, models=models, failures=failures, commands=commands, oracles=versions, seed=args.seed,
                    solver_sha256=hashlib.sha256(args.solver.read_bytes()).hexdigest())
     (args.output / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
     print(json.dumps(summary))

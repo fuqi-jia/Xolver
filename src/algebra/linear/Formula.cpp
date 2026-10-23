@@ -36,7 +36,7 @@ Affine Formula::affine(ExprId id) const {
     Affine result{std::vector<mpq_class>(variables.size()), 0};
     std::unordered_map<std::string, mpq_class> coefficients;
     budget_.tick();
-    if (!extractLinearExpr(id, terms_, coefficients, result.constant))
+    if (!extractLinearExpr(id, terms_, coefficients, result.constant, 1, &budget_))
         throw UnsupportedFormula("non-affine arithmetic expression");
     for (const auto &[name, coefficient] : coefficients) {
         auto it = indices_.find(name);

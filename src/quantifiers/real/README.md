@@ -26,3 +26,9 @@ replayable CAD proof certificate.
 
 Projection reference: [Davenport, Computer Algebra lectures](https://people.bath.ac.uk/masjhd/JHD-CA/JHD-CA20211215.pdf).
 CAD background: [Brown, Quantifier Elimination by Cylindrical Algebraic Decomposition](https://www.usna.edu/Users/cs/wcbrown/research/qebycad/Tutorial/node6.html).
+
+Existential coefficients followed by universal real polynomial identities use
+coefficient matching when the resulting coefficient equations are linear. Exact
+Gaussian elimination produces a rational model, which is checked by substitution
+into every original polynomial. Other quantifier orders and nonlinear coefficient
+systems retain the general decomposition path.

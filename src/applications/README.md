@@ -6,7 +6,7 @@ backend support does not restrict the shape of these contracts.
 
 | Application | Problem and result | Executable backend |
 | --- | --- | --- |
-| `smt` | Native assertions; sat/unsat/unknown and models | Arithmetic, UF, arrays, datatypes, finite BV combinations, FP predicates and strings |
+| `smt` | Native assertions; sat/unsat/unknown and models | Arithmetic, UF, arrays, datatypes, finite BV combinations, FP predicates/concrete arithmetic and strings |
 | `omt` | Native objectives, priorities and exact objective values | Lexicographic Bool/BV and linear arithmetic optimization |
 | `counting` | Native assertions and an explicit projected tuple | Exact Bool/BV and linear integer projection; infinite-domain detection |
 | `cp` | Native constraints, variable domains and global constraints | Domains, all-different, tables, element and cardinality constraints |

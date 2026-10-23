@@ -9,7 +9,7 @@ namespace xolver {
 bool extractLinearExpr(ExprId root, const NativeTerms& ir,
                        std::unordered_map<std::string, mpq_class>& coeffs,
                        mpq_class& constant,
-                       const mpq_class& mulRoot) {
+                       const mpq_class& mulRoot, WorkBudget* budget) {
     // Iterative pre-order accumulation (was recursive on Add/Sub/Neg/Mul/Div/
     // ToReal children; a deeply-nested linear term blew the call stack). Each
     // work item carries its accumulated scale `mul`; leaves fold into
@@ -20,6 +20,7 @@ bool extractLinearExpr(ExprId root, const NativeTerms& ir,
     stack.push_back({root, mulRoot});
 
     while (!stack.empty()) {
+        if (budget) budget->tick();
         Item item = std::move(stack.back());
         stack.pop_back();
         const mpq_class& mul = item.mul;

@@ -1,6 +1,7 @@
 #include "applications/counting/Solver.h"
 #include "applications/cp/Solver.h"
 #include "applications/de/ode/Solver.h"
+#include "applications/de/pde/Solver.h"
 #include "applications/milp/Solver.h"
 #include "applications/omt/Optimize.h"
 #include "applications/smt/Solver.h"
@@ -233,4 +234,47 @@ TEST_CASE("application foundations: integer division is not rational linear scal
         {}};
     CHECK(applications::omt::Solver().solve(optimization).status ==
           applications::omt::Status::Unknown);
+}
+
+TEST_CASE("application foundations: universal polynomial identities preserve quantifier order") {
+    SOMTParser::Parser p;
+    REQUIRE(p.parseStr("(set-logic NRA)(declare-const a Real)(declare-const b Real)(assert (forall "
+                       "((x Real)) (= (+ (* a x) b) (+ (* 3 x) 2))))"));
+    auto result = oracle(p.getAssertions());
+    INFO(result.reason);
+    REQUIRE((result.result == Result::Sat));
+    REQUIRE(result.model);
+    CHECK((result.model->numericAssignments.at("a") == RealValue::fromInt(3)));
+    CHECK((result.model->numericAssignments.at("b") == RealValue::fromInt(2)));
+    SOMTParser::Parser alternating;
+    REQUIRE(alternating.parseStr(
+        "(set-logic NRA)(assert (forall ((x Real)) (exists ((y Real)) (= y x))))"));
+    CHECK((oracle(alternating.getAssertions()).result == Result::Sat));
+    SOMTParser::Parser impossible;
+    REQUIRE(impossible.parseStr("(set-logic NRA)(declare-const a Real)(assert (forall ((x Real)) "
+                                "(= (+ (* a x x) x 1) 0)))"));
+    CHECK((oracle(impossible.getAssertions()).result == Result::Unsat));
+}
+
+TEST_CASE("application foundations: parametric PDE coefficient equations") {
+    using namespace applications::de;
+    native::Nodes b({});
+    auto real = SOMTParser::SortManager::getReal();
+    auto var = [&](const char *name) { return b.make(real, native::K::NT_VAR, {}, name); };
+    auto x = var("x"), t = var("t"), a = var("a"), dx = var("dx"), dt = var("dt"),
+         origin = var("origin");
+    auto zero = b.make(real, native::K::NT_CONST, {}, "0"),
+         two = b.make(real, native::K::NT_CONST, {}, "2");
+    Problem p{{x, t},
+              {a},
+              {"u"},
+              {{dx, 0, {1, 0}, {}}, {dt, 0, {0, 1}, {}}, {origin, 0, {0, 0}, {zero, zero}}},
+              {{{}, b.equal(dx, a)}, {{}, b.equal(dt, two)}, {{}, b.equal(origin, zero)}}};
+    auto result = pde::Solver({2, 128, {}}).solve(p);
+    INFO(result.reason);
+    REQUIRE(result.status == Status::Solved);
+    auto expected = b.make(
+        real, native::K::NT_ADD,
+        {b.make(real, native::K::NT_MUL, {a, x}), b.make(real, native::K::NT_MUL, {two, t})});
+    CHECK((oracle({b.negate(b.equal(result.functions[0], expected))}).result == Result::Unsat));
 }
