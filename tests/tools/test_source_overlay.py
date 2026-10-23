@@ -28,6 +28,29 @@ def archive(root, files, removed=None):
 
 
 class SourceOverlay(unittest.TestCase):
+    def test_committed_project_changes_are_packaged_relative_to_server_base(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            def git(*args):
+                return subprocess.check_output(["git", "-c", "user.name=Overlay test",
+                    "-c", "user.email=overlay@example.invalid", *args], cwd=root, stderr=subprocess.PIPE)
+            git("init", "-q")
+            (root / "old.cpp").write_text("server source\n")
+            git("add", "."); git("commit", "-qm", "server revision")
+            base = git("rev-parse", "HEAD").decode().strip()
+            (root / "old.cpp").unlink()
+            (root / "new.cpp").write_text("committed feature\n")
+            git("add", "-A"); git("commit", "-qm", "feature revision")
+            output = root / "update.tar.gz"
+            completed = subprocess.run([sys.executable, str(PACKAGE), str(output), "--base", base],
+                cwd=root, capture_output=True, text=True, timeout=30)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            record = json.loads(output.with_suffix(".json").read_text())
+            self.assertIn("new.cpp", record["members"])
+            self.assertEqual(record["removed"]["old.cpp"], hashlib.sha256(b"server source\n").hexdigest())
+            self.assertEqual(record["base"], base)
+            self.assertNotEqual(record["head"], base)
+
     def test_committed_submodule_update_is_included_with_exact_removed_preimage(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

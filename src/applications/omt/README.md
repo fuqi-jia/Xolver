@@ -1,1 +1,1 @@
-The existing `Optimize` class now derives from the common typed application interface. It remains a skeleton returning `Unknown`: objective optimization, optimality evidence and unboundedness detection are not implemented. This is an explicit capability limit, not an optional runtime gate.
+`Optimize` implements the typed application interface. Objective search, optimality evidence and unboundedness detection are not implemented; optimization requests return `Unknown`.

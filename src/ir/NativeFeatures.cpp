@@ -14,8 +14,12 @@ NativeFeatures nativeFeatures(const std::vector<SOMTParser::Node>& roots) {
         auto sort = node->getSort();
         if (sort) {
             features.real |= sort->isReal();
+            features.integer |= sort->isInt() || sort->isIntOrReal();
+            features.integerVariable |= (sort->isInt() || sort->isIntOrReal()) &&
+                (node->getKind() == K::NT_VAR || node->getKind() == K::NT_QUANT_VAR);
+            features.bitvector |= sort->isBv();
             features.otherSort |= !sort->isBool() && !sort->isInt() &&
-                                  !sort->isIntOrReal() && !sort->isReal();
+                                  !sort->isIntOrReal() && !sort->isReal() && !sort->isBv();
         }
         switch (node->getKind()) {
         case K::NT_FORALL: case K::NT_EXISTS: features.quantified = true; break;

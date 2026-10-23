@@ -10,6 +10,9 @@ struct NativeFeatures {
     bool quantified = false;
     bool spatial = false;
     bool real = false;
+    bool integer = false;
+    bool integerVariable = false;
+    bool bitvector = false;
     bool otherSort = false;
     bool function = false;
 };

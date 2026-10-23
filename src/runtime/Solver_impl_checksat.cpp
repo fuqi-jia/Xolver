@@ -77,7 +77,8 @@ Result Solver::Impl::checkSatInternal() {
         quantifiedRoots.insert(quantifiedRoots.end(), assumptionRoots_.begin(), assumptionRoots_.end());
         const auto nativeRoots = ir->native(quantifiedRoots);
         applications::smt::Problem problem{nativeRoots, {}, {.elimination = recordPA}};
-        if (recordPA || nativeFeatures(nativeRoots).quantified) {
+        const auto features = nativeFeatures(nativeRoots);
+        if (recordPA || (features.quantified && features.integer && !features.real && !features.bitvector)) {
             const long work = config::read<config::ReadKind::Long>("XOLVER_PA_WORK", 2000000);
             const long residues = config::read<config::ReadKind::Long>("XOLVER_PA_RESIDUES", 100000);
             if (work >= 0) problem.integerLimits.work = static_cast<size_t>(work);

@@ -3,6 +3,7 @@
 #include "runtime/SolverImpl.h"
 #include "applications/sv/sl/NativeSeparation.h"
 #include "base/MpqUtils.h"
+#include "quantifiers/FiniteFormula.h"
 #include <type_traits>
 #include <functional>
 #ifdef XOLVER_ENABLE_PROOFS
@@ -1556,6 +1557,11 @@ Term Solver::getValue(Term t) {
 
     const auto& expr = pImpl->ir->get(t.id());
     auto sortKind = pImpl->ir->sortKind(expr.sort);
+    if (sortKind == SortKind::BV && pImpl->lastModel_) {
+        const auto value = quantifiers::finiteValue(pImpl->ir->native(t.id()), *pImpl->lastModel_);
+        if (!value) return Term{};
+        return Term{pImpl->ir->add(TermExpr{Kind::ConstBV, expr.sort, {}, Payload(*value)}), pImpl->contextId_};
+    }
 
     // Prefer the typed numeric channel (RealValue) when available: it carries
     // exact values including algebraic ones (e.g. √2 for x²=2), which the
@@ -1774,7 +1780,17 @@ std::string Solver::getValueResponse(size_t scriptIndex) const {
             const auto value = sl::nativeValue(t, *model.separation);
             if (!value) return {};
             val = *value;
-        } else if (t->isVBool() || t->isVInt() || t->isVReal()) {
+        } else if (t->getSort() && (t->getSort()->isBv() || t->getSort()->isBool())) {
+            const auto value = quantifiers::finiteValue(t, model);
+            if (!value) return {};
+            val = *value;
+        } else if (t->isVInt() || t->isVReal()) {
+            auto numeric = model.numericAssignments.find(t->getName());
+            if (numeric != model.numericAssignments.end() && numeric->second.isAlgebraic()) {
+                val = numeric->second.toSmtLib2();
+                out += "(" + SOMTParser::dumpSMTLIB2(t) + " " + val + ")";
+                continue;
+            }
             auto it = model.assignments.find(t->getName());
             if (it == model.assignments.end()) return {};  // unassigned -> bail
             SortKind sk = t->isVBool() ? SortKind::Bool
@@ -2041,6 +2057,13 @@ void Solver::dumpModel(std::ostream& os) const {
             if (tm) {
                 auto it = tm->assignments.find(name);
                 if (it != tm->assignments.end()) raw = it->second;
+            }
+            if (var->getSort() && var->getSort()->isBv()) {
+                const auto width = var->getSort()->getBitWidth();
+                scalarBuf << "  (define-fun " << name << " () " << smtSort << " "
+                          << (raw.empty() ? "(_ bv0 " + std::to_string(width) + ")" : raw)
+                          << ")\n";
+                continue;
             }
             std::string valTerm;
             if (raw.empty()) {

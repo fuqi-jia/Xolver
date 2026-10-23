@@ -45,6 +45,10 @@ jobs:
       - name: Build
         run: cmake --build build -j2
 
+      - name: Quantified-domain algorithm tests
+        timeout-minutes: 5
+        run: ./build/tests/xolver_unit_tests --test-case='quantifiers:*,application dispatch:*' --duration=true
+
       - name: Unit tests (doctest)
         timeout-minutes: 30
         run: ./build/tests/xolver_unit_tests --duration=true
@@ -62,8 +66,23 @@ jobs:
             --timeout 240 \
             -j "$(nproc)"
 
+      - name: Quantified-domain differential checks
+        timeout-minutes: 12
+        run: |
+          bash tools/ci/install_dependencies.sh z3 cvc5
+          python3 tools/fuzz/fuzz_quantifiers.py --solver build/bin/xolver \
+            --output quantifier-validation --count 32 --timeout 10
+
+      - name: Retain quantifier validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quantifier-validation
+          path: quantifier-validation/
+          retention-days: 7
+
   # ---------------------------------------------------------------------------
-  # Proof gate (Phase E): build the proofs-ON config and re-validate every
+  # Proof certificate validation: build the proofs-ON config and re-validate every
   # produced UNSAT proof with an INDEPENDENT external checker — drat-trim for the
   # DRAT Boolean core, Carcara for the Alethe theory certificates. A REJECTED
   # proof is a HARD failure (run_proof_corpus.sh exits non-zero): a wrong proof is

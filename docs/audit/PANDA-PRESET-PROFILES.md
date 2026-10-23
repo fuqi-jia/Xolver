@@ -1,3 +1,8 @@
+# Panda preset allocation record
+
+Source: `tools/tuning/PRESET_PROFILES.md` at Xolver `cf746de343e2bc598dd341516b269f9368886997`.
+The referenced deployment scripts are not current repository interfaces.
+
 # Panda Preset Profiles — quick reference
 
 Use `.\tools\probe_pandas.ps1 -MaxCpuPct 10` first to see which pandas are idle, then pick the matching profile.

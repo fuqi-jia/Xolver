@@ -1,4 +1,7 @@
-# Application architecture and executable call flow
+# Application architecture migration record
+
+This is a revision-specific migration record. For the checked-out version, see
+[current architecture and query flow](../ARCHITECTURE.md).
 
 This migration starts from `d173712fd3e0502499729183e50d6136a336d990`.
 It reorganizes existing implementations and establishes independent application

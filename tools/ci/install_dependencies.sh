@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Hosted CI only: avoid refreshing unrelated mirrors when packages already exist.
 set -euo pipefail
-packages=(cmake build-essential libgmp-dev libmpfr-dev python3)
+packages=(cmake build-essential libgmp-dev libmpfr-dev python3 "$@")
 missing=()
 for package in "${packages[@]}"; do
     if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -qx 'install ok installed'; then

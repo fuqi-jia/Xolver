@@ -20,10 +20,9 @@ LAYERS = {
     "frontend": ["base", "ir", "contracts", "algebra"],
     "search": ["base", "ir", "contracts", "algebra", "evidence"],
     "quantifiers": ["base", "ir", "contracts", "algebra", "search"],
-    "logic": ["base", "ir", "contracts", "algebra", "quantifiers"],
-    "applications": ["base", "ir", "contracts", "algebra", "evidence", "search", "quantifiers", "logic"],
+    "applications": ["base", "ir", "contracts", "algebra", "evidence", "search", "quantifiers"],
     "runtime": ["base", "ir", "contracts", "algebra", "evidence",
-                "frontend", "search", "quantifiers", "logic", "applications"],
+                "frontend", "search", "quantifiers", "applications"],
 }
 INCLUDE = re.compile(r'^\s*#\s*include\s*[<"]([^">]+)[">]', re.M)
 
@@ -71,13 +70,13 @@ def inspect(root: Path = ROOT) -> tuple[dict, list[str]]:
                     edges[layer, target] += 1
                     if target not in LAYERS[layer]:
                         errors.append(f"forbidden dependency: {name} -> {include}")
-            elif include.startswith(tuple(LAYERS) + ("decision/", "solvers/", "theory/", "expr/", "util/", "api/", "proof/", "sat/")):
+            elif include.startswith(tuple(LAYERS) + ("logic/", "decision/", "solvers/", "theory/", "expr/", "util/", "api/", "proof/", "sat/")):
                 errors.append(f"missing internal header: {name} -> {include}")
             # Native external solver and parser headers belong to adapters.
             elif ("cadical" in include and layer != "search"
                   or include.startswith("somtparser/frontend/") and layer not in ("frontend", "runtime")
                   or include.startswith("somtparser/passes/") and layer not in ("frontend", "runtime")
-                  or include.startswith(("somtparser/ir/", "somtparser/core/")) and layer not in ("ir", "logic", "quantifiers", "applications", "frontend", "runtime")
+                  or include.startswith(("somtparser/ir/", "somtparser/core/")) and layer not in ("ir", "quantifiers", "applications", "frontend", "runtime")
                   or include.startswith(("poly/", "polyxx/")) and layer not in ("algebra", "search", "applications")):
                 errors.append(f"external backend leaks into {layer}: {name} -> {include}")
         if layer not in ("base",) and re.search(r"\b(?:getenv|setenv|unsetenv)\s*\(", text):
