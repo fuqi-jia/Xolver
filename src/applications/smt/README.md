@@ -11,8 +11,9 @@ claim of complete coverage.
 | `qfbv`, `bv`, `qbf` | Modular circuits and BDDs; quantification in the BV/QBF entries |
 | `qfufbv` | Ground UF applications with Bool/BV arguments/results and congruence constraints |
 | `qfabv`, `qfaufbv` | Extensional finite arrays with Bool/BV indices and elements; UF composition where signatures match |
-| `qffp`, `qfbvfp` | FP predicates, comparisons, value equality, abs/neg and BV bit reinterpretation |
+| `qffp`, `qfbvfp` | FP predicates/comparisons, value equality, abs/neg, BV reinterpretation and concrete four-operation arithmetic |
 | `qfs`, `qfslia`, `strings` | Unicode constants, equalities, concrete string operations, regex membership and integer constraints |
+| `qflira` | Mixed linear integer/real arithmetic through exact simplex and integer branch search |
 | Arithmetic, `qfuf`, `qfax`, `qfdt`, `qfufdt` | Native quantified arithmetic or the attached incremental ground session |
 | `fp`, `qfufbvfp`, `qfabvfp` | General entry contracts; unsupported binders/combinations return unknown |
 | `sequences`, `sets`, `bags` | Entry contracts; the native operator backends are unavailable |
@@ -23,8 +24,11 @@ need another combination backend. Ground arithmetic arrays continue to use the
 ground session. UF applications under binders do not use ground Ackermannization.
 
 FP values distinguish signed zeros and use one semantic NaN. IEEE `fp.eq` and
-SMT equality have distinct encodings. Rounding-dependent FP arithmetic is not
-implemented by this backend. See the [SMT-LIB FP specification](https://smt-lib.org/theories-FloatingPoint.shtml).
+SMT equality have distinct encodings. Addition, subtraction, multiplication and division use exact rational
+rounding for concrete operands, including variables fixed by asserted equalities.
+All five rounding modes are supported, and rounding-mode variables have an exact
+five-value domain. Unconstrained symbolic FP arithmetic operands, FMA and square
+root still require additional encodings. See the [SMT-LIB FP specification](https://smt-lib.org/theories-FloatingPoint.shtml).
 
 String values use Unicode code points and SMT-LIB escaping. Pure string
 equalities use a finite representative domain; other word constraints use

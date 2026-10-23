@@ -253,6 +253,7 @@ set(XOLVER_APPLICATIONS_SOURCES
     "applications/smt/common/lia/LiaSolver_integrality.cpp"
     "applications/smt/common/lia/LiaSolver_model.cpp"
     "applications/smt/lia/Solver.cpp"
+    "applications/smt/qffp/Arithmetic.cpp"
     "applications/smt/qffp/Engine.cpp"
     "applications/smt/qfidl/IdlSolver.cpp"
     "applications/smt/qflia/Builder.cpp"

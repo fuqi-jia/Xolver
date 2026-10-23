@@ -76,7 +76,7 @@ jobs:
       - name: Quantified-domain algorithm tests
         if: ${{ !cancelled() && steps.test_build.outcome == 'success' }}
         timeout-minutes: 5
-        run: ./build/tests/xolver_unit_tests --test-case='quantifiers:*,application dispatch:*,theory applications:*,application prototypes:*' --duration=true
+        run: ./build/tests/xolver_unit_tests --test-case='quantifiers:*,application dispatch:*,theory applications:*,application prototypes:*,application foundations:*' --duration=true
 
       - name: Unit tests (doctest)
         if: ${{ !cancelled() && steps.test_build.outcome == 'success' }}

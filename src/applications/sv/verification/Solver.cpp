@@ -103,7 +103,7 @@ Answer InvariantSolver::solve(const TransitionSystem &system) {
         auto invariantNext = substitute(system.invariant, next, memo, b);
         auto inductiveAssumptions = system.transition;
         inductiveAssumptions.push_back(system.invariant);
-        return Solver(decide_).solve({{{"initiation", system.initial, system.invariant},
+        return verification::Solver(decide_).solve({{{"initiation", system.initial, system.invariant},
                                        {"consecution", inductiveAssumptions, invariantNext},
                                        {"safety", {system.invariant}, system.safety}}});
     } catch (const std::invalid_argument &e) {

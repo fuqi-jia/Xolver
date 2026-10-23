@@ -110,6 +110,35 @@ def cases(seed, count):
         yield f'fp-class-{bits}', ('(declare-const x (_ FloatingPoint 2 3))'
                                   f'(assert (= x ((_ to_fp 2 3) (_ bv{bits} 5))))'
                                   f'(assert ({op} x))'), expected
+    # Every free result is checked by replaying the emitted interpretation in
+    # both external solvers; satisfiability alone would not test rounding.
+    formats = [(2, 3), (3, 4), (5, 11), (8, 24)]
+    rounding = ['RNE', 'RNA', 'RTP', 'RTN', 'RTZ']
+    for i in range(count * 5):
+        e, precision = formats[i % len(formats)]
+        width = e + precision
+        a, b = rng.randrange(1 << width), rng.randrange(1 << width)
+        operation = ['fp.add', 'fp.sub', 'fp.mul', 'fp.div'][(i // 5) % 4]
+        mode = rounding[i % 5]
+        ty = f'(_ FloatingPoint {e} {precision})'
+        x = f'((_ to_fp {e} {precision}) (_ bv{a} {width}))'
+        y = f'((_ to_fp {e} {precision}) (_ bv{b} {width}))'
+        prefix = (f'(declare-const x {ty})(declare-const y {ty})(declare-const result {ty})'
+                  f'(assert (= x {x}))(assert (= y {y}))'
+                  f'(assert (= result ({operation} {mode} x y)))')
+        yield f'fp-arithmetic-{i}', prefix, True
+    for mode in rounding:
+        for operation in ['fp.add', 'fp.sub', 'fp.mul', 'fp.div']:
+            for a, b in [(0, 0), (16, 0), (0, 16), (16, 16), (12, 28),
+                         (12, 0), (1, 8), (11, 8), (13, 4), (4, 20)]:
+                prefix = ('(declare-const result (_ FloatingPoint 2 3))'
+                          f'(assert (= result ({operation} {mode}'
+                          f' ((_ to_fp 2 3) (_ bv{a} 5)) ((_ to_fp 2 3) (_ bv{b} 5)))))')
+                yield f'fp-edge-{operation}-{mode}-{a}-{b}', prefix, True
+    yield 'fp-symbolic-rounding', ('(declare-const mode RoundingMode)'
+        '(declare-const result (_ FloatingPoint 2 3))'
+        '(assert (distinct mode RTZ))'
+        '(assert (= result (fp.add mode (fp #b0 #b01 #b00) (fp #b0 #b00 #b01))))'), True
     for i in range(count):
         a, b, c = (rng.randrange(8) for _ in range(3))
         yield f'uf-{i}', ('(declare-fun f ((_ BitVec 3)) (_ BitVec 3))'

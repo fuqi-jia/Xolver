@@ -219,3 +219,18 @@ TEST_CASE("application foundations: polynomial ODE solutions depend on declared 
     CHECK((oracle({b.negate(b.equal(r.functions[0], b.make(reals, native::K::NT_MUL, {a, t})))})
                .result == Result::Unsat));
 }
+
+TEST_CASE("application foundations: integer division is not rational linear scaling") {
+    SOMTParser::Parser p;
+    REQUIRE(p.parseStr(
+        "(set-logic QF_LIA)(declare-const x Int)(assert (= x 3))(assert (= (div x 2) 1))"));
+    CHECK((oracle(p.getAssertions()).result == Result::Sat));
+    applications::omt::Problem optimization{
+        p.getAssertions(),
+        {{symbol(p, "x"), applications::omt::Direction::Minimize,
+          applications::omt::Order::Arithmetic}},
+        applications::omt::Priority::Lexicographic,
+        {}};
+    CHECK(applications::omt::Solver().solve(optimization).status ==
+          applications::omt::Status::Unknown);
+}

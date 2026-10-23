@@ -7,8 +7,8 @@ mean the current coordinates; explicit arguments describe initial or boundary
 conditions. Equations may have local assumptions. ODE and PDE share this problem
 contract, with ODE requiring one independent coordinate.
 
-`Solver` searches polynomial function candidates up to a configurable degree
-and monomial budget. It substitutes their derivatives into every obligation,
+`Solver` searches polynomial function candidates over coordinates and declared real parameters, up to a configurable total
+degree and monomial budget. It substitutes their derivatives into every obligation,
 universally quantifies coordinates and parameters, and solves for coefficients.
 Each returned function passes another exact substitution check. `Solved` means
 these functions satisfy the supplied equations, not uniqueness or completeness.
@@ -17,6 +17,6 @@ differential problem has no solution.
 
 The interface accepts general native equations. Non-polynomial operators,
 unsupported quantified theories and algebraic coefficient serialization can
-require another backend. Free parameters must be declared explicitly so they
+require another backend. Parameters must be declared explicitly so they
 cannot silently become existential fitting variables. Jet arguments depending
 on unknown fields require a different substitution backend.

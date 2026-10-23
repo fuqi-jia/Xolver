@@ -1,11 +1,15 @@
-# Model counting
+# Projected model counting
 
-`Problem` contains native assertions and the explicit tuple of free variables
-to count. Include unused declarations when their values belong to the counted
-space. All other free symbols are existential. The empty tuple has one model
-when the assertions are satisfiable, and zero otherwise.
+`Problem` contains native assertions and an explicit tuple of distinct free
+variables. Unprojected variables are existential; unused projected declarations
+still contribute their domain. An empty tuple has zero or one satisfying value.
+The result separates exact finite counts, infinite cardinality, invalid input
+and unknown; finite counts use arbitrary-precision integers.
 
-The backend counts projected Boolean/BV valuations with BDD abstraction and
-arbitrary-precision integer arithmetic. Quantified variables are not counted.
-Results distinguish exact finite counts, infinity, invalid input and unknown;
-unsupported domains return unknown, not a fabricated finite or infinite count.
+Bool/BV projection uses exact BDD counting. Linear integer/Boolean projection
+uses exact mixed-integer bounds and tuple feasibility checks, with existential
+integer or real variables. Overlapping disjuncts count each projected tuple once.
+A feasible point and an improving rational recession ray certify infinitely
+many discrete projected values. Bounded enumeration is resource-controlled.
+Continuous projected variables, nonlinear counting and mixed BV/arithmetic
+counting require additional backends. Unknown never carries a partial exact count.
