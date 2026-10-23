@@ -21,7 +21,7 @@ struct Problem {
 enum class Status { Optimal, Infeasible, InfimumNotAttained, Unbounded, Unknown, InvalidInput };
 struct Answer {
     Status status = Status::Unknown;
-    std::vector<mpq_class> objectiveValues;
+    std::vector<RealValue> objectiveValues;
     std::optional<TheoryModel> model;
     std::string reason;
 };

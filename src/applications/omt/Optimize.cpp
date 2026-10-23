@@ -18,7 +18,7 @@ Answer Solver::solve(const Problem& problem) {
     answer.reason=std::move(result.answer.reason);answer.model=std::move(result.answer.model);
     if(result.answer.result==Result::Sat) {
         answer.status=Status::Optimal;
-        for(const auto& value:result.objectives)answer.objectiveValues.emplace_back(value);
+        for(const auto& value:result.objectives)answer.objectiveValues.push_back(RealValue::fromMpq(mpq_class(value)));
     } else if(result.answer.result==Result::Unsat)answer.status=Status::Infeasible;
     return answer;
 }

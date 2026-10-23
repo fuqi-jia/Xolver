@@ -39,9 +39,9 @@ TEST_CASE("application prototypes: lexicographic bit-vector optimization") {
     auto x=symbol(p,"x"),y=symbol(p,"y");Solver solver;
     auto answer=solver.solve({p.getAssertions(),{{x,Direction::Maximize,Order::UnsignedBitVector},{y,Direction::Maximize,Order::UnsignedBitVector}},Priority::Lexicographic,{}});
     REQUIRE((answer.status==Status::Optimal));REQUIRE(answer.objectiveValues.size()==2);
-    CHECK((answer.objectiveValues[0]==15));CHECK((answer.objectiveValues[1]==10));REQUIRE(answer.model);
+    CHECK((answer.objectiveValues[0]==RealValue::fromInt(15)));CHECK((answer.objectiveValues[1]==RealValue::fromInt(10)));REQUIRE(answer.model);
     auto signedAnswer=solver.solve({{},{{x,Direction::Minimize,Order::SignedBitVector}},Priority::Lexicographic,{}});
-    REQUIRE((signedAnswer.status==Status::Optimal));CHECK((signedAnswer.objectiveValues[0]==-8));
+    REQUIRE((signedAnswer.status==Status::Optimal));CHECK((signedAnswer.objectiveValues[0]==RealValue::fromInt(-8)));
     applications::smt::qfbv::Solver satisfiable;CHECK((satisfiable.solve({p.getAssertions(),{},{},{}}).result==Result::Sat));
 }
 TEST_CASE("application prototypes: CP domains and verification conditions") {

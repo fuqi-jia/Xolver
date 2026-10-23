@@ -10,9 +10,9 @@ std::string_view logicName(Logic) noexcept;
 SolverAnswer solveLogic(Logic,const Problem&,Solver::GroundSolve = {});
 template<Logic L>
 class LogicSolver final : public TypedSolver<Problem,SolverAnswer> {
-    Solver::GroundSolve ground_;
+    smt::Solver::GroundSolve ground_;
 public:
-    explicit LogicSolver(Solver::GroundSolve ground={}):ground_(std::move(ground)){}
+    explicit LogicSolver(smt::Solver::GroundSolve ground={}):ground_(std::move(ground)){}
     Family family() const noexcept override{return Family::Smt;}
     std::string_view name() const noexcept override{return logicName(L);}
     SolverAnswer solve(const Problem& p) override{return solveLogic(L,p,ground_);}
