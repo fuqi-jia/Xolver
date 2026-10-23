@@ -12,6 +12,7 @@ struct Request {
     std::vector<std::shared_ptr<SOMTParser::DAGNode>> assertions, declarations;
     std::vector<InductiveDefinition> definitions;
     RecursiveSemantics recursion = RecursiveSemantics::Equations;
+    std::vector<PredicateInvariant> invariantCandidates;
 };
 SolverAnswer solve(const Request&, Limits = {});
 class Solver final : public applications::TypedSolver<Request, SolverAnswer> {

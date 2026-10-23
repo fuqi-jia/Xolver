@@ -13,8 +13,9 @@ SolverAnswer Solver::solve(const Request& request) {
         decision = decideNative(request.location, request.data, request.assertions,
                                 request.declarations, limits);
     } else if (request.recursion == RecursiveSemantics::LeastFixedPoint) {
-        decision = decideInductiveNative(request.location, request.data, request.assertions,
-                                         request.declarations, request.definitions, limits);
+        decision = solveInductiveNative(request.location, request.data, request.assertions,
+                                         request.declarations, request.definitions,
+                                         request.invariantCandidates, limits).decision;
     } else {
         decision.reason = "ordinary recursive equations are outside the SL inductive semantics; "
                           "an explicit SHID logic is required for least-fixed-point predicates";
