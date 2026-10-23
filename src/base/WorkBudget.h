@@ -5,10 +5,13 @@
 #include <stdexcept>
 
 namespace xolver {
-struct ResourceExhausted : std::runtime_error { using std::runtime_error::runtime_error; };
+struct ResourceExhausted : std::runtime_error {
+    using std::runtime_error::runtime_error;
+};
 class WorkBudget {
     std::size_t limit_, used_ = 0;
-public:
+
+  public:
     explicit WorkBudget(std::size_t limit = 2000000) : limit_(limit) {}
     void tick(std::size_t amount = 1) {
         if (amount > std::numeric_limits<std::size_t>::max() - used_ ||
@@ -19,4 +22,4 @@ public:
             throw ResourceExhausted("wall-clock budget exhausted");
     }
 };
-}
+} // namespace xolver

@@ -18,6 +18,13 @@ identity, shadowing and arbitrary quantifier alternation. Free variables are
 existential for satisfiability; models contain their values, not Skolem functions
 for bound variables.
 
+`analyzeFinite` also exposes projected model counting and lexicographic Boolean
+or signed/unsigned bit-vector optimization. Projection existentially abstracts
+the other free variables; an empty tuple has count zero or one. Counts use exact
+integers, including unconstrained projected variables. These operations share
+the compiler and Boolean diagrams with QBF/QBV solving; application-specific
+problem and result contracts remain in `applications`.
+
 Integer numeric congruence, CRT and witness calculations belong to
 `algebra/integer`. Real polynomial operations and root isolation use the algebra
 and search infrastructure. Fixed-width circuits use Boolean diagrams; the

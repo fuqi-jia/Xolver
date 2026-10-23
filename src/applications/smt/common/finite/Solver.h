@@ -3,5 +3,5 @@
 #include "quantifiers/Resources.h"
 namespace xolver::applications::smt::finite {
 // Finite extensional arrays and Ackermann constraints for ground UF applications.
-SolverAnswer solve(const NativeAssertions&, quantifiers::Limits = {});
-}
+SolverAnswer solve(const NativeAssertions &, quantifiers::Limits = {});
+} // namespace xolver::applications::smt::finite

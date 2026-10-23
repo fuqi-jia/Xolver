@@ -25,10 +25,10 @@ struct Answer {
     std::optional<TheoryModel> model;
     std::string reason;
 };
-class Solver final : public TypedSolver<Problem,Answer> {
-public:
-    Family family() const noexcept override {return Family::Omt;}
-    std::string_view name() const noexcept override {return "omt";}
-    Answer solve(const Problem&) override;
+class Solver final : public TypedSolver<Problem, Answer> {
+  public:
+    Family family() const noexcept override { return Family::Omt; }
+    std::string_view name() const noexcept override { return "omt"; }
+    Answer solve(const Problem &) override;
 };
-}
+} // namespace xolver::applications::omt

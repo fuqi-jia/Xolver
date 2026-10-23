@@ -58,6 +58,11 @@ flowchart TD
     Heap -->|declare-heap| SL[SV/SL request]
     Heap -->|ordinary SMT| SMT[SMT application]
     SMT --> Classify{Native formula features}
+    Classify -->|FP| FP[FP value and predicate encoding]
+    Classify -->|String| Words[Word models and exact string evaluation]
+    Classify -->|finite UF / arrays| Finite[Extensional arrays and congruence constraints]
+    FP --> QBV
+    Finite --> QBV
     Classify -->|quantifiers or bit-vectors| Domain{Supported domain}
     Classify -->|ground arithmetic and combinations| Ground[Incremental ground session]
     Domain -->|Bool| QBF[BDD quantification]
@@ -97,9 +102,9 @@ callback. Quantifier solving runs over the current native assertion snapshot.
 
 ## Capability and evidence boundaries
 
-SMT, PA and SL have implemented solver entries. OMT has an interface with no
-objective-search implementation. CP, MILP optimization, counting, ODE and PDE
-have reserved application directories. Experimental MCSAT/NLSAT components are
+SMT, OMT, CP, MILP, counting, verification conditions, PA, SL, ODE and PDE have
+typed application entries and executable backends. Their general contracts and
+backend limits are documented in [applications](../src/applications/README.md). Experimental MCSAT/NLSAT components are
 available as source but are not the default query path.
 
 Quantified UF, arrays, mixed integer/real and mixed integer/bit-vector formulas

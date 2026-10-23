@@ -1,32 +1,34 @@
 # Solver applications
 
-Applications compose infrastructure to solve a stated problem. They do not own
-shared logical foundations, SAT implementations or mathematical primitives.
+Applications compose infrastructure through `Solver` and `TypedSolver<Input,
+Output>`. Problem contracts describe the application's mathematical semantics;
+backend support does not restrict the shape of these contracts.
 
-| Directory | Responsibility | Current implementation |
+| Application | Problem and result | Executable backend |
 | --- | --- | --- |
-| `smt` | Satisfiability and per-logic theory composition | QF theory combinations; quantified Boolean, bit-vector, integer and real arithmetic |
-| `omt` | Optimization modulo theories | `Optimize` interface; no objective search yet |
-| `cp` | Constraint programming | Reserved; no algorithm yet |
-| `milp` | Mixed-integer linear optimization | Reserved; no objective optimizer yet |
-| `de/ode`, `de/pde` | Differential equation applications | Reserved; no algorithm yet |
-| `sv/pa`, `sv/sl` | Dedicated PA and separation-logic problems | Native arithmetic and heap solvers with domain-specific models |
-| `counting` | Model counting | Reserved; no algorithm yet |
+| `smt` | Native assertions; sat/unsat/unknown and models | Arithmetic, UF, arrays, datatypes, finite BV combinations, FP predicates and strings |
+| `omt` | Native objectives, priorities and exact objective values | Lexicographic Bool/BV optimization using BDDs |
+| `counting` | Native assertions and an explicit projected tuple | Exact projected Bool/BV model counting |
+| `cp` | Native constraints, variable domains and global constraints | Domain and all-different compilation through an injected decision oracle |
+| `milp` | Rational linear constraints, integer/continuous variables, bounds and objective | Exact finite-box mixed-integer optimization |
+| `sv/verification` | Named assumptions/conclusions | Verification-condition checking with counterexamples through an injected decision oracle |
+| `sv/pa`, `sv/sl` | Presburger or explicit heap semantics | Integer elimination and separation-logic search |
+| `de/ode`, `de/pde` | Native equations, coordinates, parameters and derivative applications | Polynomial solution search with exact substitution checks |
 
-`Solver.h` defines the common abstract `Solver` identity and lifetime, and
-`TypedSolver<Input, Output>` supplies a virtual `solve(const Input&)`. SMT, PA,
-SL and the OMT interface implement this interface. There is no default
-solver that silently returns `unknown`. The different result types are deliberate:
-an optimum, a count and a satisfiability decision have different meanings.
+The CLI's SMT session supplies the stateful ground callback. The application
+headers also support direct C++ use; CP and verification-condition clients inject
+`DecisionOracle`. This is composition of independent applications, with no
+application-family include dependency. No language frontend is inferred for SV.
 
-Only application entries derive from this base. `TheorySolver` is the lower-level
-CDCL(T) callback contract, not an application interface; making it inherit this
-base would introduce a dependency from infrastructure back to applications.
+An optimization optimum, a projected count and a differential solution have
+different result types. A bounded search failure cannot imply nonexistence.
+Unknown results carry a reason; any incumbent retained after resource exhaustion
+is not an optimality claim. Resource controls bound work, not input semantics.
 
-A helper used by one solver remains with that solver. Shared application-specific
-code belongs to that application's `common/`, such as `smt/common/lia`. There is
-no `applications/common/` and no dependency between SMT, OMT, SV or other families.
-Cross-application mathematics belongs to the appropriate lower layer, after its
-application-specific assumptions and input conversion have been separated.
+Helpers used only by one backend stay with it. SMT's finite-combination code is
+in `smt/common/finite`; native DAG construction is in `ir/NativeBuilder.h`, and
+exact rectangular linear solving is in `algebra/linear`. Shared mathematics and
+formula representations do not belong in an `applications/common` folder.
 
-See [the dependency and call-flow diagrams](../../docs/ARCHITECTURE.md).
+See [architecture and query flow](../../docs/ARCHITECTURE.md) and the README in
+each application for capability and evidence limits.

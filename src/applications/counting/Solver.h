@@ -12,11 +12,15 @@ struct Problem {
     quantifiers::Limits limits;
 };
 enum class Status { Exact, Infinite, Unknown, InvalidInput };
-struct Answer {Status status=Status::Unknown;mpz_class count=0;std::string reason;};
-class Solver final : public TypedSolver<Problem,Answer> {
-public:
-    Family family() const noexcept override {return Family::Counting;}
-    std::string_view name() const noexcept override {return "counting";}
-    Answer solve(const Problem&) override;
+struct Answer {
+    Status status = Status::Unknown;
+    mpz_class count = 0;
+    std::string reason;
 };
-}
+class Solver final : public TypedSolver<Problem, Answer> {
+  public:
+    Family family() const noexcept override { return Family::Counting; }
+    std::string_view name() const noexcept override { return "counting"; }
+    Answer solve(const Problem &) override;
+};
+} // namespace xolver::applications::counting
