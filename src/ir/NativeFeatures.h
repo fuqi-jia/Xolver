@@ -13,6 +13,11 @@ struct NativeFeatures {
     bool integer = false;
     bool integerVariable = false;
     bool bitvector = false;
+    bool floatingPoint = false;
+    bool strings = false;
+    bool arrays = false;
+    bool finiteArray = false;
+    bool collections = false;
     bool otherSort = false;
     bool function = false;
 };

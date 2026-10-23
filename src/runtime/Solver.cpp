@@ -1784,6 +1784,13 @@ std::string Solver::getValueResponse(size_t scriptIndex) const {
             const auto value = quantifiers::finiteValue(t, model);
             if (!value) return {};
             val = *value;
+        } else if (t->getKind() == SOMTParser::NODE_KIND::NT_VAR && t->getSort() &&
+                   (t->getSort()->isFp() || t->getSort()->isStr())) {
+            const auto found = model.assignments.find(t->getName());
+            if (found != model.assignments.end() && found->second.starts_with("#smt:")) val = found->second.substr(5);
+            else if (t->getSort()->isStr()) val = "\"\"";
+            else val = "(_ +zero " + std::to_string(t->getSort()->getExponentWidth()) + " " +
+                       std::to_string(t->getSort()->getSignificandWidth()) + ")";
         } else if (t->isVInt() || t->isVReal()) {
             auto numeric = model.numericAssignments.find(t->getName());
             if (numeric != model.numericAssignments.end() && numeric->second.isAlgebraic()) {
@@ -1889,6 +1896,7 @@ void Solver::dumpModel(std::ostream& os) const {
 
         // Resolve a token to a printable SMT term of the given sort.
         std::string resolve(const std::string& tok, const std::string& smtSort) {
+            if (tok.starts_with("#smt:")) return tok.substr(5);
             SK k = classify(smtSort);
             if (tok.rfind("#b:", 0) == 0) return tok.substr(3) == "1" ? "true" : "false";
             if (tok.rfind("#n:", 0) == 0) {
@@ -1994,6 +2002,10 @@ void Solver::dumpModel(std::ostream& os) const {
     };
     std::function<std::string(const std::shared_ptr<SOMTParser::Sort>&)> unconstrainedValue;
     unconstrainedValue = [&](const std::shared_ptr<SOMTParser::Sort>& sort) -> std::string {
+        if (sort->isBv()) return "(_ bv0 " + std::to_string(sort->getBitWidth()) + ")";
+        if (sort->isStr()) return "\"\"";
+        if (sort->isFp()) return "(_ +zero " + std::to_string(sort->getExponentWidth()) + " " +
+                                  std::to_string(sort->getSignificandWidth()) + ")";
         if (sort->isArray())
             return "((as const " + sort->toString() + ") " + unconstrainedValue(sort->getElemSort()) + ")";
         return emit.resolve("@unconstrained_arr_default:" + sort->toString(), sort->toString());
@@ -2063,6 +2075,12 @@ void Solver::dumpModel(std::ostream& os) const {
                 scalarBuf << "  (define-fun " << name << " () " << smtSort << " "
                           << (raw.empty() ? "(_ bv0 " + std::to_string(width) + ")" : raw)
                           << ")\n";
+                continue;
+            }
+            if (var->getSort() && (var->getSort()->isFp() || var->getSort()->isStr())) {
+                if (!raw.empty() && !raw.starts_with("#smt:")) { os << "(error \"invalid native model literal\")\n"; return; }
+                scalarBuf << "  (define-fun " << name << " () " << smtSort << " "
+                          << (raw.empty() ? unconstrainedValue(var->getSort()) : raw.substr(5)) << ")\n";
                 continue;
             }
             std::string valTerm;

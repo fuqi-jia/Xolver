@@ -47,7 +47,7 @@ jobs:
 
       - name: Quantified-domain algorithm tests
         timeout-minutes: 5
-        run: ./build/tests/xolver_unit_tests --test-case='quantifiers:*,application dispatch:*' --duration=true
+        run: ./build/tests/xolver_unit_tests --test-case='quantifiers:*,application dispatch:*,theory applications:*,application prototypes:*' --duration=true
 
       - name: Unit tests (doctest)
         timeout-minutes: 30

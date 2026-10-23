@@ -12,6 +12,8 @@ struct TheoryModel {
     // variable name -> value string (e.g. "x" -> "42", "y" -> "3/4").
     // Legacy channel; carries both numeric and boolean values as strings.
     std::unordered_map<std::string, std::string> assignments;
+    // The #smt: prefix denotes a complete, typed SMT-LIB value literal supplied
+    // by a native theory backend, including FP/String values and UF/array cells.
     // Typed numeric channel (RealValue unification, Phase 1). Solvers that
     // have migrated populate this; consumers prefer it for arithmetic
     // variables and fall back to `assignments` otherwise. Lets NRA export

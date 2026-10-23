@@ -3,6 +3,7 @@
 #include <somtparser/ir/node.h>
 #include <algorithm>
 #include <map>
+#include <set>
 #include <sstream>
 #include <unordered_map>
 
@@ -332,9 +333,7 @@ public:
         return node->getSort()->isBool() ? (value == 0 ? "false" : "true") :
             "(_ bv" + value.get_str() + " " + std::to_string(bits.size()) + ")";
     }
-    SolverAnswer solve(const Roots& roots) {
-        Bit result = 1;
-        for (const auto& root : roots) result = diagram_.conjunction(result, formula(root));
+    SolverAnswer model(Bit result) {
         SolverAnswer answer;
         answer.result = result == 0 ? Result::Unsat : Result::Sat;
         if (result != 0) {
@@ -351,6 +350,40 @@ public:
         }
         return answer;
     }
+    FiniteAnalysis analyze(const Roots& roots,const std::optional<Roots>& projection,
+                           const std::vector<FiniteObjective>& objectives) {
+        Bit result = 1;
+        for (const auto& root : roots) result = diagram_.conjunction(result, formula(root));
+        FiniteAnalysis out;
+        if(projection) {
+            std::set<Node> projected;
+            std::vector<boolean::Diagram::Variable> keep,hidden;
+            for(auto node:*projection) {
+                if(!node || node->getKind()!=Kind::NT_VAR || !projected.insert(node).second)
+                    throw Unsupported("count projection requires distinct free variables");
+                for(auto bit:term(node))keep.push_back(diagram_.variableOf(bit));
+            }
+            for(const auto& [node,bits]:free_)if(!projected.contains(node))
+                for(auto bit:bits)hidden.push_back(diagram_.variableOf(bit));
+            out.count=diagram_.count(diagram_.eliminate(result,hidden,false),keep);
+        }
+        for(const auto& objective:objectives) {
+            const auto bits=term(objective.term);
+            if(result==0)break;
+            for(std::size_t i=bits.size();i-- >0;) {
+                const bool preferOne=objective.maximize != (objective.signedOrder && i==bits.size()-1);
+                const auto chosen=diagram_.conjunction(result,preferOne?bits[i]:diagram_.negate(bits[i]));
+                if(chosen!=0)result=chosen;
+                else result=diagram_.conjunction(result,preferOne?diagram_.negate(bits[i]):bits[i]);
+            }
+            const auto witness=diagram_.witness(result);mpz_class value=0;
+            for(std::size_t i=0;i<bits.size();++i)if(diagram_.evaluate(bits[i],witness))mpz_setbit(value.get_mpz_t(),i);
+            if(objective.signedOrder && mpz_tstbit(value.get_mpz_t(),bits.size()-1))value-=mpz_class(1)<<bits.size();
+            out.objectives.push_back(value);
+        }
+        out.answer=model(result);return out;
+    }
+    SolverAnswer solve(const Roots& roots) { return analyze(roots,std::nullopt,{}).answer; }
 };
 }
 SolverAnswer solveFinite(const Roots& roots, Limits limits, bool bitvectors) {
@@ -366,5 +399,12 @@ std::optional<std::string> finiteValue(const Node& node, const TheoryModel& inte
     catch (const Exhausted&) { return std::nullopt; }
     catch (const Unsupported&) { return std::nullopt; }
     catch (const std::bad_alloc&) { return std::nullopt; }
+}
+FiniteAnalysis analyzeFinite(const Roots& roots,const std::optional<Roots>& projection,
+                             const std::vector<FiniteObjective>& objectives,Limits limits) {
+    try{return Compiler(limits,true).analyze(roots,projection,objectives);}
+    catch(const Exhausted& e){FiniteAnalysis a;a.answer.reason=e.what();return a;}
+    catch(const Unsupported& e){FiniteAnalysis a;a.answer.reason=e.what();return a;}
+    catch(const std::bad_alloc&){FiniteAnalysis a;a.answer.reason="finite analysis memory exhausted";return a;}
 }
 }

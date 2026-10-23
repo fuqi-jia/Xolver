@@ -18,6 +18,25 @@ NativeFeatures nativeFeatures(const std::vector<SOMTParser::Node>& roots) {
             features.integerVariable |= (sort->isInt() || sort->isIntOrReal()) &&
                 (node->getKind() == K::NT_VAR || node->getKind() == K::NT_QUANT_VAR);
             features.bitvector |= sort->isBv();
+            features.floatingPoint |= sort->isFp() || sort->isRoundingMode();
+            features.strings |= sort->isStr() || sort->isReg();
+            features.arrays |= sort->isArray();
+            if(sort->isArray()) {
+                auto i=sort->getIndexSort(),e=sort->getElemSort();
+                features.finiteArray |= i && e && (i->isBool() || i->isBv()) && (e->isBool() || e->isBv());
+            }
+            features.collections |= sort->isSet() || sort->isBag() || sort->isSeq() || sort->isRelation();
+            // A BV domain can be present only in an array signature (e.g. a=b).
+            // Such formulas must not enter an infinite-domain array abstraction.
+            std::vector<std::shared_ptr<SOMTParser::Sort>> sorts{sort};
+            std::unordered_set<std::shared_ptr<SOMTParser::Sort>> seenSorts;
+            while(!sorts.empty()) {
+                auto s=sorts.back();sorts.pop_back();if(!s || !seenSorts.insert(s).second)continue;
+                features.bitvector |= s->isBv();features.floatingPoint |= s->isFp();
+                features.strings |= s->isStr();
+                features.collections |= s->isSet() || s->isBag() || s->isSeq() || s->isRelation();
+                if(s->isArray()){sorts.push_back(s->getIndexSort());sorts.push_back(s->getElemSort());}
+            }
             features.otherSort |= !sort->isBool() && !sort->isInt() &&
                                   !sort->isIntOrReal() && !sort->isReal() && !sort->isBv();
         }

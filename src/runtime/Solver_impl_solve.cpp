@@ -3,6 +3,7 @@
 #include "base/EnvParam.h"
 #include "runtime/SolverImpl.h"
 #include "xolver/Script.h"
+#include "frontend/parser/NativeTheoryPolicy.h"
 #include <fstream>
 #include <iterator>
 
@@ -45,6 +46,7 @@ void Solver::Impl::reset() {
 }
 bool Solver::Impl::parseFile(std::string_view filename) {
         auto nextParser = std::make_unique<SOMTParser::Parser>();
+        preserveNativeTheories(*nextParser->getOptions());
         // Keep response payloads for the selected query snapshot.
         nextParser->setCommandLogging(true);
         // whether parse-time expansion is the Certora blowup. Not for production.
@@ -64,11 +66,12 @@ bool Solver::Impl::parseFile(std::string_view filename) {
         auto opts = nextParser->getOptions();
         // Keep binders and explicit SL syntax intact for their solver entry
         // points. Ground preprocessing must not run across these boundaries.
-        const bool quantified = nativeFeatures(nextParser->getAssertions()).quantified;
+        const auto native = nativeFeatures(nextParser->getAssertions());
+        const bool nativeTheory = native.quantified || native.bitvector || native.floatingPoint || native.strings;
         const auto paOption = options.find("produce-pa-certificate");
         const bool recordPA = paOption != options.end() && paOption->second.kind == OptionValue::Bool && paOption->second.b;
         FrontendAdapter adapter(*nextParser);
-        auto nextIr = adapter.importProblem(!quantified && !recordPA && !nextParser->getHeapLocationSort());
+        auto nextIr = adapter.importProblem(!nativeTheory && !recordPA && !nextParser->getHeapLocationSort());
         if (nextParser->getHeapLocationSort())
             for (auto variable : nextParser->getDeclaredVariables()) nextIr->index(std::move(variable));
         reset();
