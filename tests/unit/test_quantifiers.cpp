@@ -138,6 +138,9 @@ TEST_CASE("quantifiers: real closed fields and degree drops") {
     REQUIRE((model.result == Result::Sat));
     REQUIRE(model.model);
     CHECK(model.model->numericAssignments.at("a").isAlgebraic());
+    const auto& a = model.model->numericAssignments.at("a");
+    CHECK((a > RealValue::fromInt(0)));
+    CHECK((a * a == RealValue::fromInt(2)));
 }
 TEST_CASE("quantifiers: budgets stop computation without a logical verdict") {
     for (const auto& formula : {"(forall ((x Bool)) (or x (not x)))", "(forall ((x Real)) (>= (* x x) 0))"}) {

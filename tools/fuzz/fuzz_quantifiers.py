@@ -101,9 +101,12 @@ def main():
     parser.add_argument('--count', type=int, default=64)
     parser.add_argument('--seed', type=int, default=20261023)
     parser.add_argument('--timeout', type=float, default=15)
+    parser.add_argument('--oracle-timeout', type=float, default=3)
     parser.add_argument('--z3', default=shutil.which('z3'))
     parser.add_argument('--cvc5', default=shutil.which('cvc5'))
     args = parser.parse_args()
+    if args.count <= 0 or args.timeout <= 0 or args.oracle_timeout <= 0:
+        parser.error('case count and time limits must be positive')
     args.output.mkdir(parents=True, exist_ok=False)
     commands = {'xolver': [str(Path(args.solver).resolve()), 'solve']}
     if args.z3:
@@ -115,7 +118,8 @@ def main():
         expected = 'sat' if expected_bool else 'unsat'
         source = args.output / (name + '.smt2')
         source.write_text('(set-logic ALL)\n(assert ' + formula + ')\n(check-sat)\n')
-        result = {engine: invoke(command, source, args.timeout) for engine, command in commands.items()}
+        result = {engine: invoke(command, source, args.timeout if engine == 'xolver' else args.oracle_timeout)
+                  for engine, command in commands.items()}
         row = dict(case=name, expected=expected, sha256=hashlib.sha256(source.read_bytes()).hexdigest(), engines=result)
         rows.append(row)
         for engine, answer in result.items():
@@ -129,6 +133,7 @@ def main():
         with (args.output / 'cases.jsonl').open('a') as out:
             out.write(json.dumps(row) + '\n')
     summary = dict(seed=args.seed, cases=len(rows), commands=commands,
+                   solver_timeout=args.timeout, oracle_timeout=args.oracle_timeout,
                    solver_sha256=hashlib.sha256(Path(args.solver).read_bytes()).hexdigest(),
                    failures=failures, unknowns=unknowns, oracle_decisions=oracle_decisions)
     (args.output / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
