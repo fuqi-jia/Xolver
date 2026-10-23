@@ -18,7 +18,7 @@ void cases(const std::vector<std::pair<std::string, Result>>& inputs) {
         INFO(formula);
         auto answer = quantified("(assert " + formula + ")");
         INFO(answer.reason);
-        CHECK(answer.result == expected);
+        CHECK((answer.result == expected));
     }
 }
 }
@@ -88,7 +88,7 @@ TEST_CASE("quantifiers: QBF alternation and scope") {
         {"(forall ((x Bool)) (ite x (exists ((y Bool)) y) (not x)))", Result::Sat},
         {"(forall ((x Bool)) true)", Result::Sat}});
     auto model = quantified("(declare-const x Bool)(assert x)(assert (exists ((x Bool)) (not x)))");
-    REQUIRE(model.result == Result::Sat);
+    REQUIRE((model.result == Result::Sat));
     REQUIRE(model.model);
     CHECK(model.model->assignments.at("x") == "true");
 }
@@ -112,7 +112,7 @@ TEST_CASE("quantifiers: native fixed-width operators and alternating binders") {
         {"(forall ((x (_ BitVec 128))) (= (bvxor x x) (_ bv0 128)))", Result::Sat},
         {"(forall ((x (_ BitVec 4))) (= (bvadd x (_ bv1 4)) x))", Result::Unsat}});
     auto model = quantified("(declare-const x (_ BitVec 4))(assert (= (bvadd x #x1) #x0))");
-    REQUIRE(model.result == Result::Sat);
+    REQUIRE((model.result == Result::Sat));
     REQUIRE(model.model);
     CHECK(model.model->assignments.at("x") == "(_ bv15 4)");
 }
@@ -136,14 +136,14 @@ TEST_CASE("quantifiers: real closed fields and degree drops") {
     auto model = quantified("(declare-const a Real)(assert (and (> a 0) (= (* a a) 2)))"
                             "(assert (forall ((x Real)) (>= (* x x) 0)))");
     INFO(model.reason);
-    REQUIRE(model.result == Result::Sat);
+    REQUIRE((model.result == Result::Sat));
     REQUIRE(model.model);
     CHECK(model.model->numericAssignments.at("a").isAlgebraic());
 }
 TEST_CASE("quantifiers: budgets stop computation without a logical verdict") {
     for (const auto& formula : {"(forall ((x Bool)) (or x (not x)))", "(forall ((x Real)) (>= (* x x) 0))"}) {
         auto answer = quantified(std::string("(assert ") + formula + ")", {.work = 2});
-        CHECK(answer.result == Result::Unknown);
+        CHECK((answer.result == Result::Unknown));
         CHECK(answer.reason.find("budget") != std::string::npos);
     }
 }
