@@ -3,6 +3,7 @@
 #include "applications/smt/common/finite/Solver.h"
 #include "applications/smt/qffp/Engine.h"
 #include "applications/smt/qfs/Engine.h"
+#include "applications/smt/qflira/Engine.h"
 #include "ir/NativeFeatures.h"
 
 namespace xolver::applications::smt {
@@ -32,6 +33,10 @@ SolverAnswer Solver::solve(const Problem &problem) {
         problem.integerEvidence.model)
         return solveFirstOrder(problem.assertions, problem.integerLimits, problem.integerEvidence,
                                problem.quantifierLimits);
+    if (!features.function && !features.otherSort &&
+        ((!ground_ && (features.integer || features.real)) ||
+         (features.integerVariable && features.real)))
+        if (auto linear = solveLinearArithmetic(problem)) return *linear;
     if (ground_)
         return ground_(problem);
     return solveFirstOrder(problem.assertions, problem.integerLimits, problem.integerEvidence,

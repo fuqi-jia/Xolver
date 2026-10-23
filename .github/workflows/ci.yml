@@ -56,9 +56,10 @@ jobs:
       - name: Native-theory differential and model checks
         timeout-minutes: 12
         run: |
-          bash tools/ci/install_dependencies.sh z3 cvc5
+          bash tools/ci/install_dependencies.sh z3
+          python3 tools/ci/install_oracles.py .validation-oracles
           python3 tools/fuzz/fuzz_theory_applications.py --solver build/bin/xolver \
-            --output theory-validation --count 32 --timeout 10
+            --output theory-validation --count 32 --timeout 10 --cvc5 .validation-oracles/cvc5
 
       - name: Retain native-theory validation evidence
         if: always()
@@ -76,7 +77,7 @@ jobs:
       - name: Quantified-domain algorithm tests
         if: ${{ !cancelled() && steps.test_build.outcome == 'success' }}
         timeout-minutes: 5
-        run: ./build/tests/xolver_unit_tests --test-case='quantifiers:*,application dispatch:*,theory applications:*,application prototypes:*' --duration=true
+        run: ./build/tests/xolver_unit_tests --test-case='quantifiers:*,application dispatch:*,theory applications:*,application prototypes:*,application foundations:*' --duration=true
 
       - name: Unit tests (doctest)
         if: ${{ !cancelled() && steps.test_build.outcome == 'success' }}

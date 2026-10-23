@@ -1,5 +1,5 @@
 #include "applications/de/Solver.h"
-#include "ir/NativeBuilder.h"
+#include "ir/NativeSubstitution.h"
 #include "quantifiers/real/Solver.h"
 #include <functional>
 #include <map>
@@ -30,40 +30,27 @@ class PolynomialSearch {
     Node real(const mpq_class &q) {
         return b.make(SOMTParser::SortManager::getReal(), K::NT_CONST, {}, q.get_str());
     }
-    Node substitute(Node n, const std::map<Node, Node> &replacements, std::map<Node, Node> &memo) {
-        Nodes::Frame frame(b);
-        if (auto it = replacements.find(n); it != replacements.end())
-            return it->second;
-        if (auto it = memo.find(n); it != memo.end())
-            return it->second;
-        if (!n || !n->getSort())
-            throw std::invalid_argument("null differential expression");
-        if (!n->getChildrenSize())
-            return n;
-        std::vector<Node> args;
-        for (auto c : SOMTParser::children(n))
-            args.push_back(substitute(c, replacements, memo));
-        auto out = b.make(n->getSort(), n->getKind(), args, n->getName());
-        memo[n] = out;
-        return out;
-    }
     Node polynomial(std::size_t field, const Monomial &derivative,
                     const NativeAssertions &arguments) {
+        auto values = arguments;
+        values.insert(values.end(), p.parameters.begin(), p.parameters.end());
+        auto derivatives = derivative;
+        derivatives.resize(values.size(), 0);
         std::vector<Node> terms;
         for (std::size_t i = 0; i < monomials.size(); ++i) {
             b.budget.tick();
             mpz_class factor = 1;
             auto powers = monomials[i];
             for (std::size_t j = 0; j < powers.size(); ++j) {
-                if (powers[j] < derivative[j]) {
+                if (powers[j] < derivatives[j]) {
                     factor = 0;
                     break;
                 }
-                for (unsigned k = 0; k < derivative[j]; ++k) {
+                for (unsigned k = 0; k < derivatives[j]; ++k) {
                     b.budget.tick();
                     factor *= powers[j] - k;
                 }
-                powers[j] -= derivative[j];
+                powers[j] -= derivatives[j];
             }
             if (factor == 0)
                 continue;
@@ -73,7 +60,7 @@ class PolynomialSearch {
             for (std::size_t j = 0; j < powers.size(); ++j)
                 for (unsigned k = 0; k < powers[j]; ++k) {
                     b.budget.tick();
-                    product.push_back(arguments[j]);
+                    product.push_back(values[j]);
                 }
             terms.push_back(product.size() == 1
                                 ? product[0]
@@ -94,8 +81,8 @@ class PolynomialSearch {
         for (const auto &equation : p.equations) {
             NativeAssertions assumptions;
             for (auto a : equation.assumptions)
-                assumptions.push_back(substitute(a, jets, cache));
-            auto body = substitute(equation.formula, jets, cache);
+                assumptions.push_back(substitute(a, jets, cache, b));
+            auto body = substitute(equation.formula, jets, cache, b);
             formulas.push_back(
                 assumptions.empty() ? body : b.logical(K::NT_IMPLIES, {b.all(assumptions), body}));
         }
@@ -110,7 +97,7 @@ class PolynomialSearch {
             declarations.push_back(bound);
         }
         cache.clear();
-        auto body = substitute(b.all(formulas), bind, cache);
+        auto body = substitute(b.all(formulas), bind, cache, b);
         if (declarations.empty())
             return {body};
         declarations.insert(declarations.begin(), body);
@@ -118,7 +105,7 @@ class PolynomialSearch {
     }
     void basis(unsigned degree) {
         monomials.clear();
-        Monomial powers(p.coordinates.size(), 0);
+        Monomial powers(p.coordinates.size() + p.parameters.size(), 0);
         std::function<void(std::size_t, unsigned)> visit = [&](std::size_t position,
                                                                unsigned remaining) {
             Nodes::Frame frame(b);
@@ -217,8 +204,13 @@ Answer Solver::solve(const Problem &problem) {
         };
         for (auto n : problem.coordinates)
             variable(n, true);
-        for (auto n : problem.parameters)
+        for (auto n : problem.parameters) {
             variable(n, false);
+            if (!n->getSort()->isReal()) {
+                answer.reason = "polynomial differential backend requires real parameters";
+                return answer;
+            }
+        }
         for (const auto &j : problem.jets) {
             variable(j.symbol, true);
             if (j.field >= problem.fields.size() || j.order.size() != problem.coordinates.size() ||

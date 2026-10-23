@@ -200,3 +200,6 @@ _skbuild/
 # Full validation archives and frozen input copies stay in local/server storage.
 # Keep concise audit reports and provenance in docs/audit instead.
 /docs/audit/evidence/
+
+# Independent validation executables and pinned release archives
+.validation-oracles/

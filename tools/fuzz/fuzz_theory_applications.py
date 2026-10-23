@@ -111,6 +111,44 @@ def cases(seed, count):
                                   f'(assert (= x ((_ to_fp 2 3) (_ bv{bits} 5))))'
                                   f'(assert ({op} x))'), expected
     for i in range(count):
+        lo = rng.randrange(-8, 8)
+        hi = lo + rng.randrange(0, 7)
+        prefix = ('(declare-const x Int)(declare-const r Real)'
+                  '(assert (= (to_real x) r))'
+                  f'(assert (> r (/ {integer(lo)} 2)))'
+                  f'(assert (< r (/ {integer(hi)} 2)))')
+        expected = any(lo < 2 * x < hi for x in range(-8, 12))
+        yield f'mixed-linear-{i}', prefix, expected
+    # Every free result is checked by replaying the emitted interpretation in
+    # both external solvers; satisfiability alone would not test rounding.
+    formats = [(2, 3), (3, 4), (5, 11), (8, 24)]
+    rounding = ['RNE', 'RNA', 'RTP', 'RTN', 'RTZ']
+    for i in range(count * 5):
+        e, precision = formats[i % len(formats)]
+        width = e + precision
+        a, b = rng.randrange(1 << width), rng.randrange(1 << width)
+        operation = ['fp.add', 'fp.sub', 'fp.mul', 'fp.div'][(i // 5) % 4]
+        mode = rounding[i % 5]
+        ty = f'(_ FloatingPoint {e} {precision})'
+        x = f'((_ to_fp {e} {precision}) (_ bv{a} {width}))'
+        y = f'((_ to_fp {e} {precision}) (_ bv{b} {width}))'
+        prefix = (f'(declare-const x {ty})(declare-const y {ty})(declare-const result {ty})'
+                  f'(assert (= x {x}))(assert (= y {y}))'
+                  f'(assert (= result ({operation} {mode} x y)))')
+        yield f'fp-arithmetic-{i}', prefix, True
+    for mode in rounding:
+        for operation in ['fp.add', 'fp.sub', 'fp.mul', 'fp.div']:
+            for a, b in [(0, 0), (16, 0), (0, 16), (16, 16), (12, 28),
+                         (12, 0), (1, 8), (11, 8), (13, 4), (4, 20)]:
+                prefix = ('(declare-const result (_ FloatingPoint 2 3))'
+                          f'(assert (= result ({operation} {mode}'
+                          f' ((_ to_fp 2 3) (_ bv{a} 5)) ((_ to_fp 2 3) (_ bv{b} 5)))))')
+                yield f'fp-edge-{operation}-{mode}-{a}-{b}', prefix, True
+    yield 'fp-symbolic-rounding', ('(declare-const mode RoundingMode)'
+        '(declare-const result (_ FloatingPoint 2 3))'
+        '(assert (distinct mode RTZ))'
+        '(assert (= result (fp.add mode (fp #b0 #b01 #b00) (fp #b0 #b00 #b01))))'), True
+    for i in range(count):
         a, b, c = (rng.randrange(8) for _ in range(3))
         yield f'uf-{i}', ('(declare-fun f ((_ BitVec 3)) (_ BitVec 3))'
                           '(declare-const x (_ BitVec 3))'
@@ -180,7 +218,14 @@ def main():
     args.output.mkdir(parents=True, exist_ok=False)
     commands = {'xolver': [str(args.solver.resolve()), 'solve'],
                 'z3': [str(Path(args.z3).resolve())],
-                'cvc5': [str(Path(args.cvc5).resolve()), '--lang=smt2']}
+                'cvc5': [str(Path(args.cvc5).resolve()), '--lang=smt2', '--fp-exp', '--arrays-exp']}
+    versions = {}
+    for name, command in commands.items():
+        if name == 'xolver':
+            continue
+        version = subprocess.run([command[0], '--version'], capture_output=True, text=True, timeout=10)
+        versions[name] = dict(version=version.stdout.splitlines()[0] if version.stdout else version.stderr[:200],
+                              sha256=hashlib.sha256(Path(command[0]).read_bytes()).hexdigest())
     failures, total, models = [], 0, 0
     for name, body, expected_bool in cases(args.seed, args.count):
         expected = 'sat' if expected_bool else 'unsat'
@@ -223,7 +268,7 @@ def main():
                 failures.append(dict(case=name, model_error=str(error)))
         with (args.output / 'cases.jsonl').open('a') as stream:
             stream.write(json.dumps(row) + '\n')
-    summary = dict(cases=total, models=models, failures=failures, commands=commands, seed=args.seed,
+    summary = dict(cases=total, models=models, failures=failures, commands=commands, oracles=versions, seed=args.seed,
                    solver_sha256=hashlib.sha256(args.solver.read_bytes()).hexdigest())
     (args.output / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
     print(json.dumps(summary))

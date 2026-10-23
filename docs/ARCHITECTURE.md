@@ -39,6 +39,8 @@ other application families; SV/SL and SV/PA are also independent.
 | Native binder compilation and domain-specific elimination | `quantifiers` |
 | CRT, integer witnesses and polynomial operations | `algebra` |
 | SAT, simplex, ICP, root isolation and reusable search | `search` |
+| Rational objective optimization and mixed-integer branch search | `search/optimization` |
+| Native affine formula compilation and exact linear systems | `algebra/linear` |
 
 A helper belongs to its sole consumer. Helpers shared within an application
 belong to that application's `common/`. Cross-application algorithms belong to
@@ -58,17 +60,19 @@ flowchart TD
     Heap -->|declare-heap| SL[SV/SL request]
     Heap -->|ordinary SMT| SMT[SMT application]
     SMT --> Classify{Native formula features}
-    Classify -->|FP| FP[FP value and predicate encoding]
+    Classify -->|FP| FP[FP values, predicates and exact concrete arithmetic]
     Classify -->|String| Words[Word models and exact string evaluation]
     Classify -->|finite UF / arrays| Finite[Extensional arrays and congruence constraints]
     FP --> QBV
     Finite --> QBV
     Classify -->|quantifiers or bit-vectors| Domain{Supported domain}
+    Classify -->|mixed linear arithmetic| Mixed[Native linear feasibility]
+    Mixed --> Optimization[Exact simplex and integer branch search]
     Classify -->|ground arithmetic and combinations| Ground[Incremental ground session]
     Domain -->|Bool| QBF[BDD quantification]
     Domain -->|Bool and BitVec| QBV[Fixed-width circuits and BDD quantification]
     Domain -->|Bool and Presburger Int| Int[Integer elimination]
-    Domain -->|Bool and polynomial Real| Real[Prenex compilation and CAD]
+    Domain -->|Bool and polynomial Real| Real[Polynomial identities or prenex CAD]
     Domain -->|unsupported combination| Unknown[Unknown with reason]
     Ground --> Lower[Ground rewriting and atomization]
     Lower --> Factory[SMT theory-stack factory]
@@ -99,6 +103,31 @@ quantifier infrastructure. The independent PA API also uses that infrastructure.
 Runtime owns push/pop scopes, assumptions, result lifetimes, models and proof
 export. Its stateful ground session is passed into the SMT application as a
 callback. Quantifier solving runs over the current native assertion snapshot.
+
+## Application composition
+
+```mermaid
+flowchart TD
+    OMT[OMT arithmetic objectives] --> Opt[search/optimization]
+    MILP[MILP rational matrix input] --> Opt
+    Count[Linear integer projection counting] --> Opt
+    SMT[SMT native linear feasibility] --> Opt
+    OMT --> Affine[algebra/linear: affine formula compilation]
+    Count --> Affine
+    SMT --> Affine
+    Opt --> Rational[Exact rational tableau and linear algebra]
+    CP[CP global constraints] --> Oracle[Injected decision oracle]
+    SV[SV invariant and VC checks] --> Oracle
+    DE[ODE / PDE polynomial candidates] --> Real[quantifiers/real]
+    Real --> Identities[Polynomial coefficient identities]
+    Identities --> Rational
+```
+
+Objective optimization uses a two-phase rational primal simplex. Incremental
+CDCL(T) feasibility retains its bound-based simplex and SAT conflict reasons;
+these are distinct algorithm contracts. CP and verification compile requests for
+an injected oracle, without a dependency on another application family. DE and
+SV share identity-based native substitution in `ir/NativeSubstitution.h`.
 
 ## Capability and evidence boundaries
 

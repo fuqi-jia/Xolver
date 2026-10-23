@@ -23,6 +23,7 @@ enum class Logic {
     QBF,
     QF_LIA,
     QF_LRA,
+    QF_LIRA,
     QF_NIA,
     QF_NRA,
     LIA,

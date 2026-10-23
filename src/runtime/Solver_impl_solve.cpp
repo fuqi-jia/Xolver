@@ -67,7 +67,8 @@ bool Solver::Impl::parseFile(std::string_view filename) {
         // Keep binders and explicit SL syntax intact for their solver entry
         // points. Ground preprocessing must not run across these boundaries.
         const auto native = nativeFeatures(nextParser->getAssertions());
-        const bool nativeTheory = native.quantified || native.bitvector || native.floatingPoint || native.strings;
+        const bool nativeTheory = native.quantified || native.bitvector || native.floatingPoint ||
+                                  native.strings || (native.integerVariable && native.real);
         const auto paOption = options.find("produce-pa-certificate");
         const bool recordPA = paOption != options.end() && paOption->second.kind == OptionValue::Bool && paOption->second.b;
         FrontendAdapter adapter(*nextParser);

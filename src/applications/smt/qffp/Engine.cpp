@@ -1,4 +1,5 @@
 #include "applications/smt/qffp/Engine.h"
+#include "applications/smt/qffp/Arithmetic.h"
 #include "ir/NativeBuilder.h"
 #include "quantifiers/FiniteFormula.h"
 #include <map>
@@ -9,12 +10,54 @@ namespace {
 using namespace xolver::native;
 class Lowering {
     Nodes b;
-    std::map<Node, Node> memo, variables;
+    std::map<Node, Node> memo, variables, bindings;
+    NativeAssertions domains;
     std::set<std::string> names;
     struct Format {
         std::size_t e, s;
         std::size_t width() const { return e + s; }
     };
+    static constexpr const char *roundingNames[] = {"RNE", "RNA", "RTP", "RTN", "RTZ"};
+    Sort encodedSort(Sort sort) {
+        return sort->isFp()             ? b.bvSort(format(sort).width())
+               : sort->isRoundingMode() ? b.bvSort(3)
+                                        : sort;
+    }
+    bool closed(Node root) {
+        std::vector<Node> pending{root};
+        std::set<Node> seen;
+        while (!pending.empty()) {
+            b.budget.tick();
+            auto n = pending.back();
+            pending.pop_back();
+            if (!n)
+                return false;
+            if (!seen.insert(n).second)
+                continue;
+            const auto k = n->getKind();
+            if (k == K::NT_VAR || k == K::NT_QUANT_VAR || k == K::NT_UF_APPLY ||
+                k == K::NT_FUNC_APPLY || k == K::NT_FORALL || k == K::NT_EXISTS)
+                return false;
+            for (auto c : SOMTParser::children(n))
+                pending.push_back(c);
+        }
+        return true;
+    }
+    mpz_class concrete(Node n) {
+        // finiteValue completes absent model bindings with zero; it may only be
+        // used for constant folding after an explicit closed-term check.
+        if (!closed(n))
+            throw Unsupported("symbolic FP arithmetic requires a circuit backend");
+        auto value = quantifiers::finiteValue(n, {});
+        if (!value)
+            throw Unsupported("constant FP operand evaluation failed");
+        if (value->starts_with("#"))
+            return bits(*value, n->getSort()->getBitWidth());
+        if (!value->starts_with("(_ bv"))
+            throw Unsupported("invalid concrete BV value");
+        const auto end = value->find(' ', 5);
+        return mpz_class(value->substr(5, end - 5), 10);
+    }
     Format format(Sort sort) {
         if (!sort || !sort->isFp())
             throw Unsupported("expected floating-point sort");
@@ -106,11 +149,42 @@ class Lowering {
         if (k == K::NT_VAR) {
             if (!names.insert(n->getName()).second)
                 throw Unsupported("ambiguous free symbol identity");
-            if (!(sort->isBool() || sort->isBv() || sort->isFp()))
+            if (!(sort->isBool() || sort->isBv() || sort->isFp() || sort->isRoundingMode()))
                 throw Unsupported("floating-point combination sort unavailable");
-            auto raw = b.fresh(sort->isFp() ? b.bvSort(format(sort).width()) : sort);
+            auto known = bindings.find(n);
+            auto raw = known == bindings.end() ? b.fresh(encodedSort(sort)) : lower(known->second);
             variables[n] = raw;
+            if (sort->isRoundingMode())
+                domains.push_back(b.logical(K::NT_BV_ULE, {raw, b.bv(4, 3)}));
             out = sort->isFp() ? canonical(raw, format(sort)) : raw;
+        } else if (sort->isRoundingMode() && count == 0) {
+            const std::string aliases[] = {"roundNearestTiesToEven", "roundNearestTiesToAway",
+                                           "roundTowardPositive", "roundTowardNegative",
+                                           "roundTowardZero"};
+            for (unsigned i = 0; i < 5; ++i)
+                if (n->getName() == roundingNames[i] || n->getName() == aliases[i])
+                    out = b.bv(i, 3);
+            if (!out)
+                throw Unsupported("unrecognized rounding-mode constant");
+        } else if (k == K::NT_FP_ADD || k == K::NT_FP_SUB || k == K::NT_FP_MUL ||
+                   k == K::NT_FP_DIV) {
+            arity(3);
+            auto f = format(sort);
+            if (!n->getChild(0)->getSort()->isRoundingMode() ||
+                *n->getChild(1)->getSort() != *sort || *n->getChild(2)->getSort() != *sort)
+                throw Unsupported("FP arithmetic signature mismatch");
+            auto rounding = lower(n->getChild(0));
+            const auto x = concrete(lower(n->getChild(1))), y = concrete(lower(n->getChild(2)));
+            const auto operation = k == K::NT_FP_ADD   ? Arithmetic::Add
+                                   : k == K::NT_FP_SUB ? Arithmetic::Subtract
+                                   : k == K::NT_FP_MUL ? Arithmetic::Multiply
+                                                       : Arithmetic::Divide;
+            for (unsigned i = 0; i < 5; ++i) {
+                auto value =
+                    b.bv(evaluate(operation, static_cast<Rounding>(i), f.e, f.s, x, y, b.budget),
+                         f.width());
+                out = out ? b.choose(b.equal(rounding, b.bv(i, 3)), value, out) : value;
+            }
         } else if (k == K::NT_CONST && sort->isFp() && count == 3) {
             // The native (fp sign exponent significand) constructor stores its
             // fields as children, including when those fields are symbolic.
@@ -185,25 +259,46 @@ class Lowering {
                 k == K::NT_FUNC_APPLY || k == K::NT_QUANT_VAR ||
                 (k >= K::NT_FP_ADD && k <= K::NT_FP_IS_POS))
                 throw Unsupported("floating-point operator requires an additional backend");
-            if (!(sort->isBool() || sort->isBv() || sort->isFp() ||
+            if (!(sort->isBool() || sort->isBv() || sort->isFp() || sort->isRoundingMode() ||
                   ((sort->isInt() || sort->isIntOrReal()) && k == K::NT_CONST)))
                 throw Unsupported("floating-point mixed theory signature unavailable");
             std::vector<Node> args;
             for (auto c : SOMTParser::children(n))
                 args.push_back(lower(c));
-            out =
-                b.make(sort->isFp() ? b.bvSort(format(sort).width()) : sort, k, args, n->getName());
+            out = b.make(encodedSort(sort), k, args, n->getName());
         }
         memo[n] = out;
         return out;
     }
 
   public:
-    Lowering(const NativeAssertions &roots, std::size_t work) : b(roots, work) {}
+    Lowering(const NativeAssertions &roots, std::size_t work) : b(roots, work) {
+        auto pending = roots;
+        while (!pending.empty()) {
+            b.budget.tick();
+            auto n = pending.back();
+            pending.pop_back();
+            if (!n)
+                continue;
+            if (n->getKind() == K::NT_AND) {
+                for (auto c : SOMTParser::children(n))
+                    pending.push_back(c);
+            } else if ((n->getKind() == K::NT_EQ || n->getKind() == K::NT_EQ_OTHER ||
+                        n->getKind() == K::NT_EQ_BOOL) &&
+                       n->getChildrenSize() == 2) {
+                for (unsigned i = 0; i < 2; ++i) {
+                    auto v = n->getChild(i), value = n->getChild(1 - i);
+                    if (v->getKind() == K::NT_VAR && closed(value))
+                        bindings.emplace(v, value);
+                }
+            }
+        }
+    }
     SolverAnswer solve(const NativeAssertions &roots, quantifiers::Limits limits) {
         NativeAssertions encoded;
         for (auto root : roots)
             encoded.push_back(lower(root));
+        encoded.insert(encoded.end(), domains.begin(), domains.end());
         auto answer = quantifiers::bitvector::solve(encoded, limits);
         if (answer.result != Result::Sat || !answer.model)
             return answer;
@@ -213,7 +308,16 @@ class Lowering {
             auto text = quantifiers::finiteValue(term, raw);
             if (!text)
                 throw Unsupported("FP model reconstruction failed");
-            if (!input->getSort()->isFp())
+            if (input->getSort()->isRoundingMode()) {
+                auto index = quantifiers::finiteValue(term, raw);
+                if (!index || !index->starts_with("(_ bv"))
+                    throw Unsupported("rounding mode model reconstruction failed");
+                const unsigned value = static_cast<unsigned>(std::stoul(index->substr(5)));
+                if (value >= 5)
+                    throw Unsupported("invalid rounding mode model");
+                answer.model->assignments[input->getName()] =
+                    "#smt:" + std::string(roundingNames[value]);
+            } else if (!input->getSort()->isFp())
                 answer.model->assignments[input->getName()] = *text;
             else {
                 auto f = format(input->getSort());

@@ -13,6 +13,7 @@ class WorkBudget {
 
   public:
     explicit WorkBudget(std::size_t limit = 2000000) : limit_(limit) {}
+    std::size_t used() const noexcept { return used_; }
     void tick(std::size_t amount = 1) {
         if (amount > std::numeric_limits<std::size_t>::max() - used_ ||
             (limit_ && amount > limit_ - used_))

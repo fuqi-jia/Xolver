@@ -6,14 +6,14 @@ backend support does not restrict the shape of these contracts.
 
 | Application | Problem and result | Executable backend |
 | --- | --- | --- |
-| `smt` | Native assertions; sat/unsat/unknown and models | Arithmetic, UF, arrays, datatypes, finite BV combinations, FP predicates and strings |
-| `omt` | Native objectives, priorities and exact objective values | Lexicographic Bool/BV optimization using BDDs |
-| `counting` | Native assertions and an explicit projected tuple | Exact projected Bool/BV model counting |
-| `cp` | Native constraints, variable domains and global constraints | Domain and all-different compilation through an injected decision oracle |
-| `milp` | Rational linear constraints, integer/continuous variables, bounds and objective | Exact finite-box mixed-integer optimization |
-| `sv/verification` | Named assumptions/conclusions | Verification-condition checking with counterexamples through an injected decision oracle |
+| `smt` | Native assertions; sat/unsat/unknown and models | Arithmetic, UF, arrays, datatypes, finite BV combinations, FP predicates/concrete arithmetic and strings |
+| `omt` | Native objectives, priorities and exact objective values | Lexicographic Bool/BV and linear arithmetic optimization |
+| `counting` | Native assertions and an explicit projected tuple | Exact Bool/BV and linear integer projection; infinite-domain detection |
+| `cp` | Native constraints, variable domains and global constraints | Domains, all-different, tables, element and cardinality constraints |
+| `milp` | Rational linear constraints, integer/continuous variables, bounds and objective | Exact rational simplex and integer branch and bound |
+| `sv/verification` | Named assumptions/conclusions | Verification conditions and inductive invariant checks |
 | `sv/pa`, `sv/sl` | Presburger or explicit heap semantics | Integer elimination and separation-logic search |
-| `de/ode`, `de/pde` | Native equations, coordinates, parameters and derivative applications | Polynomial solution search with exact substitution checks |
+| `de/ode`, `de/pde` | Native equations, coordinates, parameters and derivative applications | Parametric polynomial solution search with exact substitution checks |
 
 The CLI's SMT session supplies the stateful ground callback. The application
 headers also support direct C++ use; CP and verification-condition clients inject
@@ -40,6 +40,15 @@ data for differential equations. Run them with:
 
 ```sh
 ./build/tests/xolver_unit_tests --test-case='application prototypes:*'
+```
+
+The [application algorithm tests](../../tests/unit/test_application_foundations.cpp)
+exercise exact optimization, independent mixed-integer reference enumeration,
+open bounds, projected integer counts, CP constraints, inductive invariants and
+parametric differential equations:
+
+```sh
+./build/tests/xolver_unit_tests --test-case='application foundations:*'
 ```
 
 The [SMT theory examples](../../tests/unit/test_theory_applications.cpp) and

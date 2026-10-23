@@ -157,7 +157,9 @@ TEST_CASE("application prototypes: exact mixed-integer optimization") {
     CHECK((solver.solve(p).status == Status::Infeasible));
     p.variables[0].lower.reset();
     p.variables[0].upper.reset();
-    CHECK((solver.solve(p).status == Status::Unknown));
+    r = solver.solve(p);
+    REQUIRE((r.status == Status::Optimal));
+    CHECK((*r.objectiveValue == 4));
     p.variables[0].lower = 0;
     p.variables[0].upper = 3;
     p.workLimit = 1;

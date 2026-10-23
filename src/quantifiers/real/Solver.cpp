@@ -1,5 +1,6 @@
 #include "quantifiers/real/Solver.h"
 #include "quantifiers/real/Problem.h"
+#include "quantifiers/real/Identities.h"
 #include <algorithm>
 #include <unordered_map>
 
@@ -8,6 +9,7 @@ SolverAnswer solve(const Roots& roots, Limits limits) {
     try {
         Resources resources(limits);
         auto problem = compile(roots, resources);
+        if (auto identities = solveIdentities(problem, resources)) return *identities;
         auto kernel = createPolynomialKernel();
         // Kernel variable order follows the quantifier prefix. Native traversal
         // can encounter a free symbol inside a binder; it must still be outside

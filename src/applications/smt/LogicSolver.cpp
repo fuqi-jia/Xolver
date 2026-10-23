@@ -63,6 +63,8 @@ Profile profile(Logic logic) {
         return {"LIA", Int, true};
     case Logic::QF_LRA:
         return {"QF_LRA", Real, false};
+    case Logic::QF_LIRA:
+        return {"QF_LIRA", Int | Real, false};
     case Logic::QF_NIA:
         return {"QF_NIA", Int, false};
     case Logic::QF_NRA:
