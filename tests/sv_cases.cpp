@@ -49,17 +49,31 @@ struct Export {
         std::string text = "(set-logic ALL)\n";
         if (heap)
             text += "(declare-heap (Int Int))\n";
-        for (const auto &[name, n] : variables)
-            text += "(declare-const " + SOMTParser::dumpSMTLIB2(n) + " " +
-                    n->getSort()->toString() + ")\n";
+        // Internal @ names are reserved by SMT-LIB. Rename free and bound
+        // symbols simultaneously by identity, preserving scopes and sorts.
+        native::Nodes b(assertions);
+        std::map<native::Node, native::Node> renamed, memo;
+        nlohmann::json symbols = nlohmann::json::object();
+        for (const auto &[name, n] : variables) {
+            auto external = "sv_v_" + std::to_string(renamed.size());
+            renamed[n] = b.make(n->getSort(), native::K::NT_VAR, {}, external);
+            symbols[external] = name;
+            text += "(declare-const " + external + " " + n->getSort()->toString() + ")\n";
+        }
+        for (auto n : visited)
+            if (n->getKind() == native::K::NT_QUANT_VAR)
+                renamed[n] = b.make(n->getSort(), native::K::NT_QUANT_VAR, {},
+                                    "sv_b_" + std::to_string(renamed.size()));
         for (auto n : assertions)
-            text += "(assert " + SOMTParser::dumpSMTLIB2(n) + ")\n";
+            text += "(assert " + SOMTParser::dumpSMTLIB2(native::substitute(n, renamed, memo, b)) +
+                    ")\n";
         text += "(check-sat)\n";
         auto file = std::to_string(cases.size()) + ".smt2";
         write(output / file, text);
         cases.push_back({{"input", file},
                          {"group", group},
                          {"heap", heap},
+                         {"symbols", symbols},
                          {"expected", result == Result::Sat ? "sat" : "unsat"}});
     }
 };
@@ -82,7 +96,8 @@ void safety(Export &out) {
     auto check = [&](const std::string &group, NativeAssertions candidates = {},
                      v::SafetyMethod method = v::SafetyMethod::Induction) {
         auto answer = v::SafetySolver(decide, {6}, method).solve({s, candidates});
-        require(answer.status == v::SafetyStatus::Safe, "expected safety proof");
+        if (answer.status != v::SafetyStatus::Safe)
+            throw std::runtime_error(group + ": expected safety proof; " + answer.reason);
         require(bool(answer.certificate), "missing safety certificate");
         DecisionOracle recording = [&](const NativeAssertions &query) {
             auto result = decide(query);
@@ -111,6 +126,15 @@ void safety(Export &out) {
     s.transition = {b.any(edges)};
     s.safety = b.negate(b.equal(x, num(5)));
     check("two-step-induction");
+    // Completion on an explicitly finite domain, independently checked by BFS
+    // in the unit suite. The integer graph above exercises k-induction.
+    auto bx = b.make(b.bvSort(2), native::K::NT_VAR, {}, "bx");
+    auto bxp = b.make(b.bvSort(2), native::K::NT_VAR, {}, "bxp");
+    s.state = {{bx, bxp}};
+    s.initial = {b.equal(bx, b.bv(0, 2))};
+    s.transition = {b.any({b.all({b.equal(bx, b.bv(0, 2)), b.equal(bxp, b.bv(1, 2))}),
+                           b.all({b.equal(bx, b.bv(1, 2)), b.equal(bxp, b.bv(0, 2))})})};
+    s.safety = b.negate(b.equal(bx, b.bv(2, 2)));
     check("reachability-completion", {}, v::SafetyMethod::Bounded);
     s = copy;
     auto input = b.make(SOMTParser::SortManager::getBool(), native::K::NT_VAR, {}, "input");
