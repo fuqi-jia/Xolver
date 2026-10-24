@@ -268,9 +268,10 @@ END = re.compile(r"\.(?=\s*(?:Definition\b|Module\b|End\b|$))")
 
 
 def export_goals(source: Path, output: Path) -> dict:
-    raw = source.read_text()
+    raw_bytes = source.read_bytes()
+    raw = raw_bytes.decode('utf-8')
     text = comments(raw)
-    digest = hashlib.sha256(raw.encode()).hexdigest()
+    digest = hashlib.sha256(raw_bytes).hexdigest()
     output.mkdir(parents=True, exist_ok=True)
     report: dict = {"source": str(source), "source_sha256": digest, "goals": [], "queries": [],
                     "semantics": "Rocq Z/bool; % is Z.rem; division by zero follows Rocq total functions",
@@ -317,7 +318,7 @@ def export_goals(source: Path, output: Path) -> dict:
                 filename = f"{match[1]}-{i}.smt2"
                 built.append((filename, "\n".join(script), expression))
             for filename, script, expression in built:
-                (output / filename).write_text(script)
+                (output / filename).write_bytes(script.encode('utf-8'))
                 report["queries"].append({**record, "file": filename, "kind": projection,
                                           "conclusion": expression,
                                           "query_sha256": hashlib.sha256(script.encode()).hexdigest()})

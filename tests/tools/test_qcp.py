@@ -71,6 +71,19 @@ Definition unsupported := forall (xs: list Z), True.
         with self.assertRaises(Unsupported):
             binders('forall (INT_MAX: Z), INT_MAX = 0')
 
+    def test_source_hash_is_the_original_byte_sequence(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            source = root / 'windows.v'
+            content = b'Definition goal :=\r\nforall (x: Z), x = x.\r\n'
+            source.write_bytes(content)
+            report = export_goals(source, root / 'out')
+            self.assertEqual(report['source_sha256'], hashlib.sha256(content).hexdigest())
+            self.assertEqual(len(report['queries']), 1)
+            row = report['queries'][0]
+            self.assertEqual(row['query_sha256'], hashlib.sha256((root/'out'/row['file']).read_bytes()).hexdigest())
+
 
 if __name__ == '__main__':
     unittest.main()
