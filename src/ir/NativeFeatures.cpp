@@ -16,6 +16,19 @@ NativeFeatures nativeFeatures(const std::vector<SOMTParser::Node> &roots) {
             continue;
         auto sort = node->getSort();
         if (sort) {
+            if (sort->isInt() || sort->isIntOrReal()) {
+                const auto kind = node->getKind();
+                if (kind == K::NT_MUL) {
+                    std::size_t symbolic = 0;
+                    for (const auto &c : SOMTParser::children(node))
+                        symbolic += c->getKind() != K::NT_CONST;
+                    features.nonlinearInteger |= symbolic > 1;
+                } else if (kind == K::NT_POW)
+                    features.nonlinearInteger = true;
+                else if ((kind == K::NT_DIV_INT || kind == K::NT_MOD) &&
+                         node->getChildrenSize() == 2)
+                    features.nonlinearInteger |= node->getChild(1)->getKind() != K::NT_CONST;
+            }
             features.real |= sort->isReal();
             features.integer |= sort->isInt() || sort->isIntOrReal();
             features.integerVariable |=

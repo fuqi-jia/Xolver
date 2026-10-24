@@ -1,9 +1,10 @@
 #include "applications/smt/Solver.h"
+#include "search/arith/IntegerBounds.h"
 #include "applications/smt/FirstOrderSolver.h"
 #include "applications/smt/common/finite/Solver.h"
 #include "applications/smt/qffp/Engine.h"
-#include "applications/smt/qfs/Engine.h"
 #include "applications/smt/qflira/Engine.h"
+#include "applications/smt/qfs/Engine.h"
 #include "ir/NativeFeatures.h"
 
 namespace xolver::applications::smt {
@@ -33,10 +34,21 @@ SolverAnswer Solver::solve(const Problem &problem) {
         problem.integerEvidence.model)
         return solveFirstOrder(problem.assertions, problem.integerLimits, problem.integerEvidence,
                                problem.quantifierLimits);
+    if (features.nonlinearInteger && !features.real && !features.floatingPoint &&
+        !features.strings) {
+        // Refute the original conjunction before nonlinear ground search.
+        // Linear proof-producing paths keep their existing dispatch.
+        auto proof = integer_bounds::refute(problem.assertions, problem.integerLimits.work);
+        if (proof.status == integer_bounds::ProofStatus::Proved) {
+            answer.result = Result::Unsat;
+            return answer;
+        }
+    }
     if (!features.function && !features.otherSort &&
         ((!ground_ && (features.integer || features.real)) ||
          (features.integerVariable && features.real)))
-        if (auto linear = solveLinearArithmetic(problem)) return *linear;
+        if (auto linear = solveLinearArithmetic(problem))
+            return *linear;
     if (ground_)
         return ground_(problem);
     return solveFirstOrder(problem.assertions, problem.integerLimits, problem.integerEvidence,

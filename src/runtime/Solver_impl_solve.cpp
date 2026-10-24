@@ -12,10 +12,13 @@ namespace xolver {
 // Relocated Solver::Impl method definitions (declared in SolverImpl.h).
 
 void Solver::Impl::reset() {
+        resetWithParser(std::make_unique<SOMTParser::Parser>());
+}
+void Solver::Impl::resetWithParser(std::unique_ptr<SOMTParser::Parser> replacement) {
         static std::atomic<uint64_t> nextContext{1};
         contextId_ = nextContext.fetch_add(1, std::memory_order_relaxed);
         symbolTerms_.clear();
-        parser = std::make_unique<SOMTParser::Parser>();
+        parser = std::move(replacement);
         ir.reset();
         sat.reset();
         sharedTermRegistry_.reset();
@@ -75,8 +78,9 @@ bool Solver::Impl::parseFile(std::string_view filename) {
         auto nextIr = adapter.importProblem(!nativeTheory && !recordPA && !nextParser->getHeapLocationSort());
         if (nextParser->getHeapLocationSort())
             for (auto variable : nextParser->getDeclaredVariables()) nextIr->index(std::move(variable));
-        reset();
-        parser = std::move(nextParser);
+        // Commit only after parsing/import succeeds. Reuse that parser instead
+        // of constructing an empty parser during reset and discarding it.
+        resetWithParser(std::move(nextParser));
         ir = std::move(nextIr);
         for (ExprId id = 0; id < ir->size(); ++id) {
             const auto& e = ir->get(id);

@@ -22,7 +22,9 @@ flowchart TD
   G --> H[Spatial and unsupported obligations retained]
   A --> F[Frozen SMT-LIB refutations]
   F --> V[SV RangeAssistedSolver]
-  V --> R[Integer interval proof]
+  F --> M[Standard SMT application]
+  V --> R[Shared integer interval proof]
+  M --> R
   R --> K[Check bound premises and original condition]
   V --> S[Injected SMT oracle for open conditions]
   F --> Z[Z3 reference on the identical query]
@@ -69,8 +71,10 @@ assumptions. It constructs the conclusion by negating that parsed condition, so
 parser simplification cannot change the query's meaning. Its JSON output names
 the proof method and whether a native interval certificate was replayed.
 `RangeAssistedSolver` contains the orchestration; the CLI does not implement a
-separate solver algorithm. The ordinary SMT executable remains independent of
-the verification application.
+separate solver algorithm. The standard SMT application uses the same checked
+integer refutation calculus for nonlinear integer queries before ground search.
+An open interval proof delegates the unchanged query to ground search. Neither
+application depends on the other, and interval reasoning never manufactures SAT.
 
 The pinned, licensed QCP excerpts in `tests/integration/qcp` make a small CI
 integration check reproducible without downloading QCP. Full corpus comparisons
@@ -80,3 +84,15 @@ Reference availability is not a proof of source translation or C++ correctness.
 
 QCP source: [QualifiedCProgramming](https://github.com/QinxiangCao/QualifiedCProgramming),
 [QCP-V2.1.4](https://github.com/QinxiangCao/QualifiedCProgramming/releases/tag/QCP-V2.1.4).
+
+`select_qcp_holdout.py` freezes programs from previously unused example
+families, excluding development basenames and source hashes. The selection is
+independent of solver outcomes. `analyze_qcp_corpus.py` counts generation failures
+and unsupported definitions, excludes alpha-identical development queries, and
+collapses alpha-identical repetitions before producing a benchmark manifest.
+Alpha normalization preserves constants, sorts and assumptions; it does not
+detect every semantically equivalent template. The first 24 novel queries in
+seeded hash order receive three repetitions. The remaining queries receive one.
+Use the [standard SMT comparison harness](../regression/README.md) for balanced
+measurements. Report export coverage alongside solver coverage: deciding every
+exported pure condition does not decide the unsupported spatial obligations.
