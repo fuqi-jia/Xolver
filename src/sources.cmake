@@ -295,6 +295,7 @@ set(XOLVER_APPLICATIONS_SOURCES
     "applications/sv/sl/Solver.cpp"
     "applications/sv/sl/SymbolicHeap.cpp"
     "applications/sv/verification/ModelChecking.cpp"
+    "applications/sv/verification/Range.cpp"
     "applications/sv/verification/Reachability.cpp"
     "applications/sv/verification/Solver.cpp"
     "applications/sv/verification/Transition.cpp"

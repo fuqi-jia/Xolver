@@ -1,6 +1,7 @@
 #pragma once
 
 #include "algebra/interval/IntervalQ.h"
+#include "algebra/interval/IntervalOperations.h"
 #include <algorithm>
 #include <cassert>
 
@@ -50,21 +51,17 @@ inline IntervalQ intervalQPow(const IntervalQ& a, uint32_t k) {
 
     if (k % 2 == 0) {
         if (a.containsZero()) {
-            mpq_class lo2 = a.lo * a.lo;
-            mpq_class hi2 = a.hi * a.hi;
-            return {mpq_class(0), std::max(lo2, hi2)};
+            mpq_class loPower = interval_detail::power(a.lo, k);
+            mpq_class hiPower = interval_detail::power(a.hi, k);
+            return {mpq_class(0), std::max(loPower, hiPower)};
         } else {
-            mpq_class lo2 = a.lo * a.lo;
-            mpq_class hi2 = a.hi * a.hi;
-            return {std::min(lo2, hi2), std::max(lo2, hi2)};
+            mpq_class loPower = interval_detail::power(a.lo, k);
+            mpq_class hiPower = interval_detail::power(a.hi, k);
+            return {std::min(loPower, hiPower), std::max(loPower, hiPower)};
         }
     } else {
-        mpq_class loK = a.lo;
-        mpq_class hiK = a.hi;
-        for (uint32_t i = 1; i < k; ++i) {
-            loK *= a.lo;
-            hiK *= a.hi;
-        }
+        mpq_class loK = interval_detail::power(a.lo, k);
+        mpq_class hiK = interval_detail::power(a.hi, k);
         return {loK, hiK};
     }
 }

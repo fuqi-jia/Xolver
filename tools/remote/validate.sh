@@ -28,13 +28,14 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
     -DFETCHCONTENT_SOURCE_DIR_DOCTEST="$PWD/dependencies/doctest" \
     -Dnlohmann_json_DIR="$PWD/dependencies/json/share/cmake/nlohmann_json" \
     > "$logdir/configure.log" 2>&1
-cmake --build build --target xolver-cli xolver_unit_tests xolver_checker_tests xolver_sl_cases xolver_sv_cases -j "${XOLVER_BUILD_JOBS:-4}" > "$logdir/build.log" 2>&1
+cmake --build build --target xolver-cli xolver-sv xolver_unit_tests xolver_checker_tests xolver_sl_cases xolver_sv_cases -j "${XOLVER_BUILD_JOBS:-4}" > "$logdir/build.log" 2>&1
 cp build/bin/xolver "$logdir/xolver"
+cp build/bin/xolver-sv "$logdir/xolver-sv"
 cp build/tests/xolver_unit_tests "$logdir/xolver_unit_tests"
 cp build/tests/xolver_checker_tests "$logdir/xolver_checker_tests"
 cp build/tests/xolver_sl_cases "$logdir/xolver_sl_cases"
 cp build/tests/xolver_sv_cases "$logdir/xolver_sv_cases"
-sha256sum "$logdir/xolver" "$logdir/xolver_unit_tests" "$logdir/xolver_checker_tests" "$logdir/xolver_sl_cases" "$logdir/xolver_sv_cases" > "$logdir/binaries.sha256"
+sha256sum "$logdir/xolver" "$logdir/xolver-sv" "$logdir/xolver_unit_tests" "$logdir/xolver_checker_tests" "$logdir/xolver_sl_cases" "$logdir/xolver_sv_cases" > "$logdir/binaries.sha256"
 cp build/tests/CMakeFiles/xolver_checker_tests.dir/link.txt "$logdir/checker-link.txt"
 inputs="$logdir/inputs"
 python3 tools/remote/freeze_validation.py "$inputs" > "$logdir/input-freeze.log"

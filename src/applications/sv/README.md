@@ -34,6 +34,11 @@ uses that infrastructure; it does not dispatch arbitrary quantified formulas.
 Helpers shared only by state verification stay in `verification`; SL-specific
 inference stays in `sl`.
 
+The state-verification application also provides checked integer range proofs
+and a range-assisted oracle composition for verification conditions. The
+[QCP bridge](../../../tools/integration/README.md) supplies typed pure conditions
+and records residual heap goals; it does not reinterpret those heap goals as PA.
+
 See [state verification](verification/README.md) and [heap reasoning](sl/README.md)
 for contracts, algorithms and certificate limits. These APIs do not claim a
 complete solver for arbitrary recursive heaps or infinite-state safety.

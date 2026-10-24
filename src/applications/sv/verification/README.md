@@ -23,6 +23,28 @@ Heap entailments use the separate SL application.
 | `SafetySolver` | Increasing-depth reachability, invariant strengthening, k-induction and simple-path completion |
 | `ReachabilitySolver` | Exact existential successor images and symbolic reachable-region closure |
 | `CertificateSolver` | Rebuild and solve all conditions required by a supplied safety certificate |
+| `RangeSolver` | Prove sufficient mathematical-integer interval conditions from mandatory pure bounds |
+| `RangeCertificateSolver` | Check each bound against its original assumption and replay the interval proof |
+| `RangeAssistedSolver` | Check an interval certificate, otherwise solve the unchanged obligation with the injected oracle |
+
+The range solvers accept the same native `Obligation` contract. They use exact
+integer interval operations, preserve symbol identity, and derive strict bounds
+with integer rounding. They can bound nonlinear products and powers, select or
+join conditional branches, and reason about Euclidean quotient/remainder ranges.
+Zero can be excluded only by mandatory constraints, including explicit integer
+disequalities; a condition inside a disjunction is insufficient. An open range
+proof returns `Unknown`, never a fabricated countermodel. Countermodels in the
+assisted solver come from its injected oracle.
+
+Range certificates identify their variable bounds and the exact original
+conjuncts that justify each endpoint. Replay checks membership, variable identity,
+endpoint values and the original conclusion without trusting the discovered box.
+There is no implicit C arithmetic mode: source clients lower truncating or floor
+division to ordinary native formulas before invoking these mathematical-integer
+APIs. `intervalPow(interval, k)` and its rational counterpart denote the requested
+`k`th power for every exponent; they do not switch meanings based on the client.
+See the [QCP source bridge](../../../../tools/integration/README.md) for an external
+client and its precise translation and validation boundaries.
 
 `SafetySolver` checks `I(s0) /\ T(s0,u0,s1) /\ ... /\ !P(sk)` at increasing
 depths. A satisfiable query gives the shortest discovered reachable counterexample,

@@ -1,0 +1,82 @@
+# QCP verification conditions
+
+The QCP bridge reads generated Rocq conditions with explicit `Z` and `bool`
+binders. It emits standard SMT-LIB refutations with source names, line numbers,
+original-goal hashes and query hashes. The source adapter accepts its documented
+first-order operators and rejects unknown binders/functions instead of assigning
+them an integer sort. Spatial assumptions do not become arithmetic facts.
+Rocq propositions and `bool` values remain distinct in the source type checker;
+proposition equality is rejected rather than treated as Boolean equivalence.
+
+`collect_qcp.py` invokes a supplied QCP checkout and writes generated files to a
+separate results directory. It keeps QCP's command, source hash, exit status,
+elapsed generation time and unsupported goals. A nonzero exit or generation
+timeout is not a verified program. `reexport_qcp.py` reuses frozen Rocq goals
+after verifying their hashes; it does not rerun the C frontend.
+
+```mermaid
+flowchart TD
+  C[Annotated C and explicit specifications] --> Q[QCP symbolic execution]
+  Q --> G[Generated typed Rocq goals]
+  G --> A[Typed pure-condition adapter]
+  G --> H[Spatial and unsupported obligations retained]
+  A --> F[Frozen SMT-LIB refutations]
+  F --> V[SV RangeAssistedSolver]
+  V --> R[Integer interval proof]
+  R --> K[Check bound premises and original condition]
+  V --> S[Injected SMT oracle for open conditions]
+  F --> Z[Z3 reference on the identical query]
+```
+
+For a spatial entailment, only leading pure assertions on its right-hand side
+are exported. Proving such a condition from the explicit pure hypotheses is a
+sufficient pure subcondition. An unsupported hypothesis rejects that export;
+it is not silently discarded. Residual heap obligations remain recorded.
+A satisfiable pure refutation is a counterexample to this sufficient condition,
+not necessarily to the heap entailment or C program. No result from this bridge
+is counted as a complete QCP/Rocq proof or installed as an internal QCP callback.
+
+Arithmetic has explicit contracts:
+
+| Source | Meaning |
+| --- | --- |
+| `Z`, `INT_MIN`, `INT_MAX`, `INT64_MIN`, `INT64_MAX` | Mathematical integers and the bounds defined by QCP's `IntLib.v` |
+| `÷`, `Z.quot` | Quotient toward zero; at a zero divisor the Rocq value is zero |
+| `%`, `Z.rem` | Remainder with the dividend's sign; at a zero divisor the Rocq value is the dividend |
+| `/`, `Z.div` | Quotient toward negative infinity, including negative divisors; zero divisor maps to zero |
+| `Z.modulo` | Dividend minus divisor times the floor quotient |
+| SMT `div`, `mod` inside exported formulas | Standard Euclidean SMT-LIB operations; their meaning is unchanged |
+
+The remainder normal form preserves its sign explicitly and uses nonnegative
+Euclidean remainder magnitude. Zero-divisor guards preserve Rocq totalization;
+C division safety remains a separate QCP obligation. The semantic checks cover
+positive, negative and zero operands independently of the interval proofs.
+
+Example commands (run native solver work on the server):
+
+```bash
+python3 tools/integration/collect_qcp.py --qcp /path/to/QCP \
+  --revision 08cc7a0f1373a1db3800111a0205a340b6d6f99c \
+  --count 32 --output validation/qcp/corpus
+python3 tools/integration/compare_qcp.py --corpus validation/qcp/corpus \
+  --solver build/bin/xolver --sv build/bin/xolver-sv --z3 /path/to/z3 \
+  --output validation/qcp/comparison
+```
+
+`xolver-sv` is a client of the public SV APIs. It parses the assertion snapshot;
+the last assertion is the refutation condition, and preceding assertions are the
+assumptions. It constructs the conclusion by negating that parsed condition, so
+parser simplification cannot change the query's meaning. Its JSON output names
+the proof method and whether a native interval certificate was replayed.
+`RangeAssistedSolver` contains the orchestration; the CLI does not implement a
+separate solver algorithm. The ordinary SMT executable remains independent of
+the verification application.
+
+The pinned, licensed QCP excerpts in `tests/integration/qcp` make a small CI
+integration check reproducible without downloading QCP. Full corpus comparisons
+are separate measurements. Reports count unknowns, timeouts, unsupported goals,
+generation failures and disagreements separately; none is silently a success.
+Reference availability is not a proof of source translation or C++ correctness.
+
+QCP source: [QualifiedCProgramming](https://github.com/QinxiangCao/QualifiedCProgramming),
+[QCP-V2.1.4](https://github.com/QinxiangCao/QualifiedCProgramming/releases/tag/QCP-V2.1.4).

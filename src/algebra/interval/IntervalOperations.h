@@ -6,6 +6,20 @@
 
 namespace xolver {
 
+namespace interval_detail {
+template <class T> T power(T base, uint32_t exponent) {
+    T result(1);
+    while (exponent) {
+        if (exponent & 1)
+            result *= base;
+        exponent >>= 1;
+        if (exponent)
+            base *= base;
+    }
+    return result;
+}
+} // namespace interval_detail
+
 inline IntervalZ intervalAdd(const IntervalZ& a, const IntervalZ& b) {
     return {a.lo + b.lo, a.hi + b.hi};
 }
@@ -35,24 +49,20 @@ inline IntervalZ intervalPow(const IntervalZ& a, uint32_t k) {
     if (k % 2 == 0) {
         // Even power
         if (a.containsZero()) {
-            // 0 in [lo, hi]: minimum is 0, maximum is max(lo^2, hi^2)
-            mpz_class lo2 = a.lo * a.lo;
-            mpz_class hi2 = a.hi * a.hi;
-            return {mpz_class(0), std::max(lo2, hi2)};
+            // 0 in [lo, hi]: minimum is 0, maximum is max(lo^k, hi^k)
+            mpz_class loPower = interval_detail::power(a.lo, k);
+            mpz_class hiPower = interval_detail::power(a.hi, k);
+            return {mpz_class(0), std::max(loPower, hiPower)};
         } else {
-            // 0 not in [lo, hi]: minimum is min(lo^2, hi^2)
-            mpz_class lo2 = a.lo * a.lo;
-            mpz_class hi2 = a.hi * a.hi;
-            return {std::min(lo2, hi2), std::max(lo2, hi2)};
+            // 0 not in [lo, hi]: minimum is min(lo^k, hi^k)
+            mpz_class loPower = interval_detail::power(a.lo, k);
+            mpz_class hiPower = interval_detail::power(a.hi, k);
+            return {std::min(loPower, hiPower), std::max(loPower, hiPower)};
         }
     } else {
         // Odd power: monotonic
-        mpz_class loK = a.lo;
-        mpz_class hiK = a.hi;
-        for (uint32_t i = 1; i < k; ++i) {
-            loK *= a.lo;
-            hiK *= a.hi;
-        }
+        mpz_class loK = interval_detail::power(a.lo, k);
+        mpz_class hiK = interval_detail::power(a.hi, k);
         return {loK, hiK};
     }
 }
