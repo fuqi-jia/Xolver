@@ -585,3 +585,54 @@ TEST_CASE("rewriter: shared arithmetic DAGs retain bounded storage") {
     CHECK(edges < 12 * depth);
     CHECK(values.at(result) == mpz_class(3) * (mpz_class(1) << depth));
 }
+
+TEST_CASE("rewriter: strict lower bounds respect integer and real semantics") {
+    for (const bool integers : {false, true}) {
+        for (const auto kind : {Kind::Geq, Kind::Gt, Kind::Leq, Kind::Lt}) {
+            for (const auto threshold : {"-1", "-1/2", "0", "1/2"}) {
+                Harness h;
+                const auto sort = integers ? h.intS : h.realS;
+                const auto x = h.mk(Kind::Variable, sort, {}, Payload(std::string("x")));
+                const auto y = h.mk(Kind::Variable, sort, {}, Payload(std::string("y")));
+                const auto c = h.creal(threshold);
+                const bool reversed = kind == Kind::Leq || kind == Kind::Lt;
+                const auto bx = h.mk(kind, h.boolS, reversed ? std::vector<ExprId>{c, x}
+                                                           : std::vector<ExprId>{x, c});
+                const auto by = h.mk(kind, h.boolS, reversed ? std::vector<ExprId>{c, y}
+                                                           : std::vector<ExprId>{y, c});
+                const auto xx = h.mk(Kind::Mul, sort, {x, x});
+                const auto yy = h.mk(Kind::Mul, sort, {y, y});
+                const auto eq = h.mk(Kind::Eq, h.boolS, {xx, yy});
+                const auto original = h.mk(Kind::And, h.boolS, {bx, by, eq});
+                h.ir.addAssertion(original, 0);
+                FormulaRewriter rw(h.ir, h.boolS);
+                REQUIRE(rw.run() == FormulaRewriter::Verdict::Normal);
+                const auto rewritten = rw.rewrite(original);
+                for (int a = -4; a <= 4; ++a) for (int b = -4; b <= 4; ++b) {
+                    const Asg asg{{"x", Val(mpq_class(a, integers ? 1 : 4))},
+                                  {"y", Val(mpq_class(b, integers ? 1 : 4))}};
+                    const auto expected = eval(h.ir, original, asg);
+                    const auto actual = eval(h.ir, rewritten, asg);
+                    REQUIRE(expected.has_value());
+                    REQUIRE(actual.has_value());
+                    INFO(integers, " ", static_cast<int>(kind), " ", threshold, " ", a, " ", b);
+                    CHECK(valEq(*expected, *actual));
+                }
+            }
+        }
+    }
+}
+
+TEST_CASE("rewriter: mandatory bounds scan shared conjunction DAGs once") {
+    Harness h;
+    const auto x = h.intVar("shared-bound-x");
+    const auto zero = h.cint(0);
+    auto conjunction = h.mk(Kind::Geq, h.boolS, {x, zero});
+    const auto atom = conjunction;
+    for (unsigned i = 0; i < 40; ++i)
+        conjunction = h.mk(Kind::And, h.boolS, {conjunction, conjunction});
+    h.ir.addAssertion(conjunction, 0);
+    FormulaRewriter rw(h.ir, h.boolS);
+    REQUIRE(rw.run() == FormulaRewriter::Verdict::Normal);
+    CHECK(rw.rewrite(conjunction) == rw.rewrite(atom));
+}

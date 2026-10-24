@@ -100,136 +100,50 @@ void FormulaRewriter::commit() {
 
 ExprId FormulaRewriter::rewrite(ExprId e) { return rewriteRec(e); }
 
-// Top-level scan: a Variable v is marked non-negative if some top-level
-// asserted atom proves it. Recognises (>= v c) / (> v c) / (<= c v) / (< c v)
-// with the threshold relaxed to 0 (so `>= v 0`, `> v -1`, `>= v 1` etc. all
-// count). Flattens And nodes so conjuncts of a packed assertion are seen.
-// Sound: each top-level conjunct must hold, so the conjunct's bound is a
-// true global constraint.
+// Mandatory lower bounds are collected only through asserted conjunctions.
+// Strict bounds use integer rounding only for Int-sorted variables.
 void FormulaRewriter::scanNonNegativeVars() {
     nonNegVars_.clear();
     varLowerBound_.clear();
-    auto tryConstInt = [&](ExprId e, mpz_class& out) -> bool {
-        const TermExpr& n = ir_.get(e);
-        // Accept both ConstInt and ConstReal-with-integer-value: the parser
-        // can store small literals like `1` as ConstReal even when the
-        // containing expression is Int-typed.
-        if (n.kind != Kind::ConstInt && n.kind != Kind::ConstReal) return false;
-        if (auto* iv = std::get_if<int64_t>(&n.payload.value)) {
-            out = mpz_class(*iv);
-            return true;
-        }
-        if (auto* sv = std::get_if<std::string>(&n.payload.value)) {
-            try {
-                mpq_class q(*sv);
-                if (q.get_den() != 1) return false;
-                out = q.get_num();
-                return true;
-            } catch (...) { return false; }
-        }
-        return false;
-    };
-    auto recordLowerBound = [&](const std::string& v, const mpz_class& bound) {
-        auto it = varLowerBound_.find(v);
-        if (it == varLowerBound_.end() || bound > it->second) {
-            varLowerBound_[v] = bound;
-        }
-    };
-    auto recordUpperBound = [&](const std::string& v, const mpz_class& bound) {
-        auto it = varUpperBound_.find(v);
-        if (it == varUpperBound_.end() || bound < it->second) {
-            varUpperBound_[v] = bound;
-        }
-    };
-    auto constGe = [&](ExprId e, const mpq_class& bound) -> bool {
-        const TermExpr& n = ir_.get(e);
-        if (n.kind != Kind::ConstInt && n.kind != Kind::ConstReal) return false;
-        if (auto* iv = std::get_if<int64_t>(&n.payload.value))
-            return mpq_class(*iv) >= bound;
-        if (auto* sv = std::get_if<std::string>(&n.payload.value)) {
-            try { return mpq_class(*sv) >= bound; } catch (...) { return false; }
-        }
-        return false;
-    };
-    auto varName = [&](ExprId e) -> std::optional<std::string> {
-        const TermExpr& n = ir_.get(e);
-        if (n.kind != Kind::Variable) return std::nullopt;
-        if (auto* s = std::get_if<std::string>(&n.payload.value)) return *s;
-        return std::nullopt;
-    };
-    auto mark = [&](ExprId atom) {
-        const TermExpr& a = ir_.get(atom);
-        if (a.children.size() != 2) return;
-        // (>= v c) -> v >= c; (> v c) -> v >= c+1 for integer v
-        // (<= c v) -> v >= c; (< c v) -> v >= c+1 for integer v
-        if (a.kind == Kind::Geq || a.kind == Kind::Gt) {
-            mpq_class need = (a.kind == Kind::Geq) ? mpq_class(0) : mpq_class(-1);
-            if (auto v = varName(a.children[0])) {
-                if (constGe(a.children[1], need)) nonNegVars_.insert(*v);
-                mpz_class c;
-                if (tryConstInt(a.children[1], c)) {
-                    mpz_class bound = (a.kind == Kind::Geq) ? c : (c + 1);
-                    recordLowerBound(*v, bound);
-                }
+    auto lowerBound = [&](ExprId variable, ExprId constant, bool strict) {
+        const auto& v = ir_.get(variable);
+        if (v.kind != Kind::Variable) return;
+        const auto* name = std::get_if<std::string>(&v.payload.value);
+        const auto sort = ir_.sortKind(v.sort);
+        if (!name || !sort || (*sort != SortKind::Int && *sort != SortKind::Real)) return;
+        const auto value = tryRational(ir_, constant);
+        if (!value) return;
+        if (*sort == SortKind::Int) {
+            mpz_class bound;
+            if (strict) {
+                mpz_fdiv_q(bound.get_mpz_t(), value->get_num_mpz_t(), value->get_den_mpz_t());
+                ++bound;
+            } else {
+                mpz_cdiv_q(bound.get_mpz_t(), value->get_num_mpz_t(), value->get_den_mpz_t());
             }
-            // (>= c v) / (> c v): v <= c / v <= c - 1
-            if (auto v = varName(a.children[1])) {
-                mpz_class c;
-                if (tryConstInt(a.children[0], c)) {
-                    mpz_class bound = (a.kind == Kind::Geq) ? c : (c - 1);
-                    recordUpperBound(*v, bound);
-                }
-            }
-        }
-        if (a.kind == Kind::Leq || a.kind == Kind::Lt) {
-            mpq_class need = (a.kind == Kind::Leq) ? mpq_class(0) : mpq_class(-1);
-            if (auto v = varName(a.children[1])) {
-                if (constGe(a.children[0], need)) nonNegVars_.insert(*v);
-                mpz_class c;
-                if (tryConstInt(a.children[0], c)) {
-                    mpz_class bound = (a.kind == Kind::Leq) ? c : (c + 1);
-                    recordLowerBound(*v, bound);
-                }
-            }
-            // (<= v c) / (< v c): v <= c / v <= c - 1
-            if (auto v = varName(a.children[0])) {
-                mpz_class c;
-                if (tryConstInt(a.children[1], c)) {
-                    mpz_class bound = (a.kind == Kind::Leq) ? c : (c - 1);
-                    recordUpperBound(*v, bound);
-                }
-            }
+            auto [it, inserted] = varLowerBound_.emplace(*name, bound);
+            if (!inserted && bound > it->second) it->second = bound;
+            if (bound >= 0) nonNegVars_.insert(*name);
+        } else if (*value >= 0) {
+            nonNegVars_.insert(*name);
         }
     };
-    std::function<void(ExprId)> walk = [&](ExprId e) {
-        const TermExpr& n = ir_.get(e);
+    std::vector<ExprId> pending;
+    for (const auto& [_, e] : ir_.getScopedAssertions()) pending.push_back(e);
+    std::unordered_set<ExprId> visited;
+    while (!pending.empty()) {
+        const auto e = pending.back(); pending.pop_back();
+        if (!visited.insert(e).second) continue;
+        const auto& n = ir_.get(e);
         if (n.kind == Kind::And) {
-            for (ExprId c : n.children) walk(c);
-            return;
-        }
-        mark(e);
-    };
-    for (const auto& [_, e] : ir_.getScopedAssertions()) walk(e);
-}
-
-bool FormulaRewriter::tryGetLowerBound(ExprId e, mpz_class& out) const {
-    const TermExpr& n = ir_.get(e);
-    if (n.kind == Kind::ConstInt) {
-        if (auto* iv = std::get_if<int64_t>(&n.payload.value)) {
-            out = mpz_class(*iv);
-            return true;
+            pending.insert(pending.end(), n.children.begin(), n.children.end());
+        } else if (n.children.size() == 2) {
+            if (n.kind == Kind::Geq || n.kind == Kind::Gt)
+                lowerBound(n.children[0], n.children[1], n.kind == Kind::Gt);
+            else if (n.kind == Kind::Leq || n.kind == Kind::Lt)
+                lowerBound(n.children[1], n.children[0], n.kind == Kind::Lt);
         }
     }
-    if (n.kind == Kind::Variable) {
-        if (auto* s = std::get_if<std::string>(&n.payload.value)) {
-            auto it = varLowerBound_.find(*s);
-            if (it != varLowerBound_.end()) {
-                out = it->second;
-                return true;
-            }
-        }
-    }
-    return false;
 }
 
 bool FormulaRewriter::isProvablyNonNegative(ExprId e) const {
