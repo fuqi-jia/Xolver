@@ -90,6 +90,10 @@ jobs:
         run: |
           python3 tools/fuzz/check_sv_obligations.py --generator build/tests/xolver_sv_cases \
             --z3 /usr/bin/z3 --cvc5 .validation-oracles/cvc5 --output sv-validation
+          python3 tools/integration/check_qcp_arithmetic.py --solver build/bin/xolver \
+            --sv build/bin/xolver-sv --z3 /usr/bin/z3 --output sv-validation/qcp-arithmetic
+          python3 tools/integration/check_qcp_fixture.py --solver build/bin/xolver \
+            --sv build/bin/xolver-sv --z3 /usr/bin/z3 --output sv-validation/qcp-conditions
 
       - name: Retain SV validation evidence
         if: always()

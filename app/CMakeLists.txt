@@ -11,3 +11,9 @@ set_target_properties(xolver-cli PROPERTIES
     OUTPUT_NAME xolver
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
+
+add_executable(xolver-sv sv.cpp)
+target_link_libraries(xolver-sv PRIVATE xolver_core Threads::Threads)
+set_target_properties(xolver-sv PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+)

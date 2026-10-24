@@ -1,0 +1,42 @@
+{
+  "repository": "https://github.com/QinxiangCao/QualifiedCProgramming",
+  "revision": "08cc7a0f1373a1db3800111a0205a340b6d6f99c",
+  "tag": "QCP-V2.1.4",
+  "excerpts": [
+    {
+      "name": "gcd_safety_wit_2",
+      "generated_file": "gcd/gcd_goal.v",
+      "generated_file_sha256": "1052f6ae736191a7fd165ae9ed6d5a97cb33226f9b28d2e8bc402b91049acf6e",
+      "line": 32,
+      "excerpt_sha256": "680021a8d054a37f000d145fb733a9acaafa5e414c8c8cad8489f5455464c2e8"
+    },
+    {
+      "name": "gcd_entail_wit_1",
+      "generated_file": "gcd/gcd_goal.v",
+      "generated_file_sha256": "1052f6ae736191a7fd165ae9ed6d5a97cb33226f9b28d2e8bc402b91049acf6e",
+      "line": 41,
+      "excerpt_sha256": "147692e51fe53835f361f7950a2c36796bce234310996c4a4854a29be156f793"
+    },
+    {
+      "name": "gcd_partial_solve_wit_2_pure_split_goal_1",
+      "generated_file": "gcd/gcd_goal.v",
+      "generated_file_sha256": "1052f6ae736191a7fd165ae9ed6d5a97cb33226f9b28d2e8bc402b91049acf6e",
+      "line": 140,
+      "excerpt_sha256": "2ea25b1bf662a1369fe81cdee39c3615620305dbe9843950b9e325393115335f"
+    },
+    {
+      "name": "Always_positive_simple_safety_wit_4",
+      "generated_file": "Always_pos/Always_pos_goal.v",
+      "generated_file_sha256": "ecbb1285d6ba5c9e7b12aae4f48ad509cc95802655e00372504e6f607fdd5614",
+      "line": 56,
+      "excerpt_sha256": "78a655a36007145e88b8cbf0a6ab21438872d3005494f1137cd1ea733b994041"
+    },
+    {
+      "name": "Always_positive_simple_safety_wit_6",
+      "generated_file": "Always_pos/Always_pos_goal.v",
+      "generated_file_sha256": "ecbb1285d6ba5c9e7b12aae4f48ad509cc95802655e00372504e6f607fdd5614",
+      "line": 80,
+      "excerpt_sha256": "6afcd6547af17f34ddd04de53a1fd9d16b6176ff85f496066053214472c4e739"
+    }
+  ]
+}

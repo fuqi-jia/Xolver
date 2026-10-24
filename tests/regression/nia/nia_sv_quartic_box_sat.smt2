@@ -1,0 +1,8 @@
+(set-logic QF_NIA)
+(set-info :status sat)
+(declare-const x Int)
+(assert (>= x 2))
+(assert (<= x 3))
+(assert (= (* x x x x) 16))
+(check-sat)
+(exit)

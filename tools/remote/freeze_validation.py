@@ -7,7 +7,7 @@ from pathlib import Path
 import stat
 
 
-DIRECTORIES = ("tools", "tests/tools", "tests/regression", "tests/known_gaps")
+DIRECTORIES = ("tools", "tests/tools", "tests/regression", "tests/known_gaps", "tests/integration")
 
 
 def freeze(root: Path, output: Path):
