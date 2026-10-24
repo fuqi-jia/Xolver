@@ -27,7 +27,9 @@ Heap entailments use the separate SL application.
 | `RangeCertificateSolver` | Check each bound against its original assumption and replay the interval proof |
 | `RangeAssistedSolver` | Check an interval certificate, otherwise solve the unchanged obligation with the injected oracle |
 
-The range solvers accept the same native `Obligation` contract. They use exact
+The range solvers accept the same native `Obligation` contract. The calculus and
+certificate checker in `search/arith/IntegerBounds` also serve the standard SMT
+application; SV adapts obligations to that shared interface. They use exact
 integer interval operations, preserve symbol identity, and derive strict bounds
 with integer rounding. They can bound nonlinear products and powers, select or
 join conditional branches, and reason about Euclidean quotient/remainder ranges.

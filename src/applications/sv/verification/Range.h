@@ -1,18 +1,12 @@
 #pragma once
 #include "applications/sv/verification/Solver.h"
-#include <gmpxx.h>
+#include "search/arith/IntegerBounds.h"
 
 namespace xolver::applications::sv::verification {
 // Integer bounds justified by mandatory conjuncts of the original assumptions.
 // Native symbol identities and assumption identities are part of the contract.
-struct RangeBound {
-    std::shared_ptr<SOMTParser::DAGNode> symbol;
-    std::optional<mpz_class> lower, upper;
-    std::shared_ptr<SOMTParser::DAGNode> lowerAssumption, upperAssumption;
-};
-struct RangeCertificate {
-    std::vector<RangeBound> bounds;
-};
+using RangeBound = integer_bounds::Bound;
+using RangeCertificate = integer_bounds::Certificate;
 struct RangeAnswer {
     Status status = Status::Unknown;
     std::optional<RangeCertificate> certificate;

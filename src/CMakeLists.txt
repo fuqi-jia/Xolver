@@ -100,6 +100,10 @@ foreach(layer base ir contracts algebra evidence quantifiers applications fronte
     if(layer MATCHES "^(search|runtime)$")
         target_link_libraries(xolver_${layer} PRIVATE cadical)
     endif()
+    if(layer STREQUAL "search")
+        # Native graph reasoning consumes the IR bridge, without parser APIs.
+        target_link_libraries(xolver_${layer} PRIVATE somtparser_ir)
+    endif()
     if(layer MATCHES "^(ir|quantifiers|applications)$")
         # Native node storage consumes only the public IR headers.
         # No frontend/parser headers are visible to this layer.

@@ -408,6 +408,7 @@ public:
     Impl() : sat(createSatSolver()) {}
 
     void reset();
+    void resetWithParser(std::unique_ptr<SOMTParser::Parser>);
 
     bool parseFile(std::string_view filename);
 

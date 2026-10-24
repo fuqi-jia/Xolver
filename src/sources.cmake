@@ -79,6 +79,7 @@ set(XOLVER_FRONTEND_SOURCES
 
 set(XOLVER_SEARCH_SOURCES
     "search/arith/ArithSolverBase.cpp"
+    "search/arith/IntegerBounds.cpp"
     "search/array/ArrayModelCompletion.cpp"
     "search/array/ArrayReasoner.cpp"
     "search/bitblast/BitBlastEncoder.cpp"

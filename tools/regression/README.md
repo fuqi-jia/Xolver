@@ -1,0 +1,35 @@
+# SMT benchmark comparisons
+
+`select_public_sample.py` freezes a deterministic family-stratified sample from
+an existing SMT-LIB directory. It records member names, sizes, expected statuses
+and SHA-256 hashes. Selection uses neither solver outcomes nor file-size cutoffs.
+Use the shared immutable SMT-LIB archives for provenance checks; benchmarks do
+not need a project-specific copy.
+
+`compare_fixed_sample.py` compares two standard Xolver executables and Z3 on
+identical hash-checked inputs. A manifest contains a `cases` array with `path`,
+`sha256`, `family`, `logic`, `expected`, and optional `repetitions` fields.
+Choose inputs and repetition counts before observing results. Every execution is
+a fresh process, with solver order rotated across cases and repetitions.
+
+```bash
+python3 tools/regression/select_public_sample.py --root /datasets/non-incremental \
+  --output selected.json
+python3 tools/regression/compare_fixed_sample.py --manifest selected.json \
+  --baseline /validation/baseline/xolver --candidate /validation/candidate/xolver \
+  --z3 /oracles/z3 --timeout 3 --output comparison
+```
+
+Reports retain verdicts, unknowns, timeouts and errors. A decisive disagreement
+with Z3 or the embedded status fails the comparison. All inputs contribute to
+coverage and PAR-2; unsolved executions cost twice the timeout. Latency ratios
+use medians only where all solvers consistently decide the same verdict, then
+weight benchmark families equally. Family bootstrap intervals describe sampling
+variation within that sample, not all SMT workloads. Raw observations remain in
+`report.json`. Common-case speedups alone cannot establish overall superiority.
+
+The default sample spans QF_LIA, QF_NIA, QF_LRA and QF_NRA. It does not represent
+bitvectors, floating point, strings, arrays, quantifiers or incremental solving.
+Broader claims require explicit samples from those populations and separate
+model/proof validation. Agreement with a reference is differential evidence, not
+a formal correctness proof.

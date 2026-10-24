@@ -39,10 +39,7 @@ def main():
                     '--solver', str(args.solver), '--sv', str(args.sv), '--z3', str(args.z3)], check=True)
     report = json.loads((args.output / 'comparison/report.json').read_text())
     if report['shared_decisions'] != len(exported['queries']):
-        # The plain SMT application can be unknown; the SV path must decide.
-        for row in report['rows']:
-            if row['attempts']['sv']['result'] not in ('sat', 'unsat') or row['attempts']['z3']['result'] not in ('sat', 'unsat'):
-                raise RuntimeError('SV fixture has an undecided condition')
+        raise RuntimeError('standard SMT, SV and Z3 must all decide the fixture conditions')
     print(json.dumps({'queries': len(exported['queries']), 'interval_certificates': report['interval_certificates'], 'failures': 0}))
 
 

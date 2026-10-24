@@ -9,6 +9,40 @@
 
 using namespace xolver;
 
+TEST_CASE("API: parse replacement is transactional across model and scope state") {
+    namespace fs = std::filesystem;
+    auto root = fs::temp_directory_path();
+    auto good = root / "xolver_parser_transaction_good.smt2";
+    auto bad = root / "xolver_parser_transaction_bad.smt2";
+    auto replacement = root / "xolver_parser_transaction_replace.smt2";
+    { std::ofstream f(good); f << "(set-logic QF_LIA)(declare-const x Int)(assert (= x 5))(check-sat)(get-value (x))"; }
+    { std::ofstream f(bad); f << "(set-logic QF_LIA)(declare-const y Int)(assert (= missing 1))"; }
+    { std::ofstream f(replacement); f << "(set-logic QF_LIA)(declare-const y Int)(assert (= y 9))(check-sat)(get-value (y))"; }
+    Solver solver;
+    REQUIRE(solver.parseFile(good.string()));
+    REQUIRE((solver.checkSat() == Result::Sat));
+    CHECK((solver.validateModel() == Solver::ModelValidation::Satisfied));
+    solver.push();
+    solver.assertFormula(solver.mkBool(false));
+    REQUIRE((solver.checkSat() == Result::Unsat));
+    CHECK_FALSE(solver.parseFile(bad.string()));
+    CHECK((solver.checkSat() == Result::Unsat));
+    solver.pop();
+    REQUIRE((solver.checkSat() == Result::Sat));
+    for (auto command : solver.scriptResponseCommands())
+        if (command.kind == Solver::ScriptResponseCommand::Kind::GetValue)
+            CHECK(solver.getValueResponse(command.scriptIndex) == "((x 5))");
+    REQUIRE(solver.parseFile(replacement.string()));
+    REQUIRE((solver.checkSat() == Result::Sat));
+    for (auto command : solver.scriptResponseCommands())
+        if (command.kind == Solver::ScriptResponseCommand::Kind::GetValue)
+            CHECK(solver.getValueResponse(command.scriptIndex) == "((y 9))");
+    solver.reset();
+    solver.assertFormula(solver.mkBool(false));
+    CHECK((solver.checkSat() == Result::Unsat));
+    fs::remove(good); fs::remove(bad); fs::remove(replacement);
+}
+
 TEST_CASE("API: automatic UF arithmetic selection is scoped to the query") {
     auto path = std::filesystem::temp_directory_path() / "xolver_auto_uf_arithmetic.smt2";
     {
