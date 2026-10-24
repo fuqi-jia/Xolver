@@ -36,6 +36,10 @@ def summarize(rows, timeout):
     common = []
     for i, row in enumerate(rows):
         observations = row['observations']
+        decisive = {pair[n]['result'] for pair in observations for n in names
+                    if pair[n]['result'] in ('sat', 'unsat')}
+        if len(decisive) > 1:
+            wrong.append(dict(index=i, reason='conflicting decisive results across solvers or repetitions'))
         for pair in observations:
             oracle = pair['z3']['result']
             for n in names:

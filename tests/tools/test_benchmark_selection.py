@@ -61,6 +61,14 @@ class BenchmarkSelectionTests(unittest.TestCase):
         self.assertFalse(report['wrong_verdicts'])
         rows[0]['observations'][0]['candidate']['result']='sat'
         self.assertTrue(summarize(rows,3)['wrong_verdicts'])
+        # An unknown reference cannot excuse a decisive contradiction between
+        # implementations, or between repeated executions of one solver.
+        rows=[dict(case={'family':'A','expected':'unknown'},
+                   observations=[pair('sat','unsat','unknown')])]
+        self.assertTrue(summarize(rows,3)['wrong_verdicts'])
+        rows[0]['observations']=[pair('unknown','sat','unknown'),
+                                 pair('unknown','unsat','unknown')]
+        self.assertTrue(summarize(rows,3)['wrong_verdicts'])
 
 
 if __name__=='__main__':unittest.main()
