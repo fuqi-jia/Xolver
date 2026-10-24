@@ -1711,20 +1711,22 @@ Solver::ModelValidation Solver::validateModel() const {
     }
     for (const auto& [name, value] : model.numericAssignments)
         if (auto q = value.tryAsRational()) nums[name] = *q;
-    for (ExprId id = 0; id < pImpl->ir->size(); ++id) {
-        const auto& e = pImpl->ir->get(id);
-        if (e.kind != Kind::Variable || pImpl->ir->sortKind(e.sort) != SortKind::Int) continue;
-        auto name = std::get_if<std::string>(&e.payload.value);
-        if (!name) continue;
-        if (auto n = model.numericAssignments.find(*name); n != model.numericAssignments.end()) {
-            if (!n->second.isExactInteger()) return ModelValidation::Violated;
-        } else if (auto n = nums.find(*name); n != nums.end() && n->second.get_den() != 1) {
-            return ModelValidation::Violated;
+    if (pImpl->parser)
+        for (const auto& var : pImpl->parser->getDeclaredVariables()) {
+            if (!var) continue;
+            if (var->isVBool()) bools.try_emplace(var->getName(), false);
+            else if ((var->isVInt() || var->isVReal()) &&
+                     !model.assignments.contains(var->getName()) &&
+                     !model.numericAssignments.contains(var->getName()))
+                nums.try_emplace(var->getName(), 0);
         }
-    }
+    if (!ArithModelValidator::integerAssignmentsValid(*pImpl->ir, model.numericAssignments, nums))
+        return ModelValidation::Violated;
     ArithModelValidator validator(*pImpl->ir, nums, bools, model.arrayInterps, tokens);
     validator.setRealAssignments(&model.numericAssignments);
     validator.setFunctionInterps(&model.functionInterps, &model.arrayValues);
+    validator.setIntegerZeroExtensions(&pImpl->partialFuncModel_.divZero,
+                                      &pImpl->partialFuncModel_.modZero);
     switch (validator.validate(pImpl->originalAssertions_)) {
         case ArithModelValidator::Verdict::Satisfied: return ModelValidation::Satisfied;
         case ArithModelValidator::Verdict::Violated: return ModelValidation::Violated;

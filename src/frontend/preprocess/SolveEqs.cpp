@@ -30,9 +30,12 @@ std::optional<std::string> SolveEqs::asNumericVar(ExprId e) const {
 
 bool SolveEqs::occurs(const std::string& name, ExprId root) const {
     std::vector<ExprId> stack{root};
+    std::unordered_set<ExprId> seen;
     while (!stack.empty()) {
-        const auto& node = ir_.get(stack.back());
+        const auto id = stack.back();
         stack.pop_back();
+        if (!seen.insert(id).second) continue;
+        const auto& node = ir_.get(id);
         if (node.kind == Kind::Variable) {
             if (auto* nm = std::get_if<std::string>(&node.payload.value)) {
                 if (*nm == name) return true;
@@ -45,9 +48,12 @@ bool SolveEqs::occurs(const std::string& name, ExprId root) const {
 
 bool SolveEqs::isLinearReconstructable(ExprId root) const {
     std::vector<ExprId> stack{root};
+    std::unordered_set<ExprId> seen;
     while (!stack.empty()) {
-        const auto& node = ir_.get(stack.back());
+        const auto id = stack.back();
         stack.pop_back();
+        if (!seen.insert(id).second) continue;
+        const auto& node = ir_.get(id);
         switch (node.kind) {
             case Kind::ConstInt: case Kind::ConstReal: case Kind::Variable:
                 break;
@@ -126,12 +132,17 @@ ExprId SolveEqs::substitute(ExprId root, const std::string& name, ExprId replace
 void SolveEqs::computeUnsafeVars() {
     unsafeVars_.clear();
     struct F { ExprId e; bool underUF; };
+    std::unordered_map<ExprId, unsigned char> seen;
     for (const auto& [level, root] : conjuncts_) {
         (void)level;
         std::vector<F> stack{{root, false}};
         while (!stack.empty()) {
             F f = stack.back();
             stack.pop_back();
+            const unsigned char context = f.underUF ? 2 : 1;
+            auto& contexts = seen[f.e];
+            if (contexts & context) continue;
+            contexts |= context;
             const auto& node = ir_.get(f.e);
             if (f.underUF && node.kind == Kind::Variable) {
                 if (auto* nm = std::get_if<std::string>(&node.payload.value)) unsafeVars_.insert(*nm);
@@ -151,9 +162,11 @@ bool SolveEqs::run() {
     // Flatten top-level conjunctions into atomic conjuncts (keeping levels).
     for (const auto& [level, a] : ir_.getScopedAssertions()) {
         std::vector<ExprId> flat{a};
+        std::unordered_set<ExprId> seen;
         while (!flat.empty()) {
             ExprId e = flat.back();
             flat.pop_back();
+            if (!seen.insert(e).second) continue;
             const auto& node = ir_.get(e);
             if (node.kind == Kind::And) {
                 for (int i = static_cast<int>(node.children.size()) - 1; i >= 0; --i)

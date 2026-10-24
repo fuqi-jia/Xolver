@@ -28,6 +28,10 @@ class BenchmarkSelectionTests(unittest.TestCase):
             second = select(root, {'QF_NIA': 3})
             self.assertEqual([c['member'] for c in first['cases']], [c['member'] for c in second['cases']])
             self.assertNotEqual(first['cases'][0]['sha256'], second['cases'][0]['sha256'])
+            excluded = {c['member'] for c in first['cases']}
+            followup = select(root, {'QF_NIA': 3}, seed='followup', excluded=excluded)
+            self.assertFalse(excluded.intersection(c['member'] for c in followup['cases']))
+            self.assertEqual({c['family'] for c in followup['cases']}, {'one','two','three'})
 
     def test_qcp_holdout_excludes_family_name_and_byte_duplicates(self):
         with tempfile.TemporaryDirectory() as d:

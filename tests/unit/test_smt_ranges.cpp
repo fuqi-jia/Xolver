@@ -74,13 +74,38 @@ TEST_CASE("SMT ranges: mandatory negations can refute but disjuncts cannot suppl
               .status == integer_bounds::ProofStatus::Open);
 }
 
+TEST_CASE("SMT ranges: expression bounds retain differences and check their sources") {
+    SOMTParser::Parser parser;
+    preserveNativeTheories(*parser.getOptions());
+    REQUIRE(parser.parseStr("(set-logic QF_NIA)(declare-const a Int)(declare-const b Int)"
+                            "(declare-const c Int)(declare-const d Int)"
+                            "(assert (and (<= (- 2) a) (<= a 2) (<= (- 2) b) (<= b 2)"
+                            "(<= (- 2) c) (<= c 2) (<= (- 2) d) (<= d 2)))"
+                            "(assert (>= (- a b) 0))(assert (> (- c d) 0))"
+                            "(assert (< (* (- a b) (- c d)) 0))"));
+    auto roots = parser.getAssertions();
+    auto proof = integer_bounds::refute(roots);
+    REQUIRE(proof.status == integer_bounds::ProofStatus::Proved);
+    REQUIRE(proof.certificate);
+    REQUIRE_FALSE(proof.certificate->terms.empty());
+    native::Nodes nodes(roots);
+    CHECK(integer_bounds::check(roots, nodes.boolean(false), *proof.certificate).status ==
+          integer_bounds::ProofStatus::Proved);
+    auto forged = *proof.certificate;
+    auto &entry = forged.terms.front();
+    if (entry.lower)
+        ++*entry.lower;
+    else
+        --*entry.upper;
+    CHECK(integer_bounds::check(roots, nodes.boolean(false), forged).status ==
+          integer_bounds::ProofStatus::Invalid);
+}
+
 TEST_CASE("SMT ranges: checked refutations agree with exhaustive bounded integers") {
     native::Nodes b({});
     using K = native::K;
     auto sort = SOMTParser::SortManager::getInt();
-    auto integer = [&](int value) {
-        return b.make(sort, K::NT_CONST, {}, std::to_string(value));
-    };
+    auto integer = [&](int value) { return b.make(sort, K::NT_CONST, {}, std::to_string(value)); };
     auto x = b.make(sort, K::NT_VAR, {}, "x");
     auto y = b.make(sort, K::NT_VAR, {}, "y");
     auto zero = b.numeral(0);
@@ -112,38 +137,52 @@ TEST_CASE("SMT ranges: checked refutations agree with exhaustive bounded integer
     std::size_t proved = 0, open = 0;
     for (const auto &term : terms)
         for (int threshold = -5; threshold <= 5; ++threshold)
-            for (auto kind : {K::NT_LE, K::NT_LT, K::NT_EQ, K::NT_DISTINCT}) {
-                NativeAssertions assertions{b.logical(K::NT_GE, {x, integer(-2)}),
-                                            b.logical(K::NT_LE, {x, b.numeral(2)}),
-                                            b.logical(K::NT_GE, {y, integer(-2)}),
-                                            b.logical(K::NT_LE, {y, b.numeral(2)})};
-                if (term.excludesZero)
-                    assertions.push_back(b.logical(K::NT_DISTINCT, {y, zero}));
-                assertions.push_back(b.logical(kind, {term.node, integer(threshold)}));
-                bool satisfiable = false;
-                for (int a = -2; a <= 2; ++a)
-                    for (int d = -2; d <= 2; ++d) {
-                        if (term.excludesZero && !d)
-                            continue;
-                        int value = term.evaluate(a, d);
-                        satisfiable |= kind == K::NT_LE   ? value <= threshold
-                                       : kind == K::NT_LT ? value < threshold
-                                       : kind == K::NT_EQ ? value == threshold
-                                                          : value != threshold;
-                    }
-                auto proof = integer_bounds::refute(assertions);
-                CAPTURE(threshold);
-                CAPTURE(static_cast<int>(kind));
-                REQUIRE(proof.status != integer_bounds::ProofStatus::Invalid);
-                if (proof.status == integer_bounds::ProofStatus::Proved) {
-                    ++proved;
-                    CHECK_FALSE(satisfiable);
-                    REQUIRE(proof.certificate);
-                    CHECK(integer_bounds::check(assertions, b.boolean(false), *proof.certificate)
-                              .status == integer_bounds::ProofStatus::Proved);
-                } else
-                    ++open;
-            }
+            for (int restriction = 0; restriction < 5; ++restriction)
+                for (auto kind : {K::NT_LE, K::NT_LT, K::NT_EQ, K::NT_DISTINCT}) {
+                    NativeAssertions assertions{b.logical(K::NT_GE, {x, integer(-2)}),
+                                                b.logical(K::NT_LE, {x, b.numeral(2)}),
+                                                b.logical(K::NT_GE, {y, integer(-2)}),
+                                                b.logical(K::NT_LE, {y, b.numeral(2)})};
+                    if (term.excludesZero)
+                        assertions.push_back(b.logical(K::NT_DISTINCT, {y, zero}));
+                    if (restriction == 1 || restriction == 2)
+                        assertions.push_back(
+                            b.logical(restriction == 1 ? K::NT_GE : K::NT_EQ,
+                                      {term.node, integer(restriction == 1 ? 0 : 1)}));
+                    if (restriction >= 3)
+                        assertions.push_back(b.logical(K::NT_DISTINCT, {term.node, zero}));
+                    if (restriction == 4)
+                        assertions.push_back(b.logical(K::NT_LE, {term.node, zero}));
+                    assertions.push_back(b.logical(kind, {term.node, integer(threshold)}));
+                    bool satisfiable = false;
+                    for (int a = -2; a <= 2; ++a)
+                        for (int d = -2; d <= 2; ++d) {
+                            if (term.excludesZero && !d)
+                                continue;
+                            int value = term.evaluate(a, d);
+                            if ((restriction == 1 && value < 0) || (restriction == 2 && value != 1))
+                                continue;
+                            if ((restriction >= 3 && value == 0) || (restriction == 4 && value > 0))
+                                continue;
+                            satisfiable |= kind == K::NT_LE   ? value <= threshold
+                                           : kind == K::NT_LT ? value < threshold
+                                           : kind == K::NT_EQ ? value == threshold
+                                                              : value != threshold;
+                        }
+                    auto proof = integer_bounds::refute(assertions);
+                    CAPTURE(threshold);
+                    CAPTURE(static_cast<int>(kind));
+                    REQUIRE(proof.status != integer_bounds::ProofStatus::Invalid);
+                    if (proof.status == integer_bounds::ProofStatus::Proved) {
+                        ++proved;
+                        CHECK_FALSE(satisfiable);
+                        REQUIRE(proof.certificate);
+                        CHECK(
+                            integer_bounds::check(assertions, b.boolean(false), *proof.certificate)
+                                .status == integer_bounds::ProofStatus::Proved);
+                    } else
+                        ++open;
+                }
     CHECK(proved > 0);
     CHECK(open > 0);
 }

@@ -9,9 +9,30 @@
 
 #include <doctest/doctest.h>
 #include "contracts/SatSolver.h"
+#include "search/sat/CadicalBackend.h"
+#include <algorithm>
 #include <stdexcept>
 
 using namespace xolver;
+
+TEST_CASE("SAT: external variable allocation has no phantom decision domain") {
+    CadicalBackend solver;
+    std::vector<SatVar> variables;
+    for (int i = 0; i < 32; ++i) {
+        variables.push_back(solver.newVar());
+        CHECK(solver.getStats().vars <= i + 1);
+    }
+    auto p = variables.front();
+    solver.addClause({SatLit::positive(p)});
+    REQUIRE((solver.solve() == SatSolver::SolveResult::Sat));
+    auto fresh = solver.newVar();
+    CHECK(std::find(variables.begin(), variables.end(), fresh) == variables.end());
+    solver.addClause({SatLit::negative(fresh), SatLit::negative(p)});
+    REQUIRE((solver.solve({SatLit::positive(fresh)}) == SatSolver::SolveResult::Unsat));
+    REQUIRE((solver.solve({SatLit::negative(fresh)}) == SatSolver::SolveResult::Sat));
+    CHECK(solver.value(p));
+    CHECK_FALSE(solver.value(fresh));
+}
 
 TEST_CASE("SAT: expired local deadline consumes assumptions and permits reuse") {
     auto s = createSatSolver();

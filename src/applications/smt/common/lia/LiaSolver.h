@@ -69,7 +69,7 @@ public:
     // with "__"). Used by NiaSolver's embedded linear-decide to obtain the
     // COMPLETE assignment for exact re-validation against NIA's normalized
     // constraints (which reference NIA's mod/div-lowering aux vars).
-    std::optional<TheoryModel> getModelWithInternal() const;
+    std::optional<TheoryModel> getModelWithInternal() const override;
 
     // Standalone complete integer solve for NiaSolver's embedded linear-decide.
     // Precondition: the caller has asserted all constraints via assertLit. Runs

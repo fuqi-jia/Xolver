@@ -60,6 +60,9 @@ jobs:
           python3 tools/ci/install_oracles.py .validation-oracles
           python3 tools/fuzz/fuzz_theory_applications.py --solver build/bin/xolver \
             --output theory-validation --count 32 --timeout 10 --cvc5 .validation-oracles/cvc5
+          python3 tools/fuzz/fuzz_integer_partial.py --solver build/bin/xolver \
+            --z3 /usr/bin/z3 --cvc5 .validation-oracles/cvc5 \
+            --output theory-validation/integer-partial --count 4 --timeout 5
 
       - name: Retain native-theory validation evidence
         if: always()

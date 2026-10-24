@@ -38,8 +38,8 @@ disequalities; a condition inside a disjunction is insufficient. An open range
 proof returns `Unknown`, never a fabricated countermodel. Countermodels in the
 assisted solver come from its injected oracle.
 
-Range certificates identify their variable bounds and the exact original
-conjuncts that justify each endpoint. Replay checks membership, variable identity,
+Range certificates identify variable bounds and separate compound-term bounds,
+with the exact original conjuncts that justify each endpoint. Replay checks membership, native identity,
 endpoint values and the original conclusion without trusting the discovered box.
 There is no implicit C arithmetic mode: source clients lower truncating or floor
 division to ordinary native formulas before invoking these mathematical-integer

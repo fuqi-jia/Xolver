@@ -75,11 +75,24 @@ public:
     }
 
     using RealAssignment = std::unordered_map<std::string, RealValue>;
+    static bool integerAssignmentsValid(const NativeTerms&, const RealAssignment&,
+                                        const NumAssignment&);
     // Provide EXACT real-algebraic values (e.g. √2) for variables, from the
     // theory's typed model channel (numericAssignments). Consulted before the
     // rational `num_` map, so NRA/NIRA algebraic witnesses validate instead of
     // being Indeterminate. Optional; pointer must outlive this validator.
     void setRealAssignments(const RealAssignment* ra) { real_ = ra; }
+
+    // Explicit total interpretations at integer zero divisors. Each finite
+    // table has default value zero; nullptr retains indeterminate evaluation.
+    // Ordinary nonzero div/mod keep their Euclidean semantics. Tables must
+    // outlive this validator.
+    using IntegerZeroTable = std::map<mpq_class, mpq_class>;
+    void setIntegerZeroExtensions(const IntegerZeroTable* div, const IntegerZeroTable* mod) {
+        divZero_ = div;
+        modZero_ = mod;
+        evalMemo_.clear();
+    }
 
     // Provide TYPED values for array-read terms, keyed by
     // (array-operand ExprId, index value). Used by the combination model check
@@ -158,6 +171,8 @@ private:
     const ArrayAssignment* arr_ = nullptr;
     const TokenAssignment* tok_ = nullptr;
     const FuncInterpMap* funcInterps_ = nullptr;
+    const IntegerZeroTable* divZero_ = nullptr;
+    const IntegerZeroTable* modZero_ = nullptr;
     const ArrayAssignment* arrayValues_ = nullptr;
     const RealAssignment* real_ = nullptr;
     const SelectOverrideMap* selOverride_ = nullptr;

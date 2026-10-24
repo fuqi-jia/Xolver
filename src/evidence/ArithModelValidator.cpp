@@ -5,6 +5,20 @@
 #include <functional>
 
 namespace xolver {
+bool ArithModelValidator::integerAssignmentsValid(const NativeTerms& ir,
+        const RealAssignment& real, const NumAssignment& numeric) {
+    for (ExprId id = 0; id < ir.size(); ++id) {
+        const auto term = ir.get(id);
+        if (term.kind != Kind::Variable || ir.sortKind(term.sort) != SortKind::Int) continue;
+        const auto name = std::get_if<std::string>(&term.payload.value);
+        if (!name) continue;
+        if (auto found = real.find(*name); found != real.end()) {
+            if (!found->second.isExactInteger()) return false;
+        } else if (auto found = numeric.find(*name); found != numeric.end() && found->second.get_den() != 1)
+            return false;
+    }
+    return true;
+}
 
 // Forward decl for diag helper at bottom of file
 static void amvDumpExpr(const NativeTerms& ir, ExprId eid, int depth, int maxDepth);
@@ -302,7 +316,12 @@ ArithModelValidator::TR ArithModelValidator::evalImpl(ExprId eid) const {
             if (n.children.size() != 2) return r;
             TR a = eval(n.children[0]), b = eval(n.children[1]);
             if (a.kind != Kind2::Number || b.kind != Kind2::Number) return r;
-            if (b.n.isZero()) return r;  // div/0 underspecified → indeterminate
+            if (b.n.isZero()) {
+                if (n.sort != ir_.intSortId() || !divZero_ || !a.n.isExactInteger()) return r;
+                auto found = divZero_->find(mpq_class(a.n.floor()));
+                mpq_class value = found == divZero_->end() ? mpq_class(0) : found->second;
+                return value.get_den() == 1 ? num(RealValue::fromMpq(value)) : r;
+            }
             // SMT-LIB `div` on Int is EUCLIDEAN integer division; `/` on Real is
             // real division. Distinguish by the node's sort.
             if (n.sort == ir_.intSortId()) {
@@ -340,7 +359,13 @@ ArithModelValidator::TR ArithModelValidator::evalImpl(ExprId eid) const {
             if (n.children.size() != 2) return r;
             TR a = eval(n.children[0]), b = eval(n.children[1]);
             if (a.kind != Kind2::Number || b.kind != Kind2::Number) return r;
-            if (!a.n.isExactInteger() || !b.n.isExactInteger() || b.n.isZero()) return r;
+            if (!a.n.isExactInteger() || !b.n.isExactInteger()) return r;
+            if (b.n.isZero()) {
+                if (!modZero_) return r;
+                auto found = modZero_->find(mpq_class(a.n.floor()));
+                mpq_class value = found == modZero_->end() ? mpq_class(0) : found->second;
+                return value.get_den() == 1 ? num(RealValue::fromMpq(value)) : r;
+            }
             mpz_class ai = a.n.floor(), bi = b.n.floor(), absB = abs(bi), q, rem;
             mpz_fdiv_qr(q.get_mpz_t(), rem.get_mpz_t(), ai.get_mpz_t(), absB.get_mpz_t());
             return num(RealValue::fromMpz(rem));

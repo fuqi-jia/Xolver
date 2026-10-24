@@ -73,7 +73,6 @@ private:
 
     std::unique_ptr<CaDiCaL::Solver> solver_;
     SatVar maxVar_ = 0;
-    SatVar declaredVars_ = 0;
     std::atomic<bool> terminateRequested_{false};
     std::mutex terminateMutex_;
     bool propagatorConnected_ = false;

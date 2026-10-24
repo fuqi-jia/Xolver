@@ -159,6 +159,10 @@ bool Solver::Impl::arrayModelDefinitelyViolates() const {
 bool Solver::Impl::modelPositivelyValidates() {
         if (!reconstructReadOnlyArrays()) return false;
         if (!ir || !lastModel_) return false;
+        if (!divModOrigins_.empty()) {
+            buildPartialFuncModel();
+            if (partialFuncModel_.inconsistent) return false;
+        }
         ArithModelValidator::NumAssignment numAsg;
         ArithModelValidator::BoolAssignment boolAsg;
         ArithModelValidator::TokenAssignment tokAsg;
@@ -199,7 +203,12 @@ bool Solver::Impl::modelPositivelyValidates() {
             auto rit = lastModel_->numericAssignments.find(name);
             if (rit != lastModel_->numericAssignments.end()) {
                 auto q = rit->second.tryAsRational();
-                if (q && *q != 0) continue;  // real value → not opaque-excluded
+                // Integer partial-function interpretations need concrete
+                // dividends, including zero. Treat these values as candidate
+                // numbers and check every original assertion below.
+                const bool integerPartial = !divModOrigins_.empty() &&
+                    lastModel_->arrayInterps.empty() && lastModel_->arrayValues.empty();
+                if (q && (*q != 0 || integerPartial)) continue;
             }
             opaqueScalar.insert(name);
         }
@@ -449,12 +458,14 @@ bool Solver::Impl::modelPositivelyValidates() {
         }
         // #41 promoted default-ON: validator eval memoization is verdict-identical
         // (memoizes a PURE eval over ExprId) — a speedup on validator-heavy sat
+        if (!ArithModelValidator::integerAssignmentsValid(*ir, filteredReal, numAsg)) return false;
         ArithModelValidator::Verdict v;
         if (!lastModel_->arrayInterps.empty() || !selBridge.empty()) {
             ArithModelValidator validator(*ir, numAsg, boolAsg,
                                           lastModel_->arrayInterps, tokAsg);
             validator.setFunctionInterps(&lastModel_->functionInterps, &lastModel_->arrayValues);
             validator.setRealAssignments(&filteredReal);
+            validator.setIntegerZeroExtensions(&partialFuncModel_.divZero, &partialFuncModel_.modZero);
             if (!selBridge.empty()) validator.setSelectOverride(&selBridge);
             if (!selectorBridge.empty()) validator.setSelectorOverride(&selectorBridge);
             v = validator.validate(originalAssertions_);
@@ -462,6 +473,7 @@ bool Solver::Impl::modelPositivelyValidates() {
             ArithModelValidator validator(*ir, numAsg, boolAsg);
             validator.setFunctionInterps(&lastModel_->functionInterps, &lastModel_->arrayValues);
             validator.setRealAssignments(&filteredReal);
+            validator.setIntegerZeroExtensions(&partialFuncModel_.divZero, &partialFuncModel_.modZero);
             if (!selectorBridge.empty()) validator.setSelectorOverride(&selectorBridge);
             v = validator.validate(originalAssertions_);
         }
@@ -484,6 +496,8 @@ void Solver::Impl::buildPartialFuncModel() {
             if (val == "false") { boolAsg[name] = false; continue; }
             try { numAsg[name] = mpq_class(val); } catch (...) {}
         }
+        for (const auto& [name, value] : lastModel_->numericAssignments)
+            if (auto rational = value.tryAsRational()) numAsg[name] = *rational;
         // Mirror dumpModel's defaulting of unconstrained user variables (0 /
         // false) so the partial-function table agrees with the printed model:
         // a dividend the theory left unassigned is emitted as 0, so it must

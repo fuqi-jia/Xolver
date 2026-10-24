@@ -12,6 +12,10 @@ identical hash-checked inputs. A manifest contains a `cases` array with `path`,
 Choose inputs and repetition counts before observing results. Every execution is
 a fresh process, with solver order rotated across cases and repetitions.
 
+Follow-up selection accepts `--seed` and repeatable `--exclude previous.json`
+arguments. Exclusion applies to member names; content hashes allow additional
+overlap checks. A different file is not necessarily a different semantic template.
+
 ```bash
 python3 tools/regression/select_public_sample.py --root /datasets/non-incremental \
   --output selected.json
@@ -33,3 +37,10 @@ bitvectors, floating point, strings, arrays, quantifiers or incremental solving.
 Broader claims require explicit samples from those populations and separate
 model/proof validation. Agreement with a reference is differential evidence, not
 a formal correctness proof.
+
+`tools/fuzz/fuzz_integer_partial.py` separately checks integer div/mod cases with
+Z3 and cvc5. Exported SAT models are replayed with their chosen zero-divisor
+interpretations pinned under fresh function names. Unspecified table entries
+use the model's explicit zero default. Both oracles must reject negative controls
+with missing or incorrect zero-divisor values. These generated checks measure
+semantic correctness, not public-benchmark performance.

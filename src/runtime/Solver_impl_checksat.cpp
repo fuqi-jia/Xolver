@@ -15,6 +15,8 @@ Result Solver::Impl::checkSatInternal() {
         lastUnknownComponent_.clear();
         lastUnknownDetail_.clear();
         lastModel_.reset();
+        divModOrigins_.clear();
+        partialFuncModel_ = PartialFuncModel{};
         roaeReads_.clear();
         originalAssertions_.clear();
         if (parser && parser->getHeapLocationSort()) {
@@ -111,11 +113,11 @@ Result Solver::Impl::checkSatInternal() {
 }
 
 Result Solver::Impl::checkSatGround() {
-        struct AutomaticLogicRestore {
+        struct QueryLogicRestore {
             std::string& logic;
-            bool automatic;
-            ~AutomaticLogicRestore() { if (automatic) logic = "ALL"; }
-        } restoreLogic{logic, logic == "ALL"};
+            std::string declared;
+            ~QueryLogicRestore() { logic = std::move(declared); }
+        } restoreLogic{logic, logic};
         // Lowering can introduce an arithmetic sort absent from the input:
         // e.g. (is_int r) creates an Int witness in an otherwise Real DAG.
         getOrCreateBoolSort();
@@ -203,6 +205,7 @@ Result Solver::Impl::checkSatGround() {
             }
             rewriter.commit();
         }
+        phase("rewrite-done");
 
         // Eliminate reconstructable definitions at base scope.
         modelConverter_ = ModelConverter{};
@@ -235,6 +238,7 @@ Result Solver::Impl::checkSatGround() {
         }
 
         // Reset SAT solver for fresh query.
+        phase("solve-eqs-done");
         sat = createSatSolver();
 
 #ifdef XOLVER_ENABLE_PROOFS
@@ -273,6 +277,7 @@ Result Solver::Impl::checkSatGround() {
             preMod.run();
             preMod.commit();
         }
+        phase("symbolic-mod-done");
 
         // Lower ITEs before any theory processing or atomization.
         // IteLowerer is a pure IR-to-IR pass: no SatLit, no theory atom
@@ -295,6 +300,7 @@ Result Solver::Impl::checkSatGround() {
         }
 
         // Cap. 8a — UnconditionalConstantPropagation.
+        phase("ite-lowering-done");
         // Collect (= var ConstNumeric) from top-level unconditional
         // conjuncts; substitute the variable by the constant globally
         // (including under ite / or / => / mod / div / to_real / to_int).
@@ -321,6 +327,7 @@ Result Solver::Impl::checkSatGround() {
             fixedBindings_ = cprop.fixedConstMap();
             cprop.commit();
         }
+        phase("constant-propagation-done");
 
         // Cap. 8b — ToRealLiteralFold.
         // Pure constant folding: (to_real ConstInt k) -> ConstReal k,
@@ -426,7 +433,15 @@ Result Solver::Impl::checkSatGround() {
                 return Result::Unknown;
             }
             if (req.needsEUF && !hasEuf) {
-                {
+                // Div/mod at zero are total, congruent functions even in an
+                // arithmetic-only input logic. Select the existing combination
+                // stack for the generated functions, scoped to this query.
+                if (logic == "QF_NIA" || logic == "NIA")
+                    logic = "QF_UFNIA";
+                else if (logic == "QF_LIA" || logic == "LIA" ||
+                         logic == "QF_IDL" || logic == "IDL")
+                    logic = "QF_UFLIA";
+                else if (logic != "ALL") {
                     lastUnknownReason_ = "IntDivModLowerer: needsEUF but logic=" + logic;
 #ifdef XOLVER_ENABLE_CASESTATS
                     finalizeCaseStats(Result::Unknown, 0.0);
@@ -446,6 +461,18 @@ Result Solver::Impl::checkSatGround() {
             // shadows giving our chosen value at undefined (divisor-0) inputs.
             divModOrigins_ = dmLowerer.origins();
         }
+        // Lowering exposes bindings for the fresh quotient/remainder symbols.
+        // Propagate them before feature detection so e.g. d*q with q=5 is
+        // handled as linear arithmetic, including the guarded zero branch.
+        if (!divModOrigins_.empty()) {
+            UnconditionalConstantPropagation constants(*ir);
+            constants.run();
+            if (constants.hadContradiction()) return Result::Unsat;
+            for (const auto& [name, value] : constants.fixedConstMap())
+                fixedBindings_.insert_or_assign(name, value);
+            constants.commit();
+        }
+        phase("integer-divmod-done");
 
         // Lower n-ary distinct to pairwise binary distinct
         {
@@ -675,11 +702,12 @@ Result Solver::Impl::checkSatGround() {
         // never SAT/UNSAT.
         {
             if (!features.hasNonlinear &&
-                (logic == "QF_NIA" || logic == "NIA")) {
+                (logic == "QF_NIA" || logic == "NIA" ||
+                 logic == "QF_UFNIA" || logic == "UFNIA")) {
                 if (xolver::config::read<xolver::config::ReadKind::Presence>("XOLVER_NIA_LINEAR_DOWNGRADE_DIAG"))
                     std::cerr << "[NIA-LINEAR-DOWNGRADE] " << logic
                               << " -> QF_LIA (no nonlinear terms)\n";
-                logic = "QF_LIA";
+                logic = features.hasUF ? "QF_UFLIA" : "QF_LIA";
             }
         }
 
@@ -1509,9 +1537,10 @@ Result Solver::Impl::checkSatGround() {
         // inconsistent, or a Real `/` is applied at a 0 denominator (not emitted
         // in round 1), the printed model would be incomplete/unsound — downgrade
         // Sat -> Unknown rather than emit it.
-        if (ret == Result::Sat && modelRequestedImpl()) {
+        if (ret == Result::Sat && (modelRequestedImpl() || !divModOrigins_.empty())) {
             buildPartialFuncModel();
-            if (partialFuncModel_.inconsistent || partialFuncModel_.realDivByZero) {
+            if (partialFuncModel_.inconsistent ||
+                (modelRequestedImpl() && partialFuncModel_.realDivByZero)) {
                 lastUnknownReason_ =
                     partialFuncModel_.inconsistent
                         ? "partial-function model: inconsistent total extension"
@@ -1575,11 +1604,10 @@ Result Solver::Impl::checkSatGround() {
         // not the original mod relations (e.g. SVCOMP soft_float: many
         // (mod m 2^k) clauses; xolver=sat, oracle=unsat). Validate the sat for
         // such (pure-Int) div/mod-lowered formulas too. Sound: only sat->unknown.
-        // Exclude UF: div/mod-by-zero under UF is a partial function the
-        // validator cannot positively confirm (genuine UFNIA divzero sats would
-        // be over-floored to unknown); leave those to UF-aware validation.
+        // Explicit zero-divisor interpretations also permit checking the UF
+        // combination against the original mathematical-integer formula.
         bool divModSatFloor = !divModOrigins_.empty() &&
-                              !features.hasRealVar && !features.hasUF;
+                              !features.hasRealVar;
         // Real-division purification (promoted default-ON) introduces fresh `q`
         // for real `(/ a b)` with the guarded def `b!=0 => q*b=a`. For b!=0 this
         // pins q=a/b exactly; for b==0 q is left free (SMT-LIB div-by-0 is
@@ -1686,6 +1714,14 @@ Result Solver::Impl::checkSatGround() {
             if (!modelConverter_.reconstruct(lastModel_->numericAssignments,
                                              lastModel_->assignments, *ir)) {
                 lastUnknownReason_ = "solve-eqs: eliminated variable not reconstructable";
+                lastModel_.reset();
+                ret = Result::Unknown;
+            }
+        }
+        if (ret == Result::Sat && !divModOrigins_.empty()) {
+            buildPartialFuncModel();
+            if (partialFuncModel_.inconsistent) {
+                lastUnknownReason_ = "partial-function model: inconsistent reconstructed extension";
                 lastModel_.reset();
                 ret = Result::Unknown;
             }

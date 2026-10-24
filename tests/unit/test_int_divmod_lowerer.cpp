@@ -224,6 +224,58 @@ TEST_CASE("IntDivModLowerer: variable divisor requires nonlinear + EUF") {
     }
 }
 
+TEST_CASE("IntDivModLowerer: nonzero elimination respects polarity and scope") {
+    for (auto kind : {Kind::Eq, Kind::Distinct, Kind::Geq, Kind::Gt, Kind::Leq, Kind::Lt})
+        for (int value = -2; value <= 2; ++value)
+            for (bool reverse : {false, true})
+                for (bool negate : {false, true}) {
+                    NativeTerms ir = makeIrWithInt();
+                    auto x = mkIntVar(ir, "x"), d = mkIntVar(ir, "d");
+                    auto number = mkIntConst(ir, value);
+                    auto fact = ir.add(TermExpr{kind,
+                                                ir.boolSortId(),
+                                                {reverse ? number : d, reverse ? d : number},
+                                                Payload{}});
+                    if (negate)
+                        fact = ir.add(TermExpr{Kind::Not, ir.boolSortId(), {fact}, Payload{}});
+                    ir.addAssertion(fact);
+                    ir.addAssertion(mkEq(ir, mkDiv(ir, x, d), mkIntConst(ir, 1)));
+                    int lhs = reverse ? value : 0, rhs = reverse ? 0 : value;
+                    bool atZero = kind == Kind::Eq         ? lhs == rhs
+                                  : kind == Kind::Distinct ? lhs != rhs
+                                  : kind == Kind::Geq      ? lhs >= rhs
+                                  : kind == Kind::Gt       ? lhs > rhs
+                                  : kind == Kind::Leq      ? lhs <= rhs
+                                                           : lhs < rhs;
+                    if (negate)
+                        atZero = !atZero;
+                    IntDivModLowerer lowerer(ir);
+                    REQUIRE(lowerer.run());
+                    CHECK(lowerer.requirement().needsEUF == atZero);
+                }
+    NativeTerms ir = makeIrWithInt();
+    auto x = mkIntVar(ir, "x"), d = mkIntVar(ir, "d");
+    auto positive = ir.add(TermExpr{Kind::Gt, ir.boolSortId(), {d, mkIntConst(ir, 0)}, Payload{}});
+    auto optional =
+        ir.add(TermExpr{Kind::Or, ir.boolSortId(), {positive, mkEq(ir, x, x)}, Payload{}});
+    ir.addAssertion(optional);
+    ir.addAssertion(mkEq(ir, mkDiv(ir, x, d), mkIntConst(ir, 1)));
+    IntDivModLowerer lowerer(ir);
+    REQUIRE(lowerer.run());
+    CHECK(lowerer.requirement().needsEUF);
+    auto division = mkEq(ir, mkDiv(ir, x, d), mkIntConst(ir, 1));
+    ir.clearAssertions();
+    ir.addAssertion(positive, ScopeLevel{1});
+    ir.addAssertion(division, ScopeLevel{0});
+    REQUIRE(lowerer.run());
+    CHECK(lowerer.requirement().needsEUF);
+    ir.clearAssertions();
+    ir.addAssertion(positive, ScopeLevel{0});
+    ir.addAssertion(division, ScopeLevel{1});
+    REQUIRE(lowerer.run());
+    CHECK_FALSE(lowerer.requirement().needsEUF);
+}
+
 TEST_CASE("IntDivModLowerer: variable divisor mod") {
     NativeTerms ir = makeIrWithInt();
     ExprId x = mkIntVar(ir, "x");
@@ -240,6 +292,53 @@ TEST_CASE("IntDivModLowerer: variable divisor mod") {
 
     for (const auto& [level, a] : ir.getScopedAssertions()) {
         CHECK(!containsIntMod(ir, a));
+    }
+}
+
+TEST_CASE("IntDivModLowerer: arbitrary precision integer divisors remain linear") {
+    for (const auto& text : {"18446744073709551616", "-18446744073709551616"}) {
+        NativeTerms ir = makeIrWithInt();
+        auto x = mkIntVar(ir, "x");
+        auto divisor = ir.add(TermExpr{Kind::ConstInt, ir.intSortId(), {}, Payload(std::string(text))});
+        ir.addAssertion(mkEq(ir, mkDiv(ir, x, divisor), mkIntConst(ir, 1)));
+        IntDivModLowerer lowerer(ir);
+        REQUIRE(lowerer.run());
+        CHECK_FALSE(lowerer.requirement().needsEUF);
+        CHECK_FALSE(lowerer.requirement().needsNonlinearInt);
+    }
+}
+
+TEST_CASE("IntDivModLowerer: finite divisor alternatives have an exact linear encoding") {
+    for (bool zeroAllowed : {false, true}) {
+        NativeTerms ir = makeIrWithInt();
+        auto x = mkIntVar(ir, "x"), d = mkIntVar(ir, "d");
+        auto first = mkEq(ir, d, mkIntConst(ir, zeroAllowed ? 0 : 2));
+        auto second = mkEq(ir, d, mkIntConst(ir, -3));
+        auto domain = ir.add(TermExpr{Kind::Or, ir.boolSortId(), {first, second}, Payload{}});
+        auto equation = mkEq(ir, mkMod(ir, x, d), mkIntConst(ir, 1));
+        ir.addAssertion(domain);
+        ir.addAssertion(equation);
+        IntDivModLowerer lowerer(ir);
+        REQUIRE(lowerer.run());
+        CHECK_FALSE(lowerer.requirement().needsNonlinearInt);
+        CHECK(lowerer.requirement().needsEUF == zeroAllowed);
+        ir.clearAssertions();
+        ir.addAssertion(domain, ScopeLevel{1});
+        ir.addAssertion(equation, ScopeLevel{0});
+        REQUIRE(lowerer.run());
+        CHECK(lowerer.requirement().needsNonlinearInt);
+        ir.clearAssertions();
+        ir.addAssertion(domain, ScopeLevel{0});
+        ir.addAssertion(equation, ScopeLevel{1});
+        REQUIRE(lowerer.run());
+        CHECK_FALSE(lowerer.requirement().needsNonlinearInt);
+
+        auto other = mkIntVar(ir, "other");
+        auto mixed = ir.add(TermExpr{Kind::Or, ir.boolSortId(),
+            {first, mkEq(ir, other, mkIntConst(ir, 1))}, Payload{}});
+        ir.clearAssertions(); ir.addAssertion(mixed); ir.addAssertion(equation);
+        REQUIRE(lowerer.run());
+        CHECK(lowerer.requirement().needsNonlinearInt);
     }
 }
 

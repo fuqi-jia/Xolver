@@ -24,6 +24,31 @@ struct Fix {
 };
 }
 
+TEST_CASE("ArithModelValidator: integer zero extensions are explicit model data") {
+    Fix f;
+    auto x = f.var("x", f.intS);
+    auto zero = f.cint(0);
+    auto div = f.bin(Kind::Div, x, zero, f.intS);
+    auto mod = f.bin(Kind::Mod, x, zero, f.intS);
+    auto divGoal = f.bin(Kind::Eq, div, f.cint(5), f.boolS);
+    auto modGoal = f.bin(Kind::Eq, mod, f.cint(-3), f.boolS);
+    ArithModelValidator validator(f.ir, {{"x", 2}}, {});
+    CHECK(validator.validate({divGoal}) == ArithModelValidator::Verdict::Indeterminate);
+    ArithModelValidator::IntegerZeroTable divTable{{mpq_class(2), mpq_class(5)}};
+    ArithModelValidator::IntegerZeroTable modTable{{mpq_class(2), mpq_class(-3)}};
+    validator.setIntegerZeroExtensions(&divTable, &modTable);
+    CHECK(validator.validate({divGoal, modGoal}) == ArithModelValidator::Verdict::Satisfied);
+    divTable[2] = 6;
+    validator.setIntegerZeroExtensions(&divTable, &modTable);
+    CHECK(validator.validate({divGoal}) == ArithModelValidator::Verdict::Violated);
+    divTable[2] = mpq_class(1, 2);
+    validator.setIntegerZeroExtensions(&divTable, &modTable);
+    CHECK(validator.validate({divGoal}) == ArithModelValidator::Verdict::Indeterminate);
+    auto realZero = f.ir.add(TermExpr{Kind::ConstReal, f.realS, {}, Payload(std::string("0"))});
+    auto realDiv = f.bin(Kind::Div, realZero, realZero, f.realS);
+    CHECK_FALSE(validator.evalNumber(realDiv));
+}
+
 TEST_CASE("ArithModelValidator: satisfied model") {
     Fix f;
     ExprId x = f.var("x", f.intS), y = f.var("y", f.intS);

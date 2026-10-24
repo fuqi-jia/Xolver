@@ -6,6 +6,43 @@ named signature check; per-logic `Solver.h` entries expose this same interface.
 Theory combinations compose actual encodings rather than accepting a name as a
 claim of complete coverage.
 
+Ground integer reasoning shares a checked interval calculus with SV. Bounds on
+variables and compound integer terms retain their original mandatory premises;
+integer disequalities can exclude a zero endpoint. A refutation is accepted only
+after certificate replay. Open interval proofs preserve the original query.
+
+Integer div/mod use Euclidean semantics for nonzero divisors and explicit total
+function interpretations at zero. Scoped nonzero facts eliminate unreachable
+zero branches. Lowering exposes quotient/remainder bindings for constant
+propagation; the remaining features select arithmetic or arithmetic/EUF stacks
+for that query. The declared logic is retained across repeated checks.
+
+Theory model reconstruction requests `getModelWithInternal()` so quotient,
+remainder and combination witnesses remain available. The ordinary theory
+`getModel()` interface retains its filtered view. Integer sort checks and the
+zero-divisor interpretation tables are shared by native model validation and
+the public `validateModel()` API.
+
+The ordinary ground integer div/mod path is:
+
+```mermaid
+flowchart TD
+  A[Integer assertions and declared logic] --> I[Applicable integer interval refutation]
+  I -->|replayed contradiction| U[UNSAT]
+  I -->|open| G[Incremental ground session]
+  G --> P[DAG rewriting and scoped arithmetic lowering]
+  P --> R[Query-local theory selection]
+  R --> D[CDCL with arithmetic and required combinations]
+  D --> U
+  D -->|resource exhaustion| N[Unknown with diagnostic reason]
+  D --> M[Complete theory model and reconstruction]
+  M --> V[Check original integer arithmetic and total extensions]
+  V -->|validated| S[SAT]
+  V -->|unconfirmed| X[Model search within resource limits]
+  X -->|candidate| V
+  X -->|budget exhausted| N
+```
+
 | Entry | Backend behavior |
 | --- | --- |
 | `qfbv`, `bv`, `qbf` | Modular circuits and BDDs; quantification in the BV/QBF entries |
