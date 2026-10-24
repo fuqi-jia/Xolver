@@ -78,6 +78,9 @@ TEST_CASE("SMT ranges: checked refutations agree with exhaustive bounded integer
     native::Nodes b({});
     using K = native::K;
     auto sort = SOMTParser::SortManager::getInt();
+    auto integer = [&](int value) {
+        return b.make(sort, K::NT_CONST, {}, std::to_string(value));
+    };
     auto x = b.make(sort, K::NT_VAR, {}, "x");
     auto y = b.make(sort, K::NT_VAR, {}, "y");
     auto zero = b.numeral(0);
@@ -110,13 +113,13 @@ TEST_CASE("SMT ranges: checked refutations agree with exhaustive bounded integer
     for (const auto &term : terms)
         for (int threshold = -5; threshold <= 5; ++threshold)
             for (auto kind : {K::NT_LE, K::NT_LT, K::NT_EQ, K::NT_DISTINCT}) {
-                NativeAssertions assertions{b.logical(K::NT_GE, {x, b.numeral(-2)}),
+                NativeAssertions assertions{b.logical(K::NT_GE, {x, integer(-2)}),
                                             b.logical(K::NT_LE, {x, b.numeral(2)}),
-                                            b.logical(K::NT_GE, {y, b.numeral(-2)}),
+                                            b.logical(K::NT_GE, {y, integer(-2)}),
                                             b.logical(K::NT_LE, {y, b.numeral(2)})};
                 if (term.excludesZero)
                     assertions.push_back(b.logical(K::NT_DISTINCT, {y, zero}));
-                assertions.push_back(b.logical(kind, {term.node, b.numeral(threshold)}));
+                assertions.push_back(b.logical(kind, {term.node, integer(threshold)}));
                 bool satisfiable = false;
                 for (int a = -2; a <= 2; ++a)
                     for (int d = -2; d <= 2; ++d) {
