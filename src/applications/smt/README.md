@@ -18,12 +18,30 @@ propagation; the remaining features select arithmetic or arithmetic/EUF stacks
 for that query. The declared logic is retained across repeated checks.
 
 Theory model reconstruction requests `getModelWithInternal()` so quotient,
-remainder and combination witnesses remain available. The ordinary theory
-`getModel()` interface retains its filtered view. Integer sort checks and the
+remainder and combination witnesses remain available. The theory `getModel()`
+interface filters internal bindings. Integer sort checks and the
 zero-divisor interpretation tables are shared by native model validation and
 the public `validateModel()` API.
 
-The ordinary ground integer div/mod path is:
+Linear checks share an immutable fixed-value analysis within each stable scan.
+Its work queue tracks tableau residuals and original bound premises; proof
+extraction uses iterative dependency traversal. LIA reuses fully applied input
+prefixes only while exact keys and the simplex bound revision match. Complete
+SAT candidate reconstruction initializes an independent primal point;
+incremental backtracking can retain the current point.
+
+Real bound propagation uses a local, explained overlay and row min/max
+aggregates. Backward propagation subtracts the appropriate extremum of the
+other terms before dividing by the target coefficient. New facts wake only
+incident rows; explanations contain original SAT premises, including through
+multi-row chains. Propagation respects work, time, output and explanation
+budgets without mutating the simplex snapshot.
+
+Nonlinear rational candidates use direct exact polynomial evaluation. Boundary
+candidates share immutable decompositions and skip independent coordinates.
+Original constraints still validate each candidate before SAT is reported.
+
+Ground integer div/mod follows this path:
 
 ```mermaid
 flowchart TD

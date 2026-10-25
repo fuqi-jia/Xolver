@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 #include "search/lra/LraPropagationEngine.h"
 #include "search/lra/GeneralSimplex.h"
+#include <algorithm>
 
 using namespace xolver;
 
@@ -29,6 +30,178 @@ static int countBounds(const std::vector<LraPropagationEngine::ExplainedBound>& 
         if (b.var == var && b.isLower == isLower) ++c;
     }
     return c;
+}
+
+TEST_CASE("LraPropagationEngine: negative target uses the correct extremum of other terms") {
+    for (const bool basicLower : {true, false}) {
+        CAPTURE(basicLower);
+        GeneralSimplex gs;
+        const int x = gs.addVar("negative-x"), y = gs.addVar("negative-y");
+        const int s = gs.addConstraint({{x, -1}, {y, 1}}, 0);
+        REQUIRE(gs.assertLower(y, mkBound(basicLower ? 0 : -10, 1)));
+        REQUIRE(gs.assertUpper(y, mkBound(basicLower ? 10 : 0, 2)));
+        if (basicLower) REQUIRE(gs.assertLower(s, mkBound(0, 3)));
+        else REQUIRE(gs.assertUpper(s, mkBound(0, 3)));
+        REQUIRE(gs.check() == GeneralSimplex::Result::Sat);
+
+        LraPropagationEngine engine;
+        const auto derived = engine.propagateAll(gs);
+        // s = -x+y. s>=0,y<=10 permits x=5,y=10;
+        // s<=0,y>=-10 permits x=-5,y=-10.
+        const mpq_class witnessX = basicLower ? 5 : -5;
+        const mpq_class witnessY = basicLower ? 10 : -10;
+        for (const auto& bound : derived) {
+            const mpq_class value = bound.var == x ? witnessX :
+                bound.var == y ? witnessY : witnessY - witnessX;
+            if (bound.isLower) CHECK(DeltaRational(value) >= bound.value);
+            else CHECK(DeltaRational(value) <= bound.value);
+        }
+        CHECK(hasBound(derived, x, !basicLower, basicLower ? 10 : -10));
+    }
+}
+
+TEST_CASE("LraPropagationEngine: local closure flattens multi-row premises") {
+    GeneralSimplex gs;
+    const int x = gs.addVar("chain-x"), y = gs.addVar("chain-y"), z = gs.addVar("chain-z");
+    const int first = gs.addConstraint({{x, 1}, {y, -1}}, 0);
+    const int second = gs.addConstraint({{y, 1}, {z, -1}}, 0);
+    REQUIRE(gs.assertLower(first, mkBound(0, 1)));
+    REQUIRE(gs.assertLower(second, mkBound(0, 2)));
+    REQUIRE(gs.assertLower(z, mkBound(3, 3)));
+    // Propagation reasons depend on row identities and active bounds, even
+    // before simplex pivots change the basis or repair the primal point.
+    LraPropagationEngine engine;
+    const auto derived = engine.propagateAll(gs, {64, 256, 12, 1000});
+    CHECK(hasBound(derived, y, true, 3));
+    CHECK(hasBound(derived, x, true, 3));
+    bool checked = false;
+    for (const auto& bound : derived) {
+        if (bound.var != x || !bound.isLower || bound.value != DeltaRational(3)) continue;
+        REQUIRE(bound.reasons.size() == 3);
+        for (SatVar reason = 1; reason <= 3; ++reason) {
+            CHECK(std::any_of(bound.reasons.begin(), bound.reasons.end(),
+                [reason](SatLit literal) { return literal.var == reason && literal.sign; }));
+        }
+        checked = true;
+    }
+    CHECK(checked);
+    // The local overlay must not assert its conclusions into the source.
+    CHECK_FALSE(gs.varState(x).lower.bound.isFinite());
+    CHECK_FALSE(gs.varState(y).lower.bound.isFinite());
+}
+
+TEST_CASE("LraPropagationEngine: strict endpoints and empty explanations stay exact") {
+    SUBCASE("negative division preserves infinitesimal signs") {
+        GeneralSimplex gs;
+        const int x = gs.addVar("strict-x"), y = gs.addVar("strict-y");
+        const int s = gs.addConstraint({{x, -1}, {y, 1}}, 0);
+        REQUIRE(gs.assertLower(y, mkBound(0, 1)));
+        REQUIRE(gs.assertUpper(y, BoundInfo(BoundValue(DeltaRational(10, -1)), SatLit::positive(2))));
+        REQUIRE(gs.assertLower(s, BoundInfo(BoundValue(DeltaRational(0, 1)), SatLit::positive(3))));
+        REQUIRE(gs.check() == GeneralSimplex::Result::Sat);
+        LraPropagationEngine engine;
+        const auto derived = engine.propagateAll(gs, {64, 256, 12, 1000});
+        CHECK(std::any_of(derived.begin(), derived.end(), [x](const auto& bound) {
+            return bound.var == x && !bound.isLower && bound.value == DeltaRational(10, -2);
+        }));
+    }
+    SUBCASE("a constant row is an unconditional fact") {
+        GeneralSimplex gs;
+        const int s = gs.addConstraint({}, -7);
+        REQUIRE(gs.check() == GeneralSimplex::Result::Sat);
+        LraPropagationEngine engine;
+        const auto derived = engine.propagateAll(gs, {8, 32, 0, 1000});
+        CHECK(hasBound(derived, s, true, 7));
+        CHECK(hasBound(derived, s, false, 7));
+        for (const auto& bound : derived) CHECK(bound.reasons.empty());
+    }
+}
+
+TEST_CASE("LraPropagationEngine: repeated calls after rollback forget child facts") {
+    GeneralSimplex gs;
+    const int x = gs.addVar("rollback-x"), y = gs.addVar("rollback-y");
+    const int s = gs.addConstraint({{x, 1}, {y, 1}}, 0);
+    REQUIRE(gs.assertLower(y, mkBound(1, 1)));
+    REQUIRE(gs.assertUpper(s, mkBound(5, 2)));
+    REQUIRE(gs.check() == GeneralSimplex::Result::Sat);
+    LraPropagationEngine engine;
+    CHECK(hasBound(engine.propagateAll(gs), x, false, 4));
+    gs.push();
+    REQUIRE(gs.assertLower(y, mkBound(3, 3), 1));
+    REQUIRE(gs.check() == GeneralSimplex::Result::Sat);
+    CHECK(hasBound(engine.propagateAll(gs), x, false, 2));
+    gs.pop();
+    REQUIRE(gs.check() == GeneralSimplex::Result::Sat);
+    const auto restored = engine.propagateAll(gs);
+    CHECK(hasBound(restored, x, false, 4));
+    CHECK_FALSE(hasBound(restored, x, false, 2));
+}
+
+TEST_CASE("LraPropagationEngine: independently replay explanations over signed rows") {
+    struct Premise { int var; bool lower; int value; };
+    int checkedModels = 0;
+    for (int pattern = 0; pattern < 8; ++pattern) {
+        for (int shift = -1; shift <= 1; ++shift) {
+            CAPTURE(pattern);
+            CAPTURE(shift);
+            GeneralSimplex gs;
+            const int x = gs.addVar("grid-x"), y = gs.addVar("grid-y"), z = gs.addVar("grid-z");
+            const int a = (pattern & 1) ? -2 : 2;
+            const int b = (pattern & 2) ? -1 : 1;
+            const int c = (pattern & 4) ? -2 : 2;
+            const int d = (pattern & 1) ? 1 : -1;
+            const int first = gs.addConstraint({{x, a}, {y, b}}, shift);
+            const int second = gs.addConstraint({{y, c}, {z, d}}, -shift);
+            std::vector<Premise> premises;
+            auto assertPremise = [&](int var, bool lower, int value) {
+                premises.push_back({var, lower, value});
+                const auto bound = mkBound(value, static_cast<SatVar>(premises.size()));
+                REQUIRE((lower ? gs.assertLower(var, bound) : gs.assertUpper(var, bound)));
+            };
+            for (const int var : {x, y, z}) {
+                assertPremise(var, true, -2);
+                assertPremise(var, false, 2);
+            }
+            if (pattern % 3 != 2) assertPremise(first, true, -1);
+            if (pattern % 3 != 0) assertPremise(first, false, 1);
+            if (pattern % 3 != 0) assertPremise(second, true, -1);
+            if (pattern % 3 != 2) assertPremise(second, false, 1);
+            REQUIRE(gs.check() == GeneralSimplex::Result::Sat);
+            LraPropagationEngine engine;
+            const auto derived = engine.propagateAll(gs, {64, 256, 12, 1000});
+            for (const auto& bound : derived) {
+                for (const auto literal : bound.reasons) {
+                    REQUIRE(literal.sign);
+                    REQUIRE(literal.var > 0);
+                    REQUIRE(static_cast<size_t>(literal.var) <= premises.size());
+                }
+                for (int xv = -2; xv <= 2; ++xv) {
+                    for (int yv = -2; yv <= 2; ++yv) {
+                        for (int zv = -2; zv <= 2; ++zv) {
+                            std::vector<int> values(gs.numVars());
+                            values[x] = xv; values[y] = yv; values[z] = zv;
+                            values[first] = a * xv + b * yv - shift;
+                            values[second] = c * yv + d * zv + shift;
+                            bool premisesHold = true;
+                            for (const auto literal : bound.reasons) {
+                                const auto& premise = premises[static_cast<size_t>(literal.var) - 1];
+                                const int value = values[premise.var];
+                                if (premise.lower ? value < premise.value : value > premise.value) {
+                                    premisesHold = false;
+                                    break;
+                                }
+                            }
+                            if (!premisesHold) continue;
+                            ++checkedModels;
+                            const DeltaRational value(values[bound.var]);
+                            CHECK((bound.isLower ? value >= bound.value : value <= bound.value));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    CHECK(checkedModels > 1000);
 }
 
 // ---------------------------------------------------------------------------

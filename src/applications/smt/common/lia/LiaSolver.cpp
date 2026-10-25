@@ -63,8 +63,8 @@ void LiaSolver::onPop(uint32_t n) {
     entailmentEmittedKeys_.clear();
 }
 
-void LiaSolver::resetAppliedBounds() {
-    gs_.resetActiveBounds(GeneralSimplex::AssignmentPolicy::Preserve);
+void LiaSolver::resetAppliedBounds(GeneralSimplex::AssignmentPolicy policy) {
+    gs_.resetActiveBounds(policy);
     appliedBounds_.clear();
     appliedInterfaceEqualities_.clear();
     appliedBoundRevision_ = gs_.boundRevision();
@@ -101,7 +101,7 @@ void LiaSolver::onReset() {
     pendingConflict_.reset();
     repairModel_.reset();
     cutsThisSolve_ = 0;
-    resetAppliedBounds();
+    resetAppliedBounds(GeneralSimplex::AssignmentPolicy::Reinitialize);
     entailmentProps_.clear();
     entailmentEmittedKeys_.clear();
 }
@@ -156,7 +156,11 @@ void LiaSolver::onBacktrack(int level) {
     repairModel_.reset();
     // Withdrawing premises invalidates the applied prefix immediately, so
     // entailment reads before the next check cannot see stale child bounds.
-    resetAppliedBounds();
+    // Level zero rebuilds the complete SAT candidate. Its point selection is
+    // independent of the previous candidate; ordinary backtracking remains
+    // incremental within the current search.
+    resetAppliedBounds(level == 0 ? GeneralSimplex::AssignmentPolicy::Reinitialize
+                                  : GeneralSimplex::AssignmentPolicy::Preserve);
 
     if (level == 0) {
         // Full reset for modelCheck rebuild or SAT restart to level 0.

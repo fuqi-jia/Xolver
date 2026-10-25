@@ -1,311 +1,192 @@
 #include "search/lra/LraPropagationEngine.h"
-#include <cassert>
 #include <algorithm>
+#include <array>
+#include <chrono>
+#include <deque>
+#include <map>
+#include <optional>
 
 namespace xolver {
+namespace {
 
-// ============================================================================
-// Public API
-// ============================================================================
+struct LiteralLess {
+    bool operator()(SatLit a, SatLit b) const {
+        return a.var != b.var ? a.var < b.var : a.sign < b.sign;
+    }
+};
+
+struct ExplainedEndpoint {
+    std::optional<DeltaRational> value;
+    std::vector<SatLit> reasons;
+    // An unconditional derived bound has an empty, valid explanation.
+    bool explained = false;
+    bool usable() const { return value.has_value() && explained; }
+};
+
+struct Contribution {
+    DeltaRational value;
+    std::vector<SatLit> reasons;
+    bool available = false;
+
+    Contribution(const ExplainedEndpoint& endpoint, const mpq_class& coefficient) {
+        if (coefficient == 0) { available = true; return; }
+        if (!endpoint.usable()) return;
+        value = coefficient * *endpoint.value;
+        reasons = endpoint.reasons;
+        available = true;
+    }
+};
+
+struct RowAggregate {
+    DeltaRational sum;
+    size_t missing = 0;
+    std::map<SatLit, size_t, LiteralLess> reasonCounts;
+
+    void add(const Contribution& contribution) {
+        if (!contribution.available) { ++missing; return; }
+        sum += contribution.value;
+        for (const auto reason : contribution.reasons) ++reasonCounts[reason];
+    }
+
+    std::optional<std::vector<SatLit>> explain(
+        const Contribution* excluded, const std::vector<SatLit>& required,
+        int maxReasons) const {
+        std::vector<SatLit> result = required; // sorted and unique
+        if (static_cast<int>(result.size()) > maxReasons) return std::nullopt;
+        for (const auto& [reason, count] : reasonCounts) {
+            const bool removed = excluded && excluded->available &&
+                std::binary_search(excluded->reasons.begin(), excluded->reasons.end(),
+                                   reason, LiteralLess{});
+            if (count == static_cast<size_t>(removed)) continue;
+            if (!std::binary_search(required.begin(), required.end(), reason, LiteralLess{}))
+                result.push_back(reason);
+            if (static_cast<int>(result.size()) > maxReasons) return std::nullopt;
+        }
+        std::sort(result.begin(), result.end(), LiteralLess{});
+        return result;
+    }
+};
+
+} // namespace
 
 std::vector<LraPropagationEngine::ExplainedBound>
 LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
-                                   const PropagationBudget& budget) {
-    gs_ = &gs;
-    budget_ = &budget;
-    workQueue_.clear();
-    workPos_ = 0;
-    iterationCount_ = 0;
-    derivedCount_ = 0;
-    strongestDerived_.clear();
-    startTime_ = std::chrono::steady_clock::now();
-
-    // Seed: enqueue every basic var (forward derivation).
-    // Also enqueue basic vars that have an active bound (backward derivation).
-    int n = gs.numVars();
-    for (int v = 0; v < n; ++v) {
-        if (gs.basicRowOfVar(v) >= 0) {
-            enqueue(v, true);   // will do forward lower + backward from lower if present
-            enqueue(v, false);  // will do forward upper + backward from upper if present
-        }
-    }
-
+                                  const PropagationBudget& budget) {
     std::vector<ExplainedBound> accepted;
+    if (budget.maxDerivedBounds <= 0 || budget.maxIterations <= 0 ||
+        budget.maxReasonSize < 0 || budget.maxTimeMs <= 0) return accepted;
+    const auto started = std::chrono::steady_clock::now();
+    auto exhausted = [&] {
+        return static_cast<int>(accepted.size()) >= budget.maxDerivedBounds ||
+            std::chrono::steady_clock::now() - started >=
+                std::chrono::milliseconds(budget.maxTimeMs);
+    };
 
-    while (workPos_ < workQueue_.size() && !shouldStop()) {
-        WorkItem item = workQueue_[workPos_++];
-        ++iterationCount_;
-
-        int row = gs.basicRowOfVar(item.var);
-        if (row < 0) {
-            // Non-basic var with a new bound: enqueue every basic var whose row
-            // contains this non-basic var.
-            const auto& col = gs.tableau().col(item.var);
-            for (const auto& ce : col.entries) {
-                int basicVar = gs.tableau().row(ce.row).basicVar;
-                if (basicVar >= 0) {
-                    enqueue(basicVar, true);
-                    enqueue(basicVar, false);
-                }
+    // Values and explanations are local to this call. No stale state can
+    // survive a simplex mutation, backtrack or a subsequent propagation run.
+    std::vector<std::array<ExplainedEndpoint, 2>> bounds(gs.numVars());
+    for (int var = 0; var < gs.numVars(); ++var) {
+        const auto state = gs.varState(var);
+        const BoundInfo* sources[] = {&state.lower, &state.upper};
+        for (size_t side = 0; side < 2; ++side) {
+            if (!sources[side]->bound.isFinite()) continue;
+            auto& target = bounds[var][side];
+            target.value = sources[side]->bound.value;
+            if (sources[side]->reason) {
+                target.reasons.push_back(*sources[side]->reason);
+                target.explained = true;
             }
-            continue;
-        }
-
-        const auto& tabRow = gs.tableau().row(row);
-
-        if (item.isLower) {
-            // --- Forward: lower(basic) from non-basic bounds ---
-            {
-                DeltaRational numer(tabRow.rhs);
-                std::vector<std::pair<int, SatLit>> reasonAcc;
-                bool ok = true;
-                for (const auto& e : tabRow.entries) {
-                    auto st = gs.varState(e.col);
-                    if (e.coeff > 0) {
-                        if (!st.lower.bound.isFinite()) { ok = false; break; }
-                        numer += e.coeff * st.lower.bound.value;
-                        if (!st.lower.reason) { ok = false; break; }  // consumed finite bound must be explained
-                        reasonAcc.push_back({e.col, *st.lower.reason});
-                    } else {
-                        if (!st.upper.bound.isFinite()) { ok = false; break; }
-                        numer += e.coeff * st.upper.bound.value;
-                        if (!st.upper.reason) { ok = false; break; }  // consumed finite bound must be explained
-                        reasonAcc.push_back({e.col, *st.upper.reason});
-                    }
-                }
-                if (ok) {
-                    auto reasons = collectReasons(reasonAcc);
-                    if (tryDeriveBound(item.var, true, numer, reasons)) {
-                        accepted.push_back({item.var, true, numer, std::move(reasons)});
-                    }
-                }
-            }
-            // --- Backward from lower(basic) ---
-            // Only if basicVar actually has a lower bound.
-            {
-                auto basicSt = gs.varState(item.var);
-                if (!basicSt.lower.bound.isFinite()) goto skip_backward_lower;
-            }
-            for (const auto& e : tabRow.entries) {
-                int otherVar = e.col;
-                const mpq_class& coeff = e.coeff;
-                bool deriveLower = (coeff > 0);  // coeff>0 -> lower; coeff<0 -> upper
-
-                DeltaRational numer = DeltaRational(tabRow.rhs);
-                std::vector<std::pair<int, SatLit>> reasonAcc;
-                bool ok = true;
-
-                {
-                    auto basicSt = gs.varState(item.var);
-                    numer = basicSt.lower.bound.value - numer;
-                    if (!basicSt.lower.reason) ok = false;  // consumed finite bound must be explained
-                    else reasonAcc.push_back({item.var, *basicSt.lower.reason});
-                }
-
-                for (const auto& e2 : tabRow.entries) {
-                    if (e2.col == otherVar) continue;
-                    auto st2 = gs.varState(e2.col);
-                    if (deriveLower) {
-                        // minimize numerator for lower(x_j) with coeff > 0
-                        if (e2.coeff > 0) {
-                            if (!st2.upper.bound.isFinite()) { ok = false; break; }
-                            numer -= e2.coeff * st2.upper.bound.value;
-                            if (!st2.upper.reason) { ok = false; break; }  // consumed finite bound must be explained
-                            reasonAcc.push_back({e2.col, *st2.upper.reason});
-                        } else {
-                            if (!st2.lower.bound.isFinite()) { ok = false; break; }
-                            numer -= e2.coeff * st2.lower.bound.value;
-                            if (!st2.lower.reason) { ok = false; break; }  // consumed finite bound must be explained
-                            reasonAcc.push_back({e2.col, *st2.lower.reason});
-                        }
-                    } else {
-                        // maximize numerator for upper(x_j) with coeff < 0
-                        if (e2.coeff > 0) {
-                            if (!st2.lower.bound.isFinite()) { ok = false; break; }
-                            numer -= e2.coeff * st2.lower.bound.value;
-                            if (!st2.lower.reason) { ok = false; break; }  // consumed finite bound must be explained
-                            reasonAcc.push_back({e2.col, *st2.lower.reason});
-                        } else {
-                            if (!st2.upper.bound.isFinite()) { ok = false; break; }
-                            numer -= e2.coeff * st2.upper.bound.value;
-                            if (!st2.upper.reason) { ok = false; break; }  // consumed finite bound must be explained
-                            reasonAcc.push_back({e2.col, *st2.upper.reason});
-                        }
-                    }
-                }
-                if (ok) {
-                    DeltaRational newBound = numer / coeff;
-                    auto reasons = collectReasons(reasonAcc);
-                    if (tryDeriveBound(otherVar, deriveLower, newBound, reasons)) {
-                        accepted.push_back({otherVar, deriveLower, newBound, std::move(reasons)});
-                    }
-                }
-            }
-        skip_backward_lower:;
-        } else {
-            // --- Forward: upper(basic) from non-basic bounds ---
-            {
-                DeltaRational numer(tabRow.rhs);
-                std::vector<std::pair<int, SatLit>> reasonAcc;
-                bool ok = true;
-                for (const auto& e : tabRow.entries) {
-                    auto st = gs.varState(e.col);
-                    if (e.coeff > 0) {
-                        if (!st.upper.bound.isFinite()) { ok = false; break; }
-                        numer += e.coeff * st.upper.bound.value;
-                        if (!st.upper.reason) { ok = false; break; }  // consumed finite bound must be explained
-                        reasonAcc.push_back({e.col, *st.upper.reason});
-                    } else {
-                        if (!st.lower.bound.isFinite()) { ok = false; break; }
-                        numer += e.coeff * st.lower.bound.value;
-                        if (!st.lower.reason) { ok = false; break; }  // consumed finite bound must be explained
-                        reasonAcc.push_back({e.col, *st.lower.reason});
-                    }
-                }
-                if (ok) {
-                    auto reasons = collectReasons(reasonAcc);
-                    if (tryDeriveBound(item.var, false, numer, reasons)) {
-                        accepted.push_back({item.var, false, numer, std::move(reasons)});
-                    }
-                }
-            }
-            // --- Backward from upper(basic) ---
-            {
-                auto basicSt = gs.varState(item.var);
-                if (!basicSt.upper.bound.isFinite()) goto skip_backward_upper;
-            }
-            for (const auto& e : tabRow.entries) {
-                int otherVar = e.col;
-                const mpq_class& coeff = e.coeff;
-                bool deriveLower = (coeff < 0);  // coeff>0 -> upper; coeff<0 -> lower
-
-                DeltaRational numer = DeltaRational(tabRow.rhs);
-                std::vector<std::pair<int, SatLit>> reasonAcc;
-                bool ok = true;
-
-                {
-                    auto basicSt = gs.varState(item.var);
-                    numer = basicSt.upper.bound.value - numer;
-                    if (!basicSt.upper.reason) ok = false;  // consumed finite bound must be explained
-                    else reasonAcc.push_back({item.var, *basicSt.upper.reason});
-                }
-
-                for (const auto& e2 : tabRow.entries) {
-                    if (e2.col == otherVar) continue;
-                    auto st2 = gs.varState(e2.col);
-                    if (!deriveLower) {
-                        // coeff > 0, derive upper(x_j): maximize numerator
-                        if (e2.coeff > 0) {
-                            if (!st2.lower.bound.isFinite()) { ok = false; break; }
-                            numer -= e2.coeff * st2.lower.bound.value;
-                            if (!st2.lower.reason) { ok = false; break; }  // consumed finite bound must be explained
-                            reasonAcc.push_back({e2.col, *st2.lower.reason});
-                        } else {
-                            if (!st2.upper.bound.isFinite()) { ok = false; break; }
-                            numer -= e2.coeff * st2.upper.bound.value;
-                            if (!st2.upper.reason) { ok = false; break; }  // consumed finite bound must be explained
-                            reasonAcc.push_back({e2.col, *st2.upper.reason});
-                        }
-                    } else {
-                        // coeff < 0, derive lower(x_j): minimize numerator
-                        if (e2.coeff > 0) {
-                            if (!st2.upper.bound.isFinite()) { ok = false; break; }
-                            numer -= e2.coeff * st2.upper.bound.value;
-                            if (!st2.upper.reason) { ok = false; break; }  // consumed finite bound must be explained
-                            reasonAcc.push_back({e2.col, *st2.upper.reason});
-                        } else {
-                            if (!st2.lower.bound.isFinite()) { ok = false; break; }
-                            numer -= e2.coeff * st2.lower.bound.value;
-                            if (!st2.lower.reason) { ok = false; break; }  // consumed finite bound must be explained
-                            reasonAcc.push_back({e2.col, *st2.lower.reason});
-                        }
-                    }
-                }
-                if (ok) {
-                    DeltaRational newBound = numer / coeff;
-                    auto reasons = collectReasons(reasonAcc);
-                    if (tryDeriveBound(otherVar, deriveLower, newBound, reasons)) {
-                        accepted.push_back({otherVar, deriveLower, newBound, std::move(reasons)});
-                    }
-                }
-            }
-        skip_backward_upper:;
         }
     }
 
-    gs_ = nullptr;
-    budget_ = nullptr;
+    struct WorkItem { int basic; bool lower; };
+    std::deque<WorkItem> work;
+    std::vector<std::array<bool, 2>> queued(gs.numVars(), {false, false});
+    auto enqueue = [&](int basic, bool lower) {
+        const size_t side = lower ? 0 : 1;
+        if (queued[basic][side]) return;
+        queued[basic][side] = true;
+        work.push_back({basic, lower});
+    };
+    for (int row = 0; row < gs.tableau().numRows(); ++row) {
+        const int basic = gs.tableau().row(row).basicVar;
+        if (basic >= 0) { enqueue(basic, true); enqueue(basic, false); }
+    }
+
+    auto publish = [&](int var, bool lower, const DeltaRational& value,
+                       const RowAggregate& aggregate, const Contribution* excluded,
+                       const std::vector<SatLit>& required) {
+        if (exhausted()) return false;
+        auto& target = bounds[var][lower ? 0 : 1];
+        if (target.value && (lower ? value <= *target.value : value >= *target.value))
+            return false;
+        // Materialize explanations only for a genuinely stronger bound.
+        auto reasons = aggregate.explain(excluded, required, budget.maxReasonSize);
+        if (!reasons) return false;
+        target.value = value;
+        target.reasons = *reasons;
+        target.explained = true;
+        accepted.push_back({var, lower, value, std::move(*reasons)});
+        return true;
+    };
+
+    int iterations = 0;
+    while (!work.empty() && iterations < budget.maxIterations && !exhausted()) {
+        const auto item = work.front();
+        work.pop_front();
+        queued[item.basic][item.lower ? 0 : 1] = false;
+        ++iterations;
+        const int rowIndex = gs.basicRowOfVar(item.basic);
+        if (rowIndex < 0) continue;
+        const auto& row = gs.tableau().row(rowIndex);
+
+        // Snapshot each endpoint once. Publishing new facts below cannot
+        // change a contribution or its original-premise explanation mid-row.
+        std::vector<std::array<Contribution, 2>> contributions;
+        contributions.reserve(row.entries.size());
+        RowAggregate minimum, maximum;
+        for (const auto& entry : row.entries) {
+            if (exhausted()) return accepted;
+            const auto& variable = bounds[entry.col];
+            const size_t minSide = entry.coeff > 0 ? 0 : 1;
+            contributions.push_back({Contribution(variable[minSide], entry.coeff),
+                                     Contribution(variable[1 - minSide], entry.coeff)});
+            minimum.add(contributions.back()[0]);
+            maximum.add(contributions.back()[1]);
+        }
+
+        const auto& forward = item.lower ? minimum : maximum;
+        if (forward.missing == 0)
+            publish(item.basic, item.lower, DeltaRational(row.rhs) + forward.sum,
+                    forward, nullptr, {});
+
+        const auto basic = bounds[item.basic][item.lower ? 0 : 1];
+        if (!basic.usable()) continue;
+        // s >= L always subtracts the MAXIMUM of the other terms;
+        // s <= U always subtracts their MINIMUM. The target coefficient
+        // controls the final inequality direction only, after division.
+        const auto& backward = item.lower ? maximum : minimum;
+        const size_t contributionSide = item.lower ? 1 : 0;
+        for (size_t index = 0; index < row.entries.size() && !exhausted(); ++index) {
+            const auto& entry = row.entries[index];
+            if (entry.coeff == 0) continue;
+            const auto& excluded = contributions[index][contributionSide];
+            if (backward.missing != (excluded.available ? 0u : 1u)) continue;
+            DeltaRational others = backward.sum;
+            if (excluded.available) others -= excluded.value;
+            const auto value = (*basic.value - DeltaRational(row.rhs) - others) / entry.coeff;
+            const bool lower = item.lower ? entry.coeff > 0 : entry.coeff < 0;
+            if (!publish(entry.col, lower, value, backward, &excluded, basic.reasons)) continue;
+            // Only rows incident to the changed non-basic variable can learn
+            // something new. Pending visits coalesce, so the queue is bounded
+            // by two entries per tableau row.
+            for (const auto& incident : gs.tableau().col(entry.col).entries) {
+                const int affected = gs.tableau().row(incident.row).basicVar;
+                if (affected >= 0) { enqueue(affected, true); enqueue(affected, false); }
+            }
+        }
+    }
     return accepted;
-}
-
-// ============================================================================
-// Private helpers
-// ============================================================================
-
-void LraPropagationEngine::enqueue(int var, bool isLower) {
-    workQueue_.push_back({var, isLower});
-}
-
-bool LraPropagationEngine::shouldStop() const {
-    if (iterationCount_ >= budget_->maxIterations) return true;
-    if (derivedCount_ >= budget_->maxDerivedBounds) return true;
-    auto now = std::chrono::steady_clock::now();
-    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - startTime_).count();
-    if (elapsed >= budget_->maxTimeMs) return true;
-    return false;
-}
-
-void LraPropagationEngine::computeRowLower(int basicVar) {
-    (void)basicVar;
-}
-
-void LraPropagationEngine::computeRowUpper(int basicVar) {
-    (void)basicVar;
-}
-
-bool LraPropagationEngine::tryDeriveBound(int var, bool isLower,
-                                          const DeltaRational& value,
-                                          const std::vector<SatLit>& reasons) {
-    if (derivedCount_ >= budget_->maxDerivedBounds) return false;
-    if (static_cast<int>(reasons.size()) > budget_->maxReasonSize) return false;
-
-    auto st = gs_->varState(var);
-    if (isLower) {
-        if (st.lower.bound.isFinite() && value <= st.lower.bound.value) {
-            return false;
-        }
-    } else {
-        if (st.upper.bound.isFinite() && value >= st.upper.bound.value) {
-            return false;
-        }
-    }
-
-    DerivedBoundKey key{var, isLower};
-    auto it = strongestDerived_.find(key);
-    if (it != strongestDerived_.end()) {
-        if (isLower) {
-            if (value <= it->second) return false;
-        } else {
-            if (value >= it->second) return false;
-        }
-    }
-
-    strongestDerived_[key] = value;
-    ++derivedCount_;
-    enqueue(var, isLower);
-    return true;
-}
-
-std::vector<SatLit> LraPropagationEngine::collectReasons(
-    const std::vector<std::pair<int, SatLit>>& reasons) {
-    std::vector<SatLit> result;
-    result.reserve(reasons.size());
-    for (const auto& p : reasons) {
-        result.push_back(p.second);
-    }
-    std::sort(result.begin(), result.end(), satLitLess);
-    result.erase(std::unique(result.begin(), result.end(), satLitEqual), result.end());
-    return result;
 }
 
 } // namespace xolver

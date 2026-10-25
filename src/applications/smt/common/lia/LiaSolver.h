@@ -174,7 +174,8 @@ private:
     // Per-(satVar, value) dedup — emit each entailment at most once per
     // SAT-decision cycle. Cleared on backtrack to level 0 / reset.
     std::unordered_set<uint64_t> entailmentEmittedKeys_;
-    void resetAppliedBounds();
+    void resetAppliedBounds(GeneralSimplex::AssignmentPolicy policy =
+                                GeneralSimplex::AssignmentPolicy::Preserve);
     void rebuildTrailCaches();
     void scanLiteralPinEntailments();
     void clearEntailmentDedupForBacktrack(int level);

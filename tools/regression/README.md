@@ -44,3 +44,10 @@ interpretations pinned under fresh function names. Unspecified table entries
 use the model's explicit zero default. Both oracles must reject negative controls
 with missing or incorrect zero-divisor values. These generated checks measure
 semantic correctness, not public-benchmark performance.
+
+`tools/fuzz/fuzz_linear_arithmetic.py` checks signed rational linear formulas,
+strict inequalities and Boolean contexts with Z3 and cvc5. SAT cases have an
+independently constructed rational witness; UNSAT cases contain a Boolean
+contradiction between linear predicates. Both references also check the fully
+pinned exported SAT models. These checks complement the propagation unit tests
+that replay returned explanations using only their original premises.
