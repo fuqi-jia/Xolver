@@ -917,7 +917,7 @@ void GeneralSimplex::push() {
     scopeStack_.push_back(std::move(scope));
 }
 
-void GeneralSimplex::pop() {
+void GeneralSimplex::pop(AssignmentPolicy policy) {
     noteBoundChange();
     assert(!scopeStack_.empty());
     auto scope = std::move(scopeStack_.back());
@@ -936,10 +936,8 @@ void GeneralSimplex::pop() {
         else           vars_[e.var].upper = e.oldBound;
         trail_.pop_back();
     }
-    // Restoring older bounds only relaxes intervals. A clean assignment still
-    // satisfies every row equation and every non-basic bound. Basic bounds may
-    // remain violated after an infeasible child, so refresh their repair queue.
-    if (!betaDirty_) rebuildViolationQueue();
+    if (policy == AssignmentPolicy::Reinitialize) betaDirty_ = true;
+    else if (!betaDirty_) rebuildViolationQueue();
 }
 
 void GeneralSimplex::backtrackToLevel(int level) {
@@ -952,16 +950,16 @@ void GeneralSimplex::backtrackToLevel(int level) {
     }
     hasImmediateConflict_ = false;
     conflict_.clear();
+    betaDirty_ = true;
     violatedQueue_.clear();
     std::fill(inViolationQueue_.begin(), inViolationQueue_.end(), false);
-    if (!betaDirty_) rebuildViolationQueue();
 }
 
 // ============================================================================
 // Reset
 // ============================================================================
 
-void GeneralSimplex::resetActiveBounds() {
+void GeneralSimplex::resetActiveBounds(AssignmentPolicy policy) {
     noteBoundChange();
     for (int i = 0; i < static_cast<int>(vars_.size()); ++i) {
         vars_[i].lower = BoundInfo(BoundValue::negInf());
@@ -969,8 +967,9 @@ void GeneralSimplex::resetActiveBounds() {
     }
     trail_.clear();
     scopeStack_.clear();
-    // With all bounds removed, a clean row-consistent assignment is already
-    // feasible. Keep it as the warm start for the next asserted context.
+    // Assignment selection is explicit: nonlinear clients retain their
+    // centering behavior; incremental feasibility checks can keep a valid point.
+    if (policy == AssignmentPolicy::Reinitialize) betaDirty_ = true;
     conflict_.clear();
     hasImmediateConflict_ = false;
     violatedQueue_.clear();

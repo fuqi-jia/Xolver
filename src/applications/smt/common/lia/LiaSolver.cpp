@@ -64,7 +64,7 @@ void LiaSolver::onPop(uint32_t n) {
 }
 
 void LiaSolver::resetAppliedBounds() {
-    gs_.resetActiveBounds();
+    gs_.resetActiveBounds(GeneralSimplex::AssignmentPolicy::Preserve);
     appliedBounds_.clear();
     appliedInterfaceEqualities_.clear();
     appliedBoundRevision_ = gs_.boundRevision();

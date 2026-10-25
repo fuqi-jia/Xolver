@@ -60,6 +60,8 @@ class GeneralSimplex {
 public:
     GeneralSimplex();
 
+    enum class AssignmentPolicy { Reinitialize, Preserve };
+
     // -------------------------------------------------------------------------
     // Variable / constraint registration (before any check)
     // -------------------------------------------------------------------------
@@ -146,14 +148,14 @@ public:
     // -------------------------------------------------------------------------
 
     void push();
-    void pop();
+    void pop(AssignmentPolicy policy = AssignmentPolicy::Reinitialize);
 
     // -------------------------------------------------------------------------
     // Reset
     // -------------------------------------------------------------------------
 
     /** Reset active bounds to (-inf, +inf). Keeps tableau. */
-    void resetActiveBounds();
+    void resetActiveBounds(AssignmentPolicy policy = AssignmentPolicy::Reinitialize);
 
     /** Full reset: clears everything including tableau. */
     void reset();
