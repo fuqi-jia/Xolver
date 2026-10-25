@@ -441,13 +441,16 @@ TEST_CASE("LIA: withdrawing multivariable sources preserves disequalities and un
     const LinearFormKey x{{{"suffix-x", 1}}}, y{{{"suffix-y", 1}}}, z{{{"suffix-z", 1}}};
     source(1, x, Relation::Eq, 1, 1);
     for (int repeat = 0; repeat < 3; ++repeat) {
+        CAPTURE(repeat);
         // Two first occurrences and a repeated term in one source exercise
         // withdrawal/reintroduction of all its original variable columns.
         source(2, {{{"suffix-y", 1}, {"suffix-z", 1}, {"suffix-y", 1}}}, Relation::Eq, 7, 3);
         source(3, y, Relation::Eq, 2, 3);
         source(4, z, Relation::Eq, 3, 3);
         source(5, y, Relation::Eq, repeat % 2 ? 2 : 4, 3, false);
-        CHECK(solver.check(db).kind == (repeat % 2 ? TheoryCheckResult::Kind::Conflict : TheoryCheckResult::Kind::Consistent));
+        // Disequality splitting/conflict detection belongs to the model-check
+        // effort; propagation may conservatively return Unknown here.
+        CHECK(solver.check(db, TheoryEffort::Full).kind == (repeat % 2 ? TheoryCheckResult::Kind::Conflict : TheoryCheckResult::Kind::Consistent));
         solver.backtrackToLevel(1);
         REQUIRE(solver.check(db).kind == TheoryCheckResult::Kind::Consistent);
         const auto pin = solver.proveFixedValueByName("suffix-x");
