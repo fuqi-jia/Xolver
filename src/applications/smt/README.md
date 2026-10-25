@@ -37,6 +37,10 @@ incident rows; explanations contain original SAT premises, including through
 multi-row chains. Propagation respects work, time, output and explanation
 budgets without mutating the simplex snapshot.
 
+Ordinary bound propagation matches derived predicates to registered SAT
+literals through a read-only lookup, including logical complements. Cut and
+split algorithms request new atom registration explicitly.
+
 Nonlinear rational candidates use direct exact polynomial evaluation. Boundary
 candidates share immutable decompositions and skip independent coordinates.
 Original constraints still validate each candidate before SAT is reported.

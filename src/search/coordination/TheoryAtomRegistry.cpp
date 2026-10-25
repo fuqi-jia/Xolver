@@ -1,4 +1,5 @@
 #include "search/coordination/TheoryAtomRegistry.h"
+#include "algebra/linear/LinearExpr.h"
 #include <cassert>
 
 namespace xolver {
@@ -96,6 +97,15 @@ TheoryAtomRegistry::findBoolVariableSatVar(const std::string& name) const {
     auto it = boolVarSatVars_.find(name);
     if (it == boolVarSatVars_.end()) return std::nullopt;
     return it->second;
+}
+
+std::optional<SatLit> TheoryAtomRegistry::findLinearLiteral(
+    const LinearFormKey& lhs, Relation rel, const mpq_class& rhs) const {
+    auto found = linearLookup_.find(LinearLookupKey{lhs, rel, rhs});
+    if (found != linearLookup_.end()) return SatLit::positive(records_[found->second].satVar);
+    found = linearLookup_.find(LinearLookupKey{lhs, negateRelation(rel), rhs});
+    if (found != linearLookup_.end()) return SatLit::negative(records_[found->second].satVar);
+    return std::nullopt;
 }
 
 SatLit TheoryAtomRegistry::getOrCreateLinearBoundAtom(
