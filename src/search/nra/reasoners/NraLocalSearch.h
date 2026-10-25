@@ -4,7 +4,7 @@
 //
 // Heuristic SAT-finder for nonlinear real arithmetic. Maintains a rational
 // assignment (mpq_class per VarId, NEVER algebraic), evaluates each active
-// constraint via RationalPolynomial::substituteRational, and walks one variable
+// constraint by exact rational point evaluation, and walks one variable
 // at a time toward a sign-satisfying value.
 //
 // The search is SAT-direction only — it returns either a candidate rational

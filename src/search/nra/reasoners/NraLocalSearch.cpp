@@ -91,10 +91,8 @@ NraLocalSearch::~NraLocalSearch() {
 std::optional<mpq_class>
 NraLocalSearch::evalAt(PolyId p,
                        const std::unordered_map<VarId, mpq_class>& asg) const {
-    // LS-C: cache PolyId → RationalPolynomial. fromPolyId rebuilds the RP from
-    // the immutable kernel pool every call without it. Cache hit = O(1) lookup,
-    // miss = pay fromPolyId once and store. We then COPY the cached RP because
-    // substituteRational below mutates `cur` toward the constant.
+    // The cached polynomial is immutable. Evaluate it directly rather than
+    // copying, substituting and normalizing a polynomial for each variable.
     auto cIt = rpCache_.find(p);
     if (cIt == rpCache_.end()) {
         ++evalCacheMisses_;
@@ -104,17 +102,7 @@ NraLocalSearch::evalAt(PolyId p,
     } else {
         ++evalCacheHits_;
     }
-    RationalPolynomial cur = cIt->second;          // copy — substitution mutates
-    static const mpq_class kZero{0};
-    auto varSet = cur.variables();
-    std::vector<VarId> vs(varSet.begin(), varSet.end());
-    for (VarId v : vs) {
-        auto it = asg.find(v);
-        const mpq_class& q = (it != asg.end()) ? it->second : kZero;
-        cur = cur.substituteRational(v, q);
-    }
-    if (!cur.isConstant()) return std::nullopt;
-    return cur.constantValue();
+    return cIt->second.evaluateRational(asg);
 }
 
 mpq_class

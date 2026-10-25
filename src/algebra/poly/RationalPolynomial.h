@@ -9,6 +9,7 @@
 #include <vector>
 #include <optional>
 #include <utility>
+#include <unordered_map>
 
 namespace xolver {
 
@@ -49,6 +50,12 @@ public:
     bool isConstant() const;
     mpq_class constantValue() const;
     const FlatMonomialMap<mpq_class>& terms() const { return terms_; }
+
+    /** Exact point evaluation. Variables absent from sample have value zero.
+     * Evaluates monomials directly without constructing substituted polynomials.
+     */
+    mpq_class evaluateRational(
+        const std::unordered_map<VarId, mpq_class>& sample) const;
 
     // -- CDCAC V1 extensions --------------------------------------------------
 

@@ -12,6 +12,39 @@ using namespace xolver;
 
 static VarId VX = VarId{1}, VY = VarId{2};
 
+TEST_CASE("RatPoly: direct rational evaluation agrees with substitution") {
+    RationalPolynomial p;
+    p.addTerm({{VX, 7}, {VY, 4}}, mpq_class(-11, 13));
+    p.addTerm({{VX, 2}, {VY, 9}}, mpq_class(17, 19));
+    p.addVar(VX, 5, mpq_class(23, 29));
+    p.addVar(VY, 2, mpq_class(-31, 37));
+    p.addConstant(mpq_class(41, 43));
+    p.normalize();
+    for (int xn = -5; xn <= 5; ++xn) {
+        for (int yn = -5; yn <= 5; ++yn) {
+            const mpq_class x(xn, 7), y(yn, 11);
+            const auto substituted = p.substituteRational(VX, x).substituteRational(VY, y);
+            REQUIRE(substituted.isConstant());
+            CHECK(p.evaluateRational({{VX, x}, {VY, y}}) == substituted.constantValue());
+        }
+    }
+    CHECK(p.evaluateRational({}) == mpq_class(41, 43));
+    CHECK(p.evaluateRational({{VX, 2}}) ==
+          p.substituteRational(VX, 2).substituteRational(VY, 0).constantValue());
+    CHECK(RationalPolynomial{}.evaluateRational({{VX, 1}}) == 0);
+}
+
+TEST_CASE("RatPoly: direct rational evaluation preserves high powers and cancellation") {
+    auto p = RationalPolynomial::fromVar(VX, 101, mpq_class(7, 11));
+    const mpq_class x(-2, 3);
+    mpq_class power{1};
+    for (int i = 0; i < 101; ++i) power *= x;
+    CHECK(p.evaluateRational({{VX, x}}) == mpq_class(7, 11) * power);
+    p.addConstant(-mpq_class(7, 11) * power);
+    CHECK(p.evaluateRational({{VX, x}}) == 0);
+    CHECK(p.evaluateRational({}) == -mpq_class(7, 11) * power);
+}
+
 TEST_CASE("RatPoly: fromConstant + isConstant") {
     auto p = RationalPolynomial::fromConstant(mpq_class(7));
     CHECK(p.isConstant());
