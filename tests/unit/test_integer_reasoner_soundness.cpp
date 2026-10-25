@@ -208,6 +208,33 @@ TEST_CASE("LIA: missing dynamic registration cannot dereference an absent branch
     CHECK((disequalitySolver.check(database, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Unknown));
 }
 
+TEST_CASE("linear propagation: borrowed endpoint patterns match independent truth and preserve owning values") {
+    const Relation relations[] = {Relation::Eq, Relation::Neq, Relation::Lt, Relation::Leq, Relation::Gt, Relation::Geq};
+    for (const auto relation : relations) for (const bool truth : {false, true}) for (const bool integral : {false, true}) {
+        const auto bounds = LinearAtomManager::effectiveBoundViews(relation, truth, integral);
+        const auto effective = truth ? relation : negateRelation(relation);
+        if (effective == Relation::Neq) {
+            CHECK(bounds.lower == nullptr);
+            CHECK(bounds.upper == nullptr);
+            continue;
+        }
+        for (int numerator = -8; numerator <= 8; ++numerator) {
+            mpq_class point(numerator, integral ? 1 : 2); point.canonicalize();
+            const DeltaRational value(point);
+            const bool accepted = (!bounds.lower || value >= *bounds.lower) && (!bounds.upper || value <= *bounds.upper);
+            CHECK(accepted == (compare(relation, point, mpq_class(0)) == truth));
+        }
+    }
+    const auto zero = LinearAtomManager::effectiveBoundViews(Relation::Eq, true, false);
+    auto owned = LinearAtomManager::effectiveBounds(Relation::Eq, true, false);
+    *owned.lower = DeltaRational(99);
+    CHECK(*zero.lower == DeltaRational(0));
+    CHECK(*zero.upper == DeltaRational(0));
+    const auto strict = LinearAtomManager::effectiveBoundViews(Relation::Lt, true, false);
+    CHECK(*strict.upper == DeltaRational(0, -1));
+    CHECK(*zero.lower == DeltaRational(0));
+}
+
 TEST_CASE("LIA: decision hints use exact values and leave unregistered coordinates untouched") {
     Allocator allocator;
     TheoryAtomRegistry registry;

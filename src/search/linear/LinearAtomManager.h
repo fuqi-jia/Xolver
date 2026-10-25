@@ -61,6 +61,13 @@ public:
         std::optional<DeltaRational> lower, upper;
     };
     static RelationBounds effectiveBounds(Relation rel, bool value, bool integerForm);
+    struct RelationBoundViews {
+        const DeltaRational* lower = nullptr;
+        const DeltaRational* upper = nullptr;
+    };
+    // Immutable canonical endpoints with process lifetime. The owning value
+    // API above keeps its existing coordinate and strictness semantics.
+    static RelationBoundViews effectiveBoundViews(Relation rel, bool value, bool integerForm);
 
     // -------------------------------------------------------------------------
     // Translate a GeneralSimplex conflict to a TheoryConflict.

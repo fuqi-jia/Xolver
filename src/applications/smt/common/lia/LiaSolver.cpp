@@ -199,23 +199,24 @@ void LiaSolver::onBacktrack(int level) {
         // Replace the retained source base atomically, rather than resetting
         // every column and replaying each source through incremental pivots.
         // This also handles non-monotone decision levels and replaced sources.
-        std::vector<GeneralSimplex::ActiveBound> bounds;
+        std::vector<GeneralSimplex::ActiveBoundView> bounds;
         bounds.reserve(2 * (theoryTrail_.size() + interfaceEqualities_.size()));
         appliedBounds_.clear();
         for (const auto& entry : theoryTrail_) {
             const auto& atom = std::get<LinearAtomPayload>(entry.atom.payload);
-            const auto endpoints = LinearAtomManager::effectiveBounds(atom.rel, entry.value, isIntegerLinearForm(atom));
-            if (endpoints.lower) bounds.push_back({entry.auxVar, true, BoundInfo(BoundValue(*endpoints.lower), entry.lit)});
-            if (endpoints.upper) bounds.push_back({entry.auxVar, false, BoundInfo(BoundValue(*endpoints.upper), entry.lit)});
+            const auto endpoints = LinearAtomManager::effectiveBoundViews(atom.rel, entry.value, isIntegerLinearForm(atom));
+            if (endpoints.lower) bounds.push_back({entry.auxVar, true, endpoints.lower, entry.lit});
+            if (endpoints.upper) bounds.push_back({entry.auxVar, false, endpoints.upper, entry.lit});
             appliedBounds_.push_back(appliedKey(entry));
         }
+        static const DeltaRational zero(0);
         for (const auto& equality : interfaceEqualities_) {
             const int aux = getOrCreateInterfaceEqAuxVar(equality.a, equality.b);
             if (aux < 0) continue;
-            bounds.push_back({aux, true, BoundInfo(BoundValue(DeltaRational(0)), equality.reason)});
-            bounds.push_back({aux, false, BoundInfo(BoundValue(DeltaRational(0)), equality.reason)});
+            bounds.push_back({aux, true, &zero, equality.reason});
+            bounds.push_back({aux, false, &zero, equality.reason});
         }
-        gs_.replaceActiveBounds(bounds, GeneralSimplex::AssignmentPolicy::Preserve);
+        gs_.replaceActiveBoundViews(bounds, GeneralSimplex::AssignmentPolicy::Preserve);
         appliedInterfaceEqualities_ = interfaceEqualities_;
         appliedBoundRevision_ = gs_.boundRevision();
     }

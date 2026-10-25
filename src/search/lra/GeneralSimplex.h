@@ -14,6 +14,8 @@
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <array>
+#include <span>
 
 namespace xolver {
 
@@ -170,6 +172,17 @@ public:
     bool replaceActiveBounds(const std::vector<ActiveBound>& bounds,
                              AssignmentPolicy policy = AssignmentPolicy::Reinitialize);
 
+    struct ActiveBoundView {
+        int var;
+        bool isLower;
+        const DeltaRational* value;
+        SatLit reason;
+    };
+    // Same complete-base contract, with borrowed finite endpoints. Values need
+    // only live through the call; selected endpoints are copied into owned state.
+    bool replaceActiveBoundViews(std::span<const ActiveBoundView> bounds,
+                                 AssignmentPolicy policy = AssignmentPolicy::Reinitialize);
+
     /** Full reset: clears everything including tableau. */
     void reset();
 
@@ -263,6 +276,11 @@ public:
 private:
     mutable std::shared_ptr<const FixedValueAnalysis> fixedValueAnalysis_;
     std::unordered_set<int> boundedVars_;
+    // Sparse column-to-slot index and reusable owned endpoint storage. Scratch
+    // state is separate from the current bounds and immutable proof snapshots.
+    std::vector<int> boundMergeSlots_, boundMergeSources_;
+    std::vector<int> boundMergeViolations_, boundMergeChanged_;
+    std::vector<std::array<BoundInfo, 2>> boundMergeValues_;
     uint64_t analysisRevision_ = 0;
     void noteAnalysisChange() noexcept {
         fixedValueAnalysis_.reset();

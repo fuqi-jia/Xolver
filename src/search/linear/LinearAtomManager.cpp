@@ -62,33 +62,35 @@ bool LinearAtomManager::auxForm(int aux, LinearFormKey& lhsOut, mpq_class& rhsOu
     return true;
 }
 
-LinearAtomManager::RelationBounds LinearAtomManager::effectiveBounds(
+LinearAtomManager::RelationBoundViews LinearAtomManager::effectiveBoundViews(
     Relation rel, bool value, bool integerForm) {
-    Relation effective = value ? rel : xolver::negateRelation(rel);
-
-    // Integer strict tightening: for an integer-valued aux s, s < 0 <=> s <= -1
-    // and s > 0 <=> s >= 1 (exact — no integer lies in the open gap). This
-    // replaces the δ-strict bound that branch-and-bound cannot close on an
-    // integer-empty range like n < d < n+1, where it would otherwise chase the
-    // real-feasible relaxation forever.
-    const DeltaRational strictUpper = integerForm ? DeltaRational(-1) : DeltaRational(0, -1);
-    const DeltaRational strictLower = integerForm ? DeltaRational(1)  : DeltaRational(0, 1);
-
+    static const DeltaRational zero(0), minusOne(-1), plusOne(1);
+    static const DeltaRational strictUpper(0, -1), strictLower(0, 1);
+    const auto effective = value ? rel : xolver::negateRelation(rel);
     switch (effective) {
-        case Relation::Eq: return {DeltaRational(0), DeltaRational(0)};
-        case Relation::Leq: return {std::nullopt, DeltaRational(0)};
-        case Relation::Lt: return {std::nullopt, strictUpper};
-        case Relation::Geq: return {DeltaRational(0), std::nullopt};
-        case Relation::Gt: return {strictLower, std::nullopt};
-        case Relation::Neq: return {}; // not a convex bound
+        case Relation::Eq: return {&zero, &zero};
+        case Relation::Leq: return {nullptr, &zero};
+        case Relation::Lt: return {nullptr, integerForm ? &minusOne : &strictUpper};
+        case Relation::Geq: return {&zero, nullptr};
+        case Relation::Gt: return {integerForm ? &plusOne : &strictLower, nullptr};
+        case Relation::Neq: return {};
     }
     return {};
+}
+
+LinearAtomManager::RelationBounds LinearAtomManager::effectiveBounds(
+    Relation rel, bool value, bool integerForm) {
+    const auto views = effectiveBoundViews(rel, value, integerForm);
+    RelationBounds bounds;
+    if (views.lower) bounds.lower = *views.lower;
+    if (views.upper) bounds.upper = *views.upper;
+    return bounds;
 }
 
 bool LinearAtomManager::assertBound(GeneralSimplex& gs, int auxVar, Relation rel,
                                     bool value, SatLit reasonLit, int level,
                                     bool integerForm) {
-    const auto bounds = effectiveBounds(rel, value, integerForm);
+    const auto bounds = effectiveBoundViews(rel, value, integerForm);
     if (bounds.lower && !gs.assertLower(auxVar, BoundInfo(BoundValue(*bounds.lower), reasonLit), level))
         return false;
     return !bounds.upper || gs.assertUpper(auxVar, BoundInfo(BoundValue(*bounds.upper), reasonLit), level);

@@ -512,6 +512,50 @@ TEST_CASE("GeneralSimplex: non-pinning tightenings retain valid fixed-value proo
     CHECK(pinned->prove(y)->first == DeltaRational(3));
 }
 
+TEST_CASE("GeneralSimplex: borrowed bound merging owns its endpoints and survives rejected calls and reset") {
+    GeneralSimplex gs;
+    const int x = gs.addVar("view-x");
+    for (int i = 0; i < 128; ++i) gs.addVar("unused-" + std::to_string(i));
+    DeltaRational half(mpq_class(2, 4)); // intentionally noncanonical
+    std::vector<GeneralSimplex::ActiveBoundView> views{
+        {x, true, &half, SatLit::positive(1)}, {x, false, &half, SatLit::positive(2)},
+        {x, true, &half, SatLit::positive(3)}};
+    REQUIRE(gs.replaceActiveBoundViews(views));
+    REQUIRE((gs.check() == GeneralSimplex::Result::Sat));
+    const auto snapshot = gs.sharedFixedValueAnalysis();
+    REQUIRE(snapshot->prove(x));
+    CHECK(snapshot->prove(x)->first == DeltaRational(mpq_class(1, 2)));
+    const auto state = gs.varState(x);
+    REQUIRE(state.lower.reason.has_value());
+    CHECK((*state.lower.reason == SatLit::positive(1))); // first equal source wins
+    half = DeltaRational(7);
+    CHECK(gs.value(x) == DeltaRational(mpq_class(1, 2)));
+    CHECK(snapshot->prove(x)->first == DeltaRational(mpq_class(1, 2)));
+    const auto revision = gs.boundRevision();
+    views.push_back({999, false, &half, SatLit::positive(4)});
+    CHECK_THROWS_AS(gs.replaceActiveBoundViews(views), std::invalid_argument);
+    CHECK(gs.boundRevision() == revision);
+    CHECK(gs.sharedFixedValueAnalysis() == snapshot);
+    views.back() = {x, false, nullptr, SatLit::positive(4)};
+    CHECK_THROWS_AS(gs.replaceActiveBoundViews(views), std::invalid_argument);
+    views.pop_back();
+    REQUIRE(gs.replaceActiveBoundViews(views, GeneralSimplex::AssignmentPolicy::Preserve));
+    REQUIRE((gs.check() == GeneralSimplex::Result::Sat));
+    CHECK(gs.value(x) == DeltaRational(7));
+    CHECK(snapshot->prove(x)->first == DeltaRational(mpq_class(1, 2)));
+    REQUIRE(gs.replaceActiveBoundViews({}));
+    CHECK_FALSE(gs.fixedValue(x));
+    REQUIRE((gs.check() == GeneralSimplex::Result::Sat));
+    REQUIRE(gs.replaceActiveBoundViews(std::array<GeneralSimplex::ActiveBoundView, 1>{
+        GeneralSimplex::ActiveBoundView{128, true, &half, SatLit::positive(4)}}));
+    gs.reset();
+    const int reused = gs.addVar("reused");
+    REQUIRE(gs.replaceActiveBoundViews(std::array<GeneralSimplex::ActiveBoundView, 1>{
+        GeneralSimplex::ActiveBoundView{reused, true, &half, SatLit::positive(5)}}));
+    REQUIRE((gs.check() == GeneralSimplex::Result::Sat));
+    CHECK(gs.value(reused) >= half);
+}
+
 TEST_CASE("GeneralSimplex: replacing bound sources agrees with independent finite feasibility") {
     GeneralSimplex gs;
     const int x = gs.addVar("base-x"), y = gs.addVar("base-y");
@@ -539,7 +583,11 @@ TEST_CASE("GeneralSimplex: replacing bound sources agrees with independent finit
             for (const auto& bound : bounds) valid &= satisfies(bound, a, b);
             exists |= valid;
         }
-        gs.replaceActiveBounds(bounds, GeneralSimplex::AssignmentPolicy::Preserve);
+        if (step % 2) {
+            std::vector<GeneralSimplex::ActiveBoundView> views;
+            for (const auto& b : bounds) views.push_back({b.var, b.isLower, &b.info.bound.value, *b.info.reason});
+            gs.replaceActiveBoundViews(views, GeneralSimplex::AssignmentPolicy::Preserve);
+        } else gs.replaceActiveBounds(bounds, GeneralSimplex::AssignmentPolicy::Preserve);
         const auto result = gs.check();
         CHECK(result == (exists ? GeneralSimplex::Result::Sat : GeneralSimplex::Result::Unsat));
         if (exists) {
