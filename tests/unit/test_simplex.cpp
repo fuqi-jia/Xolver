@@ -472,6 +472,37 @@ TEST_CASE("GeneralSimplex: a replaced base supports new scopes and sparse resets
     CHECK((gs.check() == GeneralSimplex::Result::Sat));
 }
 
+TEST_CASE("GeneralSimplex: replacement normalizes rational endpoints transactionally") {
+    GeneralSimplex gs;
+    const int x = gs.addVar("rational-base-x");
+    const auto endpoint = [](mpq_class a, mpq_class b, int reason) {
+        return BoundInfo(BoundValue(DeltaRational(a, b)), SatLit::positive(reason));
+    };
+    const auto raw = endpoint(mpq_class(6, 4), mpq_class(4, 2), 1);
+    REQUIRE(gs.replaceActiveBounds({{x, true, raw}, {x, false, raw}}));
+    REQUIRE((gs.check() == GeneralSimplex::Result::Sat));
+    CHECK(gs.value(x) == DeltaRational(mpq_class(3, 2), 2));
+    // Normalization belongs to the solver boundary; caller data is unchanged.
+    CHECK(mpz_cmp_ui(mpq_denref(raw.bound.value.a.get_mpq_t()), 4) == 0);
+    mpq_class negativeDenominator(3, 2);
+    mpz_neg(mpq_denref(negativeDenominator.get_mpq_t()), mpq_denref(negativeDenominator.get_mpq_t()));
+    const auto negative = endpoint(negativeDenominator, mpq_class(0, 2), 2);
+    REQUIRE(gs.replaceActiveBounds({{x, true, negative}, {x, false, negative}},
+                                  GeneralSimplex::AssignmentPolicy::Preserve));
+    REQUIRE((gs.check() == GeneralSimplex::Result::Sat));
+    CHECK(gs.value(x) == DeltaRational(mpq_class(-3, 2)));
+    const auto snapshot = gs.sharedFixedValueAnalysis();
+    for (bool delta : {false, true}) {
+        mpq_class zeroDenominator(1);
+        mpz_set_ui(mpq_denref(zeroDenominator.get_mpq_t()), 0);
+        const auto invalid = endpoint(delta ? mpq_class(0) : zeroDenominator,
+                                      delta ? zeroDenominator : mpq_class(0), 3);
+        CHECK_THROWS_AS(gs.replaceActiveBounds({{x, true, raw}, {x, false, invalid}}), std::invalid_argument);
+        CHECK(gs.sharedFixedValueAnalysis() == snapshot);
+        CHECK(gs.value(x) == DeltaRational(mpq_class(-3, 2)));
+    }
+}
+
 TEST_CASE("GeneralSimplex: bound revisions invalidate rejected bounds, scopes and resets") {
     GeneralSimplex gs;
     const int x = gs.addVar("revision-x");

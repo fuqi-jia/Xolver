@@ -81,12 +81,13 @@ def arguments(description):
     return args
 
 
-def validate_cases(args, generated_cases, logic):
+def validate_cases(args, generated_cases, logic, *, require_all_oracles=True):
     args.output.mkdir(parents=True, exist_ok=False)
     commands = {'xolver': [str(args.solver.resolve()), 'solve'],
                 'z3': [str(args.z3.resolve())],
                 'cvc5': [str(args.cvc5.resolve()), '--lang=smt2']}
     failures, models, total = [], 0, 0
+    oracle_limits, oracle_confirmed = [], 0
     for name, body, expected in generated_cases:
         prefix = f'(set-logic {logic})\n(set-option :produce-models true)\n' + body + '\n'
         source = args.output / (name + '.smt2')
@@ -95,9 +96,19 @@ def validate_cases(args, generated_cases, logic):
         row = dict(case=name, expected=expected, sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
                    engines=results)
         total += 1
+        confirmed = False
         for engine, result in results.items():
+            if engine != 'xolver' and result['verdict'] == expected:
+                confirmed = True
             if result['verdict'] != expected:
+                if (not require_all_oracles and engine != 'xolver'
+                        and result['verdict'] in ('unknown', 'timeout')):
+                    oracle_limits.append(dict(case=name, engine=engine, actual=result['verdict']))
+                    continue
                 failures.append(dict(case=name, engine=engine, expected=expected, actual=result['verdict']))
+        oracle_confirmed += int(confirmed)
+        if not require_all_oracles and not confirmed:
+            failures.append(dict(case=name, oracle_error='no independent oracle decided the original query'))
         if results['xolver']['verdict'] == 'sat':
             query = args.output / (name + '-model.smt2')
             query.write_text(prefix + '(check-sat)(get-model)\n')
@@ -126,8 +137,13 @@ def validate_cases(args, generated_cases, logic):
         version = subprocess.run([commands[engine][0], '--version'], capture_output=True, text=True, timeout=10)
         binaries[engine]['version'] = version.stdout.splitlines()[0] if version.stdout else version.stderr[:200]
     summary = dict(cases=total, models=models, failures=failures, seed=args.seed, binaries=binaries)
+    if not require_all_oracles:
+        summary.update(oracle_policy='one original-query confirmation; both model replays required',
+                       oracle_limits=oracle_limits, oracle_confirmed=oracle_confirmed)
     (args.output / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
     metrics = dict(cases=total, models=models, failures=len(failures))
+    if not require_all_oracles:
+        metrics.update(oracle_limits=len(oracle_limits), oracle_confirmed=oracle_confirmed)
     (args.output / 'metrics.json').write_text(json.dumps(metrics) + '\n')
     if os.environ.get('EOS_METRICS_FILE'):
         Path(os.environ['EOS_METRICS_FILE']).write_text(json.dumps(metrics) + '\n')

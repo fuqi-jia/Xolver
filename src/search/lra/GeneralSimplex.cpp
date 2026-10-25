@@ -1010,11 +1010,27 @@ bool GeneralSimplex::replaceActiveBounds(const std::vector<ActiveBound>& bounds,
     for (const auto& input : bounds) {
         if (input.var < 0 || input.var >= numVars() || !input.info.bound.isFinite() || !input.info.reason)
             throw std::invalid_argument("replacement bounds need an existing column and a finite explained endpoint");
+        const auto& value = input.info.bound.value;
+        if (mpz_sgn(mpq_denref(value.a.get_mpq_t())) == 0 ||
+            mpz_sgn(mpq_denref(value.b.get_mpq_t())) == 0)
+            throw std::invalid_argument("replacement bounds need nonzero rational denominators");
+        // GMP's numerator/denominator constructor does not reduce its input.
+        // Keep the integer fast path, and normalize other caller-owned values
+        // before comparisons or tableau arithmetic use GMP's canonical form.
+        std::optional<BoundInfo> normalized;
+        const BoundInfo* endpoint = &input.info;
+        if (mpz_cmp_ui(mpq_denref(value.a.get_mpq_t()), 1) != 0 ||
+            mpz_cmp_ui(mpq_denref(value.b.get_mpq_t()), 1) != 0) {
+            normalized = input.info;
+            normalized->bound.value.a.canonicalize();
+            normalized->bound.value.b.canonicalize();
+            endpoint = &*normalized;
+        }
         auto [it, fresh] = next.try_emplace(input.var);
         if (fresh) it->second[0] = BoundInfo(BoundValue::negInf());
         auto& current = it->second[input.isLower ? 0 : 1];
-        if (input.isLower ? input.info.bound > current.bound : input.info.bound < current.bound)
-            current = input.info;
+        if (input.isLower ? endpoint->bound > current.bound : endpoint->bound < current.bound)
+            current = *endpoint;
     }
     noteBoundChange();
     trail_.clear();
