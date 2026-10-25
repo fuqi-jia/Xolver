@@ -23,12 +23,30 @@ interface filters internal bindings. Integer sort checks and the
 zero-divisor interpretation tables are shared by native model validation and
 the public `validateModel()` API.
 
-Linear checks share an immutable fixed-value analysis within each stable scan.
+Linear checks share an immutable fixed-value analysis across stable queries.
 Its work queue tracks tableau residuals and original bound premises; proof
-extraction uses iterative dependency traversal. LIA reuses fully applied input
+extraction uses iterative dependency traversal. Bounds, new definitions and
+pivots invalidate the shared snapshot. Completed predicate scans are reused
+only while their state revision and registered vocabulary match.
+LIA reuses fully applied input
 prefixes only while exact keys and the simplex bound revision match. Complete
 SAT candidate reconstruction initializes an independent primal point;
-incremental backtracking can retain the current point.
+positive-level backtracking merges retained bound sources and updates affected
+columns while preserving the current point. A Boolean backtrack which withdraws
+no theory premise preserves the existing base. Strict relation encoding is
+shared between incremental assertion and complete bound-base replacement.
+
+Registered LIA predicates sharing a linear form receive branch-independent
+bound-ordering clauses before SAT search. These use existing literals and are
+explicitly recorded as theory assumptions in propositional proof output.
+Backtrackable decision hints evaluate linear predicates exactly at the current
+simplex point; they do not establish satisfiability or introduce deductions.
+
+Integer candidate construction uses exact affine lattices from Smith normal
+form. Zero- and one-parameter lattices admit exact bound/exclusion solving;
+other cases continue ordinary integer search. A candidate must satisfy every
+original active constraint before it can establish SAT. Candidate construction
+failure never establishes UNSAT.
 
 Real bound propagation uses a local, explained overlay and row min/max
 aggregates. Backward propagation subtracts the appropriate extremum of the

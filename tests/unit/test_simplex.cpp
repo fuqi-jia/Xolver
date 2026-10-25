@@ -5,6 +5,7 @@
 #include "search/coordination/TheoryLemmaDatabase.h"
 #include "ir/NativeTerms.h"
 #include <random>
+#include <stdexcept>
 
 using namespace xolver;
 
@@ -315,6 +316,160 @@ TEST_CASE("GeneralSimplex: fixed-value proof chains use iterative shared depende
     REQUIRE(proof.has_value());
     CHECK(proof->first == DeltaRational(1));
     CHECK(proof->second.size() == 2 * (depth + 1));
+}
+
+TEST_CASE("GeneralSimplex: shared fixed-value snapshots follow bounds, pivots and new definitions") {
+    GeneralSimplex gs;
+    const int x = gs.addVar("snapshot-x"), y = gs.addVar("snapshot-y");
+    const int sum = gs.addConstraint({{x, 1}, {y, 1}}, 5);
+    auto pin = [&](int var, int value, SatVar reason) {
+        REQUIRE(gs.assertLower(var, BoundInfo(BoundValue(DeltaRational(value)), SatLit::positive(reason))));
+        REQUIRE(gs.assertUpper(var, BoundInfo(BoundValue(DeltaRational(value)), SatLit::positive(reason + 1))));
+    };
+    pin(x, 2, 1); pin(sum, 0, 3);
+    const auto before = gs.sharedFixedValueAnalysis();
+    const auto beforeRevision = gs.analysisRevision();
+    const auto boundRevision = gs.boundRevision();
+    REQUIRE(before->fixedValue(y));
+    CHECK(*before->fixedValue(y) == DeltaRational(3));
+    CHECK(gs.sharedFixedValueAnalysis() == before);
+    REQUIRE(gs.assertLower(x, BoundInfo(BoundValue(DeltaRational(1)), SatLit::positive(99))));
+    CHECK(gs.sharedFixedValueAnalysis() == before); // redundant assertion changes no premise
+    CHECK(gs.analysisRevision() == beforeRevision);
+    CHECK_FALSE(gs.isBasic(y));
+    REQUIRE((gs.check() == GeneralSimplex::Result::Sat));
+    CHECK(gs.isBasic(y));
+    const auto pivoted = gs.sharedFixedValueAnalysis();
+    CHECK(pivoted != before);
+    CHECK(gs.analysisRevision() != beforeRevision);
+    CHECK(gs.boundRevision() == boundRevision);
+    REQUIRE(pivoted->prove(y));
+    CHECK(pivoted->prove(y)->first == DeltaRational(3));
+    CHECK(*before->fixedValue(y) == DeltaRational(3)); // outstanding handle stays immutable
+
+    gs.push();
+    CHECK_FALSE(gs.assertLower(x, BoundInfo(BoundValue(DeltaRational(4)), SatLit::positive(10)), 1));
+    const auto conflicting = gs.sharedFixedValueAnalysis();
+    CHECK(conflicting != pivoted);
+    gs.pop();
+    CHECK(gs.sharedFixedValueAnalysis() != conflicting);
+    gs.resetActiveBounds();
+    CHECK_FALSE(gs.sharedFixedValueAnalysis()->fixedValue(y));
+    pin(x, 5, 11); pin(sum, 0, 13);
+    REQUIRE(gs.proveFixedValue(y));
+    CHECK(gs.proveFixedValue(y)->first == DeltaRational(0));
+
+    const auto old = gs.sharedFixedValueAnalysis();
+    const int z = gs.addVar("snapshot-z");
+    CHECK(gs.sharedFixedValueAnalysis() != old);
+    CHECK_FALSE(gs.sharedFixedValueAnalysis()->fixedValue(z));
+    const int difference = gs.addConstraint({{y, 1}, {z, -1}}, 1);
+    pin(difference, 0, 15);
+    REQUIRE(gs.proveFixedValue(z));
+    CHECK(gs.proveFixedValue(z)->first == DeltaRational(-1));
+    CHECK_FALSE(old->fixedValue(z));
+}
+
+TEST_CASE("GeneralSimplex: cached fixed values cannot leak through scope removal, copies or reset") {
+    GeneralSimplex gs;
+    const int x = gs.addVar("scope-x");
+    gs.push();
+    REQUIRE(gs.assertLower(x, BoundInfo(BoundValue(DeltaRational(7)), SatLit::positive(1)), 1));
+    REQUIRE(gs.assertUpper(x, BoundInfo(BoundValue(DeltaRational(7)), SatLit::positive(2)), 1));
+    const auto pinned = gs.sharedFixedValueAnalysis();
+    REQUIRE(pinned->prove(x));
+    GeneralSimplex copy = gs;
+    copy.resetActiveBounds();
+    CHECK_FALSE(copy.proveFixedValue(x));
+    CHECK(gs.sharedFixedValueAnalysis() == pinned);
+    gs.pop();
+    CHECK_FALSE(gs.proveFixedValue(x));
+    CHECK(pinned->prove(x)->first == DeltaRational(7));
+    REQUIRE(gs.assertLower(x, BoundInfo(BoundValue(DeltaRational(9)), SatLit::positive(3)), 2));
+    REQUIRE(gs.assertUpper(x, BoundInfo(BoundValue(DeltaRational(9)), SatLit::positive(4)), 2));
+    REQUIRE(gs.proveFixedValue(x));
+    CHECK(gs.proveFixedValue(x)->first == DeltaRational(9));
+    gs.backtrackToLevel(0);
+    CHECK_FALSE(gs.proveFixedValue(x));
+    gs.reset();
+    CHECK(gs.addVar("reused-index") == x);
+    CHECK_FALSE(gs.proveFixedValue(x));
+    CHECK_FALSE(gs.sharedFixedValueAnalysis()->fixedValue(-1));
+    CHECK_FALSE(gs.sharedFixedValueAnalysis()->fixedValue(100));
+}
+
+TEST_CASE("GeneralSimplex: replacing bound sources agrees with independent finite feasibility") {
+    GeneralSimplex gs;
+    const int x = gs.addVar("base-x"), y = gs.addVar("base-y");
+    const int sum = gs.addConstraint({{x, 1}, {y, 1}}, 0);
+    for (int step = 0; step < 120; ++step) {
+        CAPTURE(step);
+        std::vector<GeneralSimplex::ActiveBound> bounds;
+        auto add = [&](int var, bool lower, int twice) {
+            bounds.push_back({var, lower, BoundInfo(BoundValue(DeltaRational(mpq_class(twice, 2))),
+                                                  SatLit::positive(bounds.size() + 1))});
+        };
+        add(x, true, -6); add(x, false, 6); add(y, true, -6); add(y, false, 6);
+        add(x, true, (step * 5) % 13 - 6);
+        add(x, false, (step * 7 + 2) % 13 - 6);
+        add(sum, true, (step * 3) % 17 - 8);
+        add(sum, false, (step * 11 + 3) % 17 - 8);
+        auto satisfies = [&](const GeneralSimplex::ActiveBound& bound, int a, int b) {
+            const mpq_class value(bound.var == x ? a : bound.var == y ? b : a + b, 2);
+            return bound.isLower ? DeltaRational(value) >= bound.info.bound.value
+                                 : DeltaRational(value) <= bound.info.bound.value;
+        };
+        bool exists = false;
+        for (int a = -6; a <= 6; ++a) for (int b = -6; b <= 6; ++b) {
+            bool valid = true;
+            for (const auto& bound : bounds) valid &= satisfies(bound, a, b);
+            exists |= valid;
+        }
+        gs.replaceActiveBounds(bounds, GeneralSimplex::AssignmentPolicy::Preserve);
+        const auto result = gs.check();
+        CHECK(result == (exists ? GeneralSimplex::Result::Sat : GeneralSimplex::Result::Unsat));
+        if (exists) {
+            CHECK(gs.value(sum) == gs.value(x) + gs.value(y));
+            for (const auto& bound : bounds)
+                CHECK(bound.isLower ? gs.value(bound.var) >= bound.info.bound.value
+                                    : gs.value(bound.var) <= bound.info.bound.value);
+        } else {
+            REQUIRE_FALSE(gs.getConflict().empty());
+            // A conflict must already follow from just its returned premises.
+            for (int a = -8; a <= 8; ++a) for (int b = -8; b <= 8; ++b) {
+                bool premises = true;
+                for (const auto& reason : gs.getConflict()) {
+                    REQUIRE(reason.reason.var > 0);
+                    REQUIRE(reason.reason.var <= bounds.size());
+                    premises &= satisfies(bounds[reason.reason.var - 1], a, b);
+                }
+                CHECK_FALSE(premises);
+            }
+        }
+        CHECK(gs.debugCheckInvariants());
+    }
+}
+
+TEST_CASE("GeneralSimplex: a replaced base supports new scopes and sparse resets") {
+    GeneralSimplex gs;
+    const int x = gs.addVar("base-scope-x");
+    for (int i = 0; i < 100; ++i) gs.addVar("unbounded-" + std::to_string(i));
+    const auto lower = BoundInfo(BoundValue(DeltaRational(0)), SatLit::positive(1));
+    const auto upper = BoundInfo(BoundValue(DeltaRational(10)), SatLit::positive(2));
+    REQUIRE(gs.replaceActiveBounds({{x, true, lower}, {x, false, upper}}));
+    REQUIRE((gs.check() == GeneralSimplex::Result::Sat));
+    const auto snapshot = gs.sharedFixedValueAnalysis();
+    CHECK_THROWS_AS(gs.replaceActiveBounds({{-1, true, lower}}), std::invalid_argument);
+    CHECK(gs.sharedFixedValueAnalysis() == snapshot);
+    gs.push();
+    REQUIRE(gs.assertLower(x, BoundInfo(BoundValue(DeltaRational(5)), SatLit::positive(3)), 1));
+    gs.pop(GeneralSimplex::AssignmentPolicy::Preserve);
+    CHECK(gs.varState(x).lower.bound.value == DeltaRational(0));
+    CHECK(gs.varState(x).upper.bound.value == DeltaRational(10));
+    gs.resetActiveBounds();
+    CHECK_FALSE(gs.varState(x).lower.bound.isFinite());
+    CHECK_FALSE(gs.varState(x).upper.bound.isFinite());
+    CHECK((gs.check() == GeneralSimplex::Result::Sat));
 }
 
 TEST_CASE("GeneralSimplex: bound revisions invalidate rejected bounds, scopes and resets") {

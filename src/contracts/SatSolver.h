@@ -55,6 +55,9 @@ public:
 
     virtual SatVar newVar() = 0;
     virtual void addClause(const std::vector<SatLit>& clause) = 0;
+    // A caller-justified theory tautology. Proof backends must distinguish it
+    // from original Boolean input, even when it is installed before solve().
+    virtual void addTheoryClause(const std::vector<SatLit>& clause) { addClause(clause); }
 
     enum class SolveResult { Sat, Unsat, Unknown };
     virtual SolveResult solve() = 0;

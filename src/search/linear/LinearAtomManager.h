@@ -57,6 +57,11 @@ public:
                      bool value, SatLit reasonLit, int level = 0,
                      bool integerForm = false);
 
+    struct RelationBounds {
+        std::optional<DeltaRational> lower, upper;
+    };
+    static RelationBounds effectiveBounds(Relation rel, bool value, bool integerForm);
+
     // -------------------------------------------------------------------------
     // Translate a GeneralSimplex conflict to a TheoryConflict.
     // -------------------------------------------------------------------------

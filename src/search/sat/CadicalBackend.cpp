@@ -158,6 +158,13 @@ SatVar CadicalBackend::newVar() {
     return maxVar_;
 }
 
+void CadicalBackend::addTheoryClause(const std::vector<SatLit>& clause) {
+    addClause(clause);
+#ifdef XOLVER_ENABLE_PROOFS
+    if (proofTracing_) --proofOrigClauseCount_;
+#endif
+}
+
 void CadicalBackend::addClause(const std::vector<SatLit>& clause) {
 #ifdef XOLVER_ENABLE_PROOFS
     // The capture tracer records the actual clauses (incl. these original ones);

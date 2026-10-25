@@ -59,7 +59,8 @@ public:
 
     // Enumerate registry linear atoms, group by form, emit clauses to `sat`.
     // Returns the number of clauses emitted.
-    static int generate(const TheoryAtomRegistry& registry, SatSolver& sat);
+    static int generate(const TheoryAtomRegistry& registry, SatSolver& sat,
+                        std::optional<TheoryId> theory = std::nullopt);
 
 private:
     static int maxGroupSize();

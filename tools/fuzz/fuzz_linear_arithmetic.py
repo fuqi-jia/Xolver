@@ -66,8 +66,8 @@ def cases(seed, count):
         yield f'signed-{index:04d}', '\n'.join(commands), expected
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+def arguments(description):
+    parser = argparse.ArgumentParser(description=description)
     parser.add_argument('--solver', type=Path, required=True)
     parser.add_argument('--z3', type=Path, required=True)
     parser.add_argument('--cvc5', type=Path, required=True)
@@ -78,13 +78,17 @@ def main():
     args = parser.parse_args()
     if args.count <= 0 or args.timeout <= 0:
         parser.error('positive count and timeout are required')
+    return args
+
+
+def validate_cases(args, generated_cases, logic):
     args.output.mkdir(parents=True, exist_ok=False)
     commands = {'xolver': [str(args.solver.resolve()), 'solve'],
                 'z3': [str(args.z3.resolve())],
                 'cvc5': [str(args.cvc5.resolve()), '--lang=smt2']}
     failures, models, total = [], 0, 0
-    for name, body, expected in cases(args.seed, args.count):
-        prefix = '(set-logic QF_LRA)\n(set-option :produce-models true)\n' + body + '\n'
+    for name, body, expected in generated_cases:
+        prefix = f'(set-logic {logic})\n(set-option :produce-models true)\n' + body + '\n'
         source = args.output / (name + '.smt2')
         source.write_text(prefix + '(check-sat)\n')
         results = {engine: invoke(command, source, args.timeout) for engine, command in commands.items()}
@@ -129,6 +133,11 @@ def main():
         Path(os.environ['EOS_METRICS_FILE']).write_text(json.dumps(metrics) + '\n')
     print(json.dumps(metrics))
     return int(bool(failures) or not models)
+
+
+def main():
+    args = arguments(__doc__)
+    return validate_cases(args, cases(args.seed, args.count), 'QF_LRA')
 
 
 if __name__ == '__main__':

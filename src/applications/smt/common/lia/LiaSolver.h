@@ -32,6 +32,9 @@ public:
     void assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit assertedLit) override;
 
     void setRegistry(TheoryAtomRegistry* reg) {
+        if (registry_ != reg) {
+            pinScanRevision_.reset();
+        }
         registry_ = reg;
         integerReasoner_.setRegistry(reg);
     }
@@ -57,6 +60,7 @@ public:
     // the consequence and closing the goal-atom escape that the floor
     // currently catches as a SAT model violating the original assertion.
     std::vector<TheoryLemma> takeEntailmentPropagations() override;
+    std::optional<bool> evalAtomAtModel(SatVar variable) override;
 
     std::vector<SharedEqualityPropagation>
     deduceIndexEqualitiesByGaussian(const std::vector<SharedTermId>& idxTerms) override;
@@ -174,6 +178,8 @@ private:
     // Per-(satVar, value) dedup — emit each entailment at most once per
     // SAT-decision cycle. Cleared on backtrack to level 0 / reset.
     std::unordered_set<uint64_t> entailmentEmittedKeys_;
+    std::optional<uint64_t> pinScanRevision_;
+    size_t pinScanRecords_ = 0;
     void resetAppliedBounds(GeneralSimplex::AssignmentPolicy policy =
                                 GeneralSimplex::AssignmentPolicy::Preserve);
     void rebuildTrailCaches();
@@ -200,6 +206,7 @@ private:
         bool isDiseq;
         bool operator==(const AppliedBound&) const = default;
     };
+    static AppliedBound appliedKey(const LiaTrailEntry& entry);
     std::vector<AppliedBound> appliedBounds_;
     std::vector<InterfaceEq> appliedInterfaceEqualities_;
     std::optional<uint64_t> appliedBoundRevision_;

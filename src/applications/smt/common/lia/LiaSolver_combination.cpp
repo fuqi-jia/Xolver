@@ -221,7 +221,7 @@ LiaSolver::getDeducedSharedEqualities() {
     // Map fixed-value shared terms
     using GroupEntry = std::pair<SharedTermId, std::vector<SatLit>>;
     std::map<DeltaRational, std::vector<GroupEntry>> groups;
-    std::optional<GeneralSimplex::FixedValueAnalysis> fixedAnalysis;
+    std::shared_ptr<const GeneralSimplex::FixedValueAnalysis> fixedAnalysis;
 
     for (SharedTermId stId : sharedTermRegistry_->allSharedTerms()) {
         std::string name = getVarNameForSharedTerm(stId);
@@ -230,7 +230,7 @@ LiaSolver::getDeducedSharedEqualities() {
         if (it == nameToVar.end()) continue;
         int var = it->second;
 
-        if (!fixedAnalysis) fixedAnalysis = gs_.analyzeFixedValues();
+        if (!fixedAnalysis) fixedAnalysis = gs_.sharedFixedValueAnalysis();
         auto fixedOpt = fixedAnalysis->prove(var);
         if (!fixedOpt) continue;
 

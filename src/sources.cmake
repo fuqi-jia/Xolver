@@ -125,6 +125,7 @@ set(XOLVER_SEARCH_SOURCES
     "search/icp/contractors/SquareContractor.cpp"
     "search/lia/GomoryCut.cpp"
     "search/linear/BoundAxiomGenerator.cpp"
+    "search/linear/IntegerAffineModel.cpp"
     "search/linear/IntegerReasoner.cpp"
     "search/linear/LinearAtomManager.cpp"
     "search/linear/LinearConstraintRegistration.cpp"

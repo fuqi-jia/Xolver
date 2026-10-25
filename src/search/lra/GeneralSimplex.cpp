@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <cstdlib>
 #include <iostream>
+#include <array>
+#include <stdexcept>
 
 namespace xolver {
 
@@ -44,6 +46,7 @@ GeneralSimplex::GeneralSimplex() {
 // ---------------------------------------------------------------------------
 
 int GeneralSimplex::addVar(const std::string& name) {
+    noteAnalysisChange();
     int id = static_cast<int>(vars_.size());
     VarState vs;
     vs.name = name;
@@ -262,6 +265,7 @@ bool GeneralSimplex::assertLower(int var, const BoundInfo& info, int level) {
 
     trail_.push_back({level, var, true, vars_[var].lower});
     vars_[var].lower = info;
+    boundedVars_.insert(var);
 
     if (vars_[var].basicRow == -1 && violatesLower(var)) {
         update(var, info.bound.value);
@@ -286,6 +290,7 @@ bool GeneralSimplex::assertUpper(int var, const BoundInfo& info, int level) {
 
     trail_.push_back({level, var, false, vars_[var].upper});
     vars_[var].upper = info;
+    boundedVars_.insert(var);
 
     if (vars_[var].basicRow == -1 && violatesUpper(var)) {
         update(var, info.bound.value);
@@ -680,6 +685,7 @@ void GeneralSimplex::pivotAndUpdate(int leavingBasic, int enteringNonBasic,
 }
 
 void GeneralSimplex::pivot(int leaving, int entering) {
+    noteAnalysisChange();
 #ifdef XOLVER_LRA_PROFILE
     ++pivotCount_;
     auto prof_t0 = std::chrono::steady_clock::now();
@@ -934,6 +940,8 @@ void GeneralSimplex::pop(AssignmentPolicy policy) {
         const auto& e = trail_.back();
         if (e.isLower) vars_[e.var].lower = e.oldBound;
         else           vars_[e.var].upper = e.oldBound;
+        if (!vars_[e.var].lower.bound.isFinite() && !vars_[e.var].upper.bound.isFinite())
+            boundedVars_.erase(e.var);
         trail_.pop_back();
     }
     if (policy == AssignmentPolicy::Reinitialize) betaDirty_ = true;
@@ -946,6 +954,8 @@ void GeneralSimplex::backtrackToLevel(int level) {
         const auto& e = trail_.back();
         if (e.isLower) vars_[e.var].lower = e.oldBound;
         else           vars_[e.var].upper = e.oldBound;
+        if (!vars_[e.var].lower.bound.isFinite() && !vars_[e.var].upper.bound.isFinite())
+            boundedVars_.erase(e.var);
         trail_.pop_back();
     }
     hasImmediateConflict_ = false;
@@ -961,10 +971,11 @@ void GeneralSimplex::backtrackToLevel(int level) {
 
 void GeneralSimplex::resetActiveBounds(AssignmentPolicy policy) {
     noteBoundChange();
-    for (int i = 0; i < static_cast<int>(vars_.size()); ++i) {
+    for (int i : boundedVars_) {
         vars_[i].lower = BoundInfo(BoundValue::negInf());
         vars_[i].upper = BoundInfo(BoundValue::posInf());
     }
+    boundedVars_.clear();
     trail_.clear();
     scopeStack_.clear();
     // Assignment selection is explicit: nonlinear clients retain their
@@ -979,6 +990,7 @@ void GeneralSimplex::resetActiveBounds(AssignmentPolicy policy) {
 void GeneralSimplex::reset() {
     noteBoundChange();
     vars_.clear();
+    boundedVars_.clear();
     tab_ = SparseTableau();
     basicVars_.clear();
     nonBasicVars_.clear();
@@ -990,6 +1002,60 @@ void GeneralSimplex::reset() {
     scopeStack_.clear();
     betaDirty_ = true;
     hasImmediateConflict_ = false;
+}
+
+bool GeneralSimplex::replaceActiveBounds(const std::vector<ActiveBound>& bounds,
+                                         AssignmentPolicy policy) {
+    std::unordered_map<int, std::array<BoundInfo, 2>> next;
+    for (const auto& input : bounds) {
+        if (input.var < 0 || input.var >= numVars() || !input.info.bound.isFinite() || !input.info.reason)
+            throw std::invalid_argument("replacement bounds need an existing column and a finite explained endpoint");
+        auto [it, fresh] = next.try_emplace(input.var);
+        if (fresh) it->second[0] = BoundInfo(BoundValue::negInf());
+        auto& current = it->second[input.isLower ? 0 : 1];
+        if (input.isLower ? input.info.bound > current.bound : input.info.bound < current.bound)
+            current = input.info;
+    }
+    noteBoundChange();
+    trail_.clear();
+    scopeStack_.clear();
+    hasImmediateConflict_ = false;
+    conflict_.clear();
+    std::vector<int> changed;
+    auto assign = [&](int var, const BoundInfo& lower, const BoundInfo& upper) {
+        auto& state = vars_[var];
+        if (state.lower.bound.kind != lower.bound.kind || state.upper.bound.kind != upper.bound.kind ||
+            (lower.bound.isFinite() && (state.lower.bound.value != lower.bound.value || state.lower.reason != lower.reason)) ||
+            (upper.bound.isFinite() && (state.upper.bound.value != upper.bound.value || state.upper.reason != upper.reason))) {
+            state.lower = lower;
+            state.upper = upper;
+            changed.push_back(var);
+        }
+        if (!hasImmediateConflict_ && lower.bound > upper.bound) {
+            explainImmediateConflict(var, true, *lower.reason);
+            hasImmediateConflict_ = true;
+        }
+    };
+    for (int var : boundedVars_) {
+        if (next.contains(var)) continue;
+        assign(var, BoundInfo(BoundValue::negInf()), BoundInfo(BoundValue::posInf()));
+    }
+    boundedVars_.clear();
+    for (const auto& [var, endpoints] : next) {
+        assign(var, endpoints[0], endpoints[1]);
+        boundedVars_.insert(var);
+    }
+    if (policy == AssignmentPolicy::Reinitialize) betaDirty_ = true;
+    if (!betaDirty_ && !hasImmediateConflict_) {
+        // Install the whole base first. Non-basic moves update their incident
+        // rows; basic violations use the existing lazy work queue.
+        for (const int var : changed) {
+            if (vars_[var].basicRow >= 0) refreshViolationStatus(var);
+            else if (violatesLower(var)) update(var, vars_[var].lower.bound.value);
+            else if (violatesUpper(var)) update(var, vars_[var].upper.bound.value);
+        }
+    }
+    return !hasImmediateConflict_;
 }
 
 std::optional<DeltaRational> GeneralSimplex::fixedValue(int var) const {
@@ -1083,6 +1149,19 @@ GeneralSimplex::FixedValueAnalysis GeneralSimplex::analyzeFixedValues() const {
     return result;
 }
 
+std::optional<DeltaRational>
+GeneralSimplex::FixedValueAnalysis::fixedValue(int var) const {
+    if (var < 0 || static_cast<size_t>(var) >= values_.size()) return std::nullopt;
+    return values_[var];
+}
+
+std::shared_ptr<const GeneralSimplex::FixedValueAnalysis>
+GeneralSimplex::sharedFixedValueAnalysis() const {
+    if (!fixedValueAnalysis_)
+        fixedValueAnalysis_ = std::make_shared<const FixedValueAnalysis>(analyzeFixedValues());
+    return fixedValueAnalysis_;
+}
+
 std::optional<GeneralSimplex::FixedValueProof>
 GeneralSimplex::FixedValueAnalysis::prove(int var) const {
     if (var < 0 || static_cast<size_t>(var) >= values_.size() || !values_[var])
@@ -1112,7 +1191,7 @@ GeneralSimplex::FixedValueAnalysis::prove(int var) const {
 std::optional<GeneralSimplex::FixedValueProof> GeneralSimplex::proveFixedValue(int var) const {
     if (var < 0 || var >= numVars()) return std::nullopt;
     if (auto direct = fixedValue(var)) return FixedValueProof{*direct, explainFixedValue(var)};
-    return analyzeFixedValues().prove(var);
+    return sharedFixedValueAnalysis()->prove(var);
 }
 
 // ============================================================================

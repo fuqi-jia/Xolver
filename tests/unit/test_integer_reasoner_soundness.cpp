@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 #include "search/linear/IntegerReasoner.h"
+#include "search/linear/BoundAxiomGenerator.h"
 #include "algebra/linear/LinearConstraintNormalizer.h"
 #include "applications/smt/common/lia/LiaSolver.h"
 #include "applications/smt/qflra/LraSolver.h"
@@ -125,6 +126,64 @@ TEST_CASE("LraSolver: ordinary propagation preserves the registered vocabulary")
             }
         }
     }
+}
+
+TEST_CASE("BoundAxiomGenerator: selecting LIA preserves other theories and the input vocabulary") {
+    struct Clauses : Allocator {
+        std::vector<std::vector<SatLit>> clauses;
+        void addClause(const std::vector<SatLit>& clause) override { clauses.push_back(clause); }
+    } allocator;
+    TheoryAtomRegistry registry;
+    registry.setContext(&allocator, &allocator);
+    const LinearFormKey form{{{"x", 1}}};
+    const auto first = registry.getOrCreateLinearBoundAtom(form, Relation::Leq, 1, TheoryId::LIA);
+    const auto second = registry.getOrCreateLinearBoundAtom(form, Relation::Leq, 2, TheoryId::LIA);
+    const auto realFirst = registry.getOrCreateLinearBoundAtom(form, Relation::Geq, -1, TheoryId::LRA);
+    registry.getOrCreateLinearBoundAtom(form, Relation::Geq, -2, TheoryId::LRA);
+    const auto count = allocator.next;
+    CHECK(BoundAxiomGenerator::generate(registry, allocator, TheoryId::LIA) == 1);
+    REQUIRE(allocator.clauses.size() == 1);
+    CHECK(allocator.clauses[0] == std::vector<SatLit>{first.negated(), second});
+    CHECK(allocator.next == count);
+    CHECK(registry.numAtomVars() == count);
+    for (const auto& clause : allocator.clauses)
+        for (const auto literal : clause) CHECK(literal.var < realFirst.var);
+    // Check the actual emitted clause, not only an expected implementation shape.
+    for (int n = -12; n <= 12; ++n) {
+        const mpq_class x(n, 3);
+        bool holds = false;
+        for (const auto literal : allocator.clauses[0]) {
+            const auto* record = registry.findBySatVar(literal.var);
+            REQUIRE(record != nullptr);
+            const auto& atom = std::get<LinearAtomPayload>(record->payload);
+            holds |= compare(atom.rel, x, atom.rhs.asRational()) == literal.sign;
+        }
+        CHECK(holds);
+    }
+}
+
+TEST_CASE("LIA: decision hints use exact values and leave unregistered coordinates untouched") {
+    Allocator allocator;
+    TheoryAtomRegistry registry;
+    registry.setContext(&allocator, &allocator);
+    const LinearFormKey form{{{"x", 1}}};
+    const mpq_class large(mpz_class("9007199254740992"));
+    const auto source = registry.getOrCreateLinearBoundAtom(form, Relation::Eq, large, TheoryId::LIA);
+    const auto equal = registry.getOrCreateLinearBoundAtom(form, Relation::Eq, large + 1, TheoryId::LIA);
+    const auto strict = registry.getOrCreateLinearBoundAtom(form, Relation::Lt, large + 1, TheoryId::LIA);
+    const auto missing = registry.getOrCreateLinearBoundAtom(LinearFormKey{{{"y", 1}}}, Relation::Leq, 1, TheoryId::LIA);
+    LiaSolver solver;
+    solver.setRegistry(&registry);
+    solver.assertLit(*registry.findBySatVar(source.var), true, 1, source);
+    TheoryLemmaDatabase db;
+    REQUIRE(solver.check(db).kind == TheoryCheckResult::Kind::Consistent);
+    const auto size = registry.numAtomVars();
+    REQUIRE(solver.evalAtomAtModel(equal.var).has_value());
+    CHECK_FALSE(*solver.evalAtomAtModel(equal.var));
+    REQUIRE(solver.evalAtomAtModel(strict.var).has_value());
+    CHECK(*solver.evalAtomAtModel(strict.var));
+    CHECK_FALSE(solver.evalAtomAtModel(missing.var).has_value());
+    CHECK(registry.numAtomVars() == size);
 }
 
 TEST_CASE("IntegerReasoner soundness: normalization preserves integer witnesses") {

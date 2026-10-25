@@ -34,6 +34,16 @@ TEST_CASE("LIA: strict sort - 2x = 1 is unsat") {
     CHECK(static_cast<int>(r) == static_cast<int>(Result::Unsat));
 }
 
+TEST_CASE("LIA: affine lattice repair handles a large-coefficient equality fixed by two inequalities") {
+    Solver solver;
+    REQUIRE(solver.parseFile(writeTempSmt2(
+        "(set-logic QF_LIA)\n(declare-const x Int)\n(declare-const y Int)\n"
+        "(assert (>= (+ (* 4294967296 x) (* 3123612579 y)) 24))\n"
+        "(assert (<= (+ (* 4294967296 x) (* 3123612579 y)) 24))\n"
+        "(assert (< y 0))\n(check-sat)\n")));
+    CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Sat));
+}
+
 TEST_CASE("LIA: basic SAT with branching") {
     std::string path = writeTempSmt2(
         "(set-logic QF_LIA)\n"
@@ -397,4 +407,22 @@ TEST_CASE("LIA: withdrawing a pin invalidates entailment reads before another ch
     CHECK_FALSE(solver.proveFixedValueByName("incremental-x").has_value());
     REQUIRE(solver.check(db).kind == TheoryCheckResult::Kind::Consistent);
     CHECK_FALSE(solver.proveFixedValueByName("incremental-x").has_value());
+}
+
+TEST_CASE("LIA: positive backtracking retains parent premises before another check") {
+    LiaSolver solver;
+    TheoryLemmaDatabase db;
+    replayAssert(solver, 1, Relation::Geq, 9, true, 1);
+    replayAssert(solver, 2, Relation::Leq, 9, true, 1);
+    replayAssert(solver, 3, Relation::Leq, 10, true, 3);
+    REQUIRE(solver.check(db).kind == TheoryCheckResult::Kind::Consistent);
+    solver.backtrackToLevel(1);
+    const auto retained = solver.proveFixedValueByName("incremental-x");
+    REQUIRE(retained.has_value());
+    CHECK(retained->first == 9);
+    for (const auto literal : retained->second) CHECK(literal.var != 3);
+    REQUIRE(solver.check(db).kind == TheoryCheckResult::Kind::Consistent);
+    solver.backtrackToLevel(1); // a Boolean-only backtrack preserves the same base
+    REQUIRE(solver.proveFixedValueByName("incremental-x").has_value());
+    CHECK(solver.proveFixedValueByName("incremental-x")->first == 9);
 }
