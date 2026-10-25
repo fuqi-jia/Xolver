@@ -162,6 +162,52 @@ TEST_CASE("BoundAxiomGenerator: selecting LIA preserves other theories and the i
     }
 }
 
+TEST_CASE("BoundAxiomGenerator: eager family size preserves the default and original vocabulary") {
+    struct RecordingAllocator : Allocator {
+        std::vector<std::vector<SatLit>> clauses;
+        void addClause(const std::vector<SatLit>& clause) override { clauses.push_back(clause); }
+    } allocator;
+    TheoryAtomRegistry registry;
+    registry.setContext(&allocator, &allocator);
+    for (const auto& name : {"x", "y"}) for (int rhs = 0; rhs < (name[0] == 'x' ? 3 : 2); ++rhs)
+        registry.getOrCreateLinearBoundAtom(LinearFormKey{{{name, 1}}}, Relation::Leq, rhs, TheoryId::LIA);
+    const auto variables = registry.numAtomVars();
+    CHECK(BoundAxiomGenerator::generate(registry, allocator, TheoryId::LIA, 3) == 3);
+    CHECK(allocator.clauses.size() == 3);
+    for (const auto& clause : allocator.clauses) for (int n = -4; n <= 8; ++n) {
+        mpq_class point(n, 2); point.canonicalize();
+        bool holds = false;
+        for (const auto literal : clause) {
+            const auto* atom = registry.findBySatVar(literal.var);
+            REQUIRE(atom != nullptr);
+            const auto& payload = std::get<LinearAtomPayload>(atom->payload);
+            CHECK(payload.lhs.terms.front().first == "x");
+            holds |= compare(payload.rel, point, payload.rhs.asRational()) == literal.sign;
+        }
+        CHECK(holds);
+    }
+    allocator.clauses.clear();
+    CHECK(BoundAxiomGenerator::generate(registry, allocator, TheoryId::LIA) == 4);
+    CHECK(allocator.clauses.size() == 4);
+    CHECK(registry.numAtomVars() == variables);
+}
+
+TEST_CASE("LIA: missing dynamic registration cannot dereference an absent branch registrar") {
+    const LinearFormKey doubled{{{"x", 2}}};
+    LiaSolver solver;
+    TheoryLemmaDatabase database;
+    solver.assertLit(TheoryAtomRecord{1, TheoryId::LIA, false, 1,
+        LinearAtomPayload{doubled, Relation::Eq, RealValue::fromMpq(1)}}, true, 0, SatLit::positive(1));
+    // The rational relaxation is fractional; the integer gcd refutation still
+    // applies without a SAT registrar to allocate branch literals.
+    CHECK((solver.check(database).kind == TheoryCheckResult::Kind::Conflict));
+    LiaSolver disequalitySolver;
+    const LinearFormKey unit{{{"x", 1}}};
+    disequalitySolver.assertLit(TheoryAtomRecord{2, TheoryId::LIA, false, 2,
+        LinearAtomPayload{unit, Relation::Neq, RealValue::fromMpq(0)}}, true, 0, SatLit::positive(2));
+    CHECK((disequalitySolver.check(database, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Unknown));
+}
+
 TEST_CASE("LIA: decision hints use exact values and leave unregistered coordinates untouched") {
     Allocator allocator;
     TheoryAtomRegistry registry;

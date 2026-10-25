@@ -586,6 +586,28 @@ TEST_CASE("GeneralSimplex: a replaced base supports new scopes and sparse resets
     CHECK((gs.check() == GeneralSimplex::Result::Sat));
 }
 
+TEST_CASE("GeneralSimplex: replacement preserves incremental bound-event priority") {
+    GeneralSimplex original;
+    const int x = original.addVar("event-x"), y = original.addVar("event-y");
+    const int sum = original.addConstraint({{x, 1}, {y, 1}}, 0);
+    const int difference = original.addConstraint({{x, 1}, {y, -1}}, 0);
+    REQUIRE((original.check() == GeneralSimplex::Result::Sat));
+    GeneralSimplex incremental = original, bulk = original;
+    auto lower = [](int value, int reason) {
+        return BoundInfo(BoundValue(DeltaRational(value)), SatLit::positive(reason));
+    };
+    const std::vector<GeneralSimplex::ActiveBound> bounds{
+        {sum, true, lower(-1, 1)}, {difference, true, lower(1, 2)}, {sum, true, lower(2, 3)}};
+    incremental.resetActiveBounds(GeneralSimplex::AssignmentPolicy::Preserve);
+    for (const auto& bound : bounds) REQUIRE(incremental.assertLower(bound.var, bound.info));
+    REQUIRE(bulk.replaceActiveBounds(bounds, GeneralSimplex::AssignmentPolicy::Preserve));
+    REQUIRE((incremental.check() == GeneralSimplex::Result::Sat));
+    REQUIRE((bulk.check() == GeneralSimplex::Result::Sat));
+    for (int var = 0; var < original.numVars(); ++var) CHECK(bulk.value(var) == incremental.value(var));
+    CHECK(bulk.value(sum) == bulk.value(x) + bulk.value(y));
+    CHECK(bulk.value(difference) == bulk.value(x) - bulk.value(y));
+}
+
 TEST_CASE("GeneralSimplex: replacement reuses only unchanged fixed-value proof sources") {
     GeneralSimplex gs;
     const int x = gs.addVar("proof-source-x"), y = gs.addVar("proof-source-y");

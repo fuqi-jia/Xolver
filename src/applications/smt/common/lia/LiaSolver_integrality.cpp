@@ -87,7 +87,7 @@ TheoryCheckResult LiaSolver::handleDisequalities(TheoryLemmaStorage& lemmaDb) {
                 return TheoryCheckResult::consistent();
             }
 
-            assert(registry_ != nullptr);
+            if (!registry_) return TheoryCheckResult::unknown();
             mpq_class leRhs = mpq_class(c - g, 1);
             mpq_class geRhs = mpq_class(c + g, 1);
 
@@ -182,7 +182,7 @@ TheoryCheckResult LiaSolver::checkIntegrality(TheoryLemmaStorage& lemmaDb, Theor
                 }
             }
         }
-        assert(registry_ != nullptr);
+        if (!registry_) return TheoryCheckResult::unknown();
         return TheoryCheckResult::mkLemma(buildBranchSplitLemma(bestVar, gs_.value(bestVar)));
     }
     return TheoryCheckResult::consistent();

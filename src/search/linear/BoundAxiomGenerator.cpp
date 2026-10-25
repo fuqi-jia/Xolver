@@ -133,7 +133,7 @@ int BoundAxiomGenerator::maxGroupSize() {
 }
 
 int BoundAxiomGenerator::generate(const TheoryAtomRegistry& registry, SatSolver& sat,
-                                std::optional<TheoryId> theory) {
+                                std::optional<TheoryId> theory, std::size_t minimumGroupSize) {
     struct AtomLite { Relation rel; mpq_class c; SatVar var; };
     std::unordered_map<LinearFormKey, std::vector<AtomLite>, LinearFormKeyHash> groups;
 
@@ -158,7 +158,7 @@ int BoundAxiomGenerator::generate(const TheoryAtomRegistry& registry, SatSolver&
         int n = static_cast<int>(atoms.size());
         totalAtoms += n;
         if (n > maxGroup) maxGroup = n;
-        if (n < 2 || n > cap) continue;
+        if (n < 2 || static_cast<std::size_t>(n) < minimumGroupSize || n > cap) continue;
         ++pairedGroups;
         for (int i = 0; i < n; ++i) {
             for (int j = i + 1; j < n; ++j) {

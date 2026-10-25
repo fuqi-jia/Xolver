@@ -58,9 +58,12 @@ public:
                                          Relation relB, const mpq_class& cB);
 
     // Enumerate registry linear atoms, group by form, emit clauses to `sat`.
+    // minimumGroupSize selects which input families to compile eagerly.
+    // Smaller families retain the ordinary explained theory checks.
     // Returns the number of clauses emitted.
     static int generate(const TheoryAtomRegistry& registry, SatSolver& sat,
-                        std::optional<TheoryId> theory = std::nullopt);
+                        std::optional<TheoryId> theory = std::nullopt,
+                        std::size_t minimumGroupSize = 2);
 
 private:
     static int maxGroupSize();

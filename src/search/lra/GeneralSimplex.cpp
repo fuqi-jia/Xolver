@@ -1020,6 +1020,7 @@ bool GeneralSimplex::replaceActiveBounds(const std::vector<ActiveBound>& bounds,
                                          AssignmentPolicy policy) {
     std::unordered_map<int, std::array<BoundInfo, 2>> next;
     std::vector<int> sourceOrder;
+    std::vector<int> violatedSourceOrder;
     for (const auto& input : bounds) {
         if (input.var < 0 || input.var >= numVars() || !input.info.bound.isFinite() || !input.info.reason)
             throw std::invalid_argument("replacement bounds need an existing column and a finite explained endpoint");
@@ -1038,6 +1039,11 @@ bool GeneralSimplex::replaceActiveBounds(const std::vector<ActiveBound>& bounds,
             normalized->bound.value.a.canonicalize();
             normalized->bound.value.b.canonicalize();
             endpoint = &*normalized;
+        }
+        if (policy == AssignmentPolicy::Preserve && !betaDirty_ && vars_[input.var].basicRow >= 0) {
+            const auto& point = vars_[input.var].beta;
+            if (input.isLower ? point < endpoint->bound.value : point > endpoint->bound.value)
+                violatedSourceOrder.push_back(input.var);
         }
         auto [it, fresh] = next.try_emplace(input.var);
         if (fresh) {
@@ -1092,17 +1098,21 @@ bool GeneralSimplex::replaceActiveBounds(const std::vector<ActiveBound>& bounds,
     }
     if (policy == AssignmentPolicy::Reinitialize) betaDirty_ = true;
     if (!betaDirty_ && !hasImmediateConflict_) {
-        // Install the whole base first, then repair non-basic points. Rebuild
-        // the work queue in input-source order: hash iteration and stale child
-        // queue entries must not choose the parent's pivot order.
+        // Preserve the first violated bound EVENT, not the first occurrence of
+        // its column: an early weak bound must not move a later strong bound
+        // ahead of another column. Withdrawing child bounds normally leaves
+        // non-basic points unchanged, matching incremental parent replay.
+        bool pointMoved = false;
         for (const int var : changed) {
             if (vars_[var].basicRow >= 0) continue;
-            if (violatesLower(var)) update(var, vars_[var].lower.bound.value);
-            else if (violatesUpper(var)) update(var, vars_[var].upper.bound.value);
+            if (violatesLower(var)) { update(var, vars_[var].lower.bound.value); pointMoved = true; }
+            else if (violatesUpper(var)) { update(var, vars_[var].upper.bound.value); pointMoved = true; }
         }
         for (int var : violatedQueue_) inViolationQueue_[var] = false;
         violatedQueue_.clear();
-        for (int var : sourceOrder) refreshViolationStatus(var);
+        for (int var : violatedSourceOrder) refreshViolationStatus(var);
+        // A new non-basic point can expose additional violations.
+        if (pointMoved) for (int var : sourceOrder) refreshViolationStatus(var);
     }
     // Fixed-value closure uses only equality pins, their explanations and the
     // tableau equations. Other interval changes do not change those proofs.

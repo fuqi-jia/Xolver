@@ -1136,10 +1136,10 @@ Result Solver::Impl::checkSatGround() {
             assumptionReportTerms.push_back(indicatorCoreTerms_[k]);
         }
 
-        // Compile branch-independent relationships between registered LIA
-        // predicates once. Boolean propagation can then enforce bound ordering
-        // without rediscovering each binary conflict through the simplex.
-        BoundAxiomGenerator::generate(registry, *sat, TheoryId::LIA);
+        // Compile branch-independent relations for multi-predicate threshold
+        // families once. Isolated pairs retain ordinary explained theory
+        // conflicts, limiting preprocessing's effect on Boolean search.
+        BoundAxiomGenerator::generate(registry, *sat, TheoryId::LIA, 3);
         phase("bound-axioms-done");
 
         // P3: Do NOT eagerly create all shared-term-pair equality atoms.

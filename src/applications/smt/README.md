@@ -24,9 +24,11 @@ zero-divisor interpretation tables are shared by native model validation and
 the public `validateModel()` API.
 
 Linear checks share an immutable fixed-value analysis across stable queries.
-Its work queue tracks tableau residuals and original bound premises; proof
-extraction uses iterative dependency traversal. Bounds, new definitions and
-pivots invalidate the shared snapshot. Completed predicate scans are reused
+Its work queue tracks unknown coordinates and computes an exact residual only
+when a row has one unknown. Proof extraction traverses original bound premises
+iteratively. Equality-pin changes, definitions and pivots invalidate the shared
+snapshot; other bounds advance the state revision without discarding unchanged
+equality proofs. Completed predicate scans are reused
 only while their state revision and registered vocabulary match.
 LIA reuses fully applied input
 prefixes only while exact keys and the simplex bound revision match. Complete
@@ -36,8 +38,9 @@ columns while preserving the current point. A Boolean backtrack which withdraws
 no theory premise preserves the existing base. Strict relation encoding is
 shared between incremental assertion and complete bound-base replacement.
 
-Registered LIA predicates sharing a linear form receive branch-independent
-bound-ordering clauses before SAT search. These use existing literals and are
+Input LIA threshold families with at least three registered predicates receive
+branch-independent bound-ordering clauses before SAT search. Isolated pairs
+retain ordinary explained theory conflicts. These use existing literals and are
 explicitly recorded as theory assumptions in propositional proof output.
 Backtrackable decision hints evaluate linear predicates exactly at the current
 simplex point; they do not establish satisfiability or introduce deductions.
