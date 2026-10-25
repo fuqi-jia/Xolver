@@ -66,6 +66,9 @@ jobs:
           python3 tools/fuzz/fuzz_linear_arithmetic.py --solver build/bin/xolver \
             --z3 /usr/bin/z3 --cvc5 .validation-oracles/cvc5 \
             --output theory-validation/linear-arithmetic --count 64 --timeout 5
+          python3 tools/fuzz/fuzz_integer_affine.py --solver build/bin/xolver \
+            --z3 /usr/bin/z3 --cvc5 .validation-oracles/cvc5 \
+            --output theory-validation/integer-affine --count 32 --timeout 5
 
       - name: Retain native-theory validation evidence
         if: always()

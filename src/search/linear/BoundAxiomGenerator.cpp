@@ -132,11 +132,13 @@ int BoundAxiomGenerator::maxGroupSize() {
     return m;
 }
 
-int BoundAxiomGenerator::generate(const TheoryAtomRegistry& registry, SatSolver& sat) {
+int BoundAxiomGenerator::generate(const TheoryAtomRegistry& registry, SatSolver& sat,
+                                std::optional<TheoryId> theory, std::size_t minimumGroupSize) {
     struct AtomLite { Relation rel; mpq_class c; SatVar var; };
     std::unordered_map<LinearFormKey, std::vector<AtomLite>, LinearFormKeyHash> groups;
 
     for (const auto& rec : registry.records()) {
+        if (theory && rec.theory != *theory) continue;
         if (!std::holds_alternative<LinearAtomPayload>(rec.payload)) continue;
         const auto& p = std::get<LinearAtomPayload>(rec.payload);
         if (p.rel == Relation::Neq) continue;          // complement-of-point: skipped
@@ -156,7 +158,7 @@ int BoundAxiomGenerator::generate(const TheoryAtomRegistry& registry, SatSolver&
         int n = static_cast<int>(atoms.size());
         totalAtoms += n;
         if (n > maxGroup) maxGroup = n;
-        if (n < 2 || n > cap) continue;
+        if (n < 2 || static_cast<std::size_t>(n) < minimumGroupSize || n > cap) continue;
         ++pairedGroups;
         for (int i = 0; i < n; ++i) {
             for (int j = i + 1; j < n; ++j) {
@@ -165,10 +167,10 @@ int BoundAxiomGenerator::generate(const TheoryAtomRegistry& registry, SatSolver&
                 for (Shape s : pairShapes(atoms[i].rel, atoms[i].c,
                                           atoms[j].rel, atoms[j].c)) {
                     switch (s) {
-                        case Shape::ImpAtoB:   sat.addClause({pA.negated(), pB}); break;
-                        case Shape::ImpBtoA:   sat.addClause({pB.negated(), pA}); break;
-                        case Shape::Exclusion: sat.addClause({pA.negated(), pB.negated()}); break;
-                        case Shape::Cover:     sat.addClause({pA, pB}); break;
+                        case Shape::ImpAtoB:   sat.addTheoryClause({pA.negated(), pB}); break;
+                        case Shape::ImpBtoA:   sat.addTheoryClause({pB.negated(), pA}); break;
+                        case Shape::Exclusion: sat.addTheoryClause({pA.negated(), pB.negated()}); break;
+                        case Shape::Cover:     sat.addTheoryClause({pA, pB}); break;
                     }
                     ++emitted;
                 }

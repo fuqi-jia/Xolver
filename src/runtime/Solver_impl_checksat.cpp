@@ -5,6 +5,7 @@
 #include "applications/smt/Solver.h"
 #include "applications/sv/sl/Solver.h"
 #include "search/array/ArrayModelCompletion.h"
+#include "search/linear/BoundAxiomGenerator.h"
 
 namespace xolver {
 // Relocated Solver::Impl method definitions (declared in SolverImpl.h).
@@ -1134,6 +1135,12 @@ Result Solver::Impl::checkSatGround() {
             assumptionLits.push_back(atomizer.atomize(indicatorRoots_[k], *ir));
             assumptionReportTerms.push_back(indicatorCoreTerms_[k]);
         }
+
+        // Compile branch-independent relations for multi-predicate threshold
+        // families once. Isolated pairs retain ordinary explained theory
+        // conflicts, limiting preprocessing's effect on Boolean search.
+        BoundAxiomGenerator::generate(registry, *sat, TheoryId::LIA, 3);
+        phase("bound-axioms-done");
 
         // P3: Do NOT eagerly create all shared-term-pair equality atoms.
         // Full arrangement search requires sound theory conflict explanation,

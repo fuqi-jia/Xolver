@@ -21,6 +21,31 @@
 
 namespace xolver {
 
+std::optional<bool> LiaSolver::evalAtomAtModel(SatVar variable) {
+    const auto* record = registry_ ? registry_->findBySatVar(variable) : nullptr;
+    if (!record) return std::nullopt;
+    const auto* atom = std::get_if<LinearAtomPayload>(&record->payload);
+    if (!atom || !atom->rhs.isRational()) return std::nullopt;
+    DeltaRational value;
+    for (const auto& [name, coefficient] : atom->lhs.terms) {
+        const int index = manager_.findVarIndex(name);
+        if (index < 0) return std::nullopt;
+        value += coefficient * gs_.value(index);
+    }
+    const DeltaRational rhs(atom->rhs.asRational());
+    // A backtrackable phase hint only, never a deduction or a SAT answer.
+    // Exact evaluation avoids overflow and preserves strict infinitesimals.
+    switch (atom->rel) {
+    case Relation::Eq: return value == rhs;
+    case Relation::Neq: return value != rhs;
+    case Relation::Lt: return value < rhs;
+    case Relation::Leq: return value <= rhs;
+    case Relation::Gt: return value > rhs;
+    case Relation::Geq: return value >= rhs;
+    }
+    return std::nullopt;
+}
+
 // NOTE: This translation unit was split out of LiaSolver.cpp for readability.
 // It compiles into the same xolver_core target and shares the class's
 // private state via the declarations in the corresponding header.
@@ -36,22 +61,30 @@ namespace xolver {
 // asserted true, so `reasons → atom` is a tautology under the active trail.
 void LiaSolver::scanLiteralPinEntailments() {
     if (!registry_) return;
+    const auto revision = gs_.analysisRevision();
+    const auto recordCount = registry_->records().size();
+    if (revision && pinScanRevision_ == revision && pinScanRecords_ == recordCount) return;
     // Throttle: hard cap per check to avoid quadratic worst-case in the SAT bus.
     const size_t kMaxPropsPerScan = 256;
     size_t emitted = 0;
-    // Bounds and tableau stay unchanged during this scan. Share a single
-    // work-queue closure, and materialize each target's proof only once.
-    std::optional<GeneralSimplex::FixedValueAnalysis> fixedAnalysis;
+    bool completed = true;
+    // Reuse the simplex snapshot across unchanged drains. Check the value and
+    // emitted polarity before materializing a target's premise DAG.
+    std::shared_ptr<const GeneralSimplex::FixedValueAnalysis> fixedAnalysis;
+    auto fixedValue = [&](int idx) {
+        if (!fixedAnalysis) fixedAnalysis = gs_.sharedFixedValueAnalysis();
+        return fixedAnalysis->fixedValue(idx);
+    };
     using FixedResult = decltype(gs_.proveFixedValue(0));
     std::unordered_map<int, FixedResult> fixedCache;
     auto cachedProveFixedValue = [&](int idx) -> const FixedResult& {
         auto it = fixedCache.find(idx);
         if (it != fixedCache.end()) return it->second;
-        if (!fixedAnalysis) fixedAnalysis = gs_.analyzeFixedValues();
+        if (!fixedAnalysis) fixedAnalysis = gs_.sharedFixedValueAnalysis();
         return fixedCache.emplace(idx, fixedAnalysis->prove(idx)).first->second;
     };
     for (const auto& rec : registry_->records()) {
-        if (emitted >= kMaxPropsPerScan) break;
+        if (emitted >= kMaxPropsPerScan) { completed = false; break; }
         // --- Path A: shared-equality atom (Combination): both sides are
         // SharedTerms; if BOTH currently pinned by LIA bounds, the atom value
         // is forced regardless of which theory owns the registration. This is
@@ -65,35 +98,40 @@ void LiaSolver::scanLiteralPinEntailments() {
             std::holds_alternative<SharedEqualityPayload>(rec.payload)) {
             const auto& sp = std::get<SharedEqualityPayload>(rec.payload);
             if (!sharedTermRegistry_) continue;
-            auto pinOf = [&](SharedTermId stId) -> std::optional<std::pair<mpq_class, std::vector<SatLit>>> {
+            struct SharedPin { mpq_class value; int var; };
+            auto pinOf = [&](SharedTermId stId) -> std::optional<SharedPin> {
                 if (sharedTermRegistry_->get(stId)) {
                     // Numeric-constant shared term has its value baked in.
                     if (auto cv = sharedTermRegistry_->constValue(stId)) {
-                        return std::make_pair(*cv, std::vector<SatLit>{});
+                        return SharedPin{*cv, -1};
                     }
                 }
                 std::string nm = getVarNameForSharedTerm(stId);
                 if (nm.empty()) return std::nullopt;
                 int idx = manager_.findVarIndex(nm);
                 if (idx < 0) return std::nullopt;
-                const auto& fv = cachedProveFixedValue(idx);
+                const auto fv = fixedValue(idx);
                 if (!fv) return std::nullopt;
-                if (fv->first.b != 0) return std::nullopt;
-                std::vector<SatLit> reasons;
-                reasons.reserve(fv->second.size());
-                for (const auto& br : fv->second) reasons.push_back(br.reason);
-                return std::make_pair(fv->first.a, std::move(reasons));
+                if (fv->b != 0) return std::nullopt;
+                return SharedPin{fv->a, idx};
             };
             auto pa = pinOf(sp.a);
             auto pb = pinOf(sp.b);
             if (!pa || !pb) continue;
-            bool atomTrue = (pa->first == pb->first);
+            bool atomTrue = (pa->value == pb->value);
             SatLit atomLit{rec.satVar, true};
             uint64_t key = (static_cast<uint64_t>(rec.satVar) << 1) | (atomTrue ? 1u : 0u);
-            if (!entailmentEmittedKeys_.insert(key).second) continue;
+            if (entailmentEmittedKeys_.contains(key)) continue;
             TheoryLemma lemma;
-            for (const auto& r : pa->second) lemma.lits.push_back(r.negated());
-            for (const auto& r : pb->second) lemma.lits.push_back(r.negated());
+            auto appendReasons = [&](const SharedPin& pin) {
+                if (pin.var < 0) return true;
+                const auto& proof = cachedProveFixedValue(pin.var);
+                if (!proof) return false;
+                for (const auto& br : proof->second) lemma.lits.push_back(br.reason.negated());
+                return true;
+            };
+            if (!appendReasons(*pa) || !appendReasons(*pb)) continue;
+            entailmentEmittedKeys_.insert(key);
             lemma.lits.push_back(atomTrue ? atomLit : atomLit.negated());
             entailmentProps_.push_back(std::move(lemma));
             ++emitted;
@@ -111,9 +149,9 @@ void LiaSolver::scanLiteralPinEntailments() {
         if (coeff == 0) continue;
         int idx = manager_.findVarIndex(name);
         if (idx < 0) continue;                          // not in simplex yet
-        const auto& fixedOpt = cachedProveFixedValue(idx);
-        if (!fixedOpt) continue;                        // not pinned by current bounds
-        const DeltaRational& pinned = fixedOpt->first;
+        const auto value = fixedValue(idx);
+        if (!value) continue;                           // not pinned by current bounds
+        const DeltaRational& pinned = *value;
         if (pinned.b != 0) continue;                    // skip δ-strict (open) values
         // Atom `coeff*v = rhs` is true iff coeff * pinned.a == rhs.
         mpq_class lhsVal = coeff * pinned.a;
@@ -123,7 +161,10 @@ void LiaSolver::scanLiteralPinEntailments() {
         // Dedup: (satVar, polarity-as-int) → emitted once per backtrack epoch.
         uint64_t key = (static_cast<uint64_t>(rec.satVar) << 1) |
                        (atomTrue ? 1u : 0u);
-        if (!entailmentEmittedKeys_.insert(key).second) continue;
+        if (entailmentEmittedKeys_.contains(key)) continue;
+        const auto& fixedOpt = cachedProveFixedValue(idx);
+        if (!fixedOpt) continue;
+        entailmentEmittedKeys_.insert(key);
         TheoryLemma lemma;
         for (const auto& br : fixedOpt->second) {
             lemma.lits.push_back(br.reason.negated());  // ~reasons
@@ -131,6 +172,10 @@ void LiaSolver::scanLiteralPinEntailments() {
         lemma.lits.push_back(atomTrue ? atomLit : atomLit.negated());
         entailmentProps_.push_back(std::move(lemma));
         ++emitted;
+    }
+    if (completed) {
+        pinScanRevision_ = revision;
+        pinScanRecords_ = recordCount;
     }
 }
 

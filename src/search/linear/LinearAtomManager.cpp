@@ -62,9 +62,8 @@ bool LinearAtomManager::auxForm(int aux, LinearFormKey& lhsOut, mpq_class& rhsOu
     return true;
 }
 
-bool LinearAtomManager::assertBound(GeneralSimplex& gs, int auxVar, Relation rel,
-                                    bool value, SatLit reasonLit, int level,
-                                    bool integerForm) {
+LinearAtomManager::RelationBounds LinearAtomManager::effectiveBounds(
+    Relation rel, bool value, bool integerForm) {
     Relation effective = value ? rel : xolver::negateRelation(rel);
 
     // Integer strict tightening: for an integer-valued aux s, s < 0 <=> s <= -1
@@ -75,31 +74,24 @@ bool LinearAtomManager::assertBound(GeneralSimplex& gs, int auxVar, Relation rel
     const DeltaRational strictUpper = integerForm ? DeltaRational(-1) : DeltaRational(0, -1);
     const DeltaRational strictLower = integerForm ? DeltaRational(1)  : DeltaRational(0, 1);
 
-    bool ok = true;
     switch (effective) {
-        case Relation::Eq:
-            ok = gs.assertLower(auxVar, BoundInfo(BoundValue(DeltaRational(0)), reasonLit), level);
-            if (!ok) break;
-            ok = gs.assertUpper(auxVar, BoundInfo(BoundValue(DeltaRational(0)), reasonLit), level);
-            break;
-        case Relation::Leq:
-            ok = gs.assertUpper(auxVar, BoundInfo(BoundValue(DeltaRational(0)), reasonLit), level) && ok;
-            break;
-        case Relation::Lt:
-            ok = gs.assertUpper(auxVar, BoundInfo(BoundValue(strictUpper), reasonLit), level) && ok;
-            break;
-        case Relation::Geq:
-            ok = gs.assertLower(auxVar, BoundInfo(BoundValue(DeltaRational(0)), reasonLit), level) && ok;
-            break;
-        case Relation::Gt:
-            ok = gs.assertLower(auxVar, BoundInfo(BoundValue(strictLower), reasonLit), level) && ok;
-            break;
-        case Relation::Neq:
-            // Neq cannot be expressed as a single convex bound.
-            // The caller (LraSolver/LiaSolver) must handle disequalities separately.
-            break;
+        case Relation::Eq: return {DeltaRational(0), DeltaRational(0)};
+        case Relation::Leq: return {std::nullopt, DeltaRational(0)};
+        case Relation::Lt: return {std::nullopt, strictUpper};
+        case Relation::Geq: return {DeltaRational(0), std::nullopt};
+        case Relation::Gt: return {strictLower, std::nullopt};
+        case Relation::Neq: return {}; // not a convex bound
     }
-    return ok;
+    return {};
+}
+
+bool LinearAtomManager::assertBound(GeneralSimplex& gs, int auxVar, Relation rel,
+                                    bool value, SatLit reasonLit, int level,
+                                    bool integerForm) {
+    const auto bounds = effectiveBounds(rel, value, integerForm);
+    if (bounds.lower && !gs.assertLower(auxVar, BoundInfo(BoundValue(*bounds.lower), reasonLit), level))
+        return false;
+    return !bounds.upper || gs.assertUpper(auxVar, BoundInfo(BoundValue(*bounds.upper), reasonLit), level);
 }
 
 TheoryConflict LinearAtomManager::translateConflict(const GeneralSimplex& gs) const {

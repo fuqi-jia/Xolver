@@ -1,10 +1,15 @@
 """Check that external-model validation cannot silently omit interpretations."""
 import sys
+import json
 from pathlib import Path
+from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'tools/fuzz'))
 import fuzz_theory_applications as theory
+import fuzz_linear_arithmetic as linear
 
 
 class TheoryValidation(unittest.TestCase):
@@ -45,6 +50,48 @@ class TheoryValidation(unittest.TestCase):
                                'sat\n(model (define-fun f ((x Bool)) Bool x))')
         self.assertIn('(define-fun f ((x Bool)) Bool x)', result)
         self.assertNotIn('declare-fun', result)
+
+    def test_resource_limited_oracles_cannot_hide_wrong_answers_or_bad_models(self):
+        scenarios = [
+            # One independent original-query decision is sufficient only under
+            # the explicit affine policy. Model replay still needs both oracles.
+            ('sat', 'timeout', 'sat', 'sat', False, False),
+            ('sat', 'timeout', 'sat', 'sat', True, True),
+            ('sat', 'timeout', 'unknown', 'sat', False, True),
+            ('sat', 'unsat', 'sat', 'sat', False, True),
+            ('sat', 'error', 'sat', 'sat', False, True),
+            ('unknown', 'sat', 'sat', 'sat', False, True),
+            ('sat', 'timeout', 'sat', 'timeout', False, True),
+            ('sat', 'timeout', 'sat', 'unsat', False, True),
+        ]
+        for xolver, z3, cvc5, replay, strict, failure in scenarios:
+            with self.subTest(scenario=(xolver, z3, cvc5, replay, strict)), TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                for engine in ('xolver', 'z3', 'cvc5'):
+                    (root / engine).write_text('test binary placeholder')
+                args = SimpleNamespace(solver=root / 'xolver', z3=root / 'z3', cvc5=root / 'cvc5',
+                                       output=root / 'out', timeout=5, seed=0)
+
+                def invoke(command, source, timeout):
+                    engine = Path(command[0]).name
+                    verdict = replay if source.stem.endswith('-replay') else {
+                        'xolver': xolver, 'z3': z3, 'cvc5': cvc5}[engine]
+                    return dict(verdict=verdict, stdout='sat\n((define-fun x () Int 0))')
+
+                with patch.object(linear, 'invoke', side_effect=invoke), \
+                        patch.object(linear.subprocess, 'run', return_value=SimpleNamespace(stdout='test', stderr='')), \
+                        patch.dict(linear.os.environ, {'EOS_METRICS_FILE': str(root / 'metrics.json')}), \
+                        patch('builtins.print'):
+                    result = linear.validate_cases(args, [('case', '(declare-const x Int)', 'sat')],
+                                                   'QF_LIA', require_all_oracles=strict)
+                self.assertEqual(bool(result), failure)
+                summary = json.loads((args.output / 'summary.json').read_text())
+                if not strict:
+                    self.assertIn('oracle_limits', summary)
+                if not failure:
+                    self.assertEqual(summary['oracle_confirmed'], 1)
+                    self.assertEqual(summary['oracle_limits'],
+                                     [dict(case='case', engine='z3', actual='timeout')])
 
 
 if __name__ == '__main__':

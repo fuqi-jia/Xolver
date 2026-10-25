@@ -12,8 +12,34 @@
 #include "search/sat/CadicalBackend.h"
 #include <algorithm>
 #include <stdexcept>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 
 using namespace xolver;
+
+#ifdef XOLVER_ENABLE_PROOFS
+TEST_CASE("SAT: preprocessing theory clauses remain explicit proof assumptions") {
+    const auto base = (std::filesystem::temp_directory_path() / "xolver-theory-base-proof").string();
+    {
+        CadicalBackend solver;
+        REQUIRE(solver.enableProofTrace(base, false));
+        const auto p = solver.newVar(), q = solver.newVar();
+        solver.addClause({SatLit::positive(p)});
+        solver.addClause({SatLit::negative(q)});
+        // Interpret p as x<=0 and q as x<=1: p implies q is a theory axiom,
+        // not a Boolean tautology or an original assertion.
+        solver.addTheoryClause({SatLit::negative(p), SatLit::positive(q)});
+        REQUIRE((solver.solve() == SatSolver::SolveResult::Unsat));
+        solver.finalizeProof();
+    }
+    std::ifstream input(base + ".cnf");
+    const std::string contents((std::istreambuf_iterator<char>(input)), {});
+    CHECK(contents.find("2 original clauses, 1 theory lemmas assumed") != std::string::npos);
+    std::filesystem::remove(base + ".cnf");
+    std::filesystem::remove(base + ".drat");
+}
+#endif
 
 TEST_CASE("SAT: external variable allocation has no phantom decision domain") {
     CadicalBackend solver;

@@ -28,6 +28,7 @@ public:
 
     SatVar newVar() override;
     void addClause(const std::vector<SatLit>& clause) override;
+    void addTheoryClause(const std::vector<SatLit>& clause) override;
     SolveResult solve() override;
     SolveResult solve(const std::vector<SatLit>& assumptions) override;
     bool value(SatVar v) const override;

@@ -13,6 +13,7 @@
 #include <cassert>
 #include <cstdint>
 #include <limits>
+#include <memory>
 
 namespace xolver {
 
@@ -157,6 +158,18 @@ public:
     /** Reset active bounds to (-inf, +inf). Keeps tableau. */
     void resetActiveBounds(AssignmentPolicy policy = AssignmentPolicy::Reinitialize);
 
+    struct ActiveBound {
+        int var;
+        bool isLower;
+        BoundInfo info;
+    };
+    // Replace the complete bound base, discarding bound trails and local
+    // scopes. Definitions stay intact. Each affected column is updated once;
+    // Preserve repairs the current point incrementally before the next check.
+    // Conflicting input bounds return false with their original explanations.
+    bool replaceActiveBounds(const std::vector<ActiveBound>& bounds,
+                             AssignmentPolicy policy = AssignmentPolicy::Reinitialize);
+
     /** Full reset: clears everything including tableau. */
     void reset();
 
@@ -168,6 +181,12 @@ public:
     std::optional<uint64_t> boundRevision() const noexcept {
         if (boundRevision_ == std::numeric_limits<uint64_t>::max()) return std::nullopt;
         return boundRevision_;
+    }
+    // Changes when either bounds or their tableau representation change.
+    // Unlike boundRevision(), this includes new columns and pivots.
+    std::optional<uint64_t> analysisRevision() const noexcept {
+        if (analysisRevision_ == std::numeric_limits<uint64_t>::max()) return std::nullopt;
+        return analysisRevision_;
     }
     int numVars() const { return static_cast<int>(vars_.size()); }
     int numRows() const { return tab_.numRows(); }
@@ -190,6 +209,8 @@ public:
     // premises active. Create a new analysis after backtracking or mutation.
     class FixedValueAnalysis {
     public:
+        // Query the value without expanding its premise DAG.
+        std::optional<DeltaRational> fixedValue(int var) const;
         std::optional<FixedValueProof> prove(int var) const;
     private:
         friend class GeneralSimplex;
@@ -198,6 +219,9 @@ public:
         std::vector<std::vector<BoundReason>> premises_;
     };
     FixedValueAnalysis analyzeFixedValues() const;
+    // Reuse an immutable snapshot while bounds and tableau are unchanged.
+    // A mutation invalidates the stored snapshot, never an outstanding handle.
+    std::shared_ptr<const FixedValueAnalysis> sharedFixedValueAnalysis() const;
     std::optional<FixedValueProof> proveFixedValue(int var) const;
 
     // -------------------------------------------------------------------------
@@ -237,8 +261,16 @@ public:
 #endif
 
 private:
+    mutable std::shared_ptr<const FixedValueAnalysis> fixedValueAnalysis_;
+    std::unordered_set<int> boundedVars_;
+    uint64_t analysisRevision_ = 0;
+    void noteAnalysisChange() noexcept {
+        fixedValueAnalysis_.reset();
+        if (analysisRevision_ != std::numeric_limits<uint64_t>::max()) ++analysisRevision_;
+    }
     uint64_t boundRevision_ = 0;
     void noteBoundChange() noexcept {
+        noteAnalysisChange();
         if (boundRevision_ != std::numeric_limits<uint64_t>::max()) ++boundRevision_;
     }
 

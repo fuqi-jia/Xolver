@@ -89,6 +89,7 @@ void LiaSolver::rebuildTrailCaches() {
 }
 
 void LiaSolver::onReset() {
+    pinScanRevision_.reset();
     scopes_.clear();
     currentLevel_ = 0;
     interfaceEqualities_.clear();
@@ -151,18 +152,28 @@ void LiaSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
     }
 }
 
+LiaSolver::AppliedBound LiaSolver::appliedKey(const LiaTrailEntry& entry) {
+    return {entry.atom.satVar, entry.atom.exprId, entry.lit, entry.level, entry.auxVar,
+            std::get<LinearAtomPayload>(entry.atom.payload).rel, entry.value, entry.isDiseq};
+}
+
 void LiaSolver::onBacktrack(int level) {
     currentLevel_ = level;
     repairModel_.reset();
-    // Withdrawing premises invalidates the applied prefix immediately, so
-    // entailment reads before the next check cannot see stale child bounds.
-    // Level zero rebuilds the complete SAT candidate. Its point selection is
-    // independent of the previous candidate; ordinary backtracking remains
-    // incremental within the current search.
-    resetAppliedBounds(level == 0 ? GeneralSimplex::AssignmentPolicy::Reinitialize
-                                  : GeneralSimplex::AssignmentPolicy::Preserve);
+    const auto revision = gs_.boundRevision();
+    const bool applied = revision && appliedBoundRevision_ == revision &&
+        appliedBounds_.size() == theoryTrail_.size() &&
+        appliedInterfaceEqualities_ == interfaceEqualities_ &&
+        std::equal(appliedBounds_.begin(), appliedBounds_.end(), theoryTrail_.begin(),
+            [](const auto& key, const auto& entry) { return key == appliedKey(entry); });
+    if (level > 0 && applied &&
+        std::none_of(theoryTrail_.begin(), theoryTrail_.end(), [level](const auto& e) { return e.level > level; }) &&
+        std::none_of(interfaceEqualities_.begin(), interfaceEqualities_.end(), [level](const auto& e) { return e.level > level; }) &&
+        std::none_of(interfaceDisequalities_.begin(), interfaceDisequalities_.end(), [level](const auto& e) { return e.level > level; }))
+        return; // the Boolean backtrack withdrew no theory premise
 
     if (level == 0) {
+        resetAppliedBounds(GeneralSimplex::AssignmentPolicy::Reinitialize);
         // Full reset for modelCheck rebuild or SAT restart to level 0.
         // All entries will be re-asserted by the caller.
         theoryTrail_.clear();
@@ -173,9 +184,9 @@ void LiaSolver::onBacktrack(int level) {
         interfaceEqualities_.clear();
         interfaceDisequalities_.clear();
     } else {
+        const size_t previousTrailSize = theoryTrail_.size();
         theoryTrail_.erase(std::remove_if(theoryTrail_.begin(), theoryTrail_.end(),
             [level](const auto& e) { return e.level > level; }), theoryTrail_.end());
-        rebuildTrailCaches();
         auto ieIt = std::remove_if(interfaceEqualities_.begin(), interfaceEqualities_.end(),
             [level](const auto& ie) { return ie.level > level; });
         interfaceEqualities_.erase(ieIt, interfaceEqualities_.end());
@@ -183,6 +194,30 @@ void LiaSolver::onBacktrack(int level) {
         auto idIt = std::remove_if(interfaceDisequalities_.begin(), interfaceDisequalities_.end(),
             [level](const auto& ie) { return ie.level > level; });
         interfaceDisequalities_.erase(idIt, interfaceDisequalities_.end());
+        if (theoryTrail_.size() != previousTrailSize) rebuildTrailCaches();
+
+        // Replace the retained source base atomically, rather than resetting
+        // every column and replaying each source through incremental pivots.
+        // This also handles non-monotone decision levels and replaced sources.
+        std::vector<GeneralSimplex::ActiveBound> bounds;
+        bounds.reserve(2 * (theoryTrail_.size() + interfaceEqualities_.size()));
+        appliedBounds_.clear();
+        for (const auto& entry : theoryTrail_) {
+            const auto& atom = std::get<LinearAtomPayload>(entry.atom.payload);
+            const auto endpoints = LinearAtomManager::effectiveBounds(atom.rel, entry.value, isIntegerLinearForm(atom));
+            if (endpoints.lower) bounds.push_back({entry.auxVar, true, BoundInfo(BoundValue(*endpoints.lower), entry.lit)});
+            if (endpoints.upper) bounds.push_back({entry.auxVar, false, BoundInfo(BoundValue(*endpoints.upper), entry.lit)});
+            appliedBounds_.push_back(appliedKey(entry));
+        }
+        for (const auto& equality : interfaceEqualities_) {
+            const int aux = getOrCreateInterfaceEqAuxVar(equality.a, equality.b);
+            if (aux < 0) continue;
+            bounds.push_back({aux, true, BoundInfo(BoundValue(DeltaRational(0)), equality.reason)});
+            bounds.push_back({aux, false, BoundInfo(BoundValue(DeltaRational(0)), equality.reason)});
+        }
+        gs_.replaceActiveBounds(bounds, GeneralSimplex::AssignmentPolicy::Preserve);
+        appliedInterfaceEqualities_ = interfaceEqualities_;
+        appliedBoundRevision_ = gs_.boundRevision();
     }
     clearEntailmentDedupForBacktrack(level);
 }
@@ -201,16 +236,12 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
     auto prof_t0 = std::chrono::steady_clock::now();
 #endif
 
-    auto keyOf = [](const LiaTrailEntry& e) {
-        return AppliedBound{e.atom.satVar, e.atom.exprId, e.lit, e.level, e.auxVar,
-                            std::get<LinearAtomPayload>(e.atom.payload).rel, e.value, e.isDiseq};
-    };
     const auto revision = gs_.boundRevision();
     const bool reuse = revision && appliedBoundRevision_ == revision &&
         appliedBounds_.size() <= theoryTrail_.size() &&
         appliedInterfaceEqualities_.size() <= interfaceEqualities_.size() &&
         std::equal(appliedBounds_.begin(), appliedBounds_.end(), theoryTrail_.begin(),
-                   [&](const auto& key, const auto& e) { return key == keyOf(e); }) &&
+                   [&](const auto& key, const auto& e) { return key == appliedKey(e); }) &&
         std::equal(appliedInterfaceEqualities_.begin(), appliedInterfaceEqualities_.end(),
                    interfaceEqualities_.begin());
     if (!reuse) {
@@ -227,7 +258,7 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
             pendingConflict_ = PendingConflict{e.level, manager_.translateConflict(gs_)};
             break;
         }
-        appliedBounds_.push_back(keyOf(e));
+        appliedBounds_.push_back(appliedKey(e));
     }
 
     if (pendingConflict_) {

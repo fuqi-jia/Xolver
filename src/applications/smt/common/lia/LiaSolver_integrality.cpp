@@ -7,6 +7,7 @@
 #include "contracts/TheoryAtomTypes.h"
 #include "search/arith/Reasoner.h"
 #include "search/linear/SimplexDiseqSplitter.h"
+#include "search/linear/IntegerAffineModel.h"
 #include "algebra/linear/LinearConstraintNormalizer.h"
 #include "search/lia/GomoryCut.h"
 #include "applications/smt/common/lia/LiaSolverDetail.h"  // isIntegerLinearForm / roundNearest (shared across split TUs)
@@ -86,7 +87,7 @@ TheoryCheckResult LiaSolver::handleDisequalities(TheoryLemmaStorage& lemmaDb) {
                 return TheoryCheckResult::consistent();
             }
 
-            assert(registry_ != nullptr);
+            if (!registry_) return TheoryCheckResult::unknown();
             mpq_class leRhs = mpq_class(c - g, 1);
             mpq_class geRhs = mpq_class(c + g, 1);
 
@@ -181,7 +182,7 @@ TheoryCheckResult LiaSolver::checkIntegrality(TheoryLemmaStorage& lemmaDb, Theor
                 }
             }
         }
-        assert(registry_ != nullptr);
+        if (!registry_) return TheoryCheckResult::unknown();
         return TheoryCheckResult::mkLemma(buildBranchSplitLemma(bestVar, gs_.value(bestVar)));
     }
     return TheoryCheckResult::consistent();
@@ -271,7 +272,25 @@ bool LiaSolver::tryIntegralityRepair() {
             base[r.name] = saved;
         }
     }
-    return ok;
+    if (ok) return true;
+    std::vector<NormalizedConstraint> constraints;
+    std::unordered_set<int> pinnedForms;
+    for (const auto& atom : activeAtoms_) {
+        if (auto normalized = IntegerReasoner::normalize(atom.lhs, atom.rhs, atom.rel, atom.value))
+            constraints.push_back(std::move(*normalized));
+        // Opposite inequalities can fix a form even when neither input atom
+        // is syntactically an equality. Include that exact consequence once.
+        if (!pinnedForms.insert(atom.auxVar).second) continue;
+        const auto fixed = gs_.fixedValue(atom.auxVar);
+        if (!fixed || fixed->b != 0) continue;
+        if (auto equality = IntegerReasoner::normalize(atom.lhs, atom.rhs + fixed->a, Relation::Eq, true))
+            constraints.push_back(std::move(*equality));
+    }
+    for (const auto& disequality : disequalities_)
+        if (auto normalized = IntegerReasoner::normalize(disequality.lhs, disequality.rhs, Relation::Neq, true))
+            constraints.push_back(std::move(*normalized));
+    if (auto point = findIntegerAffineModel(constraints, buildUniform(0))) return tryPoint(*point);
+    return false;
 }
 
 bool LiaSolver::isSimplexVarInteger(int idx) const {
