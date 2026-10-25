@@ -430,3 +430,58 @@ TEST_CASE("LIA: positive backtracking retains parent premises before another che
     solver.backtrackToLevel(1);
     CHECK(solver.check(db).kind == TheoryCheckResult::Kind::Conflict);
 }
+
+TEST_CASE("LIA: withdrawing multivariable sources preserves disequalities and unordered parent entries") {
+    LiaSolver solver;
+    TheoryLemmaDatabase db;
+    auto source = [&](SatVar var, LinearFormKey lhs, Relation rel, int rhs, int level, bool truth = true) {
+        solver.assertLit(TheoryAtomRecord{var, TheoryId::LIA, false, ExprId(2000 + var),
+            LinearAtomPayload{std::move(lhs), rel, RealValue::fromMpq(rhs)}}, truth, level, SatLit{var, truth});
+    };
+    const LinearFormKey x{{{"suffix-x", 1}}}, y{{{"suffix-y", 1}}}, z{{{"suffix-z", 1}}};
+    source(1, x, Relation::Eq, 1, 1);
+    for (int repeat = 0; repeat < 3; ++repeat) {
+        // Two first occurrences and a repeated term in one source exercise
+        // withdrawal/reintroduction of all its original variable columns.
+        source(2, {{{"suffix-y", 1}, {"suffix-z", 1}, {"suffix-y", 1}}}, Relation::Eq, 7, 3);
+        source(3, y, Relation::Eq, 2, 3);
+        source(4, z, Relation::Eq, 3, 3);
+        source(5, y, Relation::Eq, repeat % 2 ? 2 : 4, 3, false);
+        CHECK(solver.check(db).kind == (repeat % 2 ? TheoryCheckResult::Kind::Conflict : TheoryCheckResult::Kind::Consistent));
+        solver.backtrackToLevel(1);
+        REQUIRE(solver.check(db).kind == TheoryCheckResult::Kind::Consistent);
+        const auto pin = solver.proveFixedValueByName("suffix-x");
+        REQUIRE(pin.has_value());
+        CHECK(pin->first == 1);
+        for (auto reason : pin->second) CHECK(reason.var == 1);
+    }
+    // Removing an interior entry must keep the later, lower-level sources.
+    source(2, {{{"suffix-y", 1}, {"suffix-z", 1}}}, Relation::Eq, 5, 3);
+    source(3, y, Relation::Eq, 2, 2);
+    source(4, z, Relation::Eq, 3, 2);
+    solver.backtrackToLevel(2);
+    REQUIRE(solver.check(db).kind == TheoryCheckResult::Kind::Consistent);
+    REQUIRE(solver.proveFixedValueByName("suffix-y").has_value());
+    CHECK(solver.proveFixedValueByName("suffix-y")->first == 2);
+    // Change an early source's polarity and cache category, then withdraw a
+    // suffix. The retained parent disequality is satisfied by the new pin.
+    source(1, x, Relation::Eq, 1, 1, false);
+    source(6, x, Relation::Eq, 0, 1);
+    solver.backtrackToLevel(1);
+    REQUIRE(solver.check(db).kind == TheoryCheckResult::Kind::Consistent);
+    REQUIRE(solver.proveFixedValueByName("suffix-x").has_value());
+    CHECK(solver.proveFixedValueByName("suffix-x")->first == 0);
+    solver.push();
+    source(7, y, Relation::Eq, 9, 2);
+    REQUIRE(solver.check(db).kind == TheoryCheckResult::Kind::Consistent);
+    solver.pop(1);
+    source(7, y, Relation::Eq, 8, 2);
+    REQUIRE(solver.check(db).kind == TheoryCheckResult::Kind::Consistent);
+    solver.backtrackToLevel(1);
+    REQUIRE(solver.check(db).kind == TheoryCheckResult::Kind::Consistent);
+    solver.reset();
+    source(8, z, Relation::Eq, 6, 1);
+    REQUIRE(solver.check(db).kind == TheoryCheckResult::Kind::Consistent);
+    REQUIRE(solver.proveFixedValueByName("suffix-z").has_value());
+    CHECK(solver.proveFixedValueByName("suffix-z")->first == 6);
+}

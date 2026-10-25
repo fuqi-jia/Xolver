@@ -133,6 +133,10 @@ private:
     TheoryAtomRegistry* registry_ = nullptr;
 
     std::unordered_set<int> integerVars_;
+    std::vector<size_t> integerVarUses_;
+    std::vector<int> integerVarOrder_;
+    void retainIntegerVariables(const LinearFormKey& form);
+    void clearIntegerVariables();
 
     struct DiseqInfo {
         int auxVar;
@@ -183,6 +187,10 @@ private:
     void resetAppliedBounds(GeneralSimplex::AssignmentPolicy policy =
                                 GeneralSimplex::AssignmentPolicy::Preserve);
     void rebuildTrailCaches();
+    void trimTrailCaches(size_t retained);
+    // Same-source replacement appends its cache entry; rebuilding restores
+    // trail order. Only ordered caches can be trimmed as a suffix.
+    bool trailCachesOrdered_ = true;
     void scanLiteralPinEntailments();
     void clearEntailmentDedupForBacktrack(int level);
 

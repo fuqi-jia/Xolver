@@ -34,12 +34,14 @@ int LinearAtomManager::findVarIndex(const std::string& name) const {
 int LinearAtomManager::getOrCreateAuxVar(GeneralSimplex& gs,
                                           const LinearFormKey& lhs,
                                           const mpq_class& rhs) {
-    FormKey key{lhs, rhs};
-    auto it = formToAux_.find(key);
+    // Borrow the lookup input; only a genuinely new auxiliary column needs an
+    // owned copy of the form and its GMP coefficients.
+    auto it = formToAux_.find(FormKeyView{lhs, rhs});
     if (it != formToAux_.end()) {
         return it->second;
     }
 
+    FormKey key{lhs, rhs};
     // Build GeneralSimplex terms: (varIndex, coeff)
     std::vector<std::pair<int, mpq_class>> gsTerms;
     gsTerms.reserve(lhs.terms.size());
