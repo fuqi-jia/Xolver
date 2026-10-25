@@ -109,6 +109,9 @@ private:
     mutable uint64_t violationCacheHits_ = 0;
     mutable uint64_t violationCacheMisses_ = 0;
 
+    // Borrow an immutable decomposition for the lifetime of this search.
+    const RationalPolynomial* rationalPolynomial(PolyId p) const;
+
     // Build the sub-asg vector restricted to `vars` from the full `asg`.
     std::vector<std::pair<VarId, mpq_class>> buildSubAsg(
         const std::vector<VarId>& vars,

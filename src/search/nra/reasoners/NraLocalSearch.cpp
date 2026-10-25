@@ -88,21 +88,27 @@ NraLocalSearch::~NraLocalSearch() {
         (unsigned long long)violationCacheHits_, (unsigned long long)violationCacheMisses_, violationRate, violationCache_.size());
 }
 
+const RationalPolynomial* NraLocalSearch::rationalPolynomial(PolyId p) const {
+    auto cIt = rpCache_.find(p);
+    if (cIt == rpCache_.end()) {
+        ++evalCacheMisses_;
+        auto rpOpt = RationalPolynomial::fromPolyId(p, kernel_);
+        if (!rpOpt) return nullptr;
+        cIt = rpCache_.emplace(p, std::move(*rpOpt)).first;
+    } else {
+        ++evalCacheHits_;
+    }
+    return &cIt->second;
+}
+
 std::optional<mpq_class>
 NraLocalSearch::evalAt(PolyId p,
                        const std::unordered_map<VarId, mpq_class>& asg) const {
     // The cached polynomial is immutable. Evaluate it directly rather than
     // copying, substituting and normalizing a polynomial for each variable.
-    auto cIt = rpCache_.find(p);
-    if (cIt == rpCache_.end()) {
-        ++evalCacheMisses_;
-        auto rpOpt = RationalPolynomial::fromPolyId(p, kernel_);
-        if (!rpOpt) return std::nullopt;
-        cIt = rpCache_.emplace(p, std::move(*rpOpt)).first;
-    } else {
-        ++evalCacheHits_;
-    }
-    return cIt->second.evaluateRational(asg);
+    const auto* polynomial = rationalPolynomial(p);
+    if (!polynomial) return std::nullopt;
+    return polynomial->evaluateRational(asg);
 }
 
 mpq_class
@@ -230,7 +236,7 @@ NraLocalSearch::bracketMidpointCandidates(
         std::vector<mpq_class> lowers;   // values t such that q(v) requires v > t (or v ≥ t)
         std::vector<mpq_class> uppers;   // q(v) requires v < t (or v ≤ t)
         for (const auto& c : cs) {
-            auto rpOpt = RationalPolynomial::fromPolyId(c.poly, kernel_);
+            const auto* rpOpt = rationalPolynomial(c.poly);
             if (!rpOpt) continue;
             // poly must be LINEAR in v and constant in all other vars (after
             // substituting their assignments — but here we just check the
@@ -313,9 +319,11 @@ NraLocalSearch::univariateBoundaryCandidates(
         const Constraint& c, VarId var,
         const std::unordered_map<VarId, mpq_class>& asg) const {
     // Substitute every other var from asg into c.poly → univariate in var.
-    auto rpOpt = RationalPolynomial::fromPolyId(c.poly, kernel_);
-    if (!rpOpt) return {};
-    RationalPolynomial uni = std::move(*rpOpt);
+    const auto* rpOpt = rationalPolynomial(c.poly);
+    if (!rpOpt || !rpOpt->contains(var)) return {};
+    // A constraint independent of this coordinate cannot supply a boundary.
+    // Check this before substituting its other (possibly high-degree) variables.
+    RationalPolynomial uni = *rpOpt;
     static const mpq_class kZ{0};
     auto vs = uni.variables();
     for (VarId v : vs) {

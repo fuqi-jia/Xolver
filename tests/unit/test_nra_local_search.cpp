@@ -10,6 +10,37 @@ using namespace xolver;
 
 static SatLit mkReason(SatVar v) { return SatLit::positive(v); }
 
+TEST_CASE("NraLocalSearch: independent high-degree atoms and coupled coordinates") {
+    auto kernel = createPolynomialKernel();
+    const auto vx = kernel->getOrCreateVar("x");
+    const auto vy = kernel->getOrCreateVar("y");
+    const auto vz = kernel->getOrCreateVar("z");
+    const auto x = kernel->mkVar(vx), y = kernel->mkVar(vy), z = kernel->mkVar(vz);
+    const std::vector<NraLocalSearch::Constraint> constraints{
+        {kernel->sub(kernel->pow(x, 12), kernel->mkOne()), Relation::Eq, mkReason(1)},
+        {kernel->sub(y, kernel->mkOne()), Relation::Gt, mkReason(2)},
+        {kernel->sub(y, kernel->mkConst(2)), Relation::Lt, mkReason(3)},
+        {kernel->sub(z, x), Relation::Gt, mkReason(4)}};
+    for (const auto& order : {std::vector<VarId>{vx, vy, vz},
+                              std::vector<VarId>{vz, vy, vx}}) {
+        NraLocalSearch search(*kernel);
+        search.setBudgetMs(0);
+        search.setMaxRounds(100);
+        // Reusing the same decomposition cache must preserve both coordinate
+        // orders and repeated calls. Verify the witness independently.
+        for (int repeat = 0; repeat < 2; ++repeat) {
+            const auto model = search.tryFindModel(constraints, order);
+            REQUIRE(model.has_value());
+            mpq_class power{1};
+            for (int exponent = 0; exponent < 12; ++exponent) power *= model->at(vx);
+            CHECK(power == 1);
+            CHECK(model->at(vy) > 1);
+            CHECK(model->at(vy) < 2);
+            CHECK(model->at(vz) > model->at(vx));
+        }
+    }
+}
+
 TEST_CASE("NraLocalSearch: denominator cap follows each query snapshot") {
     auto kernel = createPolynomialKernel();
     const auto vx = kernel->getOrCreateVar("x");
