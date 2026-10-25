@@ -936,7 +936,10 @@ void GeneralSimplex::pop() {
         else           vars_[e.var].upper = e.oldBound;
         trail_.pop_back();
     }
-    betaDirty_ = true;
+    // Restoring older bounds only relaxes intervals. A clean assignment still
+    // satisfies every row equation and every non-basic bound. Basic bounds may
+    // remain violated after an infeasible child, so refresh their repair queue.
+    if (!betaDirty_) rebuildViolationQueue();
 }
 
 void GeneralSimplex::backtrackToLevel(int level) {
@@ -949,9 +952,9 @@ void GeneralSimplex::backtrackToLevel(int level) {
     }
     hasImmediateConflict_ = false;
     conflict_.clear();
-    betaDirty_ = true;
     violatedQueue_.clear();
     std::fill(inViolationQueue_.begin(), inViolationQueue_.end(), false);
+    if (!betaDirty_) rebuildViolationQueue();
 }
 
 // ============================================================================
@@ -966,7 +969,8 @@ void GeneralSimplex::resetActiveBounds() {
     }
     trail_.clear();
     scopeStack_.clear();
-    betaDirty_ = true;
+    // With all bounds removed, a clean row-consistent assignment is already
+    // feasible. Keep it as the warm start for the next asserted context.
     conflict_.clear();
     hasImmediateConflict_ = false;
     violatedQueue_.clear();

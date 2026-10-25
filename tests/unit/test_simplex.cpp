@@ -371,3 +371,48 @@ TEST_CASE("GeneralSimplex: added rows preserve the current assignment and accept
     REQUIRE((gs.check() == GeneralSimplex::Result::Sat));
     CHECK(gs.value(dirtyRow) == gs.value(x) - mpq_class(2) * gs.value(sum) - DeltaRational(7));
 }
+
+TEST_CASE("GeneralSimplex: relaxed bounds keep an already feasible assignment") {
+    GeneralSimplex gs;
+    const int x = gs.addVar("warm-x"), y = gs.addVar("warm-y");
+    const int sum = gs.addConstraint({{x, 1}, {y, 1}}, 0);
+    REQUIRE(gs.assertLower(x, BoundInfo(BoundValue(DeltaRational(0)), SatLit::positive(1))));
+    REQUIRE(gs.assertLower(y, BoundInfo(BoundValue(DeltaRational(0)), SatLit::positive(2))));
+    REQUIRE(gs.assertLower(sum, BoundInfo(BoundValue(DeltaRational(4)), SatLit::positive(3))));
+    REQUIRE((gs.check() == GeneralSimplex::Result::Sat));
+    gs.push();
+    REQUIRE(gs.assertLower(x, BoundInfo(BoundValue(DeltaRational(7)), SatLit::positive(4)), 1));
+    REQUIRE((gs.check() == GeneralSimplex::Result::Sat));
+    const auto childX = gs.value(x), childY = gs.value(y), childSum = gs.value(sum);
+    gs.pop();
+    REQUIRE((gs.check() == GeneralSimplex::Result::Sat));
+    CHECK(gs.value(x) == childX);
+    CHECK(gs.value(y) == childY);
+    CHECK(gs.value(sum) == childSum);
+    CHECK(gs.value(sum) == gs.value(x) + gs.value(y));
+    gs.resetActiveBounds();
+    REQUIRE((gs.check() == GeneralSimplex::Result::Sat));
+    CHECK(gs.value(x) == childX);
+    CHECK(gs.value(y) == childY);
+    CHECK(gs.value(sum) == childSum);
+}
+
+TEST_CASE("GeneralSimplex: warm rollback repairs violations left by an infeasible child") {
+    for (const bool useScope : {false, true}) {
+        GeneralSimplex gs;
+        const int x = gs.addVar("repair-x"), y = gs.addVar("repair-y");
+        const int sum = gs.addConstraint({{x, 1}, {y, 1}}, 0);
+        REQUIRE(gs.assertLower(x, BoundInfo(BoundValue(DeltaRational(0)), SatLit::positive(1))));
+        REQUIRE(gs.assertLower(y, BoundInfo(BoundValue(DeltaRational(0)), SatLit::positive(2))));
+        REQUIRE(gs.assertUpper(sum, BoundInfo(BoundValue(DeltaRational(0)), SatLit::positive(3))));
+        REQUIRE((gs.check() == GeneralSimplex::Result::Sat));
+        if (useScope) gs.push();
+        REQUIRE(gs.assertLower(x, BoundInfo(BoundValue(DeltaRational(1)), SatLit::positive(4)), 1));
+        REQUIRE((gs.check() == GeneralSimplex::Result::Unsat));
+        if (useScope) gs.pop(); else gs.backtrackToLevel(0);
+        REQUIRE((gs.check() == GeneralSimplex::Result::Sat));
+        CHECK(gs.value(x).isZero());
+        CHECK(gs.value(y).isZero());
+        CHECK(gs.value(sum).isZero());
+    }
+}
