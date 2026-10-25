@@ -23,6 +23,11 @@ public:
     int currentLevel() const { return state_.currentLevel; }
     ScopeLevel scopeLevel() const { return state_.scopeLevel; }
     bool pending() const { return hasPending(); }
+    std::vector<SatVar> trailVariables() const {
+        std::vector<SatVar> result;
+        for (const auto& entry : trail()) result.push_back(entry.atom.satVar);
+        return result;
+    }
 
     void doRecordConflict(int level, std::vector<SatLit> lits) {
         recordPending(level, TheoryCheckResult::mkConflict(TheoryConflict{std::move(lits)}));
@@ -85,6 +90,22 @@ TEST_CASE("ArithSolverBase: backtrackToLevel removes entries above target") {
     CHECK(s.trailSize() == 1);          // only level-1 entry survives
     CHECK(s.currentLevel() == 1);
     CHECK(s.backtrackCount == 1);
+}
+
+TEST_CASE("ArithSolverBase: replacing an early assignment retains later parent sources in order") {
+    MockArithSolver solver;
+    solver.assertLit(mkAtom(1), true, 1, SatLit::positive(1));
+    solver.assertLit(mkAtom(2), true, 1, SatLit::positive(2));
+    solver.assertLit(mkAtom(3), true, 2, SatLit::positive(3));
+    solver.assertLit(mkAtom(4), true, 1, SatLit::positive(4));
+    solver.assertLit(mkAtom(1), false, 3, SatLit::negative(1));
+    solver.backtrackToLevel(1);
+    CHECK(solver.trailVariables() == std::vector<SatVar>{2, 4});
+    solver.assertLit(mkAtom(5), true, 2, SatLit::positive(5));
+    solver.backtrackToLevel(1);
+    CHECK(solver.trailVariables() == std::vector<SatVar>{2, 4});
+    solver.backtrackToLevel(0);
+    CHECK(solver.trailSize() == 0);
 }
 
 TEST_CASE("ArithSolverBase: pending cleared on backtrack when level > target") {

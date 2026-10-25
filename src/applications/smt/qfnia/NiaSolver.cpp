@@ -223,7 +223,7 @@ void NiaSolver::assertLit(const TheoryAtomRecord& atom, bool value,
         return;
     }
 
-    state_.trail.push_back({level, assertedLit, atom, value});
+    state_.trail.append({level, assertedLit, atom, value});
     if (level > state_.currentLevel) state_.currentLevel = level;
 
     const auto* payload = std::get_if<PolynomialAtomPayload>(&atom.payload);
