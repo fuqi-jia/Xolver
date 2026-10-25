@@ -164,23 +164,21 @@ void ArithSolverBase::assertLit(const TheoryAtomRecord& atom, bool value,
     // Dedup by satVar: replace an existing assignment for the same SAT
     // variable in place, else append. This reproduces the pre-refactor
     // assertLit body shared by IDL/RDL/NIA/NIRA/LIRA verbatim.
-    for (auto& a : state_.trail) {
-        if (a.atom.satVar == atom.satVar) {
-            a = {level, assertedLit, atom, value};
+    for (size_t i = 0; i < state_.trail.size(); ++i) {
+        if (state_.trail[i].atom.satVar == atom.satVar) {
+            state_.trail.replace(i, {level, assertedLit, atom, value});
             if (level > state_.currentLevel) state_.currentLevel = level;
             onAssertLit(atom, value, level, assertedLit);
             return;
         }
     }
-    state_.trail.push_back({level, assertedLit, atom, value});
+    state_.trail.append({level, assertedLit, atom, value});
     if (level > state_.currentLevel) state_.currentLevel = level;
     onAssertLit(atom, value, level, assertedLit);
 }
 
 void ArithSolverBase::backtrackToLevel(int level) {
-    auto it = std::remove_if(state_.trail.begin(), state_.trail.end(),
-        [level](const ActiveAssignment& a) { return a.level > level; });
-    state_.trail.erase(it, state_.trail.end());
+    state_.trail.backtrack(level);
 
     if (state_.pending && state_.pending->level > level) {
         state_.pending.reset();

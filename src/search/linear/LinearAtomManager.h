@@ -61,6 +61,13 @@ public:
         std::optional<DeltaRational> lower, upper;
     };
     static RelationBounds effectiveBounds(Relation rel, bool value, bool integerForm);
+    struct RelationBoundViews {
+        const DeltaRational* lower = nullptr;
+        const DeltaRational* upper = nullptr;
+    };
+    // Immutable canonical endpoints with process lifetime. The owning value
+    // API above keeps its existing coordinate and strictness semantics.
+    static RelationBoundViews effectiveBoundViews(Relation rel, bool value, bool integerForm);
 
     // -------------------------------------------------------------------------
     // Translate a GeneralSimplex conflict to a TheoryConflict.
@@ -91,14 +98,28 @@ private:
             return lhs == o.lhs && rhs == o.rhs;
         }
     };
+    struct FormKeyView {
+        const LinearFormKey& lhs;
+        const mpq_class& rhs;
+    };
     struct FormKeyHash {
+        using is_transparent = void;
         std::size_t operator()(const FormKey& k) const {
+            return (*this)(FormKeyView{k.lhs, k.rhs});
+        }
+        std::size_t operator()(FormKeyView k) const {
             std::size_t h = LinearFormKeyHash{}(k.lhs);
             h ^= std::hash<std::string>{}(k.rhs.get_str()) + 0x9e3779b9 + (h << 6) + (h >> 2);
             return h;
         }
     };
-    std::unordered_map<FormKey, int, FormKeyHash> formToAux_;
+    struct FormKeyEqual {
+        using is_transparent = void;
+        bool operator()(const FormKey& a, const FormKey& b) const { return a == b; }
+        bool operator()(const FormKey& a, FormKeyView b) const { return a.lhs == b.lhs && a.rhs == b.rhs; }
+        bool operator()(FormKeyView a, const FormKey& b) const { return (*this)(b, a); }
+    };
+    std::unordered_map<FormKey, int, FormKeyHash, FormKeyEqual> formToAux_;
 
     // Reverse map: aux var index -> its defining (lhs, rhs).
     std::unordered_map<int, FormKey> auxToForm_;

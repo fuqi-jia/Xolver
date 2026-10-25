@@ -208,6 +208,62 @@ TEST_CASE("LIA: missing dynamic registration cannot dereference an absent branch
     CHECK((disequalitySolver.check(database, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Unknown));
 }
 
+TEST_CASE("linear propagation: borrowed endpoint patterns match independent truth and preserve owning values") {
+    const Relation relations[] = {Relation::Eq, Relation::Neq, Relation::Lt, Relation::Leq, Relation::Gt, Relation::Geq};
+    for (const auto relation : relations) for (const bool truth : {false, true}) for (const bool integral : {false, true}) {
+        const auto bounds = LinearAtomManager::effectiveBoundViews(relation, truth, integral);
+        const auto effective = truth ? relation : negateRelation(relation);
+        if (effective == Relation::Neq) {
+            CHECK(bounds.lower == nullptr);
+            CHECK(bounds.upper == nullptr);
+            continue;
+        }
+        for (int numerator = -8; numerator <= 8; ++numerator) {
+            mpq_class point(numerator, integral ? 1 : 2); point.canonicalize();
+            const DeltaRational value(point);
+            const bool accepted = (!bounds.lower || value >= *bounds.lower) && (!bounds.upper || value <= *bounds.upper);
+            CHECK(accepted == (compare(relation, point, mpq_class(0)) == truth));
+        }
+    }
+    const auto zero = LinearAtomManager::effectiveBoundViews(Relation::Eq, true, false);
+    auto owned = LinearAtomManager::effectiveBounds(Relation::Eq, true, false);
+    *owned.lower = DeltaRational(99);
+    CHECK(*zero.lower == DeltaRational(0));
+    CHECK(*zero.upper == DeltaRational(0));
+    const auto strict = LinearAtomManager::effectiveBoundViews(Relation::Lt, true, false);
+    CHECK(*strict.upper == DeltaRational(0, -1));
+    CHECK(*zero.lower == DeltaRational(0));
+}
+
+TEST_CASE("linear propagation: auxiliary lookup owns new forms and reuses borrowed equal forms after rehash") {
+    LinearAtomManager manager;
+    GeneralSimplex gs;
+    LinearFormKey input{{{"lookup-x", mpq_class(3, 2)}, {"lookup-y", mpq_class(-1, 2)}}};
+    mpq_class rhs(2, 3);
+    const auto original = input;
+    const int aux = manager.getOrCreateAuxVar(gs, input, rhs);
+    input.terms.front().second = 99;
+    rhs = 17;
+    CHECK(manager.getOrCreateAuxVar(gs, input, rhs) != aux);
+    for (int value = 0; value < 96; ++value) manager.getOrCreateAuxVar(gs, original, mpq_class(value));
+    const auto count = gs.numVars();
+    CHECK(manager.getOrCreateAuxVar(gs, original, mpq_class(2, 3)) == aux);
+    CHECK(gs.numVars() == count);
+    LinearFormKey recovered;
+    mpq_class recoveredRhs;
+    REQUIRE(manager.auxForm(aux, recovered, recoveredRhs));
+    CHECK(recovered == original);
+    CHECK(recoveredRhs == mpq_class(2, 3));
+    for (auto [name, value] : {std::pair{"lookup-x", 2}, std::pair{"lookup-y", 3}}) {
+        const auto var = manager.findVarIndex(name);
+        const BoundInfo pin(BoundValue(DeltaRational(value)), SatLit::positive(1));
+        REQUIRE(gs.assertLower(var, pin));
+        REQUIRE(gs.assertUpper(var, pin));
+    }
+    REQUIRE(gs.check() == GeneralSimplex::Result::Sat);
+    CHECK(gs.value(aux) == DeltaRational(mpq_class(5, 6))); // 3*2/2 - 3/2 - 2/3
+}
+
 TEST_CASE("LIA: decision hints use exact values and leave unregistered coordinates untouched") {
     Allocator allocator;
     TheoryAtomRegistry registry;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "contracts/TheorySolver.h"
+#include "base/IncrementalContext.h"
 #include <algorithm>
 #include <memory>
 #include <optional>
@@ -132,7 +133,7 @@ protected:
     };
 
     struct TheoryState {
-        std::vector<ActiveAssignment> trail;
+        incremental::Context<ActiveAssignment> trail;
         std::optional<PendingResult> pending;
         int currentLevel = 0;
         ScopeLevel scopeLevel = 0;
@@ -174,7 +175,7 @@ protected:
     }
 
     // Convenience: the trail, for subclasses that iterate it.
-    const std::vector<ActiveAssignment>& trail() const { return state_.trail; }
+    const std::vector<ActiveAssignment>& trail() const { return state_.trail.entries(); }
 
     // ----- Frontend / combination state (was duplicated 4× across solvers) -----
     const NativeTerms* nativeTerms_ = nullptr;

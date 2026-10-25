@@ -1003,6 +1003,11 @@ void GeneralSimplex::reset() {
     noteBoundChange();
     vars_.clear();
     boundedVars_.clear();
+    boundMergeSlots_.clear();
+    boundMergeSources_.clear();
+    boundMergeViolations_.clear();
+    boundMergeChanged_.clear();
+    boundMergeValues_.clear();
     tab_ = SparseTableau();
     basicVars_.clear();
     nonBasicVars_.clear();
@@ -1018,42 +1023,70 @@ void GeneralSimplex::reset() {
 
 bool GeneralSimplex::replaceActiveBounds(const std::vector<ActiveBound>& bounds,
                                          AssignmentPolicy policy) {
-    std::unordered_map<int, std::array<BoundInfo, 2>> next;
-    std::vector<int> sourceOrder;
-    std::vector<int> violatedSourceOrder;
+    std::vector<ActiveBoundView> views;
+    views.reserve(bounds.size());
     for (const auto& input : bounds) {
-        if (input.var < 0 || input.var >= numVars() || !input.info.bound.isFinite() || !input.info.reason)
-            throw std::invalid_argument("replacement bounds need an existing column and a finite explained endpoint");
-        const auto& value = input.info.bound.value;
-        if (mpz_sgn(mpq_denref(value.a.get_mpq_t())) == 0 ||
-            mpz_sgn(mpq_denref(value.b.get_mpq_t())) == 0)
+        if (!input.info.bound.isFinite() || !input.info.reason)
+            throw std::invalid_argument("replacement bounds need a finite explained endpoint");
+        views.push_back({input.var, input.isLower, &input.info.bound.value, *input.info.reason});
+    }
+    return replaceActiveBoundViews(views, policy);
+}
+
+bool GeneralSimplex::replaceActiveBoundViews(std::span<const ActiveBoundView> bounds,
+                                             AssignmentPolicy policy) {
+    // Clear the previous sparse index, including partial scratch from a rejected
+    // call. No bound, revision, conflict or proof state changes until validation.
+    for (int var : boundMergeSources_) boundMergeSlots_[var] = -1;
+    boundMergeSources_.clear();
+    boundMergeViolations_.clear();
+    boundMergeChanged_.clear();
+    boundMergeSlots_.resize(vars_.size(), -1);
+    auto& sourceOrder = boundMergeSources_;
+    auto& violatedSourceOrder = boundMergeViolations_;
+    for (const auto& input : bounds) {
+        if (input.var < 0 || input.var >= numVars() || !input.value)
+            throw std::invalid_argument("replacement bounds need an existing column and a finite endpoint");
+        const auto* endpoint = input.value;
+        if (mpz_sgn(mpq_denref(endpoint->a.get_mpq_t())) == 0 ||
+            mpz_sgn(mpq_denref(endpoint->b.get_mpq_t())) == 0)
             throw std::invalid_argument("replacement bounds need nonzero rational denominators");
-        // GMP's numerator/denominator constructor does not reduce its input.
-        // Keep the integer fast path, and normalize other caller-owned values
-        // before comparisons or tableau arithmetic use GMP's canonical form.
-        std::optional<BoundInfo> normalized;
-        const BoundInfo* endpoint = &input.info;
-        if (mpz_cmp_ui(mpq_denref(value.a.get_mpq_t()), 1) != 0 ||
-            mpz_cmp_ui(mpq_denref(value.b.get_mpq_t()), 1) != 0) {
-            normalized = input.info;
-            normalized->bound.value.a.canonicalize();
-            normalized->bound.value.b.canonicalize();
+        std::optional<DeltaRational> normalized;
+        if (mpz_cmp_ui(mpq_denref(endpoint->a.get_mpq_t()), 1) != 0 ||
+            mpz_cmp_ui(mpq_denref(endpoint->b.get_mpq_t()), 1) != 0) {
+            normalized = *endpoint;
+            normalized->a.canonicalize();
+            normalized->b.canonicalize();
             endpoint = &*normalized;
         }
         if (policy == AssignmentPolicy::Preserve && !betaDirty_ && vars_[input.var].basicRow >= 0) {
             const auto& point = vars_[input.var].beta;
-            if (input.isLower ? point < endpoint->bound.value : point > endpoint->bound.value)
+            if (input.isLower ? point < *endpoint : point > *endpoint)
                 violatedSourceOrder.push_back(input.var);
         }
-        auto [it, fresh] = next.try_emplace(input.var);
-        if (fresh) {
-            it->second[0] = BoundInfo(BoundValue::negInf());
+        int slot = boundMergeSlots_[input.var];
+        if (slot < 0) {
+            slot = static_cast<int>(sourceOrder.size());
+            if (boundMergeValues_.size() <= static_cast<size_t>(slot)) boundMergeValues_.emplace_back();
             sourceOrder.push_back(input.var);
+            boundMergeSlots_[input.var] = slot;
+            auto& values = boundMergeValues_[slot];
+            values[0].bound.kind = BoundKind::NegInf;
+            values[1].bound.kind = BoundKind::PosInf;
+            values[0].reason.reset();
+            values[1].reason.reset();
         }
-        auto& current = it->second[input.isLower ? 0 : 1];
-        if (input.isLower ? endpoint->bound > current.bound : endpoint->bound < current.bound)
-            current = *endpoint;
+        auto& current = boundMergeValues_[slot][input.isLower ? 0 : 1];
+        if (!current.bound.isFinite() || (input.isLower ? *endpoint > current.bound.value : *endpoint < current.bound.value)) {
+            current.bound.kind = BoundKind::Finite;
+            current.bound.value = *endpoint;
+            current.reason = input.reason;
+        }
     }
+    // Allocation belongs to the validation phase; storage is retained for the
+    // next restoration rather than repeatedly freeing small GMP endpoints.
+    boundMergeChanged_.reserve(boundedVars_.size() + sourceOrder.size());
+    std::vector<std::unordered_set<int>::node_type> membership(sourceOrder.size());
     const auto retainedAnalysis = fixedValueAnalysis_;
     bool fixedSourcesChanged = false;
     noteBoundChange();
@@ -1062,7 +1095,7 @@ bool GeneralSimplex::replaceActiveBounds(const std::vector<ActiveBound>& bounds,
     scopeStack_.clear();
     hasImmediateConflict_ = false;
     conflict_.clear();
-    std::vector<int> changed;
+    auto& changed = boundMergeChanged_;
     auto assign = [&](int var, const BoundInfo& lower, const BoundInfo& upper) {
         auto& state = vars_[var];
         if (state.lower.bound.kind != lower.bound.kind || state.upper.bound.kind != upper.bound.kind ||
@@ -1086,15 +1119,25 @@ bool GeneralSimplex::replaceActiveBounds(const std::vector<ActiveBound>& bounds,
             hasImmediateConflict_ = true;
         }
     };
-    for (int var : boundedVars_) {
-        if (next.contains(var)) continue;
-        assign(var, BoundInfo(BoundValue::negInf()), BoundInfo(BoundValue::posInf()));
+    for (auto it = boundedVars_.begin(); it != boundedVars_.end();) {
+        const auto current = it++;
+        const int var = *current;
+        const int slot = boundMergeSlots_[var];
+        if (slot >= 0) membership[slot] = boundedVars_.extract(current);
+        else {
+            assign(var, BoundInfo(BoundValue::negInf()), BoundInfo(BoundValue::posInf()));
+            boundedVars_.erase(current);
+        }
     }
-    boundedVars_.clear();
+    // Relink retained nodes in the same source order as complete reconstruction.
+    // This preserves hash iteration and fixed-proof seed order without freeing
+    // and reallocating a node for every unchanged parent column.
     for (int var : sourceOrder) {
-        const auto& endpoints = next.at(var);
+        const int slot = boundMergeSlots_[var];
+        const auto& endpoints = boundMergeValues_[slot];
         assign(var, endpoints[0], endpoints[1]);
-        boundedVars_.insert(var);
+        if (membership[slot].empty()) boundedVars_.insert(var);
+        else boundedVars_.insert(std::move(membership[slot]));
     }
     if (policy == AssignmentPolicy::Reinitialize) betaDirty_ = true;
     if (!betaDirty_ && !hasImmediateConflict_) {

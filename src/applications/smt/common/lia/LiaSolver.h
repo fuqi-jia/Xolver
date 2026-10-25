@@ -6,6 +6,7 @@
 #include "search/linear/IntegerReasoner.h"
 #include "search/lra/GeneralSimplex.h"
 #include "search/combination/SharedTermRegistry.h"
+#include "base/IncrementalContext.h"
 #include <gmpxx.h>
 #include <optional>
 #include <unordered_map>
@@ -133,6 +134,10 @@ private:
     TheoryAtomRegistry* registry_ = nullptr;
 
     std::unordered_set<int> integerVars_;
+    std::vector<size_t> integerVarUses_;
+    std::vector<int> integerVarOrder_;
+    void retainIntegerVariables(const LinearFormKey& form);
+    void clearIntegerVariables();
 
     struct DiseqInfo {
         int auxVar;
@@ -154,7 +159,7 @@ private:
         int auxVar;
         bool isDiseq;
     };
-    std::vector<LiaTrailEntry> theoryTrail_;
+    incremental::Context<LiaTrailEntry> theoryTrail_;
     // satVar -> theoryTrail_ index for O(1) lookup in assertLit's update path.
     // assertLit's hot path used to linear-scan theoryTrail_ to find an existing
     // entry for the same satVar (e->update vs append). On large QF_LIA loads
@@ -183,6 +188,11 @@ private:
     void resetAppliedBounds(GeneralSimplex::AssignmentPolicy policy =
                                 GeneralSimplex::AssignmentPolicy::Preserve);
     void rebuildTrailCaches();
+    void withdrawTrailEntry(const LiaTrailEntry& entry);
+    void relinkIntegerVariables();
+    // Same-source replacement appends its cache entry; rebuilding restores
+    // trail order. Only ordered caches can be trimmed as a suffix.
+    bool trailCachesOrdered_ = true;
     void scanLiteralPinEntailments();
     void clearEntailmentDedupForBacktrack(int level);
 
@@ -211,7 +221,7 @@ private:
     std::vector<InterfaceEq> appliedInterfaceEqualities_;
     std::optional<uint64_t> appliedBoundRevision_;
     struct ScopeState {
-        std::vector<LiaTrailEntry> trail;
+        incremental::Context<LiaTrailEntry>::Snapshot trail;
         std::vector<InterfaceEq> equalities, disequalities;
         int level;
     };
