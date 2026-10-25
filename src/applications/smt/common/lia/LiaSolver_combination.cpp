@@ -203,7 +203,7 @@ TheoryCheckResult LiaSolver::assertInterfaceDisequality(
     // rebuild dominated the QF_UFLIA Wisa profile. Verdict-identical: with no equality
     // bound removed, no simplex bound changed, so the reset would be a no-op.
     if (removedEq) {
-        gs_.resetActiveBounds();
+        resetAppliedBounds();
     }
     return TheoryCheckResult::consistent();
 }

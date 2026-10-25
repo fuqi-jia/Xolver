@@ -11,6 +11,8 @@
 #include <deque>
 #include <unordered_set>
 #include <cassert>
+#include <cstdint>
+#include <limits>
 
 namespace xolver {
 
@@ -159,6 +161,12 @@ public:
     // -------------------------------------------------------------------------
     // Diagnostics
     // -------------------------------------------------------------------------
+    // Stable key for active-bound reuse. Saturation disables caching rather
+    // than allowing an epoch to alias after unsigned wraparound.
+    std::optional<uint64_t> boundRevision() const noexcept {
+        if (boundRevision_ == std::numeric_limits<uint64_t>::max()) return std::nullopt;
+        return boundRevision_;
+    }
     int numVars() const { return static_cast<int>(vars_.size()); }
     int numRows() const { return tab_.numRows(); }
     bool isBasic(int var) const;
@@ -227,6 +235,11 @@ public:
 #endif
 
 private:
+    uint64_t boundRevision_ = 0;
+    void noteBoundChange() noexcept {
+        if (boundRevision_ != std::numeric_limits<uint64_t>::max()) ++boundRevision_;
+    }
+
     // ========================================================================
     // Variable state
     // ========================================================================

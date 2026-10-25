@@ -316,3 +316,58 @@ TEST_CASE("GeneralSimplex: fixed-value proof chains use iterative shared depende
     CHECK(proof->first == DeltaRational(1));
     CHECK(proof->second.size() == 2 * (depth + 1));
 }
+
+TEST_CASE("GeneralSimplex: bound revisions invalidate rejected bounds, scopes and resets") {
+    GeneralSimplex gs;
+    const int x = gs.addVar("revision-x");
+    auto previous = gs.boundRevision();
+    REQUIRE(previous.has_value());
+    REQUIRE(gs.assertLower(x, BoundInfo(BoundValue(DeltaRational(0)), SatLit::positive(1))));
+    CHECK(gs.boundRevision() != previous);
+    previous = gs.boundRevision();
+    REQUIRE(gs.assertLower(x, BoundInfo(BoundValue(DeltaRational(-1)), SatLit::positive(2))));
+    CHECK(gs.boundRevision() == previous);
+    gs.push();
+    CHECK_FALSE(gs.assertUpper(x, BoundInfo(BoundValue(DeltaRational(-1)), SatLit::positive(3)), 1));
+    CHECK(gs.boundRevision() != previous);
+    previous = gs.boundRevision();
+    gs.pop();
+    CHECK(gs.boundRevision() != previous);
+    REQUIRE((gs.check() == GeneralSimplex::Result::Sat));
+    previous = gs.boundRevision();
+    gs.backtrackToLevel(0);
+    CHECK(gs.boundRevision() != previous);
+    previous = gs.boundRevision();
+    gs.resetActiveBounds();
+    CHECK(gs.boundRevision() != previous);
+    previous = gs.boundRevision();
+    gs.reset();
+    CHECK(gs.boundRevision() != previous);
+}
+
+TEST_CASE("GeneralSimplex: added rows preserve the current assignment and accept bound updates") {
+    GeneralSimplex gs;
+    const int x = gs.addVar("row-x"), y = gs.addVar("row-y");
+    REQUIRE(gs.assertLower(x, BoundInfo(BoundValue(DeltaRational(2)), SatLit::positive(1))));
+    REQUIRE(gs.assertLower(y, BoundInfo(BoundValue(DeltaRational(3)), SatLit::positive(2))));
+    REQUIRE((gs.check() == GeneralSimplex::Result::Sat));
+    const auto oldX = gs.value(x), oldY = gs.value(y);
+    const int difference = gs.addConstraint({{x, 2}, {y, -3}}, 1);
+    CHECK(gs.value(x) == oldX);
+    CHECK(gs.value(y) == oldY);
+    CHECK(gs.value(difference) == mpq_class(2) * oldX - mpq_class(3) * oldY - DeltaRational(1));
+    REQUIRE(gs.assertLower(difference, BoundInfo(BoundValue(DeltaRational(-5)), SatLit::positive(3))));
+    REQUIRE((gs.check() == GeneralSimplex::Result::Sat));
+    CHECK(gs.value(difference) == mpq_class(2) * gs.value(x) - mpq_class(3) * gs.value(y) - DeltaRational(1));
+    CHECK(gs.value(difference) >= DeltaRational(-5));
+    const int z = gs.addVar("row-z");
+    const int sum = gs.addConstraint({{difference, 1}, {z, 1}}, 0);
+    CHECK(gs.value(sum) == gs.value(difference) + gs.value(z));
+    REQUIRE(gs.assertLower(z, BoundInfo(BoundValue(DeltaRational(4)), SatLit::positive(4))));
+    CHECK(gs.value(sum) == gs.value(difference) + gs.value(z));
+    REQUIRE((gs.check() == GeneralSimplex::Result::Sat));
+    gs.resetActiveBounds();
+    const int dirtyRow = gs.addConstraint({{x, 1}, {sum, -2}}, 7);
+    REQUIRE((gs.check() == GeneralSimplex::Result::Sat));
+    CHECK(gs.value(dirtyRow) == gs.value(x) - mpq_class(2) * gs.value(sum) - DeltaRational(7));
+}

@@ -184,7 +184,15 @@ int GeneralSimplex::addConstraint(const std::vector<std::pair<int, mpq_class>>& 
         }
     }
 
-    betaDirty_ = true;
+    // A definition adds no restriction to the old variables. Preserve a clean
+    // current assignment by initializing only this row; bound assertion can
+    // then update its incident rows without rebuilding the entire tableau.
+    if (!betaDirty_) {
+        DeltaRational value(f.constant);
+        for (const auto& [var, coefficient] : f.terms)
+            value += coefficient * vars_[var].beta;
+        vars_[aux].beta = std::move(value);
+    }
     return aux;
 }
 
@@ -245,6 +253,7 @@ bool GeneralSimplex::assertLower(int var, const BoundInfo& info, int level) {
     assert(var >= 0 && var < static_cast<int>(vars_.size()));
 
     if (info.bound <= vars_[var].lower.bound) return true;
+    noteBoundChange();
     if (info.bound > vars_[var].upper.bound) {
         explainImmediateConflict(var, true, info.reason.value());
         hasImmediateConflict_ = true;
@@ -268,6 +277,7 @@ bool GeneralSimplex::assertUpper(int var, const BoundInfo& info, int level) {
     assert(var >= 0 && var < static_cast<int>(vars_.size()));
 
     if (info.bound >= vars_[var].upper.bound) return true;
+    noteBoundChange();
     if (info.bound < vars_[var].lower.bound) {
         explainImmediateConflict(var, false, info.reason.value());
         hasImmediateConflict_ = true;
@@ -908,6 +918,7 @@ void GeneralSimplex::push() {
 }
 
 void GeneralSimplex::pop() {
+    noteBoundChange();
     assert(!scopeStack_.empty());
     auto scope = std::move(scopeStack_.back());
     const size_t target = scope.trailSize;
@@ -929,6 +940,7 @@ void GeneralSimplex::pop() {
 }
 
 void GeneralSimplex::backtrackToLevel(int level) {
+    noteBoundChange();
     while (!trail_.empty() && trail_.back().level > level) {
         const auto& e = trail_.back();
         if (e.isLower) vars_[e.var].lower = e.oldBound;
@@ -947,6 +959,7 @@ void GeneralSimplex::backtrackToLevel(int level) {
 // ============================================================================
 
 void GeneralSimplex::resetActiveBounds() {
+    noteBoundChange();
     for (int i = 0; i < static_cast<int>(vars_.size()); ++i) {
         vars_[i].lower = BoundInfo(BoundValue::negInf());
         vars_[i].upper = BoundInfo(BoundValue::posInf());
@@ -961,6 +974,7 @@ void GeneralSimplex::resetActiveBounds() {
 }
 
 void GeneralSimplex::reset() {
+    noteBoundChange();
     vars_.clear();
     tab_ = SparseTableau();
     basicVars_.clear();

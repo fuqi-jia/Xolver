@@ -284,3 +284,117 @@ TEST_CASE("LIA: proveFixedFormValue pins x-y=0 from x<=y and y<=x (canonical fee
     REQUIRE(pf.has_value());
     CHECK(pf->first == mpq_class(0));   // x - y pinned to 0
 }
+
+namespace {
+TheoryAtomRecord replayAtom(SatVar variable, Relation relation, int rhs) {
+    LinearFormKey form;
+    form.terms.push_back({"incremental-x", 1});
+    return TheoryAtomRecord{variable, TheoryId::LIA, false, ExprId(1000 + variable),
+        LinearAtomPayload{form, relation, RealValue::fromMpq(rhs)}};
+}
+void replayAssert(LiaSolver& solver, SatVar variable, Relation relation, int rhs,
+                  bool value = true, int level = 0) {
+    solver.assertLit(replayAtom(variable, relation, rhs), value, level, SatLit{variable, value});
+}
+}
+
+TEST_CASE("LIA: append, literal replacement and backtracking preserve current bounds") {
+    LiaSolver solver;
+    TheoryLemmaDatabase db;
+    replayAssert(solver, 1, Relation::Geq, 0);
+    replayAssert(solver, 2, Relation::Leq, 4);
+    for (int i = 0; i < 3; ++i)
+        REQUIRE(solver.check(db).kind == TheoryCheckResult::Kind::Consistent);
+    replayAssert(solver, 3, Relation::Geq, 3, true, 1);
+    REQUIRE(solver.check(db).kind == TheoryCheckResult::Kind::Consistent);
+    replayAssert(solver, 4, Relation::Leq, 3, true, 2);
+    REQUIRE(solver.check(db).kind == TheoryCheckResult::Kind::Consistent);
+    auto pin = solver.proveFixedValueByName("incremental-x");
+    REQUIRE(pin.has_value());
+    CHECK(pin->first == 3);
+    solver.backtrackToLevel(1);
+    replayAssert(solver, 5, Relation::Geq, 4, true, 2);
+    REQUIRE(solver.check(db).kind == TheoryCheckResult::Kind::Consistent);
+    pin = solver.proveFixedValueByName("incremental-x");
+    REQUIRE(pin.has_value());
+    CHECK(pin->first == 4);
+    solver.backtrackToLevel(1);
+    replayAssert(solver, 3, Relation::Geq, 3, false, 1);
+    replayAssert(solver, 6, Relation::Leq, 1, true, 2);
+    REQUIRE(solver.check(db).kind == TheoryCheckResult::Kind::Consistent);
+}
+
+TEST_CASE("LIA: nested scopes restore input trails after checks and conflicts") {
+    LiaSolver solver;
+    TheoryLemmaDatabase db;
+    replayAssert(solver, 1, Relation::Geq, 0);
+    replayAssert(solver, 2, Relation::Leq, 3);
+    REQUIRE(solver.check(db).kind == TheoryCheckResult::Kind::Consistent);
+    solver.push();
+    replayAssert(solver, 3, Relation::Geq, 2);
+    REQUIRE(solver.check(db).kind == TheoryCheckResult::Kind::Consistent);
+    solver.push();
+    replayAssert(solver, 4, Relation::Leq, 1);
+    REQUIRE(solver.check(db).kind == TheoryCheckResult::Kind::Conflict);
+    solver.push();
+    REQUIRE(solver.check(db).kind == TheoryCheckResult::Kind::Conflict);
+    solver.pop(1);
+    REQUIRE(solver.check(db).kind == TheoryCheckResult::Kind::Conflict);
+    solver.pop(2);
+    replayAssert(solver, 5, Relation::Leq, 1);
+    REQUIRE(solver.check(db).kind == TheoryCheckResult::Kind::Consistent);
+    solver.reset();
+    replayAssert(solver, 6, Relation::Eq, 9);
+    REQUIRE(solver.check(db).kind == TheoryCheckResult::Kind::Consistent);
+    const auto pin = solver.proveFixedValueByName("incremental-x");
+    REQUIRE(pin.has_value());
+    CHECK(pin->first == 9);
+}
+
+TEST_CASE("LIA: incremental unary decisions agree with exhaustive finite arithmetic") {
+    LiaSolver solver;
+    TheoryLemmaDatabase db;
+    struct Atom { Relation relation; int rhs; bool active = false, value = false; };
+    std::vector<Atom> atoms;
+    for (int i = 0; i < 8; ++i) atoms.push_back({i % 2 ? Relation::Geq : Relation::Leq, i - 4});
+    auto base = [&] { replayAssert(solver, 1, Relation::Geq, -3); replayAssert(solver, 2, Relation::Leq, 3); };
+    base();
+    for (unsigned step = 0; step < 160; ++step) {
+        if (step && step % 17 == 0) {
+            solver.backtrackToLevel(0);
+            for (auto& a : atoms) a.active = false;
+            base();
+        }
+        const size_t index = (step * 13 + step / 7) % atoms.size();
+        auto& a = atoms[index];
+        a.active = true;
+        a.value = (step / 3) % 2;
+        replayAssert(solver, SatVar(10 + index), a.relation, a.rhs, a.value, 1);
+        bool exists = false;
+        for (int value = -3; value <= 3; ++value) {
+            bool valid = true;
+            for (const auto& atom : atoms) if (atom.active)
+                valid &= (atom.relation == Relation::Leq ? value <= atom.rhs : value >= atom.rhs) == atom.value;
+            exists |= valid;
+        }
+        const auto result = solver.check(db);
+        INFO(step);
+        CHECK(result.kind == (exists ? TheoryCheckResult::Kind::Consistent : TheoryCheckResult::Kind::Conflict));
+        // Rechecking the same context must not retain a rejected local bound.
+        CHECK(solver.check(db).kind == result.kind);
+    }
+}
+
+TEST_CASE("LIA: withdrawing a pin invalidates entailment reads before another check") {
+    LiaSolver solver;
+    TheoryLemmaDatabase db;
+    replayAssert(solver, 1, Relation::Geq, 0);
+    replayAssert(solver, 2, Relation::Leq, 2);
+    replayAssert(solver, 3, Relation::Eq, 1, true, 2);
+    REQUIRE(solver.check(db).kind == TheoryCheckResult::Kind::Consistent);
+    REQUIRE(solver.proveFixedValueByName("incremental-x").has_value());
+    solver.backtrackToLevel(1);
+    CHECK_FALSE(solver.proveFixedValueByName("incremental-x").has_value());
+    REQUIRE(solver.check(db).kind == TheoryCheckResult::Kind::Consistent);
+    CHECK_FALSE(solver.proveFixedValueByName("incremental-x").has_value());
+}
