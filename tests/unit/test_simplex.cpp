@@ -235,3 +235,84 @@ TEST_CASE("GeneralSimplex: randomized sparse LRA stress") {
         CHECK(gs.debugCheckInvariants());
     }
 }
+
+TEST_CASE("GeneralSimplex: fixed-value closure shares diamond dependencies and retains premises") {
+    GeneralSimplex gs;
+    const int x = gs.addVar("x"), y = gs.addVar("y"), z = gs.addVar("z"), w = gs.addVar("w");
+    const int xy = gs.addConstraint({{x, 1}, {y, 1}}, 5);
+    const int xz = gs.addConstraint({{x, 1}, {z, 1}}, 7);
+    const int yzw = gs.addConstraint({{y, 1}, {z, 1}, {w, 1}}, 11);
+    SatVar reason = 1;
+    auto pin = [&](int var, int value) {
+        REQUIRE(gs.assertLower(var, BoundInfo(BoundValue(DeltaRational(value)), SatLit::positive(reason++))));
+        REQUIRE(gs.assertUpper(var, BoundInfo(BoundValue(DeltaRational(value)), SatLit::positive(reason++))));
+    };
+    pin(x, 2); pin(xy, 0); pin(xz, 0); pin(yzw, 0);
+    for (int pass = 0; pass < 2; ++pass) {
+        if (pass) REQUIRE((gs.check() == GeneralSimplex::Result::Sat));
+        const auto analysis = gs.analyzeFixedValues();
+        const auto proof = analysis.prove(w);
+        REQUIRE(proof.has_value());
+        CHECK(proof->first == DeltaRational(3));
+        CHECK(proof->second.size() == 8);
+        // Replay only the returned bound premises on an independent finite
+        // assignment grid. Auxiliary values use the original row equations.
+        unsigned witnesses = 0;
+        for (int a = 0; a <= 6; ++a) for (int b = 0; b <= 6; ++b)
+            for (int c = 0; c <= 6; ++c) for (int d = 0; d <= 6; ++d) {
+                const std::vector<int> values{a, b, c, d, a+b-5, a+c-7, b+c+d-11};
+                bool premises = true;
+                for (const auto& br : proof->second) {
+                    const auto state = gs.varState(br.var);
+                    const auto actual = DeltaRational(values.at(br.var));
+                    premises &= br.isLower ? actual >= state.lower.bound.value
+                                           : actual <= state.upper.bound.value;
+                }
+                if (premises) { ++witnesses; CHECK(DeltaRational(d) == proof->first); }
+            }
+        CHECK(witnesses == 1);
+    }
+}
+
+TEST_CASE("GeneralSimplex: fixed-value analysis respects cycles, strict values and backtracking") {
+    GeneralSimplex gs;
+    const int x = gs.addVar("x"), y = gs.addVar("y");
+    const int equality = gs.addConstraint({{x, 2}, {y, -3}}, 1);
+    REQUIRE(gs.assertLower(equality, BoundInfo(BoundValue(DeltaRational(0)), SatLit::positive(1))));
+    REQUIRE(gs.assertUpper(equality, BoundInfo(BoundValue(DeltaRational(0)), SatLit::positive(2))));
+    CHECK_FALSE(gs.analyzeFixedValues().prove(x));
+    CHECK_FALSE(gs.analyzeFixedValues().prove(y));
+    CHECK_FALSE(gs.proveFixedValue(-1));
+    gs.push();
+    const DeltaRational pinned(mpq_class(1, 2), mpq_class(3, 5));
+    REQUIRE(gs.assertLower(x, BoundInfo(BoundValue(pinned), SatLit::positive(3)), 1));
+    REQUIRE(gs.assertUpper(x, BoundInfo(BoundValue(pinned), SatLit::positive(4)), 1));
+    const auto proof = gs.analyzeFixedValues().prove(y);
+    REQUIRE(proof.has_value());
+    CHECK(proof->first == DeltaRational(mpq_class(0), mpq_class(2, 5)));
+    CHECK(proof->second.size() == 4);
+    gs.pop();
+    CHECK_FALSE(gs.analyzeFixedValues().prove(x));
+    CHECK_FALSE(gs.analyzeFixedValues().prove(y));
+}
+
+TEST_CASE("GeneralSimplex: fixed-value proof chains use iterative shared dependencies") {
+    GeneralSimplex gs;
+    constexpr int depth = 2048;
+    int variable = gs.addVar("root");
+    SatVar reason = 1;
+    auto pin = [&](int var, int value) {
+        REQUIRE(gs.assertLower(var, BoundInfo(BoundValue(DeltaRational(value)), SatLit::positive(reason++))));
+        REQUIRE(gs.assertUpper(var, BoundInfo(BoundValue(DeltaRational(value)), SatLit::positive(reason++))));
+    };
+    pin(variable, 1);
+    for (int i = 0; i < depth; ++i) {
+        const int next = gs.addVar("chain-" + std::to_string(i));
+        pin(gs.addConstraint({{variable, 1}, {next, 1}}, 0), 0);
+        variable = next;
+    }
+    const auto proof = gs.analyzeFixedValues().prove(variable);
+    REQUIRE(proof.has_value());
+    CHECK(proof->first == DeltaRational(1));
+    CHECK(proof->second.size() == 2 * (depth + 1));
+}

@@ -39,20 +39,16 @@ void LiaSolver::scanLiteralPinEntailments() {
     // Throttle: hard cap per check to avoid quadratic worst-case in the SAT bus.
     const size_t kMaxPropsPerScan = 256;
     size_t emitted = 0;
-    // #87: memoize proveFixedValue across this scan. The scan iterates ALL atoms and
-    // queries proveFixedValue for the SAME shared vars (sp.a/sp.b, LHS vars) across
-    // many atoms — redundant recursion (the xs-13-09 Wisa cliff: 86% of samples in
-    // GeneralSimplex::proveFixedValueImpl). The scan only READS the simplex
-    // (proveFixedValue is const; no assert/pivot here), so the bounds+tableau are
-    // STABLE throughout — caching by var index is sound + verdict-identical (same
-    // result, computed once per var instead of once per occurrence). Local to this
-    // call and discarded after, so there is no cross-mutation staleness.
+    // Bounds and tableau stay unchanged during this scan. Share a single
+    // work-queue closure, and materialize each target's proof only once.
+    std::optional<GeneralSimplex::FixedValueAnalysis> fixedAnalysis;
     using FixedResult = decltype(gs_.proveFixedValue(0));
     std::unordered_map<int, FixedResult> fixedCache;
     auto cachedProveFixedValue = [&](int idx) -> const FixedResult& {
         auto it = fixedCache.find(idx);
         if (it != fixedCache.end()) return it->second;
-        return fixedCache.emplace(idx, gs_.proveFixedValue(idx)).first->second;
+        if (!fixedAnalysis) fixedAnalysis = gs_.analyzeFixedValues();
+        return fixedCache.emplace(idx, fixedAnalysis->prove(idx)).first->second;
     };
     for (const auto& rec : registry_->records()) {
         if (emitted >= kMaxPropsPerScan) break;

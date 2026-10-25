@@ -172,10 +172,23 @@ public:
     /** Return bound reasons that fix the variable (lower == upper). */
     std::vector<BoundReason> explainFixedValue(int var) const;
 
-    /** Recursively prove that a variable is fixed by tableau row propagation.
-     *  Returns the fixed value and collected bound reasons, or nullopt.
-     */
-    std::optional<std::pair<DeltaRational, std::vector<BoundReason>>> proveFixedValue(int var) const;
+    using FixedValueProof = std::pair<DeltaRational, std::vector<BoundReason>>;
+
+    // Immutable analysis of the current bounds/tableau. A work queue propagates
+    // rows with one unknown, sharing value dependencies across all queried vars.
+    // Proofs remain justified by their recorded bounds; consumers must keep those
+    // premises active. Create a new analysis after backtracking or mutation.
+    class FixedValueAnalysis {
+    public:
+        std::optional<FixedValueProof> prove(int var) const;
+    private:
+        friend class GeneralSimplex;
+        std::vector<std::optional<DeltaRational>> values_;
+        std::vector<std::vector<int>> dependencies_;
+        std::vector<std::vector<BoundReason>> premises_;
+    };
+    FixedValueAnalysis analyzeFixedValues() const;
+    std::optional<FixedValueProof> proveFixedValue(int var) const;
 
     // -------------------------------------------------------------------------
     // Read-only accessors for bound propagation / conflict explanation
@@ -349,9 +362,6 @@ private:
 
     // Row of a basic var
     int rowOfBasic(int var) const;
-
-    std::optional<std::pair<DeltaRational, std::vector<BoundReason>>>
-    proveFixedValueImpl(int var, std::unordered_set<int>& visited) const;
 
 #ifdef XOLVER_LRA_PROFILE
 public:
