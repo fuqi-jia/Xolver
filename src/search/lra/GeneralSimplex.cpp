@@ -256,7 +256,9 @@ bool GeneralSimplex::assertLower(int var, const BoundInfo& info, int level) {
     assert(var >= 0 && var < static_cast<int>(vars_.size()));
 
     if (info.bound <= vars_[var].lower.bound) return true;
+    const auto retainedAnalysis = fixedValueAnalysis_;
     noteBoundChange();
+    const auto boundAnalysisRevision = analysisRevision();
     if (info.bound > vars_[var].upper.bound) {
         explainImmediateConflict(var, true, info.reason.value());
         hasImmediateConflict_ = true;
@@ -272,6 +274,11 @@ bool GeneralSimplex::assertLower(int var, const BoundInfo& info, int level) {
     } else {
         refreshViolationStatus(var);
     }
+    // An accepted tightening cannot remove an existing pin. If it creates no
+    // pin either, all sources of the fixed-value closure remain unchanged.
+    if (retainedAnalysis && !fixedValue(var) && boundAnalysisRevision &&
+        analysisRevision() == boundAnalysisRevision)
+        fixedValueAnalysis_ = retainedAnalysis;
     return true;
 }
 
@@ -281,7 +288,9 @@ bool GeneralSimplex::assertUpper(int var, const BoundInfo& info, int level) {
     assert(var >= 0 && var < static_cast<int>(vars_.size()));
 
     if (info.bound >= vars_[var].upper.bound) return true;
+    const auto retainedAnalysis = fixedValueAnalysis_;
     noteBoundChange();
+    const auto boundAnalysisRevision = analysisRevision();
     if (info.bound < vars_[var].lower.bound) {
         explainImmediateConflict(var, false, info.reason.value());
         hasImmediateConflict_ = true;
@@ -297,6 +306,9 @@ bool GeneralSimplex::assertUpper(int var, const BoundInfo& info, int level) {
     } else {
         refreshViolationStatus(var);
     }
+    if (retainedAnalysis && !fixedValue(var) && boundAnalysisRevision &&
+        analysisRevision() == boundAnalysisRevision)
+        fixedValueAnalysis_ = retainedAnalysis;
     return true;
 }
 
@@ -1007,6 +1019,7 @@ void GeneralSimplex::reset() {
 bool GeneralSimplex::replaceActiveBounds(const std::vector<ActiveBound>& bounds,
                                          AssignmentPolicy policy) {
     std::unordered_map<int, std::array<BoundInfo, 2>> next;
+    std::vector<int> sourceOrder;
     for (const auto& input : bounds) {
         if (input.var < 0 || input.var >= numVars() || !input.info.bound.isFinite() || !input.info.reason)
             throw std::invalid_argument("replacement bounds need an existing column and a finite explained endpoint");
@@ -1027,12 +1040,18 @@ bool GeneralSimplex::replaceActiveBounds(const std::vector<ActiveBound>& bounds,
             endpoint = &*normalized;
         }
         auto [it, fresh] = next.try_emplace(input.var);
-        if (fresh) it->second[0] = BoundInfo(BoundValue::negInf());
+        if (fresh) {
+            it->second[0] = BoundInfo(BoundValue::negInf());
+            sourceOrder.push_back(input.var);
+        }
         auto& current = it->second[input.isLower ? 0 : 1];
         if (input.isLower ? endpoint->bound > current.bound : endpoint->bound < current.bound)
             current = *endpoint;
     }
+    const auto retainedAnalysis = fixedValueAnalysis_;
+    bool fixedSourcesChanged = false;
     noteBoundChange();
+    const auto replacementRevision = analysisRevision();
     trail_.clear();
     scopeStack_.clear();
     hasImmediateConflict_ = false;
@@ -1043,6 +1062,15 @@ bool GeneralSimplex::replaceActiveBounds(const std::vector<ActiveBound>& bounds,
         if (state.lower.bound.kind != lower.bound.kind || state.upper.bound.kind != upper.bound.kind ||
             (lower.bound.isFinite() && (state.lower.bound.value != lower.bound.value || state.lower.reason != lower.reason)) ||
             (upper.bound.isFinite() && (state.upper.bound.value != upper.bound.value || state.upper.reason != upper.reason))) {
+            if (retainedAnalysis && !fixedSourcesChanged) {
+                const bool wasFixed = state.lower.bound.isFinite() && state.upper.bound.isFinite() &&
+                    state.lower.bound.value == state.upper.bound.value;
+                const bool nowFixed = lower.bound.isFinite() && upper.bound.isFinite() &&
+                    lower.bound.value == upper.bound.value;
+                fixedSourcesChanged = wasFixed != nowFixed || (wasFixed &&
+                    (state.lower.bound.value != lower.bound.value || state.lower.reason != lower.reason ||
+                     state.upper.reason != upper.reason));
+            }
             state.lower = lower;
             state.upper = upper;
             changed.push_back(var);
@@ -1057,20 +1085,31 @@ bool GeneralSimplex::replaceActiveBounds(const std::vector<ActiveBound>& bounds,
         assign(var, BoundInfo(BoundValue::negInf()), BoundInfo(BoundValue::posInf()));
     }
     boundedVars_.clear();
-    for (const auto& [var, endpoints] : next) {
+    for (int var : sourceOrder) {
+        const auto& endpoints = next.at(var);
         assign(var, endpoints[0], endpoints[1]);
         boundedVars_.insert(var);
     }
     if (policy == AssignmentPolicy::Reinitialize) betaDirty_ = true;
     if (!betaDirty_ && !hasImmediateConflict_) {
-        // Install the whole base first. Non-basic moves update their incident
-        // rows; basic violations use the existing lazy work queue.
+        // Install the whole base first, then repair non-basic points. Rebuild
+        // the work queue in input-source order: hash iteration and stale child
+        // queue entries must not choose the parent's pivot order.
         for (const int var : changed) {
-            if (vars_[var].basicRow >= 0) refreshViolationStatus(var);
-            else if (violatesLower(var)) update(var, vars_[var].lower.bound.value);
+            if (vars_[var].basicRow >= 0) continue;
+            if (violatesLower(var)) update(var, vars_[var].lower.bound.value);
             else if (violatesUpper(var)) update(var, vars_[var].upper.bound.value);
         }
+        for (int var : violatedQueue_) inViolationQueue_[var] = false;
+        violatedQueue_.clear();
+        for (int var : sourceOrder) refreshViolationStatus(var);
     }
+    // Fixed-value closure uses only equality pins, their explanations and the
+    // tableau equations. Other interval changes do not change those proofs.
+    // The bound/scan revision still changes; outstanding snapshots stay immutable.
+    if (retainedAnalysis && !fixedSourcesChanged && replacementRevision &&
+        analysisRevision() == replacementRevision)
+        fixedValueAnalysis_ = retainedAnalysis;
     return !hasImmediateConflict_;
 }
 
@@ -1106,26 +1145,23 @@ GeneralSimplex::FixedValueAnalysis GeneralSimplex::analyzeFixedValues() const {
     result.values_.resize(vars_.size());
     result.dependencies_.resize(vars_.size());
     result.premises_.resize(vars_.size());
-    for (int var = 0; var < numVars(); ++var) {
+    for (int var : boundedVars_) {
         if (auto value = fixedValue(var)) {
             result.values_[var] = *value;
             result.premises_[var] = explainFixedValue(var);
         }
     }
 
-    // Row equation: basic - sum(coeff * nonbasic) = rhs. Retain the
-    // residual after known variables and the number of remaining unknowns.
+    // Row equation: basic - sum(coeff * nonbasic) = rhs. Count unknowns
+    // without rational arithmetic; evaluate only rows that can determine a
+    // value. Most partially known rows never fire during a closure pass.
     std::vector<size_t> unknown(tab_.numRows());
-    std::vector<DeltaRational> residual(tab_.numRows());
     std::vector<int> pending;
     for (int r = 0; r < tab_.numRows(); ++r) {
         const auto& row = tab_.row(r);
-        residual[r] = DeltaRational(row.rhs);
-        if (result.values_[row.basicVar]) residual[r] -= *result.values_[row.basicVar];
-        else ++unknown[r];
+        if (!result.values_[row.basicVar]) ++unknown[r];
         for (const auto& entry : row.entries) {
-            if (result.values_[entry.col]) residual[r] += entry.coeff * *result.values_[entry.col];
-            else ++unknown[r];
+            if (!result.values_[entry.col]) ++unknown[r];
         }
         if (unknown[r] == 1) pending.push_back(r);
     }
@@ -1133,34 +1169,34 @@ GeneralSimplex::FixedValueAnalysis GeneralSimplex::analyzeFixedValues() const {
         const int r = pending.back(); pending.pop_back();
         if (unknown[r] != 1) continue;
         const auto& row = tab_.row(r);
-        int var = row.basicVar;
+        int var = -1;
         mpq_class coefficient = 1;
-        if (result.values_[var]) {
-            var = -1;
-            for (const auto& entry : row.entries) {
-                if (!result.values_[entry.col]) {
-                    var = entry.col;
-                    coefficient = -entry.coeff;
-                    break;
-                }
+        DeltaRational residual(row.rhs);
+        if (result.values_[row.basicVar]) residual -= *result.values_[row.basicVar];
+        else var = row.basicVar;
+        for (const auto& entry : row.entries) {
+            if (result.values_[entry.col]) residual += entry.coeff * *result.values_[entry.col];
+            else {
+                assert(var == -1);
+                var = entry.col;
+                coefficient = -entry.coeff;
             }
         }
         assert(var >= 0 && coefficient != 0);
-        result.values_[var] = residual[r] / coefficient;
+        result.values_[var] = residual / coefficient;
         auto& dependencies = result.dependencies_[var];
         if (row.basicVar != var) dependencies.push_back(row.basicVar);
         for (const auto& entry : row.entries)
             if (entry.col != var) dependencies.push_back(entry.col);
 
-        auto updateRow = [&](int affected, const mpq_class& coeff) {
+        auto updateRow = [&](int affected) {
             assert(unknown[affected] > 0);
             --unknown[affected];
-            residual[affected] -= coeff * *result.values_[var];
             if (unknown[affected] == 1) pending.push_back(affected);
         };
-        if (isBasic(var)) updateRow(basicRowOfVar(var), mpq_class(1));
+        if (isBasic(var)) updateRow(basicRowOfVar(var));
         for (const auto& entry : tab_.col(var).entries)
-            updateRow(entry.row, mpq_class(-tab_.row(entry.row).entries[entry.rowPos].coeff));
+            updateRow(entry.row);
     }
     return result;
 }

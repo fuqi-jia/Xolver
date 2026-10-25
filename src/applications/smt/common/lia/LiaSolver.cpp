@@ -184,6 +184,7 @@ void LiaSolver::onBacktrack(int level) {
         interfaceEqualities_.clear();
         interfaceDisequalities_.clear();
     } else {
+        const size_t previousTrailSize = theoryTrail_.size();
         theoryTrail_.erase(std::remove_if(theoryTrail_.begin(), theoryTrail_.end(),
             [level](const auto& e) { return e.level > level; }), theoryTrail_.end());
         auto ieIt = std::remove_if(interfaceEqualities_.begin(), interfaceEqualities_.end(),
@@ -193,7 +194,7 @@ void LiaSolver::onBacktrack(int level) {
         auto idIt = std::remove_if(interfaceDisequalities_.begin(), interfaceDisequalities_.end(),
             [level](const auto& ie) { return ie.level > level; });
         interfaceDisequalities_.erase(idIt, interfaceDisequalities_.end());
-        rebuildTrailCaches();
+        if (theoryTrail_.size() != previousTrailSize) rebuildTrailCaches();
 
         // Replace the retained source base atomically, rather than resetting
         // every column and replaying each source through incremental pivots.

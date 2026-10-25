@@ -425,4 +425,8 @@ TEST_CASE("LIA: positive backtracking retains parent premises before another che
     solver.backtrackToLevel(1); // a Boolean-only backtrack preserves the same base
     REQUIRE(solver.proveFixedValueByName("incremental-x").has_value());
     CHECK(solver.proveFixedValueByName("incremental-x")->first == 9);
+    // An unapplied parent fact must survive a callback that withdraws nothing.
+    replayAssert(solver, 4, Relation::Geq, 10, true, 1);
+    solver.backtrackToLevel(1);
+    CHECK(solver.check(db).kind == TheoryCheckResult::Kind::Conflict);
 }
