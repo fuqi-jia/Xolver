@@ -35,6 +35,39 @@ bool varInAssertions(const NativeTerms& ir, const std::string& n) {
 }
 } // namespace
 
+TEST_CASE("SolveEqs: shared DAG traversal preserves reconstruction and UF context") {
+    NativeTerms ir;
+    SortId b, i, r;
+    setupSorts(ir, b, i, r);
+    auto x = var(ir, i, "x"), y = var(ir, i, "y");
+    auto shared = y;
+    for (int depth = 0; depth < 40; ++depth)
+        shared = bin(ir, Kind::Add, i, shared, shared);
+    ir.addAssertion(bin(ir, Kind::Eq, b, x, shared));
+    ModelConverter converter;
+    SolveEqs pass(ir, converter);
+    REQUIRE(pass.run());
+    pass.commit();
+    CHECK(converter.size() == 1);
+    std::unordered_map<std::string, RealValue> numbers{{"y", RealValue::fromInt(1)}};
+    std::unordered_map<std::string, std::string> values{{"y", "1"}};
+    REQUIRE(converter.reconstruct(numbers, values, ir));
+    mpz_class expected = 1;
+    expected <<= 40;
+    CHECK(values.at("x") == expected.get_str());
+
+    ir.clearAssertions();
+    ir.addAssertion(bin(ir, Kind::Geq, b, shared, cint(ir, i, 0)));
+    auto fsym = var(ir, i, "f");
+    auto call = ir.add(TermExpr{Kind::UFApply, i, {fsym, shared}, Payload(std::string("f"))});
+    ir.addAssertion(bin(ir, Kind::Eq, b, call, cint(ir, i, 0)));
+    ir.addAssertion(bin(ir, Kind::Eq, b, y, cint(ir, i, 3)));
+    ModelConverter guarded;
+    SolveEqs guardedPass(ir, guarded);
+    CHECK_FALSE(guardedPass.run());
+    CHECK(guarded.size() == 0);
+}
+
 TEST_CASE("SolveEqs: does NOT eliminate a variable feeding a UF argument") {
     // (= x 1) AND (distinct (f (+ x 1)) (f 2)).  Eliminating x severs the
     // Nelson-Oppen shared term (+ x 1)/2 that congruence needs, causing a

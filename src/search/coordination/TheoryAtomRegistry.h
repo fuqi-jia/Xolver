@@ -48,6 +48,11 @@ public:
         TheoryId theory
     );
 
+    // Find an existing literal for this predicate, including a negated
+    // literal for its logical complement. Never registers or observes atoms.
+    std::optional<SatLit> findLinearLiteral(
+        const LinearFormKey& lhs, Relation rel, const mpq_class& rhs) const;
+
     SatLit getOrCreatePolynomialAtom(
         PolyId poly,
         Relation rel,

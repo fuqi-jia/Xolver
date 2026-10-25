@@ -139,11 +139,10 @@ SatVar CadicalBackend::newVar() {
         return maxVar_;
     }
 
-    ++maxVar_;
-    if (maxVar_ > declaredVars_) {
-        declaredVars_ = maxVar_ + 10000;
-        solver_->declare_more_variables(declaredVars_);
-    }
+    // This API allocates one protected external variable and skips any BVA
+    // extension variables. declare_more_variables takes a COUNT, not an ID or
+    // capacity; padding it creates thousands of actual SAT decisions.
+    maxVar_ = static_cast<SatVar>(solver_->declare_one_more_variable());
 
     // If an external propagator is already connected (pre-solve setup),
     // observe the variable immediately so it is safe to use in lemmas.
@@ -152,7 +151,6 @@ SatVar CadicalBackend::newVar() {
         if (maxVar_ >= observedVars_.size()) {
             size_t newSize = std::max(static_cast<size_t>(maxVar_) + 1,
                                       observedVars_.size() * 2);
-            newSize = std::max(newSize, static_cast<size_t>(declaredVars_) + 1);
             observedVars_.resize(newSize, false);
         }
         observedVars_[maxVar_] = true;
@@ -384,7 +382,6 @@ void CadicalBackend::addObservedVar(SatVar v) {
     if (static_cast<size_t>(v) >= observedVars_.size()) {
         size_t newSize = std::max(static_cast<size_t>(v) + 1,
                                   observedVars_.size() * 2);
-        newSize = std::max(newSize, static_cast<size_t>(declaredVars_) + 1);
         observedVars_.resize(newSize, false);
     }
     if (!observedVars_[v]) {
@@ -403,10 +400,6 @@ void CadicalBackend::setDefaultPhase(SatVar v, bool value) {
 }
 
 void CadicalBackend::connectPropagator(CadicalTheoryPropagator* propagator) {
-    if (maxVar_ > declaredVars_) {
-        declaredVars_ = maxVar_ + 10000;
-        solver_->declare_more_variables(declaredVars_);
-    }
     solver_->connect_external_propagator(propagator);
     propagatorConnected_ = true;
 }
@@ -428,9 +421,9 @@ CadicalBackend::Stats CadicalBackend::getStats() const {
     Stats s;
     s.vars = solver_->active();
     s.clauses = solver_->irredundant() + solver_->redundant();
-    s.conflicts = solver_->get("conflicts");
-    s.decisions = solver_->get("decisions");
-    s.propagations = solver_->get("propagations");
+    s.conflicts = solver_->get_statistic_value("conflicts");
+    s.decisions = solver_->get_statistic_value("decisions");
+    s.propagations = solver_->get_statistic_value("propagations");
     return s;
 }
 

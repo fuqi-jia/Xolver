@@ -5,6 +5,32 @@
 
 namespace xolver {
 
+mpq_class RationalPolynomial::evaluateRational(
+    const std::unordered_map<VarId, mpq_class>& sample) const {
+    mpq_class result{0};
+    for (const auto& [key, coefficient] : terms_) {
+        mpq_class value = coefficient;
+        for (const auto& [variable, exponent] : key) {
+            const auto it = sample.find(variable);
+            if (it == sample.end() || it->second == 0) {
+                value = 0;
+                break;
+            }
+            // Exponents are positive by the monomial invariant. GMP powers
+            // avoid a polynomial copy and a normalization at each substitution.
+            mpq_class power;
+            mpz_pow_ui(mpq_numref(power.get_mpq_t()),
+                       mpq_numref(it->second.get_mpq_t()), exponent);
+            mpz_pow_ui(mpq_denref(power.get_mpq_t()),
+                       mpq_denref(it->second.get_mpq_t()), exponent);
+            power.canonicalize();
+            value *= power;
+        }
+        result += value;
+    }
+    return result;
+}
+
 // Canonicalize a MonomialKey so map lookups behave correctly:
 //   * sort by VarId ascending (lex-canonical form used elsewhere),
 //   * merge duplicate VarId entries by summing exponents,

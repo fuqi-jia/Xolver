@@ -750,6 +750,7 @@ std::vector<SatLit> LraSolver::allActiveReasons() const {
 
 std::optional<TheoryLemma> LraSolver::buildEntailmentLemma(
     const LraPropagationEngine::ExplainedBound& eb) const {
+    if (!registry_ || eb.reasons.empty()) return std::nullopt;
     auto it = auxFormInfo_.find(eb.var);
     if (it == auxFormInfo_.end()) return std::nullopt;
     const auto& info = it->second;
@@ -774,20 +775,23 @@ std::optional<TheoryLemma> LraSolver::buildEntailmentLemma(
         else return std::nullopt;          // b>0 upper: not soundly representable
     }
 
-    if (!registry_) return std::nullopt;
-    SatLit implied = registry_->getOrCreateLinearBoundAtom(
-        info.lhs, rel, boundRhs, TheoryId::LRA);
+    // Ordinary theory propagation projects mathematical facts onto the
+    // registered SAT vocabulary. Creating an atom for every intermediate
+    // rational endpoint feeds fresh atoms back into propagation indefinitely.
+    // Cut/split algorithms use the explicit registration interface separately.
+    const auto implied = registry_->findLinearLiteral(info.lhs, rel, boundRhs);
+    if (!implied || std::find(eb.reasons.begin(), eb.reasons.end(), *implied) != eb.reasons.end())
+        return std::nullopt;
 
     // Clause (¬reason₁ ∨ ... ∨ ¬reasonₖ ∨ implied): a theory tautology, since
     // the reasons Farkas-entail `implied`. Reasons are asserted-true literals,
     // so their negations sit in the clause. Drop a degenerate empty-reason
     // derivation (would be a bare unit -> not safe).
-    if (eb.reasons.empty()) return std::nullopt;
     TheoryLemma lem;
     lem.kind = LemmaKind::Entailment;
     lem.lits.reserve(eb.reasons.size() + 1);
     for (SatLit r : eb.reasons) lem.lits.push_back(r.negated());
-    lem.lits.push_back(implied);
+    lem.lits.push_back(*implied);
     return lem;
 }
 

@@ -12,7 +12,7 @@ namespace xolver {
 // Relocated Solver::Impl method definitions (declared in SolverImpl.h).
 
 void Solver::Impl::reset() {
-        resetWithParser(std::make_unique<SOMTParser::Parser>());
+        resetWithParser(nullptr);
 }
 void Solver::Impl::resetWithParser(std::unique_ptr<SOMTParser::Parser> replacement) {
         static std::atomic<uint64_t> nextContext{1};
@@ -106,7 +106,10 @@ bool Solver::Impl::parseFile(std::string_view filename) {
         return true;
 }
 NativeTerms& Solver::Impl::ensureIr() {
-        if (!ir) ir = std::make_unique<NativeTerms>(parser->getNodeManager());
+        if (!ir) {
+            if (!parser) parser = std::make_unique<SOMTParser::Parser>();
+            ir = std::make_unique<NativeTerms>(parser->getNodeManager());
+        }
         return *ir;
 }
 SortId Solver::Impl::getOrCreateBoolSort() {

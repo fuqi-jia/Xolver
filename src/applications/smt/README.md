@@ -6,6 +6,65 @@ named signature check; per-logic `Solver.h` entries expose this same interface.
 Theory combinations compose actual encodings rather than accepting a name as a
 claim of complete coverage.
 
+Ground integer reasoning shares a checked interval calculus with SV. Bounds on
+variables and compound integer terms retain their original mandatory premises;
+integer disequalities can exclude a zero endpoint. A refutation is accepted only
+after certificate replay. Open interval proofs preserve the original query.
+
+Integer div/mod use Euclidean semantics for nonzero divisors and explicit total
+function interpretations at zero. Scoped nonzero facts eliminate unreachable
+zero branches. Lowering exposes quotient/remainder bindings for constant
+propagation; the remaining features select arithmetic or arithmetic/EUF stacks
+for that query. The declared logic is retained across repeated checks.
+
+Theory model reconstruction requests `getModelWithInternal()` so quotient,
+remainder and combination witnesses remain available. The theory `getModel()`
+interface filters internal bindings. Integer sort checks and the
+zero-divisor interpretation tables are shared by native model validation and
+the public `validateModel()` API.
+
+Linear checks share an immutable fixed-value analysis within each stable scan.
+Its work queue tracks tableau residuals and original bound premises; proof
+extraction uses iterative dependency traversal. LIA reuses fully applied input
+prefixes only while exact keys and the simplex bound revision match. Complete
+SAT candidate reconstruction initializes an independent primal point;
+incremental backtracking can retain the current point.
+
+Real bound propagation uses a local, explained overlay and row min/max
+aggregates. Backward propagation subtracts the appropriate extremum of the
+other terms before dividing by the target coefficient. New facts wake only
+incident rows; explanations contain original SAT premises, including through
+multi-row chains. Propagation respects work, time, output and explanation
+budgets without mutating the simplex snapshot.
+
+Ordinary bound propagation matches derived predicates to registered SAT
+literals through a read-only lookup, including logical complements. Cut and
+split algorithms request new atom registration explicitly.
+
+Nonlinear rational candidates use direct exact polynomial evaluation. Boundary
+candidates share immutable decompositions and skip independent coordinates.
+Original constraints still validate each candidate before SAT is reported.
+
+Ground integer div/mod follows this path:
+
+```mermaid
+flowchart TD
+  A[Integer assertions and declared logic] --> I[Applicable integer interval refutation]
+  I -->|replayed contradiction| U[UNSAT]
+  I -->|open| G[Incremental ground session]
+  G --> P[DAG rewriting and scoped arithmetic lowering]
+  P --> R[Query-local theory selection]
+  R --> D[CDCL with arithmetic and required combinations]
+  D --> U
+  D -->|resource exhaustion| N[Unknown with diagnostic reason]
+  D --> M[Complete theory model and reconstruction]
+  M --> V[Check original integer arithmetic and total extensions]
+  V -->|validated| S[SAT]
+  V -->|unconfirmed| X[Model search within resource limits]
+  X -->|candidate| V
+  X -->|budget exhausted| N
+```
+
 | Entry | Backend behavior |
 | --- | --- |
 | `qfbv`, `bv`, `qbf` | Modular circuits and BDDs; quantification in the BV/QBF entries |

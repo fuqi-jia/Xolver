@@ -77,6 +77,9 @@ private:
 
     // Check if term contains nonlinear subterms (Mul of two non-constants, Pow, etc.)
     bool containsNonlinear(ExprId e) const;
+    void collectNonzeroFacts(ExprId e, ScopeLevel level);
+    void collectFiniteDomain(ExprId e, ScopeLevel level);
+    bool knownNonzero(ExprId e, ScopeLevel level) const;
 
     // IR builders
     ExprId mkIntConst(int64_t v);
@@ -106,6 +109,9 @@ private:
     SortId boolSortId_;
     SortId intSortId_;
     std::unordered_map<ExprId, ExprId> memo_;
+    std::unordered_map<ExprId, ScopeLevel> nonzeroFacts_;
+    struct FiniteDomainFact { ScopeLevel level; std::vector<mpz_class> values; };
+    std::unordered_map<ExprId, FiniteDomainFact> divisorDomains_;
 
     struct DivModKey {
         ScopeLevel level;

@@ -203,7 +203,7 @@ TheoryCheckResult LiaSolver::assertInterfaceDisequality(
     // rebuild dominated the QF_UFLIA Wisa profile. Verdict-identical: with no equality
     // bound removed, no simplex bound changed, so the reset would be a no-op.
     if (removedEq) {
-        gs_.resetActiveBounds();
+        resetAppliedBounds();
     }
     return TheoryCheckResult::consistent();
 }
@@ -221,6 +221,7 @@ LiaSolver::getDeducedSharedEqualities() {
     // Map fixed-value shared terms
     using GroupEntry = std::pair<SharedTermId, std::vector<SatLit>>;
     std::map<DeltaRational, std::vector<GroupEntry>> groups;
+    std::optional<GeneralSimplex::FixedValueAnalysis> fixedAnalysis;
 
     for (SharedTermId stId : sharedTermRegistry_->allSharedTerms()) {
         std::string name = getVarNameForSharedTerm(stId);
@@ -229,7 +230,8 @@ LiaSolver::getDeducedSharedEqualities() {
         if (it == nameToVar.end()) continue;
         int var = it->second;
 
-        auto fixedOpt = gs_.proveFixedValue(var);
+        if (!fixedAnalysis) fixedAnalysis = gs_.analyzeFixedValues();
+        auto fixedOpt = fixedAnalysis->prove(var);
         if (!fixedOpt) continue;
 
         const DeltaRational& val = fixedOpt->first;

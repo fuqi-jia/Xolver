@@ -8,14 +8,17 @@ from pathlib import Path
 import re
 
 
-def select(root, sizes, seed='20261025'):
+def select(root, sizes, seed='20261025', excluded=()):
     rank = lambda value: hashlib.sha256((seed + ':' + value).encode()).hexdigest()
     result = []
     populations = {}
+    excluded = set(excluded)
     for logic, count in sizes.items():
         groups = collections.defaultdict(list)
         for path in (root / logic).rglob('*.smt2'):
             relative = path.relative_to(root)
+            if relative.as_posix() in excluded:
+                continue
             family = relative.parts[1] if len(relative.parts) > 2 else '_root'
             groups[family].append(path)
         populations[logic] = dict(files=sum(map(len, groups.values())), families=len(groups))
@@ -42,7 +45,7 @@ def select(root, sizes, seed='20261025'):
                 raise ValueError(f'not enough inputs for {logic}')
             depth += 1
         result.extend(selected)
-    return dict(seed=seed, population=populations, cases=result,
+    return dict(seed=seed, population=populations, cases=result, excluded_members=sorted(excluded),
                 policy='round-robin families, seeded SHA-256 rank; no solver outcomes or size cutoff')
 
 
@@ -50,8 +53,13 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--root', type=Path, required=True)
     p.add_argument('--output', type=Path, required=True)
+    p.add_argument('--seed', default='20261025')
+    p.add_argument('--exclude', type=Path, action='append', default=[],
+                   help='previous case manifest whose member names must be excluded')
     args = p.parse_args()
-    report = select(args.root, {'QF_LIA': 24, 'QF_NIA': 24, 'QF_LRA': 16, 'QF_NRA': 16})
+    excluded = {row['member'] for path in args.exclude for row in json.loads(path.read_text())['cases']}
+    report = select(args.root, {'QF_LIA': 24, 'QF_NIA': 24, 'QF_LRA': 16, 'QF_NRA': 16},
+                    args.seed, excluded)
     args.output.write_text(json.dumps(report, indent=2) + '\n')
     print({logic: (sum(c['logic'] == logic for c in report['cases']), values) for logic, values in report['population'].items()})
 

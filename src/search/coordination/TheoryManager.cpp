@@ -1116,7 +1116,7 @@ std::optional<TheorySolver::TheoryModel> TheoryManager::getModel() const {
     // it through.
     std::unordered_map<std::string, std::string> arithNum;  // var -> numeric str
     for (const auto& solver : solvers_) {
-        auto m = solver->getModel();
+        auto m = solver->getModelWithInternal();
         if (!m) continue;
         if (solver->id() == TheoryId::EUF) continue;  // tokens, not numbers
         for (const auto& [name, value] : m->assignments) {
@@ -1127,7 +1127,7 @@ std::optional<TheorySolver::TheoryModel> TheoryManager::getModel() const {
     }
 
     for (const auto& solver : solvers_) {
-        auto m = solver->getModel();
+        auto m = solver->getModelWithInternal();
         if (m) {
             for (const auto& [name, value] : m->assignments) {
                 aggregated.assignments.insert({name, value});  // first wins

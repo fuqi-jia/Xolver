@@ -11,6 +11,8 @@
 #include <deque>
 #include <unordered_set>
 #include <cassert>
+#include <cstdint>
+#include <limits>
 
 namespace xolver {
 
@@ -57,6 +59,8 @@ struct BoundInfo {
 class GeneralSimplex {
 public:
     GeneralSimplex();
+
+    enum class AssignmentPolicy { Reinitialize, Preserve };
 
     // -------------------------------------------------------------------------
     // Variable / constraint registration (before any check)
@@ -144,14 +148,14 @@ public:
     // -------------------------------------------------------------------------
 
     void push();
-    void pop();
+    void pop(AssignmentPolicy policy = AssignmentPolicy::Reinitialize);
 
     // -------------------------------------------------------------------------
     // Reset
     // -------------------------------------------------------------------------
 
     /** Reset active bounds to (-inf, +inf). Keeps tableau. */
-    void resetActiveBounds();
+    void resetActiveBounds(AssignmentPolicy policy = AssignmentPolicy::Reinitialize);
 
     /** Full reset: clears everything including tableau. */
     void reset();
@@ -159,6 +163,12 @@ public:
     // -------------------------------------------------------------------------
     // Diagnostics
     // -------------------------------------------------------------------------
+    // Stable key for active-bound reuse. Saturation disables caching rather
+    // than allowing an epoch to alias after unsigned wraparound.
+    std::optional<uint64_t> boundRevision() const noexcept {
+        if (boundRevision_ == std::numeric_limits<uint64_t>::max()) return std::nullopt;
+        return boundRevision_;
+    }
     int numVars() const { return static_cast<int>(vars_.size()); }
     int numRows() const { return tab_.numRows(); }
     bool isBasic(int var) const;
@@ -172,10 +182,23 @@ public:
     /** Return bound reasons that fix the variable (lower == upper). */
     std::vector<BoundReason> explainFixedValue(int var) const;
 
-    /** Recursively prove that a variable is fixed by tableau row propagation.
-     *  Returns the fixed value and collected bound reasons, or nullopt.
-     */
-    std::optional<std::pair<DeltaRational, std::vector<BoundReason>>> proveFixedValue(int var) const;
+    using FixedValueProof = std::pair<DeltaRational, std::vector<BoundReason>>;
+
+    // Immutable analysis of the current bounds/tableau. A work queue propagates
+    // rows with one unknown, sharing value dependencies across all queried vars.
+    // Proofs remain justified by their recorded bounds; consumers must keep those
+    // premises active. Create a new analysis after backtracking or mutation.
+    class FixedValueAnalysis {
+    public:
+        std::optional<FixedValueProof> prove(int var) const;
+    private:
+        friend class GeneralSimplex;
+        std::vector<std::optional<DeltaRational>> values_;
+        std::vector<std::vector<int>> dependencies_;
+        std::vector<std::vector<BoundReason>> premises_;
+    };
+    FixedValueAnalysis analyzeFixedValues() const;
+    std::optional<FixedValueProof> proveFixedValue(int var) const;
 
     // -------------------------------------------------------------------------
     // Read-only accessors for bound propagation / conflict explanation
@@ -214,6 +237,11 @@ public:
 #endif
 
 private:
+    uint64_t boundRevision_ = 0;
+    void noteBoundChange() noexcept {
+        if (boundRevision_ != std::numeric_limits<uint64_t>::max()) ++boundRevision_;
+    }
+
     // ========================================================================
     // Variable state
     // ========================================================================
@@ -349,9 +377,6 @@ private:
 
     // Row of a basic var
     int rowOfBasic(int var) const;
-
-    std::optional<std::pair<DeltaRational, std::vector<BoundReason>>>
-    proveFixedValueImpl(int var, std::unordered_set<int>& visited) const;
 
 #ifdef XOLVER_LRA_PROFILE
 public:

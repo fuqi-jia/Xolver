@@ -15,6 +15,9 @@ struct Bound {
 };
 struct Certificate {
     std::vector<Bound> bounds;
+    // Additional bounds on native integer expressions, identified by DAG
+    // identity. `bounds` retains its variable-only certificate contract.
+    std::vector<Bound> terms{};
 };
 enum class ProofStatus { Proved, Open, Invalid };
 struct ProofResult {

@@ -158,7 +158,7 @@ std::optional<TheorySolver::TheoryModel> LiaSolver::branchAndBound(int nodeCap, 
                     : gs_.assertUpper(diseq.auxVar, BoundInfo(BoundValue(DeltaRational(-step)), localDecision));
                 std::optional<TheoryModel> model;
                 if (ok) model = branchAndBound(nodeCap, nodes);
-                gs_.pop();
+                gs_.pop(GeneralSimplex::AssignmentPolicy::Preserve);
                 if (model) return model;
             }
             return std::nullopt;
@@ -186,7 +186,7 @@ std::optional<TheorySolver::TheoryModel> LiaSolver::branchAndBound(int nodeCap, 
         if (upper) ok = ok && gs_.assertUpper(bv, BoundInfo(BoundValue(DeltaRational(mpq_class(val))), localDecision));
         std::optional<TheoryModel> m;
         if (ok) m = branchAndBound(nodeCap, nodes);
-        gs_.pop();
+        gs_.pop(GeneralSimplex::AssignmentPolicy::Preserve);
         return m;
     };
     // PIN nearest, then the other neighbour (fixes free/near-integer vars in one

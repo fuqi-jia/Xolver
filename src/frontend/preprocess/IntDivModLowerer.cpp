@@ -2,7 +2,9 @@
 #include "frontend/preprocess/IntDivModLowerer.h"
 #include "base/EnvParam.h"
 #include <cassert>
+#include <algorithm>
 #include <iostream>
+#include <unordered_set>
 
 namespace xolver {
 
@@ -16,9 +18,13 @@ bool IntDivModLowerer::run() {
     origins_.clear();
     registry_.clear();
     memo_.clear();
+    nonzeroFacts_.clear();
+    divisorDomains_.clear();
     loweredAssertions_.clear();
 
     auto scoped = ir_.getScopedAssertions();
+    for (const auto& [level, assertion] : scoped)
+        collectNonzeroFacts(assertion, level);
     std::vector<std::pair<ScopeLevel, ExprId>> loweredScoped;
 
     for (const auto& [level, a] : scoped) {
@@ -99,6 +105,11 @@ ExprId IntDivModLowerer::lowerRec(ExprId root, ScopeLevel level) {
                 assert(false && "ITE should be eliminated before IntDivModLowerer");
             }
             memo_[e] = rebuilt;
+        }
+        if (auto fact = nonzeroFacts_.find(e); fact != nonzeroFacts_.end()) {
+            const auto factLevel = fact->second;
+            auto [entry, inserted] = nonzeroFacts_.try_emplace(memo_.at(e), factLevel);
+            if (!inserted) entry->second = std::min(entry->second, factLevel);
         }
     }
 
@@ -208,6 +219,10 @@ std::optional<mpz_class> IntDivModLowerer::evalIntConstTerm(ExprId root) const {
         switch (node.kind) {
         case Kind::ConstInt:
             if (auto* v = std::get_if<int64_t>(&node.payload.value)) r = mpz_class(*v);
+            else if (auto* text = std::get_if<std::string>(&node.payload.value)) {
+                mpz_class value;
+                if (value.set_str(*text, 10) == 0) r = std::move(value);
+            }
             break;
         case Kind::ConstReal:
             // Defensive: SOMTParser currently maps integer literals to ConstReal
@@ -279,9 +294,11 @@ std::optional<mpz_class> IntDivModLowerer::evalIntConstTerm(ExprId root) const {
 bool IntDivModLowerer::containsNonlinear(ExprId root) const {
     // Iterative DFS (was recursive on children; deep terms overflowed the stack).
     std::vector<ExprId> stack{root};
+    std::unordered_set<ExprId> seen;
     while (!stack.empty()) {
         ExprId e = stack.back();
         stack.pop_back();
+        if (!seen.insert(e).second) continue;
         const auto& node = ir_.get(e);
         switch (node.kind) {
         case Kind::Mul:
@@ -330,6 +347,23 @@ void IntDivModLowerer::emitConstDivisorConstraints(const DivModDef& def, const m
 }
 
 void IntDivModLowerer::emitVariableDivisorConstraints(const DivModDef& def, ScopeLevel level) {
+    // A mandatory finite divisor domain permits an exact guarded linear
+    // expansion. Keep its source disjunction and scope; zero still denotes
+    // a congruent, otherwise unconstrained function.
+    if (auto domain = divisorDomains_.find(def.b);
+        domain != divisorDomains_.end() && domain->second.level <= level) {
+        for (const auto& value : domain->second.values) {
+            auto branch = def;
+            branch.b = mkIntConst(value);
+            const auto guard = mkNot(mkEq(def.b, branch.b));
+            const auto begin = generatedAssertions_.size();
+            if (value == 0) emitUndefZeroConstraints(branch, level);
+            else emitConstDivisorConstraints(branch, value, level);
+            for (auto i = begin; i < generatedAssertions_.size(); ++i)
+                generatedAssertions_[i].expr = mkOr(guard, generatedAssertions_[i].expr);
+        }
+        return;
+    }
     ExprId zero = mkIntConst(0);
     ExprId one = mkIntConst(1);
 
@@ -341,10 +375,13 @@ void IntDivModLowerer::emitVariableDivisorConstraints(const DivModDef& def, Scop
     ExprId equation = mkEq(def.a, mkAdd(mkMul(def.b, def.q), def.r));
 
     // b = 0 => q = __undef_div(a,b), r = __undef_mod(a,b)
-    ExprId qUndef = mkEq(def.q, mkUndefDivApp(def.a, def.b));
-    ExprId rUndef = mkEq(def.r, mkUndefModApp(def.a, def.b));
-    generatedAssertions_.push_back({level, mkOr(mkNot(bEqZero), qUndef)});
-    generatedAssertions_.push_back({level, mkOr(mkNot(bEqZero), rUndef)});
+    const bool nonzero = knownNonzero(def.b, level);
+    if (!nonzero) {
+        ExprId qUndef = mkEq(def.q, mkUndefDivApp(def.a, def.b));
+        ExprId rUndef = mkEq(def.r, mkUndefModApp(def.a, def.b));
+        generatedAssertions_.push_back({level, mkOr(mkNot(bEqZero), qUndef)});
+        generatedAssertions_.push_back({level, mkOr(mkNot(bEqZero), rUndef)});
+    }
 
     // b > 0 => a = b*q + r, 0 <= r, r <= b - 1
     generatedAssertions_.push_back({level, mkOr(mkNot(bGtZero), equation)});
@@ -369,7 +406,122 @@ void IntDivModLowerer::emitVariableDivisorConstraints(const DivModDef& def, Scop
         {level, mkOr(mkNot(bGtZero),
                      mkOr(mkNot(mkLe(zero, def.a)), mkLe(def.q, def.a)))});
 
-    updateRequirement(true, true);
+    updateRequirement(true, !nonzero);
+}
+
+void IntDivModLowerer::collectNonzeroFacts(ExprId root, ScopeLevel level) {
+    std::vector<ExprId> work{root};
+    std::unordered_set<ExprId> seen;
+    while (!work.empty()) {
+        const auto id = work.back();
+        work.pop_back();
+        if (!seen.insert(id).second) continue;
+        auto node = ir_.get(id);
+        if (node.kind == Kind::And) {
+            work.insert(work.end(), node.children.begin(), node.children.end());
+            continue;
+        }
+        if (node.kind == Kind::Or) {
+            collectFiniteDomain(id, level);
+            continue;
+        }
+        bool negate = node.kind == Kind::Not && node.children.size() == 1;
+        if (negate) node = ir_.get(node.children[0]);
+        if (node.children.size() != 2) continue;
+        for (bool reverse : {false, true}) {
+            const auto term = node.children[reverse ? 1 : 0];
+            if (ir_.get(term).sort != intSortId_) continue;
+            auto value = evalIntConstTerm(node.children[reverse ? 0 : 1]);
+            if (!value) continue;
+            auto kind = node.kind;
+            if (reverse) {
+                if (kind == Kind::Lt) kind = Kind::Gt;
+                else if (kind == Kind::Leq) kind = Kind::Geq;
+                else if (kind == Kind::Gt) kind = Kind::Lt;
+                else if (kind == Kind::Geq) kind = Kind::Leq;
+            }
+            if (negate) {
+                if (kind == Kind::Lt) kind = Kind::Geq;
+                else if (kind == Kind::Leq) kind = Kind::Gt;
+                else if (kind == Kind::Gt) kind = Kind::Leq;
+                else if (kind == Kind::Geq) kind = Kind::Lt;
+                else if (kind == Kind::Eq) kind = Kind::Distinct;
+                else if (kind == Kind::Distinct) kind = Kind::Eq;
+            }
+            const bool proven = (kind == Kind::Eq && *value != 0) ||
+                (kind == Kind::Distinct && *value == 0) ||
+                (kind == Kind::Gt && *value >= 0) || (kind == Kind::Geq && *value >= 1) ||
+                (kind == Kind::Lt && *value <= 0) || (kind == Kind::Leq && *value <= -1);
+            if (proven) {
+                auto [entry, inserted] = nonzeroFacts_.try_emplace(term, level);
+                if (!inserted) entry->second = std::min(entry->second, level);
+            }
+        }
+    }
+}
+
+void IntDivModLowerer::collectFiniteDomain(ExprId root, ScopeLevel level) {
+    std::vector<ExprId> work{root};
+    std::unordered_set<ExprId> seen;
+    ExprId term = NullExpr;
+    std::vector<mpz_class> values;
+    while (!work.empty()) {
+        const auto id = work.back(); work.pop_back();
+        if (!seen.insert(id).second) continue;
+        const auto node = ir_.get(id);
+        if (node.kind == Kind::Or) {
+            work.insert(work.end(), node.children.begin(), node.children.end());
+            continue;
+        }
+        if (node.kind == Kind::ConstBool) {
+            if (auto value = std::get_if<bool>(&node.payload.value); value && !*value) continue;
+            return;
+        }
+        if (node.kind != Kind::Eq || node.children.size() != 2) return;
+        auto left = evalIntConstTerm(node.children[0]);
+        auto right = evalIntConstTerm(node.children[1]);
+        if (left && right) {
+            if (*left == *right) return;
+            continue;
+        }
+        if (!left && !right) return;
+        const auto expression = node.children[left ? 1 : 0];
+        if (ir_.get(expression).sort != intSortId_) return;
+        if (term != NullExpr && term != expression) return;
+        term = expression;
+        values.push_back(left ? *left : *right);
+    }
+    if (term == NullExpr) return;
+    std::sort(values.begin(), values.end());
+    values.erase(std::unique(values.begin(), values.end()), values.end());
+    auto found = divisorDomains_.find(term);
+    if (found == divisorDomains_.end() || level < found->second.level ||
+        (level == found->second.level && values.size() < found->second.values.size()))
+        divisorDomains_.insert_or_assign(term, FiniteDomainFact{level, std::move(values)});
+}
+
+bool IntDivModLowerer::knownNonzero(ExprId root, ScopeLevel level) const {
+    std::vector<ExprId> work{root};
+    std::unordered_map<ExprId, bool> visited;
+    while (!work.empty()) {
+        auto id = work.back(); work.pop_back();
+        if (!visited.emplace(id, true).second) continue;
+        if (auto fact = nonzeroFacts_.find(id); fact != nonzeroFacts_.end() && fact->second <= level)
+            continue;
+        if (auto constant = evalIntConstTerm(id)) {
+            if (*constant == 0) return false;
+            continue;
+        }
+        auto node = ir_.get(id);
+        if ((node.kind == Kind::Neg || node.kind == Kind::Abs) && node.children.size() == 1)
+            work.push_back(node.children[0]);
+        else if (node.kind == Kind::Mul && !node.children.empty())
+            work.insert(work.end(), node.children.begin(), node.children.end());
+        else if (node.kind == Kind::Ite && node.children.size() == 3) {
+            work.push_back(node.children[1]); work.push_back(node.children[2]);
+        } else return false;
+    }
+    return true;
 }
 
 void IntDivModLowerer::emitUndefZeroConstraints(const DivModDef& def, ScopeLevel level) {

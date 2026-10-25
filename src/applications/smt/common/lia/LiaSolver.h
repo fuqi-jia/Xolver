@@ -69,7 +69,7 @@ public:
     // with "__"). Used by NiaSolver's embedded linear-decide to obtain the
     // COMPLETE assignment for exact re-validation against NIA's normalized
     // constraints (which reference NIA's mod/div-lowering aux vars).
-    std::optional<TheoryModel> getModelWithInternal() const;
+    std::optional<TheoryModel> getModelWithInternal() const override;
 
     // Standalone complete integer solve for NiaSolver's embedded linear-decide.
     // Precondition: the caller has asserted all constraints via assertLit. Runs
@@ -174,6 +174,9 @@ private:
     // Per-(satVar, value) dedup — emit each entailment at most once per
     // SAT-decision cycle. Cleared on backtrack to level 0 / reset.
     std::unordered_set<uint64_t> entailmentEmittedKeys_;
+    void resetAppliedBounds(GeneralSimplex::AssignmentPolicy policy =
+                                GeneralSimplex::AssignmentPolicy::Preserve);
+    void rebuildTrailCaches();
     void scanLiteralPinEntailments();
     void clearEntailmentDedupForBacktrack(int level);
 
@@ -182,9 +185,30 @@ private:
         SharedTermId b;
         SatLit reason;
         int level;
+        bool operator==(const InterfaceEq&) const = default;
     };
     std::vector<InterfaceEq> interfaceEqualities_;
     std::vector<InterfaceEq> interfaceDisequalities_;
+    struct AppliedBound {
+        uint32_t satVar;
+        ExprId expression;
+        SatLit literal;
+        int level;
+        int auxVar;
+        Relation relation;
+        bool value;
+        bool isDiseq;
+        bool operator==(const AppliedBound&) const = default;
+    };
+    std::vector<AppliedBound> appliedBounds_;
+    std::vector<InterfaceEq> appliedInterfaceEqualities_;
+    std::optional<uint64_t> appliedBoundRevision_;
+    struct ScopeState {
+        std::vector<LiaTrailEntry> trail;
+        std::vector<InterfaceEq> equalities, disequalities;
+        int level;
+    };
+    std::vector<ScopeState> scopes_;
     int currentLevel_ = 0;
 
     std::unordered_map<uint64_t, int> interfaceEqAuxVars_;

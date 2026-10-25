@@ -2,7 +2,9 @@
 #include "search/linear/IntegerReasoner.h"
 #include "algebra/linear/LinearConstraintNormalizer.h"
 #include "applications/smt/common/lia/LiaSolver.h"
+#include "applications/smt/qflra/LraSolver.h"
 #include "search/coordination/TheoryLemmaDatabase.h"
+#include <algorithm>
 #include <stdexcept>
 #include <unordered_map>
 
@@ -20,6 +22,8 @@ bool compare(Relation r, const mpq_class& a, const mpq_class& b) {
     }
     throw std::logic_error("invalid relation");
 }
+
+
 mpq_class eval(const LinearFormKey& form, const Values& values) {
     mpq_class result = 0;
     for (const auto& [name, coefficient] : form.terms)
@@ -62,6 +66,65 @@ struct Fixture {
         return false;
     }
 };
+}
+
+TEST_CASE("LraSolver: ordinary propagation preserves the registered vocabulary") {
+    for (int variant = 0; variant < 4; ++variant) {
+        CAPTURE(variant);
+        Allocator allocator;
+        TheoryAtomRegistry registry;
+        registry.setContext(&allocator, &allocator);
+        LraSolver solver;
+        solver.setRegistry(&registry);
+        const bool strict = variant == 3;
+        auto registerAtom = [&](LinearFormKey lhs, Relation relation, int rhs) {
+            const auto variable = allocator.newVar();
+            registry.registerParsedTheoryAtom(variable, NullExpr, TheoryId::LRA,
+                LinearAtomPayload{lhs, relation, RealValue::fromMpq(mpq_class(rhs))});
+            return variable;
+        };
+        const LinearFormKey x{{{"x", 1}}}, y{{{"y", 1}}}, sum{{{"x", 1}, {"y", 1}}};
+        const auto first = registerAtom(x, strict ? Relation::Gt : Relation::Leq, 1);
+        const auto second = registerAtom(y, strict ? Relation::Gt : Relation::Leq, 2);
+        const auto weak = registerAtom(sum, strict ? Relation::Geq : Relation::Leq, strict ? -10 : 10);
+        std::optional<SatLit> target;
+        if (variant) {
+            const auto relation = variant == 2 ? Relation::Gt : Relation::Leq;
+            const auto variable = registerAtom(sum, relation, 3);
+            target = variant == 1 ? SatLit::positive(variable) : SatLit::negative(variable);
+        }
+        const auto missingSize = registry.numAtomVars();
+        CHECK_FALSE(registry.findLinearLiteral(sum, Relation::Eq, 999).has_value());
+        CHECK(registry.numAtomVars() == missingSize);
+        for (const auto variable : {first, second, weak})
+            solver.assertLit(*registry.findBySatVar(variable), true, 0, SatLit::positive(variable));
+        const auto atomCount = registry.numAtomVars();
+        const auto variableCount = allocator.next;
+        TheoryLemmaDatabase database;
+        for (int repeat = 0; repeat < 3; ++repeat) {
+            REQUIRE(solver.check(database, TheoryEffort::Standard).kind == TheoryCheckResult::Kind::Consistent);
+            const auto propagations = solver.takeEntailmentPropagations();
+            CHECK(registry.numAtomVars() == atomCount);
+            CHECK(allocator.next == variableCount);
+            if (!target) { CHECK(propagations.empty()); continue; }
+            CHECK(std::any_of(propagations.begin(), propagations.end(), [&](const auto& lemma) {
+                return std::find(lemma.lits.begin(), lemma.lits.end(), *target) != lemma.lits.end();
+            }));
+            for (const auto& lemma : propagations) {
+                for (int xn = -6; xn <= 8; ++xn) for (int yn = -6; yn <= 8; ++yn) {
+                    const Values values{{"x", mpq_class(xn, 2)}, {"y", mpq_class(yn, 2)}};
+                    bool holds = false;
+                    for (const auto literal : lemma.lits) {
+                        const auto* record = registry.findBySatVar(literal.var);
+                        REQUIRE(record != nullptr);
+                        const auto& payload = std::get<LinearAtomPayload>(record->payload);
+                        holds |= compare(payload.rel, eval(payload.lhs, values), payload.rhs.asRational()) == literal.sign;
+                    }
+                    CHECK(holds);
+                }
+            }
+        }
+    }
 }
 
 TEST_CASE("IntegerReasoner soundness: normalization preserves integer witnesses") {

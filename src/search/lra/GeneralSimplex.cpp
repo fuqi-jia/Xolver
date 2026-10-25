@@ -184,7 +184,15 @@ int GeneralSimplex::addConstraint(const std::vector<std::pair<int, mpq_class>>& 
         }
     }
 
-    betaDirty_ = true;
+    // A definition adds no restriction to the old variables. Preserve a clean
+    // current assignment by initializing only this row; bound assertion can
+    // then update its incident rows without rebuilding the entire tableau.
+    if (!betaDirty_) {
+        DeltaRational value(f.constant);
+        for (const auto& [var, coefficient] : f.terms)
+            value += coefficient * vars_[var].beta;
+        vars_[aux].beta = std::move(value);
+    }
     return aux;
 }
 
@@ -245,6 +253,7 @@ bool GeneralSimplex::assertLower(int var, const BoundInfo& info, int level) {
     assert(var >= 0 && var < static_cast<int>(vars_.size()));
 
     if (info.bound <= vars_[var].lower.bound) return true;
+    noteBoundChange();
     if (info.bound > vars_[var].upper.bound) {
         explainImmediateConflict(var, true, info.reason.value());
         hasImmediateConflict_ = true;
@@ -268,6 +277,7 @@ bool GeneralSimplex::assertUpper(int var, const BoundInfo& info, int level) {
     assert(var >= 0 && var < static_cast<int>(vars_.size()));
 
     if (info.bound >= vars_[var].upper.bound) return true;
+    noteBoundChange();
     if (info.bound < vars_[var].lower.bound) {
         explainImmediateConflict(var, false, info.reason.value());
         hasImmediateConflict_ = true;
@@ -907,7 +917,8 @@ void GeneralSimplex::push() {
     scopeStack_.push_back(std::move(scope));
 }
 
-void GeneralSimplex::pop() {
+void GeneralSimplex::pop(AssignmentPolicy policy) {
+    noteBoundChange();
     assert(!scopeStack_.empty());
     auto scope = std::move(scopeStack_.back());
     const size_t target = scope.trailSize;
@@ -925,10 +936,12 @@ void GeneralSimplex::pop() {
         else           vars_[e.var].upper = e.oldBound;
         trail_.pop_back();
     }
-    betaDirty_ = true;
+    if (policy == AssignmentPolicy::Reinitialize) betaDirty_ = true;
+    else if (!betaDirty_) rebuildViolationQueue();
 }
 
 void GeneralSimplex::backtrackToLevel(int level) {
+    noteBoundChange();
     while (!trail_.empty() && trail_.back().level > level) {
         const auto& e = trail_.back();
         if (e.isLower) vars_[e.var].lower = e.oldBound;
@@ -946,14 +959,17 @@ void GeneralSimplex::backtrackToLevel(int level) {
 // Reset
 // ============================================================================
 
-void GeneralSimplex::resetActiveBounds() {
+void GeneralSimplex::resetActiveBounds(AssignmentPolicy policy) {
+    noteBoundChange();
     for (int i = 0; i < static_cast<int>(vars_.size()); ++i) {
         vars_[i].lower = BoundInfo(BoundValue::negInf());
         vars_[i].upper = BoundInfo(BoundValue::posInf());
     }
     trail_.clear();
     scopeStack_.clear();
-    betaDirty_ = true;
+    // Assignment selection is explicit: nonlinear clients retain their
+    // centering behavior; incremental feasibility checks can keep a valid point.
+    if (policy == AssignmentPolicy::Reinitialize) betaDirty_ = true;
     conflict_.clear();
     hasImmediateConflict_ = false;
     violatedQueue_.clear();
@@ -961,6 +977,7 @@ void GeneralSimplex::resetActiveBounds() {
 }
 
 void GeneralSimplex::reset() {
+    noteBoundChange();
     vars_.clear();
     tab_ = SparseTableau();
     basicVars_.clear();
@@ -1002,123 +1019,100 @@ std::vector<GeneralSimplex::BoundReason> GeneralSimplex::explainFixedValue(int v
     return reasons;
 }
 
-std::optional<std::pair<DeltaRational, std::vector<GeneralSimplex::BoundReason>>>
-GeneralSimplex::proveFixedValue(int var) const {
-    std::unordered_set<int> visited;
-    return proveFixedValueImpl(var, visited);
+GeneralSimplex::FixedValueAnalysis GeneralSimplex::analyzeFixedValues() const {
+    FixedValueAnalysis result;
+    result.values_.resize(vars_.size());
+    result.dependencies_.resize(vars_.size());
+    result.premises_.resize(vars_.size());
+    for (int var = 0; var < numVars(); ++var) {
+        if (auto value = fixedValue(var)) {
+            result.values_[var] = *value;
+            result.premises_[var] = explainFixedValue(var);
+        }
+    }
+
+    // Row equation: basic - sum(coeff * nonbasic) = rhs. Retain the
+    // residual after known variables and the number of remaining unknowns.
+    std::vector<size_t> unknown(tab_.numRows());
+    std::vector<DeltaRational> residual(tab_.numRows());
+    std::vector<int> pending;
+    for (int r = 0; r < tab_.numRows(); ++r) {
+        const auto& row = tab_.row(r);
+        residual[r] = DeltaRational(row.rhs);
+        if (result.values_[row.basicVar]) residual[r] -= *result.values_[row.basicVar];
+        else ++unknown[r];
+        for (const auto& entry : row.entries) {
+            if (result.values_[entry.col]) residual[r] += entry.coeff * *result.values_[entry.col];
+            else ++unknown[r];
+        }
+        if (unknown[r] == 1) pending.push_back(r);
+    }
+    while (!pending.empty()) {
+        const int r = pending.back(); pending.pop_back();
+        if (unknown[r] != 1) continue;
+        const auto& row = tab_.row(r);
+        int var = row.basicVar;
+        mpq_class coefficient = 1;
+        if (result.values_[var]) {
+            var = -1;
+            for (const auto& entry : row.entries) {
+                if (!result.values_[entry.col]) {
+                    var = entry.col;
+                    coefficient = -entry.coeff;
+                    break;
+                }
+            }
+        }
+        assert(var >= 0 && coefficient != 0);
+        result.values_[var] = residual[r] / coefficient;
+        auto& dependencies = result.dependencies_[var];
+        if (row.basicVar != var) dependencies.push_back(row.basicVar);
+        for (const auto& entry : row.entries)
+            if (entry.col != var) dependencies.push_back(entry.col);
+
+        auto updateRow = [&](int affected, const mpq_class& coeff) {
+            assert(unknown[affected] > 0);
+            --unknown[affected];
+            residual[affected] -= coeff * *result.values_[var];
+            if (unknown[affected] == 1) pending.push_back(affected);
+        };
+        if (isBasic(var)) updateRow(basicRowOfVar(var), mpq_class(1));
+        for (const auto& entry : tab_.col(var).entries)
+            updateRow(entry.row, mpq_class(-tab_.row(entry.row).entries[entry.rowPos].coeff));
+    }
+    return result;
 }
 
-std::optional<std::pair<DeltaRational, std::vector<GeneralSimplex::BoundReason>>>
-GeneralSimplex::proveFixedValueImpl(int var, std::unordered_set<int>& visited) const {
-    if (var < 0 || var >= static_cast<int>(vars_.size())) {
+std::optional<GeneralSimplex::FixedValueProof>
+GeneralSimplex::FixedValueAnalysis::prove(int var) const {
+    if (var < 0 || static_cast<size_t>(var) >= values_.size() || !values_[var])
         return std::nullopt;
+    std::vector<BoundReason> reasons;
+    std::vector<int> pending{var};
+    std::unordered_set<int> visited;
+    while (!pending.empty()) {
+        const int current = pending.back(); pending.pop_back();
+        if (!visited.insert(current).second) continue;
+        reasons.insert(reasons.end(), premises_[current].begin(), premises_[current].end());
+        pending.insert(pending.end(), dependencies_[current].begin(), dependencies_[current].end());
     }
-    if (visited.count(var)) {
-        return std::nullopt;
-    }
-    visited.insert(var);
+    auto less = [](const BoundReason& a, const BoundReason& b) {
+        if (a.var != b.var) return a.var < b.var;
+        if (a.isLower != b.isLower) return a.isLower < b.isLower;
+        if (a.reason.var != b.reason.var) return a.reason.var < b.reason.var;
+        return a.reason.sign < b.reason.sign;
+    };
+    std::sort(reasons.begin(), reasons.end(), less);
+    reasons.erase(std::unique(reasons.begin(), reasons.end(), [&](const auto& a, const auto& b) {
+        return !less(a, b) && !less(b, a);
+    }), reasons.end());
+    return FixedValueProof{*values_[var], std::move(reasons)};
+}
 
-    // Direct bound fix
-    auto direct = fixedValue(var);
-    if (direct) {
-        return std::make_pair(*direct, explainFixedValue(var));
-    }
-
-    // If var is basic, check whether all non-basic entries in its row are fixed.
-    int row = basicRowOfVar(var);
-    if (row >= 0 && row < tableau().numRows()) {
-        const auto& tabRow = tableau().row(row);
-        DeltaRational value(tabRow.rhs);
-        std::vector<BoundReason> reasons;
-        for (const auto& e : tabRow.entries) {
-            if (e.col < 0 || e.col >= static_cast<int>(vars_.size())) {
-                return std::nullopt;
-            }
-            auto sub = proveFixedValueImpl(e.col, visited);
-            if (!sub) return std::nullopt;
-            value += e.coeff * sub->first;
-            reasons.insert(reasons.end(), sub->second.begin(), sub->second.end());
-        }
-
-        // Deduplicate reasons
-        std::sort(reasons.begin(), reasons.end(), [](const BoundReason& a, const BoundReason& b) {
-            if (a.var != b.var) return a.var < b.var;
-            if (a.isLower != b.isLower) return a.isLower < b.isLower;
-            if (a.reason.var != b.reason.var) return a.reason.var < b.reason.var;
-            return a.reason.sign < b.reason.sign;
-        });
-        reasons.erase(std::unique(reasons.begin(), reasons.end(), [](const BoundReason& a, const BoundReason& b) {
-            return a.var == b.var && a.isLower == b.isLower && a.reason.var == b.reason.var && a.reason.sign == b.reason.sign;
-        }), reasons.end());
-
-        return std::make_pair(value, std::move(reasons));
-    }
-
-    // Non-basic variable: check if its value is determined by a fixed basic variable.
-    // If var appears in basic row b = RHS + sum(c_i * v_i), and b is fixed,
-    // and all non-basic entries except var are fixed, then var is fixed.
-    // var is non-basic here (the basic case above returned), so the tableau's
-    // column cross-link gives EXACTLY the rows that contain var as an entry —
-    // visit those instead of scanning every row. Sort by row index so the FIRST
-    // proving row (hence the returned value AND its bound-reason set) is identical
-    // to the old r=0..numRows scan: behaviour byte-identical, O(numRows) ->
-    // O(deg(var)). proveFixedValueImpl was ~60% of QF_LIA bofill-scheduling
-    // samples (profiled) — the all-rows scan on a ~2600-row tableau was the cliff.
-    std::vector<int> colRows;
-    colRows.reserve(tableau().col(var).entries.size());
-    for (const auto& ce : tableau().col(var).entries) colRows.push_back(ce.row);
-    std::sort(colRows.begin(), colRows.end());
-    for (int r : colRows) {
-        const auto& tabRow = tableau().row(r);
-        int b = tabRow.basicVar;
-        if (b < 0) continue;
-
-        // Find var in this row
-        int foundIdx = -1;
-        for (size_t i = 0; i < tabRow.entries.size(); ++i) {
-            if (tabRow.entries[i].col == var) {
-                foundIdx = static_cast<int>(i);
-                break;
-            }
-        }
-        if (foundIdx < 0) continue;
-
-        // Check if basic var b is fixed
-        auto basicFixed = proveFixedValueImpl(b, visited);
-        if (!basicFixed) continue;
-
-        // Check if all other non-basic entries are fixed
-        DeltaRational value = basicFixed->first;
-        std::vector<BoundReason> reasons = basicFixed->second;
-        bool allFixed = true;
-        for (size_t i = 0; i < tabRow.entries.size(); ++i) {
-            if (static_cast<int>(i) == foundIdx) continue;
-            const auto& e = tabRow.entries[i];
-            auto sub = proveFixedValueImpl(e.col, visited);
-            if (!sub) { allFixed = false; break; }
-            value -= e.coeff * sub->first;
-            reasons.insert(reasons.end(), sub->second.begin(), sub->second.end());
-        }
-        if (!allFixed) continue;
-
-        // var = (b_value - RHS - sum(c_i * v_i)) / c_var
-        value = (value - DeltaRational(tabRow.rhs)) / tabRow.entries[foundIdx].coeff;
-
-        // Deduplicate reasons
-        std::sort(reasons.begin(), reasons.end(), [](const BoundReason& a, const BoundReason& b) {
-            if (a.var != b.var) return a.var < b.var;
-            if (a.isLower != b.isLower) return a.isLower < b.isLower;
-            if (a.reason.var != b.reason.var) return a.reason.var < b.reason.var;
-            return a.reason.sign < b.reason.sign;
-        });
-        reasons.erase(std::unique(reasons.begin(), reasons.end(), [](const BoundReason& a, const BoundReason& b) {
-            return a.var == b.var && a.isLower == b.isLower && a.reason.var == b.reason.var && a.reason.sign == b.reason.sign;
-        }), reasons.end());
-
-        return std::make_pair(value, std::move(reasons));
-    }
-
-    return std::nullopt;
+std::optional<GeneralSimplex::FixedValueProof> GeneralSimplex::proveFixedValue(int var) const {
+    if (var < 0 || var >= numVars()) return std::nullopt;
+    if (auto direct = fixedValue(var)) return FixedValueProof{*direct, explainFixedValue(var)};
+    return analyzeFixedValues().prove(var);
 }
 
 // ============================================================================

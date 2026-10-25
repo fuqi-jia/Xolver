@@ -17,6 +17,7 @@ struct Engine {
     Nodes nodes;
     std::set<Node> assumptions;
     Box box;
+    bool inconsistent = false;
     Engine(const NativeAssertions &premises, Node conclusion, std::size_t limit)
         : nodes(
               [&] {
@@ -71,6 +72,41 @@ struct Engine {
     }
     std::optional<IntervalZ> interval(Node n, bool constantsOnly = false) {
         Nodes::Frame frame(nodes);
+        auto result = arithmeticInterval(n, constantsOnly);
+        if (constantsOnly)
+            return result;
+        auto it = box.find(n);
+        const Bound empty;
+        const auto &b = it == box.end() ? empty : it->second;
+        if (!result) {
+            if (b.lower && b.upper) {
+                if (*b.lower > *b.upper) {
+                    inconsistent = true;
+                    return {};
+                }
+                return IntervalZ{*b.lower, *b.upper};
+            }
+            return {};
+        }
+        if (b.lower)
+            result->lo = std::max(result->lo, *b.lower);
+        if (b.upper)
+            result->hi = std::min(result->hi, *b.upper);
+        // A mandatory disequality excludes zero. Integer endpoints then move
+        // by one; a disjunction cannot justify this narrowing.
+        if ((result->lo == 0 || result->hi == 0) && nonzero(n, false)) {
+            if (result->lo == 0)
+                result->lo = 1;
+            if (result->hi == 0)
+                result->hi = -1;
+        }
+        if (result->lo > result->hi) {
+            inconsistent = true;
+            return {};
+        }
+        return result;
+    }
+    std::optional<IntervalZ> arithmeticInterval(Node n, bool constantsOnly) {
         if (!n || !n->getSort() || (!n->getSort()->isInt() && !n->getSort()->isIntOrReal()))
             return {};
         auto k = n->getKind();
@@ -262,7 +298,7 @@ struct Engine {
         for (bool reverse : {false, true}) {
             auto symbol = premise->getChild(reverse ? 1 : 0);
             auto value = interval(premise->getChild(reverse ? 0 : 1), true);
-            if (symbol->getKind() != K::NT_VAR || !symbol->getSort() ||
+            if (symbol->getKind() == K::NT_CONST || !symbol->getSort() ||
                 !symbol->getSort()->isInt() || !value || value->lo != value->hi)
                 continue;
             Bound result;
@@ -305,13 +341,19 @@ struct Engine {
         for (auto a : assumptions)
             if (boolean(a, false, false) == Truth::No)
                 return true;
-        return boolean(conclusion) == Truth::Yes;
+        const bool conclusionHolds = boolean(conclusion) == Truth::Yes;
+        return inconsistent || conclusionHolds;
     }
     void replay(const Certificate &certificate) {
-        for (const auto &b : certificate.bounds) {
+        auto entries = certificate.bounds;
+        entries.insert(entries.end(), certificate.terms.begin(), certificate.terms.end());
+        for (std::size_t i = 0; i < entries.size(); ++i) {
+            const auto &b = entries[i];
             nodes.budget.tick();
             if (!b.symbol || box.contains(b.symbol) || (!b.lower && !b.upper))
                 throw std::invalid_argument("invalid or duplicate range certificate bound");
+            if ((b.symbol->getKind() == K::NT_VAR) != (i < certificate.bounds.size()))
+                throw std::invalid_argument("range certificate bound has the wrong category");
             for (bool lower : {false, true}) {
                 const auto &endpoint = lower ? b.lower : b.upper;
                 const auto &source = lower ? b.lowerAssumption : b.upperAssumption;
@@ -342,7 +384,10 @@ ProofResult prove(const NativeAssertions &premises, const native::Node &conclusi
             answer.status = ProofStatus::Proved;
             Certificate c;
             for (const auto &[_, b] : e.box)
-                c.bounds.push_back(b);
+                if (b.symbol->getKind() == K::NT_VAR)
+                    c.bounds.push_back(b);
+                else
+                    c.terms.push_back(b);
             answer.certificate = std::move(c);
         } else
             answer.reason = "integer interval proof remains open";

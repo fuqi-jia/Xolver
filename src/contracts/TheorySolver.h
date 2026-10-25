@@ -222,6 +222,9 @@ public:
     using TheoryModel = xolver::TheoryModel;
     virtual std::optional<TheoryModel>
     getModel() const { return std::nullopt; }
+    // Internal consumers retain witnesses introduced by lowering/combination.
+    // Model-output filtering remains separate from this complete interpretation.
+    virtual std::optional<TheoryModel> getModelWithInternal() const { return getModel(); }
 };
 
 // Legacy struct (for backward compatibility during transition)
