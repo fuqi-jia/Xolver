@@ -165,6 +165,7 @@ set(XOLVER_SEARCH_SOURCES
     "search/nra/StructuralIntegerProbe.cpp"
     "search/nra/backend/LibpolyAlgebraic.cpp"
     "search/nra/backend/LibpolyBackend.cpp"
+    "search/nra/backend/RootBracket.cpp"
     "search/nra/cac/CacEngine.cpp"
     "search/nra/cac/Covering.cpp"
     "search/nra/cac/SingleCellProjection.cpp"
