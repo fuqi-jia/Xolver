@@ -28,6 +28,9 @@ The delivered arithmetic implementation includes:
   its divisor may be zero. Neither a zero numerator nor a nested remainder
   licenses replacing the result with zero or assuming idempotence. Term copies
   protect recursive distribution against IR storage growth.
+- Integer refinement respects check effort. Standard checks retain LP/GCD
+  conflicts without registering atoms for uninstalled branch lemmas. Full
+  checks attempt validated integer repair before cuts and splits.
 
 The zero-divisor regressions cover `(mod d d) = 1`, `(mod 0 d) = 1`, and
 `(mod (mod 7 d) d) != (mod 7 d)` with `d` chosen from `{0,1}`. All are SAT:
@@ -310,15 +313,81 @@ by R117 is not evidence of a new capability. Preserve the negative result on
 QCP's existing development corpus has 313 exported queries; R115 decided all
 of them consistently with Z3. This leaves no coverage gap on that limited
 pure-condition corpus. A full pinned QCP source export and isolated Coq 8.20.1 /
-Dune 3.17.2 toolchain are now present under `dependencies/qcp-08cc7a0f` and
-`dependencies/qcp-tools`. The unchanged development case `branch_destruct.c`
-has controller run `branch_destruct-20261026224840`; its source/spec and prepared
-plan are preserved. Both symexec submissions were rejected before execution
-because ExperimentOS supplied no CPU lease. The controller accepted the owner's
-structured infrastructure blocker; its record is
-`qcp-jobs/branch-blocked-finalization.json`. No C program is yet counted verified.
-Obtain a normal lease and follow current controller actions; do not edit its
-state or treat pure-condition results as complete program verification.
+Dune 3.17.2 toolchain are present under `dependencies/qcp-08cc7a0f` and
+`dependencies/qcp-tools`. Initial controller run
+`branch_destruct-20261026224840` closed with a CPU-lease infrastructure blocker
+before symexec; its record remains `qcp-jobs/branch-blocked-finalization.json`.
+The fresh run `branch_destruct-20261026235539` subsequently completed the
+controller's native proof routes and final-check: **one C program, ten VCs**,
+with C and specification byte-identical. It reused 143 base proof artifacts
+and checked all four current source files. This qualifies the pinned QCP
+workflow, not an Xolver/Z3 backend comparison. Internal SMT calls were not
+instrumented; no external comparison invocation of either solver was made.
+Do not count the 313 extracted queries as verified programs. Exact source,
+proof, timing and controller evidence is indexed in the next stage record.
+
+## Integer refinement and model validation (R132/R133, 2026-10-27)
+
+Evidence: [stage record](ARITHMETIC_INTEGER_EFFORT_STAGE_20261027.json).
+Delivery PR: [#45](https://github.com/fuqi-jia/Xolver/pull/45).
+
+Standard LIA checks previously registered branch and normalization atoms even
+though the SAT callback discards their branch lemmas. Those observed variables
+could extend the next partial assignment before Full-effort integer repair ran.
+The component reproduction expanded two input atoms to five and failed 40
+assertions. The relevant integer-core files match the preceding main revision.
+
+`LiaSolver` and the shared `IntegerReasoner` now pass check effort explicitly:
+Standard retains conflicts; Full performs vocabulary-extending refinement and
+validated model repair. The one-argument integer-reasoner API still defaults to
+Full. LRA and LIA backtracking policies and public Solver semantics are unchanged.
+The general rule is that a branch lemma which will not be installed must not
+first extend the observed SAT vocabulary; sound installed entailments remain
+available during propagation.
+
+R133 passes **1,659 unit tests / 794,992 assertions**, including primitive
+coupled rows and the explicitly pinned rational-bound countermodel. The old
+countermodel test's request for a Standard branch lemma was replaced by these
+stronger model/witness checks. All 35 remaining R134 acceptance tasks pass,
+including 892 regressions, independent model checks and the QCP regressions.
+The CLI is `core-r132/xolver`, SHA-256
+`084f469bc0a58f45040923b9388037f046153a1bb5f788817067dad1437fbcac`.
+`source-r133.tar.json` has SHA-256
+`5fdcb136503cb10a2f3857c32a57b610d0912684e7a395acd553b8dfc4942733`;
+its native code is identical to the R132 build, with only test changes.
+
+Fresh formal comparison, 160 inputs, 60 seconds / one physical CPU / 16 GiB:
+
+| Version | Raw decisions | Independently verified | Verified PAR-2 |
+| --- | ---: | ---: | ---: |
+| Frozen preceding main R114 | 74 | 71 | 10878.492 |
+| Candidate R132 | 75 | 72 | 10739.232 |
+| Same-round frozen Z3 | 122 | 107 | 6781.590 |
+
+Both Xolver versions returned two unknowns; timeouts changed from 84 to 83.
+There were no opposite verdicts, solver errors, memory-limit outcomes or invalid
+exported models. The net gain is one verified decision and 139.259 seconds of
+verified PAR-2. Gains are indices **6, 7, 11, 59**; losses are **45, 52, 100**.
+Every loss remains in the report. Index 6 recovers the known sparse-pivot-era
+regression: timeout to SAT in **2.509 seconds** formally, and **0.297 seconds**
+in the targeted comparison; both exported models pass independent replay.
+Pure LRA code is unchanged, so the opposing changes at 52/59 reflect timing or
+search variation, not added theory coverage. Other gains also include cases
+solved by earlier versions in other rounds. Do not compare historical aggregate
+scores as if host conditions were constant.
+
+The 196 successful leased runs use 42 distinct physical cores with no overlap
+or discrepancy between leased and actual comparison CPUs. Six original jobs
+without CPU leases stopped before solver execution; a separate leased retry
+completed those exact inputs without overwriting valid reports. Earlier R123
+acceptance entries `architecture` and `known-gaps` lacked leases and are excluded;
+the rejected ordering experiment was not merged. Other closed prototypes and
+their evidence are retained in the stage record. The propagation memory-pool
+experiment was not repeated.
+
+This does **not** exceed Z3, and confirmation limits for 75/115/148 remain
+explicit. Neither protected set was read or run. Require PR CI and main CI on
+the merge commit for delivery; an extra server checkpoint is not required.
 
 ## Closed experiments and practical regressions
 
