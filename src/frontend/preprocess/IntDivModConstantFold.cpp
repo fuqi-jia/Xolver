@@ -303,7 +303,7 @@ ExprId IntDivModConstantFold::simplifyMul(const std::vector<ExprId>& factors) {
 }
 
 ExprId IntDivModConstantFold::distribute(ExprId e) {
-    const auto& n = ir_.get(e);
+    const auto n = ir_.get(e);
     if (n.kind == Kind::Add || n.kind == Kind::Sub) {
         SmallVector<ExprId, 4> nc; bool ch = false;
         for (ExprId c : n.children) { ExprId d = distribute(c); if (d != c) ch = true; nc.push_back(d); }
@@ -321,7 +321,7 @@ ExprId IntDivModConstantFold::distribute(ExprId e) {
         ExprId a = distribute(n.children[0]);
         ExprId b = distribute(n.children[1]);
         auto distOver = [&](ExprId factor, ExprId sumId, bool factorLeft) -> ExprId {
-            const auto& sn = ir_.get(sumId);
+            const auto sn = ir_.get(sumId);
             TermExpr f; f.kind = sn.kind; f.sort = intSortId_; f.payload = sn.payload;
             for (ExprId si : sn.children) {
                 ExprId prod = factorLeft ? mkMul2(factor, si) : mkMul2(si, factor);
@@ -419,19 +419,13 @@ ExprId IntDivModConstantFold::trySymbolicModSimplify(ExprId e, int depth) {
         return mkIte3(C, branchMod(a), branchMod(b));  // collapses if branches equal
     }
 
-    // No ite term: drop every monomial divisible by M; collapse a lone (mod a M).
+    // An M-multiple vanishes modulo nonzero M and is literally zero at M=0.
+    // Keep the outer mod: its zero-divisor interpretation is arbitrary.
     std::vector<std::pair<ExprId, bool>> kept;
-    bool dropped = false;
     for (const auto& tn : terms) {
-        if (termHasFactor(tn.first, M)) { dropped = true; continue; }
+        if (termHasFactor(tn.first, M)) continue;
         kept.push_back(tn);
     }
-    if (kept.size() == 1 && !kept[0].second) {
-        const auto& kn = ir_.get(kept[0].first);
-        if (kn.kind == Kind::Mod && kn.children.size() == 2 && kn.children[1] == M)
-            return kept[0].first;  // idempotence (incl. intadd(0,·) wrapper)
-    }
-    (void)dropped;
     // CANONICALIZE the argument ALWAYS (not only on a drop): rebuildAddSub is a
     // deterministic function of the monomial multiset, so two arguments that are
     // equal modulo M — e.g. the dropped `x*(M-1)` reducing to `-x`, and a literal
@@ -440,9 +434,6 @@ ExprId IntDivModConstantFold::trySymbolicModSimplify(ExprId e, int depth) {
     // theory's ite case-split close it (proven by skel_simp). Scoped to
     // non-constant M, so ordinary constant-modulus mods are untouched.
     ExprId p2 = rebuildAddSub(kept);
-    if (const auto& p2n = ir_.get(p2); p2n.kind == Kind::ConstInt) {
-        if (auto* v = std::get_if<int64_t>(&p2n.payload.value); v && *v == 0) return mkConstInt(0);
-    }
     return mkMod2(p2, M);
 }
 

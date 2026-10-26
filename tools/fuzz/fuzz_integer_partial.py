@@ -50,6 +50,14 @@ def replay_integer_model(prefix, output):
 
 
 def cases(seed, count):
+    choice = '(declare-const d Int)(assert (or (= d 0) (= d 1)))'
+    # At d=0, mod is an arbitrary total function. It need not map zero to
+    # zero or be idempotent; preserve and independently replay that model.
+    for name, assertion in (
+            ('zero-symbolic-self', '(= (mod d d) 1)'),
+            ('zero-symbolic-numerator', '(= (mod 0 d) 1)'),
+            ('zero-symbolic-nested', '(distinct (mod (mod 7 d) d) (mod 7 d))')):
+        yield name, 'QF_NIA', choice + f'(assert {assertion})', 'sat'
     rng = random.Random(seed)
     for i in range(count):
         a, k, b = rng.randint(-4, 4), rng.randint(-5, 5), rng.randint(1, 4)
@@ -127,7 +135,7 @@ def main():
                 row['model_error'] = str(error)
                 failures.append(dict(name=name, model_error=str(error)))
         rows.append(row)
-        (args.output / 'progress.json').write_text(json.dumps(dict(completed=len(rows), total=args.count*6)))
+        (args.output / 'progress.json').write_text(json.dumps(dict(completed=len(rows), total=args.count*6+3)))
     negative_prefix = '(declare-const x Int)(assert (= x 2))(assert (= (div x 0) 7))'
     for label, extra in [('wrong-zero-value', '(define-fun div ((a Int)(b Int)) Int (ite (= b 0) 8 (div a b)))'),
                          ('missing-zero-value', '')]:
@@ -139,7 +147,7 @@ def main():
             rows.append(dict(name=label, engine=engine, negative_control=result))
             if result['verdict'] != 'unsat':
                 failures.append(dict(name=label, engine=engine, verdict=result['verdict']))
-    report = dict(cases=args.count*6, models=models, failures=failures, rows=rows, seed=args.seed,
+    report = dict(cases=args.count*6+3, models=models, failures=failures, rows=rows, seed=args.seed,
         binaries={n:dict(path=c[0],sha256=hashlib.sha256(Path(c[0]).read_bytes()).hexdigest())
                   for n,c in commands.items()})
     (args.output / 'report.json').write_text(json.dumps(report, indent=2)+'\n')

@@ -118,3 +118,31 @@ TEST_CASE("IntDivModConstantFold: optional work exhaustion preserves assertions 
     const auto result = t.ir.get(assertions[1].second).children[0];
     CHECK(std::get<int64_t>(t.ir.get(result).payload.value) == 1);
 }
+
+TEST_CASE("IntDivModConstantFold: symbolic zero divisors preserve their function interpretation") {
+    ResidueTerms t;
+    for (auto expression : {t.op(Kind::Mod, t.x, t.x),
+                            t.op(Kind::Mod, t.constant(0), t.x)}) {
+        auto folded = t.fold(expression);
+        REQUIRE(t.ir.get(folded).kind == Kind::Mod);
+        CHECK(t.ir.get(folded).children[1] == t.x);
+        CHECK(std::get<int64_t>(t.ir.get(t.ir.get(folded).children[0]).payload.value) == 0);
+    }
+    auto nested = t.op(Kind::Mod, t.op(Kind::Mod, t.constant(7), t.x), t.x);
+    auto folded = t.fold(nested);
+    REQUIRE(t.ir.get(folded).kind == Kind::Mod);
+    CHECK(t.ir.get(t.ir.get(folded).children[0]).kind == Kind::Mod);
+}
+
+TEST_CASE("IntDivModConstantFold: wide distribution survives term storage growth") {
+    ResidueTerms t;
+    TermExpr sum; sum.kind = Kind::Add; sum.sort = t.integer;
+    for (int i = 0; i < 5000; ++i)
+        sum.children.push_back(t.ir.add(TermExpr{Kind::Variable, t.integer, {},
+            Payload(std::string("y") + std::to_string(i))}));
+    auto multiple = t.op(Kind::Mul, t.x, t.ir.add(std::move(sum)));
+    auto folded = t.fold(t.op(Kind::Mod, multiple, t.x));
+    REQUIRE(t.ir.get(folded).kind == Kind::Mod);
+    CHECK(t.ir.get(folded).children[1] == t.x);
+    CHECK(std::get<int64_t>(t.ir.get(t.ir.get(folded).children[0]).payload.value) == 0);
+}

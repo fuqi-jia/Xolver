@@ -44,13 +44,14 @@ private:
     // M (e.g. M = pow2(k) in the bit-width-independent Zohar benchmarks). Layers:
     //   - distribute p into monomials, drop every monomial divisible by M
     //     (`(a*M + b) mod M -> b mod M`), drop `0` additive terms;
-    //   - idempotence: a lone `(mod a M)` term collapses (`(mod (mod a M) M)`);
     //   - ITE-LIFT + MOD-OVER-ITE: an additive `(ite C a b)` term is pulled out,
     //     so `(mod (ctx + (ite C a b)) M) -> (ite C (mod (ctx+a) M) (mod (ctx+b) M))`,
     //     each branch recursively simplified, identical branches collapsed. This
     //     reaches the mods nested inside intmodtotal's `ite(M=0,..)` wrapper.
-    // SOUND for ANY M (dropped t=M*s is ≡0 mod M, 0 for M=0; mod-over-ite is an
-    // identity). General — no example-specific constants. `depth` caps blowup.
+    // Preserve the outer mod, including a zero numerator and nested mods:
+    // when M=0 its interpretation is arbitrary and need not be idempotent.
+    // Dropped t=M*s is zero for M=0; mod-over-ite is always an identity.
+    // General — no example-specific constants. `depth` caps blowup.
     ExprId trySymbolicModSimplify(ExprId e, int depth = 0);
     ExprId distribute(ExprId e);
     ExprId simplifyMul(const std::vector<ExprId>& factors);
