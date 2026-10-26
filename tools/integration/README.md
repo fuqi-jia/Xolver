@@ -96,3 +96,39 @@ seeded hash order receive three repetitions. The remaining queries receive one.
 Use the [standard SMT comparison harness](../regression/README.md) for balanced
 measurements. Report export coverage alongside solver coverage: deciding every
 exported pure condition does not decide the unsupported spatial obligations.
+
+
+`qcp_backend.py` provides an explicit discharge interface for **pending assigned
+manual witnesses**. The QCP group owner supplies the original generated goal
+file, its authorized manual copy, and exact witness names. Choose
+`--backend xolver --binary /path/to/frozen/xolver` or
+`--backend z3 --binary /path/to/frozen/z3`; use the same `--timeout 60` and
+inputs for both. Execute through ExperimentOS on Panda1 with one physical CPU.
+The adapter rejects an absent or mismatched lease, limits each invocation to
+16 GiB, removes solver tuning controls, and records executable/input/output
+hashes and every query result.
+
+For example, within a proving group's assigned write boundary:
+
+```bash
+python3 tools/integration/qcp_backend.py --goals /path/to/case_goal.v \
+  --manual /path/to/group/case_proof_manual.v --assigned exact_split_goal \
+  --backend xolver --binary /path/to/frozen/xolver --timeout 60 \
+  --output /path/to/group/backend-xolver
+```
+
+A supported goal produces a proof candidate only when every exported
+sufficient condition returns UNSAT. The common reconstruction attempts prove
+the original named Rocq statement, including its spatial conclusion. They
+introduce no SMT axiom. The owner must incorporate/check candidates through
+the canonical controller group-development and group acceptance commands;
+parent verification and final-check remain required. An unsuccessful
+reconstruction stays unproved. Already completed witnesses are excluded, and
+SAT on a projection never labels the C program invalid.
+
+This interface operates after QCP VC generation; QCP's opaque internal SMT
+solver remains common to both backends. Reports explicitly distinguish external
+backend invocations, unchecked proof candidates, kernel-checked VCs and verified
+programs. The adapter alone reports zero verified VCs/programs. Full-program
+comparison also needs the controller's final-check evidence and common manual
+support for unsupported obligations.
