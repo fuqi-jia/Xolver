@@ -92,7 +92,7 @@ def proof_candidate(lemma, goal):
     # Both backends use identical proof reconstruction. These tactics must
     # reconstruct the whole original Rocq statement; no SMT result is an axiom.
     return (f'Lemma {lemma} : {goal}.\nProof.\n'
-            f'  unfold {goal}; intros; try entailer!; try lia; try nia.\nQed.\n')
+            '  LLM_pre_process ltac:(first [lia | nia]).\nQed.\n')
 
 
 def discharge(goals, manual, assigned, backend, binary, timeout, output):

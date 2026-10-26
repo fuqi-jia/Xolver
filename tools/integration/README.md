@@ -132,3 +132,22 @@ backend invocations, unchecked proof candidates, kernel-checked VCs and verified
 programs. The adapter alone reports zero verified VCs/programs. Full-program
 comparison also needs the controller's final-check evidence and common manual
 support for unsupported obligations.
+
+
+The pinned QCP generator writes `Admitted` even to its auto-classified proof
+module. Such a module is not an independently checked VC proof.
+`prepare_qcp_controller.py --qcp /path/to/pinned/QCP --output /path/to/controller`
+creates an isolated, source-hashed controller copy. It promotes each admitted
+auto witness into manual obligations before publication and during final
+independent replay. Native QCP and its original checkout stay unchanged.
+Unsupported admitted syntax, duplicate witnesses, unchecked auto assumptions,
+and completed auto proofs depending on moved admissions fail explicitly.
+Invoke the copied controller with the original checkout as `--main-root`, using
+the normal owner/acceptance workflow. Both compared backends must use the same
+controller manifest. Never infer full verification from a controller run that
+still imports admitted case witnesses.
+
+Proof candidates follow `LLM_pre_process` with the common `lia`/`nia` closer.
+The group owner must follow its plan and role policy; aggressive parents use
+owner-controlled `Goal_apply` after their split proofs. A failed arithmetic
+closer requires ordinary checked reconstruction facts, not an SMT axiom.
