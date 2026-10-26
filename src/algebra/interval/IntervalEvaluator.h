@@ -42,8 +42,8 @@ struct IntervalConstraint {
  * IntervalEvaluator: sound over-approx interval evaluation for polynomial constraints.
  *
  * For a single normalized constraint p(x) rel 0:
- *   1. If the polynomial is multi-variable → NoChange (single-var only for now).
- *   2. Requires the variable to have both lower and upper bounds in the ReasonedBox.
+ *   1. Evaluate powers, products and sums with exact outward integer bounds.
+ *   2. Requires every variable to have both bounds in the ReasonedBox.
  *   3. Computes the over-approx interval of p(x) over the variable's domain.
  *   4. If the interval proves the constraint is definitely violated:
  *      returns DefinitelyViolated with the used bound reasons.
@@ -55,6 +55,13 @@ public:
     // Evaluate a single constraint against the box.
     IntervalEvalResult run(const IntervalConstraint& constraint,
                            const ReasonedBox& box);
+
+    // Shared monomial enclosure for forward evaluation and backward
+    // contraction. When omitted is set, evaluate only monomials independent
+    // of that coordinate; callers separately justify isolating its terms.
+    std::optional<ReasonedInterval> evaluateTerms(
+        const std::vector<PolynomialKernel::MonomialTerm>& terms,
+        const ReasonedBox& box, std::optional<VarId> omitted = std::nullopt) const;
 
 private:
     PolynomialKernel& kernel_;

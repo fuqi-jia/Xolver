@@ -1,0 +1,1810 @@
+{
+  "stage": "shared-integer-intervals-20261026",
+  "base_commit": "ea240d2e6896c7a2bea8b4114059c7ce29c91b9d",
+  "evidence_root": "/pub/data/jiafq/xolver/validation/arithmetic-r103",
+  "native_source_manifest": {
+    "path": "source-r109.tar.json",
+    "sha256": "9d526bb3ef649e2732436ff5792e8a4e4a0c27a848399fcbfb07a6ee33a7d64a"
+  },
+  "frozen_binaries": {
+    "xolver": "15058bb39aadf06f7cb0a992b395376c03a9adb19798d6714934908762b91fe9",
+    "xolver-sv": "99130012b880f255cd8bbaf456d4031d07649792c83c430acb5649a547bb89ef"
+  },
+  "cvc5_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+  "comparison": {
+    "cases": 160,
+    "binaries": {
+      "baseline": {
+        "path": "/pub/data/jiafq/xolver/validation/symbolic-mod-zero-core-r99-20261026/xolver",
+        "sha256": "c60e1bc94b21f27806b6d0bc7760c6a22ea2a5ab151c004d2afae34c78a5ad88"
+      },
+      "candidate": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r109/xolver",
+        "sha256": "15058bb39aadf06f7cb0a992b395376c03a9adb19798d6714934908762b91fe9"
+      },
+      "z3": {
+        "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+        "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      }
+    },
+    "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+    "timeout": 60,
+    "memory_bytes": 17179869184,
+    "counts": {
+      "baseline": {
+        "timeout": 79,
+        "decided": 78,
+        "verified_decided": 75,
+        "verified_par2": 10432.564817572013,
+        "raw_par2": 10073.201885206625,
+        "sat": 44,
+        "unsat": 34,
+        "unknown": 3
+      },
+      "candidate": {
+        "timeout": 78,
+        "decided": 79,
+        "verified_decided": 76,
+        "verified_par2": 10314.550532633439,
+        "raw_par2": 9955.185941537842,
+        "sat": 44,
+        "unsat": 35,
+        "unknown": 3
+      },
+      "z3": {
+        "unsat": 58,
+        "decided": 124,
+        "verified_decided": 109,
+        "verified_par2": 6343.907582152635,
+        "raw_par2": 4635.249418428168,
+        "sat": 66,
+        "timeout": 36
+      }
+    },
+    "by_logic": {
+      "QF_LIA": {
+        "baseline": {
+          "timeout": 23,
+          "decided": 25,
+          "verified_decided": 25,
+          "verified_par2": 2842.0896174795926,
+          "raw_par2": 2842.0896174795926,
+          "sat": 14,
+          "unsat": 11
+        },
+        "candidate": {
+          "timeout": 23,
+          "decided": 25,
+          "verified_decided": 25,
+          "verified_par2": 2843.6390814706683,
+          "raw_par2": 2843.6390814706683,
+          "sat": 14,
+          "unsat": 11
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 38,
+          "verified_decided": 32,
+          "verified_par2": 1956.689108049497,
+          "raw_par2": 1276.1705195978284,
+          "sat": 23,
+          "timeout": 10
+        }
+      },
+      "QF_NIA": {
+        "baseline": {
+          "timeout": 26,
+          "decided": 22,
+          "verified_decided": 21,
+          "verified_par2": 3341.5062181223184,
+          "raw_par2": 3221.543079050258,
+          "unsat": 9,
+          "sat": 13
+        },
+        "candidate": {
+          "timeout": 25,
+          "decided": 23,
+          "verified_decided": 22,
+          "verified_par2": 3221.808238942176,
+          "raw_par2": 3101.843175875023,
+          "unsat": 10,
+          "sat": 13
+        },
+        "z3": {
+          "unsat": 22,
+          "decided": 34,
+          "verified_decided": 29,
+          "verified_par2": 2332.3798755966127,
+          "raw_par2": 1733.1699089054018,
+          "sat": 12,
+          "timeout": 14
+        }
+      },
+      "QF_LRA": {
+        "baseline": {
+          "timeout": 17,
+          "decided": 15,
+          "verified_decided": 15,
+          "verified_par2": 2079.725036997348,
+          "raw_par2": 2079.725036997348,
+          "sat": 6,
+          "unsat": 9
+        },
+        "candidate": {
+          "timeout": 17,
+          "decided": 15,
+          "verified_decided": 15,
+          "verified_par2": 2079.812245428562,
+          "raw_par2": 2079.812245428562,
+          "sat": 6,
+          "unsat": 9
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 26,
+          "verified_decided": 25,
+          "verified_par2": 882.0559822171926,
+          "raw_par2": 812.7975851241499,
+          "sat": 11,
+          "timeout": 6
+        }
+      },
+      "QF_NRA": {
+        "baseline": {
+          "sat": 11,
+          "decided": 16,
+          "verified_decided": 14,
+          "verified_par2": 2169.2439449727535,
+          "raw_par2": 1929.8441516794264,
+          "unsat": 5,
+          "timeout": 13,
+          "unknown": 3
+        },
+        "candidate": {
+          "sat": 11,
+          "decided": 16,
+          "verified_decided": 14,
+          "verified_par2": 2169.290966792032,
+          "raw_par2": 1929.8914387635887,
+          "unsat": 5,
+          "timeout": 13,
+          "unknown": 3
+        },
+        "z3": {
+          "sat": 20,
+          "decided": 26,
+          "verified_decided": 23,
+          "verified_par2": 1172.7826162893325,
+          "raw_par2": 813.1114048007876,
+          "timeout": 6,
+          "unsat": 6
+        }
+      }
+    },
+    "changes": [
+      {
+        "index": 125,
+        "case": "QF_NIA/calypto/problem-000123.cvc.1.smt2",
+        "kind": "gained",
+        "truth": "unsat",
+        "evidence": [
+          "independent-z3-xolver-agreement"
+        ],
+        "observations": {
+          "z3": {
+            "result": "unsat",
+            "seconds": 0.06501110270619392
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.068091340363026
+          },
+          "candidate": {
+            "result": "unsat",
+            "seconds": 1.567934038117528
+          }
+        }
+      }
+    ],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "unverified": [
+      {
+        "index": 0,
+        "case": "QF_LIA/rings/ring_2exp6_8vars_4ite_unsat.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 12,
+        "case": "QF_LIA/fft/Sz128_2823.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 22,
+        "case": "QF_LIA/rings_preprocessed/ring_2exp12_5vars_1ite_unsat.smt2",
+        "results": {
+          "candidate": "timeout",
+          "z3": "unsat",
+          "baseline": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 24,
+        "case": "QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 26,
+        "case": "QF_NIA/20230321-UltimateAutomizerSvcomp2023/soft_float_3a.c.cil.c_4.smt2",
+        "results": {
+          "z3": "unsat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 27,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 42,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep2a.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 50,
+        "case": "QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_jain_5.i_2_4_3.bpl_7.smt2",
+        "results": {
+          "z3": "unsat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 75,
+        "case": "QF_NRA/20211101-Geogebra/IsoRightTriangle-Bottema1_17a.smt2",
+        "results": {
+          "baseline": "sat",
+          "candidate": "sat",
+          "z3": "sat"
+        },
+        "reasons": {
+          "baseline": "no independent confirmation within budget",
+          "candidate": "no independent confirmation within budget",
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 80,
+        "case": "QF_LIA/cut_lemmas/20-vars/cut_lemma_03_004.smt2",
+        "results": {
+          "z3": "unsat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 85,
+        "case": "QF_LIA/rings_preprocessed/ring_2exp12_6vars_1ite_unsat.smt2",
+        "results": {
+          "candidate": "timeout",
+          "z3": "unsat",
+          "baseline": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 95,
+        "case": "QF_LIA/rings/ring_2exp8_6vars_2ite_unsat.smt2",
+        "results": {
+          "z3": "unsat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 114,
+        "case": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 115,
+        "case": "QF_NIA/20230321-UltimateAutomizerSvcomp2023/ps6.c_7.smt2",
+        "results": {
+          "candidate": "unsat",
+          "z3": "timeout",
+          "baseline": "unsat"
+        },
+        "reasons": {
+          "candidate": "no independent confirmation within budget",
+          "baseline": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 148,
+        "case": "QF_NRA/20211101-Geogebra/IsoTriangle-Bottema5_3b.smt2",
+        "results": {
+          "candidate": "sat",
+          "z3": "sat",
+          "baseline": "sat"
+        },
+        "reasons": {
+          "candidate": "no independent confirmation within budget",
+          "z3": "no independent confirmation within budget",
+          "baseline": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 159,
+        "case": "QF_NRA/20161105-Sturm-MGC/mgc_07.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      }
+    ],
+    "scoring": "Correct verdicts require a replayed model or an independent UNSAT decision on the identical input hash; unresolved results receive PAR-2 penalty."
+  },
+  "comparison_reports_sha256": {
+    "case-000": "7bc15b7376d5dba6b7243bdb3ae1861cce2c16eed68d2853881694e1878171ff",
+    "case-001": "703d355c82a56755576c02745893896795dd9b4d8f54d176d44966991c5235e3",
+    "case-002": "342b1ef7d66b4679b6743bbf227c9fbf6ced712747c25e276ab8c26cd46e3529",
+    "case-003": "d48ea39773937601db6e44bb058d75f745e5ebd9e2fe18607927da48bd1c4348",
+    "case-004": "bec21e1a14662979f75b003ed3ff6b8c9c04222494a757b8feb900604a972d1b",
+    "case-005": "b4e53b7aeef46fee4a9343575c87cbbb3efb570cebc74339fc504bb902d84c9e",
+    "case-006": "3a551b2896a5d32b304f0bbc7375e5f9c7a7302da11901c21ace860eac6d546c",
+    "case-007": "ca9295abcc0782dde0e97c25df7682e53ff7cf0074f8ebcfc5fc5776ceb45cc9",
+    "case-008": "c906b9965515db435f71775d45755c0d7298dc8db7a82b7cd3c4e11bca5c6e0a",
+    "case-009": "102f1068a107f491114270053b4a4fedc7a1b7de5e438d10ae3c642aee777dd9",
+    "case-010": "000daf7c72e2d010609615ab42f94e686a83d999db5e1292c6414aa17013ebb6",
+    "case-011": "a24f564140d6f5e2dde7fb69c1516c77b9a684a43efc2aeb89b27b1dde6b643e",
+    "case-012": "4f59129ecbdb226198113ad27a000af7bab507cf451609188d6624fe4f9d13df",
+    "case-013": "e9231c98bf833fa7565cb8aa70591d6cf51a21cf66a351e063556685b7cab543",
+    "case-014": "547bab79487e82e6f1fbff7c323b584c0f3698423a20843a4f87b9214ebb44e9",
+    "case-015": "d37e1d4673899fa1590bee636c9d33de79c7a173f2c11cd4fe3a27745b88e179",
+    "case-016": "81a65963ee606005f6b3e3adf7e1fecbf185df254e1d98c03b11f9e848874c59",
+    "case-017": "be30f2c865574a42b2459097a4ed8499b8ec336fe3ef069c6728c10f72c6ff05",
+    "case-018": "a7b53057ce853ce451b91e0c12e64adf6d8ad279ccbcdee63afb36f976a9fddb",
+    "case-019": "dafbc9e522de688fe4697bea062f1259eeba5736cb784b9ef08b6ea997e0b126",
+    "case-020": "109b459b7e198274d1f94cc6b8e1002e2faad48467d4486526c7d0a39934be1c",
+    "case-021": "28657ad78a958de1eabbbf5c64d675f703d3c19ca1148e4ed851a18391266d37",
+    "case-022": "25af64c76aa5aaf93cddfb73cbf112206aad24766e4af9075c124a8efdfb7166",
+    "case-023": "ded9500ea2ff4d32f368a12509b0ac9eceda9875861e3f2047fd5a68b2aed147",
+    "case-024": "595f5a9997ba74465eb8454c9c3ab5576a3a9c5e560ab5bb0aa89d91e1cd9d4a",
+    "case-025": "2df0b3e8ec0e9ea2448c852c2ef248be59409c1409cda1f7e5bebd541d68dac1",
+    "case-026": "2c4516c006a94e4b0b7de08001ad09db3f9cfaa8fa4e0e43ca77df60521e5d13",
+    "case-027": "8a01761dca4975f83797bf029bfb1a13d6425d8dd8b60d466ef9b4854ac89bed",
+    "case-028": "5c46d214b271a14e60db0b906da06ad914bd26692bc50dae5d5430a8ecb4c41f",
+    "case-029": "c26acd0ec03a4d59f40c65d79043d38c2a7090168015a6ff894ca93e822b7fca",
+    "case-030": "a0f117857664d2035947f3529611e058a8faebc2f5d945be52328c51e5a3fc40",
+    "case-031": "7136961ad49b3dc9fa01d168e5157b401581a3a4afcde38be59d3ace71ce7cd4",
+    "case-032": "7e2cdcf8693ddd1a75d97c6d71f1a1af85005344f8baf9473e84167931a81887",
+    "case-033": "1d12b9587f1e25b99e1eb7adee3eca2d9168fa397d01a0054b0566f1f78d8c45",
+    "case-034": "1432c8611ed563495677676ab31aab7dd6895bc5c1c795815ab3cf72530d2f3d",
+    "case-035": "fdf5bf49d9d0541976daf2eaf789d06414a1a5bf768dcbd21248b2c2808650bf",
+    "case-036": "4630c58e0d9190990ba4b85d3ed15e63ae369a7d98493a9ac37c7e270d7573ca",
+    "case-037": "9255bdf977501185864aefd57ebe9bcce2b40ba5170d475935836d5701176864",
+    "case-038": "b71fd337d0d3299a5d33cd56223574e9214f260b61e37d8bc85d88082eabd1d9",
+    "case-039": "ef887103fece769249014211d31a1e46416f237946b94d658ded5b87592284f9",
+    "case-040": "ff7a0b0c055d57c692bd1c527f482a5d894dd63ba0d4ab5a39118a09ebb76add",
+    "case-041": "b8fe71c253d4de562075aeb48770c4e31a1ff29aef7e58ccf02092892a45176a",
+    "case-042": "fe23dd4e92308a570c4d44e1ccca6ba4acfd9b7d437e43bd6603c949b9701149",
+    "case-043": "afde0d3ed88f7d581789d3dcdae67a31702cea2690176b86cb2c3c301aa79f8e",
+    "case-044": "b52ba68d353e616a3fe31c729a5bff239097720b6efaa8b84aa2b8b91985a9b7",
+    "case-045": "b2c76804201616e2d2f18f8c816e05eb5ebdc870badb9a0feced1e147fab53c0",
+    "case-046": "481f9267ae698ad7a274752d223c45791f85aea69152d0c68fd1e00657379c56",
+    "case-047": "52e517b5917793a3a49c3952dadc528fefdf48b0504275edbf35d66a9537f2f4",
+    "case-048": "1c780bb48cdc88938cde1766030ed21b2c802e3417db295c657ca96f99a99bf3",
+    "case-049": "313563ed0a4d41a9b7e896a606ed4fa6e1840b72c67ef51071abb5506b04b0c2",
+    "case-050": "a5a93bfc354b081e4b6a20ab875e014d1a145aa4580ab30e67f50796edc2cd15",
+    "case-051": "ded222fa8d14dc1864a6d3a72802fffaa1dc01dad4ffd80253c13f8b1aa9d3fa",
+    "case-052": "6b1d54ed02db9dddfdb35354eefec03341ffe004b4d6a693b6f0ebca76ceac2a",
+    "case-053": "15a08724fe95d803fbd9cde585426944bd496e3c4bdf6b4c77e6baa727fe5dfe",
+    "case-054": "9af05de7deec7a15a6188a5109bd8f6f95d772257a271d5779665ed31293b56b",
+    "case-055": "2708576bc473b79f0d548b9242c4f5025e3200221534821b02c4e1a098a7f4f9",
+    "case-056": "3e539007d5180ebb218584620cf710b8e8c6a4fa195343f876a9ef4855818c1d",
+    "case-057": "6852cc3abc6d1468a19940d38fd8f06062c3269ce819bcf9caa0a1bdf17245e8",
+    "case-058": "fb72ec0d2a5e2e20ade1e8306dbd7193b97b4fc80abc6255dfce1f1dcfa590d6",
+    "case-059": "f51eec9cfdde270d232ff62ca6bf936bd7d4fbe47a5fa5bb6bf67781eab87bbc",
+    "case-060": "e5dd6daf4d586d801025bb9bd4f646de8795de91257d802e6e28e787fac2e848",
+    "case-061": "c22fdec00eaf2f8265b7e5017456d3705466ed0362c35f2d9d769899238c4e23",
+    "case-062": "ce35d652b17e613c506723c680792200f1b195c4c0c28432d2292e28ccf5253e",
+    "case-063": "8c09baf35ef120c9f0ac9e5b9ad64b49280d738c639223d0153fa691aa20ee3f",
+    "case-064": "b4ed7d112a30c7ca6057b8af2519b6308d2725056e4a0185e9c345e980f0ac61",
+    "case-065": "c582eb6d934bc6f75370f7e263b5c3f145d43d267a37cb4bf5a5a5ac65116271",
+    "case-066": "d8116a4bc376a6c385b6cb4095dc23797aaa822852e3fa3a53d7a6a0030acfc2",
+    "case-067": "1d3383a6a760fbdc0aba6542c171871b74b8dd10231b05e0cd33d623228b2a6e",
+    "case-068": "f1060d70bf07a1170179c72fcd46f1c6b249038649d8e009e2de964d6eb793ca",
+    "case-069": "f11743d2cbd6c3a62f92324ef59e8a1de54633889bef96a97548e4ad4a1310d4",
+    "case-070": "be261a9c2ebc8d17fb9ef257cb12e089fbe2c33e91c25841f1903d2860902ec4",
+    "case-071": "511338d6aa0285b4241ddfc25a0ae73f5e11253e9900f12464e22df8cc3a8707",
+    "case-072": "7470706b98a01f51a5d099687c5fea53e96df53f2bc5a4dff5c5e48891e14411",
+    "case-073": "b9eb44ade51f651f3f4eb20f97fb9d12a5329512a5a3976cb3a8400cf89b7a48",
+    "case-074": "b9ce3685ecc09d833dd93b38d25d046e29b52f990a3784218c24463677273819",
+    "case-075": "19041523de99bde8b6effef82577f5ad6d1c2d86d5fc8158c4d020fc9bd1775e",
+    "case-076": "ab19e30e47368c5721ccf72a7238ed8801597c2156e638c6d3140da2ec6e3f95",
+    "case-077": "be0b097a737e03b70398753ad267a711df0e3382f35324699ee4ae3c437fd0a5",
+    "case-078": "d253dfff390ef00ab2cdeecd44514c31a9c95af828618c3b5f31ee1e3c6ad4a6",
+    "case-079": "da894fe59daffb5cc68aedb2f8518f2a2bbe43ce656a85b3085c7aa2157d117c",
+    "case-080": "937cf463dedb5f8539486be4111facd48968a8ad09224b7657bf17b908ff9f53",
+    "case-081": "85d3bf919be056119c3d9922b56490074db7496094d89eacbfaa4a1eb7d2357b",
+    "case-082": "3c3f2c8bf5866f870ca31cc668823b92439b9c71a73cc99420862a9532d242a3",
+    "case-083": "c3a0934da6eb5402ee5d08cb7232da0034a15a909fc35f90274cccf9a19d2531",
+    "case-084": "c591046ff79bda35b20af6755583c0ccb0ec6f1e22ecef003e390d2c495e57e1",
+    "case-085": "3d5941db7aa30f30eb8f74810ccd369841b74eaeaef56fe2b64aa44d98605be8",
+    "case-086": "58c8b75116bf35b0b7ef76bd5c8c35e70ab2eca878ed7047ca6448fb6462aea5",
+    "case-087": "3ee126993bf6aa96d0130427d9307869ed403198b8fae55e5c05e0758a205995",
+    "case-088": "26bcc4b6103510518c87474b01d9bbb32f86d2d5e43bb3dac3f364aacef29724",
+    "case-089": "909c44aed91f158298b953ee8610b1aeefaa5f94a0b5aecb3849478f7c05a9da",
+    "case-090": "799ab18b7f4faad152d3d59c76f9c07a407d174ed3dfffb0c42e6c19440edc2b",
+    "case-091": "042d2bfdd7e93c828c1cb12d9ab34968873febb1d02b58e0add830d2a165972a",
+    "case-092": "18eee2baa3b28d1612f2d1d4e92c1d66b4ee2b430e606ca6c3851f4afb5028d8",
+    "case-093": "802d9aea641f8976948f7b1ebf36d9da92089c91ef96ef1ba752a6c187df0cca",
+    "case-094": "9454b34c00dbe2c3d441b2f25ce22d6f611fa51592900d28b43833c182a474ca",
+    "case-095": "fba63401bbedd4ba4a59d768af226a4555f7fb88f66c2ae212b1cdfdf969ad87",
+    "case-096": "fb1b8ba7ec99c6be634d44390c1b94f7fa66cfea44ed6f88ee8aae30fcba2fa4",
+    "case-097": "629f0dbc97aa032a31a9daa0cb55df83db1f250e12c2366bcca55a51812b30f8",
+    "case-098": "07a19fccc34c8bb3a99db2bd6fedda09f41d113195ab64c207aaef20df494ed7",
+    "case-099": "728d8575aaf36d76481e60f6a9352a370336be70692cfd7575a5f806bc3e7a20",
+    "case-100": "38353cf33722cd539c8fab2684b2d24903cc269d8ab7ae8c19ea62347b4a372d",
+    "case-101": "964d5a99b7b4e7526e8761ccbf13827a663b22830401af520a011b8e21017ca6",
+    "case-102": "3f502a3b7ea55e017feba5139c40f0a664d5a406a263c4191ffcd2616ab0ff15",
+    "case-103": "95b349ac7056e67a57318d2839592550214c2ac96cba2a0519797cd2eca79adb",
+    "case-104": "b287965e16b34b93876e26018d5f5bbf9afe770802827cdb3ac0628dc7053170",
+    "case-105": "ae4228589f86ca5149f5bd221a5b1ad631965bd57c44cfcbc35d32de5d09ba8f",
+    "case-106": "3db25406997350b3495283ed95e546f272b7a871ef13e5d91575dce4f7991f81",
+    "case-107": "54793b400d462e675ef0439d6be5b5b1cf70f96df17a163ba63b66a4ffef3338",
+    "case-108": "905a275fbfd5442a284e1b57d40b67e756f3de9f3a8f3a75b1d4831bd35b35fa",
+    "case-109": "79842654d52dc599acabd43a6938a1798b596c31707a45b055a8b200700f0f67",
+    "case-110": "291bbda74c13a883e545147c6dec7b848b0be855385ef381adce4ab9715e29ff",
+    "case-111": "ae860388236e97d840d54eb24b5c64a05bdaf8e22eb8e124eadf40948cd71e1c",
+    "case-112": "54efe7846734b892adbb40d49fcfb21e19b80fb8a42757ad9a93e19ef3077e40",
+    "case-113": "656316913ca69ca6f842bcd5bb240a82e7fe0f8ef58dcc8deb65499ec0ca0ad7",
+    "case-114": "34c4c4d66638b26da83e41da4266686315df32a4a795ec094e7aee559fb9ee9f",
+    "case-115": "38569ca034c904d4bc9141e8525f0733f32046d3d8b8236d56e6def463fd48d6",
+    "case-116": "18307f9afd272c2094f32cc04503d21805a801c21b66085435c5a065ffb4cd9f",
+    "case-117": "4570ce1a5178fb7ce1aebd22854b30ebe0761a222df6108070212906859afd9d",
+    "case-118": "ad055a34307924fb2fa74d2ada2519f721df2976de345edd181b4107b7825949",
+    "case-119": "a0a26d90e7370268f369be03e5df3e2e733c73dc356357e20d6b147bca3cf89a",
+    "case-120": "4c799a25dc8083f403cd73c3f45f52c6a0d1a7ef62b38a35723d8ed647f3397f",
+    "case-121": "02f5a68763a0f37cb01a5c3a94ff41c907b8812e43a55827c5dac68dd0f15746",
+    "case-122": "8ff2a15dcb7636f012ce800f46184a36111bc836d9526afda148e96d199af5f1",
+    "case-123": "fd3b5a4c1966db5692b6569266c2ff8f81a69de3cb325beea0cbd94b89b2000a",
+    "case-124": "23bd3d5e93956a46fa29bcdedfa1902a63262178478579ff6987a6eb8d186675",
+    "case-125": "ac4980d5f2321f798744fb56bca991a6226bb3fd50adcb1f4b9efb9cdafd89af",
+    "case-126": "64a3e8e6ec991047216217a888c194f0ad6d3dfb3a34306ba011568d6f4a0607",
+    "case-127": "ce35e48a0f879b6d642def0e0bc232b86e011aef33c96576c1de7f0ff8f6c51e",
+    "case-128": "2fbea0273cebaeaf6ec5134c6687943e675944d97a6d44277dd15c985ae18cbf",
+    "case-129": "c519cfcf99f861cc74781759a6cda32b81cb0588b919d49e59d69e668aa658e5",
+    "case-130": "f588dc4b81aceca0a96017b2a6fe400ac23e1b3d60af0346557552d59f24e6f0",
+    "case-131": "2caad9e97aebdd0d5ab870d5d6838ac52492ead068831cc2d0a367509302ef41",
+    "case-132": "d355b662f6a341c87e30d8510f25ef1f69f3fa24aa988b02dc9167c748bfec3c",
+    "case-133": "31f185965afddb9b6f25346bb06ee17886babe52bdc0732c47a0bcf9df92b3a5",
+    "case-134": "e843dc93409c2e15cf8a02693c940ab8133391e695a2259fd1c3040eef7589f6",
+    "case-135": "6888e4e379ef08e0d1d5fa09a85f606d8810cebf0085758e1e8e101e918650c4",
+    "case-136": "52ab9cfc583e3cd729016e62ac3cfaf95c057ae8a1f0c78d5d30bf59488f32d7",
+    "case-137": "6bfd665f97d4fb75044ac31b7636ba4d2888154075db779177eb3048930ca874",
+    "case-138": "9b4fae68c4cd3e7334443da51f148a2f65efe95aa445e2f0c1a65aab515b148a",
+    "case-139": "469d63f575fe264e4e2eb0c59da4462f85e371bc43ba821a6fd85da4c5d0dc45",
+    "case-140": "730b54aa0865b82223460e542d42084685b0ba38f11e95d8ca0b57bc9709f799",
+    "case-141": "bb7fb55f4023783efb32c8625cdfa03723b702bbefacd5e51aea5849c7d1580c",
+    "case-142": "7e4bb1bc2530fba706e742853369df2d0b627fa49bbe4680f38bef19c50026a1",
+    "case-143": "50c2d4998eb5ee72fc7d98ad4805ed665bbced25d8e6efd87e357784526dced9",
+    "case-144": "b13e75dd8e82550f165688e1482d8736bd5d73463c6f54cfb9a4f61444ae7930",
+    "case-145": "32140dbf7b6f9f532bf1a904dcb1ea2988fbb1d6e4a5f08f5b7ce413ebe1593a",
+    "case-146": "d0d5362b1f1080fa80406d8008080bd999b34b79dfd5176e82189436b5e2db4d",
+    "case-147": "fc34462bd342f7aed7563775a5a12cc75b2595a072c5a308c13c2c63c73b2747",
+    "case-148": "ac6bd4094d0346d0e21e822c1905d93e47daeb09a41e744ceff8629b21273f8c",
+    "case-149": "fcc98c1026c15e5b385b81606ae04f5689f10ffee3d1aee9c144c8537fd1f945",
+    "case-150": "fe5c8170c12e8b008a6c7b6a6137a5b8c24d9a3e35fc822023c7722cc56d1f4d",
+    "case-151": "62bc4ec725a18cc581809c132be1dcec4705d626f32597c7ecfa263b3c0e07df",
+    "case-152": "fefca8296beb35a790cc13abec1b0c502133ce7bd4dec90d4347bda9df7bb887",
+    "case-153": "a7c257e56e3971479417f64f353869b5c616d5a19e18bd9aa12ea0dfec37867b",
+    "case-154": "219a723427d2b918990d29883fa50632eba1e6e6cf5aac10dbbcf4512e774b40",
+    "case-155": "88e4244fbfa6b6140f5f25f0e98309eef5bb44ce9a2e0a9d23263dc8539255a1",
+    "case-156": "0a014e059d68ac7d0427462633cf00c1217dc81ff98da55d989dadad5c59ed08",
+    "case-157": "9f722ab1dbbcf614a7b2f7de616ebebdd640a27882f4dc30f5addaf2a1de3c34",
+    "case-158": "ee0d97876923f59265dacd7db13db2889e932013b051bb01c492cc01c52a3824",
+    "case-159": "2c8fd139b6e99417ac5979cfd9a7abdd255661865217c973f2218b294ebdd56b"
+  },
+  "r101_unconfirmed": [
+    {
+      "index": 18,
+      "case": "QF_LIA/20210219-Dartagnan/ReachSafety-Loops/count_up_down-1-O0.smt2",
+      "sha256": "8dea5c8594806e3ce54d1d0b343efd382018454afcf9de69bf2a11ffaf2cc5cc",
+      "result": "unsat",
+      "confirmed": true,
+      "original": {
+        "z3": {
+          "verdict": "unsat",
+          "returncode": 0,
+          "seconds": 0.0524483397603035
+        },
+        "cvc5": {
+          "verdict": "unsat",
+          "returncode": 0,
+          "seconds": 0.5242604501545429
+        }
+      },
+      "model_replay": null,
+      "report": "confirmation/18/report.json",
+      "report_sha256": "c9862f5a83779801fbc1a6e567e61fc8f2ac25e4cdfbc18a829b310ac1ffe30a"
+    },
+    {
+      "index": 20,
+      "case": "QF_LIA/2019-cmodelsdiff/hamiltonianCircuit/7.lp.smt2",
+      "sha256": "6b7f045865d2b9b8e2aec04acc1f5aa9e45f4dd39266d07ac00f1f18f13ae27c",
+      "result": "sat",
+      "confirmed": true,
+      "original": {
+        "z3": {
+          "verdict": "sat",
+          "returncode": 0,
+          "seconds": 0.22313282825052738
+        },
+        "cvc5": {
+          "verdict": "sat",
+          "returncode": 0,
+          "seconds": 0.416050149127841
+        }
+      },
+      "model_replay": {
+        "z3": {
+          "verdict": "sat",
+          "returncode": 0,
+          "seconds": 0.047565141692757607
+        },
+        "cvc5": {
+          "verdict": "sat",
+          "returncode": 0,
+          "seconds": 0.06947384402155876
+        }
+      },
+      "report": "confirmation/20/report.json",
+      "report_sha256": "38381cb668c553d964c4989e49b717080dd938593e9e36f73573324fc4401f65"
+    },
+    {
+      "index": 36,
+      "case": "QF_NIA/2019-ezsmt/car/inst7.ez.smt2",
+      "sha256": "1b6e094edcaacadaa0d68b262df86efbc8b32e9a707a84deb9c6cb212bd11a5b",
+      "result": "sat",
+      "confirmed": true,
+      "original": {
+        "z3": {
+          "verdict": "sat",
+          "returncode": 0,
+          "seconds": 0.09656629338860512
+        },
+        "cvc5": {
+          "verdict": "sat",
+          "returncode": 0,
+          "seconds": 0.06531316600739956
+        }
+      },
+      "model_replay": {
+        "z3": {
+          "verdict": "sat",
+          "returncode": 0,
+          "seconds": 0.05359806306660175
+        },
+        "cvc5": {
+          "verdict": "sat",
+          "returncode": 0,
+          "seconds": 0.02919178083539009
+        }
+      },
+      "report": "confirmation/36/report.json",
+      "report_sha256": "f6b7ee8f638a5456a79b17ad549b1a0c867bfe32f51014b7e88f57ac6099aaaa"
+    },
+    {
+      "index": 41,
+      "case": "QF_NIA/20230321-UltimateAutomizerSvcomp2023/ps4-ll.c_4.smt2",
+      "sha256": "9d58637cd2d7c26719b526b474fdc3b0021321776d9639a6a5ae435bb39cccae",
+      "result": "unsat",
+      "confirmed": true,
+      "original": {
+        "z3": {
+          "verdict": "unsat",
+          "returncode": 0,
+          "seconds": 0.03208735026419163
+        },
+        "cvc5": {
+          "verdict": "unresolved",
+          "returncode": -9,
+          "seconds": 60.11885621957481
+        }
+      },
+      "model_replay": null,
+      "report": "confirmation/41/report.json",
+      "report_sha256": "cf4d80de025a85bf025783dae22425e4b437742f1aca361d97e286e501c0628c"
+    },
+    {
+      "index": 87,
+      "case": "QF_LIA/20230321-UltimateAutomizerSvcomp2023/jain_5-2.c_7.smt2",
+      "sha256": "1eab602a02f7402987806319c9d9d884d85c8afd0de0b24f02a9af242ca7877d",
+      "result": "sat",
+      "confirmed": true,
+      "original": {
+        "z3": {
+          "verdict": "sat",
+          "returncode": 0,
+          "seconds": 0.028573373332619667
+        },
+        "cvc5": {
+          "verdict": "sat",
+          "returncode": 0,
+          "seconds": 0.010888060554862022
+        }
+      },
+      "model_replay": {
+        "z3": {
+          "verdict": "sat",
+          "returncode": 0,
+          "seconds": 0.02356015518307686
+        },
+        "cvc5": {
+          "verdict": "sat",
+          "returncode": 0,
+          "seconds": 0.009005911648273468
+        }
+      },
+      "report": "confirmation/87/report.json",
+      "report_sha256": "28010e847c04950e3864d1b6389210d41b4d1cbd570eb3a3e83268780c15552a"
+    },
+    {
+      "index": 101,
+      "case": "QF_LIA/2019-ezsmt/incrementalScheduling/251-incremental_scheduling-40518-0.smt2",
+      "sha256": "1d63d6f883ccc4cc14bb4f5cefc3c211232b99b5e315cd8220722303def95bd9",
+      "result": "unsat",
+      "confirmed": true,
+      "original": {
+        "z3": {
+          "verdict": "unsat",
+          "returncode": 0,
+          "seconds": 0.10592108964920044
+        },
+        "cvc5": {
+          "verdict": "unsat",
+          "returncode": 0,
+          "seconds": 0.23492741957306862
+        }
+      },
+      "model_replay": null,
+      "report": "confirmation/101/report.json",
+      "report_sha256": "228c595cc1769a464aad520813234c7c8968ba9e5be605a3c1200c66b26a923c"
+    },
+    {
+      "index": 112,
+      "case": "QF_NIA/2019-ezsmt/car/inst8.ez.smt2",
+      "sha256": "8236c6a24c69027c696313c4b780db3021bd51178d8f601a317400d18e7f5bf3",
+      "result": "sat",
+      "confirmed": true,
+      "original": {
+        "z3": {
+          "verdict": "sat",
+          "returncode": 0,
+          "seconds": 0.048136020079255104
+        },
+        "cvc5": {
+          "verdict": "sat",
+          "returncode": 0,
+          "seconds": 0.03302644565701485
+        }
+      },
+      "model_replay": {
+        "z3": {
+          "verdict": "sat",
+          "returncode": 0,
+          "seconds": 0.026831278577446938
+        },
+        "cvc5": {
+          "verdict": "sat",
+          "returncode": 0,
+          "seconds": 0.014598889276385307
+        }
+      },
+      "report": "confirmation/112/report.json",
+      "report_sha256": "ccc8ad0e1f22104324a52b80285375f016f961d6d408d0ae3028e44926a82793"
+    },
+    {
+      "index": 115,
+      "case": "QF_NIA/20230321-UltimateAutomizerSvcomp2023/ps6.c_7.smt2",
+      "sha256": "02a58b11df8951543940a1090a140592e24de41dcaeb6470e7a50d42e804be64",
+      "result": "unsat",
+      "confirmed": false,
+      "original": {
+        "z3": {
+          "verdict": "unresolved",
+          "returncode": 0,
+          "seconds": 60.01641119457781
+        },
+        "cvc5": {
+          "verdict": "unresolved",
+          "returncode": -9,
+          "seconds": 60.09458158351481
+        }
+      },
+      "model_replay": null,
+      "report": "confirmation/115/report.json",
+      "report_sha256": "f5ab81693af1d1174d20d8c524c2df1e0b57628bbf20d886bbf6a503fb7a613f"
+    },
+    {
+      "index": 126,
+      "case": "QF_NIA/2019-ezsmt/car/inst2.ez.smt2",
+      "sha256": "1a114d20d0c96a837083aab53175972af8b4f460c23ea2e6ad6633c4973c28a3",
+      "result": "sat",
+      "confirmed": true,
+      "original": {
+        "z3": {
+          "verdict": "sat",
+          "returncode": 0,
+          "seconds": 0.1016992386430502
+        },
+        "cvc5": {
+          "verdict": "sat",
+          "returncode": 0,
+          "seconds": 0.06638649106025696
+        }
+      },
+      "model_replay": {
+        "z3": {
+          "verdict": "sat",
+          "returncode": 0,
+          "seconds": 0.05469926632940769
+        },
+        "cvc5": {
+          "verdict": "sat",
+          "returncode": 0,
+          "seconds": 0.026756230741739273
+        }
+      },
+      "report": "confirmation/126/report.json",
+      "report_sha256": "96aa8c9c9f7479b8800fabaa87266f7bb35e746cfc09055667257d89a082af5a"
+    },
+    {
+      "index": 132,
+      "case": "QF_LRA/2019-ezsmt/robotics/1_4.smt2",
+      "sha256": "859dcae02128d7760d2555d2b835547e7c0615e3557b3285127aa32306d56002",
+      "result": "unsat",
+      "confirmed": true,
+      "original": {
+        "z3": {
+          "verdict": "unsat",
+          "returncode": 0,
+          "seconds": 0.053567277267575264
+        },
+        "cvc5": {
+          "verdict": "unsat",
+          "returncode": 0,
+          "seconds": 0.023585963994264603
+        }
+      },
+      "model_replay": null,
+      "report": "confirmation/132/report.json",
+      "report_sha256": "50973dddc1c31a8a276ec710551c126a7a9ee38bc7be9115da9425c9bd94bc48"
+    }
+  ],
+  "profiles": {
+    "22": {
+      "seconds": 20.11309211142361,
+      "samples": 49,
+      "inclusive": [
+        {
+          "frame": "xolver::GeneralSimplex::pivotAndUpdate(int, int, xolver::DeltaRational const&)",
+          "samples": 27
+        }
+      ],
+      "report": "profile/22/report.json",
+      "report_sha256": "28117ecb925ebc2bad4f9f297f4358bf4c2714aac919b3b6a8d5b7b4a78056d0"
+    },
+    "27": {
+      "seconds": 20.110393790528178,
+      "samples": 49,
+      "inclusive": [
+        {
+          "frame": "xolver::bitblast::EagerBitBlastSolver::solve(xolver::NativeTerms const&, std::vector<unsigned int, std::allocator<unsigned int> > const&)",
+          "samples": 49
+        }
+      ],
+      "report": "profile/27/report.json",
+      "report_sha256": "20e0733423cf308f3c8e8ab84554c6f749586c95ec8b3a7a98d9a4fb6436e041"
+    },
+    "48": {
+      "seconds": 20.101240295916796,
+      "samples": 49,
+      "inclusive": [
+        {
+          "frame": "xolver::LraPropagationEngine::propagateAll(xolver::GeneralSimplex const&, xolver::PropagationBudget const&)",
+          "samples": 33
+        },
+        {
+          "frame": "xolver::GeneralSimplex::pivotAndUpdate(int, int, xolver::DeltaRational const&)",
+          "samples": 7
+        },
+        {
+          "frame": "xolver::LraPropagationEngine::propagateAll(xolver::GeneralSimplex const&, xolver::PropagationBudget const&)::{lambda(int, bool, xolver::DeltaRational const&, xolver::(anonymous namespace)::RowAggregate const&, xolver::(anonymous namespace)::Contribution const*, std::vector<xolver::SatLit, std::allocator<xolver::SatLit> > const&)#1}::operator()(int, bool, xolver::DeltaRational const&, xolver::(anonymous namespace)::RowAggregate const&, xolver::(anonymous namespace)::Contribution const*, std::vector<xolver::SatLit, std::allocator<xolver::SatLit> > const&) const",
+          "samples": 2
+        }
+      ],
+      "report": "profile/48/report.json",
+      "report_sha256": "712b4229e21a1d74560881cde15c9cdd8963a89558db568d15710cbc9470c46e"
+    },
+    "63": {
+      "seconds": 20.121796894818544,
+      "samples": 49,
+      "inclusive": [
+        {
+          "frame": "xolver::GeneralSimplex::pivotAndUpdate(int, int, xolver::DeltaRational const&)",
+          "samples": 33
+        }
+      ],
+      "report": "profile/63/report.json",
+      "report_sha256": "668972d77cff328dc227044d33a531608ff906bbcfaa7a4a864775180b5aa7d1"
+    },
+    "91": {
+      "seconds": 20.11255898885429,
+      "samples": 49,
+      "inclusive": [
+        {
+          "frame": "xolver::GeneralSimplex::recomputeBeta()",
+          "samples": 7
+        },
+        {
+          "frame": "xolver::GeneralSimplex::pivotAndUpdate(int, int, xolver::DeltaRational const&)",
+          "samples": 4
+        }
+      ],
+      "report": "profile/91/report.json",
+      "report_sha256": "04808d76d2d32df867cd792614979eb7d5c3a9417c3abc7f7d8dcabb393fc05a"
+    },
+    "92": {
+      "seconds": 20.110893934965134,
+      "samples": 49,
+      "inclusive": [
+        {
+          "frame": "xolver::GeneralSimplex::pivotAndUpdate(int, int, xolver::DeltaRational const&)",
+          "samples": 18
+        },
+        {
+          "frame": "xolver::GeneralSimplex::recomputeBeta()",
+          "samples": 8
+        }
+      ],
+      "report": "profile/92/report.json",
+      "report_sha256": "b585b87a1aab1018fe28b6639da53ba7d60ab03c32f5f7bf6b753ed7dc9281d7"
+    },
+    "125": {
+      "seconds": 20.113741694018245,
+      "samples": 49,
+      "inclusive": [
+        {
+          "frame": "xolver::NiaSolver::stageModular(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)",
+          "samples": 44
+        }
+      ],
+      "report": "profile/125/report.json",
+      "report_sha256": "7cc687e1eae3fdb0c9ced648670997748e264d7fb29c11fe90daa0951514fe55"
+    },
+    "152": {
+      "seconds": 3.3696299381554127,
+      "samples": 8,
+      "inclusive": [
+        {
+          "frame": "xolver::NraSolver::check(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)",
+          "samples": 6
+        },
+        {
+          "frame": "xolver::NraSolver::stageCac(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)",
+          "samples": 4
+        },
+        {
+          "frame": "xolver::NraSolver::NraSolver(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(char const*, auto:1)#1}::operator()<xolver::NraSolver::unique_ptr(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#9}>(char const*, xolver::NraSolver::unique_ptr(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#9}) const::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#1}::operator()(xolver::TheoryLemmaStorage&, xolver::TheoryEffort) const",
+          "samples": 4
+        },
+        {
+          "frame": "std::_Function_handler<std::optional<xolver::TheoryCheckResult> (xolver::TheoryLemmaStorage&, xolver::TheoryEffort), xolver::NraSolver::NraSolver(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(char const*, auto:1)#1}::operator()<xolver::NraSolver::unique_ptr(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#9}>(char const*, xolver::NraSolver::unique_ptr(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#9}) const::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#1}>::_M_invoke(std::_Any_data const&, xolver::TheoryLemmaStorage&, xolver::TheoryEffort&&)",
+          "samples": 4
+        },
+        {
+          "frame": "xolver::NraSolver::stageLocalSearch(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)",
+          "samples": 1
+        },
+        {
+          "frame": "std::_Function_handler<std::optional<xolver::TheoryCheckResult> (xolver::TheoryLemmaStorage&, xolver::TheoryEffort), xolver::NraSolver::NraSolver(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(char const*, auto:1)#1}::operator()<xolver::NraSolver::unique_ptr(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#4}>(char const*, xolver::NraSolver::unique_ptr(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#4}) const::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#1}>::_M_invoke(std::_Any_data const&, xolver::TheoryLemmaStorage&, xolver::TheoryEffort&&)",
+          "samples": 1
+        },
+        {
+          "frame": "xolver::NraSolver::NraSolver(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(char const*, auto:1)#1}::operator()<xolver::NraSolver::unique_ptr(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#4}>(char const*, xolver::NraSolver::unique_ptr(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#4}) const::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#1}::operator()(xolver::TheoryLemmaStorage&, xolver::TheoryEffort) const",
+          "samples": 1
+        },
+        {
+          "frame": "xolver::NraSolver::NraSolver(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(char const*, auto:1)#1}::operator()<xolver::NraSolver::unique_ptr(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#10}>(char const*, xolver::NraSolver::unique_ptr(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#10}) const::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#1}::operator()(xolver::TheoryLemmaStorage&, xolver::TheoryEffort) const",
+          "samples": 1
+        },
+        {
+          "frame": "xolver::CdcacCore::mergeRoots(std::vector<xolver::RootSet, std::allocator<xolver::RootSet> > const&)",
+          "samples": 1
+        },
+        {
+          "frame": "xolver::NraSolver::stageCdcac(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)",
+          "samples": 1
+        },
+        {
+          "frame": "std::_Function_handler<std::optional<xolver::TheoryCheckResult> (xolver::TheoryLemmaStorage&, xolver::TheoryEffort), xolver::NraSolver::NraSolver(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(char const*, auto:1)#1}::operator()<xolver::NraSolver::unique_ptr(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#10}>(char const*, xolver::NraSolver::unique_ptr(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#10}) const::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#1}>::_M_invoke(std::_Any_data const&, xolver::TheoryLemmaStorage&, xolver::TheoryEffort&&)",
+          "samples": 1
+        }
+      ],
+      "report": "profile/152/report.json",
+      "report_sha256": "c5eb1185dad6a35e2502c1b5a10c009c19d9ed60d683dd9a188f18a0c251518b"
+    },
+    "157": {
+      "seconds": 20.13288682512939,
+      "samples": 49,
+      "inclusive": [
+        {
+          "frame": "xolver::NraSolver::check(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)",
+          "samples": 29
+        },
+        {
+          "frame": "std::_Function_handler<std::optional<xolver::TheoryCheckResult> (xolver::TheoryLemmaStorage&, xolver::TheoryEffort), xolver::NraSolver::NraSolver(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(char const*, auto:1)#1}::operator()<xolver::NraSolver::unique_ptr(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#10}>(char const*, xolver::NraSolver::unique_ptr(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#10}) const::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#1}>::_M_invoke(std::_Any_data const&, xolver::TheoryLemmaStorage&, xolver::TheoryEffort&&)",
+          "samples": 24
+        },
+        {
+          "frame": "xolver::NraSolver::NraSolver(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(char const*, auto:1)#1}::operator()<xolver::NraSolver::unique_ptr(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#10}>(char const*, xolver::NraSolver::unique_ptr(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#10}) const::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#1}::operator()(xolver::TheoryLemmaStorage&, xolver::TheoryEffort) const",
+          "samples": 24
+        },
+        {
+          "frame": "xolver::NraSolver::stageCdcac(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)",
+          "samples": 24
+        },
+        {
+          "frame": "xolver::CdcacCore::mergeRoots(std::vector<xolver::RootSet, std::allocator<xolver::RootSet> > const&)",
+          "samples": 21
+        },
+        {
+          "frame": "xolver::LibpolyBackend::refineRootInterval(xolver::AlgebraicRoot&)",
+          "samples": 13
+        },
+        {
+          "frame": "xolver::NraSolver::NraSolver(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(char const*, auto:1)#1}::operator()<xolver::NraSolver::unique_ptr(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#9}>(char const*, xolver::NraSolver::unique_ptr(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#9}) const::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#1}::operator()(xolver::TheoryLemmaStorage&, xolver::TheoryEffort) const",
+          "samples": 5
+        },
+        {
+          "frame": "std::_Function_handler<std::optional<xolver::TheoryCheckResult> (xolver::TheoryLemmaStorage&, xolver::TheoryEffort), xolver::NraSolver::NraSolver(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(char const*, auto:1)#1}::operator()<xolver::NraSolver::unique_ptr(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#9}>(char const*, xolver::NraSolver::unique_ptr(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#9}) const::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#1}>::_M_invoke(std::_Any_data const&, xolver::TheoryLemmaStorage&, xolver::TheoryEffort&&)",
+          "samples": 5
+        },
+        {
+          "frame": "xolver::NraSolver::stageCac(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)",
+          "samples": 5
+        }
+      ],
+      "report": "profile/157/report.json",
+      "report_sha256": "833ef8b890acba6ab10723e64264708be183e954820de21318deb5f6be98a341"
+    },
+    "159": {
+      "seconds": 20.111945133656263,
+      "samples": 49,
+      "inclusive": [
+        {
+          "frame": "xolver::NraSolver::check(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)",
+          "samples": 40
+        },
+        {
+          "frame": "std::_Function_handler<std::optional<xolver::TheoryCheckResult> (xolver::TheoryLemmaStorage&, xolver::TheoryEffort), xolver::NraSolver::NraSolver(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(char const*, auto:1)#1}::operator()<xolver::NraSolver::unique_ptr(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#6}>(char const*, xolver::NraSolver::unique_ptr(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#6}) const::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#1}>::_M_invoke(std::_Any_data const&, xolver::TheoryLemmaStorage&, xolver::TheoryEffort&&)",
+          "samples": 30
+        },
+        {
+          "frame": "xolver::NraSolver::NraSolver(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(char const*, auto:1)#1}::operator()<xolver::NraSolver::unique_ptr(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#6}>(char const*, xolver::NraSolver::unique_ptr(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#6}) const::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#1}::operator()(xolver::TheoryLemmaStorage&, xolver::TheoryEffort) const",
+          "samples": 30
+        },
+        {
+          "frame": "xolver::NraSolver::stageCascade(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)",
+          "samples": 30
+        },
+        {
+          "frame": "xolver::NraSolver::stageCac(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)",
+          "samples": 7
+        },
+        {
+          "frame": "std::_Function_handler<std::optional<xolver::TheoryCheckResult> (xolver::TheoryLemmaStorage&, xolver::TheoryEffort), xolver::NraSolver::NraSolver(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(char const*, auto:1)#1}::operator()<xolver::NraSolver::unique_ptr(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#9}>(char const*, xolver::NraSolver::unique_ptr(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#9}) const::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#1}>::_M_invoke(std::_Any_data const&, xolver::TheoryLemmaStorage&, xolver::TheoryEffort&&)",
+          "samples": 7
+        },
+        {
+          "frame": "xolver::NraSolver::NraSolver(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(char const*, auto:1)#1}::operator()<xolver::NraSolver::unique_ptr(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#9}>(char const*, xolver::NraSolver::unique_ptr(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#9}) const::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#1}::operator()(xolver::TheoryLemmaStorage&, xolver::TheoryEffort) const",
+          "samples": 7
+        },
+        {
+          "frame": "xolver::NraSolver::stageSquareCascade(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)",
+          "samples": 3
+        },
+        {
+          "frame": "xolver::NraSolver::NraSolver(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(char const*, auto:1)#1}::operator()<xolver::NraSolver::unique_ptr(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#7}>(char const*, xolver::NraSolver::unique_ptr(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#7}) const::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#1}::operator()(xolver::TheoryLemmaStorage&, xolver::TheoryEffort) const",
+          "samples": 3
+        },
+        {
+          "frame": "std::_Function_handler<std::optional<xolver::TheoryCheckResult> (xolver::TheoryLemmaStorage&, xolver::TheoryEffort), xolver::NraSolver::NraSolver(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(char const*, auto:1)#1}::operator()<xolver::NraSolver::unique_ptr(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#7}>(char const*, xolver::NraSolver::unique_ptr(std::unique_ptr<xolver::PolynomialKernel, std::default_delete<xolver::PolynomialKernel> >)::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#7}) const::{lambda(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)#1}>::_M_invoke(std::_Any_data const&, xolver::TheoryLemmaStorage&, xolver::TheoryEffort&&)",
+          "samples": 3
+        }
+      ],
+      "report": "profile/159/report.json",
+      "report_sha256": "a85e8c53bb02007b141708cef96edb4c0f540e62cd12bc1ba7262a906dc91b94"
+    }
+  },
+  "historical_gap_inventory": {
+    "by_logic": {
+      "QF_LIA": 15,
+      "QF_NIA": 18,
+      "QF_LRA": 11,
+      "QF_NRA": 12
+    },
+    "by_family": {
+      "QF_LIA/rings": 2,
+      "QF_LIA/convert": 2,
+      "QF_LIA/pb2010": 2,
+      "QF_LIA/slacks": 2,
+      "QF_LIA/fft": 1,
+      "QF_LIA/tropical-matrix": 1,
+      "QF_LIA/rings_preprocessed": 2,
+      "QF_NIA/LassoRanker": 4,
+      "QF_NIA/20230321-UltimateAutomizerSvcomp2023": 1,
+      "QF_NIA/20230328-sqrtmodinv-hoenicke": 2,
+      "QF_NIA/UltimateLassoRanker": 1,
+      "QF_NIA/20210219-Dartagnan": 2,
+      "QF_NIA/AProVE": 2,
+      "QF_NIA/UltimateAutomizer": 1,
+      "QF_NIA/20250331-elster": 3,
+      "QF_LRA/sal": 1,
+      "QF_LRA/2019-ezsmt": 1,
+      "QF_LRA/2017-Heizmann-UltimateInvariantSynthesis": 1,
+      "QF_LRA/LassoRanker": 2,
+      "QF_LRA/miplib": 1,
+      "QF_LRA/uart": 2,
+      "QF_LRA/latendresse": 1,
+      "QF_NRA/LassoRanker": 2,
+      "QF_NRA/2019-ezsmt": 2,
+      "QF_NRA/UltimateAutomizer": 2,
+      "QF_NRA/20200911-Pine": 2,
+      "QF_LIA/cut_lemmas": 1,
+      "QF_LIA/RWS": 1,
+      "QF_LIA/2019-cmodelsdiff": 1,
+      "QF_NIA/20170427-VeryMax": 1,
+      "QF_NIA/calypto": 1,
+      "QF_LRA/TM": 1,
+      "QF_LRA/sc": 1,
+      "QF_NRA/zankl": 1,
+      "QF_NRA/20220314-Uncu": 1,
+      "QF_NRA/20240407-pPDA-Chiari-Pontiggia-Winkler": 1,
+      "QF_NRA/20161105-Sturm-MGC": 1
+    },
+    "cases": [
+      {
+        "index": 0,
+        "case": "QF_LIA/rings/ring_2exp6_8vars_4ite_unsat.smt2",
+        "sha256": "57ec9bd8070aa6c56f841660537027f974a6ca35e3b084ca67cb8af558a9743a",
+        "logic": "QF_LIA",
+        "family": "rings",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 1,
+        "case": "QF_LIA/convert/convert-jpg2gif-query-1470.smt2",
+        "sha256": "df42f9cdbe66be22d8b5f55d904ae308677681d21cf6ba13801a6c1bcc7d712b",
+        "logic": "QF_LIA",
+        "family": "convert",
+        "xolver": "timeout",
+        "z3": "sat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 2,
+        "case": "QF_LIA/pb2010/normalized-j9042_5-sat.smt2",
+        "sha256": "3d94e9bfc24677f04c7dbf45681995163b033f9bafda44a73ce05c5743e38b54",
+        "logic": "QF_LIA",
+        "family": "pb2010",
+        "xolver": "timeout",
+        "z3": "sat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 11,
+        "case": "QF_LIA/slacks/30-28.slack.smt2",
+        "sha256": "8606c28a8570f123b60c8a38120df840fd3af0b321cfbc0943127ef25e17b8b8",
+        "logic": "QF_LIA",
+        "family": "slacks",
+        "xolver": "timeout",
+        "z3": "sat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 12,
+        "case": "QF_LIA/fft/Sz128_2823.smt2",
+        "sha256": "e62aa48a7ec4ae656514927d79b4f34f7b05e187e4bf8eb43cb1eda0cdbc6a54",
+        "logic": "QF_LIA",
+        "family": "fft",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 13,
+        "case": "QF_LIA/tropical-matrix/constraint-517804.smt2",
+        "sha256": "d9c546291b74c1b0021e19bff6aa4e9fbbb220fdcd253de67479375572f913f6",
+        "logic": "QF_LIA",
+        "family": "tropical-matrix",
+        "xolver": "timeout",
+        "z3": "sat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 22,
+        "case": "QF_LIA/rings_preprocessed/ring_2exp12_5vars_1ite_unsat.smt2",
+        "sha256": "ccbe9de2da7a0afa1c094e7c9caaaff2b4cdffd927cd7f42b75fa95d21d8e8ca",
+        "logic": "QF_LIA",
+        "family": "rings_preprocessed",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "profile": "profile/22/report.json",
+        "mechanism": "see sampled frames and stage handoff"
+      },
+      {
+        "index": 24,
+        "case": "QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+        "sha256": "68798a8ba5809648e09994276b2bc1fed413b743b8fce6d21d9de3a4865aa057",
+        "logic": "QF_NIA",
+        "family": "LassoRanker",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 26,
+        "case": "QF_NIA/20230321-UltimateAutomizerSvcomp2023/soft_float_3a.c.cil.c_4.smt2",
+        "sha256": "86f635a013e677b18a46e4bbd2f621ea1d03c74c374fcedb0776c77bc566f7cb",
+        "logic": "QF_NIA",
+        "family": "20230321-UltimateAutomizerSvcomp2023",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 27,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+        "sha256": "4be4382761af8ae34ba468d292dedbbce60a1adbce104d03ebecaf9217d020d8",
+        "logic": "QF_NIA",
+        "family": "20230328-sqrtmodinv-hoenicke",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "profile": "profile/27/report.json",
+        "mechanism": "see sampled frames and stage handoff"
+      },
+      {
+        "index": 29,
+        "case": "QF_NIA/UltimateLassoRanker/CookSeeZuleger-2013TACAS-Fig7a-alloca_true-termination.c.i_Iteration8_Lasso+nonterminationTemplate.smt2",
+        "sha256": "0d5e3d04305e393bfd392b8652ba33f37220c4ff420054acffb70d61df5c89e7",
+        "logic": "QF_NIA",
+        "family": "UltimateLassoRanker",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 34,
+        "case": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/ps6-ll_valuebound5-O0.smt2",
+        "sha256": "ecf140bb267be14f595da4be5a54940f0a71fc7e4348aaa027bff1d7166f1ec3",
+        "logic": "QF_NIA",
+        "family": "20210219-Dartagnan",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 37,
+        "case": "QF_NIA/AProVE/aproveSMT4592732986704711682.smt2",
+        "sha256": "ddce420246f50ef5a0bd599815764edce269a0ba4b59da5a520a617a1c29fb4c",
+        "logic": "QF_NIA",
+        "family": "AProVE",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 39,
+        "case": "QF_NIA/LassoRanker/PodelskiRybalchenko-VMCAI2004-Ex1_true-termination.c_Iteration3_Loop+nonterminationTemplate_0.smt2",
+        "sha256": "b7bff934bc32809af1cbde685952c82d2ed722df1bfc21e0c18e9b611c572248",
+        "logic": "QF_NIA",
+        "family": "LassoRanker",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 40,
+        "case": "QF_NIA/UltimateAutomizer/gauss_sum_true-unreach-call.i.smt2",
+        "sha256": "d25714f4c95ce2bc5fb613fe3807d43875a48ed8fda1a97d68757345ca23522e",
+        "logic": "QF_NIA",
+        "family": "UltimateAutomizer",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 42,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep2a.smt2",
+        "sha256": "a6848324353b5f5c15ba7135e0aad06acb838ac38e020c5e0cced695ece5e33a",
+        "logic": "QF_NIA",
+        "family": "20230328-sqrtmodinv-hoenicke",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 47,
+        "case": "QF_NIA/20250331-elster/D_2.smt2",
+        "sha256": "2c37069c8324458e8f3ad46cc6dbe0cc3a6c2f31012ed504123e660bfdf7aba4",
+        "logic": "QF_NIA",
+        "family": "20250331-elster",
+        "xolver": "timeout",
+        "z3": "sat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 48,
+        "case": "QF_LRA/sal/pursuit/pursuit-safety-20.smt2",
+        "sha256": "1db0853aaa0f355969a8b7e17778b10137081d30ee7f98e6ff8d94039a55b85b",
+        "logic": "QF_LRA",
+        "family": "sal",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "profile": "profile/48/report.json",
+        "mechanism": "see sampled frames and stage handoff"
+      },
+      {
+        "index": 49,
+        "case": "QF_LRA/2019-ezsmt/travellingSalesperson/rand_80_340_1159656267_16.lp.smt2",
+        "sha256": "d4baea957f7fe792713edbaf3edc6769274ab0aafe5e86182d023e858037d615",
+        "logic": "QF_LRA",
+        "family": "2019-ezsmt",
+        "xolver": "timeout",
+        "z3": "sat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 50,
+        "case": "QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_jain_5.i_2_4_3.bpl_7.smt2",
+        "sha256": "7e71a151d917978f1b5afc2791abf589e30c8ff97e930979df6ef82ad72dcdc0",
+        "logic": "QF_LRA",
+        "family": "2017-Heizmann-UltimateInvariantSynthesis",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 51,
+        "case": "QF_LRA/LassoRanker/CooperatingT2/ludcmp.c.i.ludcmp.pl.t2.fixed.t2.c_Iteration8_Loop_7-phaseTemplate.smt2",
+        "sha256": "8fb5c2cfe016233a2f76c3d3b103066448f0f1d3faa1c9d9493c55c304d877cb",
+        "logic": "QF_LRA",
+        "family": "LassoRanker",
+        "xolver": "timeout",
+        "z3": "sat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 56,
+        "case": "QF_LRA/miplib/pp08a-3000.smt2",
+        "sha256": "49761967d8071fc4d32d82165bcd7ef4fcdfe436b7634da8d42a9be673087218",
+        "logic": "QF_LRA",
+        "family": "miplib",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 58,
+        "case": "QF_LRA/uart/uart-26.base.cvc.smt2",
+        "sha256": "64f223bcde0c40ca731ab7443a27e55abf89d82d240cb58aed03a32ff50b15e8",
+        "logic": "QF_LRA",
+        "family": "uart",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 63,
+        "case": "QF_LRA/latendresse/ecoliFBAyicesTest-3875-4.smt2",
+        "sha256": "05f0ff15a8969b0c4708ab890a655b485db5552e1eb0d27c6d4461026c0ae5de",
+        "logic": "QF_LRA",
+        "family": "latendresse",
+        "xolver": "timeout",
+        "z3": "sat",
+        "profile": "profile/63/report.json",
+        "mechanism": "see sampled frames and stage handoff"
+      },
+      {
+        "index": 69,
+        "case": "QF_NRA/LassoRanker/CooperatingT2/byron-2.t2.c_Iteration3_Loop_4-pieceTemplate.smt2",
+        "sha256": "72e580ee3a690b54865e129f44529a71d81112f35193cbc93775236ea62a0f13",
+        "logic": "QF_NRA",
+        "family": "LassoRanker",
+        "xolver": "timeout",
+        "z3": "sat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 72,
+        "case": "QF_NRA/2019-ezsmt/reverseFolding/39-reverse_folding-0-0.smt2",
+        "sha256": "cc66abe5f5716404298fd97cb383e65487d9277ea2611ee41add8e324e7eb2c4",
+        "logic": "QF_NRA",
+        "family": "2019-ezsmt",
+        "xolver": "timeout",
+        "z3": "sat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 77,
+        "case": "QF_NRA/UltimateAutomizer/InVarSynth_InvariantSynthesis_Disjunctive02.bpl_Iteration1_0.smt2",
+        "sha256": "7511fd4d07cdce648daf4ac76fc32c90af91cf9d9576d4e955a51d0dbd4534b7",
+        "logic": "QF_NRA",
+        "family": "UltimateAutomizer",
+        "xolver": "unknown",
+        "z3": "sat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 79,
+        "case": "QF_NRA/20200911-Pine/1599121904575726000.smt2",
+        "sha256": "65bdfedbfe3b92b5476740e873997a900003ca4ac80b05e8eeec44e4c2086177",
+        "logic": "QF_NRA",
+        "family": "20200911-Pine",
+        "xolver": "unknown",
+        "z3": "sat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 80,
+        "case": "QF_LIA/cut_lemmas/20-vars/cut_lemma_03_004.smt2",
+        "sha256": "1bcb3b052ef1f9ebe04cf76147f19dc54fb0678342d72b829a38a936c56959fe",
+        "logic": "QF_LIA",
+        "family": "cut_lemmas",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 85,
+        "case": "QF_LIA/rings_preprocessed/ring_2exp12_6vars_1ite_unsat.smt2",
+        "sha256": "5a87ddf03d00d7cd5e33aefddbb298452fcba14c232516a270991c09b659151d",
+        "logic": "QF_LIA",
+        "family": "rings_preprocessed",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 89,
+        "case": "QF_LIA/RWS/Example_16.txt.smt2",
+        "sha256": "5b983ea0194c5b7fcdee4a87c0de44da99828561d82d288a89fd99da128f4c5f",
+        "logic": "QF_LIA",
+        "family": "RWS",
+        "xolver": "timeout",
+        "z3": "sat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 91,
+        "case": "QF_LIA/convert/convert-jpg2gif-query-1206.smt2",
+        "sha256": "7ec67e48865e1a0bc78158bf8b7ba457cdb114f44e8044c1eeda857a86af9446",
+        "logic": "QF_LIA",
+        "family": "convert",
+        "xolver": "timeout",
+        "z3": "sat",
+        "profile": "profile/91/report.json",
+        "mechanism": "see sampled frames and stage handoff"
+      },
+      {
+        "index": 92,
+        "case": "QF_LIA/slacks/20-24.slack.smt2",
+        "sha256": "7a4bbcac786b6fbbeed7a41b224ed02293f3409a55aab9c3d6bb42bb5670d1bd",
+        "logic": "QF_LIA",
+        "family": "slacks",
+        "xolver": "timeout",
+        "z3": "sat",
+        "profile": "profile/92/report.json",
+        "mechanism": "see sampled frames and stage handoff"
+      },
+      {
+        "index": 95,
+        "case": "QF_LIA/rings/ring_2exp8_6vars_2ite_unsat.smt2",
+        "sha256": "0cdb5deafcb9428ddf628fa7113587f28eded92db1f61824ee5d818073431112",
+        "logic": "QF_LIA",
+        "family": "rings",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 97,
+        "case": "QF_LIA/pb2010/normalized-j12022_9-sat.smt2",
+        "sha256": "fd22c3100d1bb93cc04fd4acc34efcaa757801c5db80adbfba15a52fda1111df",
+        "logic": "QF_LIA",
+        "family": "pb2010",
+        "xolver": "timeout",
+        "z3": "sat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 98,
+        "case": "QF_LIA/2019-cmodelsdiff/labyrinth/0003-labyrinth-11-0.smt2",
+        "sha256": "41b0d2ff3be911992bc3a0d8996bb79b2daedd9e66d0b274081fcadeb9ecf27d",
+        "logic": "QF_LIA",
+        "family": "2019-cmodelsdiff",
+        "xolver": "timeout",
+        "z3": "sat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 106,
+        "case": "QF_NIA/20170427-VeryMax/ITS/From_AProVE_2014__juLinkedListCreateAddAllAt.jar-obl-17__p9090_safety_0.smt2",
+        "sha256": "c96b35bb3cae604115b99477562c4059c6e78ad16658f50d9dbb9ed8abad0a25",
+        "logic": "QF_NIA",
+        "family": "20170427-VeryMax",
+        "xolver": "timeout",
+        "z3": "sat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 108,
+        "case": "QF_NIA/20250331-elster/B_2.smt2",
+        "sha256": "26d6012f717dec2f43e57be63e8638d1a13b6bc9cb5fcc963c08476793385786",
+        "logic": "QF_NIA",
+        "family": "20250331-elster",
+        "xolver": "timeout",
+        "z3": "sat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 113,
+        "case": "QF_NIA/LassoRanker/PodelskiRybalchenko-LICS2004-Fig2-TACAS2011-Fig3_true-termination.c_Iteration9_Loop+nonterminationTemplate_0.smt2",
+        "sha256": "86d1b3e1c2fdfd3b594405225c6ad99519a292d76b62f6e61c4fee766183180f",
+        "logic": "QF_NIA",
+        "family": "LassoRanker",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 114,
+        "case": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+        "sha256": "1aea29b746e949da62b784ed14b262444d87c36051a63e0aa197d313fd3f8d99",
+        "logic": "QF_NIA",
+        "family": "20210219-Dartagnan",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 116,
+        "case": "QF_NIA/AProVE/aproveSMT5381466618694630101.smt2",
+        "sha256": "f6e90d9f987771e1dd41731a7fedef9cb83d38cd6c3e8131ac254e47e5c57cdc",
+        "logic": "QF_NIA",
+        "family": "AProVE",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 122,
+        "case": "QF_NIA/20250331-elster/D_1.smt2",
+        "sha256": "c88289f0453a6bbe098b4c5f092dfc50cd9e0ac21d799c6ccfc0a61b5a974389",
+        "logic": "QF_NIA",
+        "family": "20250331-elster",
+        "xolver": "timeout",
+        "z3": "sat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 125,
+        "case": "QF_NIA/calypto/problem-000123.cvc.1.smt2",
+        "sha256": "b8150c3ef8d61003eb7fbc69be57687ed9a9f81c3fe2e736a1fbc7e3172ce975",
+        "logic": "QF_NIA",
+        "family": "calypto",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "profile": "profile/125/report.json",
+        "mechanism": "see sampled frames and stage handoff"
+      },
+      {
+        "index": 127,
+        "case": "QF_NIA/LassoRanker/Et1_true_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+        "sha256": "e252bef1ea7e7fe3f1964728b358dcfe7a944bf3f736c584c8447c5195bae27e",
+        "logic": "QF_NIA",
+        "family": "LassoRanker",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 128,
+        "case": "QF_LRA/uart/uart-19.base.cvc.smt2",
+        "sha256": "718a1e36294547bf1605cbbbcc01dc2bbf4ae1682c8d30fc7f246f6f031d3bdf",
+        "logic": "QF_LRA",
+        "family": "uart",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 129,
+        "case": "QF_LRA/LassoRanker/CooperatingT2/polyrank4.t2.c_Iteration8_Loop_4-pieceTemplate.smt2",
+        "sha256": "a7dc84671c8b4907afe99c6e0156f36462f3a89a666b25926d92511f963fe476",
+        "logic": "QF_LRA",
+        "family": "LassoRanker",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 130,
+        "case": "QF_LRA/TM/p-3-bucket_s10.smt2",
+        "sha256": "2606855399c6a9008140acb6c981d3f41d03194cab8075b68f2b198a20b2935a",
+        "logic": "QF_LRA",
+        "family": "TM",
+        "xolver": "timeout",
+        "z3": "sat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 131,
+        "case": "QF_LRA/sc/sc-37.induction2.cvc.smt2",
+        "sha256": "8b660dc1debe27fe09a0eb3ca9e4e3833f075f89a66e71b90dfe102e250bc962",
+        "logic": "QF_LRA",
+        "family": "sc",
+        "xolver": "timeout",
+        "z3": "sat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 144,
+        "case": "QF_NRA/2019-ezsmt/reverseFolding/31-reverse_folding-0-0.smt2",
+        "sha256": "d26dd3ac7eb05e598a7b54fe02cb785ae7a85da7ceb1e5fcc95f2e4f8c852c1c",
+        "logic": "QF_NRA",
+        "family": "2019-ezsmt",
+        "xolver": "timeout",
+        "z3": "sat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 146,
+        "case": "QF_NRA/LassoRanker/CooperatingT2/consts1.t2.c_Iteration1_Lasso_4-pieceTemplate.smt2",
+        "sha256": "2e27203a3ec975510dab64d149ae5f2bd8de47c8128725d04985555880240dc1",
+        "logic": "QF_NRA",
+        "family": "LassoRanker",
+        "xolver": "timeout",
+        "z3": "sat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 149,
+        "case": "QF_NRA/UltimateAutomizer/InVarSynth_agroce_minmax.c_Iteration2_0.smt2",
+        "sha256": "fa38407f1095afff71b84b3c7be9da57614d7cbdb6800672ef7d85a6dfc2412d",
+        "logic": "QF_NRA",
+        "family": "UltimateAutomizer",
+        "xolver": "timeout",
+        "z3": "sat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 150,
+        "case": "QF_NRA/zankl/matrix-3-all-2.smt2",
+        "sha256": "c5f714951dd8d10ec098bef94b650f7226eb4c8c7d2b9be1c2bad1ed00113002",
+        "logic": "QF_NRA",
+        "family": "zankl",
+        "xolver": "timeout",
+        "z3": "sat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 152,
+        "case": "QF_NRA/20200911-Pine/1599122165219202000.smt2",
+        "sha256": "37a68d15b73c24bc973d6a0cdde3f8bc07aa5daf5dc57279bcb5761b66a9125d",
+        "logic": "QF_NRA",
+        "family": "20200911-Pine",
+        "xolver": "unknown",
+        "z3": "sat",
+        "profile": "profile/152/report.json",
+        "mechanism": "see sampled frames and stage handoff"
+      },
+      {
+        "index": 155,
+        "case": "QF_NRA/20220314-Uncu/Rational_Function_Proof_Calls_With_Disjunctive_Denominator_Simplifications/DDC_ProveIneq_Mitrinovic_8_8.smt2",
+        "sha256": "d915ad72c31fdb395ae323839e4eedfdf3b3c1a7fbbbfd459df11339534a2bd7",
+        "logic": "QF_NRA",
+        "family": "20220314-Uncu",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "profile": null,
+        "mechanism": "requires profiling"
+      },
+      {
+        "index": 157,
+        "case": "QF_NRA/20240407-pPDA-Chiari-Pontiggia-Winkler/past/geom_offspring_0.499_PRAY.smt2",
+        "sha256": "d3941102878489abc44c6b3fafc7671a34c6d229ecf1820b0810e90dc61ef1cc",
+        "logic": "QF_NRA",
+        "family": "20240407-pPDA-Chiari-Pontiggia-Winkler",
+        "xolver": "timeout",
+        "z3": "sat",
+        "profile": "profile/157/report.json",
+        "mechanism": "see sampled frames and stage handoff"
+      },
+      {
+        "index": 159,
+        "case": "QF_NRA/20161105-Sturm-MGC/mgc_07.smt2",
+        "sha256": "3b3f35580e39c21659d09f507edd67f5c0d5271a2957125d9e99cca86db44033",
+        "logic": "QF_NRA",
+        "family": "20161105-Sturm-MGC",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "profile": "profile/159/report.json",
+        "mechanism": "see sampled frames and stage handoff"
+      }
+    ]
+  },
+  "acceptance": {
+    "unit_tests": 1655,
+    "assertions": 794868,
+    "regression_passes": 892,
+    "known_gaps": 2,
+    "runs": [
+      "acceptance-r110",
+      "acceptance-r111/intervals"
+    ],
+    "fuzz": {
+      "affine": {
+        "cases": 130,
+        "models": 66,
+        "failures": [],
+        "oracle_limits": 0,
+        "summary": "acceptance-r110/affine/cases/summary.json",
+        "sha256": "b1508fda15345be51bcdbacba0c009ff67fb254c615274fea3ea7c44f44ecb3d"
+      },
+      "linear": {
+        "cases": 202,
+        "models": 102,
+        "failures": [],
+        "oracle_limits": 0,
+        "summary": "acceptance-r110/linear/cases/summary.json",
+        "sha256": "cb1c5a9d309e7bf1f61f09b84a97890a9d38ad55c5323f574780c3636ab36b55"
+      },
+      "intervals": {
+        "cases": 128,
+        "models": 64,
+        "failures": [],
+        "oracle_limits": 13,
+        "summary": "acceptance-r111/intervals/cases/summary.json",
+        "sha256": "8c70e96e3caefc25c7cc0596ff3e8931b432abe0cff5145f51faa56b7804cda8"
+      }
+    }
+  },
+  "experiments": {
+    "fixed160": "9d2a5d832474",
+    "acceptance_r110": "2aef35f6e9fa",
+    "acceptance_r111": "f7bdb07964ac"
+  },
+  "boundaries": [
+    "Strict model replay left SAT cases 75 and 148 unconfirmed in both Xolver versions.",
+    "UNSAT case 115 remains unconfirmed and excluded.",
+    "Initial interval harness required both original oracles and failed on 13 cvc5 timeouts; revised established policy requires one original oracle and both SAT model replays.",
+    "ExperimentOS initially dispatched 16 inputs without CPU leases; driver refused before invoking solvers. Leased retries generated all 160 reports; 9 stale scheduler statuses retained old failures despite successful retry exit files.",
+    "No protected suite was inspected or run. QCP checks are VC regressions, not end-to-end C verification."
+  ]
+}

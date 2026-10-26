@@ -1,5 +1,7 @@
 #include <doctest/doctest.h>
 #include "search/icp/IcpEngine.h"
+#include "search/icp/contractors/RelationContractor.h"
+#include "search/icp/ContractorFactory.h"
 #include "search/nia/search/NiaIcpAdapter.h"
 #include "algebra/poly/PolynomialKernel.h"
 #include <algorithm>
@@ -11,6 +13,82 @@ namespace {
 SatLit lit(int n) { return SatLit::positive(n); }
 bool contains(const std::vector<SatLit>& reasons, int n) {
     return std::find(reasons.begin(), reasons.end(), lit(n)) != reasons.end();
+}
+
+TEST_CASE("ICP integer: nonlinear definitions create missing bounds and wake dependent rows") {
+    auto kernel = createPolynomialKernel();
+    auto variable = [&](const char* name) { return kernel->mkVar(kernel->getOrCreateVar(name)); };
+    const auto x = variable("x"), y = variable("y"), z = variable("z"), w = variable("w");
+    const auto definition = kernel->sub(x, kernel->add(kernel->mul(y, y), kernel->mul(z, z)));
+    const auto following = kernel->sub(w, x);
+    auto built = ContractorFactory::build({
+        {std::nullopt, definition, Relation::Eq, lit(5), TheoryId::NIA},
+        {std::nullopt, following, Relation::Eq, lit(6), TheoryId::NIA}}, *kernel);
+    ReasonedBox box;
+    box.set("y", {{2, 3}, {lit(1), lit(2)}});
+    box.set("z", {{-3, -2}, {lit(3), lit(4)}});
+    auto result = IcpEngine{}.run(built.contractors, built.watchers, box, {});
+    REQUIRE(result.status == IcpStatus::DomainUpdate);
+    REQUIRE(box.get("w").has_value());
+    CHECK(box.get("w")->interval.lo == 8);
+    CHECK(box.get("w")->interval.hi == 18);
+    for (int reason = 1; reason <= 6; ++reason) CHECK(contains(box.get("w")->reasons, reason));
+    // A new context with incompatible w bounds must cite both the equation
+    // chain and its new bound source, with no reused child explanations.
+    box.clear();
+    box.set("y", {{2, 3}, {lit(1), lit(2)}});
+    box.set("z", {{-3, -2}, {lit(3), lit(4)}});
+    box.set("w", {{-10, -1}, {lit(7)}});
+    result = IcpEngine{}.run(built.contractors, built.watchers, box, {});
+    REQUIRE(result.status == IcpStatus::Conflict);
+    REQUIRE(result.conflict.has_value());
+    for (int reason = 1; reason <= 7; ++reason) CHECK(contains(result.conflict->clause, reason));
+}
+
+TEST_CASE("ICP integer: signed nonlinear projections retain every independently feasible point") {
+    auto kernel = createPolynomialKernel();
+    const auto x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    const auto y = kernel->mkVar(kernel->getOrCreateVar("y"));
+    const auto z = kernel->mkVar(kernel->getOrCreateVar("z"));
+    for (const int coefficient : {-3, -1, 1, 3}) {
+        const auto poly = kernel->add(kernel->mkConst(1), kernel->add(
+            kernel->mul(kernel->mkConst(coefficient), x),
+            kernel->sub(kernel->mul(y, y), kernel->mul(kernel->mkConst(3), z))));
+        for (const auto relation : {Relation::Eq, Relation::Neq, Relation::Leq,
+                                    Relation::Lt, Relation::Geq, Relation::Gt}) {
+            ReasonedBox box;
+            box.set("x", {{-8, 8}, {lit(1)}});
+            box.set("y", {{-2, 2}, {lit(2)}});
+            box.set("z", {{-2, 2}, {lit(3)}});
+            RelationContractor contractor({std::nullopt, poly, relation, lit(4), TheoryId::NIA}, *kernel);
+            const auto result = contractor.contract(box);
+            for (int a = -8; a <= 8; ++a) for (int b = -2; b <= 2; ++b) for (int c = -2; c <= 2; ++c) {
+                const auto value = kernel->evalInteger(poly, {{"x", mpz_class(a)}, {"y", mpz_class(b)}, {"z", mpz_class(c)}});
+                REQUIRE(value.has_value());
+                const bool holds = relation == Relation::Eq ? *value == 0 : relation == Relation::Neq ? *value != 0 :
+                    relation == Relation::Leq ? *value <= 0 : relation == Relation::Lt ? *value < 0 :
+                    relation == Relation::Geq ? *value >= 0 : *value > 0;
+                if (!holds) continue;
+                CHECK(result.status != IcpStatus::Conflict);
+                for (const auto& update : result.updates)
+                    CHECK(update.newInterval.contains(update.var == "x" ? a : update.var == "y" ? b : c));
+            }
+        }
+    }
+}
+
+TEST_CASE("ICP integer: backward rounding cannot discard real-valued models") {
+    auto kernel = createPolynomialKernel();
+    const auto x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    const auto y = kernel->mkVar(kernel->getOrCreateVar("y"));
+    const auto poly = kernel->sub(kernel->add(kernel->mul(kernel->mkConst(2), x), y), kernel->mkOne());
+    ReasonedBox box;
+    box.set("x", {{0, 1}, {lit(1)}});
+    box.set("y", {{0, 0}, {lit(2)}});
+    RelationContractor real({std::nullopt, poly, Relation::Eq, lit(3), TheoryId::NRA}, *kernel);
+    CHECK(real.contract(box).status == IcpStatus::NoChange); // x=1/2 is feasible
+    RelationContractor integer({std::nullopt, poly, Relation::Eq, lit(3), TheoryId::NIA}, *kernel);
+    CHECK(integer.contract(box).status == IcpStatus::Conflict);
 }
 
 // A contractor may repeat a sound bound proposal. The engine owns intersection

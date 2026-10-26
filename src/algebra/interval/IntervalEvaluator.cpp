@@ -1,5 +1,6 @@
 #include "algebra/interval/IntervalEvaluator.h"
 #include "algebra/interval/IntervalOperations.h"
+#include "base/WorkBudget.h"
 #include <algorithm>
 #include <cassert>
 
@@ -47,6 +48,10 @@ bool IntervalEvaluator::isDefinitelyViolated(const IntervalZ& polyInterval, Rela
             return polyInterval.lo > 0;
         case Relation::Geq:
             return polyInterval.hi < 0;
+        case Relation::Lt:
+            return polyInterval.lo >= 0;
+        case Relation::Gt:
+            return polyInterval.hi <= 0;
         case Relation::Eq:
             return !polyInterval.containsZero();
         case Relation::Neq:
@@ -56,14 +61,57 @@ bool IntervalEvaluator::isDefinitelyViolated(const IntervalZ& polyInterval, Rela
     }
 }
 
+std::optional<ReasonedInterval> IntervalEvaluator::evaluateTerms(
+    const std::vector<PolynomialKernel::MonomialTerm>& terms,
+    const ReasonedBox& box, std::optional<VarId> omitted) const {
+    WorkBudget budget;
+    IntervalZ range{0, 0};
+    std::vector<SatLit> reasons;
+    try {
+        for (const auto& term : terms) {
+            if (omitted && std::any_of(term.powers.begin(), term.powers.end(),
+                [&](const auto& power) { return power.first == *omitted; })) continue;
+            budget.tick(mpz_sizeinbase(term.coefficient.get_mpz_t(), 2));
+            IntervalZ product{term.coefficient, term.coefficient};
+            for (const auto& [variable, exponent] : term.powers) {
+                const auto bound = box.get(std::string(kernel_.varName(variable)));
+                if (!bound || bound->interval.isEmpty() || exponent < 0)
+                    return std::nullopt;
+                const auto bits = std::max(mpz_sizeinbase(bound->interval.lo.get_mpz_t(), 2),
+                                           mpz_sizeinbase(bound->interval.hi.get_mpz_t(), 2));
+                if (exponent && bits > SIZE_MAX / static_cast<size_t>(exponent))
+                    return std::nullopt;
+                budget.tick(bits * static_cast<size_t>(exponent));
+                product = intervalMul(product, intervalPow(bound->interval, exponent));
+                reasons.insert(reasons.end(), bound->reasons.begin(), bound->reasons.end());
+            }
+            range = intervalAdd(range, product);
+        }
+    } catch (const ResourceExhausted&) {
+        return std::nullopt;
+    }
+    std::sort(reasons.begin(), reasons.end(), [](SatLit a, SatLit b) {
+        return a.var != b.var ? a.var < b.var : a.sign < b.sign;
+    });
+    reasons.erase(std::unique(reasons.begin(), reasons.end()), reasons.end());
+    return ReasonedInterval{std::move(range), std::move(reasons)};
+}
+
 IntervalEvalResult IntervalEvaluator::run(
     const IntervalConstraint& constraint,
     const ReasonedBox& box) {
 
     auto vars = kernel_.variables(constraint.poly);
     if (vars.size() != 1) {
-        // Single-variable only for now
-        return {IntervalEvalStatus::NoChange, {}};
+        // Evaluate each monomial over the complete reasoned box. Different
+        // occurrences may be correlated, so products/sums deliberately keep
+        // an over-approximation; only exclusion of zero proves a conflict.
+        const auto terms = kernel_.terms(constraint.poly);
+        if (!terms) return {IntervalEvalStatus::NoChange, {}};
+        auto range = evaluateTerms(*terms, box);
+        if (!range || !isDefinitelyViolated(range->interval, constraint.rel))
+            return {IntervalEvalStatus::NoChange, {}};
+        return {IntervalEvalStatus::DefinitelyViolated, std::move(range->reasons)};
     }
 
     const std::string& var = vars[0];

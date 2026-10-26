@@ -2,6 +2,15 @@
 #include <algorithm>
 
 namespace xolver {
+namespace {
+void mergeReasons(std::vector<SatLit>& target, const std::vector<SatLit>& source) {
+    target.insert(target.end(), source.begin(), source.end());
+    std::sort(target.begin(), target.end(), [](SatLit a, SatLit b) {
+        return a.var != b.var ? a.var < b.var : a.sign < b.sign;
+    });
+    target.erase(std::unique(target.begin(), target.end()), target.end());
+}
+}
 
 std::optional<ReasonedInterval> ReasonedBox::get(const std::string& var) const {
     auto it = box_.find(var);
@@ -27,14 +36,14 @@ bool ReasonedBox::narrow(const std::string& var, IntervalZ newInterval,
 
     if (newLo > newHi) {
         ri.interval = IntervalZ{newLo, newHi};
-        ri.reasons.insert(ri.reasons.end(), reasons.begin(), reasons.end());
+        mergeReasons(ri.reasons, reasons);
         return true;
     }
 
     bool changed = (newLo != ri.interval.lo) || (newHi != ri.interval.hi);
     if (changed) {
         ri.interval = IntervalZ{newLo, newHi};
-        ri.reasons.insert(ri.reasons.end(), reasons.begin(), reasons.end());
+        mergeReasons(ri.reasons, reasons);
     }
     return changed;
 }
