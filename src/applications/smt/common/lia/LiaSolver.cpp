@@ -223,7 +223,7 @@ void LiaSolver::onBacktrack(int level) {
         return; // the Boolean backtrack withdrew no theory premise
 
     if (level == 0) {
-        resetAppliedBounds(GeneralSimplex::AssignmentPolicy::Preserve);
+        resetAppliedBounds(GeneralSimplex::AssignmentPolicy::Reinitialize);
         // Full reset for modelCheck rebuild or SAT restart to level 0.
         // All entries will be re-asserted by the caller.
         theoryTrail_.clear();
