@@ -1,18 +1,14 @@
 #pragma once
 
 #include "ir/NativeTerms.h"
+#include "base/WorkBudget.h"
 #include <unordered_map>
 #include <vector>
 
 namespace xolver {
 
 /**
- * IntDivModConstantFold (Capability 8e' of the close-all-known-fails plan).
- *
- * Constant-folding pass for integer div/mod under SMT-LIB integer-division
- * semantics. Runs BEFORE IntDivModLowerer (Cap 8e) so that constant-divisor /
- * constant-dividend cases are reduced to literal `ConstInt`s without
- * introducing fresh quotient/remainder variables.
+ * Exact integer div/mod simplification before quotient/remainder lowering.
  *
  * Rewrites (only when both operands are constant integers with `b != 0`):
  *
@@ -22,9 +18,10 @@ namespace xolver {
  * where `q = div_T(a, b)` and `r = mod_T(a, b)` are the SMT-LIB integer
  * quotient/remainder satisfying `a = b*q + r` with `0 <= r < |b|`.
  *
- * Cases with non-constant operand or `b = 0` are left untouched and are
- * picked up by Cap 8e (IntDivModLowerer) which introduces the standard
- * fresh-variable definitional axioms.
+ * Also folds `(mod p m)` when the univariate integer polynomial p has the
+ * same value on every residue class modulo |m|. Complete finite-ring
+ * evaluation is bounded by a shared per-run work budget; incomplete checks
+ * leave the term unchanged. Symbolic moduli use algebraic rewrites below.
  *
  * Pure constant folding; never adds assertions, never strengthens the
  * formula. Memoized walk; new ExprIds, never mutates.
@@ -41,6 +38,7 @@ public:
 private:
     ExprId foldRec(ExprId e);
     ExprId tryFoldDivMod(ExprId node);
+    ExprId tryFoldPolynomialMod(ExprId node);
 
     // Symbolic-modulus simplification of `(mod p M)` for a NON-constant modulus
     // M (e.g. M = pow2(k) in the bit-width-independent Zohar benchmarks). Layers:
@@ -82,6 +80,7 @@ private:
     std::unordered_map<ExprId, ExprId> memo_;
     std::vector<std::pair<ScopeLevel, ExprId>> folded_;
     bool didFold_ = false;
+    WorkBudget residueBudget_{32768};
 };
 
 } // namespace xolver

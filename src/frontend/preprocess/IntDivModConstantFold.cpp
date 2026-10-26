@@ -15,6 +15,7 @@ bool IntDivModConstantFold::run() {
     memo_.clear();
     folded_.clear();
     didFold_ = false;
+    residueBudget_ = WorkBudget{32768};
 
     for (const auto& [level, eid] : ir_.getScopedAssertions()) {
         ExprId rewritten = foldRec(eid);
@@ -25,10 +26,7 @@ bool IntDivModConstantFold::run() {
 
 void IntDivModConstantFold::commit() {
     if (!didFold_) return;
-    ir_.clearAssertions();
-    for (const auto& [level, eid] : folded_) {
-        ir_.addAssertion(eid, level);
-    }
+    ir_.restoreAssertions(std::move(folded_));
 }
 
 ExprId IntDivModConstantFold::foldRec(ExprId root) {
@@ -76,6 +74,7 @@ ExprId IntDivModConstantFold::foldRec(ExprId root) {
         }
         // Try div/mod constant fold, then the symbolic-modulus law for non-const M.
         ExprId folded = tryFoldDivMod(rebuilt);
+        if (folded == rebuilt) folded = tryFoldPolynomialMod(rebuilt);
         if (folded == rebuilt) folded = trySymbolicModSimplify(rebuilt);
         if (folded != rebuilt) didFold_ = true;
         memo_[e] = folded;
@@ -89,6 +88,10 @@ namespace {
 std::optional<mpz_class> extractIntConst(const TermExpr& n) {
     if (n.kind == Kind::ConstInt) {
         if (auto* v = std::get_if<int64_t>(&n.payload.value)) return mpz_class(*v);
+        if (auto* s = std::get_if<std::string>(&n.payload.value)) {
+            mpz_class value;
+            if (value.set_str(*s, 10) == 0) return value;
+        }
         return std::nullopt;
     }
     if (n.kind == Kind::ConstReal) {
@@ -134,6 +137,121 @@ ExprId IntDivModConstantFold::tryFoldDivMod(ExprId e) {
     const mpz_class& value = (node.kind == Kind::Div) ? q : r;
     if (!value.fits_slong_p()) return e;  // refuse oversized literals.
     return mkConstInt(value.get_si());
+}
+
+ExprId IntDivModConstantFold::tryFoldPolynomialMod(ExprId e) {
+    const auto& mod = ir_.get(e);
+    if (mod.kind != Kind::Mod || mod.sort != intSortId_ || mod.children.size() != 2)
+        return e;
+    auto divisor = extractIntConst(ir_.get(mod.children[1]));
+    if (!divisor || *divisor == 0) return e;
+    const mpz_class modulus = abs(*divisor);
+    if (!modulus.fits_ulong_p() || modulus > 32768) return e;
+
+    // Compile the DAG once without polynomial expansion. Integer polynomials
+    // preserve congruence, so equal values on ALL residue classes establish
+    // the rewrite for every integer, including negative values. Unsupported
+    // operations and exhausted optional work never establish an identity.
+    struct Instruction {
+        Kind kind;
+        std::vector<std::size_t> children;
+        mpz_class value; // constant residue, or ORIGINAL exponent for Pow
+    };
+    struct Frame { ExprId id; bool ready; };
+    std::vector<Frame> stack{{mod.children[0], false}};
+    std::vector<Instruction> program;
+    std::unordered_map<ExprId, std::size_t> indices;
+    std::optional<ExprId> variable;
+    try {
+        while (!stack.empty()) {
+            residueBudget_.tick();
+            auto frame = stack.back();
+            if (indices.count(frame.id)) { stack.pop_back(); continue; }
+            const auto& node = ir_.get(frame.id);
+            Instruction op{node.kind, {}, 0};
+            if (auto value = extractIntConst(node)) {
+                mpz_mod(op.value.get_mpz_t(), value->get_mpz_t(), modulus.get_mpz_t());
+                op.kind = Kind::ConstInt;
+            } else {
+                if (node.sort != intSortId_) return e;
+                switch (node.kind) {
+                    case Kind::Variable:
+                        if (!node.children.empty() || (variable && *variable != frame.id)) return e;
+                        variable = frame.id;
+                        break;
+                    case Kind::Add: case Kind::Mul:
+                        if (node.children.empty()) return e;
+                        break;
+                    case Kind::Sub:
+                        if (node.children.empty()) return e;
+                        break;
+                    case Kind::Neg:
+                        if (node.children.size() != 1) return e;
+                        break;
+                    case Kind::Pow: {
+                        if (node.children.size() != 2) return e;
+                        auto exponent = extractIntConst(ir_.get(node.children[1]));
+                        if (!exponent || *exponent < 0) return e;
+                        op.value = std::move(*exponent);
+                        break;
+                    }
+                    default: return e;
+                }
+                if (!frame.ready && !node.children.empty()) {
+                    stack.back().ready = true;
+                    const auto count = node.kind == Kind::Pow ? 1 : node.children.size();
+                    for (std::size_t i = 0; i < count; ++i) {
+                        residueBudget_.tick();
+                        if (!indices.count(node.children[i])) stack.push_back({node.children[i], false});
+                    }
+                    continue;
+                }
+                const auto count = node.kind == Kind::Pow ? 1 : node.children.size();
+                for (std::size_t i = 0; i < count; ++i) op.children.push_back(indices.at(node.children[i]));
+            }
+            indices.emplace(frame.id, program.size());
+            program.push_back(std::move(op));
+            stack.pop_back();
+        }
+        std::vector<mpz_class> values(program.size());
+        mpz_class constant;
+        for (unsigned long residue = 0; residue < modulus.get_ui(); ++residue) {
+            for (std::size_t i = 0; i < program.size(); ++i) {
+                const auto& op = program[i];
+                auto& value = values[i];
+                residueBudget_.tick(1 + op.children.size());
+                switch (op.kind) {
+                    case Kind::ConstInt: value = op.value; break;
+                    case Kind::Variable: value = residue; break;
+                    case Kind::Neg: value = -values[op.children[0]]; break;
+                    case Kind::Add:
+                    case Kind::Sub:
+                    case Kind::Mul:
+                        value = values[op.children[0]];
+                        if (op.kind == Kind::Sub && op.children.size() == 1) value = -value;
+                        for (std::size_t j = 1; j < op.children.size(); ++j) {
+                            if (op.kind == Kind::Mul) value *= values[op.children[j]];
+                            else if (op.kind == Kind::Sub) value -= values[op.children[j]];
+                            else value += values[op.children[j]];
+                            mpz_mod(value.get_mpz_t(), value.get_mpz_t(), modulus.get_mpz_t());
+                        }
+                        break;
+                    case Kind::Pow:
+                        residueBudget_.tick(mpz_sizeinbase(op.value.get_mpz_t(), 2));
+                        mpz_powm(value.get_mpz_t(), values[op.children[0]].get_mpz_t(),
+                                 op.value.get_mpz_t(), modulus.get_mpz_t());
+                        break;
+                    default: return e;
+                }
+                mpz_mod(value.get_mpz_t(), value.get_mpz_t(), modulus.get_mpz_t());
+            }
+            if (residue == 0) constant = values.back();
+            else if (constant != values.back()) return e;
+        }
+        return mkConstInt(constant.get_si());
+    } catch (const ResourceExhausted&) {
+        return e;
+    }
 }
 
 ExprId IntDivModConstantFold::mkMul2(ExprId a, ExprId b) {

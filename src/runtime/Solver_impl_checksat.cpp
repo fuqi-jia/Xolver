@@ -196,16 +196,19 @@ Result Solver::Impl::checkSatGround() {
         // Preserve read-only array shapes until targeted elimination runs.
         const bool enableRewrite = !(logic == "QF_ANIA" || logic == "QF_AUFNIA" ||
                                      logic == "ANIA" || logic == "AUFNIA");
-        if (enableRewrite) {
+        auto rewriteAssertions = [&]() {
+            if (!enableRewrite) return false;
             FormulaRewriter rewriter(*ir, boolSortId_);
             if (rewriter.run() == FormulaRewriter::Verdict::Unsat) {
 #ifdef XOLVER_ENABLE_CASESTATS
                 finalizeCaseStats(Result::Unsat, 0.0);
 #endif
-                return Result::Unsat;
+                return true;
             }
             rewriter.commit();
-        }
+            return false;
+        };
+        if (rewriteAssertions()) return Result::Unsat;
         phase("rewrite-done");
 
         // Eliminate reconstructable definitions at base scope.
@@ -237,14 +240,7 @@ Result Solver::Impl::checkSatGround() {
                     std::cerr << "[SolveEqs] eliminated " << solveEqs.eliminatedCount()
                               << " variable(s)\n";
                     if (!polynomialDefinitions || !enableRewrite) break;
-                    FormulaRewriter rewriter(*ir, boolSortId_);
-                    if (rewriter.run() == FormulaRewriter::Verdict::Unsat) {
-#ifdef XOLVER_ENABLE_CASESTATS
-                        finalizeCaseStats(Result::Unsat, 0.0);
-#endif
-                        return Result::Unsat;
-                    }
-                    rewriter.commit();
+                    if (rewriteAssertions()) return Result::Unsat;
                 } catch (const std::bad_alloc&) {
                     std::cerr << "[SolveEqs] memory exhausted; keeping committed simplifications\n";
                     break;
@@ -291,6 +287,7 @@ Result Solver::Impl::checkSatGround() {
             IntDivModConstantFold preMod(*ir);
             preMod.run();
             preMod.commit();
+            if (preMod.didFold() && rewriteAssertions()) return Result::Unsat;
         }
         phase("symbolic-mod-done");
 
@@ -393,6 +390,7 @@ Result Solver::Impl::checkSatGround() {
             IntDivModConstantFold dmFold(*ir);
             dmFold.run();
             dmFold.commit();
+            if (dmFold.didFold() && rewriteAssertions()) return Result::Unsat;
         }
 
         // Lower integer div/mod before arithmetic extraction.

@@ -58,6 +58,13 @@ when the defined variable has only linear uses. Ground NIA alternates this
 elimination with formula rewriting under one substitution-work budget. Assertion
 replacement commits atomically, together with the corresponding replay steps.
 
+Integer div/mod preprocessing evaluates univariate integer polynomials over
+every residue class of a constant nonzero modulus. A constant residue table
+permits an exact literal rewrite before quotient/remainder lowering. The DAG
+is compiled once without expanding monomials; unsupported terms or exhausted
+optional work preserve the original expression. Boolean rewriting consumes
+changed assertions before arithmetic search starts.
+
 NRA interval search distinguishes fiber-invariant individual sign proofs from
 unverified model-search exclusions. Joint interval contraction can guide a fast
 SAT-finding pass, whose models require positive validation. If that pass used
