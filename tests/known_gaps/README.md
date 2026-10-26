@@ -8,6 +8,13 @@ an opposite verdict, a crash, or a timeout fails. Move a case into
 These are *completeness* gaps (xolver returns `unknown`), never soundness bugs —
 a wrong verdict is checked on every test run, without waiting for promotion.
 
+## nra/ — multivariate real feasibility
+
+- `box_sector_joint_reasons.smt2` has a rational witness recorded in the input
+  and independently checked by Z3 and cvc5. Exact covering does not currently
+  establish feasibility for this system. `unknown` is allowed; `unsat`
+  contradicts the witness. The unit suite also checks this obligation directly.
+
 ## ufdtnia/ — QF_UFDTNIA finite-datatype cardinality (one remaining)
 
 - `ufdtnia_004_sat_tester.smt2` — `((_ is red) c) ∧ x*x=25`. SAT (c=red, x=5),

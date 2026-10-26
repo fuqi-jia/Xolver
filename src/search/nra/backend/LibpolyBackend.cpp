@@ -1,5 +1,6 @@
 #include "base/RuntimeConfig.h"
 #include "search/nra/backend/LibpolyBackend.h"
+#include "search/nra/backend/RootBracket.h"
 #include "search/nra/preprocess/SquarefreeEngine.h"
 #include "search/nra/lazard/LocalProjection.h"   // resultant()
 #include "search/nra/lazard/TowerRootIsolation.h"     // towerNorm, TowerContext
@@ -266,15 +267,8 @@ static std::optional<poly::DyadicRational> mpqToDyadicRational(const mpq_class& 
     mpz_class den = q.get_den();
     if (den < 0) { num = -num; den = -den; }
 
-    int n = 0;
-    mpz_class temp = den;
-    while (temp > 1) {
-        if (temp % 2 != 0) {
-            return std::nullopt;
-        }
-        temp /= 2;
-        ++n;
-    }
+    if (den <= 0 || mpz_popcount(den.get_mpz_t()) != 1) return std::nullopt;
+    const auto n = mpz_scan1(den.get_mpz_t(), 0);
 
     lp_dyadic_rational_t dr;
     lp_dyadic_rational_construct(&dr);
@@ -290,16 +284,29 @@ static std::optional<poly::AlgebraicNumber> algebraicRootToPolyAlg(
     const std::vector<mpz_class>& coeffs) {
     if (ar.definingPoly == NullUniPolyId) return std::nullopt;
 
+    // Dense dyadic Horner evaluation multiplies endpoint precision by degree.
+    // Avoid rematerializing redundant precision, and check this cost before
+    // libpoly can ask GMP for multi-gigabyte temporary integers.
+    WorkBudget work;
+    std::optional<nra_backend::RootBracket> bracket;
+    try {
+        bracket = nra_backend::compactRootBracket(
+            coeffs, ar.lower, ar.upper, static_cast<std::size_t>(fwCapBits()), work);
+    } catch (const ResourceExhausted&) {
+        return std::nullopt;
+    }
+    if (!bracket) return std::nullopt;
+    auto loOpt = mpqToDyadicRational(bracket->lower);
+    auto hiOpt = mpqToDyadicRational(bracket->upper);
+    if (!loOpt || !hiOpt) return std::nullopt;
+    if (bracket->lower == bracket->upper) return poly::AlgebraicNumber(*loOpt);
+
     std::vector<poly::Integer> lpCoeffs;
     lpCoeffs.reserve(coeffs.size());
     for (auto it = coeffs.rbegin(); it != coeffs.rend(); ++it) {
         lpCoeffs.emplace_back(*it);
     }
     poly::UPolynomial up(lpCoeffs);
-
-    auto loOpt = mpqToDyadicRational(ar.lower);
-    auto hiOpt = mpqToDyadicRational(ar.upper);
-    if (!loOpt || !hiOpt) return std::nullopt;
 
     poly::DyadicInterval di(*loOpt, *hiOpt);
     return poly::AlgebraicNumber(std::move(up), di);

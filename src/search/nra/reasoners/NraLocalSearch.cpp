@@ -114,6 +114,12 @@ NraLocalSearch::evalAt(PolyId p,
 mpq_class
 NraLocalSearch::atomViolation(const Constraint& c,
                               const std::unordered_map<VarId, mpq_class>& asg) const {
+    return cachedAtomScore(c, asg).violation;
+}
+
+NraLocalSearch::CachedAtomScore&
+NraLocalSearch::cachedAtomScore(const Constraint& c,
+                              const std::unordered_map<VarId, mpq_class>& asg) const {
     // LS-D (Task F) — atom-violation incremental cache. When LS proposes a
     // var=q move, atoms NOT containing that var keep their cached value
     // (sub-asg unchanged). Atoms containing the moved var miss, recompute,
@@ -130,8 +136,8 @@ NraLocalSearch::atomViolation(const Constraint& c,
     if (!vOpt) {
         // Cannot evaluate ⇒ pessimistically violated by 1 (a finite penalty;
         // never +∞ so the move-selection still ranks better candidates).
-        violationCache_.emplace(std::move(key), mpq_class{1});
-        return mpq_class{1};
+        return violationCache_.emplace(std::move(key),
+            CachedAtomScore{mpq_class{1}, std::nullopt}).first->second;
     }
     const mpq_class& v = *vOpt;
     mpq_class result;
@@ -152,8 +158,8 @@ NraLocalSearch::atomViolation(const Constraint& c,
         case Relation::Neq:  // p ≠ 0
             result = (v != 0) ? mpq_class{0} : epsilon_; break;
     }
-    violationCache_.emplace(std::move(key), result);
-    return result;
+    return violationCache_.emplace(std::move(key),
+        CachedAtomScore{std::move(result), std::nullopt}).first->second;
 }
 
 mpq_class
@@ -206,13 +212,18 @@ NraLocalSearch::totalScore(const std::vector<Constraint>& cs,
     for (size_t i = 0; i < cs.size(); ++i) {
         const int w = (i < weights.size()) ? weights[i] : 1;
         if (w == 0) continue;
-        const mpq_class v = atomViolation(cs[i], asg);
-        if (v > 0) {
+        auto& atom = cachedAtomScore(cs[i], asg);
+        if (atom.violation > 0) {
             s.falseWeightedCount += w;
-            const mpq_class scale = scaleAt(cs[i].poly, asg);
-            const mpq_class normRes = v / scale;
-            const mpq_class capped = (normRes > 1) ? mpq_class{1} : normRes;
-            s.normalizedMag += mpq_class{w} * capped;
+            // Reweighting or moving another coordinate does not change this
+            // atom's normalized residual. Cache the exact value with the same
+            // relation and sub-assignment used for its violation.
+            if (!atom.normalizedMagnitude) {
+                const mpq_class scale = scaleAt(cs[i].poly, asg);
+                const mpq_class normRes = atom.violation / scale;
+                atom.normalizedMagnitude = normRes > 1 ? mpq_class{1} : normRes;
+            }
+            s.normalizedMag += mpq_class{w} * *atom.normalizedMagnitude;
         }
     }
     return s;

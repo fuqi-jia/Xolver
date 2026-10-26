@@ -40,6 +40,37 @@ static std::string writeTempSmt2(const std::string& content) {
     return path;
 }
 
+TEST_CASE("NIA: polynomial definitions compose with rewriting and preserve query state") {
+    const auto path = writeTempSmt2(
+        "(set-logic QF_NIA)(declare-const x Int)(declare-const y Int)(declare-const t Int)"
+        "(assert (>= x 1))(assert (>= y 1))"
+        "(assert (= t (+ (* x x x x) x)))"
+        "(assert (= t (+ (* y y y y) x)))(assert (distinct x y))(check-sat)");
+    Solver solver;
+    REQUIRE(solver.parseFile(path));
+    CHECK((solver.checkSat() == Result::Unsat));
+    CHECK((solver.checkSat() == Result::Unsat));
+}
+
+TEST_CASE("NIA: even powers keep opposite sign models through substitution and push pop") {
+    const auto path = writeTempSmt2(
+        "(set-logic QF_NIA)(declare-const x Int)(declare-const y Int)(declare-const t Int)"
+        "(assert (= t (* x x)))(assert (= t (* y y)))"
+        "(assert (= x (- 2)))(assert (distinct x y))(check-sat)");
+    Solver solver;
+    REQUIRE(solver.parseFile(path));
+    for (int repeat = 0; repeat < 2; ++repeat) {
+        REQUIRE((solver.checkSat() == Result::Sat));
+        CHECK((solver.validateModel() == Solver::ModelValidation::Satisfied));
+        solver.push();
+        solver.assertFormula(solver.mkBool(false));
+        CHECK((solver.checkSat() == Result::Unsat));
+        solver.pop();
+    }
+    REQUIRE((solver.checkSat() == Result::Sat));
+    CHECK((solver.validateModel() == Solver::ModelValidation::Satisfied));
+}
+
 TEST_CASE("NIA: trivial constant unsat (= 1 0)") {
     std::string path = writeTempSmt2(
         "(set-logic QF_NIA)\n"

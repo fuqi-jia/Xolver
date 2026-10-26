@@ -45,7 +45,12 @@ public:
     // Max search rounds — a coarse iteration cap; the real budget is wall-clock.
     void setMaxRounds(int n)  { maxRounds_ = n; }
     // Positive penalty for strict inequalities and disequalities.
-    void setEpsilon(mpq_class q) { epsilon_ = std::move(q); }
+    void setEpsilon(mpq_class q) {
+        if (q != epsilon_) {
+            epsilon_ = std::move(q);
+            violationCache_.clear();
+        }
+    }
 
     // Try to find a rational assignment satisfying every active constraint.
     // Returns std::nullopt on failure — the caller falls through to CAC.
@@ -105,9 +110,16 @@ private:
     struct ViolationKeyHash {
         size_t operator()(const ViolationKey& k) const noexcept;
     };
-    mutable std::unordered_map<ViolationKey, mpq_class, ViolationKeyHash> violationCache_;
+    struct CachedAtomScore {
+        mpq_class violation;
+        std::optional<mpq_class> normalizedMagnitude;
+    };
+    mutable std::unordered_map<ViolationKey, CachedAtomScore, ViolationKeyHash> violationCache_;
     mutable uint64_t violationCacheHits_ = 0;
     mutable uint64_t violationCacheMisses_ = 0;
+
+    CachedAtomScore& cachedAtomScore(const Constraint& c,
+        const std::unordered_map<VarId, mpq_class>& asg) const;
 
     // Borrow an immutable decomposition for the lifetime of this search.
     const RationalPolynomial* rationalPolynomial(PolyId p) const;

@@ -39,6 +39,11 @@ public:
     std::optional<TheoryCheckResult> run(
         const std::vector<ActiveLinearAtom>& activeAtoms);
 
+    // Full-effort interval combinations. The conflict cites the active bounds
+    // whose integer linear combination contains no admissible multiple.
+    std::optional<TheoryConflict> checkIntervalCombinationConflict(
+        const std::vector<ActiveLinearAtom>& activeAtoms);
+
     /**
      * Normalize an active constraint for integer reasoning.
      *

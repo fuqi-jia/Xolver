@@ -547,6 +547,10 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
         return TheoryCheckResult::consistent();
     }
 
+    if (effort == TheoryEffort::Full && ir.kind != TheoryCheckResult::Kind::Conflict)
+        if (auto conflict = integerReasoner_.checkIntervalCombinationConflict(activeAtoms_))
+            return TheoryCheckResult::mkConflict(std::move(*conflict));
+
     if (!activeAtoms_.empty()) {
         auto cr = integerReasoner_.run(activeAtoms_);
         if (cr) {

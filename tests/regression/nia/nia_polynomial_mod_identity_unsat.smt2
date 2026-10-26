@@ -1,0 +1,5 @@
+(set-logic QF_NIA)
+(set-info :status unsat)
+(declare-const y Int)
+(assert (not (= (mod (+ (* 6 y y y y y) (* 10 y y y y y y) (* y y) (* 7 y y y y)) 12) 0)))
+(check-sat)

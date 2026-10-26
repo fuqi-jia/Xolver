@@ -11,12 +11,12 @@
 namespace xolver {
 
 /**
- * SolveEqs — solve-equalities / linear variable elimination (↔SAT, P1).
+ * SolveEqs — reconstructable definition elimination (↔SAT, P1).
  *
  * Eliminates a user variable `x` defined by an unconditional top-level equality
  * conjunct `(= x t)` (or `(= t x)`) where `x` is a bare numeric Variable that
  * does not occur in `t`, and `t` is a *linear, reconstructable* term (only
- * Add/Sub/Neg/Mul-by-constant/ToReal/ToInt over variables and constants — no
+ * Add/Sub/Neg/Mul-by-constant/ToReal over variables and constants — no
  * div/mod/pow/UF/ITE/array). Substitutes `x ↦ t` globally, drops the defining
  * equality, and registers `(x, t)` with a ModelConverter so the eliminated
  * value is rebuilt on the final model (replay correctness).
@@ -27,12 +27,15 @@ namespace xolver {
  * (so a later equality whose term referenced `x` is solved over the remaining
  * variables); reverse-order replay in the converter resolves dependencies.
  *
- * Linearity + reconstructability guarantee: every SAT model is reconstructable
- * (evalRational succeeds), and no nonlinearity is introduced into the formula.
+ * Linear is the default policy. PolynomialInLinearPositions also accepts
+ * products in defining terms, provided the eliminated variable has only linear
+ * uses. It preserves polynomial degree and uses exact rational model replay.
  */
 class SolveEqs {
 public:
-    SolveEqs(NativeTerms& ir, ModelConverter& mc);
+    enum class DefinitionPolicy { Linear, PolynomialInLinearPositions };
+    SolveEqs(NativeTerms& ir, ModelConverter& mc,
+             DefinitionPolicy policy = DefinitionPolicy::Linear);
 
     // Eliminate as many variables as possible (fixpoint, bounded). Returns true
     // if any variable was eliminated.
@@ -57,12 +60,15 @@ private:
     // Does Variable named `name` occur anywhere in `e`?
     bool occurs(const std::string& name, ExprId e) const;
     // Is `e` a linear, reconstructable term (see class doc)?
-    bool isLinearReconstructable(ExprId e) const;
+    bool isReconstructable(ExprId e, bool polynomial) const;
+    bool admissibleDefinition(const std::string& name, ExprId e);
+    bool hasOnlyLinearUses(const std::string& name);
     // Substitute Variable named `name` by `replacement` throughout `e` (memoized).
     ExprId substitute(ExprId e, const std::string& name, ExprId replacement);
 
     NativeTerms& ir_;
     ModelConverter& mc_;
+    DefinitionPolicy policy_;
     SortId boolSortId_;
     SortId intSortId_;
     SortId realSortId_;

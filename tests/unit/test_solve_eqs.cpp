@@ -190,3 +190,49 @@ TEST_CASE("SolveEqs: general linear equality is not a bare definition") {
     CHECK_FALSE(se.run());              // bare-var path: nothing to do
     CHECK(mc.size() == 0);
 }
+
+TEST_CASE("SolveEqs: polynomial definitions require an explicit policy and replay exactly") {
+    NativeTerms ir; SortId b, i, r; setupSorts(ir, b, i, r);
+    auto x = var(ir, i, "x"), y = var(ir, i, "y");
+    ir.addAssertion(bin(ir, Kind::Eq, b, x, bin(ir, Kind::Mul, i, y, y)));
+    ir.pushScope();
+    ir.addAssertion(bin(ir, Kind::Gt, b, x, cint(ir, i, 2)));
+    ModelConverter mc;
+    SolveEqs linear(ir, mc);
+    CHECK_FALSE(linear.run());
+    CHECK(mc.empty());
+    SolveEqs polynomial(ir, mc, SolveEqs::DefinitionPolicy::PolynomialInLinearPositions);
+    REQUIRE(polynomial.run());
+    polynomial.commit();
+    REQUIRE(ir.getScopedAssertions().size() == 1);
+    CHECK(ir.getScopedAssertions().front().first == 1);
+    CHECK(ir.currentScopeLevel() == 1);
+    CHECK_FALSE(varInAssertions(ir, "x"));
+    std::unordered_map<std::string, RealValue> numbers{{"y", RealValue::fromInt(-3)}};
+    std::unordered_map<std::string, std::string> values{{"y", "-3"}};
+    REQUIRE(mc.reconstruct(numbers, values, ir));
+    CHECK(values.at("x") == "9");
+    ir.popScope();
+    CHECK(ir.assertions().empty());
+}
+
+TEST_CASE("SolveEqs: polynomial substitution guards both DAG contexts and current aliases") {
+    NativeTerms ir; SortId b, i, r; setupSorts(ir, b, i, r);
+    auto x = var(ir, i, "x"), y = var(ir, i, "y"), z = var(ir, i, "z");
+    SUBCASE("shared variable has a nonlinear use") {
+        ir.addAssertion(bin(ir, Kind::Gt, b, x, cint(ir, i, 0)));
+        ir.addAssertion(bin(ir, Kind::Gt, b, bin(ir, Kind::Mul, i, x, x), cint(ir, i, 2)));
+        ir.addAssertion(bin(ir, Kind::Eq, b, x, bin(ir, Kind::Mul, i, y, y)));
+    }
+    SUBCASE("linear alias introduces a nonlinear use before the next definition") {
+        ir.addAssertion(bin(ir, Kind::Eq, b, z, x));
+        ir.addAssertion(bin(ir, Kind::Gt, b, bin(ir, Kind::Mul, i, z, z), cint(ir, i, 2)));
+        ir.addAssertion(bin(ir, Kind::Eq, b, x, bin(ir, Kind::Mul, i, y, y)));
+    }
+    ModelConverter mc;
+    SolveEqs pass(ir, mc, SolveEqs::DefinitionPolicy::PolynomialInLinearPositions);
+    pass.run();
+    pass.commit();
+    CHECK(varInAssertions(ir, "x"));
+    CHECK(varInAssertions(ir, "y"));
+}

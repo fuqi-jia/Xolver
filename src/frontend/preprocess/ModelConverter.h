@@ -25,8 +25,7 @@ namespace xolver {
  * may reference a variable eliminated later — that later variable is
  * reconstructed first, so its value is available when x is computed.
  *
- * Linear-only: solve-eqs eliminates from linear equalities, so t is a linear
- * arithmetic term and the evaluator handles Add/Sub/Neg/Mul-by-const/ToReal/
+ * Exact rational replay: the evaluator handles Add/Sub/Neg/Mul/ToReal/
  * Variable/constants over rationals. A variable whose model value is not
  * rational (e.g. an algebraic NRA value) leaves the dependent eliminated var
  * unreconstructed (reconstruct() returns false), which the caller treats as a

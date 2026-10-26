@@ -669,7 +669,9 @@ std::vector<int> CdcacCore::reasonConstraintIndices(const std::vector<SatLit>& r
     return out;
 }
 
-CdcacResult CdcacCore::solvePass(const CdcacInput& input) {
+CdcacResult CdcacCore::solvePass(const CdcacInput& input, IntervalConflictMode mode) {
+    modelSearchExclusionUsed_ = false;
+    intervalConflictMode_ = mode;
     // Build the exact-RationalPolynomial cache used by the interval forward-prune
     // (intervalFpViolation). Once per solve (reused across hybrid Collins/Lazard
     // passes); the overlay's precompute, if it ran, is harmlessly overwritten.
@@ -706,6 +708,9 @@ CdcacResult CdcacCore::solvePass(const CdcacInput& input) {
     }
     SamplePoint prefix;
     CdcacResult result = solveLevel(0, prefix, input);
+
+    if (result.status == CdcacStatus::Unsat && modelSearchExclusionUsed_)
+        result = CdcacResult::mkUnknown(CdcacUnknownReason::ProjectionClosureIncomplete);
 
     // CDCAC covering-UNSAT soundness rests on the per-level/per-cell completeness
     // tracking inside solveLevel (unsatTrustworthy_ + the Lazard per-cell
@@ -757,6 +762,16 @@ CdcacResult CdcacCore::solve(const CdcacInput& input) {
 #ifndef NDEBUG
     std::cerr << "[CDCAC] solve: varOrder.size=" << input.varOrder.size() << std::endl;
 #endif
+    auto globalConflict = [&]() {
+        std::vector<SatLit> reasons;
+        reasons.reserve(input.constraints.size());
+        for (const auto& c : input.constraints) reasons.push_back(c.reason);
+        Covering cover;
+        Cell cell;
+        cell.reasons = reasons;
+        cover.cells.push_back(std::move(cell));
+        return CdcacResult::mkUnsat(std::move(cover), std::move(reasons));
+    };
     // STEP 2 — box-consistency GLOBAL refutation (conflict generalization at the root):
     // before any covering, run the HC4 box fixpoint (now incl. degree-2 square
     // contraction) over the empty assignment. An infeasible over-approximation box ⇒
@@ -769,18 +784,7 @@ CdcacResult CdcacCore::solve(const CdcacInput& input) {
     // that certificate; the box's value is the MULTI-variable bound contradiction (the
     // covering tree explodes there, e.g. hong) where it short-circuits the blowup.
     if (input.varOrder.size() >= 2 && topLevelBoxInfeasible(input)) {
-        std::vector<SatLit> reasons;
-        reasons.reserve(input.constraints.size());
-        for (const auto& c : input.constraints) reasons.push_back(c.reason);
-        // Carry the conflict literals in a one-cell covering too: consumers re-derive
-        // the conflict clause via ReasonManager::minimize(covering), which reads
-        // cells[].reasons — an EMPTY covering there would yield an empty (false) clause
-        // and the UNSAT gets downgraded to Unknown. So put the reasons in BOTH places.
-        Covering cover;
-        Cell cell;                       // full-line cell carrying the global conflict
-        cell.reasons = reasons;
-        cover.cells.push_back(std::move(cell));
-        return CdcacResult::mkUnsat(std::move(cover), std::move(reasons));
+        return globalConflict();
     }
     // nlsat-engine STEP A: SAT-only sample-first model search, ONE-SHOT per
     // CdcacCore lifetime, BEFORE the eager buildClosure projection. Sound: Sat is
@@ -884,7 +888,15 @@ CdcacResult CdcacCore::solve(const CdcacInput& input) {
     // the old pure-Collins behaviour. Collins's Sat/Unsat are AUTHORITATIVE.
     projectionKind_ = ProjectionPolicyKind::CollinsConservative;
     resetPerSolveState();
-    CdcacResult collinsResult = solvePass(input);
+    CdcacResult collinsResult = solvePass(input, IntervalConflictMode::JointModelSearch);
+
+    // Joint interval pruning can quickly find a model. If it prevented a
+    // certified refutation, repeat with individually justified sign conflicts.
+    // This second pass does not reuse unsupported parameter-cell exclusions.
+    if (collinsResult.status == CdcacStatus::Unknown && modelSearchExclusionUsed_) {
+        resetPerSolveState();
+        collinsResult = solvePass(input, IntervalConflictMode::CertifiedCovering);
+    }
 
     if (collinsResult.status != CdcacStatus::Unknown) {
         // A definite Collins verdict is returned as-is — Lazard never overrides
@@ -1427,12 +1439,12 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                     CdcacResult res;
                     bool prefRat = true;
                     for (const auto& pv : prefix.values) if (!pv.isRational()) { prefRat = false; break; }
-                    std::optional<std::pair<size_t, Sign>> sv;
+                    std::optional<CdcacResult> boxConflict;
                     if (prefRat) {
                         mpq_class boxLo = prevRoot->isRational() ? prevRoot->rational : prevRoot->root.lower;
-                        sv = boxSectorViolation(prefix, var, boxLo, rootUpper, input);
+                        boxConflict = boxSectorConflict(prefix, var, boxLo, rootUpper, input);
                     }
-                    if (sv) res = makeLeafConflictResult({*sv}, input);
+                    if (boxConflict) res = std::move(*boxConflict);
                     else    res = testAndRecurse(sample);
                     if (res.status == CdcacStatus::Sat) return res;
                     if (res.status == CdcacStatus::Unknown) return res;
@@ -1492,13 +1504,13 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                 // infeasible region, so skip it — sound, and sections don't affect coverage.
                 if (!coveredByRecorded(root)) {
                 CdcacResult res;
-                std::optional<std::pair<size_t, Sign>> sv;
+                std::optional<CdcacResult> boxConflict;
                 if (root.isRational()) {
                     bool prefRat = true;
                     for (const auto& pv : prefix.values) if (!pv.isRational()) { prefRat = false; break; }
-                    if (prefRat) sv = boxSectorViolation(prefix, var, root.rational, root.rational, input);
+                    if (prefRat) boxConflict = boxSectorConflict(prefix, var, root.rational, root.rational, input);
                 }
-                if (sv) res = makeLeafConflictResult({*sv}, input);
+                if (boxConflict) res = std::move(*boxConflict);
                 else    res = testAndRecurse(root);
                 if (res.status == CdcacStatus::Sat) return res;
                 if (res.status == CdcacStatus::Unknown) return res;
@@ -2314,10 +2326,10 @@ static bool propagateBox(const std::vector<std::optional<RationalPolynomial>>& s
         // the narrowed sub-range (the contracting constraint handles the rest). That
         // false "this constraint is violated for ALL var values" drops the var
         // dependence → the parent projection loses a boundary → over-extended cell →
-        // FALSE UNSAT (meti-tarski sin degree-7). Without contraction, the (A) check
-        // over the seed box only surfaces a constraint that is GENUINELY single-signed
-        // over the whole fiber — a sound FullLine reason. (boxSectorViolation keeps
-        // contraction: its conflict is scoped to the SECTOR it pins, not a FullLine.)
+        // FALSE UNSAT. Without contraction, the (A) check over the seed box only
+        // surfaces a constraint that is single-signed over the whole fiber.
+        // Joint sector conflicts instead retain every contracting constraint,
+        // so they cannot be widened using an incomplete single-reason support.
         if (!noContract)
         for (size_t ci : cons) {
             const RationalPolynomial& rp = *satRp[ci];
@@ -2505,7 +2517,7 @@ std::optional<std::pair<size_t, Sign>> CdcacCore::intervalFpViolation(
     return aConf;
 }
 
-std::optional<std::pair<size_t, Sign>> CdcacCore::boxSectorViolation(
+std::optional<CdcacResult> CdcacCore::boxSectorConflict(
     const SamplePoint& prefix, VarId var, const mpq_class& lo, const mpq_class& hi,
     const CdcacInput& input) {
     std::unordered_map<VarId, mpq_class> m;
@@ -2517,12 +2529,38 @@ std::optional<std::pair<size_t, Sign>> CdcacCore::boxSectorViolation(
     Iv cellIv; cellIv.lo = lo; cellIv.hi = hi;       // finite both ends (a sector gap)
     std::unordered_map<VarId, Iv> seed{ {var, cellIv} };
     std::unordered_map<VarId, Iv> box;
-    std::optional<std::pair<size_t, Sign>> aConf;
-    bool inf = propagateBox(satRp_, satSafe_, m, input, box, &aConf, &seed);
-    if (!inf || !aConf) return std::nullopt;
-    if (relationHolds(aConf->second, input.constraints[aConf->first].rel))
+    if (intervalConflictMode_ == IntervalConflictMode::CertifiedCovering) {
+        std::optional<std::pair<size_t, Sign>> signConflict;
+        if (!propagateBox(satRp_, satSafe_, m, input, box, &signConflict, &seed,
+                          /*noContract=*/true) || !signConflict)
+            return std::nullopt;
+        if (relationHolds(signConflict->second, input.constraints[signConflict->first].rel))
+            return std::nullopt;
+        return makeLeafConflictResult({*signConflict}, input);
+    }
+    std::optional<std::pair<size_t, Sign>> exclusionHint;
+    if (!propagateBox(satRp_, satSafe_, m, input, box, &exclusionHint, &seed) ||
+        !exclusionHint)
         return std::nullopt;
-    return aConf;
+    if (relationHolds(exclusionHint->second, input.constraints[exclusionHint->first].rel))
+        return std::nullopt;
+
+    // A contracted-box sign is a MODEL-SEARCH HINT: widening from this single
+    // constraint can exclude feasible cells. That is allowed only in this
+    // SAT-finding pass, whose candidates are checked against every constraint.
+    // Never promote its exclusions to a final refutation, even at the root.
+    modelSearchExclusionUsed_ = true;
+    std::vector<SatLit> hints{input.constraints[exclusionHint->first].reason};
+    Cell cell;
+    cell.var = var;
+    cell.kind = CellKind::FullLine;
+    cell.lower = Bound::negInf();
+    cell.upper = Bound::posInf();
+    cell.reasons = hints;
+    Covering cover;
+    cover.var = var;
+    cover.cells.push_back(std::move(cell));
+    return CdcacResult::mkSearchExclusion(std::move(cover), std::move(hints));
 }
 
 // M1 box HINT: re-rank/prune the root-cell candidate list using box[k]. The cells
