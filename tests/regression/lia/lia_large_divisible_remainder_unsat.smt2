@@ -1,0 +1,7 @@
+(set-logic QF_LIA)
+(set-info :status unsat)
+(declare-const x Int)
+(assert (< (mod x 8462480737302404222943281) 1208925819614629174706183))
+(assert (< (mod x 1208925819614629174706183) 13))
+(assert (>= (mod x 8462480737302404222943281) 13))
+(check-sat)

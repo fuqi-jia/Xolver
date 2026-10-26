@@ -1,0 +1,7 @@
+(set-logic QF_LIA)
+(set-info :status sat)
+(declare-const x Int)
+(assert (= x 10))
+(assert (= (mod x 10) 0))
+(assert (= (mod x 3) 1))
+(check-sat)
