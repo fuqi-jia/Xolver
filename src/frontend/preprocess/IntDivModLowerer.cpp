@@ -36,6 +36,7 @@ bool IntDivModLowerer::run() {
         loweredScoped.push_back({level, lowered});
     }
 
+    emitRemainderRelations();
     for (const auto& gen : generatedAssertions_) {
         loweredScoped.push_back({gen.level, gen.expr});
     }
@@ -344,6 +345,54 @@ void IntDivModLowerer::emitConstDivisorConstraints(const DivModDef& def, const m
 
     bool nonlinear = containsNonlinear(def.a);
     updateRequirement(nonlinear, false);
+}
+
+void IntDivModLowerer::emitRemainderRelations() {
+    struct Remainder {
+        ScopeLevel level;
+        ExprId dividend;
+        ExprId variable;
+        mpz_class modulus;
+    };
+    std::vector<Remainder> remainders;
+    for (const auto& [key, def] : registry_) {
+        const auto divisor = evalIntConstTerm(def.b);
+        if (!divisor || *divisor == 0 || !def.arithmeticConstraintsEmitted) continue;
+        remainders.push_back({key.level, def.a, def.r, mpz_class(abs(*divisor))});
+    }
+    std::sort(remainders.begin(), remainders.end(), [](const auto& a, const auto& b) {
+        if (a.level != b.level) return a.level < b.level;
+        if (a.dividend != b.dividend) return a.dividend < b.dividend;
+        if (a.modulus != b.modulus) return a.modulus < b.modulus;
+        return a.variable < b.variable;
+    });
+    for (size_t i = 0; i < remainders.size(); ++i) {
+        const auto& small = remainders[i];
+        // One edge to the nearest available multiple keeps generated syntax
+        // linear in the number of divisions. A divisibility chain transports
+        // every remainder range without a quadratic family of extra atoms.
+        for (size_t j = i + 1; j < remainders.size(); ++j) {
+            const auto& large = remainders[j];
+            if (small.level != large.level || small.dividend != large.dividend) break;
+            if (!mpz_divisible_p(large.modulus.get_mpz_t(), small.modulus.get_mpz_t())) continue;
+            if (large.modulus == small.modulus) {
+                generatedAssertions_.push_back({small.level, mkEq(small.variable, large.variable)});
+            } else {
+                // Euclidean remainders are nonnegative even for negative
+                // dividends/divisors. For m|n, (a mod n) mod m = a mod m.
+                // The bounded integer slice exposes this exact lattice fact
+                // to ordinary linear propagation before quotient branching.
+                const auto slice = ir_.makeFreshVariable(intSortId_, "__nlc_mod_slice",
+                                                         /*routingAuxiliary=*/true);
+                const auto scaled = mkMul(mkIntConst(small.modulus), slice);
+                generatedAssertions_.push_back({small.level, mkEq(large.variable, mkAdd(scaled, small.variable))});
+                generatedAssertions_.push_back({small.level, mkLe(mkIntConst(0), slice)});
+                const mpz_class upper = large.modulus / small.modulus - 1;
+                generatedAssertions_.push_back({small.level, mkLe(slice, mkIntConst(upper))});
+            }
+            break;
+        }
+    }
 }
 
 void IntDivModLowerer::emitVariableDivisorConstraints(const DivModDef& def, ScopeLevel level) {

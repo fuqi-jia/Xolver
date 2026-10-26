@@ -2,6 +2,8 @@
 #include "frontend/preprocess/IntDivModLowerer.h"
 #include "contracts/LogicFeatureDetector.h"
 #include <doctest/doctest.h>
+#include <functional>
+#include <unordered_map>
 
 using namespace xolver;
 
@@ -100,6 +102,97 @@ static ExprId mkEq(NativeTerms& ir, ExprId a, ExprId b) {
 
 static ExprId mkLe(NativeTerms& ir, ExprId a, ExprId b) {
     return ir.add(TermExpr{Kind::Leq, ir.boolSortId(), {a, b}, Payload{}});
+}
+
+TEST_CASE("IntDivModLowerer: divisible remainder relations preserve integer witnesses") {
+    auto evaluate = [](const NativeTerms& ir, ExprId root,
+                       const std::unordered_map<ExprId, mpz_class>& values) {
+        std::function<mpz_class(ExprId)> visit = [&](ExprId id) -> mpz_class {
+            const auto& e = ir.get(id);
+            switch (e.kind) {
+            case Kind::Variable: return values.at(id);
+            case Kind::ConstInt:
+                if (const auto* n = std::get_if<int64_t>(&e.payload.value)) return mpz_class(*n);
+                return mpz_class(std::get<std::string>(e.payload.value));
+            case Kind::Add: return visit(e.children[0]) + visit(e.children[1]);
+            case Kind::Sub: return visit(e.children[0]) - visit(e.children[1]);
+            case Kind::Mul: return visit(e.children[0]) * visit(e.children[1]);
+            case Kind::Neg: return -visit(e.children[0]);
+            case Kind::Eq: return mpz_class(visit(e.children[0]) == visit(e.children[1]));
+            case Kind::Leq: return mpz_class(visit(e.children[0]) <= visit(e.children[1]));
+            default: FAIL("unexpected expression in independent integer evaluator"); return 0;
+            }
+        };
+        return visit(root);
+    };
+    for (long small : {2L, 3L, 5L}) {
+        for (long ratio : {3L, 7L}) {
+            for (long smallSign : {-1L, 1L}) {
+                for (long largeSign : {-1L, 1L}) {
+                    NativeTerms ir = makeIrWithInt();
+                    const auto x = mkIntVar(ir, "x");
+                    const auto a = mkMod(ir, x, mkIntConst(ir, small * smallSign));
+                    const auto b = mkMod(ir, x, mkIntConst(ir, small * ratio * largeSign));
+                    ir.addAssertion(mkLe(ir, mkIntConst(ir, 0), a));
+                    ir.addAssertion(mkLe(ir, mkIntConst(ir, 0), b));
+                    IntDivModLowerer lowerer(ir);
+                    REQUIRE(lowerer.run());
+                    CHECK_FALSE(lowerer.requirement().needsEUF);
+                    CHECK_FALSE(lowerer.requirement().needsNonlinearInt);
+                    lowerer.commit();
+                    std::vector<ExprId> slices;
+                    for (ExprId id = 0; id < ir.size(); ++id) {
+                        const auto& e = ir.get(id);
+                        if (e.kind == Kind::Variable &&
+                            std::get<std::string>(e.payload.value).find("__nlc_mod_slice") == 0)
+                            slices.push_back(id);
+                    }
+                    REQUIRE(slices.size() == 1);
+                    // Independent Euclidean division supplies only the original
+                    // quotient/remainder witnesses. Exhaustively search the new
+                    // slice, rather than using the implementation's formula.
+                    for (long input = -2 * small * ratio; input <= 2 * small * ratio; ++input) {
+                        std::unordered_map<ExprId, mpz_class> values{{x, input}};
+                        for (const auto& origin : lowerer.origins()) {
+                            const auto divisor = evaluate(ir, origin.b, values);
+                            const mpz_class magnitude = abs(divisor);
+                            mpz_class remainder;
+                            mpz_mod(remainder.get_mpz_t(), mpz_class(input).get_mpz_t(), magnitude.get_mpz_t());
+                            values[origin.r] = remainder;
+                            values[origin.q] = (mpz_class(input) - remainder) / divisor;
+                        }
+                        int extensions = 0;
+                        for (long slice = 0; slice < ratio; ++slice) {
+                            values[slices.front()] = slice;
+                            bool satisfies = true;
+                            for (const auto& [level, assertion] : ir.getScopedAssertions()) {
+                                CHECK(level == 0);
+                                satisfies &= evaluate(ir, assertion, values) != 0;
+                            }
+                            extensions += satisfies;
+                        }
+                        CHECK(extensions == 1);
+                    }
+                }
+            }
+        }
+    }
+}
+
+TEST_CASE("IntDivModLowerer: remainder relations respect dividend and assertion scope") {
+    for (bool differentScope : {false, true}) {
+        NativeTerms ir = makeIrWithInt();
+        const auto x = mkIntVar(ir, "x"), y = mkIntVar(ir, "y");
+        const auto small = mkMod(ir, x, mkIntConst(ir, 3));
+        const auto large = mkMod(ir, differentScope ? x : y, mkIntConst(ir, 15));
+        ir.addAssertion(mkLe(ir, mkIntConst(ir, 0), small), ScopeLevel{0});
+        ir.addAssertion(mkLe(ir, mkIntConst(ir, 0), large), ScopeLevel{differentScope ? 1u : 0u});
+        IntDivModLowerer lowerer(ir);
+        REQUIRE(lowerer.run());
+        lowerer.commit();
+        CHECK(ir.getScopedAssertions().size() == 8);
+        CHECK(countFreshDivModVars(ir) == 4);
+    }
 }
 
 // ---------------------------------------------------------------------------

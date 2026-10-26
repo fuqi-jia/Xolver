@@ -70,6 +70,7 @@ private:
     struct DivModDef;
 
     void emitConstDivisorConstraints(const DivModDef& def, const mpz_class& k, ScopeLevel level);
+    void emitRemainderRelations();
     void emitVariableDivisorConstraints(const DivModDef& def, ScopeLevel level);
     void emitUndefZeroConstraints(const DivModDef& def, ScopeLevel level);
 
