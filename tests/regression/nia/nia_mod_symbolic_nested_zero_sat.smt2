@@ -1,0 +1,6 @@
+(set-logic QF_NIA)
+(set-info :status sat)
+(declare-const d Int)
+(assert (or (= d 0) (= d 1)))
+(assert (distinct (mod (mod 7 d) d) (mod 7 d)))
+(check-sat)

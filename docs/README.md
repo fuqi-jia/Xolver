@@ -11,6 +11,10 @@ Current interfaces and behavior:
 - [Server validation](../tools/remote/README.md)
 - [Known-gap test contract](../tests/known_gaps/README.md)
 
+Operational records:
+
+- [Arithmetic validation and continuation](audit/ARITHMETIC_PERFORMANCE_HANDOFF.md)
+
 `audit/`, `agents/`, `phase-d/`, `euf-deep/` and `preprocess-deep/` contain
 revision-specific experiments, investigations and design records. Their source
 hashes, measurements and unresolved issues describe the recorded revisions.
