@@ -1,0 +1,6 @@
+(set-logic QF_NIA)
+(set-info :status unsat)
+(declare-const x Int)
+(assert (< (mod (* x x) 90) 3))
+(assert (>= (mod (* x x) 15) 3))
+(check-sat)

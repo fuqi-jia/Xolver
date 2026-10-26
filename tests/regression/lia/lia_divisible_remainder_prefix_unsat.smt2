@@ -1,0 +1,6 @@
+(set-logic QF_LIA)
+(set-info :status unsat)
+(declare-const x Int)
+(assert (< (mod x 120) 6))
+(assert (>= (mod x 30) 6))
+(check-sat)

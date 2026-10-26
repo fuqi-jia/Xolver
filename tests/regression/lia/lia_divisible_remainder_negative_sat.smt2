@@ -1,0 +1,8 @@
+(set-logic QF_LIA)
+(set-info :status sat)
+(declare-const x Int)
+(assert (= x (- 121)))
+(assert (= (mod x (- 30)) 29))
+(assert (= (mod x 120) 119))
+(assert (= (div x (- 30)) 5))
+(check-sat)
