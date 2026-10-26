@@ -120,6 +120,7 @@ TEST_CASE("IntDivModLowerer: divisible remainder relations preserve integer witn
             case Kind::Neg: return -visit(e.children[0]);
             case Kind::Eq: return mpz_class(visit(e.children[0]) == visit(e.children[1]));
             case Kind::Leq: return mpz_class(visit(e.children[0]) <= visit(e.children[1]));
+            case Kind::Or: return mpz_class(visit(e.children[0]) != 0 || visit(e.children[1]) != 0);
             default: FAIL("unexpected expression in independent integer evaluator"); return 0;
             }
         };
@@ -140,17 +141,15 @@ TEST_CASE("IntDivModLowerer: divisible remainder relations preserve integer witn
                     CHECK_FALSE(lowerer.requirement().needsEUF);
                     CHECK_FALSE(lowerer.requirement().needsNonlinearInt);
                     lowerer.commit();
-                    std::vector<ExprId> slices;
-                    for (ExprId id = 0; id < ir.size(); ++id) {
-                        const auto& e = ir.get(id);
-                        if (e.kind == Kind::Variable &&
-                            std::get<std::string>(e.payload.value).find("__nlc_mod_slice") == 0)
-                            slices.push_back(id);
+                    CHECK(countFreshDivModVars(ir) == 4);
+                    CHECK(ir.getScopedAssertions().size() == 10);
+                    for (const auto& [level, assertion] : ir.getScopedAssertions()) {
+                        (void)assertion;
+                        CHECK(level == 0);
                     }
-                    REQUIRE(slices.size() == 1);
-                    // Independent Euclidean division supplies only the original
-                    // quotient/remainder witnesses. Exhaustively search the new
-                    // slice, rather than using the implementation's formula.
+                    // Independently evaluate every generated assertion with
+                    // Euclidean quotient/remainder witnesses, including both
+                    // sides of zero and every wraparound in two periods.
                     for (long input = -2 * small * ratio; input <= 2 * small * ratio; ++input) {
                         std::unordered_map<ExprId, mpz_class> values{{x, input}};
                         for (const auto& origin : lowerer.origins()) {
@@ -161,17 +160,12 @@ TEST_CASE("IntDivModLowerer: divisible remainder relations preserve integer witn
                             values[origin.r] = remainder;
                             values[origin.q] = (mpz_class(input) - remainder) / divisor;
                         }
-                        int extensions = 0;
-                        for (long slice = 0; slice < ratio; ++slice) {
-                            values[slices.front()] = slice;
-                            bool satisfies = true;
-                            for (const auto& [level, assertion] : ir.getScopedAssertions()) {
-                                CHECK(level == 0);
-                                satisfies &= evaluate(ir, assertion, values) != 0;
-                            }
-                            extensions += satisfies;
+                        bool satisfies = true;
+                        for (const auto& [level, assertion] : ir.getScopedAssertions()) {
+                            (void)level;
+                            satisfies &= evaluate(ir, assertion, values) != 0;
                         }
-                        CHECK(extensions == 1);
+                        CHECK(satisfies);
                     }
                 }
             }

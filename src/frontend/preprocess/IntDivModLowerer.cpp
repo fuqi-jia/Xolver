@@ -379,16 +379,15 @@ void IntDivModLowerer::emitRemainderRelations() {
                 generatedAssertions_.push_back({small.level, mkEq(small.variable, large.variable)});
             } else {
                 // Euclidean remainders are nonnegative even for negative
-                // dividends/divisors. For m|n, (a mod n) mod m = a mod m.
-                // The bounded integer slice exposes this exact lattice fact
-                // to ordinary linear propagation before quotient branching.
-                const auto slice = ir_.makeFreshVariable(intSortId_, "__nlc_mod_slice",
-                                                         /*routingAuxiliary=*/true);
-                const auto scaled = mkMul(mkIntConst(small.modulus), slice);
-                generatedAssertions_.push_back({small.level, mkEq(large.variable, mkAdd(scaled, small.variable))});
-                generatedAssertions_.push_back({small.level, mkLe(mkIntConst(0), slice)});
-                const mpz_class upper = large.modulus / small.modulus - 1;
-                generatedAssertions_.push_back({small.level, mkLe(slice, mkIntConst(upper))});
+                // dividends/divisors. For m|n, r_n-r_m is a nonnegative
+                // multiple of m. Exclude its first lattice gap directly,
+                // without introducing another integer quotient to branch on.
+                const auto equal = mkEq(large.variable, small.variable);
+                const auto next = mkAdd(small.variable, mkIntConst(small.modulus));
+                generatedAssertions_.push_back({small.level, mkOr(equal, mkLe(next, large.variable))});
+                const mpz_class span = large.modulus - small.modulus;
+                generatedAssertions_.push_back({small.level,
+                    mkLe(large.variable, mkAdd(small.variable, mkIntConst(span)))});
             }
             break;
         }
