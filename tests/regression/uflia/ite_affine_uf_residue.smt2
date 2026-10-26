@@ -1,0 +1,7 @@
+(set-logic QF_UFLIA)
+(set-info :status unsat)
+(declare-const c Bool)
+(declare-const x Int)
+(declare-fun f (Int) Int)
+(assert (= (ite c (+ (f x) -5) (+ (f x) 7)) (+ (f x) 1)))
+(check-sat)

@@ -1,0 +1,7 @@
+(set-logic QF_NIA)
+(set-info :status unsat)
+(declare-const c Bool)
+(declare-const x Int)
+(declare-const y Int)
+(assert (= (ite c (+ (* x y) -5) (+ (* x y) 7)) (+ (* x y) 1)))
+(check-sat)
