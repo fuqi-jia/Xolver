@@ -25,6 +25,30 @@ void addBounds(std::vector<NormalizedNiaConstraint>& cs, PolynomialKernel& k,
 
 } // namespace
 
+TEST_CASE("ModularResidue: certificate budgets remain local to the complete original variable set") {
+    auto k = createPolynomialKernel();
+    ModularResidueReasoner reasoner(*k);
+    reasoner.setEnumBudget(16);
+    const auto square = k->sub(k->pow(var(*k, "x"), 2), cst(*k, 2));
+    std::vector<NormalizedNiaConstraint> constraints{{square, Relation::Eq, rl(1)}};
+    // These variables do not enter the reduced residue search, but the
+    // independent verifier's original-coordinate space must still fit.
+    for (int i = 0; i < 8; ++i) {
+        const auto name = "free" + std::to_string(i);
+        constraints.push_back({k->mkVar(k->getOrCreateVar(name)), Relation::Geq, rl(2 + i)});
+    }
+    CHECK(reasoner.run(constraints).kind == NiaReasoningKind::NoChange);
+    constraints.resize(1);
+    auto conflict = reasoner.run(constraints);
+    REQUIRE(conflict.kind == NiaReasoningKind::Conflict);
+    REQUIRE(conflict.conflict.has_value());
+    CHECK(conflict.conflict->clause == std::vector<SatLit>{rl(1)});
+    // A later satisfiable context must neither inherit the conflict nor lose
+    // its exact modular model because a previous certificate did not fit.
+    constraints[0].poly = k->sub(k->pow(var(*k, "x"), 2), cst(*k, 1));
+    CHECK(reasoner.run(constraints).kind == NiaReasoningKind::NoChange);
+}
+
 TEST_CASE("ModularResidue: polynomial congruence cannot refute a satisfiable integer system") {
     auto k = createPolynomialKernel();
     auto b = var(*k, "b"), x = var(*k, "x"), y = var(*k, "y");

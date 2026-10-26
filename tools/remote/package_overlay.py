@@ -48,6 +48,10 @@ def main():
     for line in module_states:
         revision, directory, *_ = line.strip(" +-U").split()
         submodules[directory] = revision
+        # An uninitialized dependency has its recorded pin but no checkout to
+        # inspect. The server retains that pinned dependency unchanged.
+        if line.startswith("-"):
+            continue
         # The dependency can now contain committed upstream/PR changes. Diff
         # against the superproject's pin, not just its dirty working tree.
         pinned = subprocess.check_output(["git", "rev-parse", base + ":" + directory]).decode().strip()

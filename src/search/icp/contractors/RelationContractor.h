@@ -19,6 +19,8 @@ private:
     IcpConstraint constraint_;
     PolynomialKernel& kernel_;
     std::vector<std::string> vars_;
+    std::optional<std::vector<PolynomialKernel::MonomialTerm>> terms_;
+    std::vector<std::pair<VarId, mpz_class>> projections_;
 
     bool isDefinitelyViolated(const IntervalZ& polyInterval, Relation rel) const;
 };

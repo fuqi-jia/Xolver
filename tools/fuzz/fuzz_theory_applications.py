@@ -16,16 +16,38 @@ from isabelle_pa import Atom, parse
 
 
 def emit(node):
-    if isinstance(node, list):
-        return '(' + ' '.join(map(emit, node)) + ')'
-    if not isinstance(node, Atom):
-        raise ValueError('invalid model syntax')
-    if node.kind == 'string':
-        return '"' + node.text.replace('"', '""') + '"'
-    return '|' + node.text + '|' if node.kind == 'quoted' else node.text
+    # Benchmark assertions and exported models can exceed Python's recursion
+    # limit. Keep the shared replay serializer iterative, including nested lets.
+    pieces, pending = [], [(True, node)]
+    while pending:
+        is_node, item = pending.pop()
+        if not is_node:
+            pieces.append(item)  # punctuation inserted below
+        elif isinstance(item, list):
+            pieces.append('(')
+            pending.append((False, ')'))
+            for index in range(len(item) - 1, -1, -1):
+                pending.append((True, item[index]))
+                if index:
+                    pending.append((False, ' '))
+        elif isinstance(item, Atom):
+            if item.kind == 'string':
+                pieces.append('"' + item.text.replace('"', '""') + '"')
+            else:
+                pieces.append('|' + item.text + '|' if item.kind == 'quoted' else item.text)
+        else:
+            raise ValueError('invalid model syntax')
+    return ''.join(pieces)
 
 
 def replay(prefix, output):
+    def symbol_name(node):
+        if not isinstance(node, Atom) or node.kind == 'string':
+            raise ValueError('expected model symbol')
+        # |x| and x denote the same SMT-LIB symbol. Solvers may remove optional
+        # quoting when exporting a model; use semantic names for the join.
+        return node.text
+
     expressions = parse(output)
     if len(expressions) != 2 or emit(expressions[0]) != 'sat':
         raise ValueError('expected SAT followed by exactly one model')
@@ -39,7 +61,7 @@ def replay(prefix, output):
         if (not isinstance(binding, list) or len(binding) != 5
                 or emit(binding[0]) != 'define-fun'):
             raise ValueError('unsupported model binding')
-        name = emit(binding[1])
+        name = symbol_name(binding[1])
         if name in definitions:
             raise ValueError('duplicate model definition')
         definitions[name] = binding
@@ -47,7 +69,7 @@ def replay(prefix, output):
     for command in parse(prefix):
         op = emit(command[0])
         if op in ('declare-const', 'declare-fun'):
-            name = emit(command[1])
+            name = symbol_name(command[1])
             if name not in definitions:
                 raise ValueError('missing interpretation for ' + name)
             binding = definitions[name]

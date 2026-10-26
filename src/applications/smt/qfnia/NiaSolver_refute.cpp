@@ -423,7 +423,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageProductPositivity(TheoryLemmaSt
 }
 
 std::optional<TheoryCheckResult> NiaSolver::stageInterval(TheoryLemmaStorage&, TheoryEffort) {
-    // Interval evaluation (single-variable only, via common framework)
+    // Exact interval exclusion over all bounded polynomial coordinates.
     ReasonedBox box;
     for (const auto& c : normalized_) {
         for (const auto& var : kernel_->variables(c.poly)) {

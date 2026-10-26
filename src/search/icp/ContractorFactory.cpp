@@ -16,10 +16,7 @@ ContractorFactory::BuildResult ContractorFactory::build(
 
     for (const auto& constraint : constraints) {
         const auto vars = kernel.variables(constraint.poly);
-        // Both integer contractors currently support univariate polynomials.
-        if (vars.size() != 1) continue;
-
-        const auto degree = kernel.degree(constraint.poly, vars.front());
+        const auto degree = vars.size() == 1 ? kernel.degree(constraint.poly, vars.front()) : std::nullopt;
         if (degree && *degree == 2) {
             const auto coefficients = kernel.getIntegerCoefficients(constraint.poly, vars.front());
             if (coefficients && coefficients->size() == 3 && (*coefficients)[1] == 0 &&

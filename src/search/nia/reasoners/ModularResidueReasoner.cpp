@@ -626,20 +626,24 @@ NiaReasoningResult ModularResidueReasoner::run(
     //       enum UNSAT). The only large-residue UNSATs we still emit come from the
     //       Hensel path, which carries its OWN machine-checkable polynomial-identity
     //       certificate (verified below), not this enumeration.
-    // certBudget MATCHES the enum cap: the enum path only enumerates moduli
-    // with residue space <= currentEnumBudget(), so the independent cert can
-    // always re-verify exactly what the enum proved (no enum-proven-but-cert-
-    // OverBudget gap). Both reads come from the same scaled getter.
+    // Both searches use the same numerical cap, but the raw verifier can
+    // have more coordinates than the reduced search. Preflight its actual
+    // dimension before starting the reduced enumeration.
     std::vector<std::string> allVarsVec(allVars.begin(), allVars.end());
     std::sort(allVarsVec.begin(), allVarsVec.end());
     const mpz_class certBudget = currentEnumBudget();
-    auto bruteCertify = [&](const mpz_class& m) -> int {
+    auto certificateSize = [&](const mpz_class& m) -> std::optional<mpz_class> {
         mpz_class sz = 1;
         for (size_t i = 0; i < allVarsVec.size(); ++i) {
             sz *= m;
-            if (sz > certBudget) return 1;  // OverBudget
+            if (sz > certBudget) return std::nullopt;
         }
-        unsigned long total = allVarsVec.empty() ? 1 : static_cast<unsigned long>(sz.get_ui());
+        return sz;
+    };
+    auto bruteCertify = [&](const mpz_class& m) -> int {
+        const auto size = certificateSize(m);
+        if (!size) return 1;  // OverBudget
+        unsigned long total = static_cast<unsigned long>(size->get_ui());
         std::vector<mpz_class> odo(allVarsVec.size(), 0);
         for (unsigned long it = 0; it < total; ++it) {
             std::unordered_map<std::string, mpz_class> res;
@@ -673,6 +677,13 @@ NiaReasoningResult ModularResidueReasoner::run(
     // --- 7. Try each modulus ---
     const mpz_class enumBudgetForLoop = currentEnumBudget();
     for (const mpz_class& m : moduli) {
+        // Reduced-variable search cannot publish a refutation unless the
+        // independent raw-variable verifier can certify it. Its dimension and
+        // budget are already fixed, so an oversized certificate is known to
+        // be unusable before doing any enumeration. Do not spend the entire
+        // query in a search whose only possible conclusion must be discarded.
+        // The separately certified Newton/Hensel path below is unaffected.
+        if (!certificateSize(m)) continue;
         // enumeration size = m^|primary|
         mpz_class enumSize = 1;
         bool overBudget = false;

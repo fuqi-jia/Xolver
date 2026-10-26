@@ -63,7 +63,7 @@ Use `--since` with the last applied manifest so an abandoned experiment is
 actually restored on the server. A build directory or binary name alone is not
 sufficient source provenance.
 
-The final code qualification uses:
+The preceding zero-divisor qualification uses:
 
 - Source manifest `validation/z3-gap-source-r99.json` and its matching overlay.
 - Frozen executable `validation/symbolic-mod-zero-core-r99-20261026/xolver`.
@@ -71,10 +71,10 @@ The final code qualification uses:
 - Whole-source acceptance `validation/full-acceptance-r100-20261026/`.
 - Formal fixed-suite run `validation/z3-gap-candidate-r101-20261026/`.
 
-After main CI passes, `validation/current-main.json` records the delivered main
-revision, successful CI run, executable hash, source-manifest path and evidence
-locations. Check that record and its referenced hashes before continuing;
-source manifests can name the pre-commit working tree from which they were
+Continue from the delivered Git revision, successful GitHub main CI, source
+manifests, executable hashes and the existing acceptance records. An additional
+server checkpoint was explicitly cancelled and is not a delivery requirement.
+Source manifests can name the pre-commit working tree from which they were
 packaged. Documentation-only changes do not imply a new native executable.
 
 ## Reproduction and acceptance
@@ -132,9 +132,10 @@ is `bf87ce1df70603a05a7c950b93fb3987a7f9b17eda5591b77b2d32ff044a2efe`.
 R101 is the authoritative repetition for the final repair; inspect all eight
 lane reports, including `wrong_verdicts`, before using its results.
 
-Candidate coverage runs use matching immutable oracle rows from the baseline.
-They are not fresh paired Z3 timing comparisons. No overall claim of beating
-Z3 is justified. The protected `independent160-60s.json` manifest remains unused;
+Earlier candidate coverage runs use matching immutable oracle rows from the
+baseline. R109 below replaces those historical timings with a fresh paired run.
+No overall claim of beating Z3 is justified. The protected
+`independent160-60s.json` manifest remains unused;
 do not inspect its outcomes or tune on it before a separately declared holdout
 qualification.
 
@@ -147,6 +148,95 @@ Shared benchmark archives are immutable and referenced in place:
 
 The local shared archive is a partial release. Consult its README and manifest,
 verify source hashes and do not copy full archives into individual experiments.
+
+## Shared integer interval stage (R103–R112)
+
+The source base is main `ea240d2e`. The machine-readable
+[stage record](ARITHMETIC_INTERVAL_STAGE_20261026.json) contains the frozen binary
+hashes, input hashes, 160 report digests, gap inventory, sampled frames and
+confirmation evidence. All paths below are relative to
+`validation/arithmetic-r103/` on Panda1.
+
+The missing capability was multi-variable interval reasoning: both
+`IntervalEvaluator` and the ICP factory skipped these polynomials. On primary
+case 125, 44 of 49 diagnostic samples were in `NiaSolver::stageModular` while
+bounded nonlinear definitions could not propagate their result intervals.
+The implementation now evaluates monomial enclosures in the shared algebra
+layer and projects isolatable linear coordinates in `RelationContractor`.
+Cached polynomial structure avoids rescanning it on every contraction;
+reason unions retain all premises without accumulating duplicates. Integer
+rounding is restricted to integer owners; real owners retain sound forward
+enclosures. The modular search also skips enumerations whose mandatory raw
+certificate is known to exceed its verifier budget. That preflight alone did
+not add a solve; it does not bypass certificate checking.
+
+The fresh fixed160 comparison used the frozen R99 baseline, R109 candidate and
+the same frozen Z3, in rotating order on each leased physical CPU, all at
+60 seconds and 16 GiB. Model export and independent replay are separate untimed
+correctness checks with the same per-invocation limits.
+
+| Version | SAT | UNSAT | Unknown | Timeout | Independently verified | Verified PAR-2 total (s) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Xolver R99 | 44 | 34 | 3 | 79 | 75 | 10432.565 |
+| Xolver R109 | 44 | 35 | 3 | 78 | 76 | 10314.551 |
+| Z3, fresh round | 66 | 58 | 0 | 36 | 109 | 6343.908 |
+
+Exactly one verified solve was gained and none lost:
+`QF_NIA/calypto/problem-000123.cvc.1.smt2` (index 125) changed from a
+60-second timeout to UNSAT in 1.568 seconds; Z3 independently returned UNSAT
+in 0.065 seconds. No opposite verdict, process error or invalid replay was
+observed. Z3 returned 124 decisions this round; the earlier 125 is historical.
+Unconfirmed decisions receive the PAR-2 penalty. Both Xolver versions still
+lack a completed model replay for SAT indices 75 and 148 and an independent
+UNSAT confirmation for index 115. Z3 has 15 unconfirmed decisions under this
+strict protocol. Raw decisions must not be presented as verified coverage.
+
+R101's ten `unconfirmed` entries meant an unknown source status without an
+independent check, rather than ten established errors. All original hashes
+were checked: SAT indices 20, 36, 87, 112 and 126 passed Z3 and cvc5 model
+replay; UNSAT indices 18, 101 and 132 agreed with both oracles, and 41 with
+Z3 while cvc5 timed out. Index 115, `ps6.c_7.smt2`, remains unconfirmed after
+both independent 60-second checks. It is excluded from verified scores.
+
+Server acceptance passed 1,655 unit tests / 794,868 assertions, 892 regressions,
+architecture and harness checks, two explicit known-gap contracts, affine and
+linear differential checks, partial-function replay and QCP VC checks.
+The new deterministic interval differential suite passed 128 cases with
+64 SAT models replayed by both oracles. The first, overly strict harness
+required both oracles to decide the original input and failed on 13 cvc5
+5-second timeouts. R111 uses the established affine policy: at least one
+independent original verdict, plus both model replays for SAT. Those oracle
+limits remain recorded; neither native code nor input answers changed.
+
+Evidence identities and reproduction:
+
+- Native source: `source-r109.tar.json`, SHA-256
+  `9d526bb3ef649e2732436ff5792e8a4e4a0c27a848399fcbfb07a6ee33a7d64a`;
+  CLI: `core-r109/xolver`, SHA-256
+  `15058bb39aadf06f7cb0a992b395376c03a9adb19798d6714934908762b91fe9`.
+- Full acceptance: `acceptance-r110/` and `acceptance-r111/intervals/`;
+  tooling-only qualification: R112. Later overlays retain the R109 native
+  file hashes and frozen executables.
+- ExperimentOS experiment `xolver-arithmetic-fixed160-r109-20261026`;
+  its `fixed160-r109.yaml` invokes `tools/remote/compare_arithmetic_case.py`.
+  Reproduce scoring with
+  `python3 tools/remote/summarize_arithmetic_comparison.py --runs validation/arithmetic-r103/fixed160-r109 --output validation/arithmetic-r103/recomputed-summary.json`.
+
+Sixteen initial scheduler launches lacked CPU leases and were rejected before
+any solver invocation. Leased retries produced all 160 reports. Nine database
+statuses retained old failures after rerun, while their final exit files and
+metrics were successful; R112 checks the actual lease, exit and report evidence.
+Do not overwrite reports or edit the scheduler database to hide those attempts.
+
+The historical gap inventory contains 56 cases: LIA 15, LRA 11, NIA 18,
+NRA 12. Sampled next candidates include LIA simplex pivots (22, 92), LRA
+propagation (48), LRA pivots (63), eager bit-vector search (27), and NRA root
+merging/refinement (157). Other mechanism labels remain unprofiled. A sparse
+proportional-bound implication experiment added no solves on 16 representative
+gaps and was removed (`perf/ordered-threshold-chains`, `bcc757ec`). Do not
+confuse that negative experiment with the retained interval implementation.
+QCP checks here are pure-condition regressions; whole-program C verification
+and the independent protected sets remain outstanding.
 
 ## Closed experiments and practical regressions
 
@@ -190,7 +280,7 @@ The final source overlay restores the ordinary propagation storage.
 - General quantified PA/SL coverage and formal C++ end-to-end verification
   must not be inferred from these arithmetic certificates or passing CI.
 
-A future performance stage should begin from the checkpointed binary and
+A future performance stage should begin from the delivered binary and
 source, profile the remaining propagation/search costs, and evaluate each change
 with fixed inputs and identical budgets. Do not revive unsafe refutation
 shortcuts, assume zero-divisor identities, cap propagation output based on the
