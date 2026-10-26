@@ -97,7 +97,8 @@ public:
     bool assertUpper(int var, const BoundInfo& info, int level = 0);
 
     /** Backtrack to target decision level. */
-    void backtrackToLevel(int level);
+    void backtrackToLevel(int level,
+                          AssignmentPolicy policy = AssignmentPolicy::Reinitialize);
 
     // -------------------------------------------------------------------------
     // Solving

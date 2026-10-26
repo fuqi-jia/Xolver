@@ -130,14 +130,14 @@ void LraSolver::onBacktrack(int level) {
 
     if (level == 0) {
         // Full reset for modelCheck rebuild or SAT restart to level 0.
-        gs_.resetActiveBounds();
+        gs_.resetActiveBounds(GeneralSimplex::AssignmentPolicy::Preserve);
         theoryTrail_.clear();
         activeDisequalities_.clear();
         interfaceEqualities_.clear();
         interfaceDisequalities_.clear();
     } else {
         // Backtrack GeneralSimplex bounds by SAT decision level.
-        gs_.backtrackToLevel(level);
+        gs_.backtrackToLevel(level, GeneralSimplex::AssignmentPolicy::Preserve);
 
         // Synchronize theory trail.
         while (!theoryTrail_.empty() && theoryTrail_.back().level > level) {

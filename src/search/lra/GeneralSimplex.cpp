@@ -960,7 +960,7 @@ void GeneralSimplex::pop(AssignmentPolicy policy) {
     else if (!betaDirty_) rebuildViolationQueue();
 }
 
-void GeneralSimplex::backtrackToLevel(int level) {
+void GeneralSimplex::backtrackToLevel(int level, AssignmentPolicy policy) {
     noteBoundChange();
     while (!trail_.empty() && trail_.back().level > level) {
         const auto& e = trail_.back();
@@ -972,9 +972,13 @@ void GeneralSimplex::backtrackToLevel(int level) {
     }
     hasImmediateConflict_ = false;
     conflict_.clear();
-    betaDirty_ = true;
     violatedQueue_.clear();
     std::fill(inViolationQueue_.begin(), inViolationQueue_.end(), false);
+    // Withdrawing bounds does not change any tableau equation. A retained
+    // point may violate a remaining bound after an infeasible child, so rebuild
+    // the violation queue while preserving its exact row-consistent values.
+    if (policy == AssignmentPolicy::Reinitialize) betaDirty_ = true;
+    else if (!betaDirty_) rebuildViolationQueue();
 }
 
 // ============================================================================
