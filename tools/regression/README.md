@@ -51,3 +51,12 @@ independently constructed rational witness; UNSAT cases contain a Boolean
 contradiction between linear predicates. Both references also check the fully
 pinned exported SAT models. These checks complement the propagation unit tests
 that replay returned explanations using only their original premises.
+
+Algebraic SAT models using `root-of-with-interval` are replayed through the
+shared model serializer. An exact rational Sturm count must establish one real
+root in each open isolating interval. Fresh Real witnesses then retain the
+polynomial, interval, original model expressions and every original assertion;
+the replay uses `ALL` to express witness polynomials. Independent solvers check
+the resulting formula. Ambiguous intervals, constructor-name collisions and
+unsupported values remain unverified. This supplements truth evidence and does
+not count as a new timed solver decision.
