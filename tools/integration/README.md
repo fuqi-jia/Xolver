@@ -162,3 +162,5 @@ hash, cover every VC, and produce the exact candidate bodies present in the
 checked module before the program is labeled backend-qualified. It reports
 programs, VCs and external SMT queries separately. The stage evidence must
 authenticate the supplied controller record; this ledger does not replace Rocq.
+Missing backend reports leave external query counts unknown; they do not
+establish that no solver calls occurred.

@@ -44,6 +44,7 @@ class QcpProgramAuditTests(unittest.TestCase):
             self.assertTrue(report['program_verified'])
             self.assertFalse(report['backend_qualified'])
             self.assertEqual(report['verified_vcs'],2)
+            self.assertIsNone(report['external_backend_queries'])
             for change in [dict(returncode=1),dict(cpu_ids=''),dict(result=dict(status='failed',phase='done')),dict(invocation=dict(argv=['controller.py','dune-build']))]:
                 original=json.loads(r.read_text());updated=dict(original,**change);r.write_text(json.dumps(updated))
                 self.assertFalse(assess(g,[a,m],r, state_path=state)['program_verified']);r.write_text(json.dumps(original))
