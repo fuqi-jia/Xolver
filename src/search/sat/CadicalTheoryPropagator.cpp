@@ -274,42 +274,16 @@ int CadicalTheoryPropagator::cb_decide() {
             double pct = decisionLits_ ? 100.0 * static_cast<double>(theoryAtomDecisions_) / decisionLits_ : 0.0;
             std::cerr << "[DECIDE-PROBE] decisions=" << decideCalls_
                       << " steered=" << steeredDecisions_
-                      << " unassignedProbes=" << dbgUnassignedProbes_
-                      << " evalNull=" << dbgEvalNull_
                       << " observedDecisionLits=" << decisionLits_
                       << " theoryAtomDecisions=" << theoryAtomDecisions_
                       << " theoryAtomPct=" << pct << "%" << std::endl;
         }
     }
 
-    // Steer toward a theory-feasible region. Find an
-    // unassigned bound atom (bounded cursor scan, O(K) per call, zero alloc),
-    // evaluate it at the current theory model, and decide it at the satisfying
-    // phase. Heuristic only: a decision is backtrackable and the verdict stays
-    // theory-gated + model-validated, so a wrong guess only costs a backtrack.
-    if (!theoryAtomVarsBuilt_) {
-        theoryAtomVars_ = registry_.linearAtomVars();
-        theoryAtomVarsBuilt_ = true;
-        if (xolver::config::read<xolver::config::ReadKind::Period>("XOLVER_DECIDE_PROBE"))
-            std::cerr << "[DECIDE-STEER] theoryAtomVars=" << theoryAtomVars_.size() << std::endl;
-    }
-    const size_t n = theoryAtomVars_.size();
-    if (n > 0) {
-        const size_t kMaxProbe = n < 64 ? n : 64;
-        for (size_t p = 0; p < kMaxProbe; ++p) {
-            SatVar v = theoryAtomVars_[decideCursor_];
-            decideCursor_ = (decideCursor_ + 1) % n;
-            if (currentAssignment_.find(v) != currentAssignment_.end()) continue; // assigned
-            ++dbgUnassignedProbes_;
-            auto feasible = tm_.evalTheoryAtom(v);
-            if (!feasible) { ++dbgEvalNull_; continue; }
-            ++steeredDecisions_;
-            int lit = static_cast<int>(v);
-            return *feasible ? lit : -lit;  // decide at satisfying phase
-        }
-    }
-    // fall through: no steerable unassigned atom found → let CaDiCaL decide
-    // Behavior-neutral: decline, let CaDiCaL decide (probe dump done at top).
+    // Preserve the SAT core's conflict-driven variable order. A round-robin
+    // choice over theory atoms overrides clause activity and can repeatedly
+    // force irrelevant bounds; evaluating a stale theory point supplies no
+    // relevance information. Explicit user decisions above still take priority.
     return 0;
 }
 

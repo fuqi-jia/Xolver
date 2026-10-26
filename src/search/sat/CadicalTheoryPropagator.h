@@ -90,12 +90,8 @@ public:
     bool cb_check_found_model(const std::vector<int>& model) override;
     int cb_propagate() override;
 
-    // Behavior-neutral decision-steering PROBE (returns 0 = decline; CaDiCaL
-    // decides as normal, so OFF==ON). Counts decision requests and, via the
-    // first assignment after each new decision level, buckets decisions into
-    // theory bound-atoms vs boolean-structure literals. Periodic stderr dump
-    // gated by env XOLVER_DECIDE_PROBE. Measures whether decision-steering has
-    // any leverage before building a real cb_decide steering heuristic.
+    // Honor an explicit user decision; otherwise retain the SAT core's variable
+    // order. XOLVER_DECIDE_PROBE only records requests and observed decisions.
     int cb_decide() override;
 
     bool cb_has_external_clause(bool& is_forgettable) override;
@@ -181,12 +177,7 @@ private:
     long long theoryAtomDecisions_ = 0;// of those, over a linear bound atom
     bool expectDecisionLit_ = false;   // next notify_assignment's first lit is the decision
 
-    bool theoryAtomVarsBuilt_ = false;
-    std::vector<SatVar> theoryAtomVars_;
-    size_t decideCursor_ = 0;
     long long steeredDecisions_ = 0;
-    long long dbgUnassignedProbes_ = 0;
-    long long dbgEvalNull_ = 0;
 
     TheorySearchStats stats_;
 
