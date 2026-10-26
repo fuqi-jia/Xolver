@@ -69,6 +69,77 @@ struct Fixture {
 };
 }
 
+TEST_CASE("LiaSolver: partial checks leave integer search to full effort") {
+    for (int divisor : {2, 3}) for (int sign : {-1, 1}) {
+        CAPTURE(divisor);
+        CAPTURE(sign);
+        Fixture f;
+        LiaSolver solver;
+        solver.setRegistry(&f.registry);
+        const auto fractional = f.atom({{{"x", sign * divisor}}}, Relation::Geq, 1);
+        const auto endpoint = f.atom({{{"x", 1}}}, sign > 0 ? Relation::Leq : Relation::Geq, sign);
+        for (const auto& atom : {fractional, endpoint})
+            solver.assertLit(*f.registry.findBySatVar(atom.lit.var), true, 0, atom.lit);
+        const auto atoms = f.registry.numAtomVars();
+        const auto variables = f.allocator.next;
+        TheoryLemmaDatabase database;
+        for (int repeat = 0; repeat < 3; ++repeat) {
+            CHECK(solver.check(database, TheoryEffort::Standard).kind == TheoryCheckResult::Kind::Unknown);
+            CHECK(f.registry.numAtomVars() == atoms);
+            CHECK(f.allocator.next == variables);
+        }
+        REQUIRE(solver.check(database, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Consistent);
+        const auto model = solver.getModel();
+        REQUIRE(model);
+        const mpq_class value(model->assignments.at("x"));
+        CHECK(value.get_den() == 1);
+        CHECK(f.holds(fractional.lit, {{"x", value}}));
+        CHECK(f.holds(endpoint.lit, {{"x", value}}));
+        CHECK(f.registry.numAtomVars() == atoms);
+    }
+}
+
+TEST_CASE("IntegerReasoner: partial checks do not synthesize vocabulary") {
+    Fixture f;
+    const auto tighten = f.atom({{{"x", 2}}}, Relation::Leq, 3);
+    const auto impossible = f.atom({{{"y", 2}}}, Relation::Eq, 1);
+    const auto atoms = f.registry.numAtomVars();
+    const auto conflict = f.reasoner.run({tighten, impossible}, TheoryEffort::Standard);
+    REQUIRE(conflict);
+    CHECK(conflict->kind == TheoryCheckResult::Kind::Conflict);
+    REQUIRE(conflict->conflictOpt);
+    CHECK(conflict->conflictOpt->clause == std::vector<SatLit>{impossible.lit});
+    CHECK(f.registry.numAtomVars() == atoms);
+    // The default call retains its complete refinement behavior.
+    const auto lemma = f.reasoner.run({tighten});
+    REQUIRE(lemma);
+    REQUIRE(lemma->lemmaOpt);
+    for (int x = -4; x <= 4; ++x) CHECK(f.holds(*lemma->lemmaOpt, {{"x", x}}));
+}
+
+TEST_CASE("LiaSolver: primitive coupled rows reach a validated integer repair") {
+    Fixture f;
+    LiaSolver solver;
+    solver.setRegistry(&f.registry);
+    const auto equation = f.atom({{{"x", 2}, {"y", 1}}}, Relation::Eq, 1);
+    const auto xLower = f.atom({{{"x", 1}}}, Relation::Geq, 0);
+    const auto yLower = f.atom({{{"y", 1}}}, Relation::Geq, 0);
+    for (const auto& atom : {equation, xLower, yLower})
+        solver.assertLit(*f.registry.findBySatVar(atom.lit.var), true, 0, atom.lit);
+    const auto atoms = f.registry.numAtomVars();
+    TheoryLemmaDatabase database;
+    CHECK(solver.check(database, TheoryEffort::Standard).kind == TheoryCheckResult::Kind::Unknown);
+    CHECK(f.registry.numAtomVars() == atoms);
+    REQUIRE(solver.check(database, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Consistent);
+    const auto model = solver.getModel();
+    REQUIRE(model);
+    const Values values{{"x", mpq_class(model->assignments.at("x"))},
+                        {"y", mpq_class(model->assignments.at("y"))}};
+    for (const auto& [name, value] : values) { (void)name; CHECK(value.get_den() == 1); }
+    for (const auto& atom : {equation, xLower, yLower}) CHECK(f.holds(atom.lit, values));
+    CHECK(f.registry.numAtomVars() == atoms);
+}
+
 TEST_CASE("LraSolver: ordinary propagation preserves the registered vocabulary") {
     for (int variant = 0; variant < 4; ++variant) {
         CAPTURE(variant);
@@ -361,10 +432,23 @@ TEST_CASE("IntegerReasoner soundness: LIA core preserves a rational-bound counte
         solver.assertLit(*f.registry.findBySatVar(atom.lit.var), true, 0, atom.lit);
     }
     TheoryLemmaDatabase lemmas;
-    const auto result = solver.check(lemmas, TheoryEffort::Standard);
-    REQUIRE(result.kind == TheoryCheckResult::Kind::Lemma);
-    REQUIRE(result.lemmaOpt.has_value());
-    CHECK(f.holds(*result.lemmaOpt, witness));
+    const auto atoms = f.registry.numAtomVars();
+    CHECK(solver.check(lemmas, TheoryEffort::Standard).kind == TheoryCheckResult::Kind::Unknown);
+    CHECK(f.registry.numAtomVars() == atoms);
+    REQUIRE(solver.check(lemmas, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Consistent);
+    const auto model = solver.getModel();
+    REQUIRE(model);
+    const Values values{{"x", mpq_class(model->assignments.at("x"))},
+                        {"y", mpq_class(model->assignments.at("y"))}};
+    CHECK(f.holds(a.lit, values));
+    CHECK(f.holds(b.lit, values));
+    // Pin the original countermodel too: validating a different integer point
+    // alone would not catch a bound rule that accidentally excluded x=1.
+    for (const auto& name : {"x", "y"}) {
+        const auto pin = f.atom(LinearFormKey{{{name, 1}}}, Relation::Eq, 1);
+        solver.assertLit(*f.registry.findBySatVar(pin.lit.var), true, 0, pin.lit);
+    }
+    REQUIRE(solver.check(lemmas, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Consistent);
 }
 
 TEST_CASE("IntegerReasoner soundness: shared integer atom normalization preserves witnesses") {

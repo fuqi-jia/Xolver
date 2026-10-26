@@ -64,7 +64,7 @@ std::optional<NormalizedConstraint> IntegerReasoner::normalize(
 // ============================================================================
 
 std::optional<TheoryCheckResult> IntegerReasoner::run(
-    const std::vector<ActiveLinearAtom>& activeAtoms) {
+    const std::vector<ActiveLinearAtom>& activeAtoms, TheoryEffort effort) {
 
     for (const auto& atom : activeAtoms) {
         auto nc = normalize(atom.lhs, atom.rhs, atom.rel, atom.value);
@@ -75,6 +75,7 @@ std::optional<TheoryCheckResult> IntegerReasoner::run(
             return TheoryCheckResult::mkConflict(*conflict);
         }
 
+        if (effort != TheoryEffort::Full) continue;
         if (auto lemma = checkGcdInequalityTightening(*nc, atom.lit)) {
             return TheoryCheckResult::mkLemma(*lemma);
         }

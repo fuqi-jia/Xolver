@@ -29,7 +29,9 @@ public:
     void setRegistry(TheoryAtomRegistry* r) { registry_ = r; }
 
     /**
-     * Run all cheap integer reasoning rules on active atoms.
+     * Run cheap integer reasoning rules on active atoms. Standard effort
+     * checks conflicts without synthesizing atoms for uninstalled lemmas.
+     * The default Full effort retains the complete refinement behavior.
      *
      * Returns:
      *   - Conflict if GCD equality conflict detected
@@ -37,7 +39,8 @@ public:
      *   - nullopt if no cheap reasoning applies
      */
     std::optional<TheoryCheckResult> run(
-        const std::vector<ActiveLinearAtom>& activeAtoms);
+        const std::vector<ActiveLinearAtom>& activeAtoms,
+        TheoryEffort effort = TheoryEffort::Full);
 
     // Full-effort interval combinations. The conflict cites the active bounds
     // whose integer linear combination contains no admissible multiple.

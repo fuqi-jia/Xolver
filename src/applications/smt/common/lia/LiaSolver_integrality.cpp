@@ -158,6 +158,12 @@ TheoryCheckResult LiaSolver::checkIntegrality(TheoryLemmaStorage& lemmaDb, Theor
     }
 
     if (bestVar != -1) {
+        // Standard effort checks a partial assignment. Its branch lemmas are
+        // not installed by the SAT callback, but registering their atoms would
+        // still extend the observed vocabulary and postpone model checking.
+        // Let Full effort try the validated integer repair before adding cuts
+        // or branch atoms. LP conflicts remain available at either effort.
+        if (effort != TheoryEffort::Full) return TheoryCheckResult::unknown();
         // Before splitting, try to round the LRA relaxation
         // to a nearby integer point and exact-validate it. Only at Full effort
         // (a real, complete relaxation model is in hand). A success short-cuts
