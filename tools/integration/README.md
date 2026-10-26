@@ -35,8 +35,9 @@ are exported. Proving such a condition from the explicit pure hypotheses is a
 sufficient pure subcondition. An unsupported hypothesis rejects that export;
 it is not silently discarded. Residual heap obligations remain recorded.
 A satisfiable pure refutation is a counterexample to this sufficient condition,
-not necessarily to the heap entailment or C program. No result from this bridge
-is counted as a complete QCP/Rocq proof or installed as an internal QCP callback.
+not necessarily to the heap entailment or C program. The backend below uses
+these decisions to prepare candidates. Complete proof qualification requires
+canonical Rocq checks and the witness audit; native QCP callbacks remain common.
 
 Arithmetic has explicit contracts:
 
@@ -96,3 +97,71 @@ seeded hash order receive three repetitions. The remaining queries receive one.
 Use the [standard SMT comparison harness](../regression/README.md) for balanced
 measurements. Report export coverage alongside solver coverage: deciding every
 exported pure condition does not decide the unsupported spatial obligations.
+
+
+`qcp_backend.py` provides an explicit discharge interface for **pending assigned
+manual witnesses**. The QCP group owner supplies the original generated goal
+file, its authorized manual copy, and exact witness names. Choose
+`--backend xolver --binary /path/to/frozen/xolver` or
+`--backend z3 --binary /path/to/frozen/z3`; use the same `--timeout 60` and
+inputs for both. Execute through ExperimentOS on Panda1 with one physical CPU.
+The adapter rejects an absent or mismatched lease, limits each invocation to
+16 GiB, removes solver tuning controls, and records executable/input/output
+hashes and every query result.
+
+For example, within a proving group's assigned write boundary:
+
+```bash
+python3 tools/integration/qcp_backend.py --goals /path/to/case_goal.v \
+  --manual /path/to/group/case_proof_manual.v --assigned exact_split_goal \
+  --backend xolver --binary /path/to/frozen/xolver --timeout 60 \
+  --output /path/to/group/backend-xolver
+```
+
+A supported goal produces a proof candidate only when every exported
+sufficient condition returns UNSAT. The common reconstruction attempts prove
+the original named Rocq statement, including its spatial conclusion. They
+introduce no SMT axiom. The owner must incorporate/check candidates through
+the canonical controller group-development and group acceptance commands;
+parent verification and final-check remain required. An unsuccessful
+reconstruction stays unproved. Already completed witnesses are excluded, and
+SAT on a projection never labels the C program invalid.
+
+This interface operates after QCP VC generation; QCP's opaque internal SMT
+solver remains common to both backends. Reports explicitly distinguish external
+backend invocations, unchecked proof candidates, kernel-checked VCs and verified
+programs. The adapter alone reports zero verified VCs/programs. Full-program
+comparison also needs the controller's final-check evidence and common manual
+support for unsupported obligations.
+
+
+The pinned QCP generator writes `Admitted` even to its auto-classified proof
+module. Such a module is not an independently checked VC proof.
+`prepare_qcp_controller.py --qcp /path/to/pinned/QCP --output /path/to/controller`
+creates an isolated, source-hashed controller copy. It promotes each admitted
+auto witness into manual obligations before publication and during final
+independent replay. Native QCP and its original checkout stay unchanged.
+Unsupported admitted syntax, duplicate witnesses, unchecked auto assumptions,
+and completed auto proofs depending on moved admissions fail explicitly.
+Invoke the copied controller with the original checkout as `--main-root`, using
+the normal owner/acceptance workflow. Both compared backends must use the same
+controller manifest. Never infer full verification from a controller run that
+still imports admitted case witnesses.
+
+Proof candidates follow `LLM_pre_process` with the common `lia`/`nia` closer.
+The group owner must follow its plan and role policy; aggressive parents use
+owner-controlled `Goal_apply` after their split proofs. A failed arithmetic
+closer requires ordinary checked reconstruction facts, not an SMT axiom.
+
+`audit_qcp_program.py` keeps program counts separate from raw query decisions.
+Supply the canonical controller state, its successful leased `final-check`
+record, the original goal, and both proof modules. Every required field in
+`Module Type VC_Correct` must have a completed witness of the original type;
+admitted case proofs are rejected even when the controller reports `done`.
+Optional backend reports must share one frozen identity and the original goal
+hash, cover every VC, and produce the exact candidate bodies present in the
+checked module before the program is labeled backend-qualified. It reports
+programs, VCs and external SMT queries separately. The stage evidence must
+authenticate the supplied controller record; this ledger does not replace Rocq.
+Missing backend reports leave external query counts unknown; they do not
+establish that no solver calls occurred.
