@@ -474,6 +474,9 @@ without another server checkpoint.
 
 Evidence: [stage record](ARITHMETIC_AFFINE_LATTICE_STAGE_20261027.json).
 Delivery PR: [#47](https://github.com/fuqi-jia/Xolver/pull/47).
+Merged main: `45a69aaa7242b95f8d4d6a497567c580cf573de4`; both jobs in
+[main CI 40401271301](https://github.com/fuqi-jia/Xolver/actions/runs/40401271301)
+passed.
 Preceding [#46](https://github.com/fuqi-jia/Xolver/pull/46) merged as
 `db327e7e021d551a22745308834326e65edf0942`; both jobs in
 [main CI 40389912116](https://github.com/fuqi-jia/Xolver/actions/runs/40389912116)

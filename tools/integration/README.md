@@ -151,3 +151,14 @@ Proof candidates follow `LLM_pre_process` with the common `lia`/`nia` closer.
 The group owner must follow its plan and role policy; aggressive parents use
 owner-controlled `Goal_apply` after their split proofs. A failed arithmetic
 closer requires ordinary checked reconstruction facts, not an SMT axiom.
+
+`audit_qcp_program.py` keeps program counts separate from raw query decisions.
+Supply the canonical controller state, its successful leased `final-check`
+record, the original goal, and both proof modules. Every required field in
+`Module Type VC_Correct` must have a completed witness of the original type;
+admitted case proofs are rejected even when the controller reports `done`.
+Optional backend reports must share one frozen identity and the original goal
+hash, cover every VC, and produce the exact candidate bodies present in the
+checked module before the program is labeled backend-qualified. It reports
+programs, VCs and external SMT queries separately. The stage evidence must
+authenticate the supplied controller record; this ledger does not replace Rocq.
