@@ -506,12 +506,12 @@ TEST_CASE("LIA: projected disequality guards survive incremental scope changes")
     for (int repeat = 0; repeat < 3; ++repeat) {
         solver.push();
         solver.assertFormula(op(Kind::Eq, {difference, solver.mkInt(0)}));
-        REQUIRE(solver.checkSat() == Result::Unsat);
+        REQUIRE(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Unsat));
         solver.pop();
         solver.push();
         solver.assertFormula(op(Kind::Eq, {difference, solver.mkInt(1)}));
-        REQUIRE(solver.checkSat() == Result::Sat);
+        REQUIRE(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Sat));
         solver.pop();
-        REQUIRE(solver.checkSat() == Result::Sat);
+        REQUIRE(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Sat));
     }
 }
