@@ -85,10 +85,12 @@ struct FactoredChoice {
     mpq_class scale = 1;
 };
 
-std::optional<FactoredChoice> factorArithmeticChoice(
+std::optional<FactoredChoice> factorIntegerChoice(
     const NativeTerms& ir, SortId sort, ExprId thenTerm, ExprId elseTerm) {
     const auto kind = ir.sortKind(sort);
-    if (kind != SortKind::Int && kind != SortKind::Real) return std::nullopt;
+    // An integer residual witness exposes divisibility regardless of which
+    // theory consumes the surrounding term. Require that discrete domain.
+    if (kind != SortKind::Int) return std::nullopt;
     auto arithmetic = [](Kind operation) {
         return operation == Kind::Add || operation == Kind::Sub ||
                operation == Kind::Neg || operation == Kind::Mul;
@@ -98,7 +100,6 @@ std::optional<FactoredChoice> factorArithmeticChoice(
         // Distinct opaque atoms have no common coefficient, and a residual
         // atom with coefficient one has no integer factor. Avoid allocating
         // affine maps for these frequent variable-selection chains.
-        if (kind == SortKind::Real) return std::nullopt;
         const auto left = numericLiteral(thenNode), right = numericLiteral(elseNode);
         if (!left || !right || abs(*left - *right) <= 1) return std::nullopt;
     }
@@ -121,7 +122,7 @@ std::optional<FactoredChoice> factorArithmeticChoice(
                 it = result.thenBranch.terms.erase(it);
             } else ++it;
         }
-        if (kind == SortKind::Int) {
+        {
             mpz_class divisor = 0;
             auto include = [&](const mpq_class& coefficient) {
                 budget.tick();
@@ -267,7 +268,7 @@ ExprId IteLowerer::lowerTermIte(ExprId iteExpr, SortId S) {
     // ite(c, common + g*t, common + g*e) = common + g*ite(c,t,e).
     // For Int, the residual choice is Int too, exposing its lattice before
     // Boolean branching. The guarded residual equalities remain exact.
-    auto factor = factorArithmeticChoice(ir_, S, tLower, eLower);
+    auto factor = factorIntegerChoice(ir_, S, tLower, eLower);
     if (factor) {
         tLower = buildAffineBranch(ir_, S, factor->thenBranch);
         eLower = buildAffineBranch(ir_, S, factor->elseBranch);
