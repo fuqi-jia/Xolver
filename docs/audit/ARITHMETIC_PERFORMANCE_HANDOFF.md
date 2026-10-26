@@ -34,6 +34,9 @@ The delivered arithmetic implementation includes:
 - Constant integer divisions expose shared remainder lattice gaps before
   branching. Relations preserve dividend identity, assertion scope and signed
   Euclidean remainders, without adding integer variables.
+- Shared, budgeted integer-form projection derives affine lattice steps from
+  current equalities. Disequality splits retain every equality premise, including
+  theory-combination equalities; no projected state survives a context change.
 
 The zero-divisor regressions cover `(mod d d) = 1`, `(mod 0 d) = 1`, and
 `(mod (mod 7 d) d) != (mod 7 d)` with `d` chosen from `{0,1}`. All are SAT:
@@ -527,6 +530,64 @@ separate branch, but pure UNSAT candidates are not full proofs. Full comparison
 requires independently reconstructed original VCs, audited proof assumptions
 and complete program checks for each frozen backend. Do not count opaque QCP
 internal calls as external comparison queries or assume they are zero.
+
+## Audited QCP backend qualification (R150, 2026-10-27)
+
+Evidence: [backend stage record](QCP_BACKEND_QUALIFICATION_STAGE_20261027.json).
+Implementation branch: `feat/qcp-vc-backend`; native source manifest
+`source-r150.tar.json`. The selected native CLI remains frozen R144 and native
+production source matches qualified R146. Python integration changes passed
+**21 protocol tests**, architecture checks and three real program-record audits.
+Both protected evaluations remain unused.
+
+The pinned public QCP CLI exposes no backend-selection option. The implemented
+interface runs after VC generation: `prepare_qcp_controller.py` freezes a separate
+controller copy that promotes every admitted auto witness into manual proof
+obligations during both generation and final replay. The pinned native QCP
+checkout, C body and specification stay byte-identical. Its internal SMT remains
+a common opaque frontend component; its query count is unknown.
+
+`qcp_backend.py` dispatches assigned typed arithmetic refutations to either
+frozen Xolver or Z3 under one leased physical CPU, 60 seconds and 16 GiB per
+query. Every UNSAT result prepares a proof candidate. The identical common
+`LLM_pre_process ltac:(first [lia | nia])` bodies passed every original whole VC
+unchanged with both backends. Canonical group acceptance, parent checking,
+final publication and independent final-check all passed. The final auto and
+manual modules contain zero `Admitted`; each manual contains ten `Qed` witnesses.
+
+| Backend | Verified C programs | Whole VCs | Actual external SMT queries |
+| --- | ---: | ---: | ---: |
+| Frozen Xolver R144 | 1 | 10 | 14 |
+| Frozen Z3 5.3.2 | 1 | 10 | 14 |
+
+These are two qualifications of **one unique development program**,
+`branch_destruct.c`, with identical source and goal hashes. All 45 selected
+native workflow runs held single-physical-core leases without overlap. This
+interactive qualification is not a fresh automated same-budget program-suite
+performance comparison; queue/owner elapsed and repeated proof-stage compilation
+must not be treated as such a result. Neither an end-to-end speed lead nor
+superior program coverage has been established.
+
+`audit_qcp_program.py` checks the exact named VC interface, completed witnesses,
+absence of admitted case assumptions, matching canonical state/final-check and
+frozen backend candidates. It checks coverage against the supplied canonical native records; provenance
+is authenticated separately by the stage's EOS audit. Missing backend reports keep query
+counts unknown. Real negative checks reject the old ten-admission tutorial
+record and the GCD record that still admits six auto VCs, even though their
+controllers reached `done`. GCD's three manually proved top-level VCs and its
+two auxiliary SMT calls remain component evidence, with zero verified programs.
+
+Closed arithmetic prototype R149 preferred stronger all-integer GMI cuts, with
+the existing size/count budgets and a pure-cut fallback. It passed **1,668 unit
+tests / 798,791 assertions**, but the 15-case paired check verified 11 with each
+version, gained nothing and worsened PAR-2 by 4.394 seconds. Keep it unmerged on
+`perf/strong-integer-cuts` (`e4d50968`); no full160 rerun is justified for that
+idea. Source R150 restores the delivered native source and retains frozen R144.
+
+The remaining performance objectives still require further general solver
+improvements and a frozen automated program-suite comparison. Preserve the
+existing Git/CI/source/frozen-hash evidence route; an extra server archive is
+not a delivery prerequisite.
 
 ## Closed experiments and practical regressions
 

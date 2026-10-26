@@ -35,8 +35,9 @@ are exported. Proving such a condition from the explicit pure hypotheses is a
 sufficient pure subcondition. An unsupported hypothesis rejects that export;
 it is not silently discarded. Residual heap obligations remain recorded.
 A satisfiable pure refutation is a counterexample to this sufficient condition,
-not necessarily to the heap entailment or C program. No result from this bridge
-is counted as a complete QCP/Rocq proof or installed as an internal QCP callback.
+not necessarily to the heap entailment or C program. The backend below uses
+these decisions to prepare candidates. Complete proof qualification requires
+canonical Rocq checks and the witness audit; native QCP callbacks remain common.
 
 Arithmetic has explicit contracts:
 
