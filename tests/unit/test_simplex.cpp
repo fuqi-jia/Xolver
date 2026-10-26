@@ -10,6 +10,40 @@
 
 using namespace xolver;
 
+TEST_CASE("GeneralSimplex: dense coupled rational rows retain explanations across branches") {
+    for (auto policy : {GeneralSimplex::AssignmentPolicy::Reinitialize,
+                        GeneralSimplex::AssignmentPolicy::Preserve}) {
+        GeneralSimplex simplex;
+        const int x = simplex.addVar("x"), y = simplex.addVar("y");
+        std::vector<int> definitions;
+        for (int i = 0; i < 24; ++i) {
+            const int z = simplex.addVar("z" + std::to_string(i));
+            definitions.push_back(simplex.addConstraint({{x, mpq_class(1)},
+                {z, mpq_class(-1)}}, mpq_class(i)));
+        }
+        const int equation = simplex.addConstraint({{x, mpq_class(3)},
+            {y, mpq_class(-1)}}, mpq_class(7));
+        REQUIRE(simplex.assertLower(x, BoundInfo(BoundValue(DeltaRational(0)), SatLit::positive(1)), 0));
+        REQUIRE(simplex.assertUpper(x, BoundInfo(BoundValue(DeltaRational(1)), SatLit::positive(2)), 0));
+        REQUIRE(simplex.assertLower(equation, BoundInfo(BoundValue(DeltaRational(0)), SatLit::positive(3)), 0));
+        REQUIRE(simplex.assertUpper(equation, BoundInfo(BoundValue(DeltaRational(0)), SatLit::positive(3)), 0));
+        REQUIRE(simplex.check() == GeneralSimplex::Result::Sat);
+        CHECK(mpq_class(3) * simplex.value(x) - simplex.value(y) == DeltaRational(7));
+        simplex.assertLower(y, BoundInfo(BoundValue(DeltaRational(-3)), SatLit::positive(4)), 1);
+        REQUIRE(simplex.check() == GeneralSimplex::Result::Unsat);
+        REQUIRE_FALSE(simplex.getConflict().empty());
+        for (const auto& premise : simplex.getConflict()) CHECK(premise.reason.var <= 4);
+        simplex.backtrackToLevel(0, policy);
+        REQUIRE(simplex.check() == GeneralSimplex::Result::Sat);
+        const DeltaRational half(mpq_class(1, 2));
+        REQUIRE(simplex.assertLower(x, BoundInfo(BoundValue(half), SatLit::positive(5)), 1));
+        REQUIRE(simplex.assertUpper(x, BoundInfo(BoundValue(half), SatLit::positive(5)), 1));
+        REQUIRE(simplex.check() == GeneralSimplex::Result::Sat);
+        CHECK(simplex.value(y) == DeltaRational(mpq_class(-11, 2)));
+        CHECK(simplex.debugCheckInvariants());
+    }
+}
+
 TEST_CASE("GeneralSimplex: backtracking assignment policy preserves its explicit contract") {
     for (auto policy : {GeneralSimplex::AssignmentPolicy::Reinitialize,
                         GeneralSimplex::AssignmentPolicy::Preserve}) {
