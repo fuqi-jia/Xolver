@@ -488,3 +488,30 @@ TEST_CASE("LIA: withdrawing multivariable sources preserves disequalities and un
     REQUIRE(solver.proveFixedValueByName("suffix-z").has_value());
     CHECK(solver.proveFixedValueByName("suffix-z")->first == 6);
 }
+
+TEST_CASE("LIA: projected disequality guards survive incremental scope changes") {
+    Solver solver;
+    solver.setLogic("QF_LIA");
+    auto op = [&](Kind kind, std::vector<Term> terms) {
+        return solver.mkOp(static_cast<uint32_t>(kind), std::move(terms));
+    };
+    const auto x = solver.mkConst(solver.intSort(), "projection-x");
+    const auto y = solver.mkConst(solver.intSort(), "projection-y");
+    const auto z = solver.mkConst(solver.intSort(), "projection-z");
+    const auto difference = op(Kind::Sub, {op(Kind::Mul, {solver.mkInt(2), x}), y});
+    const auto form = op(Kind::Add, {difference, op(Kind::Mul, {solver.mkInt(512), z})});
+    solver.assertFormula(op(Kind::Gt, {form, solver.mkInt(-512)}));
+    solver.assertFormula(op(Kind::Lt, {form, solver.mkInt(512)}));
+    solver.assertFormula(op(Kind::Not, {op(Kind::Eq, {form, solver.mkInt(0)})}));
+    for (int repeat = 0; repeat < 3; ++repeat) {
+        solver.push();
+        solver.assertFormula(op(Kind::Eq, {difference, solver.mkInt(0)}));
+        REQUIRE(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Unsat));
+        solver.pop();
+        solver.push();
+        solver.assertFormula(op(Kind::Eq, {difference, solver.mkInt(1)}));
+        REQUIRE(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Sat));
+        solver.pop();
+        REQUIRE(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Sat));
+    }
+}
