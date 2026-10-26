@@ -31,6 +31,9 @@ The delivered arithmetic implementation includes:
 - Integer refinement respects check effort. Standard checks retain LP/GCD
   conflicts without registering atoms for uninstalled branch lemmas. Full
   checks attempt validated integer repair before cuts and splits.
+- Constant integer divisions expose shared remainder lattice gaps before
+  branching. Relations preserve dividend identity, assertion scope and signed
+  Euclidean remainders, without adding integer variables.
 
 The zero-divisor regressions cover `(mod d d) = 1`, `(mod 0 d) = 1`, and
 `(mod (mod 7 d) d) != (mod 7 d)` with `d` chosen from `{0,1}`. All are SAT:
@@ -330,6 +333,9 @@ proof, timing and controller evidence is indexed in the next stage record.
 
 Evidence: [stage record](ARITHMETIC_INTEGER_EFFORT_STAGE_20261027.json).
 Delivery PR: [#45](https://github.com/fuqi-jia/Xolver/pull/45).
+Merged main: `37c71d78585465a7389255c23d3269a2c043d88a`;
+[main CI 40377408280](https://github.com/fuqi-jia/Xolver/actions/runs/40377408280)
+passed both jobs.
 
 Standard LIA checks previously registered branch and normalization atoms even
 though the SAT callback discards their branch lemmas. Those observed variables
@@ -388,6 +394,78 @@ experiment was not repeated.
 This does **not** exceed Z3, and confirmation limits for 75/115/148 remain
 explicit. Neither protected set was read or run. Require PR CI and main CI on
 the merge commit for delivery; an extra server checkpoint is not required.
+
+## Shared remainder lattice cuts (R140/R141, 2026-10-27)
+
+Evidence: [stage record](ARITHMETIC_REMAINDER_LATTICE_STAGE_20261027.json).
+Delivery PR: [#46](https://github.com/fuqi-jia/Xolver/pull/46).
+The preceding main is `37c71d78`; its frozen CLI is R132.
+
+Independent quotient/remainder encodings hid a useful lattice fact from LIA.
+For one dividend and positive magnitudes `m | n`, `r_n-r_m` is a nonnegative
+multiple of `m`, at most `n-m`. `IntDivModLowerer` now emits the first gap as
+`r_n = r_m OR r_n >= r_m+m`, plus the upper bound. Each remainder connects to
+its nearest available multiple, keeping generated syntax linear in the number
+of divisions. This adds no integer variables or feature gates. Zero divisors
+are excluded; negative divisors use their absolute magnitude. Different
+dividends and assertion scopes remain independent. Existing Solver semantics
+and the distinct LRA/LIA backtracking policies are unchanged.
+
+Primary index 26, `soft_float_3a.c.cil.c_4.smt2`, changes from timeout to
+independently confirmed UNSAT in **0.0466 seconds** formally and **0.0458
+seconds** in the targeted round. In a separate diagnostic run, the old version
+made 2,043 pipeline calls and 2,732 pivots before its 20-second external cap;
+the candidate used 31 Standard checks, ten Full checks and one pivot. Generated
+assertions change from 23 to 35. These diagnostic timings do not replace the
+formal paired measurements.
+
+R141 passes **1,662 unit tests / 797,155 assertions**, including exact signed
+witnesses, arbitrary-precision constants, incomparable moduli and scope pop.
+All **36** R142 acceptance tasks pass, including **897 regressions**. Two new
+SAT fixtures pass both Z3 and cvc5 model replay. All three new UNSAT fixtures
+are independently confirmed by Z3; cvc5 confirms the two LIA fixtures and
+times out at 60 seconds on the nonlinear fixture. Its unresolved result is
+retained, not treated as an additional confirmation.
+
+Fresh 160-case comparison, 60 seconds / one physical CPU / 16 GiB:
+
+| Version | Raw decisions | Independently verified | Verified PAR-2 |
+| --- | ---: | ---: | ---: |
+| Frozen preceding main R132 | 75 | 72 | 10916.801 |
+| Candidate R140 | 78 | 75 | 10604.840 |
+| Same-round frozen Z3 | 121 | 106 | 6942.345 |
+
+Gains are **7, 26, 64**; there are no lost verified results, opposite verdicts,
+solver errors, memory-limit outcomes or invalid exported models. The net gain
+is three verified decisions and 311.961 seconds of verified PAR-2. Only 26 is
+a reproduced new algorithmic solve. The unaffected paths at 7 (near budget)
+and 64 (pure NRA) changed search/timing outcomes; do not attribute new theory
+coverage to those changes. Candidate unknowns change from three to two.
+Unconfirmed 75/115/148 remain excluded.
+
+The CLI is `core-r140/xolver`, SHA-256
+`747ce2fe4ae6b9c4276f366189063730988a8fd6c2981249f3af95bf3cef0a9a`.
+The tested source manifest is `source-r141.tar.json`, SHA-256
+`da8a7971eb51f53c4803f8b299ba14d8cd74b885294a92554f545c8ce2cb676c`.
+Its native code is identical to R140, with added tests. The 197 delivery runs
+use 42 distinct physical cores, with no overlapping leases; all 160 actual
+comparison CPUs match their leases. `H_actual` affinity is sampled before
+`taskset`, so the audit also checks every generated launch script. One targeted
+job without a lease stopped before execution and was retried with a lease.
+
+Closed prototypes: shared polynomial bulk projection R137 verified 5/15 with
+both versions, with only 0.276 seconds of PAR-2 change; the R139 auxiliary
+integer representation verified 4/12 with both versions and solved no new
+case. Neither is selected. The memory-pool experiment was not repeated.
+
+The existing 313 QCP conditions still agree across CLI, SV and Z3 (291 UNSAT,
+22 SAT). The SV executable remains byte-identical to preceding main; this is
+not an end-to-end program-backend improvement. The prior pinned QCP proof
+qualification remains one C program / ten VCs. The public pinned CLI exposes
+no SMT replacement option; the internal backend interface/source location has
+been requested. Both protected evaluations remain unused. This stage does
+not exceed Z3; require final-head PR CI and merge-commit main CI for delivery,
+without another server checkpoint.
 
 ## Closed experiments and practical regressions
 
