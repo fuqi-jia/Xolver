@@ -8,6 +8,7 @@
 #include "search/arith/Reasoner.h"
 #include "search/linear/SimplexDiseqSplitter.h"
 #include "search/linear/IntegerAffineModel.h"
+#include "search/linear/IntegerAffineProjection.h"
 #include "algebra/linear/LinearConstraintNormalizer.h"
 #include "search/lia/GomoryCut.h"
 #include "applications/smt/common/lia/LiaSolverDetail.h"  // isIntegerLinearForm / roundNearest (shared across split TUs)
@@ -71,10 +72,21 @@ TheoryCheckResult LiaSolver::handleDisequalities(TheoryLemmaStorage& lemmaDb) {
             }
 
             mpz_class c = d.rhs.get_num();
+            mpz_class offset = 0;
+            std::vector<SatLit> equalityReasons;
+            WorkBudget projectionBudget(8192);
+            if (auto projection = projectIntegerAffineForm(d.lhs, activeAtoms_, projectionBudget)) {
+                g = projection->step;
+                offset = projection->offset;
+                equalityReasons = std::move(projection->reasons);
+            }
+            const mpz_class residual = c - offset;
 
             if (g == 0) {
-                if (c == 0) {
-                    auto tc = TheoryConflict{{d.lit}};
+                if (residual == 0) {
+                    TheoryConflict tc;
+                    tc.clause = equalityReasons;
+                    tc.clause.push_back(d.lit);
                     bool ok = normalizeTheoryClause(tc.clause);
                     assert(ok && "complementary literal in gcd conflict");
                     (void)ok;
@@ -83,7 +95,7 @@ TheoryCheckResult LiaSolver::handleDisequalities(TheoryLemmaStorage& lemmaDb) {
                 return TheoryCheckResult::consistent();
             }
 
-            if (c % g != 0) {
+            if (residual % g != 0) {
                 return TheoryCheckResult::consistent();
             }
 
@@ -96,8 +108,9 @@ TheoryCheckResult LiaSolver::handleDisequalities(TheoryLemmaStorage& lemmaDb) {
             auto lit2 = registry_->getOrCreateLinearBoundAtom(
                 d.lhs, Relation::Geq, geRhs, TheoryId::LIA);
 
-            return TheoryCheckResult::mkLemma(
-                TheoryLemma{{d.lit.negated(), lit1, lit2}});
+            TheoryLemma lemma{{d.lit.negated(), lit1, lit2}};
+            for (const auto reason : equalityReasons) lemma.lits.push_back(reason.negated());
+            return TheoryCheckResult::mkLemma(std::move(lemma));
         });
 }
 
