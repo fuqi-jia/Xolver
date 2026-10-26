@@ -74,8 +74,31 @@ TheoryCheckResult LiaSolver::handleDisequalities(TheoryLemmaStorage& lemmaDb) {
             mpz_class c = d.rhs.get_num();
             mpz_class offset = 0;
             std::vector<SatLit> equalityReasons;
+            std::vector<ActiveLinearAtom> combinationContext;
+            const auto* context = &activeAtoms_;
+            if (!interfaceEqualities_.empty() && sharedTermRegistry_) {
+                combinationContext = activeAtoms_;
+                for (const auto& equality : interfaceEqualities_) {
+                    LinearFormKey form;
+                    mpq_class rhs = 0;
+                    auto append = [&](SharedTermId id, int coefficient) {
+                        if (auto value = sharedTermRegistry_->constValue(id)) {
+                            rhs -= coefficient * *value;
+                            return true;
+                        }
+                        const auto name = getVarNameForSharedTerm(id);
+                        if (name.empty() || name.rfind("__const_", 0) == 0) return false;
+                        form.terms.push_back({name, mpq_class(coefficient)});
+                        return true;
+                    };
+                    if (append(equality.a, 1) && append(equality.b, -1))
+                        combinationContext.push_back({NullExpr, -1, Relation::Eq, true,
+                                                      std::move(form), rhs, equality.reason});
+                }
+                context = &combinationContext;
+            }
             WorkBudget projectionBudget(8192);
-            if (auto projection = projectIntegerAffineForm(d.lhs, activeAtoms_, projectionBudget)) {
+            if (auto projection = projectIntegerAffineForm(d.lhs, *context, projectionBudget)) {
                 g = projection->step;
                 offset = projection->offset;
                 equalityReasons = std::move(projection->reasons);

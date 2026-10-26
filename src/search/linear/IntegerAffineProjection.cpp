@@ -31,6 +31,7 @@ std::optional<IntegerAffineProjection> projectIntegerAffineForm(
         std::vector<Row> rows;
         for (const auto& atom : activeAtoms) {
             budget.tick();
+            if ((atom.value ? atom.rel : negateRelation(atom.rel)) != Relation::Eq) continue;
             auto normalized = IntegerReasoner::normalize(atom.lhs, atom.rhs, atom.rel, atom.value);
             if (!normalized || normalized->rel != Relation::Eq || normalized->rhs.get_den() != 1) continue;
             Row row{{}, normalized->rhs.get_num(), {atom.lit}};
