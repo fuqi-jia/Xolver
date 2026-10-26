@@ -772,29 +772,6 @@ CdcacResult CdcacCore::solve(const CdcacInput& input) {
         cover.cells.push_back(std::move(cell));
         return CdcacResult::mkUnsat(std::move(cover), std::move(reasons));
     };
-    if (input.varOrder.size() >= 2) {
-        // A nonzero monomial requires each factor to be nonzero. This gives
-        // a global algebraic refutation of incompatible zero products without
-        // relying on parameter-cell lifting or interval contraction.
-        std::unordered_set<VarId> nonzero;
-        std::vector<PolynomialKernel::MonomialTerm> zeroProducts;
-        for (const auto& constraint : input.constraints) {
-            if (constraint.rel != Relation::Eq && constraint.rel != Relation::Neq &&
-                constraint.rel != Relation::Lt && constraint.rel != Relation::Gt) continue;
-            auto terms = kernel_->terms(constraint.poly);
-            if (!terms || terms->size() != 1 || mpq_class(terms->front().coefficient) == 0) continue;
-            const auto& term = terms->front();
-            if (constraint.rel == Relation::Eq) zeroProducts.push_back(term);
-            else for (const auto& [v, exponent] : term.powers)
-                if (exponent != 0) nonzero.insert(v);
-        }
-        for (const auto& term : zeroProducts) {
-            bool impossible = true;
-            for (const auto& [v, exponent] : term.powers)
-                if (exponent != 0 && !nonzero.count(v)) { impossible = false; break; }
-            if (impossible) return globalConflict();
-        }
-    }
     // STEP 2 — box-consistency GLOBAL refutation (conflict generalization at the root):
     // before any covering, run the HC4 box fixpoint (now incl. degree-2 square
     // contraction) over the empty assignment. An infeasible over-approximation box ⇒
