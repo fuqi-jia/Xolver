@@ -216,25 +216,39 @@ Result Solver::Impl::checkSatGround() {
         const bool differenceLogic = logic == "QF_IDL" || logic == "IDL" ||
                                      logic == "QF_RDL" || logic == "RDL";
         if (ir->currentScopeLevel() == 0 && !algebraicModelLogic && !differenceLogic) {
-            SolveEqs solveEqs(*ir, modelConverter_);
-            // Wrap in try/catch: SolveEqs's work-budget checks run
-            // AFTER each mutation, so a single explosive substitution on a
-            // pathological case (aproveSMT4461031801876451415: 16 vars + one
-            // big assertion + many (= x t) eligible substitutions) can OOM
-            // before the guard fires. On bad_alloc, abandon the pass and reset
-            // modelConverter_ so the residual solve uses the ORIGINAL formula
-            // without substitutions — sound, just slower (we lose iter#17's
-            // B1 recovery on this specific case, but never produce a wrong
-            // verdict from a half-applied substitution).
-            try {
-                if (solveEqs.run()) {
-                    solveEqs.commit();
+            const bool polynomialDefinitions = logic == "QF_NIA";
+            const auto policy = polynomialDefinitions
+                ? SolveEqs::DefinitionPolicy::PolynomialInLinearPositions
+                : SolveEqs::DefinitionPolicy::Linear;
+            SolveEqs solveEqs(*ir, modelConverter_, policy);
+            // A committed substitution and its replay steps form a transaction.
+            // Keep earlier committed progress if a later pass exhausts memory.
+            // The same SolveEqs object retains the total substitution-work cap.
+            for (;;) {
+                try {
+                    auto savedConverter = modelConverter_;
+                    try {
+                        if (!solveEqs.run()) break;
+                        solveEqs.commit();
+                    } catch (const std::bad_alloc&) {
+                        modelConverter_ = std::move(savedConverter);
+                        throw;
+                    }
                     std::cerr << "[SolveEqs] eliminated " << solveEqs.eliminatedCount()
                               << " variable(s)\n";
+                    if (!polynomialDefinitions || !enableRewrite) break;
+                    FormulaRewriter rewriter(*ir, boolSortId_);
+                    if (rewriter.run() == FormulaRewriter::Verdict::Unsat) {
+#ifdef XOLVER_ENABLE_CASESTATS
+                        finalizeCaseStats(Result::Unsat, 0.0);
+#endif
+                        return Result::Unsat;
+                    }
+                    rewriter.commit();
+                } catch (const std::bad_alloc&) {
+                    std::cerr << "[SolveEqs] memory exhausted; keeping committed simplifications\n";
+                    break;
                 }
-            } catch (const std::bad_alloc&) {
-                modelConverter_ = ModelConverter{};
-                std::cerr << "[SolveEqs] aborted (bad_alloc) — solving without substitution\n";
             }
         }
 

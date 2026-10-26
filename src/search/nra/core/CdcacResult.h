@@ -33,6 +33,8 @@ struct BuildCellResult {
 struct CdcacUnsatCertificate {
     Covering covering;
     std::vector<SatLit> reasons;
+    // An exclusion used only to guide candidate-model search, not a proof.
+    bool modelSearchOnly = false;
 };
 
 struct CdcacResult {
@@ -52,6 +54,11 @@ struct CdcacResult {
         r.status = CdcacStatus::Unsat;
         r.unsat = CdcacUnsatCertificate{std::move(cover), std::move(reasons)};
         return r;
+    }
+    static CdcacResult mkSearchExclusion(Covering cover, std::vector<SatLit> hints) {
+        auto result = mkUnsat(std::move(cover), std::move(hints));
+        result.unsat->modelSearchOnly = true;
+        return result;
     }
     static CdcacResult mkUnknown(CdcacUnknownReason reason) {
         assert(reason != CdcacUnknownReason::None);

@@ -10,8 +10,8 @@
 
 namespace xolver {
 
-SolveEqs::SolveEqs(NativeTerms& ir, ModelConverter& mc)
-    : ir_(ir), mc_(mc),
+SolveEqs::SolveEqs(NativeTerms& ir, ModelConverter& mc, DefinitionPolicy policy)
+    : ir_(ir), mc_(mc), policy_(policy),
       boolSortId_(ir.boolSortId()), intSortId_(ir.intSortId()), realSortId_(ir.realSortId()) {
     {
         long long v = config::read<config::ReadKind::Long>("XOLVER_PP_SOLVE_EQS_BUDGET",
@@ -46,7 +46,7 @@ bool SolveEqs::occurs(const std::string& name, ExprId root) const {
     return false;
 }
 
-bool SolveEqs::isLinearReconstructable(ExprId root) const {
+bool SolveEqs::isReconstructable(ExprId root, bool polynomial) const {
     std::vector<ExprId> stack{root};
     std::unordered_set<ExprId> seen;
     while (!stack.empty()) {
@@ -67,13 +67,61 @@ bool SolveEqs::isLinearReconstructable(ExprId root) const {
                     Kind ck = ir_.get(c).kind;
                     if (ck != Kind::ConstInt && ck != Kind::ConstReal) ++nonConst;
                 }
-                if (nonConst > 1) return false;  // var*var etc.
+                if (!polynomial && nonConst > 1) return false;
                 for (ExprId c : node.children) stack.push_back(c);
                 break;
             }
             default:
                 return false;  // div/mod/pow/to_int/uf/ite/array/... not reconstructable here
         }
+    }
+    return true;
+}
+
+bool SolveEqs::admissibleDefinition(const std::string& name, ExprId e) {
+    if (isReconstructable(e, false)) return true;
+    return policy_ == DefinitionPolicy::PolynomialInLinearPositions &&
+           isReconstructable(e, true) && hasOnlyLinearUses(name);
+}
+
+bool SolveEqs::hasOnlyLinearUses(const std::string& name) {
+    struct Frame { ExprId e; bool nonlinear; };
+    std::vector<Frame> stack;
+    for (const auto& conjunct : conjuncts_) stack.push_back({conjunct.second, false});
+    std::unordered_map<ExprId, unsigned char> seen;
+    while (!stack.empty()) {
+        if (++substWork_ > workBudget_) return false;
+        const auto frame = stack.back();
+        stack.pop_back();
+        const unsigned char context = frame.nonlinear ? 2 : 1;
+        auto& contexts = seen[frame.e];
+        if (contexts & context) continue;
+        contexts |= context;
+        const auto node = ir_.get(frame.e);
+        if (node.kind == Kind::Variable && frame.nonlinear) {
+            if (const auto* n = std::get_if<std::string>(&node.payload.value); n && *n == name)
+                return false;
+        }
+        bool nonlinear = frame.nonlinear;
+        switch (node.kind) {
+            case Kind::ConstInt: case Kind::ConstReal: case Kind::Variable:
+            case Kind::Add: case Kind::Sub: case Kind::Neg: case Kind::ToReal:
+            case Kind::Eq: case Kind::Distinct: case Kind::Lt: case Kind::Leq:
+            case Kind::Gt: case Kind::Geq: case Kind::And: case Kind::Or:
+            case Kind::Not: case Kind::Implies: case Kind::Ite:
+                break;
+            case Kind::Mul: {
+                unsigned nonConstants = 0;
+                for (ExprId child : node.children) {
+                    const auto kind = ir_.get(child).kind;
+                    if (kind != Kind::ConstInt && kind != Kind::ConstReal) ++nonConstants;
+                }
+                nonlinear |= nonConstants > 1;
+                break;
+            }
+            default: nonlinear = true; break;
+        }
+        for (ExprId child : node.children) stack.push_back({child, nonlinear});
     }
     return true;
 }
@@ -229,9 +277,9 @@ bool SolveEqs::run() {
             std::string varName;
             ExprId defExpr = NullExpr;
             SortId varSort = NullSort;
-            if (auto n = asNumericVar(lhs); n && !occurs(*n, rhs) && isLinearReconstructable(rhs)) {
+            if (auto n = asNumericVar(lhs); n && !occurs(*n, rhs) && admissibleDefinition(*n, rhs)) {
                 varName = *n; defExpr = rhs; varSort = ir_.get(lhs).sort;
-            } else if (auto n2 = asNumericVar(rhs); n2 && !occurs(*n2, lhs) && isLinearReconstructable(lhs)) {
+            } else if (auto n2 = asNumericVar(rhs); n2 && !occurs(*n2, lhs) && admissibleDefinition(*n2, lhs)) {
                 varName = *n2; defExpr = lhs; varSort = ir_.get(rhs).sort;
             } else {
                 continue;
@@ -263,8 +311,8 @@ bool SolveEqs::run() {
 
 void SolveEqs::commit() {
     if (eliminated_ == 0) return;
-    ir_.clearAssertions();
-    for (const auto& [level, e] : conjuncts_) ir_.addAssertion(e, level);
+    auto replacement = conjuncts_;
+    ir_.restoreAssertions(std::move(replacement));
 }
 
 } // namespace xolver

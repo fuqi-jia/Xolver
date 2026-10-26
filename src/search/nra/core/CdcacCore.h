@@ -150,7 +150,9 @@ private:
     // configuration currently set on this core (projectionKind_).
     // Used by the hybrid driver to run Collins then (on Unknown) Lazard. Carries
     // the existing XOLVER_NRA_UNSAT_CERT soundness floor.
-    CdcacResult solvePass(const CdcacInput& input);
+    enum class IntervalConflictMode { JointModelSearch, CertifiedCovering };
+    CdcacResult solvePass(const CdcacInput& input,
+                         IntervalConflictMode mode = IntervalConflictMode::CertifiedCovering);
 
     // Reset all per-solve scratch state so a second pass over the SAME input
     // starts clean (closures, level polys, the lazily-created policy, and the
@@ -255,12 +257,10 @@ private:
     // strict sign over the box is a strict sign over the feasible region too).
     std::optional<std::pair<size_t, Sign>> intervalFpViolation(
         const SamplePoint& prefix, const CdcacInput& input);
-    // Box-ICP SECTOR prune: prove the WHOLE cell [lo,hi] of the current var `var`
-    // (all-rational prefix) infeasible by box consistency with `var` PINNED to that
-    // interval. Returns a strict-signed conflicting constraint, or nullopt. Sound
-    // (box ⊇ feasible projection over the cell) — the descent into that cell can be
-    // skipped and the cell taken as a conflict.
-    std::optional<std::pair<size_t, Sign>> boxSectorViolation(
+    // CertifiedCovering returns only fiber-invariant individual sign proofs.
+    // JointModelSearch may return explicitly unverified exclusion hints; the
+    // entire pass must be replayed in certified mode before accepting UNSAT.
+    std::optional<CdcacResult> boxSectorConflict(
         const SamplePoint& prefix, VarId var, const mpq_class& lo, const mpq_class& hi,
         const CdcacInput& input);
     // True once satRp_/satSafe_ are populated for the current solve's constraints.
@@ -322,6 +322,10 @@ private:
     // generalized-UNSAT exit is downgraded to Unknown when false — the binding
     // "no UNSAT without a complete projection-certified covering".
     bool unsatTrustworthy_ = true;
+    // Per-pass provenance: a candidate-search exclusion was used, so this
+    // pass cannot provide a final refutation. SAT search may continue.
+    bool modelSearchExclusionUsed_ = false;
+    IntervalConflictMode intervalConflictMode_ = IntervalConflictMode::CertifiedCovering;
 
     // Per-solve: was the Lazard projection closure built to completion? Mirrors
     // the closure-completeness folding in buildClosure(). Fail-safe false.

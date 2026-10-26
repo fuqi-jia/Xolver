@@ -193,6 +193,8 @@ TheoryCheckResult CdcacSolver::check() {
             lastModel_ = std::move(result.model);
             return TheoryCheckResult::consistent();
         case CdcacStatus::Unsat: {
+            if (result.unsat && result.unsat->modelSearchOnly)
+                return TheoryCheckResult::unknown();
             std::vector<SatLit> reasons;
             if (result.unsat) {
                 reasons = ReasonManager::minimize(result.unsat->covering);

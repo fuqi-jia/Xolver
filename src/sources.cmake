@@ -28,6 +28,7 @@ set(XOLVER_ALGEBRA_SOURCES
     "algebra/interval/ReasonedBox.cpp"
     "algebra/interval/ReasonedBoxQ.cpp"
     "algebra/linear/Formula.cpp"
+    "algebra/linear/IntegerIntervalCombination.cpp"
     "algebra/linear/LinearConstraintNormalizer.cpp"
     "algebra/linear/LinearExpr.cpp"
     "algebra/linear/RationalSystem.cpp"

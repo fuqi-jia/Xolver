@@ -90,12 +90,14 @@ FormulaRewriter::Verdict FormulaRewriter::run() {
 
 void FormulaRewriter::commit() {
     if (unsat_) return;
-    ir_.clearAssertions();
+    std::vector<std::pair<ScopeLevel, ExprId>> replacement;
+    replacement.reserve(rewritten_.size());
     for (const auto& [level, e] : rewritten_) {
         // Drop assertions that simplified to the boolean constant true.
         if (isTrue(e)) { changed_ = true; continue; }
-        ir_.addAssertion(e, level);
+        replacement.emplace_back(level, e);
     }
+    ir_.restoreAssertions(std::move(replacement));
 }
 
 ExprId FormulaRewriter::rewrite(ExprId e) { return rewriteRec(e); }

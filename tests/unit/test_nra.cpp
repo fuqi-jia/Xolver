@@ -7,6 +7,19 @@
 
 using namespace xolver;
 
+TEST_CASE("NRA: box-sector explanations preserve a known rational witness") {
+    const auto path = std::filesystem::path(__FILE__).parent_path().parent_path() /
+                      "known_gaps/nra/box_sector_joint_reasons.smt2";
+    Solver solver;
+    solver.setRuntimeParameter("XOLVER_WALLCLOCK_MS", "10000");
+    REQUIRE(solver.parseFile(path.string()));
+    const auto result = solver.checkSat();
+    INFO(solver.lastUnknownReason());
+    CHECK((result != Result::Unsat));
+    if (result == Result::Sat)
+        CHECK((solver.validateModel() == Solver::ModelValidation::Satisfied));
+}
+
 namespace {
 struct NraStateFixture {
     NativeTerms terms;

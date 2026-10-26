@@ -52,6 +52,18 @@ Application outputs have distinct semantics: a satisfiability result, optimum,
 count or differential-equation solution cannot share an untyped result contract.
 `TheorySolver` is the CDCL(T) callback interface in the infrastructure layer.
 
+Definition preprocessing uses exact model reconstruction. `SolveEqs` accepts
+linear definitions by default; its explicit polynomial policy accepts products
+when the defined variable has only linear uses. Ground NIA alternates this
+elimination with formula rewriting under one substitution-work budget. Assertion
+replacement commits atomically, together with the corresponding replay steps.
+
+NRA interval search distinguishes fiber-invariant individual sign proofs from
+unverified model-search exclusions. Joint interval contraction can guide a fast
+SAT-finding pass, whose models require positive validation. If that pass used
+unverified exclusions, the solver repeats covering with individually justified
+signs before accepting an UNSAT result.
+
 ## Query flow
 
 ```mermaid

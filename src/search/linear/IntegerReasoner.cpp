@@ -1,6 +1,8 @@
 #include "search/linear/IntegerReasoner.h"
 #include "algebra/linear/LinearConstraintNormalizer.h"
+#include "algebra/linear/IntegerIntervalCombination.h"
 #include <algorithm>
+#include <unordered_map>
 
 namespace xolver {
 
@@ -84,6 +86,110 @@ std::optional<TheoryCheckResult> IntegerReasoner::run(
         }
     }
 
+    return std::nullopt;
+}
+
+std::optional<TheoryConflict> IntegerReasoner::checkIntervalCombinationConflict(
+    const std::vector<ActiveLinearAtom>& activeAtoms) {
+    struct Band {
+        std::optional<mpz_class> lower, upper;
+        SatLit lowerReason{0, true}, upperReason{0, true};
+    };
+    std::unordered_map<LinearFormKey, Band, LinearFormKeyHash> bands;
+    WorkBudget budget(8192);
+    auto conflict = [](const Band& a, const Band& b) {
+        std::vector<SatLit> reasons{a.lowerReason, a.upperReason, b.lowerReason, b.upperReason};
+        std::sort(reasons.begin(), reasons.end(), [](SatLit x, SatLit y) {
+            return x.var != y.var ? x.var < y.var : x.sign < y.sign;
+        });
+        reasons.erase(std::unique(reasons.begin(), reasons.end(), [](SatLit x, SatLit y) {
+            return x.var == y.var && x.sign == y.sign;
+        }), reasons.end());
+        return TheoryConflict{std::move(reasons)};
+    };
+    try {
+        for (const auto& atom : activeAtoms) {
+            budget.tick();
+            if (atom.lhs.terms.size() < 2) continue;
+            auto nc = normalize(atom.lhs, atom.rhs, atom.rel, atom.value);
+            if (!nc || (nc->rel != Relation::Eq && nc->rel != Relation::Leq)) continue;
+            auto& form = nc->lhs;
+            form.terms.erase(std::remove_if(form.terms.begin(), form.terms.end(),
+                [](const auto& term) { return term.second == 0; }), form.terms.end());
+            if (form.terms.size() < 2) continue;
+            const auto divisor = gcdAbs(form.terms);
+            if (divisor == 0) continue;
+            for (auto& term : form.terms) term.second /= divisor;
+            mpq_class bound = nc->rhs / divisor;
+            const bool negative = form.terms.front().second < 0;
+            if (negative) {
+                for (auto& term : form.terms) term.second = -term.second;
+                bound = -bound;
+            }
+            auto& band = bands[form];
+            if (negative || nc->rel == Relation::Eq) {
+                mpz_class lower;
+                mpz_cdiv_q(lower.get_mpz_t(), bound.get_num_mpz_t(), bound.get_den_mpz_t());
+                if (!band.lower || lower > *band.lower) {
+                    band.lower = std::move(lower); band.lowerReason = atom.lit;
+                }
+            }
+            if (!negative || nc->rel == Relation::Eq) {
+                mpz_class upper;
+                mpz_fdiv_q(upper.get_mpz_t(), bound.get_num_mpz_t(), bound.get_den_mpz_t());
+                if (!band.upper || upper < *band.upper) {
+                    band.upper = std::move(upper); band.upperReason = atom.lit;
+                }
+            }
+            if (band.lower && band.upper && *band.lower > *band.upper)
+                return conflict(band, band);
+        }
+        struct Bounded {
+            const LinearFormKey* key;
+            const Band* reasons;
+            BoundedIntegerForm form;
+            bool wide;
+        };
+        std::vector<Bounded> bounded;
+        for (const auto& [key, band] : bands) {
+            if (!band.lower || !band.upper) continue;
+            BoundedIntegerForm form{{}, *band.lower, *band.upper};
+            mpz_class norm = 0;
+            for (const auto& term : key.terms) {
+                form.coefficients.push_back(term.second.get_num());
+                const mpz_class magnitude = abs(term.second.get_num());
+                if (magnitude > norm) norm = magnitude;
+            }
+            const bool wide = form.upper - form.lower >= norm;
+            bounded.push_back({&key, &band, std::move(form), wide});
+        }
+        // Stable ordering makes a resource-limited search independent of hash layout.
+        std::sort(bounded.begin(), bounded.end(), [](const Bounded& a, const Bounded& b) {
+            const auto& x = a.key->terms; const auto& y = b.key->terms;
+            return std::lexicographical_compare(x.begin(), x.end(), y.begin(), y.end(),
+                [](const auto& l, const auto& r) {
+                    return l.first != r.first ? l.first < r.first : l.second < r.second;
+                });
+        });
+        for (std::size_t i = 0; i < bounded.size(); ++i) {
+            for (std::size_t j = i + 1; j < bounded.size(); ++j) {
+                budget.tick();
+                const auto& a = bounded[i]; const auto& b = bounded[j];
+                // If each row's width exceeds every coefficient magnitude, any
+                // combined interval is at least as wide as its possible gcd.
+                if (a.wide && b.wide) continue;
+                if (a.key->terms.size() != b.key->terms.size()) continue;
+                bool sameCoordinates = true;
+                for (std::size_t k = 0; k < a.key->terms.size(); ++k)
+                    if (a.key->terms[k].first != b.key->terms[k].first) { sameCoordinates = false; break; }
+                if (!sameCoordinates) continue;
+                if (findIntegerIntervalConflict(a.form, b.form, budget))
+                    return conflict(*a.reasons, *b.reasons);
+            }
+        }
+    } catch (const ResourceExhausted&) {
+        // A bounded cut search is optional; the main integer search continues.
+    }
     return std::nullopt;
 }
 
