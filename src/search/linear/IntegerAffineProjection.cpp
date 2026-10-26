@@ -16,11 +16,17 @@ std::optional<IntegerAffineProjection> projectIntegerAffineForm(
     };
     try {
         Coefficients target;
+        mpz_class originalStep = 0;
         for (const auto& [name, coefficient] : form.terms) {
             budget.tick();
             if (coefficient.get_den() != 1) return std::nullopt;
             target[name] += coefficient.get_num();
             if (target[name] == 0) target.erase(name);
+        }
+        for (const auto& [name, coefficient] : target) {
+            (void)name;
+            budget.tick();
+            mpz_gcd(originalStep.get_mpz_t(), originalStep.get_mpz_t(), coefficient.get_mpz_t());
         }
         std::vector<Row> rows;
         for (const auto& atom : activeAtoms) {
@@ -88,6 +94,10 @@ std::optional<IntegerAffineProjection> projectIntegerAffineForm(
             budget.tick();
             mpz_gcd(result.step.get_mpz_t(), result.step.get_mpz_t(), coefficient.get_mpz_t());
         }
+        // If elimination did not strengthen the lattice, its equality guards
+        // are unnecessary. Preserve the original unconditional split instead
+        // of weakening its explanation with irrelevant context literals.
+        if (result.step == originalStep) return IntegerAffineProjection{0, originalStep, {}};
         std::sort(result.reasons.begin(), result.reasons.end(), [](SatLit a, SatLit b) {
             return a.var != b.var ? a.var < b.var : a.sign < b.sign;
         });

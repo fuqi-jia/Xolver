@@ -81,3 +81,15 @@ TEST_CASE("IntegerAffineProjection: constant forms and resource exhaustion retai
     CHECK_FALSE(projectIntegerAffineForm(LinearFormKey{{{"x", mpq_class(1, 2)}}}, atoms,
                                         fractionalBudget).has_value());
 }
+
+TEST_CASE("IntegerAffineProjection: unchanged lattices retain unconditional explanations") {
+    const LinearFormKey form{{{"x", 1}, {"y", 1}, {"z", 1}}};
+    std::vector<ActiveLinearAtom> atoms{
+        equality(LinearFormKey{{{"x", 1}, {"y", -1}}}, 7, 5)};
+    WorkBudget budget(8192);
+    const auto projected = projectIntegerAffineForm(form, atoms, budget);
+    REQUIRE(projected.has_value());
+    CHECK(projected->offset == 0);
+    CHECK(projected->step == 1);
+    CHECK(projected->reasons.empty());
+}
