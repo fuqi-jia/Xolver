@@ -1,0 +1,968 @@
+{
+  "schema": "xolver-arithmetic-stage/1",
+  "stage": "shared-sparse-simplex-20261026",
+  "base_commit": "040a3656547489f0c3daaa96d3a4de5b1a051da4",
+  "evidence_root": "/pub/data/jiafq/xolver/validation/arithmetic-r103",
+  "native_source_manifest": {
+    "path": "source-r114.tar.json",
+    "sha256": "58742e06440b4955ebf975f1337c918622c518958c24cfa2f3e6ea913bb62c35"
+  },
+  "frozen_binaries": {
+    "xolver": "94fb80751bfca3de8f13838792109f2b8cca14e6c45cecdfdb506da5a179b82d",
+    "xolver-sv": "99130012b880f255cd8bbaf456d4031d07649792c83c430acb5649a547bb89ef"
+  },
+  "comparison": {
+    "cases": 160,
+    "binaries": {
+      "baseline": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r109/xolver",
+        "sha256": "15058bb39aadf06f7cb0a992b395376c03a9adb19798d6714934908762b91fe9"
+      },
+      "candidate": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r114/xolver",
+        "sha256": "94fb80751bfca3de8f13838792109f2b8cca14e6c45cecdfdb506da5a179b82d"
+      },
+      "z3": {
+        "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+        "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      }
+    },
+    "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+    "timeout": 60,
+    "memory_bytes": 17179869184,
+    "counts": {
+      "baseline": {
+        "timeout": 78,
+        "decided": 79,
+        "verified_decided": 76,
+        "verified_par2": 10317.216088436544,
+        "raw_par2": 9957.856684722006,
+        "sat": 44,
+        "unsat": 35,
+        "unknown": 3
+      },
+      "candidate": {
+        "timeout": 76,
+        "decided": 81,
+        "verified_decided": 78,
+        "verified_par2": 10117.22613023594,
+        "raw_par2": 9757.86894755438,
+        "sat": 46,
+        "unsat": 35,
+        "unknown": 3
+      },
+      "z3": {
+        "unsat": 58,
+        "decided": 125,
+        "verified_decided": 109,
+        "verified_par2": 6342.174434535205,
+        "raw_par2": 4572.466061491519,
+        "sat": 67,
+        "timeout": 35
+      }
+    },
+    "by_logic": {
+      "QF_LIA": {
+        "baseline": {
+          "timeout": 23,
+          "decided": 25,
+          "verified_decided": 25,
+          "verified_par2": 2846.340191697702,
+          "raw_par2": 2846.340191697702,
+          "sat": 14,
+          "unsat": 11
+        },
+        "candidate": {
+          "timeout": 22,
+          "decided": 26,
+          "verified_decided": 26,
+          "verified_par2": 2769.365822320804,
+          "raw_par2": 2769.365822320804,
+          "sat": 15,
+          "unsat": 11
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 39,
+          "verified_decided": 32,
+          "verified_par2": 1956.1823487635702,
+          "raw_par2": 1214.9647659081966,
+          "sat": 24,
+          "timeout": 9
+        }
+      },
+      "QF_NIA": {
+        "baseline": {
+          "timeout": 25,
+          "decided": 23,
+          "verified_decided": 22,
+          "verified_par2": 3222.054808333516,
+          "raw_par2": 3102.0889557935297,
+          "unsat": 10,
+          "sat": 13
+        },
+        "candidate": {
+          "timeout": 25,
+          "decided": 23,
+          "verified_decided": 22,
+          "verified_par2": 3220.4959091618657,
+          "raw_par2": 3100.532339250669,
+          "unsat": 10,
+          "sat": 13
+        },
+        "z3": {
+          "unsat": 22,
+          "decided": 34,
+          "verified_decided": 29,
+          "verified_par2": 2328.919531950727,
+          "raw_par2": 1729.7213866822422,
+          "sat": 12,
+          "timeout": 14
+        }
+      },
+      "QF_LRA": {
+        "baseline": {
+          "timeout": 17,
+          "decided": 15,
+          "verified_decided": 15,
+          "verified_par2": 2079.0972144827247,
+          "raw_par2": 2079.0972144827247,
+          "sat": 6,
+          "unsat": 9
+        },
+        "candidate": {
+          "timeout": 16,
+          "decided": 16,
+          "verified_decided": 16,
+          "verified_par2": 1957.6547285038978,
+          "raw_par2": 1957.6547285038978,
+          "sat": 7,
+          "unsat": 9
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 26,
+          "verified_decided": 25,
+          "verified_par2": 882.6427812576294,
+          "raw_par2": 813.0268791671842,
+          "sat": 11,
+          "timeout": 6
+        }
+      },
+      "QF_NRA": {
+        "baseline": {
+          "sat": 11,
+          "decided": 16,
+          "verified_decided": 14,
+          "verified_par2": 2169.7238739226013,
+          "raw_par2": 1930.33032274805,
+          "unsat": 5,
+          "timeout": 13,
+          "unknown": 3
+        },
+        "candidate": {
+          "sat": 11,
+          "decided": 16,
+          "verified_decided": 14,
+          "verified_par2": 2169.7096702493727,
+          "raw_par2": 1930.316057479009,
+          "unsat": 5,
+          "timeout": 13,
+          "unknown": 3
+        },
+        "z3": {
+          "sat": 20,
+          "decided": 26,
+          "verified_decided": 23,
+          "verified_par2": 1174.4297725632787,
+          "raw_par2": 814.7530297338963,
+          "timeout": 6,
+          "unsat": 6
+        }
+      }
+    },
+    "changes": [
+      {
+        "index": 6,
+        "case": "QF_LIA/dillig/40-12.smt2",
+        "kind": "lost",
+        "truth": "sat",
+        "evidence": [
+          "baseline-exported-model-replay",
+          "z3-exported-model-replay"
+        ],
+        "observations": {
+          "baseline": {
+            "result": "sat",
+            "seconds": 0.4253878556191921
+          },
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.0653295814991
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 0.06914832442998886
+          }
+        }
+      },
+      {
+        "index": 11,
+        "case": "QF_LIA/slacks/30-28.slack.smt2",
+        "kind": "gained",
+        "truth": "sat",
+        "evidence": [
+          "z3-exported-model-replay",
+          "candidate-exported-model-replay"
+        ],
+        "observations": {
+          "z3": {
+            "result": "sat",
+            "seconds": 7.73469346575439
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.06849307380617
+          },
+          "candidate": {
+            "result": "sat",
+            "seconds": 13.276122629642487
+          }
+        }
+      },
+      {
+        "index": 63,
+        "case": "QF_LRA/latendresse/ecoliFBAyicesTest-3875-4.smt2",
+        "kind": "gained",
+        "truth": "sat",
+        "evidence": [
+          "candidate-exported-model-replay",
+          "z3-exported-model-replay"
+        ],
+        "observations": {
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.107955330982804
+          },
+          "candidate": {
+            "result": "sat",
+            "seconds": 10.354547280818224
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 0.3471794556826353
+          }
+        }
+      },
+      {
+        "index": 92,
+        "case": "QF_LIA/slacks/20-24.slack.smt2",
+        "kind": "gained",
+        "truth": "sat",
+        "evidence": [
+          "z3-exported-model-replay",
+          "candidate-exported-model-replay"
+        ],
+        "observations": {
+          "z3": {
+            "result": "sat",
+            "seconds": 0.09023026749491692
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.06815385632217
+          },
+          "candidate": {
+            "result": "sat",
+            "seconds": 0.5984736494719982
+          }
+        }
+      }
+    ],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "unverified": [
+      {
+        "index": 0,
+        "case": "QF_LIA/rings/ring_2exp6_8vars_4ite_unsat.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 12,
+        "case": "QF_LIA/fft/Sz128_2823.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 22,
+        "case": "QF_LIA/rings_preprocessed/ring_2exp12_5vars_1ite_unsat.smt2",
+        "results": {
+          "candidate": "timeout",
+          "z3": "unsat",
+          "baseline": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 24,
+        "case": "QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 26,
+        "case": "QF_NIA/20230321-UltimateAutomizerSvcomp2023/soft_float_3a.c.cil.c_4.smt2",
+        "results": {
+          "z3": "unsat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 27,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 42,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep2a.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 50,
+        "case": "QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_jain_5.i_2_4_3.bpl_7.smt2",
+        "results": {
+          "z3": "unsat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 75,
+        "case": "QF_NRA/20211101-Geogebra/IsoRightTriangle-Bottema1_17a.smt2",
+        "results": {
+          "baseline": "sat",
+          "candidate": "sat",
+          "z3": "sat"
+        },
+        "reasons": {
+          "baseline": "no independent confirmation within budget",
+          "candidate": "no independent confirmation within budget",
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 80,
+        "case": "QF_LIA/cut_lemmas/20-vars/cut_lemma_03_004.smt2",
+        "results": {
+          "z3": "unsat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 85,
+        "case": "QF_LIA/rings_preprocessed/ring_2exp12_6vars_1ite_unsat.smt2",
+        "results": {
+          "candidate": "timeout",
+          "z3": "unsat",
+          "baseline": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 94,
+        "case": "QF_LIA/20210219-Dartagnan/ConcurrencySafety-Main/fib_bench_longer-2-O0.smt2",
+        "results": {
+          "candidate": "timeout",
+          "z3": "sat",
+          "baseline": "timeout"
+        },
+        "reasons": {
+          "z3": "unsupported model binding"
+        }
+      },
+      {
+        "index": 95,
+        "case": "QF_LIA/rings/ring_2exp8_6vars_2ite_unsat.smt2",
+        "results": {
+          "z3": "unsat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 114,
+        "case": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 115,
+        "case": "QF_NIA/20230321-UltimateAutomizerSvcomp2023/ps6.c_7.smt2",
+        "results": {
+          "candidate": "unsat",
+          "z3": "timeout",
+          "baseline": "unsat"
+        },
+        "reasons": {
+          "candidate": "no independent confirmation within budget",
+          "baseline": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 148,
+        "case": "QF_NRA/20211101-Geogebra/IsoTriangle-Bottema5_3b.smt2",
+        "results": {
+          "candidate": "sat",
+          "z3": "sat",
+          "baseline": "sat"
+        },
+        "reasons": {
+          "candidate": "no independent confirmation within budget",
+          "z3": "no independent confirmation within budget",
+          "baseline": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 159,
+        "case": "QF_NRA/20161105-Sturm-MGC/mgc_07.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      }
+    ],
+    "scoring": "Correct verdicts require a replayed model or an independent UNSAT decision on the identical input hash; unresolved results receive PAR-2 penalty."
+  },
+  "comparison_report_sha256": {
+    "case-000": "4ce18e6171c3d5650e8bde250f303e08ffa164eb2369da2cae51073cddced2ba",
+    "case-001": "8b695f30bd802ac48a61d3a912f7e25bef86fe495cb91382225102a70b3bf234",
+    "case-002": "19ebebae1d36fcd97ab499eb4d3dcdf46d11ccf32b9cff5e0ee8b6a1ba9737c0",
+    "case-003": "f8013a547b2942f251fa03ec2c022f54656048cf4372015024fd571b75df64d6",
+    "case-004": "4c98e799c9c7794dea1b42c994ebbe05b88987d7709314b9d522035280748db6",
+    "case-005": "c6b09b14e6ecbe349dcdd120f727c0f5a5979fa6710f5c5b61df6ace1094d710",
+    "case-006": "73f1cd22e5938503f63c4a1402cbe6c1c2cb2c96df7397e1c1425fe9b16bbb32",
+    "case-007": "79b063f1e881ad498ade813d95254025ed629f404f28914f38894c6288068c24",
+    "case-008": "391b089416cd258c8ae33c83ffa592789c15da53b28a3fb0027b64dfac390071",
+    "case-009": "6d82347bc28d2cf77f29eaedf4275a6b0b0760c59f1de2acda482e057349ea32",
+    "case-010": "4eb913b8f2dc9f9871dd8d32a6d0fd932b0d787fc93bb0ef2b8636c9779c928a",
+    "case-011": "c029b08775765f254be5cbaaad993f0d05b045a3d29473ec45a85f185299f347",
+    "case-012": "0a9f4d5ab2ca6458d61669745aac3a19d97d113b9b228ae3303e341e6ba58135",
+    "case-013": "2cc180067215ab9e9ddf4e7c590326c07874b3f8c7a3386f9bf85b1145c936cb",
+    "case-014": "5a2a5ad5ed557ea2cca64a32330fbbb45037f9732c9817157d537b62c55193ce",
+    "case-015": "faf19e7d03fcd1f20bbde895fa0a2a9473b21502d8f6dd3672a3c8b0be3d5dfb",
+    "case-016": "e454c24f934f8b9d99882892e47173c9813f1912da0a18dd6eac2a03126a0a67",
+    "case-017": "929e2630eee1b9808e9bfca5689a0ac1ba692266b224c23b0ca740f38fcb7a14",
+    "case-018": "9d2b1eed8a40a8da608008bff8f6e9fe38cba6de035d6548070aec29ddb904c7",
+    "case-019": "1747494361c17374bbfc1bca658af07dd85632875e84704046e5696b3c2d63e1",
+    "case-020": "1cc2a2a3be3e6ec490a1202461bf7f2004d5f1c7ed0db24a50964899efb7694d",
+    "case-021": "727b04dde99fecc23611208e9b9139c7adc4bd2b2d983ffa7581770cf19bffc0",
+    "case-022": "07341364597a99c5ee83393585d45f9c1d4c83f78d67a6ad992a1f4ee09ddf5b",
+    "case-023": "c3979c137ad6a640153ff2a9d0684576ed83bc2c814e60db22d736f542642adb",
+    "case-024": "210b496e068ed6e66c2fdea21dd2f3513ab5f151c33aaf03e646029abc923e20",
+    "case-025": "1206f60e0f5145abc666faa235a25b88b897ae6c6193e2589ab88c3bee7fd9f7",
+    "case-026": "c7695a2f3b0702ebc4f91e80c5d7e6240862f0975cee7dcc954736f477e0ad04",
+    "case-027": "2705a2226fddc7f55ce13cdbdcfab286ad51b41473a51e4e08c64e64f8eca627",
+    "case-028": "fa7f2ed5857b17f2d9d7b667aea6199601621f9a7ebba8ae7e1f9e489069e06e",
+    "case-029": "8d7728a960dd06faf3621cc773a15c3bfd1ca2d45143dcf8e1ffc3d3909d177d",
+    "case-030": "95f5f056e972a67b4157c9086443b9c24e1d4b9a35ae9adcddc976903ede7f72",
+    "case-031": "319ee07f550921f2101fbf230054bf37dabf2d7762cd3daa84afabcebaa4451e",
+    "case-032": "a0daa5e9098ae19d6e40684b7a81b5a6ce636ad1401a157d0626afa6d52584d4",
+    "case-033": "7fe3c78d0139e0f64d18f826298489ad99ae44c75f4005879c02dc09e177aee4",
+    "case-034": "b33a2863072806bf5388314563373862dccdce60c2b500b8df6efbb069c6ba28",
+    "case-035": "e5cf70440c097f6cf00dc0e60b1021e41fa78298580073908f6fcbdac7689810",
+    "case-036": "83e887712a07e7bfb7738947e30d0f2b75e52584fc262a99da34ba3d1f5b71ff",
+    "case-037": "c87ad07727f34f738ab455e7bfd99d8703590a87f87abdc2426c94c3336c54f0",
+    "case-038": "bf862cdafc6bd059c1ce95eecda828fc1b7a6ba5858eb9c36687d517b38f409b",
+    "case-039": "22a562161a126736d83ba479f8a10993ac882881746411c4320a088464d65ef9",
+    "case-040": "2de5dbfec3afa9df776dc71b0e39dd1d26bfcd0776d941c5fe5e5ed53a5ceed6",
+    "case-041": "5401745b3b2a6507aedb9f292b34594e66f18d4aad3cb452b3fd7c754aacdfc3",
+    "case-042": "f9624d1075e0a46c1c9d83b1b43b5a60478978461164a65cbddaaaae37617488",
+    "case-043": "c35d436a3d7f46bf80cd0c43da762a79869452ce76dcc8e970d378b862aaff0e",
+    "case-044": "b314641c3a7f18c627ac93bff3a6ac4a86ac77a30d009eae7e5dafba854181e9",
+    "case-045": "6e36d407ccbe6fbcd577080c19f29aab3825a27d9fa91d16278fd6c6caa0a9d3",
+    "case-046": "1ec2eebecce5a4c7b6e2a44fc523dc2fcddce6ec1c610b199403e0de60df6895",
+    "case-047": "eb2e9f610e76a3e01eefda25d5c77f8108e4ad1afdf50eb964c6166175d15bf9",
+    "case-048": "a311467b559646d76ef365d0ba583bcef6d8d37ced7b87f7f21a6bc672c230e8",
+    "case-049": "7e3a5436b4e4579b0bfb65c09bf0a5199095093f0e95073f810c9fc60ab91b31",
+    "case-050": "4831d25c36f8d12546dbffe47177273c0e78440834852bce4956eb0df8b51335",
+    "case-051": "6e001789d92edb69632715220451c21e93ab289089152bec7fa0d5d9e4c39e8f",
+    "case-052": "757426e65478b8abbc8983de4df31702f897f8a9e15d99afa6c5f2321da442a1",
+    "case-053": "b123e5725b5e78f0eb1572ea8045fc5ba55f81665b7b04f99f3cb683c5a3f1ed",
+    "case-054": "fae8c6529a2362a64db998e74e985dc1e04e9f2aa71e2d3cf55538efe86dcfa2",
+    "case-055": "c6250e5a18c7c15ef92fe31f6d48785bd3739750b9e02e30eb352535dd496831",
+    "case-056": "17551da3374174210ad55e4efbf1d02396a8acf9c2f5ac3e271ad2edd2facac0",
+    "case-057": "42d383a4a3fcd707a9605b871a56788712240f1f83f8e8892af4ca2a3a1b1048",
+    "case-058": "9d4cea5027bd853caa1a8b588e0232f7b17871c5206147c177ed887b34f8ae54",
+    "case-059": "9fe2bded8d2865750eb57bef22789b629007e8daac65221c70c0f8c008c32133",
+    "case-060": "f0f228cbb641aee00d43c40e79462a68abdac4e35fea606b993e0b5723995eeb",
+    "case-061": "1b27f654a04a10fcb095d0a72f6710d08df752c61a23163c65d18b5dbc88b2e7",
+    "case-062": "2226cabe56d70b1560c6c0fa69f379e8709ee0f6ba9f7705788c3addd59370f7",
+    "case-063": "902e6501f89c82f4a666f6720822db8acb16b3bf17aa3e57673e2ea8f91fe522",
+    "case-064": "e9baab315f1375d6ec4053599cc3a36a6c00b37bc9e60817e40c7e5585d9b459",
+    "case-065": "92c3cbe4dc858a93cd083a82cac06d46922b06b06790bb574cccc7d4a0aebb21",
+    "case-066": "790a45a84228cd912593b7cf5cc258adaaa8244b6d4fa9f5eb6daa52eab162ee",
+    "case-067": "ddcbf0d27fde307972be4a4a2c9b3de28dd51cae68be6de2ff0b19afad0c76fd",
+    "case-068": "d75534027bef966a07fc3c8d8f03573dd9f512325deb6d16daac25e91ae6c139",
+    "case-069": "f56d4007547d908fe465c53c0fa012236014e229501fa02ed6baa9f028e4ec7e",
+    "case-070": "7277cde7b8170d5fec71cbfd159717b7ed3e58053ccce8eb977e51645c8bef88",
+    "case-071": "f032124a63f9bde6a6a4fb3b88e07d77ed72246fc5d35303abb0cb4fde728587",
+    "case-072": "6a28f9d7ccc9444b78ad78a5f1f76ca844ae1e946eafb09b12a3ac4f533987fa",
+    "case-073": "7e61dab52390edcd375047ce353f761310c609e1a3b6774af481140cf9d35247",
+    "case-074": "b0a2f719a9d95dd475880f8d599900bbef1454941ed785a30e7d132e7522a4e7",
+    "case-075": "332ef640c2feed7d19dcc737b0448649a94643490669580ff58a0918d97bd042",
+    "case-076": "5196d6a88b4cf1c31d4119db3f856fcf482cfe6216614f1b7b06ed6e9c5ac1fa",
+    "case-077": "7f6dae6cc44cd9f55cb7084b68be0b6a828d8624dc25564218171465443f0b86",
+    "case-078": "76e791cb5d8fc24b5f4ceeefe9a6e584268cc3f875b82ec5b5f52f3617961843",
+    "case-079": "3dcc554f127eedec52aa5fc9edb9dd125491f6cb47791efeacf6b50f918cc3cb",
+    "case-080": "21745e3dc1c52f5e425534149f0426e9e029d34fdc9e70e95a7b19e3ee023079",
+    "case-081": "2bb23548826ed28d4bf562c06b64ef96f152b59c9b84fe562e38cccf2e9c3f27",
+    "case-082": "8722f171be320bc93981828e430c27cc35f8912a5b96b363c6dd653a990f7c98",
+    "case-083": "06e88e1bae526e2f2599e944a4a4053443b6b433f52e15245602408a93cea15c",
+    "case-084": "ca0f166c75f1430d77d93f190c2b36d4b4e6f48f44e2d3db8b57de996865e43e",
+    "case-085": "4fe6c7a2b91b69ca2e61b2b624d7369719415e95fc54e8ed7725c832a97f38f5",
+    "case-086": "95466628d04cd85371c5f228759d219582dc2d96e1e14c3413d4ade9b7ba2ee6",
+    "case-087": "20c29474b52e3ec639b83ea8b7928bda35074f7e2cfc1058341753e0e756e3ab",
+    "case-088": "d1bfdaa44c8f715e5889027910c6d286ee9f1835989687b9da34ea8909701016",
+    "case-089": "41f6fd90b840caa736627b197f72b49d826b17dad4fa7ecd7e086ffcd46cbf8e",
+    "case-090": "1b8c4cfc06796e888aef2b843b052082049b591d47378c2884a19b68bf22e69d",
+    "case-091": "a5e0f6925a9e23f4b1c502e57bea203469196719ad953da49e3bc8649439b986",
+    "case-092": "5e7285dfae9fad552f947cd6c3867c5d95af8acdb3ca5363306ba2a55c965972",
+    "case-093": "7b54a354956397734463db3bf7242a3acd3782e864d4e97e55587322c5835e40",
+    "case-094": "174dbaec065c693d0df54642c2a0264f4941b7974e09157c55f59b932e97ee35",
+    "case-095": "fad18acdb1d117fb66abc60590be78d6b113f9c881d590deda6d8c600c7711cb",
+    "case-096": "72df095a88e4019b1b30ee5496a1192deea8e7b8382e75d399dc6cedda334e82",
+    "case-097": "a8f353574adc33270496913cfc632e2b6dab04a44f6244a55775ec5be3bdb487",
+    "case-098": "bd15136e41e5fd89f4a0725433341d976752963b244704e40fcafcea78067b40",
+    "case-099": "c248d980ff9e00037dbd252d312c7de7d2718f3836476e23fec0b34fbaf644a6",
+    "case-100": "3c021ee2ed35e3e7131882205dcd8e2c887a1a213719548137ce48471ca2bec4",
+    "case-101": "a2e58082b2421fce750078e2f7f924961c271dee69da622a5dead9ae3d5e3bd0",
+    "case-102": "3adc3d7e3956fa486874fa13b54bfbe70fdd25f769c7c75f786437155c5964cc",
+    "case-103": "ae8b231376e6b2446d1fa84691065db91eb7d670edf19bfe36bafacf191d8541",
+    "case-104": "6f0d8d904a3c5ec33c0139045db28c38efe8a72b8743587f35312637e1353d0d",
+    "case-105": "894b72edc2be62b61dda5b7bebd08bc24bb994a6bfcf465098493f5a34b54748",
+    "case-106": "7bc41ff6418d4b1a115cbf91563782dc2187b587ca88cc68f34502c0393dc0b2",
+    "case-107": "59e36ea02beb269b71bca9caa50cccabb3767f319b54bd0669dc8b2ef8c3bed9",
+    "case-108": "e287a71387ff5fb5c4d3453e67b456396b6e9a7db5407761996849550baa737a",
+    "case-109": "9b1ba5f88a75b1560331678089b47912a2a95a161642e3cc29c1e24cf7a1c539",
+    "case-110": "a53dbb54abb599eb961ac96026a3e63a62a7be2ab1413ff656f1ca525943b006",
+    "case-111": "391e3e364ee5e27c94f05d94aaece6186fb64d0b09f8bd3d3cdef0177473a66d",
+    "case-112": "a1c80c8b26e697436687e9a39dd3946e5619eabaaf170b825c763c36d33019ec",
+    "case-113": "c1df998a69656d512bcc8636a3221cc4cf554278654fabc389023293c3ac66a5",
+    "case-114": "7574dc79056f513eb8b9afbbf9a98dd4cf81d6c9dac88750381d084bb5f8824c",
+    "case-115": "17095b265cd2c3a08e910e945beb5a71873451050d53ee909e7ee175e3691476",
+    "case-116": "a8df1044f5cd75528c2234aeb2ee04fef91f34dca3d6974e9d765066319b7f66",
+    "case-117": "14e9ef769e52532789517a299326ec9e30582eaba260f6cf55969ba4a2db120b",
+    "case-118": "511467b63f0fd54fe179cfe79c057a3ce04ca9cac8505de04a18d7cc7c953f53",
+    "case-119": "3d9e8a64aa253f1778506969bd06352c4a6dd07c5941c431474d527cc8778b99",
+    "case-120": "59943c3e5587b2d8cfa1d6e8f24cbe3eba23c12b8c7becbb893cb7d18a659db4",
+    "case-121": "f4679fbdb102841816b7cf84c3adbf94cfb169940359fe8730b0adba0b7aea96",
+    "case-122": "0c8d70142b9f78a28e51b59663e8ffa43b48ad6f8acc87f98a98115411799f25",
+    "case-123": "56f3ba459546a1379709f6819bb6ec3c2e79793e376b45f800c9faac05c53efe",
+    "case-124": "2fe6f022eb0e1ead226ad3905fbaea019fa5523bcd93f2f31485b23599b8808c",
+    "case-125": "a56383a226288e3475f0fe93557283fc01da88ae687a0f4563768c9e082f9617",
+    "case-126": "c49532b589a5caa9b208532eb54ed9186a3bac936b06e87fbfc043263c91afde",
+    "case-127": "f1bc9375f5ba48cdc26b198c9a923b58298b6b6ac6648c5a9bf1647be646bc38",
+    "case-128": "b3a3486fd08898280927fd57319b5751526ab1822b95e77aa6ada646b713a88c",
+    "case-129": "62b15ceb5620ea37510bf4511c3985c821417ac9f74c4c2723638f92bcfe9628",
+    "case-130": "d1b41d2dada3c10fa6d13a6a6cec52df020bf2440c0d211100b5ecaec6a9d7ee",
+    "case-131": "a046d9e36835dbfdac6bf2ce5125f0ab9163918e111586f7b66f1ab9ffc394aa",
+    "case-132": "93d944200b5efe4813211f93f77b85bbe07164d227c193604febd861d0f05113",
+    "case-133": "781ea7af973ac30782cedcbb240c631d257136786f77e1532d8b40b5bf679c46",
+    "case-134": "834b803336cdeef8000ddb195df6fdb2988f4486bdb96d57f7d35c63e24cec79",
+    "case-135": "f4429e3b468f57980b11449b1aacdf596061b8821a6b1b500f3e98e99b04ab7b",
+    "case-136": "158780ce191275a1cf11eda17a7cddecc0f0ba219ee419dde0188450f4de6455",
+    "case-137": "fc3505842f04ecd6d0376d5ed38ad501997521fb62b5092e7fd7e68c2abee297",
+    "case-138": "c20cdff23717aec5d46184c64c7a8780484ef756be6fa64174526675e9998356",
+    "case-139": "b97e7043d2a19856de09dc6a429ea9c4848fcab55892ed22b0147620a78e1716",
+    "case-140": "45602ec10bf4bbb068bfbb54899c92cefc7fe64370a76936d1b30e5dfd7694c0",
+    "case-141": "6f915563e61a2b7ea8f379937e79b7c34e51bcea3d1183607c72f40b1b837c6a",
+    "case-142": "4996f36217a17494953e90238fbabe0b9d836d25ce18a7f9713b59095d8ab2ca",
+    "case-143": "eade63d28dce9e5d4cd80d9d305b230e26e98e78a0f4702105c7fa95fc05bbab",
+    "case-144": "1428480f5320242a691479fa7b80b529dd523f3475c331c0a461863a19cd1790",
+    "case-145": "8c894b17a4366aa382c5b342895a1574feae54e815abd0acb06849f03c15c623",
+    "case-146": "710dc5312d5446a1ee9579875ad55bc6b227de6808823810a1418f177f5e6ea6",
+    "case-147": "f5fa97fee93f99c525b50ebb03bd8cdaf8ba7ce1c033c6cbd82a474b3ba9c045",
+    "case-148": "26ee56dd9314190a0ea131bbe645b008815e550b39174ccab7bba90058c1827b",
+    "case-149": "6a1ae8919f5bcb7b77bdd2c656071c49d020c78f19bd9364f5795d8ebb22637c",
+    "case-150": "10ab83177a7164f33022edf9194050ec45fde2e3e944b3679133d08f8e354d66",
+    "case-151": "64468f57c8bab5b058be2081d914b5c0e1ad5ab56e83d01741f7e8e1d936508c",
+    "case-152": "7591f80d563ae4f2c0d0b10dd5b303e7c6709a9d5120f389092fed7390bb77a4",
+    "case-153": "e341c9d8c117dcd67fd8125a8fb59ecb7f341d0e8cac3bdd8fa3598780200934",
+    "case-154": "d10776fc3428dfe3d789882ca41a5ebfc862ac00efcb8ca1b9cfcf246e37b83f",
+    "case-155": "40966145c94d464cb1a1330a965da0008f6f864dbf39061bf3528e87cec29cad",
+    "case-156": "afe6f564511cd01a027fc3d7d7415bf3feb319321d58407ab140a9eeaf8ef45b",
+    "case-157": "65a9272aee2b63b233b96f2d0ad4464d6d24ed564043e6d6dc3a8f6ab6b7e8a1",
+    "case-158": "26547ea8c96c398ca6b482ed5abb6f3930079e88110c2c52a1577ba593fdffeb",
+    "case-159": "044597d6cdb7ae6bedfe8918699f9c94734db64973c679570d981e3699e638d3"
+  },
+  "acceptance": {
+    "experiment": "5803a7070ea5",
+    "directory": "acceptance-r115",
+    "unit_tests": 1656,
+    "assertions": 794902,
+    "regression_passes": 892,
+    "checks": {
+      "regression-auflia": {
+        "checks": 1,
+        "failures": 0
+      },
+      "linear": {
+        "checks": 1,
+        "failures": 0
+      },
+      "regression-ania": {
+        "checks": 1,
+        "failures": 0
+      },
+      "regression-nia": {
+        "checks": 1,
+        "failures": 0
+      },
+      "intervals": {
+        "checks": 1,
+        "failures": 0
+      },
+      "regression-idl": {
+        "checks": 1,
+        "failures": 0
+      },
+      "regression-ufnra": {
+        "checks": 1,
+        "failures": 0
+      },
+      "regression-ufnia": {
+        "checks": 1,
+        "failures": 0
+      },
+      "affine": {
+        "checks": 1,
+        "failures": 0
+      },
+      "regression-lia": {
+        "checks": 1,
+        "failures": 0
+      },
+      "regression-sl": {
+        "checks": 1,
+        "failures": 0
+      },
+      "known-gaps": {
+        "checks": 1,
+        "failures": 0
+      },
+      "regression-quantifiers": {
+        "checks": 1,
+        "failures": 0
+      },
+      "architecture": {
+        "checks": 2,
+        "failures": 0
+      },
+      "regression-lira": {
+        "checks": 1,
+        "failures": 0
+      },
+      "regression-euf": {
+        "checks": 1,
+        "failures": 0
+      },
+      "quick": {
+        "checks": 3,
+        "failures": 0
+      },
+      "regression-rdl": {
+        "checks": 1,
+        "failures": 0
+      },
+      "qcp": {
+        "checks": 3,
+        "failures": 0
+      },
+      "regression-ufdtlia": {
+        "checks": 1,
+        "failures": 0
+      },
+      "regression-uflia": {
+        "checks": 1,
+        "failures": 0
+      },
+      "regression-dt": {
+        "checks": 1,
+        "failures": 0
+      },
+      "regression-ufdtnia": {
+        "checks": 1,
+        "failures": 0
+      },
+      "regression-alra": {
+        "checks": 1,
+        "failures": 0
+      },
+      "regression-alia": {
+        "checks": 1,
+        "failures": 0
+      },
+      "partial": {
+        "checks": 1,
+        "failures": 0
+      },
+      "root-regressions": {
+        "checks": 1,
+        "failures": 0
+      },
+      "regression-aufnia": {
+        "checks": 1,
+        "failures": 0
+      },
+      "regression-lra": {
+        "checks": 1,
+        "failures": 0
+      },
+      "regression-uflra": {
+        "checks": 1,
+        "failures": 0
+      },
+      "regression-auflra": {
+        "checks": 1,
+        "failures": 0
+      },
+      "regression-bool": {
+        "checks": 1,
+        "failures": 0
+      },
+      "regression-ax": {
+        "checks": 1,
+        "failures": 0
+      },
+      "regression-nira": {
+        "checks": 1,
+        "failures": 0
+      },
+      "unit": {
+        "checks": 1,
+        "failures": 0
+      },
+      "regression-nra": {
+        "checks": 1,
+        "failures": 0
+      }
+    }
+  },
+  "negative_experiment": {
+    "branch": "perf/simplex-feasible-repair",
+    "commit": "cab35356",
+    "native_source_manifest": {
+      "path": "source-r117.tar.json",
+      "sha256": "f82e328e5b3a2d2efef81fbc69c00f81539b87e8581c47a1cc16f65d95e632ae"
+    },
+    "frozen_binaries": {
+      "xolver": "c1abebad87b12e92793f2608aee669b1e4bdc8a65520009d77e3f9174d0087a9",
+      "xolver-sv": "99130012b880f255cd8bbaf456d4031d07649792c83c430acb5649a547bb89ef"
+    },
+    "counts": {
+      "baseline": {
+        "timeout": 88,
+        "decided": 70,
+        "verified_decided": 67,
+        "verified_par2": 11454.733553368598,
+        "raw_par2": 11095.484086381271,
+        "sat": 40,
+        "unsat": 30,
+        "unknown": 2
+      },
+      "candidate": {
+        "timeout": 87,
+        "decided": 71,
+        "verified_decided": 68,
+        "verified_par2": 11367.678483227268,
+        "raw_par2": 11010.462242253125,
+        "sat": 40,
+        "unsat": 31,
+        "unknown": 2
+      },
+      "z3": {
+        "unsat": 56,
+        "decided": 120,
+        "verified_decided": 105,
+        "verified_par2": 7016.495421575382,
+        "raw_par2": 5303.068910498172,
+        "sat": 64,
+        "timeout": 40
+      }
+    },
+    "changes": [
+      {
+        "index": 6,
+        "case": "QF_LIA/dillig/40-12.smt2",
+        "kind": "lost",
+        "truth": "sat",
+        "evidence": [
+          "baseline-exported-model-replay",
+          "z3-exported-model-replay"
+        ],
+        "observations": {
+          "baseline": {
+            "result": "sat",
+            "seconds": 0.4557975083589554
+          },
+          "candidate": {
+            "result": "timeout",
+            "seconds": 61.51281481422484
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 0.3528712000697851
+          }
+        }
+      },
+      {
+        "index": 92,
+        "case": "QF_LIA/slacks/20-24.slack.smt2",
+        "kind": "gained",
+        "truth": "sat",
+        "evidence": [
+          "z3-exported-model-replay",
+          "candidate-exported-model-replay"
+        ],
+        "observations": {
+          "z3": {
+            "result": "sat",
+            "seconds": 0.0990313608199358
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.06860985979438
+          },
+          "candidate": {
+            "result": "sat",
+            "seconds": 0.665904575958848
+          }
+        }
+      },
+      {
+        "index": 101,
+        "case": "QF_LIA/2019-ezsmt/incrementalScheduling/251-incremental_scheduling-40518-0.smt2",
+        "kind": "gained",
+        "truth": "unsat",
+        "evidence": [
+          "independent-z3-xolver-agreement"
+        ],
+        "observations": {
+          "z3": {
+            "result": "unsat",
+            "seconds": 0.13220261968672276
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.08570774458349
+          },
+          "candidate": {
+            "result": "unsat",
+            "seconds": 27.99919213913381
+          }
+        }
+      }
+    ],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "failures": [
+      {
+        "check": "known-gaps",
+        "case": "tests/known_gaps/nra/box_sector_joint_reasons.smt2",
+        "result": "timeout",
+        "budget_seconds": 20
+      },
+      {
+        "check": "linear",
+        "case": "signed-0040",
+        "engine": "z3",
+        "model": "timeout",
+        "budget_seconds": 5
+      },
+      {
+        "check": "regression-ufnia",
+        "case": "tests/regression/ufnia/ufnia_zohar_ic_sat_intcheck_bvugt.smt2",
+        "result": "timeout",
+        "budget_seconds": 240
+      }
+    ],
+    "disposition": "Rejected: no recovery of index 6, failed server checks, substantial same-binary timing variation; no claim of cross-round coverage improvement."
+  },
+  "qcp": {
+    "revision": "08cc7a0f1373a1db3800111a0205a340b6d6f99c",
+    "proof_toolchain": "qcp-bootstrap-r5",
+    "coq": "The Coq Proof Assistant, version 8.20.1\ncompiled with OCaml 4.14.1",
+    "dune": "3.17.2",
+    "run": "branch_destruct-20261026224840",
+    "verified_programs": 0,
+    "status": "controller-reported infrastructure blocker: both symexec jobs rejected before execution for absent CPU leases",
+    "controller_result": "qcp-jobs/branch-blocked-finalization.json"
+  },
+  "boundaries": [
+    "Three verified gains and one verified loss apply to the frozen R114 round, not overall superiority to Z3.",
+    "R114 and R109 correctness/performance runs had no overlapping CPU leases among their respective benchmark/acceptance jobs.",
+    "R117 baseline index 101 timed out whereas prior same-binary runs took 7-8 seconds; apparent recovery of that index is not a demonstrated new capability.",
+    "No protected set was inspected or run. No additional main checkpoint is required."
+  ]
+}

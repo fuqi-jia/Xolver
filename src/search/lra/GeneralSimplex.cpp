@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <array>
+#include <cstdio>
 #include <stdexcept>
 
 namespace xolver {
@@ -562,6 +563,52 @@ GeneralSimplex::Result GeneralSimplex::checkInternal() {
     const long long kStrictBlandThreshold = 10000;
     const long long kSafetyGuard = 1LL << 34;  // ~1.7e10 pivots; external timeout fires first
 
+    // Reuse the existing diagnostic destination. These counters describe
+    // sparse elimination work, independently of the entering-variable rule.
+    const auto profilePath = config::read<config::ReadKind::ProfilePath>(
+        "ARITH_STAGE_PROF", "/tmp/xolver_stageprof.txt");
+    auto recordPivotChoice = [&](int basic, int entering, bool increase) {
+        if (profilePath.empty()) return;
+        struct WorkProfile {
+            unsigned long long pivots = 0, cheaperChoices = 0;
+            unsigned long long chosenDegree = 0, minimumDegree = 0;
+            unsigned long long chosenUpdates = 0, minimumUpdates = 0;
+            std::chrono::steady_clock::time_point lastDump{};
+        };
+        static thread_local WorkProfile profile;
+        const auto& row = tab_.row(rowOfBasic(basic));
+        const size_t chosen = tab_.col(entering).entries.size();
+        size_t minimum = chosen;
+        for (const auto& entry : row.entries) {
+            const bool eligible = increase
+                ? ((entry.coeff > 0 && canIncrease(entry.col)) ||
+                   (entry.coeff < 0 && canDecrease(entry.col)))
+                : ((entry.coeff < 0 && canIncrease(entry.col)) ||
+                   (entry.coeff > 0 && canDecrease(entry.col)));
+            if (eligible) minimum = std::min(minimum, tab_.col(entry.col).entries.size());
+        }
+        ++profile.pivots;
+        profile.cheaperChoices += minimum < chosen;
+        profile.chosenDegree += chosen;
+        profile.minimumDegree += minimum;
+        profile.chosenUpdates += (chosen - 1) * row.entries.size();
+        profile.minimumUpdates += (minimum - 1) * row.entries.size();
+        const auto now = std::chrono::steady_clock::now();
+        if (now - profile.lastDump < std::chrono::seconds(2)) return;
+        profile.lastDump = now;
+        auto outputPath = profilePath;
+        outputPath += ".simplex.json";
+        if (FILE* output = std::fopen(outputPath.c_str(), "w")) {
+            std::fprintf(output,
+                "{\"pivots\":%llu,\"cheaper_choices\":%llu,"
+                "\"chosen_column_degree\":%llu,\"minimum_column_degree\":%llu,"
+                "\"chosen_update_estimate\":%llu,\"minimum_update_estimate\":%llu}\n",
+                profile.pivots, profile.cheaperChoices, profile.chosenDegree,
+                profile.minimumDegree, profile.chosenUpdates, profile.minimumUpdates);
+            std::fclose(output);
+        }
+    };
+
     for (long long iter = 0; iter < kSafetyGuard; ++iter) {
         bool strictBland = iter >= kStrictBlandThreshold;
         int xi = strictBland ? pickViolatedBasicBland() : pickViolatedBasic();
@@ -578,6 +625,7 @@ GeneralSimplex::Result GeneralSimplex::checkInternal() {
                 explainLowerConflict(xi);
                 return Result::Unsat;
             }
+            recordPivotChoice(xi, xj, true);
             pivotAndUpdate(xi, xj, vars_[xi].lower.bound.value);
         } else if (violatesUpper(xi)) {
             int xj = findEnteringVarToDecrease(xi, useBland);
@@ -585,6 +633,7 @@ GeneralSimplex::Result GeneralSimplex::checkInternal() {
                 explainUpperConflict(xi);
                 return Result::Unsat;
             }
+            recordPivotChoice(xi, xj, false);
             pivotAndUpdate(xi, xj, vars_[xi].upper.bound.value);
         }
     }
@@ -598,62 +647,46 @@ GeneralSimplex::Result GeneralSimplex::checkInternal() {
 // Entering variable selection
 // ============================================================================
 
-int GeneralSimplex::findEnteringVarToIncrease(int basicVar, bool useBland) const {
-    int r = rowOfBasic(basicVar);
+int GeneralSimplex::findEnteringVar(int basicVar, bool increase, bool useBland) const {
+    const auto& row = tab_.row(rowOfBasic(basicVar));
     int best = -1;
-    mpq_class bestMag(0);  // |coeff| of best, used only in heuristic mode
-
-    for (const auto& e : tab_.row(r).entries) {
-        int xj = e.col;
-        const mpq_class& a = e.coeff;
-
-        bool eligible = (a > 0 && canIncrease(xj)) || (a < 0 && canDecrease(xj));
+    size_t bestDegree = 0;
+    mpq_class bestMagnitude(0);
+    for (const auto& entry : row.entries) {
+        const int variable = entry.col;
+        const auto& coefficient = entry.coeff;
+        const bool eligible = increase
+            ? ((coefficient > 0 && canIncrease(variable)) ||
+               (coefficient < 0 && canDecrease(variable)))
+            : ((coefficient < 0 && canIncrease(variable)) ||
+               (coefficient > 0 && canDecrease(variable)));
         if (!eligible) continue;
-
-        if (best == -1) {
-            best = xj;
-            if (!useBland) bestMag = (a < 0) ? mpq_class(-a) : a;
-        } else if (useBland) {
-            if (xj < best) best = xj;  // Bland's rule: smallest index
-        } else {
-            // Heuristic: prefer the largest pivot magnitude (bigger steps,
-            // better numerical behaviour); deterministic tie-break by index.
-            mpq_class mag = (a < 0) ? mpq_class(-a) : a;
-            if (mag > bestMag || (mag == bestMag && xj < best)) {
-                best = xj;
-                bestMag = mag;
-            }
+        if (useBland) {
+            if (best == -1 || variable < best) best = variable;
+            continue;
+        }
+        // Each incident non-pivot row must eliminate this column against the
+        // entire pivot row. Its degree predicts exact sparse arithmetic work;
+        // floating-point numerical stability is irrelevant to rational pivots.
+        const size_t degree = tab_.col(variable).entries.size();
+        const mpq_class magnitude = coefficient < 0 ? mpq_class(-coefficient) : coefficient;
+        if (best == -1 || degree < bestDegree ||
+            (degree == bestDegree && (magnitude > bestMagnitude ||
+             (magnitude == bestMagnitude && variable < best)))) {
+            best = variable;
+            bestDegree = degree;
+            bestMagnitude = magnitude;
         }
     }
     return best;
 }
 
+int GeneralSimplex::findEnteringVarToIncrease(int basicVar, bool useBland) const {
+    return findEnteringVar(basicVar, true, useBland);
+}
+
 int GeneralSimplex::findEnteringVarToDecrease(int basicVar, bool useBland) const {
-    int r = rowOfBasic(basicVar);
-    int best = -1;
-    mpq_class bestMag(0);
-
-    for (const auto& e : tab_.row(r).entries) {
-        int xj = e.col;
-        const mpq_class& a = e.coeff;
-
-        bool eligible = (a < 0 && canIncrease(xj)) || (a > 0 && canDecrease(xj));
-        if (!eligible) continue;
-
-        if (best == -1) {
-            best = xj;
-            if (!useBland) bestMag = (a < 0) ? mpq_class(-a) : a;
-        } else if (useBland) {
-            if (xj < best) best = xj;  // Bland's rule: smallest index
-        } else {
-            mpq_class mag = (a < 0) ? mpq_class(-a) : a;
-            if (mag > bestMag || (mag == bestMag && xj < best)) {
-                best = xj;
-                bestMag = mag;
-            }
-        }
-    }
-    return best;
+    return findEnteringVar(basicVar, false, useBland);
 }
 
 // ============================================================================

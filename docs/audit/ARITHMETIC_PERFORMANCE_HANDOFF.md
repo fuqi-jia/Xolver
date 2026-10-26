@@ -151,6 +151,11 @@ verify source hashes and do not copy full archives into individual experiments.
 
 ## Shared integer interval stage (R103–R112)
 
+Delivered through [PR #42](https://github.com/fuqi-jia/Xolver/pull/42) as main
+`040a3656547489f0c3daaa96d3a4de5b1a051da4`.
+[Main CI](https://github.com/fuqi-jia/Xolver/actions/runs/40339177941)
+completed successfully with both `build-test` and `proof-gate` green.
+
 The source base is main `ea240d2e`. The machine-readable
 [stage record](ARITHMETIC_INTERVAL_STAGE_20261026.json) contains the frozen binary
 hashes, input hashes, 160 report digests, gap inventory, sampled frames and
@@ -237,6 +242,83 @@ gaps and was removed (`perf/ordered-threshold-chains`, `bcc757ec`). Do not
 confuse that negative experiment with the retained interval implementation.
 QCP checks here are pure-condition regressions; whole-program C verification
 and the independent protected sets remain outstanding.
+
+## Shared sparse simplex stage (R113–R119)
+
+The accepted native snapshot is R114, based on the preceding delivered code;
+the R117 alternative was rejected. The
+[stage record](ARITHMETIC_SPARSE_SIMPLEX_STAGE_20261026.json) contains binary and
+source hashes, all 160 report digests, detailed results and the rejected
+experiment. Its evidence root is again `validation/arithmetic-r103/`.
+
+Diagnostic samples put 27/49 frames for LIA index 22 and 33/49 for LRA index
+63 in simplex pivots. The old entering rule preferred the largest absolute
+coefficient without considering the number of affected rows. On index 63,
+148/230 sampled pivot choices had a sparser eligible column; immediate coefficient
+update estimates were 22,887,792 versus 13,294,541. These are local estimates,
+not a prediction of an unchanged search trajectory.
+
+`GeneralSimplex` now shares one entering-variable implementation for both
+inequality directions, preferring fewer incident rows before coefficient
+magnitude and variable index. Eligibility and Bland fallback are unchanged.
+This applies to clients of the shared simplex, including LRA and LIA; it adds
+no per-input rule or feature gate and retains their distinct backtracking
+policies. Existing diagnostic configuration can record sparse elimination work.
+
+The fresh R114 comparison uses R109, R114 and the same frozen Z3, with the
+60-second / single leased physical CPU / 16 GiB protocol above:
+
+| Version | Raw decisions | Verified decisions | Unknown | Timeout | Verified PAR-2 total (s) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Xolver R109 | 79 | 76 | 3 | 78 | 10317.216 |
+| Xolver R114 | 81 | 78 | 3 | 76 | 10117.226 |
+| Z3, fresh round | 125 | 109 | 0 | 35 | 6342.174 |
+
+Three SAT gains passed independent model replay, with one SAT loss:
+
+| Primary index / member suffix | R109 (s) | R114 (s) |
+| --- | ---: | ---: |
+| 11 / `QF_LIA/slacks/30-28.slack.smt2` | timeout | SAT 13.276 |
+| 63 / `QF_LRA/latendresse/ecoliFBAyicesTest-3875-4.smt2` | timeout | SAT 10.355 |
+| 92 / `QF_LIA/slacks/20-24.slack.smt2` | timeout | SAT 0.598 |
+| 6 / `QF_LIA/dillig/40-12.smt2` | SAT 0.425 | timeout |
+
+No opposite verdict, process error, memory-limit result or invalid model replay
+was observed in this round. The net gain is two verified decisions and about
+200 seconds of PAR-2; index 6 is a real unresolved performance regression.
+These results do not establish superiority to Z3. Independent confirmation
+boundaries for indices 75, 115 and 148 remain unchanged.
+
+Server acceptance R115 passed all 36 tasks: 1,656 unit tests / 794,902 assertions,
+892 regressions, architecture/harness checks, differential/model checks and
+the explicit known-gap contracts. The CLI is `core-r114/xolver`, SHA-256
+`94fb80751bfca3de8f13838792109f2b8cca14e6c45cecdfdb506da5a179b82d`.
+Its native source manifest is `source-r114.tar.json`, SHA-256
+`58742e06440b4955ebf975f1337c918622c518958c24cfa2f3e6ea913bb62c35`.
+The later source qualification restores exactly those native file hashes;
+documentation updates do not require rebuilding an identical native snapshot.
+
+The bounded-repair-first R117 alternative did not recover index 6. It failed
+the known-gap 20-second check and a UFNIA 240-second regression, while a Z3
+model query in the linear differential suite also timed out at 5 seconds.
+Its full round returned 70/71/120 raw decisions and 67/68/105 verified decisions
+for R109/R117/Z3, with substantial host/timing variation: unchanged R109 index
+101 moved from 7–8 seconds in earlier rounds to a timeout. Its apparent recovery
+by R117 is not evidence of a new capability. Preserve the negative result on
+`perf/simplex-feasible-repair`, `cab35356`, and do not merge that policy.
+
+QCP's existing development corpus has 313 exported queries; R115 decided all
+of them consistently with Z3. This leaves no coverage gap on that limited
+pure-condition corpus. A full pinned QCP source export and isolated Coq 8.20.1 /
+Dune 3.17.2 toolchain are now present under `dependencies/qcp-08cc7a0f` and
+`dependencies/qcp-tools`. The unchanged development case `branch_destruct.c`
+has controller run `branch_destruct-20261026224840`; its source/spec and prepared
+plan are preserved. Both symexec submissions were rejected before execution
+because ExperimentOS supplied no CPU lease. The controller accepted the owner's
+structured infrastructure blocker; its record is
+`qcp-jobs/branch-blocked-finalization.json`. No C program is yet counted verified.
+Obtain a normal lease and follow current controller actions; do not edit its
+state or treat pure-condition results as complete program verification.
 
 ## Closed experiments and practical regressions
 

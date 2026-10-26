@@ -410,7 +410,9 @@ private:
 
     // Find entering var for violated basic var. When useBland is true, the
     // smallest-index (Bland) rule is used (guarantees termination); otherwise a
-    // largest-|coefficient| heuristic is used.
+    // sparse elimination cost is preferred, with coefficient magnitude and
+    // variable index as deterministic tie-breakers.
+    int findEnteringVar(int basicVar, bool increase, bool useBland) const;
     int findEnteringVarToIncrease(int basicVar, bool useBland) const;
     int findEnteringVarToDecrease(int basicVar, bool useBland) const;
 
