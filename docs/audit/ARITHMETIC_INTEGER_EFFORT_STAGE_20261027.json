@@ -4009,7 +4009,7 @@
     "kind": "pinned-qcp-end-to-end-infrastructure-qualification",
     "qcp_revision": "08cc7a0f1373a1db3800111a0205a340b6d6f99c",
     "run": "branch_destruct-20261026235539",
-    "verified_programs": 1,
+    "verified_programs": 0,
     "verification_conditions": 10,
     "vc_names": [
       "example_safety_wit_1",
@@ -4224,6 +4224,13 @@
         "seconds": 25.746914260089397,
         "cpu_ids": "0"
       }
+    },
+    "original_reported_verified_programs": 1,
+    "trust_audit_correction": {
+      "reason": "Generated proof_auto contains ten Proof. Admitted. placeholders; successful controller compilation was infrastructure qualification, not independently proved VCs.",
+      "admitted_vcs": 10,
+      "auto_file_sha256": "384f0da0a49fba6aa268bc48dfe4ecee3c40e04b54a43a4ebdb3d786a54a3237",
+      "evidence": "ARITHMETIC_AFFINE_LATTICE_STAGE_20261027.json"
     }
   },
   "protected_sets": "Neither SMT nor program protected results were read or run.",

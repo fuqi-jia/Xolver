@@ -321,10 +321,12 @@ Dune 3.17.2 toolchain are present under `dependencies/qcp-08cc7a0f` and
 `branch_destruct-20261026224840` closed with a CPU-lease infrastructure blocker
 before symexec; its record remains `qcp-jobs/branch-blocked-finalization.json`.
 The fresh run `branch_destruct-20261026235539` subsequently completed the
-controller's native proof routes and final-check: **one C program, ten VCs**,
-with C and specification byte-identical. It reused 143 base proof artifacts
-and checked all four current source files. This qualifies the pinned QCP
-workflow, not an Xolver/Z3 backend comparison. Internal SMT calls were not
+controller's native compilation routes and final-check for one C input with
+ten VCs, with C and specification byte-identical. It reused 143 base proof
+artifacts and compiled all four current source files. **Trust-audit correction:**
+the generated auto module contains ten `Proof. Admitted.` placeholders. This
+qualifies infrastructure only: **zero independently verified programs**. It is
+not an Xolver/Z3 backend comparison. Internal SMT calls were not
 instrumented; no external comparison invocation of either solver was made.
 Do not count the 313 extracted queries as verified programs. Exact source,
 proof, timing and controller evidence is indexed in the next stage record.
@@ -461,11 +463,67 @@ case. Neither is selected. The memory-pool experiment was not repeated.
 The existing 313 QCP conditions still agree across CLI, SV and Z3 (291 UNSAT,
 22 SAT). The SV executable remains byte-identical to preceding main; this is
 not an end-to-end program-backend improvement. The prior pinned QCP proof
-qualification remains one C program / ten VCs. The public pinned CLI exposes
-no SMT replacement option; the internal backend interface/source location has
-been requested. Both protected evaluations remain unused. This stage does
+qualification is infrastructure only; all ten auto VCs are admitted and the
+verified-program count is zero. The public pinned CLI exposes no SMT replacement
+option. Implement an explicit backend discharge interface rather than waiting
+for a source location, and reconstruct every VC, including auto placeholders. Both protected evaluations remain unused. This stage does
 not exceed Z3; require final-head PR CI and merge-commit main CI for delivery,
 without another server checkpoint.
+
+## Conditional affine lattices (R144/R146, 2026-10-27)
+
+Evidence: [stage record](ARITHMETIC_AFFINE_LATTICE_STAGE_20261027.json).
+Delivery PR: [#47](https://github.com/fuqi-jia/Xolver/pull/47).
+Preceding [#46](https://github.com/fuqi-jia/Xolver/pull/46) merged as
+`db327e7e021d551a22745308834326e65edf0942`; both jobs in
+[main CI 40389912116](https://github.com/fuqi-jia/Xolver/actions/runs/40389912116)
+passed.
+
+`LiaSolver::handleDisequalities` previously split using only the gcd of raw
+coefficients. In ring case 22 this is 1, while either active equality branch
+implies a step of 512. The shared, stateless `IntegerAffineProjection` uses
+budgeted sparse integral unit pivots to derive `offset + step*Z`. Splits cite
+all used equality literals, including theory-combination equalities; fixed
+forms and impossible residues keep their exact meanings. Unsupported/exhausted
+projections retain the old lattice. LRA/LIA backtracking policies are unchanged.
+
+Frozen CLI R144 SHA-256:
+`c1604d8bb498cfafedfdb0d2e8f422fcd0d6fb1d138518963d3621b7a870e662`.
+R146 adds only correctness tests; its CLI and SV hashes match R144. Native
+qualification passed **1,667 tests / 798,457 assertions**. All **37 acceptance
+tasks / 901 regressions** passed. Four new regressions cover conditional
+branches, nonzero cosets and projected constants; independent Z3/cvc5 decisions
+and exported SAT-model replay passed. Scope tests repeat UNSAT → pop → SAT
+three times. All 220 audited build/target/formal/acceptance/recheck runs held
+single-physical-core leases across 42 physical cores, with no overlaps.
+
+Fresh 160-case comparison (60 seconds / one core / 16 GiB per invocation):
+
+| Version | Raw decided | Verified decided | Verified PAR-2 |
+| --- | ---: | ---: | ---: |
+| Frozen R140 baseline | 75 | 72 | 10841.770 |
+| Frozen R144 candidate | 78 | 75 | 10461.618 |
+| Same-round Z3 | 120 | 110 | 6469.944 |
+
+No wrong verdicts, invalid exported models, solver errors or memory failures.
+The three independently confirmed ring gains are 22, 85 and 95: formal times
+0.220, 0.534 and 28.766 seconds; targeted times 0.220, 0.535 and 5.428 seconds.
+Preserve the formal SAT gain 45 and LRA loss 59 in the score. Each was rechecked
+three times with both frozen versions: both versions returned checked SAT in
+every repetition (about 3.2–3.6 seconds). Neither change establishes another
+algorithmic gain or a reproducible LRA regression. Do not replace formal rows
+with the diagnostic repetitions. Net verified gain is three; PAR-2 improves
+380.152 seconds. Candidate still trails Z3 substantially. Unverified Xolver
+75/115/148 remain excluded; neither protected set has been evaluated.
+
+QCP correction is part of this effective code delivery: the earlier
+`branch_destruct` controller success is **zero verified programs**, because its
+auto file admits all ten VCs. Current `gcd` auto output similarly admits six
+VCs. A selectable VC-discharge prototype now runs outside the solver in a
+separate branch, but pure UNSAT candidates are not full proofs. Full comparison
+requires independently reconstructed original VCs, audited proof assumptions
+and complete program checks for each frozen backend. Do not count opaque QCP
+internal calls as external comparison queries or assume they are zero.
 
 ## Closed experiments and practical regressions
 
