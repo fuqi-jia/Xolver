@@ -10,6 +10,52 @@
 
 using namespace xolver;
 
+TEST_CASE("GeneralSimplex: backtracking assignment policy preserves its explicit contract") {
+    for (auto policy : {GeneralSimplex::AssignmentPolicy::Reinitialize,
+                        GeneralSimplex::AssignmentPolicy::Preserve}) {
+        GeneralSimplex simplex;
+        const auto x = simplex.addVar("x");
+        const auto row = simplex.addConstraint({{x, mpq_class(2)}}, mpq_class(-1));
+        REQUIRE(simplex.assertLower(x, BoundInfo(BoundValue(DeltaRational(10)), SatLit::positive(1)), 0));
+        REQUIRE((simplex.check() == GeneralSimplex::Result::Sat));
+        REQUIRE(simplex.assertLower(x, BoundInfo(BoundValue(DeltaRational(20)), SatLit::positive(2)), 1));
+        REQUIRE((simplex.check() == GeneralSimplex::Result::Sat));
+        REQUIRE(simplex.value(x) == DeltaRational(20));
+        if (policy == GeneralSimplex::AssignmentPolicy::Reinitialize)
+            simplex.backtrackToLevel(0); // the existing default still recenters
+        else simplex.backtrackToLevel(0, policy);
+        REQUIRE((simplex.check() == GeneralSimplex::Result::Sat));
+        CHECK(simplex.value(x) == DeltaRational(
+            policy == GeneralSimplex::AssignmentPolicy::Preserve ? 20 : 10));
+        CHECK(simplex.value(row) == mpq_class(2) * simplex.value(x) + DeltaRational(1));
+        CHECK(simplex.debugCheckInvariants());
+    }
+}
+
+TEST_CASE("GeneralSimplex: preserved backtracking repairs the parent after infeasible children") {
+    GeneralSimplex simplex;
+    const auto x = simplex.addVar("x"), y = simplex.addVar("y");
+    const auto sum = simplex.addConstraint({{x, mpq_class(1)}, {y, mpq_class(1)}}, mpq_class(10));
+    REQUIRE(simplex.assertLower(x, BoundInfo(BoundValue(DeltaRational(0)), SatLit::positive(1)), 0));
+    REQUIRE(simplex.assertLower(y, BoundInfo(BoundValue(DeltaRational(0)), SatLit::positive(2)), 0));
+    REQUIRE(simplex.assertLower(sum, BoundInfo(BoundValue(DeltaRational(0)), SatLit::positive(3)), 0));
+    REQUIRE(simplex.assertUpper(sum, BoundInfo(BoundValue(DeltaRational(0)), SatLit::positive(3)), 0));
+    for (int branch = 0; branch < 20; ++branch) {
+        REQUIRE((simplex.check() == GeneralSimplex::Result::Sat));
+        const int bound = branch % 2 ? 11 + branch : branch / 2;
+        simplex.assertLower(x, BoundInfo(BoundValue(DeltaRational(bound)),
+            SatLit::positive(10 + branch)), 1);
+        CHECK(simplex.check() == (bound > 10 ? GeneralSimplex::Result::Unsat : GeneralSimplex::Result::Sat));
+        simplex.backtrackToLevel(0, GeneralSimplex::AssignmentPolicy::Preserve);
+        REQUIRE((simplex.check() == GeneralSimplex::Result::Sat));
+        CHECK(simplex.value(x) >= DeltaRational(0));
+        CHECK(simplex.value(y) >= DeltaRational(0));
+        CHECK(simplex.value(x) + simplex.value(y) == DeltaRational(10));
+        CHECK(simplex.value(sum) == DeltaRational(0));
+        CHECK(simplex.debugCheckInvariants());
+    }
+}
+
 TEST_CASE("GeneralSimplex: pop restores parent conflict state and permits the next branch") {
     GeneralSimplex simplex;
     const auto x = simplex.addVar("x");
