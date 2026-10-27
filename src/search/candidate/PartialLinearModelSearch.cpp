@@ -219,8 +219,10 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
                     (void)exponent;
                     support.insert(var);
                 }
-            for (size_t depth = 0; depth < parameters.size(); ++depth)
+            for (size_t depth = 0; depth < parameters.size(); ++depth) {
+                tick();
                 if (support.contains(parameters[depth])) affected[depth].push_back(index);
+            }
         }
         auto activate = [&](const std::vector<size_t>& indices, int level) {
             for (const auto index : indices) {
