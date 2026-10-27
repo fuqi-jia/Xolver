@@ -4,6 +4,6 @@
 (declare-const y Real)
 (assert (= (* y y) 2))
 (assert (> y 0))
-(assert (= x (+ (* y y) 1)))
-(assert (= (* x x) 9))
+(assert (= x (+ (/ (* y y) 2) 1)))
+(assert (= (* x x) 4))
 (check-sat)

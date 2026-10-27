@@ -255,6 +255,17 @@ std::optional<mpq_class> ModelConverter::evalRational(
                 val[e] = p;
                 break;
             }
+            case Kind::Div: {
+                if (node.sort != ir.realSortId() || node.children.size() != 2)
+                    return std::nullopt;
+                const auto& divisor = ir.get(node.children[1]);
+                if (divisor.kind != Kind::ConstInt && divisor.kind != Kind::ConstReal)
+                    return std::nullopt;
+                const auto& denominator = val.at(node.children[1]);
+                if (denominator == 0) return std::nullopt;
+                val[e] = val.at(node.children[0]) / denominator;
+                break;
+            }
             case Kind::ToReal: {
                 if (node.children.size() != 1) return std::nullopt;
                 val[e] = val.at(node.children[0]);
@@ -397,8 +408,13 @@ bool ModelConverter::reconstruct(std::unordered_map<std::string, RealValue>& num
                         else return std::nullopt;
                         continue;
                     }
-                    if (node.kind != Kind::Add && node.kind != Kind::Sub && node.kind != Kind::Neg &&
-                        node.kind != Kind::Mul && node.kind != Kind::ToReal) return std::nullopt;
+                    if (node.kind == Kind::Div) {
+                        if (node.sort != ir.realSortId() || node.children.size() != 2)
+                            return std::nullopt;
+                        const auto kind = ir.get(node.children[1]).kind;
+                        if (kind != Kind::ConstInt && kind != Kind::ConstReal) return std::nullopt;
+                    } else if (node.kind != Kind::Add && node.kind != Kind::Sub && node.kind != Kind::Neg &&
+                               node.kind != Kind::Mul && node.kind != Kind::ToReal) return std::nullopt;
                     pending.emplace_back(id, true);
                     for (const auto child : node.children) {
                         budget.tick();
@@ -411,6 +427,10 @@ bool ModelConverter::reconstruct(std::unordered_map<std::string, RealValue>& num
                     if (node.children.size() != 1) return std::nullopt;
                     value = values.at(node.children[0]);
                     if (node.kind == Kind::Neg) value = -value;
+                } else if (node.kind == Kind::Div) {
+                    const auto denominator = values.at(node.children[1]).tryAsRational();
+                    if (!denominator || *denominator == 0) return std::nullopt;
+                    value = values.at(node.children[0]) * RealValue::fromMpq(mpq_class(1) / *denominator);
                 } else if (node.kind == Kind::Sub) {
                     if (node.children.empty()) return std::nullopt;
                     value = values.at(node.children[0]);

@@ -276,3 +276,29 @@ TEST_CASE("SolveEqs: real polynomial definitions preserve shared UF arguments") 
     CHECK(converter.empty());
     CHECK(varInAssertions(ir, "x"));
 }
+
+TEST_CASE("SolveEqs: rational polynomial coefficients require a nonzero constant real divisor") {
+    for (int divisor : {-2, 0, 3}) {
+        NativeTerms ir; SortId b, i, r; setupSorts(ir, b, i, r);
+        const auto x = var(ir, r, "x"), y = var(ir, r, "y");
+        const auto square = bin(ir, Kind::Mul, r, y, y);
+        const auto denominator = ir.add(TermExpr{Kind::ConstReal, r, {}, Payload(std::to_string(divisor))});
+        ir.addAssertion(bin(ir, Kind::Eq, b, x, bin(ir, Kind::Div, r, square, denominator)));
+        ir.addAssertion(bin(ir, Kind::Gt, b, bin(ir, Kind::Mul, r, x, x), cint(ir, r, 1)));
+        ModelConverter converter;
+        SolveEqs pass(ir, converter, SolveEqs::DefinitionPolicy::PolynomialReals);
+        if (divisor == 0) {
+            CHECK_FALSE(pass.run());
+            CHECK(converter.empty());
+            CHECK(varInAssertions(ir, "x"));
+        } else {
+            REQUIRE(pass.run());
+            pass.commit();
+            CHECK_FALSE(varInAssertions(ir, "x"));
+            std::unordered_map<std::string, RealValue> numbers{{"y", RealValue::fromInt(3)}};
+            std::unordered_map<std::string, std::string> strings;
+            REQUIRE(converter.reconstruct(numbers, strings, ir));
+            CHECK(numbers.at("x") == RealValue::fromMpq(mpq_class(9) / mpq_class(divisor)));
+        }
+    }
+}

@@ -174,6 +174,39 @@ TEST_CASE("ModelConverter: polynomial algebraic chains replace defaults and pres
     CHECK(strings.at("y").find("root-of-with-interval") != std::string::npos);
 }
 
+TEST_CASE("ModelConverter: real constant divisors replay exactly and preserve unsupported division") {
+    for (bool algebraic : {false, true}) {
+        NativeTerms ir; SortId b, i, r; setupSorts(ir, b, i, r);
+        const auto z = var(ir, r, "z");
+        const auto numerator = add(ir, r, ir.add(TermExpr{Kind::Mul, r, {z, z}, {}}), z);
+        const auto seed = algebraic ? RealValue::fromAlgebraic(
+            AlgebraicNumber{{mpz_class(-2), mpz_class(0), mpz_class(1)}, 1, 2})
+            : RealValue::fromInt(3);
+        for (int divisor : {-2, 0, 3}) {
+            ModelConverter converter;
+            const auto denominator = ir.add(TermExpr{Kind::ConstReal, r, {},
+                                                    Payload(std::to_string(divisor))});
+            converter.registerElimination("x", r, ir.add(TermExpr{Kind::Div, r, {numerator, denominator}, {}}));
+            std::unordered_map<std::string, RealValue> numbers{{"z", seed}};
+            std::unordered_map<std::string, std::string> strings;
+            if (divisor == 0) {
+                CHECK_FALSE(converter.reconstruct(numbers, strings, ir));
+                CHECK_FALSE(numbers.contains("x"));
+            } else {
+                REQUIRE(converter.reconstruct(numbers, strings, ir));
+                CHECK(numbers.at("x") * RealValue::fromInt(divisor) == seed * seed + seed);
+            }
+        }
+    }
+    NativeTerms ir; SortId b, i, r; setupSorts(ir, b, i, r);
+    ModelConverter converter;
+    converter.registerElimination("x", i, ir.add(TermExpr{Kind::Div, i, {cint(ir, i, 3), cint(ir, i, 2)}, {}}));
+    std::unordered_map<std::string, RealValue> numbers;
+    std::unordered_map<std::string, std::string> strings;
+    CHECK_FALSE(converter.reconstruct(numbers, strings, ir));
+    CHECK_FALSE(numbers.contains("x"));
+}
+
 TEST_CASE("ModelConverter: real polynomial definitions survive repeated checks and rollback") {
     Solver solver;
     solver.setLogic("QF_NRA");
@@ -185,8 +218,9 @@ TEST_CASE("ModelConverter: real polynomial definitions survive repeated checks a
     const auto square = op(Kind::Mul, {y, y});
     solver.assertFormula(op(Kind::Eq, {square, solver.mkReal("2")}));
     solver.assertFormula(op(Kind::Gt, {y, solver.mkReal("0")}));
-    solver.assertFormula(op(Kind::Eq, {x, op(Kind::Add, {square, solver.mkReal("1")})}));
-    solver.assertFormula(op(Kind::Eq, {op(Kind::Mul, {x, x}), solver.mkReal("9")}));
+    const auto halfSquare = op(Kind::Div, {square, solver.mkReal("2")});
+    solver.assertFormula(op(Kind::Eq, {x, op(Kind::Add, {halfSquare, solver.mkReal("1")})}));
+    solver.assertFormula(op(Kind::Eq, {op(Kind::Mul, {x, x}), solver.mkReal("4")}));
     for (int repeat = 0; repeat < 2; ++repeat) {
         CHECK((solver.checkSat() == Result::Sat));
         CHECK(solver.getModel().getValue(x.id()) != nullptr);
