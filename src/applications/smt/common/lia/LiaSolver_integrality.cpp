@@ -29,13 +29,38 @@ namespace xolver {
 // Behavior is byte-identical to the pre-split definitions.
 
 TheoryCheckResult LiaSolver::handleDisequalities(TheoryLemmaStorage& lemmaDb) {
+    std::vector<ActiveLinearAtom> combinationContext;
+    const auto* context = &activeAtoms_;
+    if (!interfaceEqualities_.empty() && sharedTermRegistry_) {
+        combinationContext = activeAtoms_;
+        for (const auto& equality : interfaceEqualities_) {
+            LinearFormKey form;
+            mpq_class rhs = 0;
+            auto append = [&](SharedTermId id, int coefficient) {
+                if (auto value = sharedTermRegistry_->constValue(id)) {
+                    rhs -= coefficient * *value;
+                    return true;
+                }
+                const auto name = getVarNameForSharedTerm(id);
+                if (name.empty() || name.rfind("__const_", 0) == 0) return false;
+                form.terms.push_back({name, mpq_class(coefficient)});
+                return true;
+            };
+            if (append(equality.a, 1) && append(equality.b, -1))
+                combinationContext.push_back({NullExpr, -1, Relation::Eq, true,
+                                              std::move(form), rhs, equality.reason});
+        }
+        context = &combinationContext;
+    }
+    WorkBudget contextBudget(8192);
+    auto affineContext = IntegerAffineContext::build(*context, contextBudget);
     return handleSimplexDisequalities(
         disequalities_, gs_, lemmaDb,
-        [this](const DiseqInfo& d) -> TheoryCheckResult {
+        [this, &affineContext](const DiseqInfo& d) -> TheoryCheckResult {
             // If the disequality is forced to be false by current bounds
             // (auxVar is fixed to 0), return a precise conflict.
             auto val = gs_.value(d.auxVar);
-            auto proved = gs_.proveFixedValue(d.auxVar);
+            auto proved = val.isZero() ? gs_.proveFixedValue(d.auxVar) : std::nullopt;
             if (proved && proved->first.isZero()) {
                 TheoryConflict tc;
                 for (const auto& br : proved->second) {
@@ -48,12 +73,25 @@ TheoryCheckResult LiaSolver::handleDisequalities(TheoryLemmaStorage& lemmaDb) {
                 return TheoryCheckResult::mkConflict(std::move(tc));
             }
 
-            if (d.rhs.get_den() != 1) {
-                return TheoryCheckResult::consistent();
+            // Clear denominators before using an integer lattice. Scale the
+            // auxiliary model difference too, so the gap test uses the same
+            // units as its generated bounds. Integral forms need no copy.
+            mpz_class scale = d.rhs.get_den();
+            for (const auto& term : d.lhs.terms)
+                mpz_lcm(scale.get_mpz_t(), scale.get_mpz_t(), term.second.get_den_mpz_t());
+            LinearFormKey integralForm;
+            const LinearFormKey* form = &d.lhs;
+            mpq_class rhs = d.rhs;
+            if (scale != 1) {
+                integralForm = d.lhs;
+                for (auto& term : integralForm.terms) term.second *= scale;
+                rhs *= scale;
+                val = mpq_class(scale) * val;
+                form = &integralForm;
             }
 
             mpz_class g = 0;
-            for (const auto& t : d.lhs.terms) {
+            for (const auto& t : form->terms) {
                 const mpq_class& c = t.second;
                 if (c.get_den() != 1) {
                     g = 1;
@@ -71,37 +109,16 @@ TheoryCheckResult LiaSolver::handleDisequalities(TheoryLemmaStorage& lemmaDb) {
                 }
             }
 
-            mpz_class c = d.rhs.get_num();
+            mpz_class c = rhs.get_num();
             mpz_class offset = 0;
             std::vector<SatLit> equalityReasons;
-            std::vector<ActiveLinearAtom> combinationContext;
-            const auto* context = &activeAtoms_;
-            if (!interfaceEqualities_.empty() && sharedTermRegistry_) {
-                combinationContext = activeAtoms_;
-                for (const auto& equality : interfaceEqualities_) {
-                    LinearFormKey form;
-                    mpq_class rhs = 0;
-                    auto append = [&](SharedTermId id, int coefficient) {
-                        if (auto value = sharedTermRegistry_->constValue(id)) {
-                            rhs -= coefficient * *value;
-                            return true;
-                        }
-                        const auto name = getVarNameForSharedTerm(id);
-                        if (name.empty() || name.rfind("__const_", 0) == 0) return false;
-                        form.terms.push_back({name, mpq_class(coefficient)});
-                        return true;
-                    };
-                    if (append(equality.a, 1) && append(equality.b, -1))
-                        combinationContext.push_back({NullExpr, -1, Relation::Eq, true,
-                                                      std::move(form), rhs, equality.reason});
-                }
-                context = &combinationContext;
-            }
             WorkBudget projectionBudget(8192);
-            if (auto projection = projectIntegerAffineForm(d.lhs, *context, projectionBudget)) {
-                g = projection->step;
-                offset = projection->offset;
-                equalityReasons = std::move(projection->reasons);
+            if (affineContext && !affineContext->empty()) {
+                if (auto projection = affineContext->project(*form, projectionBudget)) {
+                    g = projection->step;
+                    offset = projection->offset;
+                    equalityReasons = std::move(projection->reasons);
+                }
             }
             const mpz_class residual = c - offset;
 
@@ -122,19 +139,27 @@ TheoryCheckResult LiaSolver::handleDisequalities(TheoryLemmaStorage& lemmaDb) {
                 return TheoryCheckResult::consistent();
             }
 
+            // The integer form cannot take any value in (c-g,c+g) except c,
+            // which its disequality excludes. A nonzero fractional LP model
+            // in this gap needs the same aggregate split as a zero model;
+            // otherwise integrality branches on unrelated individual values.
+            const DeltaRational lowerGap{mpq_class(-g)}, upperGap{mpq_class(g)};
+            if (val <= lowerGap || val >= upperGap)
+                return TheoryCheckResult::consistent();
+
             if (!registry_) return TheoryCheckResult::unknown();
             mpq_class leRhs = mpq_class(c - g, 1);
             mpq_class geRhs = mpq_class(c + g, 1);
 
             auto lit1 = registry_->getOrCreateLinearBoundAtom(
-                d.lhs, Relation::Leq, leRhs, TheoryId::LIA);
+                *form, Relation::Leq, leRhs, TheoryId::LIA);
             auto lit2 = registry_->getOrCreateLinearBoundAtom(
-                d.lhs, Relation::Geq, geRhs, TheoryId::LIA);
+                *form, Relation::Geq, geRhs, TheoryId::LIA);
 
             TheoryLemma lemma{{d.lit.negated(), lit1, lit2}};
             for (const auto reason : equalityReasons) lemma.lits.push_back(reason.negated());
             return TheoryCheckResult::mkLemma(std::move(lemma));
-        });
+        }, [](const DiseqInfo&, const DeltaRational&) { return true; });
 }
 
 TheoryCheckResult LiaSolver::checkIntegrality(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {

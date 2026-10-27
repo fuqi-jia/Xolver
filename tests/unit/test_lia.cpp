@@ -4,6 +4,9 @@
 #include "search/coordination/TheoryAtomRegistry.h"
 #include "search/boolean/Atomizer.h"
 #include "search/coordination/TheoryLemmaDatabase.h"
+#include "search/coordination/TheoryManager.h"
+#include "search/sat/CadicalBackend.h"
+#include "search/sat/CadicalTheoryPropagator.h"
 #include "algebra/linear/LinearExpr.h"
 #include "algebra/linear/LinearConstraintNormalizer.h"
 #include "search/lra/GeneralSimplex.h"
@@ -513,5 +516,70 @@ TEST_CASE("LIA: projected disequality guards survive incremental scope changes")
         REQUIRE(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Sat));
         solver.pop();
         REQUIRE(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Sat));
+    }
+}
+
+namespace {
+struct LiaGapContext {
+    std::unique_ptr<SatSolver> sat = createSatSolver();
+    Atomizer atomizer{*sat};
+    TheoryAtomRegistry registry;
+    TheoryManager theories;
+    TheoryLemmaDatabase lemmas;
+    CadicalBackend& backend = dynamic_cast<CadicalBackend&>(*sat);
+    CadicalTheoryPropagator propagator{registry, theories, lemmas, backend};
+    LiaGapContext() {
+        registry.setContext(sat.get(), &atomizer);
+        backend.connectPropagator(&propagator);
+    }
+    ~LiaGapContext() { backend.disconnectPropagator(); }
+};
+}
+
+TEST_CASE("LIA: fractional disequality gaps use the explained aggregate lattice split") {
+    for (bool conditional : {false, true}) {
+        for (int sign : {-1, 1}) {
+            for (bool fractional : {false, true}) {
+                LiaGapContext context;
+                auto& registry = context.registry;
+                LiaSolver solver;
+                solver.setRegistry(&registry);
+                LinearFormKey form = conditional
+                    ? LinearFormKey{{{"x", 2}, {"y", -1}, {"z", 64}}}
+                    : LinearFormKey{{{"x", 64}}};
+                const LinearFormKey expectedForm = form;
+                const mpq_class offset = conditional ? 5 : 0;
+                const mpq_class divisor = fractional ? 3 : 1;
+                for (auto& term : form.terms) term.second /= divisor;
+                auto assertBound = [&](const LinearFormKey& lhs, Relation relation, const mpq_class& rhs) {
+                    const auto literal = registry.getOrCreateLinearBoundAtom(lhs, relation, rhs, TheoryId::LIA);
+                    solver.assertLit(*registry.findBySatVar(literal.var), true, 0, literal);
+                    return literal;
+                };
+                std::optional<SatLit> equality;
+                if (conditional)
+                    equality = assertBound(LinearFormKey{{{"x", 2}, {"y", -1}}}, Relation::Eq, offset);
+                // Every feasible LP model lies strictly inside a nonzero lattice
+                // gap. Waiting for the disequality's value to be exactly zero
+                // misses this stronger explained split and branches on variables.
+                assertBound(form, Relation::Geq, mpq_class((offset + (sign > 0 ? mpq_class(1, 4) : mpq_class(-3, 4))) / divisor));
+                assertBound(form, Relation::Leq, mpq_class((offset + (sign > 0 ? mpq_class(3, 4) : mpq_class(-1, 4))) / divisor));
+                const auto disequality = assertBound(form, Relation::Neq, mpq_class(offset / divisor));
+                auto& database = context.lemmas;
+                const auto result = solver.check(database, TheoryEffort::Full);
+                REQUIRE(result.kind == TheoryCheckResult::Kind::Lemma);
+                REQUIRE(result.lemmaOpt.has_value());
+                const auto lower = registry.findLinearLiteral(expectedForm, Relation::Leq, mpq_class(offset - 64));
+                const auto upper = registry.findLinearLiteral(expectedForm, Relation::Geq, mpq_class(offset + 64));
+                REQUIRE(lower.has_value());
+                REQUIRE(upper.has_value());
+                const auto& clause = result.lemmaOpt->lits;
+                CHECK(clause.size() == (conditional ? 4 : 3));
+                CHECK(std::find(clause.begin(), clause.end(), disequality.negated()) != clause.end());
+                CHECK(std::find(clause.begin(), clause.end(), *lower) != clause.end());
+                CHECK(std::find(clause.begin(), clause.end(), *upper) != clause.end());
+                if (equality) CHECK(std::find(clause.begin(), clause.end(), equality->negated()) != clause.end());
+            }
+        }
     }
 }

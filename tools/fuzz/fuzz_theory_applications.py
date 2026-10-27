@@ -65,9 +65,27 @@ def replay(prefix, output):
         if name in definitions:
             raise ValueError('duplicate model definition')
         definitions[name] = binding
-    commands = []
-    for command in parse(prefix):
+    original_commands = parse(prefix)
+    algebraic_prelude = []
+    if 'root-of-with-interval' in output:
+        names = [symbol_name(command[1]) for command in original_commands
+                 if emit(command[0]) in ('declare-const', 'declare-fun')]
+        from algebraic_model import expand_algebraic_roots
+        selected, algebraic_prelude = expand_algebraic_roots(
+            [definitions[name] for name in names if name in definitions], original_commands)
+        definitions.update({symbol_name(binding[1]): binding for binding in selected})
+    commands, inserted_roots = [], False
+    for command in original_commands:
         op = emit(command[0])
+        if algebraic_prelude and op == 'set-logic':
+            # Witness polynomials may exceed the original problem's logic;
+            # widening the replay language preserves every original assertion.
+            commands.append('(set-logic ALL)')
+            continue
+        if (algebraic_prelude and not inserted_roots
+                and op not in ('set-option', 'set-info')):
+            commands.extend(algebraic_prelude)
+            inserted_roots = True
         if op in ('declare-const', 'declare-fun'):
             name = symbol_name(command[1])
             if name not in definitions:

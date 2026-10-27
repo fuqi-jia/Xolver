@@ -3,6 +3,7 @@
 #include "contracts/TheorySolver.h"
 #include "search/coordination/TheoryLemmaDatabase.h"
 #include "search/lra/GeneralSimplex.h"
+#include <utility>
 #include <vector>
 
 namespace xolver {
@@ -21,16 +22,17 @@ namespace xolver {
 //   - int auxVar
 //   - SatLit lit
 // ============================================================================
-template <typename DiseqInfoT, typename SplitBuilder>
+template <typename DiseqInfoT, typename SplitBuilder, typename ModelViolation>
 TheoryCheckResult handleSimplexDisequalities(
     const std::vector<DiseqInfoT>& disequalities,
     const GeneralSimplex& gs,
     TheoryLemmaStorage& lemmaDb,
-    SplitBuilder&& buildSplit)
+    SplitBuilder&& buildSplit,
+    ModelViolation&& violatesModel)
 {
     for (const auto& d : disequalities) {
         auto val = gs.value(d.auxVar);
-        if (!val.isZero()) continue;
+        if (!violatesModel(d, val)) continue;
 
         auto result = buildSplit(d);
         if (result.kind == TheoryCheckResult::Kind::Consistent) continue;
@@ -42,6 +44,20 @@ TheoryCheckResult handleSimplexDisequalities(
         return result;
     }
     return TheoryCheckResult::consistent();
+}
+
+// Dense theories only need a split at zero. Discrete theories can supply a
+// predicate and let their builder exclude a wider unreachable model interval.
+template <typename DiseqInfoT, typename SplitBuilder>
+TheoryCheckResult handleSimplexDisequalities(
+    const std::vector<DiseqInfoT>& disequalities,
+    const GeneralSimplex& gs,
+    TheoryLemmaStorage& lemmaDb,
+    SplitBuilder&& buildSplit)
+{
+    return handleSimplexDisequalities(disequalities, gs, lemmaDb,
+        std::forward<SplitBuilder>(buildSplit),
+        [](const DiseqInfoT&, const DeltaRational& value) { return value.isZero(); });
 }
 
 } // namespace xolver

@@ -1,8 +1,159 @@
 #include "frontend/preprocess/IteLowerer.h"
+#include "base/WorkBudget.h"
+#include "ir/NumericLiteral.h"
 #include <cassert>
 #include <iostream>
+#include <map>
 
 namespace xolver {
+
+namespace {
+// Arithmetic atoms remain opaque: the identity holds for nonlinear terms,
+// array reads and UF applications as well as for plain arithmetic variables.
+struct AffineBranch {
+    std::map<ExprId, mpq_class> terms;
+    mpq_class constant = 0;
+};
+
+AffineBranch collectAffineBranch(const NativeTerms& ir, ExprId root, WorkBudget& budget) {
+    AffineBranch result;
+    std::vector<std::pair<ExprId, mpq_class>> pending{{root, 1}};
+    while (!pending.empty()) {
+        budget.tick();
+        auto [id, factor] = std::move(pending.back());
+        pending.pop_back();
+        if (factor == 0) continue;
+        const auto node = ir.get(id);
+        if (auto value = numericLiteral(node)) {
+            result.constant += factor * *value;
+        } else if (node.kind == Kind::Add || node.kind == Kind::Sub || node.kind == Kind::Neg) {
+            for (size_t i = 0; i < node.children.size(); ++i) {
+                budget.tick();
+                const bool negative = node.kind == Kind::Neg ||
+                    (node.kind == Kind::Sub && (i > 0 || node.children.size() == 1));
+                pending.emplace_back(node.children[i], negative ? mpq_class(-factor) : factor);
+            }
+        } else if (node.kind == Kind::Mul) {
+            ExprId atom = NullExpr;
+            bool nonlinear = false;
+            mpq_class product = factor;
+            for (auto child : node.children) {
+                budget.tick();
+                if (auto value = numericLiteral(ir, child)) product *= *value;
+                else if (atom == NullExpr) atom = child;
+                else { nonlinear = true; break; }
+            }
+            if (nonlinear) result.terms[id] += factor;
+            else if (atom == NullExpr) result.constant += product;
+            else pending.emplace_back(atom, std::move(product));
+        } else {
+            result.terms[id] += factor;
+        }
+    }
+    for (auto it = result.terms.begin(); it != result.terms.end(); ) {
+        if (it->second == 0) it = result.terms.erase(it);
+        else ++it;
+    }
+    return result;
+}
+
+ExprId arithmeticConstant(NativeTerms& ir, SortId sort, const mpq_class& value) {
+    const auto kind = ir.sortKind(sort) == SortKind::Int ? Kind::ConstInt : Kind::ConstReal;
+    return ir.addShared(TermExpr{kind, sort, {}, Payload(value.get_str())});
+}
+
+ExprId buildAffineBranch(NativeTerms& ir, SortId sort, const AffineBranch& branch) {
+    std::vector<ExprId> terms;
+    if (branch.constant != 0) terms.push_back(arithmeticConstant(ir, sort, branch.constant));
+    for (const auto& [atom, coefficient] : branch.terms) {
+        if (coefficient == 1) terms.push_back(atom);
+        else if (coefficient == -1)
+            terms.push_back(ir.addShared(TermExpr{Kind::Neg, sort, {atom}, Payload{}}));
+        else if (coefficient != 0)
+            terms.push_back(ir.addShared(TermExpr{Kind::Mul, sort,
+                {arithmeticConstant(ir, sort, coefficient), atom}, Payload{}}));
+    }
+    if (terms.empty()) return arithmeticConstant(ir, sort, 0);
+    if (terms.size() == 1) return terms.front();
+    TermExpr sum{Kind::Add, sort, {}, Payload{}};
+    for (auto term : terms) sum.children.push_back(term);
+    return ir.addShared(std::move(sum));
+}
+
+struct FactoredChoice {
+    AffineBranch common, thenBranch, elseBranch;
+    mpq_class scale = 1;
+};
+
+std::optional<FactoredChoice> factorIntegerChoice(
+    const NativeTerms& ir, SortId sort, ExprId thenTerm, ExprId elseTerm) {
+    const auto kind = ir.sortKind(sort);
+    // An integer residual witness exposes divisibility regardless of which
+    // theory consumes the surrounding term. Require that discrete domain.
+    if (kind != SortKind::Int) return std::nullopt;
+    auto arithmetic = [](Kind operation) {
+        return operation == Kind::Add || operation == Kind::Sub ||
+               operation == Kind::Neg || operation == Kind::Mul;
+    };
+    const auto thenNode = ir.get(thenTerm), elseNode = ir.get(elseTerm);
+    if (!arithmetic(thenNode.kind) && !arithmetic(elseNode.kind)) {
+        // Distinct opaque atoms have no common coefficient, and a residual
+        // atom with coefficient one has no integer factor. Avoid allocating
+        // affine maps for these frequent variable-selection chains.
+        const auto left = numericLiteral(thenNode), right = numericLiteral(elseNode);
+        if (!left || !right || abs(*left - *right) <= 1) return std::nullopt;
+    }
+    try {
+        WorkBudget budget(8192);
+        FactoredChoice result;
+        result.thenBranch = collectAffineBranch(ir, thenTerm, budget);
+        result.elseBranch = collectAffineBranch(ir, elseTerm, budget);
+        // Shift by a common constant and factor exactly shared coefficients.
+        // This exposes branch-independent structure without distributing ITEs.
+        result.common.constant = result.thenBranch.constant;
+        result.elseBranch.constant -= result.common.constant;
+        result.thenBranch.constant = 0;
+        for (auto it = result.thenBranch.terms.begin(); it != result.thenBranch.terms.end(); ) {
+            budget.tick();
+            const auto other = result.elseBranch.terms.find(it->first);
+            if (other != result.elseBranch.terms.end() && other->second == it->second) {
+                result.common.terms.insert(*it);
+                result.elseBranch.terms.erase(other);
+                it = result.thenBranch.terms.erase(it);
+            } else ++it;
+        }
+        {
+            mpz_class divisor = 0;
+            auto include = [&](const mpq_class& coefficient) {
+                budget.tick();
+                if (coefficient.get_den() != 1) return false;
+                mpz_gcd(divisor.get_mpz_t(), divisor.get_mpz_t(), coefficient.get_num_mpz_t());
+                return true;
+            };
+            for (const auto* branch : {&result.thenBranch, &result.elseBranch}) {
+                if (!include(branch->constant)) return std::nullopt;
+                for (const auto& [atom, coefficient] : branch->terms) {
+                    // Only Int-valued atoms justify divisibility. In particular
+                    // an integral-looking Real expression gives no such fact.
+                    if (ir.sortKind(ir.get(atom).sort) != SortKind::Int || !include(coefficient))
+                        return std::nullopt;
+                }
+            }
+            if (divisor > 1) {
+                result.scale = mpq_class(divisor);
+                for (auto* branch : {&result.thenBranch, &result.elseBranch}) {
+                    branch->constant /= result.scale;
+                    for (auto& [atom, coefficient] : branch->terms) coefficient /= result.scale;
+                }
+            }
+        }
+        if (result.common.terms.empty() && result.scale == 1) return std::nullopt;
+        return result;
+    } catch (const ResourceExhausted&) {
+        return std::nullopt; // Optional normalization; retain exact original guards.
+    }
+}
+} // namespace
 
 IteLowerer::IteLowerer(NativeTerms& ir)
     : ir_(ir), boolSortId_(ir.boolSortId()) {
@@ -114,8 +265,27 @@ ExprId IteLowerer::lowerTermIte(ExprId iteExpr, SortId S) {
         return tLower;
     }
 
+    // ite(c, common + g*t, common + g*e) = common + g*ite(c,t,e).
+    // For Int, the residual choice is Int too, exposing its lattice before
+    // Boolean branching. The guarded residual equalities remain exact.
+    auto factor = factorIntegerChoice(ir_, S, tLower, eLower);
+    if (factor) {
+        tLower = buildAffineBranch(ir_, S, factor->thenBranch);
+        eLower = buildAffineBranch(ir_, S, factor->elseBranch);
+        if (tLower == eLower) {
+            factor->common.terms[tLower] += factor->scale;
+            const auto result = buildAffineBranch(ir_, S, factor->common);
+            termMemo_[key] = result;
+            return result;
+        }
+    }
     ExprId v = freshTerm(S);
-    termMemo_[key] = v;
+    ExprId result = v;
+    if (factor) {
+        factor->common.terms[v] += factor->scale;
+        result = buildAffineBranch(ir_, S, factor->common);
+    }
+    termMemo_[key] = result;
 
     // (or (not c) (= v t))
     ExprId eqThen = ir_.add(TermExpr{Kind::Eq, boolSortId_, {v, tLower}, Payload{}});
@@ -131,7 +301,7 @@ ExprId IteLowerer::lowerTermIte(ExprId iteExpr, SortId S) {
     ExprId guardElse = ir_.add(TermExpr{Kind::Or, boolSortId_, {cLower, eqElse}, Payload{}});
     generatedAssertions_.push_back(guardElse);
 
-    return v;
+    return result;
 }
 
 ExprId IteLowerer::lowerAssertion(ExprId assertion) {
