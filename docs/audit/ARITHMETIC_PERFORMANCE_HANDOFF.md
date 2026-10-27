@@ -768,6 +768,51 @@ whole-program performance claim. Neither protected set has been evaluated.
 Continue using Git, successful GitHub CI, source manifests, frozen hashes and
 these acceptance records. An additional server archive is not a delivery gate.
 
+## Delivery receipt and typed QCP storage ranges (2026-10-27)
+
+The R184 arithmetic stage was merged in
+[PR50](https://github.com/fuqi-jia/Xolver/pull/50), producing main
+`7a7e40a7f5ea54df920baa2634a669717fa0a545`. Both jobs passed in
+[PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/40437207152) and
+[main CI](https://github.com/fuqi-jia/Xolver/actions/runs/40439231930).
+R184 remains the selected arithmetic binary. Later experimental binaries below
+do not replace its qualification.
+
+The [typed-range stage record](QCP_TYPED_RANGE_STAGE_20261027.json) records a
+QCP adapter improvement: supported positive assertions owning signed `Int`
+cells contribute the exact storage range supplied by `store_int_range`.
+Unknown heap syntax, negative contexts and disjunctions contribute no range
+facts. Unowned `Z` variables remain unbounded. Exported assumptions and both
+adapter source hashes are recorded with each query.
+
+The adapter reconstructs complete original Rocq statements, deriving ranges
+with the public storage lemma. Pure-only conclusions avoid spatial splitting;
+spatial cancellation must finish its branch. Twenty-five native integration
+tests passed in EOS `b3b49552a328`. Four newly generated R222 safety candidates
+passed unchanged in EOS `b5de49ca4ab5`; other obligations still require checked
+public remainder/gcd arithmetic. No SMT result becomes a proof assumption.
+
+Both frozen backends completed canonical GCD final-checks with identical C,
+specifications and frontend: Xolver EOS `145b082b14fb`, Z3 `dac58200d7cc`.
+The independent coverage audit finds **one program and nine whole VCs per
+backend**, zero admitted auto witnesses. Each R210 discharge uses twelve
+external queries, all UNSAT; two formerly SAT weaker projections are now UNSAT
+with justified type ranges. Repeated R222 attempts do not add query or program
+coverage. Total unique qualified development C programs, including the earlier
+branch example, is **two**. Internal symbolic-executor query counts remain
+unknown. Reconstruction attempts differ, so these timings establish no fair
+end-to-end speed advantage or superiority over Z3.
+
+Boundary candidates and integer scaling are separate experimental methods.
+The common boundary framework takes theory-supplied admissible endpoints and
+requires complete candidate validation. Integer primitive-ray scaling has its
+own arithmetic-specific checks. Shared linear coordinates exposed a growing
+integer branch ray; a reproduced stale decision-vocabulary cache was fixed,
+but that fix alone did not recover all lost solves. R208, R219, R224 and R227
+remain unselected: their formal comparisons had no added verified solve and
+lost results. These experiments establish no selected boundary-search gain.
+Neither protected set has been evaluated, and an extra server archive is not a gate.
+
 ## Closed experiments and practical regressions
 
 R178 replaced the square-cascade's ad hoc coefficient-Horner substitution with

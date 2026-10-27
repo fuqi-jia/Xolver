@@ -3,8 +3,9 @@
 
 This is a conservative source adapter, not a Rocq elaborator or a QCP callback.
 Only explicit Z/bool binders and the documented operators below are accepted.
-Heap assumptions are not converted into integer facts. Pure RHS projections are
-sufficient subconditions, not proofs or counterexamples of entire C programs.
+Owned signed-Int cells supply their declared range only in the supported positive
+conjunctive assertion grammar. Projections are sufficient subconditions, not
+proofs or counterexamples of entire C programs.
 """
 from __future__ import annotations
 
@@ -267,6 +268,106 @@ DEFINITION = re.compile(r"\bDefinition\s+([A-Za-z_][A-Za-z_0-9']*)\s*:=")
 END = re.compile(r"\.(?=\s*(?:Definition\b|Module\b|End\b|$))")
 
 
+def assertion_parts(text: str) -> list[str]:
+    """Split positive conjunctions, respecting parentheses and both quote kinds.
+
+    Each resulting leaf must still match the complete supported grammar. An
+    unknown connective/binder invalidates extraction from the entire assertion.
+    """
+    result, start, depth, quote, i = [], 0, 0, '', 0
+    while i < len(text):
+        token = text[i]
+        if quote:
+            if token == quote:
+                quote = ''
+        elif token in ('"', '“'):
+            quote = '”' if token == '“' else '"'
+        elif token == '(':
+            depth += 1
+        elif token == ')':
+            depth -= 1
+            if depth < 0:
+                raise Unsupported('unbalanced assertion')
+        elif depth == 0 and text[i:i+2] in ('**', '&&'):
+            result.append(text[start:i].strip())
+            i += 2
+            start = i
+            continue
+        i += 1
+    if depth or quote:
+        raise Unsupported('unterminated assertion')
+    result.append(text[start:].strip())
+    return result
+
+
+def assertion_unwrap(text: str) -> str:
+    text = text.strip()
+    while text.startswith('('):
+        depth, quote, end = 0, '', None
+        for i, token in enumerate(text):
+            if quote:
+                if token == quote:
+                    quote = ''
+            elif token in ('"', '“'):
+                quote = '”' if token == '“' else '"'
+            elif token == '(':
+                depth += 1
+            elif token == ')':
+                depth -= 1
+                if depth == 0:
+                    end = i
+                    break
+        if end != len(text) - 1:
+            break
+        text = text[1:-1].strip()
+    return text
+
+
+def owned_int_ranges(assertion: str, symbols: dict[str, str]) -> list[dict]:
+    """Conservative consequences of QCP store_int_range (signed 32-bit Int).
+
+    Fully recognize the positive assertion tree before returning any facts.
+    In particular, never mine cells out of disjunctions, negations, wands,
+    existential assertions, function applications or unknown heap predicates.
+    """
+    def visit(text: str, depth: int = 0) -> list[dict]:
+        if depth > 100:
+            raise Unsupported('assertion nesting budget exhausted')
+        text = assertion_unwrap(text)
+        parts = assertion_parts(text)
+        if len(parts) > 1:
+            return [fact for part in parts for fact in visit(part, depth + 1)]
+        if text in ('TT', 'emp'):
+            return []
+        if text.startswith('“') and text.endswith('”') and text.count('“') == 1:
+            if parse(text[1:-1], symbols).sort != 'Prop':
+                raise Unsupported('non-propositional assertion')
+            return []
+        cell = re.fullmatch(r'(.+?)\s*#\s*Int\s*\|->\s*(.+)', text, re.DOTALL)
+        if not cell:
+            raise Unsupported('unsupported positive assertion leaf')
+        address, value = assertion_unwrap(cell[1]), assertion_unwrap(cell[2])
+        # Addresses are retained for checked proof reconstruction, never asserted
+        # as arithmetic facts. Recognize a variable address or a typed Z term.
+        if not re.fullmatch(r'&\(\s*"[A-Za-z_][A-Za-z_0-9]*"\s*\)', address):
+            if parse(address, symbols).sort != 'Int':
+                raise Unsupported('unsupported cell address')
+        term = parse(value, symbols)
+        if term.sort != 'Int':
+            raise Unsupported('non-integer cell value')
+        lower = apply('<=', Term(integer(LIMITS['INT_MIN']), 'Int'), term, sort='Prop')
+        upper = apply('<=', term, Term(integer(LIMITS['INT_MAX']), 'Int'), sort='Prop')
+        return [dict(kind='owned-int-range', address=address, value=value,
+                     lemma='store_int_range', lower=lower.smt, upper=upper.smt)]
+
+    try:
+        return visit(assertion)
+    except (Unsupported, RecursionError):
+        # Retain the previous weaker pure projection; unsupported heap syntax
+        # cannot cause a stronger arithmetic assumption to escape.
+        return []
+
+
 def export_goals(source: Path, output: Path) -> dict:
     raw_bytes = source.read_bytes()
     raw = raw_bytes.decode('utf-8')
@@ -289,7 +390,11 @@ def export_goals(source: Path, output: Path) -> dict:
             if "|--" in body:
                 if body.count("|--") != 1:
                     raise Unsupported("compound entailment requires an elaborated AST")
-                _, rhs = body.split("|--")
+                lhs, rhs = body.split("|--")
+                ranges = owned_int_ranges(lhs, symbols)
+                record['derived_assumptions'] = ranges
+                for fact in ranges:
+                    assumptions.extend(Term(fact[key], 'Prop') for key in ('lower', 'upper'))
                 projection = "pure-sufficient-condition"
                 rest = rhs.strip()
                 while rest.startswith("“"):

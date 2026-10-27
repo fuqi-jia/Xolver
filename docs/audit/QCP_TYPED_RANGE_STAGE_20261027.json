@@ -1,0 +1,387 @@
+{
+  "schema": "xolver-qcp-typed-range-stage/1",
+  "stage": "owned-int-range-projection-20261027",
+  "implementation_commit": "5f0dd0697134b9b9523a83df3a1e36e8d7c4809c",
+  "main_baseline": "7a7e40a7f5ea54df920baa2634a669717fa0a545",
+  "main_baseline_ci": "https://github.com/fuqi-jia/Xolver/actions/runs/40439231930",
+  "source_files": {
+    "tools/integration/qcp.py": "1ee231f9b2884949859eb16eb37fbfc797e96550766946805adb123d632a7490",
+    "tools/integration/qcp_backend.py": "07461bd8bd5f48b2d51c3f83b04f518228f3362b38fdefd9db9bfaa393314b22",
+    "tests/tools/test_qcp.py": "c83aafdf839b3fe9df806e74c1f5a6b916357c9e4172bdb80ebf03a047c22a16",
+    "tests/tools/test_qcp_backend.py": "0134187aef4ab3a8c85feaa4e597bd090922da68f47009e850ea6a43cd77b4ba"
+  },
+  "qcp": {
+    "revision": "08cc7a0f1373a1db3800111a0205a340b6d6f99c",
+    "symexec_sha256": "0e74c446cebca8c804ff9b838f07c67f23e31a093630675bc720b25c986e1032",
+    "common_frontend": "Pinned precompiled symbolic executor; internal SMT invocations remain opaque.",
+    "range_lemma": "Rocq/SeparationLogic/StoreAux.v:store_int_range",
+    "integer_semantics": "Signed 32-bit Int storage; unowned Z variables are not range bounded."
+  },
+  "benefit": {
+    "previous_weak_projections_sat": 2,
+    "range_strengthened_projections_unsat": 2,
+    "same_queries_solved_by_both_backends": true,
+    "whole_vcs_per_backend": 9,
+    "external_queries_per_backend": 12,
+    "external_unsat_per_backend": 12,
+    "unique_c_programs_in_this_stage": 1,
+    "total_qualified_unique_development_c_programs": 2,
+    "opaque_internal_smt_queries": null
+  },
+  "qualification": {
+    "unit_experiment": "b3b49552a328",
+    "unit_job": "20261027083045-qcp-resource-r233-unit-audit-2149af",
+    "unit_tests": 25,
+    "program_audits": {
+      "xolver": {
+        "program_verified": true,
+        "verified_vcs": 9,
+        "audit_sha256": "f44e20aa8484abef85f91ff8bbd458b4ea39ecc732561912eda3b04b385dfae5",
+        "hashes": {
+          "goal": "8f85baa2d2fd8afb8346f8b5d9f425932e3eb600b1d239193bf80c602ddc1db9",
+          "proofs": {
+            "/pub/data/jiafq/xolver/dependencies/qcp-08cc7a0f/Rocq/examples/QCP_demos_human/simple_arith/gcd_resource_xolver_proof_auto.v": "a8c52fd4c3f90eff65017d2311b2eca8436fae1a8673d3da3d03155c18885b1a",
+            "/pub/data/jiafq/xolver/dependencies/qcp-08cc7a0f/Rocq/examples/QCP_demos_human/simple_arith/gcd_resource_xolver_proof_manual.v": "11cc20abeeae4ac9b02ea48ce8004c9182e723546582315c5e524eb13ab03a21"
+          },
+          "final_check": "068f777f2cbfd281e3e024c142ab0563e5f01a202d7ffd0ac8d89bcb6814fa6a",
+          "state": "66751aeaf8ab5510426415dfe44cea55841af2464cce6a76d7ae6f1797f1ae45",
+          "backend_reports": {}
+        },
+        "backend_qualified": false
+      },
+      "z3": {
+        "program_verified": true,
+        "verified_vcs": 9,
+        "audit_sha256": "e643f0e2f2df7af992e1ee458769a34fa86d428b4f810ba706be5c559bca66cf",
+        "hashes": {
+          "goal": "8f85baa2d2fd8afb8346f8b5d9f425932e3eb600b1d239193bf80c602ddc1db9",
+          "proofs": {
+            "/pub/data/jiafq/xolver/dependencies/qcp-08cc7a0f/Rocq/examples/QCP_demos_human/simple_arith/gcd_resource_z3_proof_auto.v": "67c61288a07172a1efcf7c1f9880eb4d4b7b77c36bb8998581528de504171096",
+            "/pub/data/jiafq/xolver/dependencies/qcp-08cc7a0f/Rocq/examples/QCP_demos_human/simple_arith/gcd_resource_z3_proof_manual.v": "b6c815a4a216a9aec7f085368ba702c5e3c940fb245306da349617d0f7f46d21"
+          },
+          "final_check": "c613ee949ee7026a90d438cf6223c692889cde0a51249f4e173c97242b71e4cf",
+          "state": "3ec594dd946361ae6c9f9008d530262d814617246c2a0a493e16b2b5b56de90c",
+          "backend_reports": {}
+        },
+        "backend_qualified": false
+      }
+    },
+    "final_checks": {
+      "xolver": {
+        "experiment": "145b082b14fb",
+        "job": "20261027082036-gcd-resource-xolver-final-check-520733"
+      },
+      "z3": {
+        "experiment": "dac58200d7cc",
+        "job": "20261027075008-gcd-resource-z3-final-check-b06743"
+      }
+    },
+    "r222_unchanged_generated_safety_candidates": {
+      "count": 4,
+      "experiment": "b5de49ca4ab5",
+      "whole_vcs_checked": 5
+    },
+    "remainder_evidence": "R222 split query is UNSAT, but its generated candidate still needed explicit public remainder arithmetic before the complete parent VCs checked. Do not credit unchanged candidate proof success.",
+    "returns_evidence": "Four unsupported declarations generate zero external queries; two full return VCs use checked public gcd facts, not SMT discharge."
+  },
+  "limitations": [
+    "This replaces external pending-VC discharge only; it does not replace the opaque SMT backend inside the pinned symbolic executor.",
+    "Program verification combines backend candidates and checked manual arithmetic; not every complete VC is an unchanged SMT candidate.",
+    "Both backends verify the same GCD program and 9 whole VCs. Repeated runs do not add unique program coverage.",
+    "Query timings exclude proof work and differ across reconstruction attempts; no end-to-end performance superiority is established.",
+    "SMT projection antecedents changed by sound typed-range facts; the old SAT projections were not incorrect solver verdicts or C bugs.",
+    "Only a fully recognized positive conjunctive assertion tree contributes range facts; unsupported structure discards every heap-derived fact.",
+    "An UNSAT projection only emits an untrusted complete-statement candidate; Rocq checking remains mandatory.",
+    "Neither independent protected set has been read or evaluated."
+  ],
+  "server_evidence_root": "/pub/data/jiafq/xolver/validation/arithmetic-r103",
+  "evidence": {
+    "source_c_sha256": "255cd902a923b5044acdbe6372652e0b422af3a5a723cc37355040e613a8b3a3",
+    "programs": {
+      "xolver": {
+        "run": "gcd_resource_xolver-20261027131759",
+        "phase": "done",
+        "final_check": {
+          "status": "passed",
+          "checked_at": "2026-10-27T08:21:21.821121Z",
+          "errors": [],
+          "cleanup_removed_count": 0
+        },
+        "spec_freeze": {
+          "functions": [
+            "abs",
+            "gcd"
+          ],
+          "baseline": {
+            "extern_coq": {
+              "Zgcd": "Z -> Z -> Z",
+              "Zabs": "Z -> Z"
+            },
+            "import_coq": {},
+            "specs": {
+              "abs::<default>": "Require INT_MIN < x && x <= INT_MAX && emp Ensure __return == Zabs(x) && emp",
+              "gcd::<default>": "Require INT_MIN < x && INT_MIN < y Ensure __return == Zgcd(x,y)"
+            },
+            "lib": {}
+          }
+        },
+        "proof_auto_admitted": 0,
+        "goal_sha256": "8f85baa2d2fd8afb8346f8b5d9f425932e3eb600b1d239193bf80c602ddc1db9",
+        "manual_sha256": "11cc20abeeae4ac9b02ea48ce8004c9182e723546582315c5e524eb13ab03a21",
+        "auto_sha256": "a8c52fd4c3f90eff65017d2311b2eca8436fae1a8673d3da3d03155c18885b1a",
+        "controller_state_sha256": "66751aeaf8ab5510426415dfe44cea55841af2464cce6a76d7ae6f1797f1ae45"
+      },
+      "z3": {
+        "run": "gcd_resource_z3-20261027132548",
+        "phase": "done",
+        "final_check": {
+          "status": "passed",
+          "checked_at": "2026-10-27T07:50:51.666833Z",
+          "errors": [],
+          "cleanup_removed_count": 0
+        },
+        "spec_freeze": {
+          "functions": [
+            "abs",
+            "gcd"
+          ],
+          "baseline": {
+            "extern_coq": {
+              "Zgcd": "Z -> Z -> Z",
+              "Zabs": "Z -> Z"
+            },
+            "import_coq": {},
+            "specs": {
+              "abs::<default>": "Require INT_MIN < x && x <= INT_MAX && emp Ensure __return == Zabs(x) && emp",
+              "gcd::<default>": "Require INT_MIN < x && INT_MIN < y Ensure __return == Zgcd(x,y)"
+            },
+            "lib": {}
+          }
+        },
+        "proof_auto_admitted": 0,
+        "goal_sha256": "8f85baa2d2fd8afb8346f8b5d9f425932e3eb600b1d239193bf80c602ddc1db9",
+        "manual_sha256": "b6c815a4a216a9aec7f085368ba702c5e3c940fb245306da349617d0f7f46d21",
+        "auto_sha256": "67c61288a07172a1efcf7c1f9880eb4d4b7b77c36bb8998581528de504171096",
+        "controller_state_sha256": "3ec594dd946361ae6c9f9008d530262d814617246c2a0a493e16b2b5b56de90c"
+      }
+    },
+    "backend_reports": {
+      "qcp-gcd-resource-xolver-safety-r210": {
+        "sha256": "bdd656a5ce002d3d5bce52665aae9b72c3e24bb136161ffa8399a85c473072a1",
+        "backend": "xolver",
+        "binary": {
+          "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r184/xolver",
+          "sha256": "c59cea2ce49f62f793fe9de28527da32ab2d4af2456347f0753384ff39433ff9"
+        },
+        "source_sha256": "8f85baa2d2fd8afb8346f8b5d9f425932e3eb600b1d239193bf80c602ddc1db9",
+        "adapter_sha256": "50e0db8c6a0655d38991bb0a31f612e3c8424112f197e4f3d9233f7b48e8a3ee",
+        "exporter_sha256": "1ee231f9b2884949859eb16eb37fbfc797e96550766946805adb123d632a7490",
+        "queries": 11,
+        "candidates": 4,
+        "results": [
+          "unsat",
+          "unsat",
+          "unsat",
+          "unsat",
+          "unsat",
+          "unsat",
+          "unsat",
+          "unsat",
+          "unsat",
+          "unsat",
+          "unsat"
+        ],
+        "smt_seconds": 0.39418610371649265
+      },
+      "qcp-gcd-resource-z3-safety-r210": {
+        "sha256": "3cdea84e306ecd141f31af188482abede5a190652eb985c104a9550e30586223",
+        "backend": "z3",
+        "binary": {
+          "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+          "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+        },
+        "source_sha256": "8f85baa2d2fd8afb8346f8b5d9f425932e3eb600b1d239193bf80c602ddc1db9",
+        "adapter_sha256": "50e0db8c6a0655d38991bb0a31f612e3c8424112f197e4f3d9233f7b48e8a3ee",
+        "exporter_sha256": "1ee231f9b2884949859eb16eb37fbfc797e96550766946805adb123d632a7490",
+        "queries": 11,
+        "candidates": 4,
+        "results": [
+          "unsat",
+          "unsat",
+          "unsat",
+          "unsat",
+          "unsat",
+          "unsat",
+          "unsat",
+          "unsat",
+          "unsat",
+          "unsat",
+          "unsat"
+        ],
+        "smt_seconds": 0.4812631029635668
+      },
+      "qcp-gcd-resource-xolver-safety-r222": {
+        "sha256": "1c7f6d002937f1b13c949340ccbf005186f1f031fc5af90026b4b8755145b057",
+        "backend": "xolver",
+        "binary": {
+          "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r184/xolver",
+          "sha256": "c59cea2ce49f62f793fe9de28527da32ab2d4af2456347f0753384ff39433ff9"
+        },
+        "source_sha256": "8f85baa2d2fd8afb8346f8b5d9f425932e3eb600b1d239193bf80c602ddc1db9",
+        "adapter_sha256": "07461bd8bd5f48b2d51c3f83b04f518228f3362b38fdefd9db9bfaa393314b22",
+        "exporter_sha256": "1ee231f9b2884949859eb16eb37fbfc797e96550766946805adb123d632a7490",
+        "queries": 11,
+        "candidates": 4,
+        "results": [
+          "unsat",
+          "unsat",
+          "unsat",
+          "unsat",
+          "unsat",
+          "unsat",
+          "unsat",
+          "unsat",
+          "unsat",
+          "unsat",
+          "unsat"
+        ],
+        "smt_seconds": 0.5184566639363766
+      },
+      "qcp-gcd-resource-xolver-remainder-r210": {
+        "sha256": "f1bcf97d22317551c679ac0044b908863c6e0293002b88507d521c104b926815",
+        "backend": "xolver",
+        "binary": {
+          "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r184/xolver",
+          "sha256": "c59cea2ce49f62f793fe9de28527da32ab2d4af2456347f0753384ff39433ff9"
+        },
+        "source_sha256": "8f85baa2d2fd8afb8346f8b5d9f425932e3eb600b1d239193bf80c602ddc1db9",
+        "adapter_sha256": "50e0db8c6a0655d38991bb0a31f612e3c8424112f197e4f3d9233f7b48e8a3ee",
+        "exporter_sha256": "1ee231f9b2884949859eb16eb37fbfc797e96550766946805adb123d632a7490",
+        "queries": 1,
+        "candidates": 1,
+        "results": [
+          "unsat"
+        ],
+        "smt_seconds": 0.03454492799937725
+      },
+      "qcp-gcd-resource-z3-remainder-r210": {
+        "sha256": "fc8f8e0040533d7d18c0be78246afb7cf469a09e9801a95f681ac68fc532ab9c",
+        "backend": "z3",
+        "binary": {
+          "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+          "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+        },
+        "source_sha256": "8f85baa2d2fd8afb8346f8b5d9f425932e3eb600b1d239193bf80c602ddc1db9",
+        "adapter_sha256": "50e0db8c6a0655d38991bb0a31f612e3c8424112f197e4f3d9233f7b48e8a3ee",
+        "exporter_sha256": "1ee231f9b2884949859eb16eb37fbfc797e96550766946805adb123d632a7490",
+        "queries": 1,
+        "candidates": 1,
+        "results": [
+          "unsat"
+        ],
+        "smt_seconds": 0.033644888550043106
+      },
+      "qcp-gcd-resource-xolver-remainder-r222": {
+        "sha256": "eda2a40753505ee111374fffe66648f3d2741b0cc7531571d71578bba83d4a9b",
+        "backend": "xolver",
+        "binary": {
+          "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r184/xolver",
+          "sha256": "c59cea2ce49f62f793fe9de28527da32ab2d4af2456347f0753384ff39433ff9"
+        },
+        "source_sha256": "8f85baa2d2fd8afb8346f8b5d9f425932e3eb600b1d239193bf80c602ddc1db9",
+        "adapter_sha256": "07461bd8bd5f48b2d51c3f83b04f518228f3362b38fdefd9db9bfaa393314b22",
+        "exporter_sha256": "1ee231f9b2884949859eb16eb37fbfc797e96550766946805adb123d632a7490",
+        "queries": 1,
+        "candidates": 1,
+        "results": [
+          "unsat"
+        ],
+        "smt_seconds": 0.033189427107572556
+      },
+      "qcp-gcd-resource-xolver-returns-r210": {
+        "sha256": "c014d6c62a8309c755157462f138543d98344ca02d4a5dfd26809750d8aef7b7",
+        "backend": "xolver",
+        "binary": {
+          "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r184/xolver",
+          "sha256": "c59cea2ce49f62f793fe9de28527da32ab2d4af2456347f0753384ff39433ff9"
+        },
+        "source_sha256": "8f85baa2d2fd8afb8346f8b5d9f425932e3eb600b1d239193bf80c602ddc1db9",
+        "adapter_sha256": "50e0db8c6a0655d38991bb0a31f612e3c8424112f197e4f3d9233f7b48e8a3ee",
+        "exporter_sha256": "1ee231f9b2884949859eb16eb37fbfc797e96550766946805adb123d632a7490",
+        "queries": 0,
+        "candidates": 0,
+        "results": [],
+        "smt_seconds": 0
+      },
+      "qcp-gcd-resource-z3-returns-r210": {
+        "sha256": "ea0022fde0d4f28dba2e3194860827c1c21ad04d21d4daedcb308378eba8ead6",
+        "backend": "z3",
+        "binary": {
+          "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+          "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+        },
+        "source_sha256": "8f85baa2d2fd8afb8346f8b5d9f425932e3eb600b1d239193bf80c602ddc1db9",
+        "adapter_sha256": "50e0db8c6a0655d38991bb0a31f612e3c8424112f197e4f3d9233f7b48e8a3ee",
+        "exporter_sha256": "1ee231f9b2884949859eb16eb37fbfc797e96550766946805adb123d632a7490",
+        "queries": 0,
+        "candidates": 0,
+        "results": [],
+        "smt_seconds": 0
+      }
+    }
+  },
+  "closed_arithmetic_experiments": [
+    {
+      "stage": "R208",
+      "experiment": "see targets-r208",
+      "baseline_verified": 57,
+      "candidate_verified": 54,
+      "gains": [],
+      "losses": [
+        11,
+        91,
+        92
+      ],
+      "selected": false
+    },
+    {
+      "stage": "R219",
+      "experiment": "0918880934f0",
+      "retry": "47e2051b6f42",
+      "baseline_verified": 56,
+      "candidate_verified": 53,
+      "gains": [],
+      "losses": [
+        11,
+        59,
+        91
+      ],
+      "selected": false
+    },
+    {
+      "stage": "R224",
+      "experiment": "86a9f95383b5",
+      "baseline_verified": 88,
+      "candidate_verified": 85,
+      "gains": [],
+      "losses": [
+        11,
+        59,
+        91
+      ],
+      "selected": false
+    },
+    {
+      "stage": "R227",
+      "experiment": "8c8014d826dd",
+      "baseline_verified": 57,
+      "candidate_verified": 55,
+      "gains": [],
+      "losses": [
+        11,
+        91
+      ],
+      "selected": false
+    }
+  ]
+}
