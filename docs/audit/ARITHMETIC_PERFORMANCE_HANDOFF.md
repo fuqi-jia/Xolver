@@ -813,6 +813,84 @@ remain unselected: their formal comparisons had no added verified solve and
 lost results. These experiments establish no selected boundary-search gain.
 Neither protected set has been evaluated, and an extra server archive is not a gate.
 
+## Rational polynomial real definitions (2026-10-27, R258/R260)
+
+The preceding typed QCP range stage merged as
+[PR51](https://github.com/fuqi-jia/Xolver/pull/51), main
+`3091a4cc7c75c1fe60a9be57d6a919723953a6ad`. Both jobs passed in
+[PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/40474461100) and
+[main CI](https://github.com/fuqi-jia/Xolver/actions/runs/40478407991).
+
+The [polynomial-definition stage record](ARITHMETIC_POLYNOMIAL_DEFINITIONS_STAGE_20261027.json)
+qualifies implementation `3fd4939ad110e5334f8a7b0a449d1685bb50af0b` against that
+main. `checkSatGround -> SolveEqs -> ModelConverter` now removes unconditional
+real polynomial definitions even when the defined variable has nonlinear uses,
+then reconstructs their exact algebraic values. Rational replay remains the
+fast path. Real division by a nonzero numeric literal is an admissible rational
+coefficient; variable/zero divisors and integer division retain their previous
+handling. Missing dependencies, unsupported algebraic operations or exhausted
+replay resources cannot manufacture a model. Integer elimination, shared
+UF/array guards, base-scope restrictions and LRA/LIA root policies remain.
+
+Original **79**, `QF_NRA/20200911-Pine/1599121904575726000.smt2`, previously
+retained one polynomial alias and timed out in covering/root isolation. The
+candidate eliminates both aliases: four variables become two, DAG nodes
+57→53, substitution work 156. The early R256 prototype rejected `u^3/6` and
+`u^5/120`, eliminated only one alias and gained nothing; R258 completes this
+case without a filename rule. The transformed-query diagnostic and instrumented
+timings are excluded from scoring. The candidate model for the complete
+original input replays SAT in both Z3 and cvc5.
+
+Frozen CLI SHA-256:
+`65ec6a15c7d4c61506689a6bbed023aaef8f95ac2e1e9738fc082ad7f687c33d`.
+The SV binary retains `99130012b880f255cd8bbaf456d4031d07649792c83c430acb5649a547bb89ef`.
+Panda1 qualification passed **1,684 unit tests / 801,216 assertions**, including
+**67 targeted tests / 12,680 assertions**. All **38 acceptance tasks / 915
+regressions**, 1,018 native-theory differential cases and 703 model checks passed.
+Eight separate original-input/fixture checks are confirmed. Three small
+algebraic fixture replays remain unresolved in cvc5 but pass Z3; original 79
+and retained gain 152 pass both. No budget was extended.
+
+Fresh fixed160, 60 seconds / one physical core / 16 GiB per frozen version,
+with order rotated on the same assigned CPU:
+
+| Version | Raw decided | Verified decided | Verified PAR-2 |
+| --- | ---: | ---: | ---: |
+| Preceding main, frozen R184 | 89 | 88 | 8956.654 |
+| Candidate R258 | 90 | 89 | 8841.332 |
+| Same-round frozen Z3 | 124 | 115 | 5609.728 |
+
+The sole verified gain is **79**, SAT in **0.1359 s** against a baseline
+timeout; same-round Z3 takes 4.6061 s. There are no lost verified results,
+opposite verdicts, invalid exported models, process errors or memory failures.
+PAR-2 improves 115.322 seconds. Baseline/candidate have 71/70 timeouts and
+zero unknowns. **UNSAT115 remains unconfirmed and excluded**. The 32-case NRA
+check independently records 17→18 verified results, only gain 79, no losses.
+Xolver remains below Z3; this stage establishes no overall superiority.
+
+Build EOS `9bd8a9ffb90d`; NRA `6af467375fca`; full comparison `2230ce9bbfde`;
+acceptance `3fe419f85864`; original-model checks `cf2b449ac3c6`;
+profile `ac0fb00ceb1a`; source/binary/CPU audit `d5a4bead935e`.
+The audit matches all 233 stage runs to physical CPU leases on 65 cores,
+with no overlaps and exact formal process affinity. Source manifests and Git
+inventory identify the frozen binaries. QCP component regressions pass; the
+two previously qualified unique development C programs gain no new whole-program
+coverage or end-to-end performance claim here. Neither protected set was used.
+
+R231, R234, R238, R242, R248 and R253 remain unselected, as detailed in the
+stage record. Reproduced model-phase and registry-wiring defects did not yield
+verified solve gains on their tested sets. Their fixes are not asserted to
+explain or recover the shared-coordinate performance regression. Boundary
+search remains independent of integer scaling; neither experimental bundle
+is included in this candidate. The earlier 96-case subset actually contains
+48 LIA + 16 NIA + 32 LRA inputs; its historical “all-linear” label was wrong.
+The fixed160 manifest contains 48 LIA, 48 NIA, 32 LRA and 32 NRA inputs.
+Input hashes and historical scores are unaffected by this label correction.
+
+Continue from Git, CI, source manifests, frozen hashes and these acceptance
+records. The cancelled `validation/current-main.json` archive is not a gap or
+a delivery requirement.
+
 ## Closed experiments and practical regressions
 
 R178 replaced the square-cascade's ad hoc coefficient-Horner substitution with

@@ -128,8 +128,21 @@ TEST_CASE("ModelConverter: algebraic cancellation and unsupported dependencies r
         CHECK_FALSE(mc.reconstruct(numbers, strings, ir));
         CHECK_FALSE(numbers.count("x"));
     }
-    SUBCASE("nonlinear algebraic definitions are unsupported") {
+    SUBCASE("polynomial algebraic definitions replay exactly") {
         mc.registerElimination("x", r, ir.add(TermExpr{Kind::Mul, r, {z, z}, {}}));
+        REQUIRE(mc.reconstruct(numbers, strings, ir));
+        CHECK(numbers.at("x") == RealValue::fromInt(2));
+        CHECK(numbers.at("x").isExactInteger());
+    }
+    SUBCASE("non-polynomial algebraic definitions remain unsupported") {
+        mc.registerElimination("x", r, ir.add(TermExpr{Kind::Div, r, {z, z}, {}}));
+        CHECK_FALSE(mc.reconstruct(numbers, strings, ir));
+        CHECK_FALSE(numbers.count("x"));
+    }
+    SUBCASE("polynomial cancellation cannot hide a missing dependency") {
+        const auto square = ir.add(TermExpr{Kind::Mul, r, {z, z}, {}});
+        const auto cancelled = ir.add(TermExpr{Kind::Sub, r, {missing, missing}, {}});
+        mc.registerElimination("x", r, add(ir, r, square, cancelled));
         CHECK_FALSE(mc.reconstruct(numbers, strings, ir));
         CHECK_FALSE(numbers.count("x"));
     }
@@ -138,6 +151,85 @@ TEST_CASE("ModelConverter: algebraic cancellation and unsupported dependencies r
         CHECK_FALSE(mc.reconstruct(numbers, strings, ir));
         CHECK_FALSE(numbers.count("x"));
     }
+}
+
+TEST_CASE("ModelConverter: polynomial algebraic chains replace defaults and preserve identities") {
+    NativeTerms ir; SortId b, i, r; setupSorts(ir, b, i, r);
+    const auto y = var(ir, r, "y"), z = var(ir, r, "z");
+    const auto yy = ir.add(TermExpr{Kind::Mul, r, {y, y}, {}});
+    const auto zz = ir.add(TermExpr{Kind::Mul, r, {z, z}, {}});
+    const auto fourY = ir.add(TermExpr{Kind::Mul, r, {cint(ir, r, 4), y}, {}});
+    ModelConverter mc;
+    mc.registerElimination("x", r, ir.add(TermExpr{Kind::Sub, r, {yy, fourY}, {}}));
+    mc.registerElimination("y", r, add(ir, r, zz, z));
+    const auto root = RealValue::fromAlgebraic(
+        AlgebraicNumber{{mpz_class(-2), mpz_class(0), mpz_class(1)}, 1, 2});
+    std::unordered_map<std::string, RealValue> numbers{{"z", root}, {"y", RealValue::fromInt(0)}};
+    std::unordered_map<std::string, std::string> strings{{"z", "0"}, {"y", "0"}};
+    REQUIRE(mc.reconstruct(numbers, strings, ir));
+    const auto shifted = numbers.at("y") - RealValue::fromInt(2);
+    CHECK(shifted.sign() > 0);
+    CHECK(shifted * shifted == RealValue::fromInt(2));
+    CHECK(numbers.at("x") == RealValue::fromInt(-2));
+    CHECK(strings.at("y").find("root-of-with-interval") != std::string::npos);
+}
+
+TEST_CASE("ModelConverter: real constant divisors replay exactly and preserve unsupported division") {
+    for (bool algebraic : {false, true}) {
+        NativeTerms ir; SortId b, i, r; setupSorts(ir, b, i, r);
+        const auto z = var(ir, r, "z");
+        const auto numerator = add(ir, r, ir.add(TermExpr{Kind::Mul, r, {z, z}, {}}), z);
+        const auto seed = algebraic ? RealValue::fromAlgebraic(
+            AlgebraicNumber{{mpz_class(-2), mpz_class(0), mpz_class(1)}, 1, 2})
+            : RealValue::fromInt(3);
+        for (int divisor : {-2, 0, 3}) {
+            ModelConverter converter;
+            const auto denominator = ir.add(TermExpr{Kind::ConstReal, r, {},
+                                                    Payload(std::to_string(divisor))});
+            converter.registerElimination("x", r, ir.add(TermExpr{Kind::Div, r, {numerator, denominator}, {}}));
+            std::unordered_map<std::string, RealValue> numbers{{"z", seed}};
+            std::unordered_map<std::string, std::string> strings;
+            if (divisor == 0) {
+                CHECK_FALSE(converter.reconstruct(numbers, strings, ir));
+                CHECK_FALSE(numbers.contains("x"));
+            } else {
+                REQUIRE(converter.reconstruct(numbers, strings, ir));
+                CHECK(numbers.at("x") * RealValue::fromInt(divisor) == seed * seed + seed);
+            }
+        }
+    }
+    NativeTerms ir; SortId b, i, r; setupSorts(ir, b, i, r);
+    ModelConverter converter;
+    converter.registerElimination("x", i, ir.add(TermExpr{Kind::Div, i, {cint(ir, i, 3), cint(ir, i, 2)}, {}}));
+    std::unordered_map<std::string, RealValue> numbers;
+    std::unordered_map<std::string, std::string> strings;
+    CHECK_FALSE(converter.reconstruct(numbers, strings, ir));
+    CHECK_FALSE(numbers.contains("x"));
+}
+
+TEST_CASE("ModelConverter: real polynomial definitions survive repeated checks and rollback") {
+    Solver solver;
+    solver.setLogic("QF_NRA");
+    const auto x = solver.mkVar(solver.realSort(), "polynomial-x");
+    const auto y = solver.mkVar(solver.realSort(), "polynomial-y");
+    auto op = [&](Kind kind, std::initializer_list<Term> terms) {
+        return solver.mkOp(static_cast<uint32_t>(kind), std::vector<Term>(terms));
+    };
+    const auto square = op(Kind::Mul, {y, y});
+    solver.assertFormula(op(Kind::Eq, {square, solver.mkReal("2")}));
+    solver.assertFormula(op(Kind::Gt, {y, solver.mkReal("0")}));
+    const auto halfSquare = op(Kind::Div, {square, solver.mkReal("2")});
+    solver.assertFormula(op(Kind::Eq, {x, op(Kind::Add, {halfSquare, solver.mkReal("1")})}));
+    solver.assertFormula(op(Kind::Eq, {op(Kind::Mul, {x, x}), solver.mkReal("4")}));
+    for (int repeat = 0; repeat < 2; ++repeat) {
+        CHECK((solver.checkSat() == Result::Sat));
+        CHECK(solver.getModel().getValue(x.id()) != nullptr);
+        solver.push();
+        solver.assertFormula(op(Kind::Lt, {x, solver.mkReal("0")}));
+        CHECK((solver.checkSat() == Result::Unsat));
+        solver.pop();
+    }
+    CHECK((solver.checkSat() == Result::Sat));
 }
 
 TEST_CASE("ModelConverter: NRA definitions survive repeated checks and rollback") {

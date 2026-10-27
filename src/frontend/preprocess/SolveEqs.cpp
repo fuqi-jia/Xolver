@@ -2,6 +2,7 @@
 #include "frontend/preprocess/SolveEqs.h"
 #include "algebra/linear/LinearExpr.h"
 #include "base/EnvParam.h"
+#include "base/MpqUtils.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -71,15 +72,36 @@ bool SolveEqs::isReconstructable(ExprId root, bool polynomial) const {
                 for (ExprId c : node.children) stack.push_back(c);
                 break;
             }
+            case Kind::Div: {
+                // A real polynomial may have rational coefficients written as
+                // division. Variable/zero divisors and integer div stay outside
+                // this reconstruction policy.
+                if (!polynomial || node.sort != realSortId_ || node.children.size() != 2)
+                    return false;
+                const auto& divisor = ir_.get(node.children[1]);
+                if (divisor.kind != Kind::ConstInt && divisor.kind != Kind::ConstReal)
+                    return false;
+                try {
+                    if (const auto* value = std::get_if<int64_t>(&divisor.payload.value)) {
+                        if (*value == 0) return false;
+                    } else if (const auto* value = std::get_if<std::string>(&divisor.payload.value)) {
+                        if (mpqFromString(*value) == 0) return false;
+                    } else return false;
+                } catch (const std::exception&) { return false; }
+                stack.push_back(node.children[0]);
+                break;
+            }
             default:
-                return false;  // div/mod/pow/to_int/uf/ite/array/... not reconstructable here
+                return false;  // mod/pow/to_int/uf/ite/array/... not reconstructable here
         }
     }
     return true;
 }
 
-bool SolveEqs::admissibleDefinition(const std::string& name, ExprId e) {
+bool SolveEqs::admissibleDefinition(const std::string& name, ExprId e, SortId targetSort) {
     if (isReconstructable(e, false)) return true;
+    if (policy_ == DefinitionPolicy::PolynomialReals &&
+        targetSort == realSortId_ && isReconstructable(e, true)) return true;
     return policy_ == DefinitionPolicy::PolynomialInLinearPositions &&
            isReconstructable(e, true) && hasOnlyLinearUses(name);
 }
@@ -277,9 +299,9 @@ bool SolveEqs::run() {
             std::string varName;
             ExprId defExpr = NullExpr;
             SortId varSort = NullSort;
-            if (auto n = asNumericVar(lhs); n && !occurs(*n, rhs) && admissibleDefinition(*n, rhs)) {
+            if (auto n = asNumericVar(lhs); n && !occurs(*n, rhs) && admissibleDefinition(*n, rhs, ir_.get(lhs).sort)) {
                 varName = *n; defExpr = rhs; varSort = ir_.get(lhs).sort;
-            } else if (auto n2 = asNumericVar(rhs); n2 && !occurs(*n2, lhs) && admissibleDefinition(*n2, lhs)) {
+            } else if (auto n2 = asNumericVar(rhs); n2 && !occurs(*n2, lhs) && admissibleDefinition(*n2, lhs, ir_.get(rhs).sort)) {
                 varName = *n2; defExpr = lhs; varSort = ir_.get(rhs).sort;
             } else {
                 continue;

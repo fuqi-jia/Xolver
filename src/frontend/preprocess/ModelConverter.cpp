@@ -255,6 +255,17 @@ std::optional<mpq_class> ModelConverter::evalRational(
                 val[e] = p;
                 break;
             }
+            case Kind::Div: {
+                if (node.sort != ir.realSortId() || node.children.size() != 2)
+                    return std::nullopt;
+                const auto& divisor = ir.get(node.children[1]);
+                if (divisor.kind != Kind::ConstInt && divisor.kind != Kind::ConstReal)
+                    return std::nullopt;
+                const auto& denominator = val.at(node.children[1]);
+                if (denominator == 0) return std::nullopt;
+                val[e] = val.at(node.children[0]) / denominator;
+                break;
+            }
             case Kind::ToReal: {
                 if (node.children.size() != 1) return std::nullopt;
                 val[e] = val.at(node.children[0]);
@@ -367,10 +378,82 @@ bool ModelConverter::reconstruct(std::unordered_map<std::string, RealValue>& num
             return std::nullopt;
         }
     };
+    auto evalPolynomial = [&](ExprId expr) -> std::optional<RealValue> {
+        try {
+            WorkBudget budget;
+            std::unordered_map<ExprId, RealValue> values;
+            std::vector<std::pair<ExprId, bool>> pending{{expr, false}};
+            while (!pending.empty()) {
+                budget.tick();
+                const auto [id, processed] = pending.back();
+                pending.pop_back();
+                if (values.contains(id)) continue;
+                const auto& node = ir.get(id);
+                if (!processed) {
+                    if (node.kind == Kind::Variable) {
+                        const auto* name = std::get_if<std::string>(&node.payload.value);
+                        if (!name) return std::nullopt;
+                        const auto typed = numAsg.find(*name);
+                        const auto rational = env.find(*name);
+                        if (typed == numAsg.end() && rational == env.end()) return std::nullopt;
+                        values.emplace(id, typed != numAsg.end()
+                            ? typed->second : RealValue::fromMpq(rational->second));
+                        continue;
+                    }
+                    if (node.kind == Kind::ConstInt || node.kind == Kind::ConstReal) {
+                        if (const auto* number = std::get_if<int64_t>(&node.payload.value))
+                            values.emplace(id, RealValue::fromInt(*number));
+                        else if (const auto* number = std::get_if<std::string>(&node.payload.value))
+                            values.emplace(id, RealValue::fromMpq(mpqFromString(*number)));
+                        else return std::nullopt;
+                        continue;
+                    }
+                    if (node.kind == Kind::Div) {
+                        if (node.sort != ir.realSortId() || node.children.size() != 2)
+                            return std::nullopt;
+                        const auto kind = ir.get(node.children[1]).kind;
+                        if (kind != Kind::ConstInt && kind != Kind::ConstReal) return std::nullopt;
+                    } else if (node.kind != Kind::Add && node.kind != Kind::Sub && node.kind != Kind::Neg &&
+                               node.kind != Kind::Mul && node.kind != Kind::ToReal) return std::nullopt;
+                    pending.emplace_back(id, true);
+                    for (const auto child : node.children) {
+                        budget.tick();
+                        if (!values.contains(child)) pending.emplace_back(child, false);
+                    }
+                    continue;
+                }
+                RealValue value = RealValue::fromInt(node.kind == Kind::Mul ? 1 : 0);
+                if (node.kind == Kind::Neg || node.kind == Kind::ToReal) {
+                    if (node.children.size() != 1) return std::nullopt;
+                    value = values.at(node.children[0]);
+                    if (node.kind == Kind::Neg) value = -value;
+                } else if (node.kind == Kind::Div) {
+                    const auto denominator = values.at(node.children[1]).tryAsRational();
+                    if (!denominator || *denominator == 0) return std::nullopt;
+                    value = values.at(node.children[0]) * RealValue::fromMpq(mpq_class(1) / *denominator);
+                } else if (node.kind == Kind::Sub) {
+                    if (node.children.empty()) return std::nullopt;
+                    value = values.at(node.children[0]);
+                    for (size_t child = 1; child < node.children.size(); ++child)
+                        value = value - values.at(node.children[child]);
+                } else {
+                    for (const auto child : node.children)
+                        value = node.kind == Kind::Mul ? value * values.at(child) : value + values.at(child);
+                }
+                values.emplace(id, std::move(value));
+            }
+            return values.at(expr);
+        } catch (const std::exception&) {
+            // A missing dependency, unsupported algebraic operation or exhausted
+            // budget leaves reconstruction incomplete, never a guessed value.
+            return std::nullopt;
+        }
+    };
     // Newest step first: a term may reference a later-eliminated variable.
     for (auto it = steps_.rbegin(); it != steps_.rend(); ++it) {
         auto vb = evalRational(it->expr, ir, env, &boolEnv);
         auto value = vb ? std::optional<RealValue>(RealValue::fromMpq(*vb)) : evalAffine(it->expr);
+        if (!value) value = evalPolynomial(it->expr);
         if (!value || (ir.sortKind(it->sort) == SortKind::Int && !value->isExactInteger())) {
             allOk = false;
             continue;

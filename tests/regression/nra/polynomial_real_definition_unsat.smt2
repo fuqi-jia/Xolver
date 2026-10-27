@@ -1,0 +1,8 @@
+(set-logic QF_NRA)
+(set-info :status unsat)
+(declare-const x Real)
+(declare-const y Real)
+(assert (= (* y y) 2))
+(assert (= x (/ (* y y) 2)))
+(assert (< x 0))
+(check-sat)

@@ -1,0 +1,790 @@
+{
+  "schema": "xolver-polynomial-real-definition-stage/1",
+  "stage": "rational-polynomial-real-definitions-20261027",
+  "base_commit": "3091a4cc7c75c1fe60a9be57d6a919723953a6ad",
+  "code_commit": "3fd4939ad110e5334f8a7b0a449d1685bb50af0b",
+  "review_branch": "perf/polynomial-real-definition-replay",
+  "source_manifest": {
+    "path": "source-r258.tar.json",
+    "sha256": "87a0bb14f4c895ea9e184ab0b0e2148b9607a28eb1b31e2dc93c85365051eb95",
+    "archive_sha256": "9b53a5a07184f8980ea9cde00f355f79329d53f1daf45e83e95080df4a114c3f"
+  },
+  "git_code_inventory": {
+    "schema": "xolver-git-code-inventory/1",
+    "commit": "3fd4939ad110e5334f8a7b0a449d1685bb50af0b",
+    "manifest_sha256": "87a0bb14f4c895ea9e184ab0b0e2148b9607a28eb1b31e2dc93c85365051eb95",
+    "files": {
+      "src/frontend/preprocess/ModelConverter.cpp": "55206cacd7dcc24b8474a1a1f23f0bf2d555609bbc10de81df7258a89a1bfe89",
+      "src/frontend/preprocess/ModelConverter.h": "c32c00401fada92c84edee30e8e342723e84df486bfe1a59a7862ee737e14073",
+      "src/frontend/preprocess/SolveEqs.cpp": "a420a4a4dc5b171f7891d38dd0dbb2ef432ca32abfa20d4250bf15464fa3b270",
+      "src/frontend/preprocess/SolveEqs.h": "a36e9808d27a73600c76de3df68877f0ba50dc2987974cbb253a7b639eeaebfa",
+      "src/runtime/Solver_impl_checksat.cpp": "3fc4fa5adb025bfe9b7df1de704087ccc60ead4c6857fc38fcddcb90051b0b11",
+      "tests/regression/nra/polynomial_real_definition_sat.smt2": "3d564237f7ba8f6e51e43e05dbd854a93f624f78ff45ea459a6f5800f73dfd13",
+      "tests/regression/nra/polynomial_real_definition_unsat.smt2": "cf6c99ad169fc4a91983a7e5242c992915087333f4cf81ddc66f39da3e66cc2a",
+      "tests/unit/test_model_converter.cpp": "8595ddabb7c7ac3e96714990473707a62adcc7bff28bcb80178cba9a82b9f6d0",
+      "tests/unit/test_solve_eqs.cpp": "0af74bbbf5ac6a1f7128112e79906624ca10c14799bfe631d6104134a4c2055e"
+    },
+    "boundary": "All changed tracked files against main3091a4cc; source-r258 manifest also includes restoration of abandoned overlays."
+  },
+  "frozen_binaries": {
+    "xolver": "65ec6a15c7d4c61506689a6bbed023aaef8f95ac2e1e9738fc082ad7f687c33d",
+    "xolver-sv": "99130012b880f255cd8bbaf456d4031d07649792c83c430acb5649a547bb89ef"
+  },
+  "verification_boundary": {
+    "model_policy": "A checked original-formula witness or independent UNSAT decision is required; unconfirmed results receive PAR-2 penalty.",
+    "remaining_original_unconfirmed": [
+      115
+    ],
+    "qcp": "Component regressions only; existing two unique development C programs unchanged; no new end-to-end coverage or timing claim.",
+    "profile": "Instrumented snapshots and transformed-input diagnostic are excluded from formal scores."
+  },
+  "interpretation": {
+    "verified_gain": 1,
+    "verified_par2_improvement_seconds": 115.32183527946472,
+    "above_z3": false,
+    "sv_binary_changed": false
+  },
+  "protected_sets": {
+    "smt_evaluated": false,
+    "programs_evaluated": false
+  },
+  "server_extra_archive_required": false,
+  "server_stage_record": {
+    "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/stage-r260.json",
+    "sha256": "4127fd8935b74e31f4602e0c0d9552fd7682cea4e4740cc0e7cdb19c3422b73b",
+    "audit_experiment": "d5a4bead935e"
+  },
+  "native": {
+    "unit_cases": 1684,
+    "unit_assertions": 801216,
+    "targeted_cases": 67,
+    "targeted_assertions": 12680,
+    "unit_log_sha256": "d7ef8997802b49168c1006a8dd0ce888ee4b99a376e775b1b4a761a1804fb2ae",
+    "unit_binary_sha256": "895d85e2ed7152bee2bed3c9b5f091aa0b7325d0361a9673f1ebf084feeeeeb0",
+    "acceptance_tasks": 38,
+    "regression_cases": 915,
+    "theory_differential": {
+      "cases": 1018,
+      "models": 703,
+      "failures": [],
+      "seed": 20261023,
+      "solver_sha256": "65ec6a15c7d4c61506689a6bbed023aaef8f95ac2e1e9738fc082ad7f687c33d"
+    }
+  },
+  "lease_audit": {
+    "runs": 233,
+    "distinct_physical_cores": 65,
+    "overlaps": 0,
+    "formal_actual_affinity_matches": true,
+    "experiments": {
+      "build": "9bd8a9ffb90d",
+      "targeted": "6af467375fca",
+      "formal": "2230ce9bbfde",
+      "acceptance": "3fe419f85864",
+      "models": "cf2b449ac3c6",
+      "profile": "ac0fb00ceb1a"
+    }
+  },
+  "formal": {
+    "cases": 160,
+    "binaries": {
+      "baseline": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r184/xolver",
+        "sha256": "c59cea2ce49f62f793fe9de28527da32ab2d4af2456347f0753384ff39433ff9"
+      },
+      "candidate": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r258/xolver",
+        "sha256": "65ec6a15c7d4c61506689a6bbed023aaef8f95ac2e1e9738fc082ad7f687c33d"
+      },
+      "z3": {
+        "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+        "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      }
+    },
+    "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+    "timeout": 60,
+    "memory_bytes": 17179869184,
+    "counts": {
+      "baseline": {
+        "unsat": 40,
+        "decided": 89,
+        "verified_decided": 88,
+        "verified_par2": 8956.654181499034,
+        "raw_par2": 8836.688332300633,
+        "timeout": 71,
+        "sat": 49
+      },
+      "candidate": {
+        "unsat": 40,
+        "decided": 90,
+        "verified_decided": 89,
+        "verified_par2": 8841.33234621957,
+        "raw_par2": 8721.36886629276,
+        "timeout": 70,
+        "sat": 50
+      },
+      "z3": {
+        "unsat": 58,
+        "decided": 124,
+        "verified_decided": 115,
+        "verified_par2": 5609.728413181379,
+        "raw_par2": 4644.0741091948,
+        "sat": 66,
+        "timeout": 36
+      }
+    },
+    "by_logic": {
+      "QF_LIA": {
+        "baseline": {
+          "unsat": 15,
+          "decided": 32,
+          "verified_decided": 32,
+          "verified_par2": 2076.1375460363925,
+          "raw_par2": 2076.1375460363925,
+          "timeout": 16,
+          "sat": 17
+        },
+        "candidate": {
+          "unsat": 15,
+          "decided": 32,
+          "verified_decided": 32,
+          "verified_par2": 2078.7758508734405,
+          "raw_par2": 2078.7758508734405,
+          "timeout": 16,
+          "sat": 17
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 38,
+          "verified_decided": 36,
+          "verified_par2": 1477.8948103208095,
+          "raw_par2": 1277.496806723997,
+          "sat": 23,
+          "timeout": 10
+        }
+      },
+      "QF_NIA": {
+        "baseline": {
+          "timeout": 24,
+          "decided": 24,
+          "verified_decided": 23,
+          "verified_par2": 3115.1949896160513,
+          "raw_par2": 2995.2291404176503,
+          "unsat": 11,
+          "sat": 13
+        },
+        "candidate": {
+          "timeout": 24,
+          "decided": 24,
+          "verified_decided": 23,
+          "verified_par2": 3116.0400625970215,
+          "raw_par2": 2996.076582670212,
+          "unsat": 11,
+          "sat": 13
+        },
+        "z3": {
+          "unsat": 22,
+          "decided": 34,
+          "verified_decided": 29,
+          "verified_par2": 2313.157570376992,
+          "raw_par2": 1734.2051348220557,
+          "sat": 12,
+          "timeout": 14
+        }
+      },
+      "QF_LRA": {
+        "baseline": {
+          "timeout": 16,
+          "decided": 16,
+          "verified_decided": 16,
+          "verified_par2": 1955.103909758851,
+          "raw_par2": 1955.103909758851,
+          "sat": 7,
+          "unsat": 9
+        },
+        "candidate": {
+          "timeout": 16,
+          "decided": 16,
+          "verified_decided": 16,
+          "verified_par2": 1956.202875526622,
+          "raw_par2": 1956.202875526622,
+          "sat": 7,
+          "unsat": 9
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 26,
+          "verified_decided": 25,
+          "verified_par2": 883.6243377756327,
+          "raw_par2": 817.056371724233,
+          "sat": 11,
+          "timeout": 6
+        }
+      },
+      "QF_NRA": {
+        "baseline": {
+          "sat": 12,
+          "decided": 17,
+          "verified_decided": 17,
+          "verified_par2": 1810.2177360877395,
+          "raw_par2": 1810.2177360877395,
+          "unsat": 5,
+          "timeout": 15
+        },
+        "candidate": {
+          "sat": 13,
+          "decided": 18,
+          "verified_decided": 18,
+          "verified_par2": 1690.3135572224855,
+          "raw_par2": 1690.3135572224855,
+          "unsat": 5,
+          "timeout": 14
+        },
+        "z3": {
+          "sat": 20,
+          "decided": 26,
+          "verified_decided": 25,
+          "verified_par2": 935.051694707945,
+          "raw_par2": 815.3157959245145,
+          "timeout": 6,
+          "unsat": 6
+        }
+      }
+    },
+    "changes": [
+      {
+        "index": 79,
+        "case": "QF_NRA/20200911-Pine/1599121904575726000.smt2",
+        "kind": "gained",
+        "truth": "sat",
+        "evidence": [
+          "candidate-exported-model-replay",
+          "z3-exported-model-replay"
+        ],
+        "observations": {
+          "candidate": {
+            "result": "sat",
+            "seconds": 0.13586737401783466
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 4.606090407818556
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.06619265116751
+          }
+        }
+      }
+    ],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "unverified": [
+      {
+        "index": 12,
+        "case": "QF_LIA/fft/Sz128_2823.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 24,
+        "case": "QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 27,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 42,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep2a.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 47,
+        "case": "QF_NIA/20250331-elster/D_2.smt2",
+        "results": {
+          "z3": "sat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "model query did not return SAT"
+        }
+      },
+      {
+        "index": 50,
+        "case": "QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_jain_5.i_2_4_3.bpl_7.smt2",
+        "results": {
+          "z3": "unsat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 80,
+        "case": "QF_LIA/cut_lemmas/20-vars/cut_lemma_03_004.smt2",
+        "results": {
+          "z3": "unsat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 114,
+        "case": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 115,
+        "case": "QF_NIA/20230321-UltimateAutomizerSvcomp2023/ps6.c_7.smt2",
+        "results": {
+          "candidate": "unsat",
+          "z3": "timeout",
+          "baseline": "unsat"
+        },
+        "reasons": {
+          "candidate": "no independent confirmation within budget",
+          "baseline": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 159,
+        "case": "QF_NRA/20161105-Sturm-MGC/mgc_07.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      }
+    ],
+    "scoring": "Correct verdicts require a replayed model or an independent UNSAT decision on the identical input hash; unresolved results receive PAR-2 penalty."
+  },
+  "targeted": {
+    "cases": 32,
+    "binaries": {
+      "baseline": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r184/xolver",
+        "sha256": "c59cea2ce49f62f793fe9de28527da32ab2d4af2456347f0753384ff39433ff9"
+      },
+      "candidate": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r258/xolver",
+        "sha256": "65ec6a15c7d4c61506689a6bbed023aaef8f95ac2e1e9738fc082ad7f687c33d"
+      },
+      "z3": {
+        "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+        "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      }
+    },
+    "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+    "timeout": 60,
+    "memory_bytes": 17179869184,
+    "counts": {
+      "baseline": {
+        "sat": 12,
+        "decided": 17,
+        "verified_decided": 17,
+        "verified_par2": 1809.7771146036685,
+        "raw_par2": 1809.7771146036685,
+        "unsat": 5,
+        "timeout": 14,
+        "unknown": 1
+      },
+      "candidate": {
+        "sat": 13,
+        "decided": 18,
+        "verified_decided": 18,
+        "verified_par2": 1689.933466019109,
+        "raw_par2": 1689.933466019109,
+        "unsat": 5,
+        "timeout": 13,
+        "unknown": 1
+      },
+      "z3": {
+        "sat": 20,
+        "decided": 26,
+        "verified_decided": 25,
+        "verified_par2": 933.4796324558556,
+        "raw_par2": 813.7488923557103,
+        "timeout": 6,
+        "unsat": 6
+      }
+    },
+    "by_logic": {
+      "QF_NRA": {
+        "baseline": {
+          "sat": 12,
+          "decided": 17,
+          "verified_decided": 17,
+          "verified_par2": 1809.7771146036685,
+          "raw_par2": 1809.7771146036685,
+          "unsat": 5,
+          "timeout": 14,
+          "unknown": 1
+        },
+        "candidate": {
+          "sat": 13,
+          "decided": 18,
+          "verified_decided": 18,
+          "verified_par2": 1689.933466019109,
+          "raw_par2": 1689.933466019109,
+          "unsat": 5,
+          "timeout": 13,
+          "unknown": 1
+        },
+        "z3": {
+          "sat": 20,
+          "decided": 26,
+          "verified_decided": 25,
+          "verified_par2": 933.4796324558556,
+          "raw_par2": 813.7488923557103,
+          "timeout": 6,
+          "unsat": 6
+        }
+      }
+    },
+    "changes": [
+      {
+        "index": 79,
+        "case": "QF_NRA/20200911-Pine/1599121904575726000.smt2",
+        "kind": "gained",
+        "truth": "sat",
+        "evidence": [
+          "candidate-exported-model-replay",
+          "z3-exported-model-replay"
+        ],
+        "observations": {
+          "candidate": {
+            "result": "sat",
+            "seconds": 0.13480718433856964
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 4.258148059248924
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.06625553779304
+          }
+        }
+      }
+    ],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "unverified": [
+      {
+        "index": 159,
+        "case": "QF_NRA/20161105-Sturm-MGC/mgc_07.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      }
+    ],
+    "scoring": "Correct verdicts require a replayed model or an independent UNSAT decision on the identical input hash; unresolved results receive PAR-2 penalty."
+  },
+  "model_checks": [
+    {
+      "file": "/pub/data/jiafq/xolver/tests/regression/nra/affine_definition_algebraic_sat.smt2",
+      "sha256": "ab31a4acd4d41785babe8be74fe3d370921eef76ae44055a1a680168b0de1e42",
+      "expected": "sat",
+      "confirmed": true,
+      "wrong": false,
+      "decisions": {
+        "xolver": "sat",
+        "z3": "sat",
+        "cvc5": "sat"
+      },
+      "replays": {
+        "z3": {
+          "result": "sat",
+          "seconds": 0.03492363542318344
+        },
+        "cvc5": {
+          "result": "unresolved",
+          "seconds": 60.0089166611433
+        }
+      }
+    },
+    {
+      "file": "/pub/data/jiafq/xolver/tests/regression/nra/affine_definition_correlated_unsat.smt2",
+      "sha256": "a658291b3d1d97f3e25a84d765381a2d47b6569d930ba4089b2c1e33098beb50",
+      "expected": "unsat",
+      "confirmed": true,
+      "wrong": false,
+      "decisions": {
+        "xolver": "unsat",
+        "z3": "unsat",
+        "cvc5": "unsat"
+      },
+      "replays": {}
+    },
+    {
+      "file": "/pub/data/jiafq/xolver/tests/regression/nra/affine_definition_free_parameter_sat.smt2",
+      "sha256": "1f026a7e905d32ee11d6962d1ae9d5f5d34624a57be547ed0d73ef63d37c7952",
+      "expected": "sat",
+      "confirmed": true,
+      "wrong": false,
+      "decisions": {
+        "xolver": "sat",
+        "z3": "sat",
+        "cvc5": "sat"
+      },
+      "replays": {
+        "z3": {
+          "result": "sat",
+          "seconds": 0.027836676687002182
+        },
+        "cvc5": {
+          "result": "sat",
+          "seconds": 0.009245434775948524
+        }
+      }
+    },
+    {
+      "file": "/pub/data/jiafq/xolver/tests/regression/nra/affine_definition_signed_chain_sat.smt2",
+      "sha256": "de25fab5528447ea0f771515c672b7ad592787f14c2bca225ead8cfb32217552",
+      "expected": "sat",
+      "confirmed": true,
+      "wrong": false,
+      "decisions": {
+        "xolver": "sat",
+        "z3": "sat",
+        "cvc5": "sat"
+      },
+      "replays": {
+        "z3": {
+          "result": "sat",
+          "seconds": 0.03521382249891758
+        },
+        "cvc5": {
+          "result": "unresolved",
+          "seconds": 60.0111402887851
+        }
+      }
+    },
+    {
+      "file": "/pub/data/jiafq/xolver/tests/regression/nra/polynomial_real_definition_sat.smt2",
+      "sha256": "3d564237f7ba8f6e51e43e05dbd854a93f624f78ff45ea459a6f5800f73dfd13",
+      "expected": "sat",
+      "confirmed": true,
+      "wrong": false,
+      "decisions": {
+        "xolver": "sat",
+        "z3": "sat",
+        "cvc5": "sat"
+      },
+      "replays": {
+        "z3": {
+          "result": "sat",
+          "seconds": 0.03285606764256954
+        },
+        "cvc5": {
+          "result": "unresolved",
+          "seconds": 60.010548911988735
+        }
+      }
+    },
+    {
+      "file": "/pub/data/jiafq/xolver/tests/regression/nra/polynomial_real_definition_unsat.smt2",
+      "sha256": "cf6c99ad169fc4a91983a7e5242c992915087333f4cf81ddc66f39da3e66cc2a",
+      "expected": "unsat",
+      "confirmed": true,
+      "wrong": false,
+      "decisions": {
+        "xolver": "unsat",
+        "z3": "unsat",
+        "cvc5": "unsat"
+      },
+      "replays": {}
+    },
+    {
+      "file": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NRA/20200911-Pine/1599122165219202000.smt2",
+      "sha256": "37a68d15b73c24bc973d6a0cdde3f8bc07aa5daf5dc57279bcb5761b66a9125d",
+      "expected": "sat",
+      "confirmed": true,
+      "wrong": false,
+      "decisions": {
+        "xolver": "sat",
+        "z3": "sat",
+        "cvc5": "sat"
+      },
+      "replays": {
+        "z3": {
+          "result": "sat",
+          "seconds": 0.027812696993350983
+        },
+        "cvc5": {
+          "result": "sat",
+          "seconds": 0.010991400107741356
+        }
+      }
+    },
+    {
+      "file": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NRA/20200911-Pine/1599121904575726000.smt2",
+      "sha256": "65bdfedbfe3b92b5476740e873997a900003ca4ac80b05e8eeec44e4c2086177",
+      "expected": "sat",
+      "confirmed": true,
+      "wrong": false,
+      "decisions": {
+        "xolver": "sat",
+        "z3": "sat",
+        "cvc5": "unresolved"
+      },
+      "replays": {
+        "z3": {
+          "result": "sat",
+          "seconds": 0.024783391505479813
+        },
+        "cvc5": {
+          "result": "sat",
+          "seconds": 0.009973309934139252
+        }
+      }
+    }
+  ],
+  "qcp_previous_delivery": {
+    "pull_request": "https://github.com/fuqi-jia/Xolver/pull/51",
+    "main_commit": "3091a4cc7c75c1fe60a9be57d6a919723953a6ad",
+    "pr_ci": "https://github.com/fuqi-jia/Xolver/actions/runs/40474461100",
+    "main_ci": "https://github.com/fuqi-jia/Xolver/actions/runs/40478407991",
+    "jobs": {
+      "build-test": "success",
+      "proof-gate": "success"
+    },
+    "unique_qualified_development_c_programs": 2,
+    "new_program_coverage_in_this_arithmetic_stage": 0
+  },
+  "causal_diagnostics": {
+    "original_index": 79,
+    "baseline_profile_experiment": "9c73b8ba06f9",
+    "transformed_query_experiment": "755a927a888c",
+    "transformed_query_seconds": 0.114941,
+    "transformed_query_counted_in_primary": false,
+    "candidate_profile_experiment": "ac0fb00ceb1a",
+    "original_variables": 4,
+    "remaining_variables": 2,
+    "eliminated_definitions": 2,
+    "substitution_work": 156,
+    "dag_nodes_before": 57,
+    "dag_nodes_after": 53,
+    "instrumented_seconds": 0.16787935607135296,
+    "boundary": "Diagnostics excluded from formal scoring."
+  },
+  "closed_experiments": [
+    {
+      "stage": "R231",
+      "candidate_verified": 58,
+      "baseline_verified": 57,
+      "cases": 96,
+      "losses": [
+        11
+      ],
+      "selected": false,
+      "reason": "Two gains accompanied by a lost result and worse PAR-2."
+    },
+    {
+      "stage": "R234",
+      "candidate_verified": 3,
+      "baseline_verified": 4,
+      "cases": 6,
+      "selected": false,
+      "reason": "Paired-column branching lost verified results."
+    },
+    {
+      "stage": "R238",
+      "candidate_verified": 2,
+      "baseline_verified": 4,
+      "cases": 6,
+      "selected": false,
+      "reason": "Nearest-integer branch scoring and aggregate columns had no gain."
+    },
+    {
+      "stage": "R242",
+      "candidate_verified": 3,
+      "baseline_verified": 4,
+      "cases": 6,
+      "selected": false,
+      "reason": "Boundary/scaling extraction without shared coordinates still lost91."
+    },
+    {
+      "stage": "R248",
+      "candidate_verified": 3,
+      "baseline_verified": 3,
+      "cases": 6,
+      "selected": false,
+      "reason": "Reproduced model-phase inconsistency fixed; steering counters disprove it as the tested performance cause."
+    },
+    {
+      "stage": "R253",
+      "candidate_verified": 3,
+      "baseline_verified": 3,
+      "cases": 8,
+      "selected": false,
+      "reason": "Reproduced common registry wiring fixed; steering occurred but produced no verified solve gain."
+    },
+    {
+      "stage": "R256",
+      "candidate_verified": 17,
+      "baseline_verified": 17,
+      "cases": 32,
+      "selected": false,
+      "reason": "First real-polynomial replay prototype rejected constant real division; only one definition eliminated."
+    }
+  ],
+  "fixed_suite_classification": {
+    "QF_LIA": 48,
+    "QF_NIA": 48,
+    "QF_LRA": 32,
+    "QF_NRA": 32,
+    "correction": "Earlier 96-case subset contains48LIA+16NIA+32LRA; it is not an all-linear subset. Identical input hashes and scores are unaffected."
+  }
+}
