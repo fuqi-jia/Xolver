@@ -78,8 +78,10 @@ bool SolveEqs::isReconstructable(ExprId root, bool polynomial) const {
     return true;
 }
 
-bool SolveEqs::admissibleDefinition(const std::string& name, ExprId e) {
+bool SolveEqs::admissibleDefinition(const std::string& name, ExprId e, SortId targetSort) {
     if (isReconstructable(e, false)) return true;
+    if (policy_ == DefinitionPolicy::PolynomialReals &&
+        targetSort == realSortId_ && isReconstructable(e, true)) return true;
     return policy_ == DefinitionPolicy::PolynomialInLinearPositions &&
            isReconstructable(e, true) && hasOnlyLinearUses(name);
 }
@@ -277,9 +279,9 @@ bool SolveEqs::run() {
             std::string varName;
             ExprId defExpr = NullExpr;
             SortId varSort = NullSort;
-            if (auto n = asNumericVar(lhs); n && !occurs(*n, rhs) && admissibleDefinition(*n, rhs)) {
+            if (auto n = asNumericVar(lhs); n && !occurs(*n, rhs) && admissibleDefinition(*n, rhs, ir_.get(lhs).sort)) {
                 varName = *n; defExpr = rhs; varSort = ir_.get(lhs).sort;
-            } else if (auto n2 = asNumericVar(rhs); n2 && !occurs(*n2, lhs) && admissibleDefinition(*n2, lhs)) {
+            } else if (auto n2 = asNumericVar(rhs); n2 && !occurs(*n2, lhs) && admissibleDefinition(*n2, lhs, ir_.get(rhs).sort)) {
                 varName = *n2; defExpr = lhs; varSort = ir_.get(rhs).sort;
             } else {
                 continue;

@@ -236,3 +236,43 @@ TEST_CASE("SolveEqs: polynomial substitution guards both DAG contexts and curren
     CHECK(varInAssertions(ir, "x"));
     CHECK(varInAssertions(ir, "y"));
 }
+
+TEST_CASE("SolveEqs: real polynomial policy removes nonlinear uses without widening integer elimination") {
+    for (bool integer : {false, true}) {
+        NativeTerms ir; SortId b, i, r; setupSorts(ir, b, i, r);
+        const auto sort = integer ? i : r;
+        const auto x = var(ir, sort, "x"), y = var(ir, sort, "y");
+        ir.addAssertion(bin(ir, Kind::Eq, b, x, bin(ir, Kind::Mul, sort, y, y)));
+        ir.addAssertion(bin(ir, Kind::Gt, b, bin(ir, Kind::Mul, sort, x, x), cint(ir, sort, 4)));
+        ModelConverter converter;
+        SolveEqs pass(ir, converter, SolveEqs::DefinitionPolicy::PolynomialReals);
+        if (integer) {
+            CHECK_FALSE(pass.run());
+            CHECK(converter.empty());
+            CHECK(varInAssertions(ir, "x"));
+        } else {
+            REQUIRE(pass.run());
+            pass.commit();
+            CHECK_FALSE(varInAssertions(ir, "x"));
+            CHECK(varInAssertions(ir, "y"));
+            std::unordered_map<std::string, RealValue> numbers{{"y", RealValue::fromInt(3)}};
+            std::unordered_map<std::string, std::string> values;
+            REQUIRE(converter.reconstruct(numbers, values, ir));
+            CHECK(numbers.at("x") == RealValue::fromInt(9));
+        }
+    }
+}
+
+TEST_CASE("SolveEqs: real polynomial definitions preserve shared UF arguments") {
+    NativeTerms ir; SortId b, i, r; setupSorts(ir, b, i, r);
+    const auto x = var(ir, r, "x"), y = var(ir, r, "y");
+    ir.addAssertion(bin(ir, Kind::Eq, b, x, bin(ir, Kind::Mul, r, y, y)));
+    const auto function = var(ir, r, "f");
+    const auto call = ir.add(TermExpr{Kind::UFApply, r, {function, x}, Payload(std::string("f"))});
+    ir.addAssertion(bin(ir, Kind::Eq, b, call, cint(ir, r, 1)));
+    ModelConverter converter;
+    SolveEqs pass(ir, converter, SolveEqs::DefinitionPolicy::PolynomialReals);
+    CHECK_FALSE(pass.run());
+    CHECK(converter.empty());
+    CHECK(varInAssertions(ir, "x"));
+}

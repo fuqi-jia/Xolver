@@ -15,8 +15,8 @@ namespace xolver {
  *
  * Eliminates a user variable `x` defined by an unconditional top-level equality
  * conjunct `(= x t)` (or `(= t x)`) where `x` is a bare numeric Variable that
- * does not occur in `t`, and `t` is a *linear, reconstructable* term (only
- * Add/Sub/Neg/Mul-by-constant/ToReal over variables and constants — no
+ * does not occur in `t`, and `t` is reconstructable under the selected policy
+ * (Add/Sub/Neg/Mul/ToReal over variables and constants — no
  * div/mod/pow/UF/ITE/array). Substitutes `x ↦ t` globally, drops the defining
  * equality, and registers `(x, t)` with a ModelConverter so the eliminated
  * value is rebuilt on the final model (replay correctness).
@@ -30,10 +30,12 @@ namespace xolver {
  * Linear is the default policy. PolynomialInLinearPositions also accepts
  * products in defining terms, provided the eliminated variable has only linear
  * uses. It preserves polynomial degree and uses exact rational model replay.
+ * PolynomialReals also accepts real polynomial definitions in nonlinear
+ * positions, paired with exact algebraic replay; integer definitions stay linear.
  */
 class SolveEqs {
 public:
-    enum class DefinitionPolicy { Linear, PolynomialInLinearPositions };
+    enum class DefinitionPolicy { Linear, PolynomialInLinearPositions, PolynomialReals };
     SolveEqs(NativeTerms& ir, ModelConverter& mc,
              DefinitionPolicy policy = DefinitionPolicy::Linear);
 
@@ -61,7 +63,7 @@ private:
     bool occurs(const std::string& name, ExprId e) const;
     // Is `e` a linear, reconstructable term (see class doc)?
     bool isReconstructable(ExprId e, bool polynomial) const;
-    bool admissibleDefinition(const std::string& name, ExprId e);
+    bool admissibleDefinition(const std::string& name, ExprId e, SortId targetSort);
     bool hasOnlyLinearUses(const std::string& name);
     // Substitute Variable named `name` by `replacement` throughout `e` (memoized).
     ExprId substitute(ExprId e, const std::string& name, ExprId replacement);

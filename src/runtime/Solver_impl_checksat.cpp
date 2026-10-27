@@ -220,7 +220,7 @@ Result Solver::Impl::checkSatGround() {
             const bool polynomialDefinitions = logic == "QF_NIA";
             const auto policy = polynomialDefinitions
                 ? SolveEqs::DefinitionPolicy::PolynomialInLinearPositions
-                : SolveEqs::DefinitionPolicy::Linear;
+                : SolveEqs::DefinitionPolicy::PolynomialReals;
             SolveEqs solveEqs(*ir, modelConverter_, policy);
             // A committed substitution and its replay steps form a transaction.
             // Keep earlier committed progress if a later pass exhausts memory.
