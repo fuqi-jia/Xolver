@@ -57,7 +57,7 @@ std::optional<TheoryCheckResult> NraSolver::stagePartialLinearModel(
     auto model = PartialLinearModelSearch::trySolve(constraints, *kernel_, false, &stats);
     const auto profile = config::read<config::ReadKind::ProfilePath>("ARITH_STAGE_PROF", "/tmp/xolver_stageprof.txt");
     if (!profile.empty()) {
-        std::ofstream out(profile + ".boundary.log", std::ios::app);
+        std::ofstream out(profile.string() + ".boundary.log", std::ios::app);
         out << "variables=" << stats.variables << " parameters=" << stats.parameters
             << " contexts=" << stats.contexts << " checks=" << stats.linearChecks
             << " choices=" << stats.choices << " rejected=" << stats.rejectedChoices
