@@ -7,6 +7,10 @@ API contracts are described in [the architecture reference](../ARCHITECTURE.md),
 named source snapshots and binaries; they do not establish general completeness
 or performance superiority.
 
+Latest qualified arithmetic source: [integer choice/context stage](#integer-choice-lattices-and-shared-contexts-r174-2026-10-27).
+Older result tables describe their own frozen rounds; use the latest table and
+its exact GitHub review/merge checks when continuing work.
+
 ## Delivery contract
 
 The delivered arithmetic implementation includes:
@@ -30,7 +34,8 @@ The delivered arithmetic implementation includes:
   protect recursive distribution against IR storage growth.
 - Integer refinement respects check effort. Standard checks retain LP/GCD
   conflicts without registering atoms for uninstalled branch lemmas. Full
-  checks attempt validated integer repair before cuts and splits.
+  integrality checks attempt validated integer repair before cuts and variable
+  branches; disequality refinements use the current relaxation model.
 - Constant integer divisions expose shared remainder lattice gaps before
   branching. Relations preserve dividend identity, assertion scope and signed
   Euclidean remainders, without adding integer variables.
@@ -534,9 +539,12 @@ internal calls as external comparison queries or assume they are zero.
 ## Audited QCP backend qualification (R150, 2026-10-27)
 
 Evidence: [backend stage record](QCP_BACKEND_QUALIFICATION_STAGE_20261027.json).
+Delivery: [PR #48](https://github.com/fuqi-jia/Xolver/pull/48), merged as
+`741b447c40d7a5384dc405c719d6c0c97516369e`; both jobs in
+[main CI 40415965574](https://github.com/fuqi-jia/Xolver/actions/runs/40415965574) passed.
 Implementation branch: `feat/qcp-vc-backend`; native source manifest
-`source-r150.tar.json`. The selected native CLI remains frozen R144 and native
-production source matches qualified R146. Python integration changes passed
+`source-r150.tar.json`. That qualification used frozen R144 and native
+production source matching qualified R146. Python integration changes passed
 **21 protocol tests**, architecture checks and three real program-record audits.
 Both protected evaluations remain unused.
 
@@ -588,6 +596,90 @@ The remaining performance objectives still require further general solver
 improvements and a frozen automated program-suite comparison. Preserve the
 existing Git/CI/source/frozen-hash evidence route; an extra server archive is
 not a delivery prerequisite.
+
+## Integer choice lattices and shared contexts (R174, 2026-10-27)
+
+Evidence: [qualified stage record](ARITHMETIC_INTEGER_CHOICE_CONTEXT_STAGE_20261027.json).
+Code revision: `48f6964124872a75e4fc42d7276a0cf2d1559366`, review branch
+`perf/affine-ite-lowering`. Use the branch's GitHub PR and merge-commit CI as the
+delivery record. Native source manifest is `source-r174.tar.json`; the server
+export may advance after this qualification without invalidating its hashes.
+
+`IteLowerer` previously replaced each arithmetic choice with an unrelated
+integer. Branches sharing an affine part and a residual gcd now retain
+`common + gcd * freshInt`, with both exact guarded definitions. Int-valued
+nonlinear terms, UF applications and array reads remain opaque arithmetic atoms.
+The transformation applies by value sort across theories. Real choices keep
+their established lowering after an unsuccessful broader experiment.
+
+`LiaSolver::handleDisequalities` now excludes nonzero LP values inside an
+unreachable integer lattice gap, with positive denominator scaling and every
+used equality premise retained. The continuous zero-only handler is unchanged.
+A shared `IntegerAffineContext` prepares the current equality snapshot once per
+Full check and indexes variable dependencies. Projections visit the transitive
+relevant component in source order. The compatibility helper remains available;
+no prepared context survives into another check or scope. LRA/LIA assignment
+policies, APIs, cut budgets and runtime-oracle policy are unchanged.
+
+Ring case 0 exposes the root cause: the lowered disequality changes from 30
+terms with coefficient gcd 1 to 28 terms with gcd 64. Its formal runtime changes
+from a 60-second timeout to **0.186 seconds**, independently confirmed by Z3.
+A diagnostic records **107 LIA checks** (23 Full, 84 Standard), compared with
+thousands before the baseline timeout. Separate tests prepare 1,001 equalities
+once, then complete each relevant projection within a budget of 128, preserving
+indirect dependencies and fresh-context explanations.
+
+Frozen CLI SHA-256:
+`90d6e0027bdacdcad065845c92f0e9d1efac3390c6a65809d379958643733936`.
+The SV executable retains SHA-256
+`99130012b880f255cd8bbaf456d4031d07649792c83c430acb5649a547bb89ef`.
+Native qualification passed **1,674 tests / 801,135 assertions**, the targeted
+**37 tests / 4,430 assertions**, and all **37 acceptance tasks / 909 regressions**.
+Eight fixtures have independent decisions and SAT-model replay. All 219 audited
+runs used single-physical-core leases across 65 cores without overlap; every
+formal invocation matched its assigned CPU.
+
+Fresh fixed160 comparison: each invocation receives 60 seconds, one physical
+core and 16 GiB; both frozen Xolver versions and Z3 rotate on the same CPU.
+
+| Version | Raw decided | Verified decided | Verified PAR-2 |
+| --- | ---: | ---: | ---: |
+| Frozen preceding main R144 | 82 | 81 | 9673.930 |
+| Candidate R174 | 85 | 84 | 9360.687 |
+| Same-round frozen Z3 | 121 | 113 | 5900.908 |
+
+Verified gains are **0, 91 and 100**, with no lost results. Their formal times
+are 0.186, 3.195 and 6.192 seconds; targeted times are 0.171, 3.166 and 6.229.
+Each preceding-main invocation timed out in both comparisons. PAR-2 improves
+**313.243 seconds**. Both Xolver versions return two unknowns; no wrong verdict,
+invalid exported model, solver error or memory failure was observed. Individual
+matched cases can still slow down; all original observations remain recorded.
+This does not exceed Z3 or the user's 125/160 reference target.
+
+The shared replay tool now expands `root-of-with-interval` only after an exact
+rational Sturm count proves unique isolation. Fresh Real witnesses retain the
+polynomial, interval, original model expressions and all original assertions.
+The replay language permits witness polynomials. Six roots in SAT cases **75
+and 148** passed independent Z3 replay; 16 protocol tests and two negative
+controls (both rejected by Z3 and cvc5) cover the checker. The first cvc5 replay
+of case75 timed out at60s; that boundary is retained. These model confirmations
+apply to both versions and are separate from the three algorithmic gains.
+Historical tables excluding75/148 remain historical; **UNSAT115 is still
+unconfirmed and excluded**. Unsupported model values stay unverified.
+
+R153 lost verified coverage; R155 tied coverage with worse PAR-2. R162 tied
+coverage with a small PAR-2 improvement but retained regressions from repeated
+projection preparation. The R170 unit-gap deferral experiment lost coverage in
+its 15-case check and was reverted without a full160 rerun. Their raw records
+remain in the stage artifact. The selected R174 implementation passed the full
+closure above. No propagation-pool experiment was reopened.
+
+QCP component regressions passed with the new CLI; the independently checked
+whole-program qualification remains the one unique development C program in
+PR48. A fresh frozen program-suite performance comparison is still required.
+Neither protected set has been evaluated. Continue from Git, successful CI,
+source manifests and frozen hashes; an extra server archive is not a delivery
+gate after GitHub CI is green.
 
 ## Closed experiments and practical regressions
 
