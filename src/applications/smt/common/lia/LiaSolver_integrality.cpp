@@ -29,9 +29,34 @@ namespace xolver {
 // Behavior is byte-identical to the pre-split definitions.
 
 TheoryCheckResult LiaSolver::handleDisequalities(TheoryLemmaStorage& lemmaDb) {
+    std::vector<ActiveLinearAtom> combinationContext;
+    const auto* context = &activeAtoms_;
+    if (!interfaceEqualities_.empty() && sharedTermRegistry_) {
+        combinationContext = activeAtoms_;
+        for (const auto& equality : interfaceEqualities_) {
+            LinearFormKey form;
+            mpq_class rhs = 0;
+            auto append = [&](SharedTermId id, int coefficient) {
+                if (auto value = sharedTermRegistry_->constValue(id)) {
+                    rhs -= coefficient * *value;
+                    return true;
+                }
+                const auto name = getVarNameForSharedTerm(id);
+                if (name.empty() || name.rfind("__const_", 0) == 0) return false;
+                form.terms.push_back({name, mpq_class(coefficient)});
+                return true;
+            };
+            if (append(equality.a, 1) && append(equality.b, -1))
+                combinationContext.push_back({NullExpr, -1, Relation::Eq, true,
+                                              std::move(form), rhs, equality.reason});
+        }
+        context = &combinationContext;
+    }
+    WorkBudget contextBudget(8192);
+    auto affineContext = IntegerAffineContext::build(*context, contextBudget);
     return handleSimplexDisequalities(
         disequalities_, gs_, lemmaDb,
-        [this](const DiseqInfo& d) -> TheoryCheckResult {
+        [this, &affineContext](const DiseqInfo& d) -> TheoryCheckResult {
             // If the disequality is forced to be false by current bounds
             // (auxVar is fixed to 0), return a precise conflict.
             auto val = gs_.value(d.auxVar);
@@ -87,34 +112,13 @@ TheoryCheckResult LiaSolver::handleDisequalities(TheoryLemmaStorage& lemmaDb) {
             mpz_class c = rhs.get_num();
             mpz_class offset = 0;
             std::vector<SatLit> equalityReasons;
-            std::vector<ActiveLinearAtom> combinationContext;
-            const auto* context = &activeAtoms_;
-            if (!interfaceEqualities_.empty() && sharedTermRegistry_) {
-                combinationContext = activeAtoms_;
-                for (const auto& equality : interfaceEqualities_) {
-                    LinearFormKey form;
-                    mpq_class rhs = 0;
-                    auto append = [&](SharedTermId id, int coefficient) {
-                        if (auto value = sharedTermRegistry_->constValue(id)) {
-                            rhs -= coefficient * *value;
-                            return true;
-                        }
-                        const auto name = getVarNameForSharedTerm(id);
-                        if (name.empty() || name.rfind("__const_", 0) == 0) return false;
-                        form.terms.push_back({name, mpq_class(coefficient)});
-                        return true;
-                    };
-                    if (append(equality.a, 1) && append(equality.b, -1))
-                        combinationContext.push_back({NullExpr, -1, Relation::Eq, true,
-                                                      std::move(form), rhs, equality.reason});
-                }
-                context = &combinationContext;
-            }
             WorkBudget projectionBudget(8192);
-            if (auto projection = projectIntegerAffineForm(*form, *context, projectionBudget)) {
-                g = projection->step;
-                offset = projection->offset;
-                equalityReasons = std::move(projection->reasons);
+            if (affineContext && !affineContext->empty()) {
+                if (auto projection = affineContext->project(*form, projectionBudget)) {
+                    g = projection->step;
+                    offset = projection->offset;
+                    equalityReasons = std::move(projection->reasons);
+                }
             }
             const mpz_class residual = c - offset;
 

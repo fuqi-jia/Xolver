@@ -93,3 +93,58 @@ TEST_CASE("IntegerAffineProjection: unchanged lattices retain unconditional expl
     CHECK(projected->step == 1);
     CHECK(projected->reasons.empty());
 }
+
+TEST_CASE("IntegerAffineContext: repeated projections ignore unrelated equality components") {
+    std::vector<ActiveLinearAtom> atoms{
+        equality(LinearFormKey{{{"x", 2}, {"y", -1}}}, 7, 1)};
+    for (int i = 0; i < 1000; ++i)
+        atoms.push_back(equality(LinearFormKey{{{"a" + std::to_string(i), 1},
+                                               {"b" + std::to_string(i), -1}}}, i, i + 10));
+    WorkBudget preparation(8192);
+    const auto context = IntegerAffineContext::build(atoms, preparation);
+    REQUIRE(context.has_value());
+    for (long step : {2L, 3L, 512L}) {
+        const LinearFormKey form{{{"x", 2}, {"y", -1}, {"z", mpq_class(step)}}};
+        WorkBudget projection(128);
+        const auto result = context->project(form, projection);
+        REQUIRE(result.has_value());
+        CHECK(result->offset == 7);
+        CHECK(result->step == step);
+        CHECK(result->reasons == std::vector<SatLit>{SatLit::positive(1)});
+        CHECK(projection.used() < 128);
+    }
+    // The compatibility API charges preparation too; it cannot scan a
+    // thousand source equations within the small per-projection budget.
+    WorkBudget oneShot(128);
+    CHECK_FALSE(projectIntegerAffineForm(LinearFormKey{{{"x", 2}, {"y", -1}, {"z", 512}}},
+                                         atoms, oneShot).has_value());
+}
+
+TEST_CASE("IntegerAffineContext: indirect dependencies and fresh source snapshots retain explanations") {
+    std::vector<ActiveLinearAtom> atoms{
+        equality(LinearFormKey{{{"a", -1}, {"z", 1}}}, 3, 2),
+        equality(LinearFormKey{{{"a", 1}, {"y", -4}}}, 5, 3)};
+    const LinearFormKey form{{{"x", 2}, {"z", 1}}};
+    WorkBudget preparation(8192);
+    const auto context = IntegerAffineContext::build(atoms, preparation);
+    REQUIRE(context.has_value());
+    WorkBudget projection(8192);
+    const auto result = context->project(form, projection);
+    REQUIRE(result.has_value());
+    CHECK(result->offset == 8);
+    CHECK(result->step == 2);
+    CHECK(result->reasons == std::vector<SatLit>{SatLit::positive(2), SatLit::positive(3)});
+    // A backtracked source is a negated equality and cannot support the new
+    // context. Reusing prepared rows within a check never retains this premise
+    // into another check.
+    atoms[1].value = false;
+    atoms[1].lit = SatLit::negative(3);
+    WorkBudget nextPreparation(8192), nextProjection(8192);
+    const auto next = IntegerAffineContext::build(atoms, nextPreparation);
+    REQUIRE(next.has_value());
+    const auto unconditioned = next->project(form, nextProjection);
+    REQUIRE(unconditioned.has_value());
+    CHECK(unconditioned->step == 1);
+    CHECK(unconditioned->offset == 0);
+    CHECK(unconditioned->reasons.empty());
+}

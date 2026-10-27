@@ -1,19 +1,42 @@
 #include "search/linear/IntegerAffineProjection.h"
 
 #include <algorithm>
-#include <map>
+#include <unordered_set>
 
 namespace xolver {
 
-std::optional<IntegerAffineProjection> projectIntegerAffineForm(
-    const LinearFormKey& form, const std::vector<ActiveLinearAtom>& activeAtoms,
-    WorkBudget& budget) {
+std::optional<IntegerAffineContext> IntegerAffineContext::build(
+    const std::vector<ActiveLinearAtom>& activeAtoms, WorkBudget& budget) {
+    try {
+        IntegerAffineContext context;
+        for (const auto& atom : activeAtoms) {
+            budget.tick();
+            if ((atom.value ? atom.rel : negateRelation(atom.rel)) != Relation::Eq) continue;
+            auto normalized = IntegerReasoner::normalize(atom.lhs, atom.rhs, atom.rel, atom.value);
+            if (!normalized || normalized->rel != Relation::Eq || normalized->rhs.get_den() != 1) continue;
+            Equation row{{}, normalized->rhs.get_num(), {atom.lit}};
+            for (const auto& [name, coefficient] : normalized->lhs.terms) {
+                budget.tick();
+                if (coefficient.get_den() != 1) return std::nullopt;
+                row.terms[name] += coefficient.get_num();
+                if (row.terms[name] == 0) row.terms.erase(name);
+            }
+            const size_t index = context.equations_.size();
+            for (const auto& [name, coefficient] : row.terms) {
+                (void)coefficient;
+                context.incidence_[name].push_back(index);
+            }
+            context.equations_.push_back(std::move(row));
+        }
+        return context;
+    } catch (const ResourceExhausted&) {
+        return std::nullopt;
+    }
+}
+
+std::optional<IntegerAffineProjection> IntegerAffineContext::project(
+    const LinearFormKey& form, WorkBudget& budget) const {
     using Coefficients = std::map<std::string, mpz_class>;
-    struct Row {
-        Coefficients terms;
-        mpz_class rhs;
-        std::vector<SatLit> reasons;
-    };
     try {
         Coefficients target;
         mpz_class originalStep = 0;
@@ -28,20 +51,41 @@ std::optional<IntegerAffineProjection> projectIntegerAffineForm(
             budget.tick();
             mpz_gcd(originalStep.get_mpz_t(), originalStep.get_mpz_t(), coefficient.get_mpz_t());
         }
-        std::vector<Row> rows;
-        for (const auto& atom : activeAtoms) {
-            budget.tick();
-            if ((atom.value ? atom.rel : negateRelation(atom.rel)) != Relation::Eq) continue;
-            auto normalized = IntegerReasoner::normalize(atom.lhs, atom.rhs, atom.rel, atom.value);
-            if (!normalized || normalized->rel != Relation::Eq || normalized->rhs.get_den() != 1) continue;
-            Row row{{}, normalized->rhs.get_num(), {atom.lit}};
-            for (const auto& [name, coefficient] : normalized->lhs.terms) {
+        // Equalities in disjoint variable components cannot affect this form.
+        // Keep source ordering inside the relevant component, including every
+        // equality connected indirectly through another equation.
+        std::vector<size_t> relevant;
+        std::vector<bool> visited(equations_.size(), false);
+        std::unordered_set<std::string> variables;
+        std::vector<std::string> pending;
+        for (const auto& [name, coefficient] : target) {
+            (void)coefficient;
+            variables.insert(name);
+            pending.push_back(name);
+        }
+        while (!pending.empty()) {
+            const auto variable = std::move(pending.back());
+            pending.pop_back();
+            const auto found = incidence_.find(variable);
+            if (found == incidence_.end()) continue;
+            for (size_t index : found->second) {
                 budget.tick();
-                if (coefficient.get_den() != 1) return std::nullopt;
-                row.terms[name] += coefficient.get_num();
-                if (row.terms[name] == 0) row.terms.erase(name);
+                if (visited[index]) continue;
+                visited[index] = true;
+                relevant.push_back(index);
+                for (const auto& [name, coefficient] : equations_[index].terms) {
+                    (void)coefficient;
+                    budget.tick();
+                    if (variables.insert(name).second) pending.push_back(name);
+                }
             }
-            rows.push_back(std::move(row));
+        }
+        std::sort(relevant.begin(), relevant.end());
+        std::vector<Equation> rows;
+        rows.reserve(relevant.size());
+        for (size_t index : relevant) {
+            budget.tick(equations_[index].terms.size() + 1);
+            rows.push_back(equations_[index]);
         }
         auto appendReasons = [&](std::vector<SatLit>& to, const std::vector<SatLit>& from) {
             for (const auto literal : from) {
@@ -72,7 +116,7 @@ std::optional<IntegerAffineProjection> projectIntegerAffineForm(
                 }
             }
             if (chosen == rows.size()) break;
-            Row pivot = std::move(rows[chosen]);
+            Equation pivot = std::move(rows[chosen]);
             rows.erase(rows.begin() + chosen);
             const auto unit = pivot.terms.at(variable);
             if (const auto it = target.find(variable); it != target.end()) {
@@ -106,6 +150,13 @@ std::optional<IntegerAffineProjection> projectIntegerAffineForm(
     } catch (const ResourceExhausted&) {
         return std::nullopt;
     }
+}
+
+std::optional<IntegerAffineProjection> projectIntegerAffineForm(
+    const LinearFormKey& form, const std::vector<ActiveLinearAtom>& activeAtoms,
+    WorkBudget& budget) {
+    auto context = IntegerAffineContext::build(activeAtoms, budget);
+    return context ? context->project(form, budget) : std::nullopt;
 }
 
 } // namespace xolver
