@@ -5,7 +5,7 @@ import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from tools.integration.qcp import Unsupported, binders, export_goals, parse
+from tools.integration.qcp import Unsupported, binders, export_goals, owned_int_ranges, parse
 
 
 class QcpAdapterTests(unittest.TestCase):
@@ -83,6 +83,48 @@ Definition unsupported := forall (xs: list Z), True.
             self.assertEqual(len(report['queries']), 1)
             row = report['queries'][0]
             self.assertEqual(row['query_sha256'], hashlib.sha256((root/'out'/row['file']).read_bytes()).hexdigest())
+
+    def test_owned_cell_ranges_require_complete_positive_assertion_grammar(self):
+        cell = '((&("x")) # Int |-> x)'
+        symbols = {'x': 'Int', 'y': 'Int', 'p': 'Int'}
+        facts = owned_int_ranges(f'({cell} ** ((p # Int |-> (y + 1)) && emp))', symbols)
+        self.assertEqual(len(facts), 2)
+        self.assertEqual(facts[0]['upper'], '(<= |x| 2147483647)')
+        self.assertEqual(facts[1]['lower'], '(<= (- 2147483648) (+ |y| 1))')
+        # No partial extraction, even when a supported cell is another conjunct.
+        unsafe = [f'{cell} || emp', f'~ {cell}', f'{cell} -* emp',
+                  f'EX x, {cell}', f'foo {cell}', f'{cell} ** arbitrary_heap',
+                  f'({cell} || emp) ** {cell}', f'~ {cell} && {cell}',
+                  f'if True then {cell} else emp && {cell}',
+                  'p # UInt |-> x', 'p # Int |-> mystery', 'p # Int |-> true',
+                  'p # Int |-> (x = y)', 'p # Int |-> x trailing']
+        for assertion in unsafe:
+            with self.subTest(assertion=assertion):
+                self.assertEqual(owned_int_ranges(assertion, symbols), [])
+
+    def test_typed_cells_strengthen_only_the_antecedent_and_record_derivation(self):
+        text = '''Definition owned := forall (x: Z) (y: Z),
+  (( &("left") ) # Int |-> x) ** (( &("right") ) # Int |-> y)
+  |-- “ x <= INT_MAX ” && “ y >= INT_MIN ” && emp.
+Definition unowned := forall (x: Z), emp |-- “ x <= INT_MAX ”.
+Definition negative := forall (x: Z),
+  ((( &("left") ) # Int |-> x) || emp) |-- “ x <= INT_MAX ”.
+'''
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            source = root / 'goals.v'
+            source.write_text(text)
+            report = export_goals(source, root / 'out')
+            facts = report['goals'][0]['derived_assumptions']
+            self.assertEqual([f['value'] for f in facts], ['x', 'y'])
+            self.assertTrue(all(f['lemma'] == 'store_int_range' for f in facts))
+            script = (root / 'out/owned-0.smt2').read_text()
+            self.assertIn('(assert (<= |x| 2147483647))', script)
+            self.assertIn('(assert (<= (- 2147483648) |y|))', script)
+            for name in ('unowned', 'negative'):
+                other = (root / 'out' / (name + '-0.smt2')).read_text()
+                self.assertNotIn('(assert (<= |x| 2147483647))', other)
+            self.assertFalse(report['program_verified'])
 
 
 if __name__ == '__main__':

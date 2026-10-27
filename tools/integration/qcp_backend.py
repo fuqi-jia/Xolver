@@ -88,11 +88,26 @@ def invoke(backend, binary, query, timeout, output):
                 stderr_sha256=hashlib.sha256(stderr).hexdigest())
 
 
-def proof_candidate(lemma, goal):
+def proof_candidate(lemma, goal, derived=()):
     # Both backends use identical proof reconstruction. These tactics must
     # reconstruct the whole original Rocq statement; no SMT result is an axiom.
-    return (f'Lemma {lemma} : {goal}.\nProof.\n'
-            '  LLM_pre_process ltac:(first [lia | nia]).\nQed.\n')
+    lines = [f'Lemma {lemma} : {goal}.', 'Proof.',
+             '  LLM_pre_process ltac:(first [lia | nia]).']
+    for fact in derived:
+        address, value = fact['address'], fact['value']
+        lines.extend([
+            f'  all: prop_apply_p (store_int_range ({address}) ({value}));',
+            '    let H := fresh "HcellRange" in',
+            '    Intros_p H;',
+            f'    change (-2147483648 <= ({value}) <= 2147483647) in H;',
+            '    destruct H.',
+        ])
+    if derived:
+        cells = '; '.join(f"cancel (({f['address']}) # Int |-> ({f['value']}))" for f in derived)
+        lines.extend(['  all: split_pure_spatial.', f'  all: first [{cells}',
+                      '    | split_pures; dump_pre_spatial; first [lia | nia]].'])
+    lines.append('Qed.')
+    return '\n'.join(lines) + '\n'
 
 
 def discharge(goals, manual, assigned, backend, binary, timeout, output):
@@ -112,7 +127,8 @@ def discharge(goals, manual, assigned, backend, binary, timeout, output):
     report = dict(schema=1, integration='pending-vc-discharge', backend=backend,
                   binary=dict(path=str(binary), sha256=snapshots[0]),
                   source_sha256=snapshots[1], manual_sha256=snapshots[2],
-                  adapter_sha256=sha256(Path(__file__)), cpu=cpu,
+                  adapter_sha256=sha256(Path(__file__)),
+                  exporter_sha256=sha256(Path(__file__).with_name('qcp.py')), cpu=cpu,
                   timeout=timeout, memory_bytes=MEMORY_BYTES, rows=[],
                   program_verified=False, verified_vcs=0, kernel_checks=0,
                   internal_qcp_smt_queries=None)
@@ -134,7 +150,8 @@ def discharge(goals, manual, assigned, backend, binary, timeout, output):
                                             output / f'vc-{index}-query-{number}'))
         if all(q['result'] == 'unsat' for q in record['queries']):
             candidate = output / f'vc-{index}-candidate.v'
-            candidate.write_text(proof_candidate(pending[name], name))
+            candidate.write_text(proof_candidate(pending[name], name,
+                                 by_name[name].get('derived_assumptions', ())))
             record.update(status='proof-candidate', candidate=str(candidate),
                           candidate_sha256=sha256(candidate), kernel_checked=False)
         else:

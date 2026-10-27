@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from tools.integration.qcp_backend import discharge, leased_cpu, pending_goals
+from tools.integration.qcp_backend import discharge, leased_cpu, pending_goals, proof_candidate
 
 
 class QcpBackendTests(unittest.TestCase):
@@ -91,6 +91,19 @@ Lemma proof_unsupported : unsupported. Proof. Abort.
                 leased_cpu()
         with patch.dict(os.environ, EOS_CPU_IDS='7'), patch('os.sched_getaffinity', return_value={7}):
             self.assertEqual(leased_cpu(), 7)
+
+    def test_owned_cell_candidate_reconstructs_ranges_in_original_goal(self):
+        candidate = proof_candidate('proof_owned', 'owned', [
+            dict(address='&("left")', value='x'),
+            dict(address='p', value='y + 1'),
+        ])
+        self.assertIn('Lemma proof_owned : owned.', candidate)
+        self.assertIn('store_int_range (&("left")) (x)', candidate)
+        self.assertIn('store_int_range (p) (y + 1)', candidate)
+        self.assertIn('change (-2147483648 <= (y + 1) <= 2147483647)', candidate)
+        self.assertIn('split_pure_spatial', candidate)
+        self.assertNotIn('Admitted', candidate)
+        self.assertNotIn('Axiom', candidate)
 
 
 if __name__ == '__main__':
