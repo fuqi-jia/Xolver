@@ -6,7 +6,6 @@
 #include <chrono>
 #include <map>
 #include <set>
-#include <tuple>
 
 namespace xolver {
 namespace {
@@ -158,32 +157,10 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
                 (!b.upper || q < b.upper->value || (q == b.upper->value && !b.upper->strict));
         };
 
-        // One linear relaxation for the entire local search. Distinct nonlinear
-        // monomials initially have independent columns. A parameter assignment
-        // activates exact identities m = value^exponent * (m / parameter^exponent).
-        // Build only the quotient chains in the fixed cover order, rather than
-        // all subsets of a monomial's parameters.
-        struct Link { Powers monomial, quotient; int exponent; };
-        std::vector<std::map<Powers, Link>> links(parameters.size());
-        std::set<Powers> closure(monomials.begin(), monomials.end());
-        for (const auto& monomial : monomials) {
-            Powers current = monomial;
-            for (size_t depth = 0; depth < parameters.size(); ++depth) {
-                tick();
-                if (current.empty() || (current.size() == 1 && current[0].second == 1)) break;
-                auto it = std::find_if(current.begin(), current.end(), [&](const auto& power) {
-                    return power.first == parameters[depth];
-                });
-                if (it == current.end()) continue;
-                const int exponent = it->second;
-                Powers quotient = current;
-                quotient.erase(quotient.begin() + (it - current.begin()));
-                links[depth].try_emplace(current, Link{current, quotient, exponent});
-                closure.insert(quotient);
-                current = std::move(quotient);
-            }
-        }
-
+        // Keep one local affine context. A nonlinear atom enters it only once
+        // substitution of the current prefix makes the WHOLE atom affine.
+        // Omitting an unfinished atom weakens the local relaxation. This avoids
+        // constructing a tableau column for every intermediate monomial.
         GeneralSimplex simplex;
         ++stats.contexts;
         auto check = [&]() {
@@ -193,11 +170,9 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
             return result;
         };
         std::map<VarId, int> columns;
-        std::map<Powers, int> monomialColumns;
         for (auto var : variables) {
             tick();
             columns[var] = simplex.addVar(std::string(kernel.varName(var)));
-            monomialColumns[{{var, 1}}] = columns.at(var);
         }
         const auto reason = SatLit::positive(1); // private; never exported
         auto fix = [&](int column, const mpq_class& value, int level) {
@@ -205,43 +180,102 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
             return simplex.assertLower(column, bound, level) &&
                    simplex.assertUpper(column, bound, level);
         };
-        const int unit = simplex.addVar("monomial-unit");
-        if (!fix(unit, mpq_class(1), 0)) return std::nullopt;
-        monomialColumns[{}] = unit;
-        for (const auto& powers : closure) {
-            tick();
-            if (!monomialColumns.contains(powers))
-                monomialColumns[powers] = simplex.addVar("monomial");
-        }
+        Model selected;
+        std::map<VarId, std::map<int, mpq_class>> selectedPowers;
+        auto power = [&](VarId var, int exponent) -> mpq_class {
+            auto& cache = selectedPowers[var];
+            if (auto it = cache.find(exponent); it != cache.end()) return it->second;
+            const auto& value = selected.at(var);
+            mpq_class result;
+            if (exponent == 1 || value == 0 || value == 1) result = value;
+            else if (value == -1) result = exponent % 2 ? -1 : 1;
+            else {
+                const size_t bits = mpz_sizeinbase(value.get_num().get_mpz_t(), 2) +
+                                    mpz_sizeinbase(value.get_den().get_mpz_t(), 2);
+                if (bits > 100000 || static_cast<size_t>(exponent) > 100000 / bits)
+                    throw ResourceExhausted("partial linear model coefficient exhausted");
+                budget.tick(bits * exponent);
+                mpz_class numerator, denominator;
+                mpz_pow_ui(numerator.get_mpz_t(), value.get_num().get_mpz_t(), exponent);
+                mpz_pow_ui(denominator.get_mpz_t(), value.get_den().get_mpz_t(), exponent);
+                result = mpq_class(numerator, denominator);
+            }
+            cache.emplace(exponent, result);
+            return result;
+        };
+        using Row = std::vector<std::pair<int, mpq_class>>;
+        std::map<std::pair<Row, mpq_class>, int> definitions;
+        std::vector<bool> active(atoms.size(), false);
+        std::vector<std::vector<size_t>> introduced(parameters.size() + 1);
+        std::vector<std::vector<size_t>> affected(parameters.size());
+        std::vector<size_t> all;
         for (size_t index = 0; index < atoms.size(); ++index) {
             tick();
-            std::map<int, mpq_class> coefficients;
-            mpq_class constant = 0;
-            for (const auto& term : atoms[index]) {
-                tick();
-                if (term.coefficient == 0) continue;
-                if (term.powers.empty()) constant += term.coefficient;
-                else coefficients[monomialColumns.at(term.powers)] += term.coefficient;
-            }
-            std::vector<std::pair<int, mpq_class>> row;
-            for (const auto& [column, coefficient] : coefficients)
-                if (coefficient != 0) row.emplace_back(column, coefficient);
-            const auto relation = constraints[index].rel;
-            if (row.empty()) {
-                if (!holds(constant, relation)) return std::nullopt;
-                continue;
-            }
-            if (relation == Relation::Neq) continue; // checked on the original model
-            const int auxiliary = simplex.addConstraint(row, -constant);
-            if (auxiliary < 0) return std::nullopt;
-            if ((relation == Relation::Eq || relation == Relation::Gt || relation == Relation::Geq) &&
-                !simplex.assertLower(auxiliary, BoundInfo(BoundValue(
-                    DeltaRational(0, relation == Relation::Gt ? 1 : 0)), reason))) return std::nullopt;
-            if ((relation == Relation::Eq || relation == Relation::Lt || relation == Relation::Leq) &&
-                !simplex.assertUpper(auxiliary, BoundInfo(BoundValue(
-                    DeltaRational(0, relation == Relation::Lt ? -1 : 0)), reason))) return std::nullopt;
+            all.push_back(index);
+            std::set<VarId> support;
+            for (const auto& term : atoms[index])
+                for (const auto& [var, exponent] : term.powers) {
+                    tick();
+                    (void)exponent;
+                    support.insert(var);
+                }
+            for (size_t depth = 0; depth < parameters.size(); ++depth)
+                if (support.contains(parameters[depth])) affected[depth].push_back(index);
         }
-        if (check() != GeneralSimplex::Result::Sat) return std::nullopt;
+        auto activate = [&](const std::vector<size_t>& indices, int level) {
+            for (const auto index : indices) {
+                tick();
+                if (active[index]) continue;
+                std::map<int, mpq_class> coefficients;
+                mpq_class constant = 0;
+                bool affine = true;
+                for (const auto& term : atoms[index]) {
+                    tick();
+                    mpq_class coefficient(term.coefficient);
+                    Powers remaining;
+                    for (const auto& [var, exponent] : term.powers) {
+                        tick();
+                        if (coefficient == 0) break;
+                        if (selected.contains(var)) coefficient *= power(var, exponent);
+                        else remaining.emplace_back(var, exponent);
+                    }
+                    if (coefficient == 0) continue;
+                    if (remaining.empty()) constant += coefficient;
+                    else if (remaining.size() == 1 && remaining[0].second == 1)
+                        coefficients[columns.at(remaining[0].first)] += coefficient;
+                    else { affine = false; break; }
+                }
+                if (!affine) continue;
+                active[index] = true;
+                introduced[level].push_back(index);
+                Row row;
+                for (const auto& [column, coefficient] : coefficients)
+                    if (coefficient != 0) row.emplace_back(column, coefficient);
+                const auto relation = constraints[index].rel;
+                if (row.empty()) {
+                    if (!holds(constant, relation)) return false;
+                    continue;
+                }
+                if (relation == Relation::Neq) continue; // final original-model check
+                const auto key = std::make_pair(row, constant);
+                auto it = definitions.find(key);
+                if (it == definitions.end()) {
+                    const int auxiliary = simplex.addConstraint(row, -constant);
+                    if (auxiliary < 0) return false;
+                    it = definitions.emplace(key, auxiliary).first;
+                    ++stats.definitions;
+                }
+                const int auxiliary = it->second;
+                if ((relation == Relation::Eq || relation == Relation::Gt || relation == Relation::Geq) &&
+                    !simplex.assertLower(auxiliary, BoundInfo(BoundValue(
+                        DeltaRational(0, relation == Relation::Gt ? 1 : 0)), reason), level)) return false;
+                if ((relation == Relation::Eq || relation == Relation::Lt || relation == Relation::Leq) &&
+                    !simplex.assertUpper(auxiliary, BoundInfo(BoundValue(
+                        DeltaRational(0, relation == Relation::Lt ? -1 : 0)), reason), level)) return false;
+            }
+            return true;
+        };
+        if (!activate(all, 0) || check() != GeneralSimplex::Result::Sat) return std::nullopt;
 
         auto complete = [&]() -> std::optional<Model> {
             tick();
@@ -301,43 +335,12 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
             }
             return values;
         };
-        auto power = [&](const mpq_class& value, int exponent) -> mpq_class {
-            if (value == 0 || value == 1) return value;
-            if (value == -1) return exponent % 2 ? mpq_class(-1) : mpq_class(1);
-            const size_t bits = mpz_sizeinbase(value.get_num().get_mpz_t(), 2) +
-                                mpz_sizeinbase(value.get_den().get_mpz_t(), 2);
-            if (bits > 100000 || static_cast<size_t>(exponent) > 100000 / bits)
-                throw ResourceExhausted("partial linear model coefficient exhausted");
-            budget.tick(bits * exponent);
-            mpz_class numerator, denominator;
-            mpz_pow_ui(numerator.get_mpz_t(), value.get_num().get_mpz_t(), exponent);
-            mpz_pow_ui(denominator.get_mpz_t(), value.get_den().get_mpz_t(), exponent);
-            return mpq_class(numerator, denominator);
-        };
-        std::map<std::tuple<int, int, mpq_class>, int> definitions;
         auto apply = [&](size_t depth, const mpq_class& value) {
             tick();
             const int level = static_cast<int>(depth) + 1;
-            if (!fix(columns.at(parameters[depth]), value, level)) return false;
-            for (const auto& [powers, link] : links[depth]) {
-                tick();
-                (void)powers;
-                const int monomial = monomialColumns.at(link.monomial);
-                const int quotient = monomialColumns.at(link.quotient);
-                const auto factor = power(value, link.exponent);
-                const auto key = std::make_tuple(monomial, quotient, factor);
-                auto it = definitions.find(key);
-                if (it == definitions.end()) {
-                    // Only the equality bound is conditional. The row itself
-                    // defines a fresh auxiliary and remains valid after pop.
-                    const int auxiliary = simplex.addConstraint(
-                        {{monomial, mpq_class(1)}, {quotient, -factor}}, mpq_class(0));
-                    if (auxiliary < 0) return false;
-                    it = definitions.emplace(key, auxiliary).first;
-                    ++stats.definitions;
-                }
-                if (!fix(it->second, mpq_class(0), level)) return false;
-            }
+            selected[parameters[depth]] = value;
+            if (!fix(columns.at(parameters[depth]), value, level) ||
+                !activate(affected[depth], level)) return false;
             return check() == GeneralSimplex::Result::Sat;
         };
         auto push = [&](size_t depth, const mpq_class& value) {
@@ -349,6 +352,10 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
         };
         auto pop = [&](size_t depth) {
             simplex.backtrackToLevel(static_cast<int>(depth), GeneralSimplex::AssignmentPolicy::Preserve);
+            for (auto index : introduced[depth + 1]) active[index] = false;
+            introduced[depth + 1].clear();
+            selected.erase(parameters[depth]);
+            selectedPowers.erase(parameters[depth]);
         };
         return searchBoundaryCandidates(parameters.size(), candidates, push, pop, complete);
     } catch (const ResourceExhausted&) {

@@ -1001,6 +1001,33 @@ The last applied server overlay is `source-r274.tar.json`. A subsequent overlay
 must restore its abandoned NIA changes using `package_overlay.py --since`.
 Continue from the qualified R264/main source and binary, not this experiment.
 
+### Rejected eager monomial boundary context (R276–R279)
+
+The old helper fails the mixed-boundary unit reproduction (EOS `436ed44afc14`):
+`a,b,c` in `[0,1]`, `a+b=1`, `ab=ac=0`, `bc=1` require the mixed assignment
+`a=0,b=c=1`, which its coherent whole-cover corners miss. R278 adds a generic
+balanced candidate traversal and one incremental monomial relaxation, but its
+eager quotient-chain expansion is **not selected**. It passes 1,694 unit tests /
+801,317 assertions, 68 targeted tests / 154,998 assertions, and 32 independent
+mixed-boundary fixtures. Both Z3 and cvc5 check all fixture decisions and replay
+all 16 SAT models; those fixtures add no primary-suite solves or QCP programs.
+
+Fresh NRA32 (EOS `ba33cd60d1f4`) verifies **20→19** results, zero gains, losing
+SAT150 (`zankl/matrix-3-all-2.smt2`): baseline 0.625 s, candidate timeout.
+Verified PAR-2 worsens 1455.632→1575.366 s. Same-round Z3 verifies 25; there are
+no wrong verdicts or invalid models. Build EOS `156d24bb9270`, fixture checks
+`83f5c292af30`, and diagnostics `619c15082cd3`. Source commit
+`c4bdd84ccdafc4891c2010437f2020db01ebcd9b`; CLI SHA-256
+`c831a9d06958e5854aacc79da63c4986f6151cec5375bef74083174776853fcf`.
+
+The profile identifies avoidable construction work: 150 has 27 cover parameters
+but exhausts the 20 ms allocation after only four choices and 518 row definitions.
+149 similarly stops at depth 18 of 28. The next implementation should activate
+only whole atoms whose current residual is affine, retaining one local context
+and original-model validation. It must be qualified independently; neither the
+new reproduction nor unit success establishes a benchmark gain. No full160 is
+run for the rejected variant. Its overlay is `source-r278.tar.json`.
+
 ## Closed experiments and practical regressions
 
 R178 replaced the square-cascade's ad hoc coefficient-Horner substitution with
