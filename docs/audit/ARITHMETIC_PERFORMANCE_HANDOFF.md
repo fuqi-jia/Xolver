@@ -7,7 +7,7 @@ API contracts are described in [the architecture reference](../ARCHITECTURE.md),
 named source snapshots and binaries; they do not establish general completeness
 or performance superiority.
 
-Latest qualified arithmetic source: [algebraic model replay stage](#affine-algebraic-model-replay-r184-2026-10-27).
+Latest qualified arithmetic source: [partial linear models](#partial-boundary-assignment-and-linear-completion-r264r266).
 Older result tables describe their own frozen rounds; use the latest table and
 its exact GitHub review/merge checks when continuing work.
 
@@ -890,6 +890,84 @@ Input hashes and historical scores are unaffected by this label correction.
 Continue from Git, CI, source manifests, frozen hashes and these acceptance
 records. The cancelled `validation/current-main.json` archive is not a gap or
 a delivery requirement.
+
+## Partial boundary assignment and linear completion (R264/R266)
+
+The preceding polynomial-definition stage merged in
+[PR52](https://github.com/fuqi-jia/Xolver/pull/52), main
+`be8e9cad1be90ba3e18e1d97004145a1f0ac93c8`. Both jobs passed in
+[PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/40499991484) and
+[main CI](https://github.com/fuqi-jia/Xolver/actions/runs/40502199358).
+
+The [partial-linear-model stage record](ARITHMETIC_PARTIAL_LINEAR_MODELS_STAGE_20261027.json)
+qualifies implementation `f967dccbef51a5becee6200ab0edf13170b79f2e` against that
+main. Merge `870cb5f1` connects the histories without changing the qualified
+source/test bytes. The source/header census is 653, with no layer violation.
+
+The root cause is incomplete candidate construction: a few variables occur
+inside products, while many remaining coordinates form a coupled linear
+system. Small whole-model guesses miss its large coordinates. A diagnostic
+automatically selected three product variables in original **157**. Setting
+them to 1 let the previous binary solve the strengthened query in 0.0425 s;
+the resulting model satisfies the full original input in both Z3 and cvc5.
+The 0/-1 strengthened queries are UNSAT, which proves nothing about original
+UNSAT and is not scored as such.
+
+`PartialLinearModelSearch` now selects a deterministic monomial cover, tries
+admissible boundary/simple corners, solves each remaining linear system with
+exact simplex and checks every original polynomial at the complete point.
+The domain-independent `boundaryCandidates` helper tries a supplied upper
+endpoint before the lower endpoint. Open real endpoints are excluded; integer
+clients round endpoints exactly and reject fractional completed models. The
+production adapter added here runs at Full candidate effort in pure NRA;
+other domains are not claimed as newly enabled. No integer scaling is involved.
+
+Each attempt owns a fresh simplex context and shares a 20 ms / 100,000-work-unit
+allocation. `GeneralSimplex::checkUntil` can yield without corrupting its
+tableau; ordinary `check()` and the verified LRA/LIA backtracking policies keep
+their existing semantics. A failed candidate creates no conflict, pruning
+clause or original UNSAT result. There is no new runtime control or oracle.
+
+Frozen CLI SHA-256:
+`e7a8214e33b022d8e6acafc33fed8d00636d1da66c33ffb070a2695ed4504e34`.
+SV retains `99130012b880f255cd8bbaf456d4031d07649792c83c430acb5649a547bb89ef`.
+Panda1 passed **1,689 unit tests / 801,249 assertions**, **98 targeted tests /
+158,920 assertions**, all **38 acceptance tasks / 916 regressions**, and
+1,018 native-theory differential cases / 703 models. Sixteen additional
+coupled fixtures have independent Z3/cvc5 decisions, and all eight SAT models
+replay in both. Four separate original/fixture checks also pass both engines,
+including retained 79/152 and new 157. Gain 150 has an independently replayed
+model in the formal comparison. These fixtures add no benchmark/program count.
+
+Fresh fixed160 uses the unchanged manifest, frozen versions, rotated same-CPU
+order and 60 seconds / one physical core / 16 GiB per solver:
+
+| Version | Raw decided | Verified decided | Verified PAR-2 |
+| --- | ---: | ---: | ---: |
+| Preceding main, frozen R258 | 90 | 89 | 8824.108 |
+| Candidate R264 | 92 | 91 | 8593.592 |
+| Same-round frozen Z3 | 124 | 115 | 5609.677 |
+
+Only **150** (`zankl/matrix-3-all-2.smt2`, SAT 0.6053 s) and **157** (the PRAY
+geometric-offspring input, SAT 3.9705 s) are newly verified; there are no lost
+results. Their same-round Z3 times are 0.0792/0.0424 s. PAR-2 improves 230.515 s.
+Baseline has 70 timeouts / zero unknowns; candidate has 67 timeouts / one
+unknown. The 77 timeout→unknown change is not a solved case. There are no
+opposite verdicts, invalid exported models, process errors or memory failures.
+**UNSAT115 remains unconfirmed and excluded**. The separate 32-case NRA round
+records 18→20 verified results, exactly the same gains, no losses; PAR-2 changes
+1689.860→1454.109. This remains below Z3 and is not a superiority claim.
+
+Build EOS `69c98a222923`; NRA `9f838f5e7cb0`; full comparison `86b586e965ca`;
+acceptance `eac97f59de82`; original models `96348ba107c0`; generated models
+`824422727924`; profile `24bd23a036bf`; causal diagnostic `83701026ee61`;
+source/binary/lease audit `4b4d875a9346`. The 252 audited runs match their
+physical CPU leases on 65 cores, with no overlap or formal affinity mismatch.
+Instrumented 157 spends 5.5 ms in completion but 3.64 s in two earlier box
+checks; this remains an optimization opportunity, not an extra measured gain.
+QCP component regressions pass; unique qualified development C coverage stays
+two, without a new end-to-end claim. Neither protected set was used. The
+cancelled server archive remains unnecessary.
 
 ## Closed experiments and practical regressions
 

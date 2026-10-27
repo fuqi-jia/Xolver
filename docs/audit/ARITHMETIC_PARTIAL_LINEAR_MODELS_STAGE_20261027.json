@@ -1,0 +1,802 @@
+{
+  "schema": "xolver-partial-linear-model-stage/1",
+  "stage": "partial-linear-boundary-models-20261027",
+  "base_commit": "be8e9cad1be90ba3e18e1d97004145a1f0ac93c8",
+  "code_commit": "f967dccbef51a5becee6200ab0edf13170b79f2e",
+  "review_branch": "perf/partial-linear-model-completion",
+  "source_manifest": {
+    "path": "source-r264.tar.json",
+    "sha256": "f111220d73039d2491dd1886a83e4500d6cf0be7fa7675ef26255539951c99b2",
+    "archive_sha256": "0f1ead1d2c8e96c92793e13e0a8cc8f0d194738c5fb19e09de0e3aa19e408d54"
+  },
+  "git_code_inventory": {
+    "schema": "xolver-git-code-inventory/1",
+    "commit": "f967dccbef51a5becee6200ab0edf13170b79f2e",
+    "current_branch_head": "870cb5f156ffd30bfe30233653e20b516a30f673",
+    "baseline": "be8e9cad1be90ba3e18e1d97004145a1f0ac93c8",
+    "manifest_sha256": "f111220d73039d2491dd1886a83e4500d6cf0be7fa7675ef26255539951c99b2",
+    "files": {
+      "src/applications/smt/qfnra/NraSolver.cpp": "ef98d3e2f07f6f0bb082abc2eb1a0208c6bb090570bac0e69cec97a73e192a42",
+      "src/applications/smt/qfnra/NraSolver.h": "19e297d9487a02f6d102ce4ad9e56906daddf23cd57490193960625f2c358c3b",
+      "src/applications/smt/qfnra/NraSolver_stages.cpp": "0dc9330b9faf49b3255876bde23f11356b13face011f2adcc28664d684840ba0",
+      "src/frontend/preprocess/ModelConverter.h": "c8bd30c7ee485a9c6a3907ccdfaad9da8af5b1df4d27be25f2cbea5987f3072d",
+      "src/frontend/preprocess/SolveEqs.h": "48cc355ad79561579bb5bdc3e69eea5dad5f0e08a5c3540feed7649ecbfd2170",
+      "src/search/candidate/BoundaryCandidates.h": "b68b8f7e7fd4cd96770c13b4ebc5c0c5f50693b41f0bcc6800f91ca553e15687",
+      "src/search/candidate/PartialLinearModelSearch.cpp": "995985e38a341bb7817477e44fddb5dd03045fef9adb546c509b5bb9c8fb9e41",
+      "src/search/candidate/PartialLinearModelSearch.h": "fcc62f1245d591bb94835413b1182ad9c8c8cf344fbf3f15c2569f53c5a65548",
+      "src/search/lra/GeneralSimplex.cpp": "63e582931ccb614a38937c4f8dba97d335974c1e531f87c7eea2b8ffef457338",
+      "src/search/lra/GeneralSimplex.h": "2c00a3cfe6b05e636fbdff9ba817cdb81bf8178bf35b195ce8a28a31fdc9c5f9",
+      "src/sources.cmake": "132387f5496158be3b9a378d35309ef5b456c8ef901e98d6163ffccd3b91e81a",
+      "tests/regression/nra/partial_linear_coupled_bounds_sat.smt2": "3c0ac0e07ef15bed11a7403fb419748c9c00636b41d4c6bccc45d2c9caefc5ee",
+      "tests/unit/test_partial_linear_model.cpp": "7c0f63391d072ac4b58f3466551e5d66be2c447c48019af656d35441ff678d82"
+    },
+    "boundary": "All changed tracked files against PR52 main. Merge870cb5f1 keeps src/tests byte-identical to qualified f967dccb."
+  },
+  "frozen_binaries": {
+    "xolver": "e7a8214e33b022d8e6acafc33fed8d00636d1da66c33ffb070a2695ed4504e34",
+    "xolver-sv": "99130012b880f255cd8bbaf456d4031d07649792c83c430acb5649a547bb89ef"
+  },
+  "verification_boundary": {
+    "model_policy": "A checked original-formula witness or independent UNSAT decision is required; unconfirmed results receive PAR-2 penalty.",
+    "remaining_original_unconfirmed": [
+      115
+    ],
+    "qcp": "Component regressions only; existing two unique development C programs unchanged; no new end-to-end coverage or timing claim.",
+    "profile": "Instrumented snapshots and transformed-input diagnostic are excluded from formal scores."
+  },
+  "interpretation": {
+    "verified_gain": 2,
+    "verified_par2_improvement_seconds": 230.51534626074135,
+    "above_z3": false,
+    "sv_binary_changed": false
+  },
+  "protected_sets": {
+    "smt_evaluated": false,
+    "programs_evaluated": false
+  },
+  "server_extra_archive_required": false,
+  "algorithm": {
+    "path": "NraSolver Full candidate -> PartialLinearModelSearch -> boundaryCandidates / GeneralSimplex::checkUntil -> all-original-polynomial validation",
+    "selection": "Greedy deterministic monomial cover leaves a linear residual; no variable or input name is consulted.",
+    "candidates": "Admissible upper/lower corners first, then projected0/1/-1 corners; strict endpoints are excluded and integer endpoints use exact directed rounding.",
+    "completion": "Fresh exact simplex context per candidate; concrete safe delta handles strict rows; all original polynomials and requested integrality are checked.",
+    "failure": "Only a complete validated model or no model; no local conflict, pruning clause or UNSAT verdict escapes.",
+    "resources": "Shared20ms local deadline and100000work-unit allowance; ordinary GeneralSimplex::check keeps its existing semantics and LRA/LIA backtracking policies.",
+    "scope": "The generic endpoint helper is domain independent. Polynomial completion supports rational/integer validation; the production adapter added here is pure NRA. No integer scaling, runtime oracle or new runtime feature control."
+  },
+  "server_stage_record": {
+    "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/stage-r266.json",
+    "sha256": "6d4a9711dbe382beb7df7984d0098e73f233cf0cff7a84ebbcc0dc3e7eb35750",
+    "audit_experiment": "4b4d875a9346"
+  },
+  "native": {
+    "unit_cases": 1689,
+    "unit_assertions": 801249,
+    "targeted_cases": 98,
+    "targeted_assertions": 158920,
+    "unit_log_sha256": "7f722b3dea0ebcf481f4a5154ed051d9fa9471fc7cffcfbce5329105266ccec2",
+    "unit_binary_sha256": "da877ebd3ac797b069a91a672cd5b07d840fa6eafb3321815e6443be0aebc7b5",
+    "acceptance_tasks": 38,
+    "regression_cases": 916,
+    "source_header_inventory": 653,
+    "theory_differential": {
+      "cases": 1018,
+      "models": 703,
+      "failures": [],
+      "seed": 20261023,
+      "solver_sha256": "e7a8214e33b022d8e6acafc33fed8d00636d1da66c33ffb070a2695ed4504e34"
+    }
+  },
+  "lease_audit": {
+    "runs": 252,
+    "distinct_physical_cores": 65,
+    "overlaps": 0,
+    "formal_actual_affinity_matches": true,
+    "experiments": {
+      "build": "69c98a222923",
+      "targeted": "9f838f5e7cb0",
+      "formal": "86b586e965ca",
+      "acceptance": "eac97f59de82",
+      "models": "96348ba107c0",
+      "profile": "24bd23a036bf",
+      "generated": "824422727924",
+      "causal": "83701026ee61"
+    }
+  },
+  "formal": {
+    "cases": 160,
+    "binaries": {
+      "baseline": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r258/xolver",
+        "sha256": "65ec6a15c7d4c61506689a6bbed023aaef8f95ac2e1e9738fc082ad7f687c33d"
+      },
+      "candidate": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r264/xolver",
+        "sha256": "e7a8214e33b022d8e6acafc33fed8d00636d1da66c33ffb070a2695ed4504e34"
+      },
+      "z3": {
+        "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+        "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      }
+    },
+    "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+    "timeout": 60,
+    "memory_bytes": 17179869184,
+    "counts": {
+      "baseline": {
+        "unsat": 40,
+        "decided": 90,
+        "verified_decided": 89,
+        "verified_par2": 8824.10779979825,
+        "raw_par2": 8704.145292352885,
+        "timeout": 70,
+        "sat": 50
+      },
+      "candidate": {
+        "unsat": 40,
+        "decided": 92,
+        "verified_decided": 91,
+        "verified_par2": 8593.592453537509,
+        "raw_par2": 8473.629044843838,
+        "timeout": 67,
+        "sat": 52,
+        "unknown": 1
+      },
+      "z3": {
+        "unsat": 58,
+        "decided": 124,
+        "verified_decided": 115,
+        "verified_par2": 5609.677275296301,
+        "raw_par2": 4637.454180160537,
+        "sat": 66,
+        "timeout": 36
+      }
+    },
+    "by_logic": {
+      "QF_LIA": {
+        "baseline": {
+          "unsat": 15,
+          "decided": 32,
+          "verified_decided": 32,
+          "verified_par2": 2068.325178183615,
+          "raw_par2": 2068.325178183615,
+          "timeout": 16,
+          "sat": 17
+        },
+        "candidate": {
+          "unsat": 15,
+          "decided": 32,
+          "verified_decided": 32,
+          "verified_par2": 2071.254667757079,
+          "raw_par2": 2071.254667757079,
+          "timeout": 16,
+          "sat": 17
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 38,
+          "verified_decided": 36,
+          "verified_par2": 1477.6585227083415,
+          "raw_par2": 1276.5576881933957,
+          "sat": 23,
+          "timeout": 10
+        }
+      },
+      "QF_NIA": {
+        "baseline": {
+          "timeout": 24,
+          "decided": 24,
+          "verified_decided": 23,
+          "verified_par2": 3109.86782646738,
+          "raw_par2": 2989.9053190220147,
+          "unsat": 11,
+          "sat": 13
+        },
+        "candidate": {
+          "timeout": 24,
+          "decided": 24,
+          "verified_decided": 23,
+          "verified_par2": 3111.0798053275794,
+          "raw_par2": 2991.116396633908,
+          "unsat": 11,
+          "sat": 13
+        },
+        "z3": {
+          "unsat": 22,
+          "decided": 34,
+          "verified_decided": 29,
+          "verified_par2": 2313.5041765961796,
+          "raw_par2": 1731.6509343329817,
+          "sat": 12,
+          "timeout": 14
+        }
+      },
+      "QF_LRA": {
+        "baseline": {
+          "timeout": 16,
+          "decided": 16,
+          "verified_decided": 16,
+          "verified_par2": 1955.62431942299,
+          "raw_par2": 1955.62431942299,
+          "sat": 7,
+          "unsat": 9
+        },
+        "candidate": {
+          "timeout": 16,
+          "decided": 16,
+          "verified_decided": 16,
+          "verified_par2": 1956.3106485325843,
+          "raw_par2": 1956.3106485325843,
+          "sat": 7,
+          "unsat": 9
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 26,
+          "verified_decided": 25,
+          "verified_par2": 883.8185899890959,
+          "raw_par2": 814.2923507783562,
+          "sat": 11,
+          "timeout": 6
+        }
+      },
+      "QF_NRA": {
+        "baseline": {
+          "sat": 13,
+          "decided": 18,
+          "verified_decided": 18,
+          "verified_par2": 1690.290475724265,
+          "raw_par2": 1690.290475724265,
+          "unsat": 5,
+          "timeout": 14
+        },
+        "candidate": {
+          "sat": 15,
+          "decided": 20,
+          "verified_decided": 20,
+          "verified_par2": 1454.9473319202662,
+          "raw_par2": 1454.9473319202662,
+          "unsat": 5,
+          "timeout": 11,
+          "unknown": 1
+        },
+        "z3": {
+          "sat": 20,
+          "decided": 26,
+          "verified_decided": 25,
+          "verified_par2": 934.6959860026836,
+          "raw_par2": 814.9532068558037,
+          "timeout": 6,
+          "unsat": 6
+        }
+      }
+    },
+    "changes": [
+      {
+        "index": 150,
+        "case": "QF_NRA/zankl/matrix-3-all-2.smt2",
+        "kind": "gained",
+        "truth": "sat",
+        "evidence": [
+          "candidate-exported-model-replay",
+          "z3-exported-model-replay"
+        ],
+        "observations": {
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.068924475461245
+          },
+          "candidate": {
+            "result": "sat",
+            "seconds": 0.6052654478698969
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 0.0791683029383421
+          }
+        }
+      },
+      {
+        "index": 157,
+        "case": "QF_NRA/20240407-pPDA-Chiari-Pontiggia-Winkler/past/geom_offspring_0.499_PRAY.smt2",
+        "kind": "gained",
+        "truth": "sat",
+        "evidence": [
+          "candidate-exported-model-replay",
+          "z3-exported-model-replay"
+        ],
+        "observations": {
+          "candidate": {
+            "result": "sat",
+            "seconds": 3.9704630747437477
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 0.04240056872367859
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.0902688447386
+          }
+        }
+      }
+    ],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "unverified": [
+      {
+        "index": 12,
+        "case": "QF_LIA/fft/Sz128_2823.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 24,
+        "case": "QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 27,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 42,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep2a.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 50,
+        "case": "QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_jain_5.i_2_4_3.bpl_7.smt2",
+        "results": {
+          "z3": "unsat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 80,
+        "case": "QF_LIA/cut_lemmas/20-vars/cut_lemma_03_004.smt2",
+        "results": {
+          "z3": "unsat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 114,
+        "case": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 115,
+        "case": "QF_NIA/20230321-UltimateAutomizerSvcomp2023/ps6.c_7.smt2",
+        "results": {
+          "candidate": "unsat",
+          "z3": "timeout",
+          "baseline": "unsat"
+        },
+        "reasons": {
+          "candidate": "no independent confirmation within budget",
+          "baseline": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 122,
+        "case": "QF_NIA/20250331-elster/D_1.smt2",
+        "results": {
+          "z3": "sat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "model query did not return SAT"
+        }
+      },
+      {
+        "index": 159,
+        "case": "QF_NRA/20161105-Sturm-MGC/mgc_07.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      }
+    ],
+    "scoring": "Correct verdicts require a replayed model or an independent UNSAT decision on the identical input hash; unresolved results receive PAR-2 penalty."
+  },
+  "targeted": {
+    "cases": 32,
+    "binaries": {
+      "baseline": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r258/xolver",
+        "sha256": "65ec6a15c7d4c61506689a6bbed023aaef8f95ac2e1e9738fc082ad7f687c33d"
+      },
+      "candidate": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r264/xolver",
+        "sha256": "e7a8214e33b022d8e6acafc33fed8d00636d1da66c33ffb070a2695ed4504e34"
+      },
+      "z3": {
+        "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+        "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      }
+    },
+    "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+    "timeout": 60,
+    "memory_bytes": 17179869184,
+    "counts": {
+      "baseline": {
+        "sat": 13,
+        "decided": 18,
+        "verified_decided": 18,
+        "verified_par2": 1689.8602174725384,
+        "raw_par2": 1689.8602174725384,
+        "unsat": 5,
+        "timeout": 13,
+        "unknown": 1
+      },
+      "candidate": {
+        "sat": 15,
+        "decided": 20,
+        "verified_decided": 20,
+        "verified_par2": 1454.1090937927365,
+        "raw_par2": 1454.1090937927365,
+        "unsat": 5,
+        "timeout": 11,
+        "unknown": 1
+      },
+      "z3": {
+        "sat": 20,
+        "decided": 26,
+        "verified_decided": 25,
+        "verified_par2": 932.9871758334339,
+        "raw_par2": 813.2244028691202,
+        "timeout": 6,
+        "unsat": 6
+      }
+    },
+    "by_logic": {
+      "QF_NRA": {
+        "baseline": {
+          "sat": 13,
+          "decided": 18,
+          "verified_decided": 18,
+          "verified_par2": 1689.8602174725384,
+          "raw_par2": 1689.8602174725384,
+          "unsat": 5,
+          "timeout": 13,
+          "unknown": 1
+        },
+        "candidate": {
+          "sat": 15,
+          "decided": 20,
+          "verified_decided": 20,
+          "verified_par2": 1454.1090937927365,
+          "raw_par2": 1454.1090937927365,
+          "unsat": 5,
+          "timeout": 11,
+          "unknown": 1
+        },
+        "z3": {
+          "sat": 20,
+          "decided": 26,
+          "verified_decided": 25,
+          "verified_par2": 932.9871758334339,
+          "raw_par2": 813.2244028691202,
+          "timeout": 6,
+          "unsat": 6
+        }
+      }
+    },
+    "changes": [
+      {
+        "index": 150,
+        "case": "QF_NRA/zankl/matrix-3-all-2.smt2",
+        "kind": "gained",
+        "truth": "sat",
+        "evidence": [
+          "candidate-exported-model-replay",
+          "z3-exported-model-replay"
+        ],
+        "observations": {
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.06916015595198
+          },
+          "candidate": {
+            "result": "sat",
+            "seconds": 0.6039110198616982
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 0.07799224369227886
+          }
+        }
+      },
+      {
+        "index": 157,
+        "case": "QF_NRA/20240407-pPDA-Chiari-Pontiggia-Winkler/past/geom_offspring_0.499_PRAY.smt2",
+        "kind": "gained",
+        "truth": "sat",
+        "evidence": [
+          "candidate-exported-model-replay",
+          "z3-exported-model-replay"
+        ],
+        "observations": {
+          "candidate": {
+            "result": "sat",
+            "seconds": 3.612619014456868
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 0.037836829200387
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.103961288928986
+          }
+        }
+      }
+    ],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "unverified": [
+      {
+        "index": 159,
+        "case": "QF_NRA/20161105-Sturm-MGC/mgc_07.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      }
+    ],
+    "scoring": "Correct verdicts require a replayed model or an independent UNSAT decision on the identical input hash; unresolved results receive PAR-2 penalty."
+  },
+  "model_checks": [
+    {
+      "file": "/pub/data/jiafq/xolver/tests/regression/nra/partial_linear_coupled_bounds_sat.smt2",
+      "sha256": "3c0ac0e07ef15bed11a7403fb419748c9c00636b41d4c6bccc45d2c9caefc5ee",
+      "expected": "sat",
+      "confirmed": true,
+      "wrong": false,
+      "decisions": {
+        "xolver": "sat",
+        "z3": "sat",
+        "cvc5": "sat"
+      },
+      "replays": {
+        "z3": "sat",
+        "cvc5": "sat"
+      }
+    },
+    {
+      "file": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NRA/20200911-Pine/1599122165219202000.smt2",
+      "sha256": "37a68d15b73c24bc973d6a0cdde3f8bc07aa5daf5dc57279bcb5761b66a9125d",
+      "expected": "sat",
+      "confirmed": true,
+      "wrong": false,
+      "decisions": {
+        "xolver": "sat",
+        "z3": "sat",
+        "cvc5": "sat"
+      },
+      "replays": {
+        "z3": "sat",
+        "cvc5": "sat"
+      }
+    },
+    {
+      "file": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NRA/20200911-Pine/1599121904575726000.smt2",
+      "sha256": "65bdfedbfe3b92b5476740e873997a900003ca4ac80b05e8eeec44e4c2086177",
+      "expected": "sat",
+      "confirmed": true,
+      "wrong": false,
+      "decisions": {
+        "xolver": "sat",
+        "z3": "sat",
+        "cvc5": "unresolved"
+      },
+      "replays": {
+        "z3": "sat",
+        "cvc5": "sat"
+      }
+    },
+    {
+      "file": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NRA/20240407-pPDA-Chiari-Pontiggia-Winkler/past/geom_offspring_0.499_PRAY.smt2",
+      "sha256": "d3941102878489abc44c6b3fafc7671a34c6d229ecf1820b0810e90dc61ef1cc",
+      "expected": "sat",
+      "confirmed": true,
+      "wrong": false,
+      "decisions": {
+        "xolver": "sat",
+        "z3": "sat",
+        "cvc5": "sat"
+      },
+      "replays": {
+        "z3": "sat",
+        "cvc5": "sat"
+      }
+    }
+  ],
+  "generated_models": {
+    "cases": 16,
+    "sat": 8,
+    "unsat": 8,
+    "all_decisions_confirmed_by_z3_and_cvc5": true,
+    "all_sat_models_replay_in_both_engines": true,
+    "seeds": [
+      20261027,
+      20261028,
+      20261037,
+      20261038,
+      20261039,
+      20261040,
+      20261041,
+      20261042,
+      20261029,
+      20261030,
+      20261031,
+      20261032,
+      20261033,
+      20261034,
+      20261035,
+      20261036
+    ],
+    "boundary": "Independent correctness fixtures; excluded from primary/holdout coverage and performance scores.",
+    "canonical_report_sha256": {
+      "0": "301ea83284f26156dde515f9b5e1552ee4c07f5c1838cd8740162be227ac1b14",
+      "1": "3a07379dd5462278ccdf417e45e4521c5ff5dca29c8ade048355884afa70f6f6",
+      "10": "c2a6d87b7dd4bff28b25f00c88fea0ba012f3aac17ef19740428bbfea3f2120e",
+      "11": "ecf04b79b03cb8bc45e51ec405e3986a3e13f8e53f8c6a324b2fb6b069adcaaf",
+      "12": "c0d2c676d89376b54354c32bb6082b74e2709bc41f10824c09c66dae2f338c5d",
+      "13": "50eaa5f6653b683e8566f790b743ab3f96f7380fc3a38ea7ad5bed824c3d105a",
+      "14": "0dc083d424ca2f9e199a22b575b6e0bb81af74b1cea1af35d960b0c17cda2b0f",
+      "15": "6090e03ac603a83af2381b48534ce26bee2cc3dccdc243689e7ac5236f36f7d1",
+      "2": "75eb31a193c8c434d4f15efe01b7e9f8e2fb0fa30d9e42de61eda2ca537e3af6",
+      "3": "1ff99ef97d1d345c973ce4f7bcbba45c4b1a1bf7d0b0152e8f02a2ec35c33a7d",
+      "4": "03708009b622d83b9f6b43b0f34f6df1739c5c1e8f40967dcc5716a845313969",
+      "5": "8b01f13c7b9e05f77de8a0d582a94ffd65bac02804ae0ddd1a5054183c9b7806",
+      "6": "634ab0f0a14a13deecb5acf3b7a85895830e326bbdbd24230156c8525170be8e",
+      "7": "065ad104497dcaad13b42e60264ca5b15e4c90d01ac918be2f4b0dce9ab5a11a",
+      "8": "c16c61e6035639d3454da59c108ee19be44f55f1a063ed44d35207a381dc7e9e",
+      "9": "51ff48062b8e309ad0cfd5dc2a530c9e39882f0841541c26673aab63e4d63a2b"
+    }
+  },
+  "causal_diagnostics": [
+    {
+      "original_index": 157,
+      "original_sha256": "d3941102878489abc44c6b3fafc7671a34c6d229ecf1820b0810e90dc61ef1cc",
+      "selected": [
+        "|(3,3,0)|",
+        "|(2,1,9)|",
+        "|(3,0,1)|"
+      ],
+      "assigned": -1,
+      "solve": {
+        "result": "unsat",
+        "seconds": 0.039400527253746986
+      },
+      "original_replays": {},
+      "confirmed": false,
+      "boundary": "Strengthened-input causal diagnostic; UNSAT does not establish original UNSAT; not counted in suite scores."
+    },
+    {
+      "original_index": 157,
+      "original_sha256": "d3941102878489abc44c6b3fafc7671a34c6d229ecf1820b0810e90dc61ef1cc",
+      "selected": [
+        "|(3,3,0)|",
+        "|(2,1,9)|",
+        "|(3,0,1)|"
+      ],
+      "assigned": 0,
+      "solve": {
+        "result": "unsat",
+        "seconds": 0.03989626280963421
+      },
+      "original_replays": {},
+      "confirmed": false,
+      "boundary": "Strengthened-input causal diagnostic; UNSAT does not establish original UNSAT; not counted in suite scores."
+    },
+    {
+      "original_index": 157,
+      "original_sha256": "d3941102878489abc44c6b3fafc7671a34c6d229ecf1820b0810e90dc61ef1cc",
+      "selected": [
+        "|(3,3,0)|",
+        "|(2,1,9)|",
+        "|(3,0,1)|"
+      ],
+      "assigned": 1,
+      "solve": {
+        "result": "sat",
+        "seconds": 0.04250413179397583
+      },
+      "original_replays": {
+        "z3": "sat",
+        "cvc5": "sat"
+      },
+      "confirmed": true,
+      "boundary": "Strengthened-input causal diagnostic; UNSAT does not establish original UNSAT; not counted in suite scores."
+    }
+  ],
+  "profile": {
+    "path": "profile-r265/candidate/157",
+    "experiment": "24bd23a036bf",
+    "instrumented_seconds": 3.724023789167404,
+    "calls": {
+      "Standard_box_refute_us": 1790198,
+      "Full_box_refute_us": 1848772,
+      "partial_linear_model_us": 5540
+    },
+    "boundary": "Instrumented timings excluded from scoring; expensive earlier box checks still remain."
+  },
+  "previous_delivery": {
+    "pr": "https://github.com/fuqi-jia/Xolver/pull/52",
+    "pr_head": "693ea9afb01c585526d1a581a6139842d0a268ce",
+    "pr_ci": "https://github.com/fuqi-jia/Xolver/actions/runs/40499991484",
+    "pr_jobs": {
+      "build-test": "success",
+      "proof-gate": "success"
+    },
+    "main_commit": "be8e9cad1be90ba3e18e1d97004145a1f0ac93c8",
+    "main_ci": "https://github.com/fuqi-jia/Xolver/actions/runs/40502199358",
+    "main_ci_state": "success",
+    "main_jobs": {
+      "build-test": "success",
+      "proof-gate": "success"
+    }
+  },
+  "qcp": {
+    "unique_qualified_development_c_programs": 2,
+    "new_program_coverage_in_this_stage": 0,
+    "internal_symexec_smt_queries": null,
+    "end_to_end_advantage_claimed": false,
+    "component_regressions_passed": true
+  }
+}
