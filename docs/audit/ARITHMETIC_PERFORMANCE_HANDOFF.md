@@ -969,6 +969,38 @@ QCP component regressions pass; unique qualified development C coverage stays
 two, without a new end-to-end claim. Neither protected set was used. The
 cancelled server archive remains unnecessary.
 
+The stage was merged through [PR #53](https://github.com/fuqi-jia/Xolver/pull/53)
+as main `67fe12af35087fb0f57bf9696351ff6642fe13ee`. Both `build-test` and
+`proof-gate` passed on the [PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/40505591792)
+and the [actual main CI](https://github.com/fuqi-jia/Xolver/actions/runs/40508939783).
+These delivery checks do not introduce an additional server archive requirement.
+
+### Rejected pending-inference scheduling experiment (R270–R275)
+
+Profiles on primary NIA 24/37/113 showed 11/10/12 prepared linear inferences
+still queued at CDCAC entry. R274 delivered these explained inferences earlier,
+while retaining candidate-model commitments at their previous late stage.
+The native failing reproduction is EOS `79f25a983699`; the repair passed
+1,690 unit tests / 801,458 assertions, including 68 targeted tests / 9,100
+assertions. Before/after profiles (`7e0340d22bad` / `9c7b7334f76d`) confirm that
+the queues become empty, but all three target inputs still time out.
+
+The fresh comparison covered **all 48 actual QF_NIA inputs** (24–47 and
+104–127), not the older mixed-logic "linear96" subset. EOS `25abad104e9f`
+records **23→22 verified results**, zero gains and one loss: primary 125,
+`calypto/problem-000123.cvc.1.smt2`, changes from independently confirmed UNSAT
+in 21.798 s to timeout. Verified PAR-2 worsens 3125.931→3215.507 s. There are
+no opposite verdicts or invalid models. The variant is **rejected**; no full160
+or production PR follows. Retain `perf/pending-theory-progress`, commit
+`0f6d15c3bb08578718662a91f885a11c79d134cc`, frozen CLI SHA-256
+`73994944b6919e0586443f69679d9baaebba4d7ef8783ef7009867cdb0dbb577`
+and `core-r274`/`targets-r274` evidence. Queue delivery alone did not address
+the measured solving gap; no claim is made about its causing older regressions.
+
+The last applied server overlay is `source-r274.tar.json`. A subsequent overlay
+must restore its abandoned NIA changes using `package_overlay.py --since`.
+Continue from the qualified R264/main source and binary, not this experiment.
+
 ## Closed experiments and practical regressions
 
 R178 replaced the square-cascade's ad hoc coefficient-Horner substitution with
@@ -1020,8 +1052,8 @@ The final source overlay restores the ordinary propagation storage.
   speed superiority has not been demonstrated.
 - `geom_offspring_0.499_PRAY.smt2` (primary index 157, SHA-256
   `d3941102878489abc44c6b3fafc7671a34c6d229ecf1820b0810e90dc61ef1cc`)
-  remains unresolved at 60 seconds. Root-bracket compaction removed its observed
-  GMP allocation abort; it did not solve the formula.
+  is now solved and its model replayed in R264/R266. Earlier root-bracket
+  compaction removed a GMP allocation abort but had not solved it on its own.
 - `tests/known_gaps/nra/box_sector_joint_reasons.smt2` remains a known SAT case
   for which sound `unknown` is allowed by the explicit known-gap contract.
 - General quantified PA/SL coverage and formal C++ end-to-end verification

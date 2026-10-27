@@ -3,6 +3,7 @@
 #include "search/candidate/PartialLinearModelSearch.h"
 #include "search/lra/GeneralSimplex.h"
 #include <chrono>
+#include <stdexcept>
 
 using namespace xolver;
 
@@ -12,6 +13,50 @@ TEST_CASE("boundary candidates: theory endpoints are upper first without arithme
     CHECK((boundaryCandidates<std::string>(std::string("a"), std::string("z")) ==
           std::vector<std::string>{"z", "a"}));
     CHECK(boundaryCandidates<int>(std::nullopt, std::nullopt).empty());
+}
+
+TEST_CASE("boundary candidates: propagated string choices unwind rejected and successful branches") {
+    std::vector<std::string> prefix;
+    size_t pushes = 0, pops = 0;
+    const auto result = searchBoundaryCandidates(2,
+        [](size_t) { return boundaryCandidates<std::string>("lower", "upper"); },
+        [&](size_t depth, const std::string& value) {
+            REQUIRE(prefix.size() == depth);
+            prefix.push_back(value);
+            ++pushes;
+            return depth == 0 || (prefix[0] == "lower" && value == "upper");
+        },
+        [&](size_t depth) {
+            CHECK(prefix.size() == depth + 1);
+            prefix.pop_back();
+            ++pops;
+        },
+        [&]() -> std::optional<std::vector<std::string>> { return prefix; });
+    REQUIRE(result.has_value());
+    CHECK((*result == std::vector<std::string>{"lower", "upper"}));
+    CHECK(prefix.empty());
+    CHECK(pushes == 5);
+    CHECK(pops == pushes);
+}
+
+TEST_CASE("boundary candidates: interrupted propagation unwinds partially constructed choices") {
+    std::vector<int> prefix;
+    auto run = [&]() {
+        return searchBoundaryCandidates(3,
+            [](size_t) { return std::vector<int>{1}; },
+            [&](size_t depth, int value) {
+                prefix.push_back(value);
+                if (depth == 1) throw std::runtime_error("local allocation expired");
+                return true;
+            },
+            [&](size_t depth) {
+                CHECK(prefix.size() == depth + 1);
+                prefix.pop_back();
+            },
+            []() -> std::optional<int> { return 1; });
+    };
+    CHECK_THROWS_AS(run(), std::runtime_error);
+    CHECK(prefix.empty());
 }
 
 TEST_CASE("partial linear model: upper parameter boundary completes coupled large coordinates") {
@@ -39,6 +84,42 @@ TEST_CASE("partial linear model: upper parameter boundary completes coupled larg
     }
 }
 
+TEST_CASE("partial linear model: mixed boundaries propagate and backtrack coupled products") {
+    auto kernel = createPolynomialKernel();
+    const auto a = kernel->getOrCreateVar("a"), b = kernel->getOrCreateVar("b"),
+               c = kernel->getOrCreateVar("c"), w = kernel->getOrCreateVar("w");
+    const auto av = kernel->mkVar(a), bv = kernel->mkVar(b), cv = kernel->mkVar(c),
+               wv = kernel->mkVar(w), one = kernel->mkOne();
+    std::vector<PartialLinearModelSearch::Constraint> constraints;
+    for (auto v : {av, bv, cv}) {
+        constraints.push_back({v, Relation::Geq});
+        constraints.push_back({kernel->sub(v, one), Relation::Leq});
+    }
+    constraints.push_back({kernel->sub(kernel->add(av, bv), one), Relation::Eq});
+    constraints.push_back({kernel->mul(av, bv), Relation::Eq});
+    constraints.push_back({kernel->mul(av, cv), Relation::Eq});
+    constraints.push_back({kernel->sub(kernel->mul(bv, cv), one), Relation::Eq});
+    constraints.push_back({kernel->sub(kernel->sub(wv, bv),
+                                     kernel->mkConst(mpq_class(1000))), Relation::Geq});
+    for (const bool integerDomain : {false, true}) {
+        PartialLinearModelSearch::Statistics stats;
+        const auto model = PartialLinearModelSearch::trySolve(constraints, *kernel, integerDomain, &stats);
+        REQUIRE(model.has_value());
+        CHECK(stats.contexts == 1);
+        CHECK(stats.rejectedChoices > 0);
+        CHECK(model->at(a) == 0);
+        CHECK(model->at(b) == 1);
+        CHECK(model->at(c) == 1);
+        CHECK(model->at(w) >= 1001);
+        for (const auto& constraint : constraints) {
+            const int sign = kernel->sgnVarId(constraint.poly, *model);
+            if (constraint.rel == Relation::Eq) CHECK(sign == 0);
+            else if (constraint.rel == Relation::Geq) CHECK(sign >= 0);
+            else CHECK(sign <= 0);
+        }
+    }
+}
+
 TEST_CASE("partial linear model: open endpoints and strict residual rows have concrete witnesses") {
     auto kernel = createPolynomialKernel();
     const auto p = kernel->getOrCreateVar("p"), x = kernel->getOrCreateVar("x");
@@ -54,6 +135,45 @@ TEST_CASE("partial linear model: open endpoints and strict residual rows have co
     CHECK(model->at(p) < 1);
     CHECK(model->at(p) * model->at(x) > 1);
     CHECK_FALSE(PartialLinearModelSearch::trySolve(constraints, *kernel, true));
+}
+
+TEST_CASE("partial linear model: a fully covered power uses an admissible interior point") {
+    auto kernel = createPolynomialKernel();
+    const auto x = kernel->getOrCreateVar("x");
+    const auto xv = kernel->mkVar(x), one = kernel->mkOne();
+    std::vector<PartialLinearModelSearch::Constraint> constraints{
+        {xv, Relation::Lt},
+        {kernel->add(xv, kernel->mkConst(mpq_class(2))), Relation::Gt},
+        {kernel->sub(kernel->pow(xv, 2), one), Relation::Eq}
+    };
+    for (const bool integerDomain : {false, true}) {
+        const auto model = PartialLinearModelSearch::trySolve(constraints, *kernel, integerDomain);
+        REQUIRE(model.has_value());
+        CHECK(model->at(x) == -1);
+    }
+    constraints.push_back({kernel->add(xv, one), Relation::Neq});
+    CHECK_FALSE(PartialLinearModelSearch::trySolve(constraints, *kernel));
+}
+
+TEST_CASE("partial linear model: quotient chains retain multiple parameter powers") {
+    auto kernel = createPolynomialKernel();
+    const auto a = kernel->getOrCreateVar("a"), b = kernel->getOrCreateVar("b");
+    const auto av = kernel->mkVar(a), bv = kernel->mkVar(b), one = kernel->mkOne();
+    std::vector<PartialLinearModelSearch::Constraint> constraints{
+        {av, Relation::Geq}, {kernel->sub(av, one), Relation::Leq},
+        {kernel->sub(bv, one), Relation::Geq},
+        {kernel->sub(bv, kernel->mkConst(mpq_class(2))), Relation::Leq},
+        {kernel->sub(kernel->mul(kernel->pow(av, 2), kernel->pow(bv, 3)),
+                     kernel->mkConst(mpq_class(8))), Relation::Eq}
+    };
+    for (const bool integerDomain : {false, true}) {
+        const auto model = PartialLinearModelSearch::trySolve(constraints, *kernel, integerDomain);
+        REQUIRE(model.has_value());
+        CHECK(model->at(a) == 1);
+        CHECK(model->at(b) == 2);
+    }
+    constraints.push_back({kernel->sub(bv, kernel->mkConst(mpq_class(2))), Relation::Neq});
+    CHECK_FALSE(PartialLinearModelSearch::trySolve(constraints, *kernel));
 }
 
 TEST_CASE("partial linear model: integer clients reject fractional completions and retain integral ones") {
