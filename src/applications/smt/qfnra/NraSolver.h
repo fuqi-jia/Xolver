@@ -66,6 +66,7 @@ private:
     void invalidateModel();
     bool validateRationalCandidate(std::unordered_map<VarId, mpq_class>& candidate) const;
     std::optional<TheoryCheckResult> stageLocalSearch(TheoryLemmaStorage&, TheoryEffort);
+    std::optional<TheoryCheckResult> stagePartialLinearModel(TheoryLemmaStorage&, TheoryEffort);
     // Reasoner pipeline stages (Phase 2). nullopt = continue.
     std::optional<TheoryCheckResult> stagePresolve(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
     // Refute the affine relaxation over independent monomial values before

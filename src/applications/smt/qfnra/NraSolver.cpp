@@ -103,6 +103,11 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     // scheduling contract with CAC instead of consuming a one-shot attempt on
     // the first partial assignment.
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
+        "nra.partial-linear-model",
+        stageWrap("partial-linear-model", [this](TheoryLemmaStorage& db, TheoryEffort e) {
+            return stagePartialLinearModel(db, e);
+        }), ReasonerSchedule::CandidateModel));
+    reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.local-search",
         stageWrap("local-search", [this](TheoryLemmaStorage& db, TheoryEffort e) {
             return stageLocalSearch(db, e);

@@ -25,7 +25,8 @@ namespace xolver {
  * may reference a variable eliminated later — that later variable is
  * reconstructed first, so its value is available when x is computed.
  *
- * Exact rational replay handles Add/Sub/Neg/Mul/ToReal/Variable/constants.
+ * Exact rational replay handles Add/Sub/Neg/Mul/ToReal/Variable/constants,
+ * including real division by nonzero numeric literals.
  * Polynomial definitions over algebraic dependencies use exact RealValue
  * operations. Missing dependencies and unsupported expressions leave the
  * variable unreconstructed and make reconstruct() return false.

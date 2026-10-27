@@ -15,6 +15,7 @@
 #include <limits>
 #include <memory>
 #include <array>
+#include <chrono>
 #include <span>
 
 namespace xolver {
@@ -108,6 +109,10 @@ public:
 
     /** Check feasibility under current bounds. */
     Result check();
+
+    // Optional local search allocation. Expiration leaves the tableau intact
+    // and returns Unknown; check() retains its existing unlimited semantics.
+    Result checkUntil(std::chrono::steady_clock::time_point deadline);
 
     /** Whether an immediate bound conflict was recorded by assertLower/Upper. */
     bool hasImmediateConflict() const { return hasImmediateConflict_; }
@@ -406,7 +411,7 @@ private:
     void rebuildViolationQueue();
 
     // Core check loop
-    Result checkInternal();
+    Result checkInternal(std::chrono::steady_clock::time_point deadline);
 
     // Find entering var for violated basic var. When useBland is true, the
     // smallest-index (Bland) rule is used (guarantees termination); otherwise a
