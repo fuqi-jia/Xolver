@@ -6,6 +6,7 @@
 #include "frontend/preprocess/ModelConverter.h"
 #include "base/RealValue.h"
 #include "base/EnvParam.h"
+#include "xolver/Solver.h"
 
 using namespace xolver;
 
@@ -77,4 +78,99 @@ TEST_CASE("ModelConverter: missing dependency leaves reconstruct() false") {
     std::unordered_map<std::string, RealValue> numAsg;  // empty
     std::unordered_map<std::string, std::string> strAsg;
     CHECK_FALSE(mc.reconstruct(numAsg, strAsg, ir));
+}
+
+TEST_CASE("ModelConverter: affine algebraic replay resolves chains and replaces defaults") {
+    NativeTerms ir; SortId b, i, r; setupSorts(ir, b, i, r);
+    const auto y = var(ir, r, "y"), z = var(ir, r, "z");
+    const auto half = ir.add(TermExpr{Kind::ConstReal, r, {}, Payload(std::string("1/2"))});
+    const auto halfY = ir.add(TermExpr{Kind::Mul, r, {half, y}, {}});
+    const auto twiceZ = ir.add(TermExpr{Kind::Mul, r, {cint(ir, r, 2), z}, {}});
+    ModelConverter mc;
+    mc.registerElimination("x", r, add(ir, r, halfY, cint(ir, r, 1)));
+    mc.registerElimination("y", r, add(ir, r, twiceZ, cint(ir, r, -3)));
+    const auto root = RealValue::fromAlgebraic(
+        AlgebraicNumber{{mpz_class(-2), mpz_class(0), mpz_class(1)}, 1, 2});
+    std::unordered_map<std::string, RealValue> numbers{{"z", root}, {"y", RealValue::fromInt(0)}};
+    // Typed values take precedence; an old rational y must not remain in the
+    // rational environment after replay reconstructs an algebraic y.
+    std::unordered_map<std::string, std::string> strings{{"z", "0"}, {"y", "0"}};
+    REQUIRE(mc.reconstruct(numbers, strings, ir));
+    const auto shiftedX = numbers.at("x") + RealValue::fromMpq(mpq_class(1, 2));
+    const auto shiftedY = numbers.at("y") + RealValue::fromInt(3);
+    CHECK(shiftedX.sign() > 0);
+    CHECK(shiftedX * shiftedX == RealValue::fromInt(2));
+    CHECK(shiftedY.sign() > 0);
+    CHECK(shiftedY * shiftedY == RealValue::fromInt(8));
+    CHECK(strings.at("x").find("root-of-with-interval") != std::string::npos);
+    CHECK(strings.at("y").find("root-of-with-interval") != std::string::npos);
+}
+
+TEST_CASE("ModelConverter: algebraic cancellation and unsupported dependencies remain exact") {
+    NativeTerms ir; SortId b, i, r; setupSorts(ir, b, i, r);
+    const auto z = var(ir, r, "z"), missing = var(ir, r, "missing");
+    const auto difference = ir.add(TermExpr{Kind::Sub, r, {z, z}, {}});
+    const auto root = RealValue::fromAlgebraic(
+        AlgebraicNumber{{mpz_class(-2), mpz_class(0), mpz_class(1)}, 1, 2});
+    std::unordered_map<std::string, RealValue> numbers{{"z", root}};
+    std::unordered_map<std::string, std::string> strings;
+    ModelConverter mc;
+    SUBCASE("correlated roots cancel to a rational") {
+        mc.registerElimination("x", r, difference);
+        REQUIRE(mc.reconstruct(numbers, strings, ir));
+        CHECK(numbers.at("x").isRational());
+        CHECK(numbers.at("x") == RealValue::fromInt(0));
+        CHECK(strings.at("x") == "0");
+    }
+    SUBCASE("cancelled missing dependencies still fail the strict contract") {
+        const auto cancelled = ir.add(TermExpr{Kind::Sub, r, {missing, missing}, {}});
+        mc.registerElimination("x", r, add(ir, r, difference, cancelled));
+        CHECK_FALSE(mc.reconstruct(numbers, strings, ir));
+        CHECK_FALSE(numbers.count("x"));
+    }
+    SUBCASE("nonlinear algebraic definitions are unsupported") {
+        mc.registerElimination("x", r, ir.add(TermExpr{Kind::Mul, r, {z, z}, {}}));
+        CHECK_FALSE(mc.reconstruct(numbers, strings, ir));
+        CHECK_FALSE(numbers.count("x"));
+    }
+    SUBCASE("an irrational value cannot reconstruct an integer") {
+        mc.registerElimination("x", i, z);
+        CHECK_FALSE(mc.reconstruct(numbers, strings, ir));
+        CHECK_FALSE(numbers.count("x"));
+    }
+}
+
+TEST_CASE("ModelConverter: NRA definitions survive repeated checks and rollback") {
+    Solver solver;
+    solver.setLogic("QF_NRA");
+    const auto x = solver.mkVar(solver.realSort(), "definition-x");
+    const auto y = solver.mkVar(solver.realSort(), "definition-y");
+    auto op = [&](Kind kind, std::initializer_list<Term> terms) {
+        return solver.mkOp(static_cast<uint32_t>(kind), std::vector<Term>(terms));
+    };
+    solver.assertFormula(op(Kind::Eq, {op(Kind::Mul, {y, y}), solver.mkReal("2")}));
+    solver.assertFormula(op(Kind::Gt, {y, solver.mkReal("0")}));
+    solver.assertFormula(op(Kind::Eq, {x, op(Kind::Add, {y, solver.mkReal("1")})}));
+    for (int repeat = 0; repeat < 2; ++repeat) {
+        CHECK((solver.checkSat() == Result::Sat));
+        CHECK(solver.getModel().getValue(x.id()) != nullptr);
+        solver.push();
+        solver.assertFormula(op(Kind::Lt, {x, solver.mkReal("1")}));
+        CHECK((solver.checkSat() == Result::Unsat));
+        solver.pop();
+    }
+    CHECK((solver.checkSat() == Result::Sat));
+    CHECK(solver.getModel().getValue(x.id()) != nullptr);
+}
+
+TEST_CASE("ModelConverter: NRA free affine parameters keep a complete model") {
+    Solver solver;
+    solver.setLogic("QF_NRA");
+    const auto x = solver.mkVar(solver.realSort(), "free-x");
+    const auto y = solver.mkVar(solver.realSort(), "free-y");
+    const auto sum = solver.mkOp(static_cast<uint32_t>(Kind::Add), {y, solver.mkReal("1")});
+    solver.assertFormula(solver.mkOp(static_cast<uint32_t>(Kind::Eq), {x, sum}));
+    REQUIRE((solver.checkSat() == Result::Sat));
+    CHECK(solver.getModel().getValue(x.id()) != nullptr);
+    CHECK(solver.getModel().getValue(y.id()) != nullptr);
 }

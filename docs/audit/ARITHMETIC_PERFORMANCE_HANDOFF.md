@@ -7,7 +7,7 @@ API contracts are described in [the architecture reference](../ARCHITECTURE.md),
 named source snapshots and binaries; they do not establish general completeness
 or performance superiority.
 
-Latest qualified arithmetic source: [integer choice/context stage](#integer-choice-lattices-and-shared-contexts-r174-2026-10-27).
+Latest qualified arithmetic source: [algebraic model replay stage](#affine-algebraic-model-replay-r184-2026-10-27).
 Older result tables describe their own frozen rounds; use the latest table and
 its exact GitHub review/merge checks when continuing work.
 
@@ -600,9 +600,13 @@ not a delivery prerequisite.
 ## Integer choice lattices and shared contexts (R174, 2026-10-27)
 
 Evidence: [qualified stage record](ARITHMETIC_INTEGER_CHOICE_CONTEXT_STAGE_20261027.json).
-Code revision: `48f6964124872a75e4fc42d7276a0cf2d1559366`, review branch
-`perf/affine-ite-lowering`. Use the branch's GitHub PR and merge-commit CI as the
-delivery record. Native source manifest is `source-r174.tar.json`; the server
+Code revision: `48f6964124872a75e4fc42d7276a0cf2d1559366`, delivered by
+[PR49](https://github.com/fuqi-jia/Xolver/pull/49) as main
+`e6e1c595db2480bcc106177c0cdb4e2fa20836ae`.
+[Final-head PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/40428978372)
+and [main CI](https://github.com/fuqi-jia/Xolver/actions/runs/40430617621)
+both passed `build-test` and `proof-gate`. Native source manifest is
+`source-r174.tar.json`; the server
 export may advance after this qualification without invalidating its hashes.
 
 `IteLowerer` previously replaced each arithmetic choice with an unrelated
@@ -681,7 +685,106 @@ Neither protected set has been evaluated. Continue from Git, successful CI,
 source manifests and frozen hashes; an extra server archive is not a delivery
 gate after GitHub CI is green.
 
+## Affine algebraic model replay (R184, 2026-10-27)
+
+Evidence: [qualified stage record](ARITHMETIC_ALGEBRAIC_MODEL_STAGE_20261027.json).
+Code revision `1be82585fe84e3d6b3db0f35ad29e7e537030037`, review branch
+`perf/algebraic-definition-replay`, builds on delivered main `e6e1c595`.
+Use the final-head PR and merged-main checks as the delivery record. Native
+source is `source-r184.tar.json`; `git-code-r184.json` checks its 124
+non-documentation overlay files against the code commit. Documentation-only
+changes do not imply another native executable.
+
+NRA/NIRA previously skipped unconditional definition elimination because
+`ModelConverter` replayed rational values only. The shared converter now replays
+affine algebraic definitions through exact `RealValue` operations. Typed model
+values take precedence, algebraic results clear old rational defaults, and
+integer targets require exact integer values. Unsupported expressions and
+missing constrained dependencies still fail reconstruction.
+
+Elimination can also remove a definition's last free parameter from the
+residual formula. `SolveEqs::commit` records these parameters only after a full
+residual occurrence scan, before replacing assertions. The converter supplies
+zero only when neither model channel provides a value; supplied parameter
+values and the strict standalone reconstruction contract remain intact. The
+existing base-scope and difference-logic policies, public Solver API and tested
+LRA/LIA assignment policies remain unchanged. There is no new feature gate or
+runtime external oracle.
+
+Primary case **152**, an inductiveness query with two linear next-state
+definitions, now exports a complete SAT model for the original assertions.
+The instrumented snapshots show four active symbols becoming two, two
+definitions eliminated with 143 substitution-work units, and a DAG change
+50→46. Baseline local search spends 265.9 ms before CAC (2098.3 ms) and CDCAC (402.3 ms)
+return unknown; the candidate finds a model in one 3.4 ms local-search call and
+does not enter either covering engine. These diagnostic timings are excluded
+from scoring. The earlier transformed-input diagnostic is causal evidence,
+not an additional solved input.
+
+Frozen CLI SHA-256:
+`c59cea2ce49f62f793fe9de28527da32ab2d4af2456347f0753384ff39433ff9`.
+The SV executable retains SHA-256
+`99130012b880f255cd8bbaf456d4031d07649792c83c430acb5649a547bb89ef`.
+Native qualification passed **1,678 tests / 801,163 assertions**, including
+**35 targeted tests / 135 assertions**. All **38 acceptance tasks / 913
+regressions** passed, together with 1,018 native-theory differential cases and
+703 exported models checked by both independent engines. Four new regressions
+and original 152 have separate decision/model evidence. Two algebraic fixture
+replays are unresolved in cvc5 but SAT in Z3; free-parameter and original 152
+models replay SAT in both. No budget was extended.
+
+Fresh fixed160: each frozen version receives 60 seconds, one physical core and
+16 GiB, with solver order rotated on the same CPU.
+
+| Version | Raw decided | Verified decided | Verified PAR-2 |
+| --- | ---: | ---: | ---: |
+| Preceding main, frozen R174 | 88 | 87 | 9056.937 |
+| Candidate R184 | 89 | 88 | 8944.209 |
+| Same-round frozen Z3 | 124 | 116 | 5505.803 |
+
+The sole verified gain is **152**, with no lost result. It takes 0.1696 s in the
+formal round and 0.1687 s in the 32-case NRA check; the baseline returns unknown
+in both. PAR-2 improves 112.729 seconds. Baseline has two unknowns and 70
+timeouts; candidate has zero unknowns and 71 timeouts. Unknown 79 becomes a
+timeout and is not a new solve. No wrong verdict, invalid exported model,
+solver error or memory failure was observed. **UNSAT115 remains unconfirmed
+and excluded**.
+
+The same R174 binary scored 84 in the preceding frozen round and 87 here. That
+cross-round difference reflects search/timing variation; only this round's
+**87→88** belongs to the new code. Xolver still trails Z3; the reference target
+remains at least 126/160, above the historical Z3's 125/160.
+
+The native source/binary/lease audit passed as EOS `e305dee38dd8`: 235 runs on 65
+physical cores, no overlapping leases, and every formal invocation matched its
+assigned CPU. The first audit task received an empty CPU lease and was rejected
+before execution; only the audit was retried. Full comparison is EOS
+`4e96d995ab00`; acceptance is `937f368d8700`; targeted NRA is `5a918215e634`;
+original-model checks are `d7043c716ec6`.
+
+QCP component regressions passed. The whole-program qualification remains the
+previous one unique development C program in PR48; this stage makes no new
+whole-program performance claim. Neither protected set has been evaluated.
+Continue using Git, successful GitHub CI, source manifests, frozen hashes and
+these acceptance records. An additional server archive is not a delivery gate.
+
 ## Closed experiments and practical regressions
+
+R178 replaced the square-cascade's ad hoc coefficient-Horner substitution with
+the common exact polynomial substitution. Native 1,674 tests passed, but the
+eight-case fresh comparison retained three verified solves with each version;
+no gain was established. The candidate was restored without a production PR.
+Evidence: `arithmetic-r103/core-r178` and `targets-r178`; EOS
+`e27b9b56820a` and `3df6dfa99401`.
+
+R179 tested necessary-endpoint checks before exact row propagation. All 1,675
+native tests passed, including 128 signed missing-endpoint patterns. Across all
+32 primary LRA inputs, both versions verified 16 results, without gains or
+losses. PAR-2 changed 1955.272 to 1950.057 seconds (0.27%); the limited time benefit
+did not close the solve gap, so the candidate remains unselected on
+`perf/linear-propagation-feasibility` (`957daa83`). Evidence: `core-r179` and
+`targets-r179`; EOS `1c435554817e` and `e3972dfcf374`. This was an arithmetic
+eligibility experiment, not a propagation memory-pool rerun.
 
 The LRA startup benchmark `tta_startup/simple_startup_10nodes.missing.induct.smt2`
 completed SAT in three quiet repetitions at 10.94, 10.46 and 10.27 seconds with

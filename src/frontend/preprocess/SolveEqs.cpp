@@ -312,6 +312,15 @@ bool SolveEqs::run() {
 void SolveEqs::commit() {
     if (eliminated_ == 0) return;
     auto replacement = conjuncts_;
+    std::vector<ExprId> residual;
+    residual.reserve(replacement.size());
+    for (const auto& [level, root] : replacement) {
+        (void)level;
+        residual.push_back(root);
+    }
+    // Record free choices before committing assertions, so allocation failure
+    // can roll back the converter without losing the original formula.
+    mc_.registerUnconstrainedParameters(ir_, residual);
     ir_.restoreAssertions(std::move(replacement));
 }
 
