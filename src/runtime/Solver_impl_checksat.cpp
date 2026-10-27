@@ -214,11 +214,9 @@ Result Solver::Impl::checkSatGround() {
         // Eliminate reconstructable definitions at base scope.
         modelConverter_ = ModelConverter{};
         fixedBindings_.clear();
-        const bool algebraicModelLogic =
-            logic.find("NRA") != std::string::npos || logic.find("NIRA") != std::string::npos;
         const bool differenceLogic = logic == "QF_IDL" || logic == "IDL" ||
                                      logic == "QF_RDL" || logic == "RDL";
-        if (ir->currentScopeLevel() == 0 && !algebraicModelLogic && !differenceLogic) {
+        if (ir->currentScopeLevel() == 0 && !differenceLogic) {
             const bool polynomialDefinitions = logic == "QF_NIA";
             const auto policy = polynomialDefinitions
                 ? SolveEqs::DefinitionPolicy::PolynomialInLinearPositions

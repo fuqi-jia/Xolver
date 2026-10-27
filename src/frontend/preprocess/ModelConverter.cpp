@@ -1,11 +1,54 @@
 #include "frontend/preprocess/ModelConverter.h"
+#include "algebra/linear/LinearExpr.h"
 #include "base/MpqUtils.h"
+#include <algorithm>
+#include <unordered_set>
 #include <gmpxx.h>
 
 namespace xolver {
 
 void ModelConverter::registerElimination(std::string name, SortId sort, ExprId definingExpr) {
     steps_.push_back({std::move(name), sort, definingExpr});
+}
+
+void ModelConverter::registerUnconstrainedParameters(
+    const NativeTerms& ir, const std::vector<ExprId>& residualAssertions) {
+    try {
+        WorkBudget budget;
+        auto variables = [&](const std::vector<ExprId>& roots) {
+            std::unordered_set<std::string> names;
+            std::unordered_set<ExprId> seen;
+            std::vector<ExprId> pending = roots;
+            while (!pending.empty()) {
+                budget.tick();
+                const auto id = pending.back(); pending.pop_back();
+                if (!seen.insert(id).second) continue;
+                const auto& node = ir.get(id);
+                if (node.kind == Kind::Variable &&
+                    (ir.sortKind(node.sort) == SortKind::Int || ir.sortKind(node.sort) == SortKind::Real)) {
+                    if (const auto* name = std::get_if<std::string>(&node.payload.value)) names.insert(*name);
+                }
+                pending.insert(pending.end(), node.children.begin(), node.children.end());
+            }
+            return names;
+        };
+        // Finish the entire residual scan before declaring any variable free.
+        auto constrained = variables(residualAssertions);
+        std::vector<ExprId> definitions;
+        for (const auto& step : steps_) {
+            constrained.insert(step.name); // reconstructed by its recorded definition
+            definitions.push_back(step.expr);
+        }
+        constrained.insert(unconstrainedParameters_.begin(), unconstrainedParameters_.end());
+        auto dependencies = variables(definitions);
+        std::vector<std::string> free;
+        for (const auto& name : dependencies)
+            if (!constrained.contains(name)) free.push_back(name);
+        std::sort(free.begin(), free.end());
+        unconstrainedParameters_.insert(unconstrainedParameters_.end(), free.begin(), free.end());
+    } catch (const ResourceExhausted&) {
+        // Incomplete occurrence information never licenses a default choice.
+    }
 }
 
 std::optional<bool> ModelConverter::evalBool(
@@ -268,17 +311,23 @@ bool ModelConverter::reconstruct(std::unordered_map<std::string, RealValue>& num
                                  const NativeTerms& ir) const {
     // Rational environment from the current (solver-produced + already
     // reconstructed) assignment. Prefer the typed channel; fall back to the
-    // string channel for vars only present there. Algebraic values are not
-    // usable by the linear evaluator and are simply absent from env.
+    // string channel for vars only present there. Algebraic dependencies use
+    // exact affine replay below instead of being rounded to rationals.
     std::unordered_map<std::string, mpq_class> env;
     env.reserve(numAsg.size() + strAsg.size() + steps_.size());
     for (const auto& [name, rv] : numAsg) {
         if (auto q = rv.tryAsRational()) env.emplace(name, *q);
     }
     for (const auto& [name, s] : strAsg) {
-        if (env.count(name)) continue;
+        if (numAsg.count(name) || env.count(name)) continue;
         if (s == "true" || s == "false") continue;
         try { env.emplace(name, mpqFromString(s)); } catch (...) {}
+    }
+    for (const auto& name : unconstrainedParameters_) {
+        if (numAsg.count(name) || strAsg.count(name)) continue;
+        numAsg.emplace(name, RealValue::fromInt(0));
+        strAsg.emplace(name, "0");
+        env.emplace(name, 0);
     }
 
     // Boolean environment from the string channel (for bool-var reconstruction).
@@ -289,14 +338,51 @@ bool ModelConverter::reconstruct(std::unordered_map<std::string, RealValue>& num
     }
 
     bool allOk = true;
+    auto evalAffine = [&](ExprId expr) -> std::optional<RealValue> {
+        try {
+            WorkBudget budget;
+            std::unordered_map<std::string, mpq_class> coefficients;
+            mpq_class constant = 0;
+            if (!extractLinearExpr(expr, ir, coefficients, constant, mpq_class(1), &budget))
+                return std::nullopt;
+            std::vector<std::pair<std::string, mpq_class>> ordered(coefficients.begin(), coefficients.end());
+            std::sort(ordered.begin(), ordered.end());
+            RealValue value = RealValue::fromMpq(constant);
+            for (const auto& [name, coefficient] : ordered) {
+                budget.tick();
+                const auto typed = numAsg.find(name);
+                const auto rational = env.find(name);
+                // Even a cancelled dependency must be present: preserve the
+                // converter's strict missing-variable contract.
+                if (typed == numAsg.end() && rational == env.end()) return std::nullopt;
+                if (coefficient == 0) continue;
+                const auto dependency = typed != numAsg.end()
+                    ? typed->second : RealValue::fromMpq(rational->second);
+                value = value + RealValue::fromMpq(coefficient) * dependency;
+            }
+            return value;
+        } catch (const std::exception&) {
+            // Unsupported algebraic operations or exhausted resources do not
+            // license a guessed model value.
+            return std::nullopt;
+        }
+    };
     // Newest step first: a term may reference a later-eliminated variable.
     for (auto it = steps_.rbegin(); it != steps_.rend(); ++it) {
         auto vb = evalRational(it->expr, ir, env, &boolEnv);
-        if (!vb) { allOk = false; continue; }
-        const mpq_class value = *vb;
-        numAsg[it->name] = RealValue::fromMpq(value);
-        strAsg[it->name] = value.get_str();           // bare mpq form
-        env[it->name] = value;
+        auto value = vb ? std::optional<RealValue>(RealValue::fromMpq(*vb)) : evalAffine(it->expr);
+        if (!value || (ir.sortKind(it->sort) == SortKind::Int && !value->isExactInteger())) {
+            allOk = false;
+            continue;
+        }
+        if (auto rational = value->tryAsRational()) {
+            strAsg[it->name] = rational->get_str(); // preserve legacy bare mpq form
+            env[it->name] = *rational;
+        } else {
+            strAsg[it->name] = value->toSmtLib2();
+            env.erase(it->name); // discard any pre-elimination default value
+        }
+        numAsg[it->name] = std::move(*value);
     }
     return allOk;
 }

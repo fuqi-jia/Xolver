@@ -25,11 +25,10 @@ namespace xolver {
  * may reference a variable eliminated later — that later variable is
  * reconstructed first, so its value is available when x is computed.
  *
- * Exact rational replay: the evaluator handles Add/Sub/Neg/Mul/ToReal/
- * Variable/constants over rationals. A variable whose model value is not
- * rational (e.g. an algebraic NRA value) leaves the dependent eliminated var
- * unreconstructed (reconstruct() returns false), which the caller treats as a
- * model it cannot vouch for.
+ * Exact rational replay handles Add/Sub/Neg/Mul/ToReal/Variable/constants.
+ * Affine definitions over algebraic dependencies use exact RealValue
+ * operations. Missing dependencies and unsupported expressions leave the
+ * variable unreconstructed and make reconstruct() return false.
  */
 class ModelConverter {
 public:
@@ -38,6 +37,12 @@ public:
     // value in the final model. Missing dep ⇒ reconstruct() returns false.
     void registerElimination(std::string name, SortId sort, ExprId definingExpr);
 
+    // Record numeric dependencies that occur only in eliminated definitions.
+    // Their values are free in the residual formula. Supply zero only if the
+    // solver provides neither model channel; preserve every supplied value.
+    void registerUnconstrainedParameters(const NativeTerms& ir,
+                                        const std::vector<ExprId>& residualAssertions);
+
     bool empty() const { return steps_.empty(); }
     size_t size() const { return steps_.size(); }
 
@@ -45,7 +50,8 @@ public:
     // (a step's term may reference a later-eliminated var). Writes BOTH channels
     // the solver reads: `numAsg` (typed RealValue) and `strAsg` (the legacy
     // string map Solver::modelMatchesOriginal and dumpModel consume, bare mpq
-    // form e.g. "5" / "3/2"). Returns true iff every step was reconstructed.
+    // form e.g. "5" / "3/2", or an exact algebraic SMT value). Returns true
+    // iff every step was reconstructed.
     bool reconstruct(std::unordered_map<std::string, RealValue>& numAsg,
                      std::unordered_map<std::string, std::string>& strAsg,
                      const NativeTerms& ir) const;
@@ -57,6 +63,7 @@ private:
         ExprId expr;     // Defining term.
     };
     std::vector<Step> steps_;
+    std::vector<std::string> unconstrainedParameters_;
 
     // Iterative post-order evaluation of an arithmetic term over the rational
     // environment `env` (name -> value). nullopt if a leaf variable is missing
