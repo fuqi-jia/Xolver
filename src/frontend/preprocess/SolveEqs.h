@@ -16,9 +16,9 @@ namespace xolver {
  * Eliminates a user variable `x` defined by an unconditional top-level equality
  * conjunct `(= x t)` (or `(= t x)`) where `x` is a bare numeric Variable that
  * does not occur in `t`, and `t` is reconstructable under the selected policy
- * (Add/Sub/Neg/Mul/ToReal over variables and constants — no
- * div/mod/pow/UF/ITE/array). Substitutes `x ↦ t` globally, drops the defining
- * equality, and registers `(x, t)` with a ModelConverter so the eliminated
+ * (Add/Sub/Neg/Mul/ToReal over variables and constants; polynomial policies
+ * also permit real division by nonzero numeric literals). Substitutes `x ↦ t`
+ * globally, drops the defining equality, and registers `(x, t)` with a ModelConverter so the eliminated
  * value is rebuilt on the final model (replay correctness).
  *
  * This is equisatisfiable, not equivalent: the variable is gone from the
@@ -61,7 +61,7 @@ private:
     std::optional<std::string> asNumericVar(ExprId e) const;
     // Does Variable named `name` occur anywhere in `e`?
     bool occurs(const std::string& name, ExprId e) const;
-    // Is `e` a linear, reconstructable term (see class doc)?
+    // Is `e` reconstructable under the selected arithmetic fragment?
     bool isReconstructable(ExprId e, bool polynomial) const;
     bool admissibleDefinition(const std::string& name, ExprId e, SortId targetSort);
     bool hasOnlyLinearUses(const std::string& name);

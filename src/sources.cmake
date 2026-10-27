@@ -93,6 +93,7 @@ set(XOLVER_SEARCH_SOURCES
     "search/boolean/EufAtomExtractor.cpp"
     "search/candidate/CandidateModelSearch.cpp"
     "search/candidate/CompleteFiniteDomainEnumerator.cpp"
+    "search/candidate/PartialLinearModelSearch.cpp"
     "search/combination/CareGraph.cpp"
     "search/combination/ConflictMinimizer.cpp"
     "search/combination/Purifier.cpp"

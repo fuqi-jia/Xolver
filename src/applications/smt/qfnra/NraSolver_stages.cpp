@@ -10,6 +10,7 @@
 #include "base/RealValue.h"                                // validated rational witness model
 #include "search/nra/reasoners/SubtropicalSatFinder.h"  // subtropical candidate search
 #include "search/nra/StructuralIntegerProbe.h"
+#include "search/candidate/PartialLinearModelSearch.h"
 #include "search/nra/NraSquareSolver.h"                   // algebraic square-cascade
 #include "search/nra/core/HybridPartitionStats.h"     // Task NRA-HYB Step 1 partition stats
 #include "search/nra/simplex/CertifiedSimplexFacts.h"   // OSF-CDCAC P1
@@ -41,6 +42,21 @@ namespace xolver {
 // It compiles into the same xolver_core target and shares the class's
 // private state via the declarations in the corresponding header.
 // Behavior is byte-identical to the pre-split definitions.
+
+std::optional<TheoryCheckResult> NraSolver::stagePartialLinearModel(
+    TheoryLemmaStorage&, TheoryEffort) {
+    if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty()) return std::nullopt;
+    std::vector<PartialLinearModelSearch::Constraint> constraints;
+    constraints.reserve(presolveConstraints_.size());
+    for (const auto& c : presolveConstraints_) {
+        if (c.poly == NullPoly) return std::nullopt;
+        constraints.push_back({c.poly, c.rel});
+    }
+    auto model = PartialLinearModelSearch::trySolve(constraints, *kernel_);
+    if (!model) return std::nullopt;
+    satFastModel_ = std::move(*model);
+    return TheoryCheckResult::consistent();
+}
 
 // Stage 1: theory-check presolve fixpoint (Caps. 1–5, 7, with Real domain).
 // May return a Conflict (UNSAT direction) via exact linear/sign reasoning,

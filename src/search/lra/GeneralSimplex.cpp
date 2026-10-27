@@ -509,13 +509,17 @@ void GeneralSimplex::rebuildViolationQueue() {
 // ============================================================================
 
 GeneralSimplex::Result GeneralSimplex::check() {
+    return checkUntil(std::chrono::steady_clock::time_point::max());
+}
+
+GeneralSimplex::Result GeneralSimplex::checkUntil(std::chrono::steady_clock::time_point deadline) {
     if (hasImmediateConflict_) {
         return Result::Unsat;
     }
     if (betaDirty_) {
         recomputeBeta();
     }
-    auto r = checkInternal();
+    auto r = checkInternal(deadline);
 #ifdef XOLVER_LRA_PROFILE
     if (r == Result::Sat) {
         // Sample coefficient bit sizes from tableau
@@ -547,7 +551,7 @@ GeneralSimplex::Result GeneralSimplex::check() {
     return r;
 }
 
-GeneralSimplex::Result GeneralSimplex::checkInternal() {
+GeneralSimplex::Result GeneralSimplex::checkInternal(std::chrono::steady_clock::time_point deadline) {
     // LRA is decidable: check() must never self-return Unknown from an internal
     // iteration cap (that would be giving up on a solvable, decidable instance —
     // only the external wall-clock may stop a solve). Termination is guaranteed
@@ -610,6 +614,11 @@ GeneralSimplex::Result GeneralSimplex::checkInternal() {
     };
 
     for (long long iter = 0; iter < kSafetyGuard; ++iter) {
+        if (deadline != std::chrono::steady_clock::time_point::max() &&
+            std::chrono::steady_clock::now() >= deadline) {
+            conflict_.clear();
+            return Result::Unknown;
+        }
         bool strictBland = iter >= kStrictBlandThreshold;
         int xi = strictBland ? pickViolatedBasicBland() : pickViolatedBasic();
         if (xi == -1) {
