@@ -102,8 +102,18 @@ Lemma proof_unsupported : unsupported. Proof. Abort.
         self.assertIn('store_int_range (p) (y + 1)', candidate)
         self.assertIn('change (-2147483648 <= (y + 1) <= 2147483647)', candidate)
         self.assertIn('split_pure_spatial', candidate)
+        self.assertIn('all: solve [cancel', candidate)
         self.assertNotIn('Admitted', candidate)
         self.assertNotIn('Axiom', candidate)
+
+    def test_pure_rhs_range_candidate_does_not_require_a_spatial_conjunct(self):
+        candidate = proof_candidate('proof_pure', 'pure', [
+            dict(address='p', value='x'),
+        ], residual_heap=False)
+        self.assertIn('store_int_range (p) (x)', candidate)
+        self.assertIn('split_pures; dump_pre_spatial', candidate)
+        self.assertNotIn('split_pure_spatial', candidate)
+        self.assertNotIn('cancel ', candidate)
 
 
 if __name__ == '__main__':

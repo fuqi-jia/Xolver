@@ -88,7 +88,7 @@ def invoke(backend, binary, query, timeout, output):
                 stderr_sha256=hashlib.sha256(stderr).hexdigest())
 
 
-def proof_candidate(lemma, goal, derived=()):
+def proof_candidate(lemma, goal, derived=(), residual_heap=True):
     # Both backends use identical proof reconstruction. These tactics must
     # reconstruct the whole original Rocq statement; no SMT result is an axiom.
     lines = [f'Lemma {lemma} : {goal}.', 'Proof.',
@@ -103,9 +103,12 @@ def proof_candidate(lemma, goal, derived=()):
             '    destruct H.',
         ])
     if derived:
-        cells = '; '.join(f"cancel (({f['address']}) # Int |-> ({f['value']}))" for f in derived)
-        lines.extend(['  all: split_pure_spatial.', f'  all: first [{cells}',
-                      '    | split_pures; dump_pre_spatial; first [lia | nia]].'])
+        if residual_heap:
+            cells = '; '.join(f"cancel (({f['address']}) # Int |-> ({f['value']}))" for f in derived)
+            lines.extend(['  all: split_pure_spatial.', f'  all: solve [{cells}',
+                          '    | split_pures; dump_pre_spatial; first [lia | nia]].'])
+        else:
+            lines.append('  all: split_pures; dump_pre_spatial; first [lia | nia].')
     lines.append('Qed.')
     return '\n'.join(lines) + '\n'
 
@@ -151,7 +154,8 @@ def discharge(goals, manual, assigned, backend, binary, timeout, output):
         if all(q['result'] == 'unsat' for q in record['queries']):
             candidate = output / f'vc-{index}-candidate.v'
             candidate.write_text(proof_candidate(pending[name], name,
-                                 by_name[name].get('derived_assumptions', ())))
+                                 by_name[name].get('derived_assumptions', ()),
+                                 by_name[name].get('residual_heap', False)))
             record.update(status='proof-candidate', candidate=str(candidate),
                           candidate_sha256=sha256(candidate), kernel_checked=False)
         else:
