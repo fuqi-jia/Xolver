@@ -131,6 +131,7 @@ set(XOLVER_SEARCH_SOURCES
     "search/linear/IntegerAffineProjection.cpp"
     "search/linear/IntegerReasoner.cpp"
     "search/linear/LinearAtomManager.cpp"
+    "search/linear/LinearBoundPropagation.cpp"
     "search/linear/LinearConstraintRegistration.cpp"
     "search/linear/LinearModelValidator.cpp"
     "search/linearizer/DomainStoreBoundStore.cpp"

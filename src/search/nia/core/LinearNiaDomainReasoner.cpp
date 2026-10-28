@@ -1,4 +1,5 @@
 #include "search/nia/core/LinearNiaDomainReasoner.h"
+#include "search/linear/LinearBoundPropagation.h"
 
 namespace xolver {
 
@@ -128,86 +129,51 @@ NiaReasoningResult LinearNiaDomainReasoner::run(
         }
     }
 
-    // Second pass: propagate bounds through binary equalities like x - y = 0
-    for (const auto& c : constraints) {
-        if (c.rel != Relation::Eq) continue;
-        auto termsOpt = kernel_.terms(c.poly);
-        if (!termsOpt) continue;
-        const auto& terms = *termsOpt;
-
-        const PolynomialKernel::MonomialTerm* constTerm = nullptr;
-        std::vector<const PolynomialKernel::MonomialTerm*> varTerms;
-        for (const auto& t : terms) {
-            if (t.powers.empty()) {
-                constTerm = &t;
-            } else if (t.powers.size() == 1 && t.powers[0].second == 1) {
-                varTerms.push_back(&t);
-            } else {
-                varTerms.clear();
+    // Propagate general affine rows to a fixpoint before bounded search.
+    // The shared engine carries every row and endpoint guard, including through
+    // chains whose defining rows occur in reverse dependency order.
+    std::vector<LinearBoundRow> rows;
+    for (const auto& constraint : constraints) {
+        if (constraint.rel == Relation::Neq) continue;
+        const auto terms = kernel_.terms(constraint.poly);
+        if (!terms) continue;
+        LinearBoundRow row{{}, constraint.rel, 0, {constraint.reason}};
+        bool linear = true;
+        for (const auto& term : *terms) {
+            if (term.powers.empty()) row.rhs -= term.coefficient;
+            else if (term.powers.size() == 1 && term.powers[0].second == 1)
+                row.lhs.terms.emplace_back(std::string(kernel_.varName(term.powers[0].first)),
+                                           term.coefficient);
+            else {
+                linear = false;
                 break;
             }
         }
-        if (varTerms.size() != 2) continue;
-        if (constTerm && constTerm->coefficient != 0) continue;
-
-        const auto& t1 = *varTerms[0];
-        const auto& t2 = *varTerms[1];
-        if (t1.coefficient != -t2.coefficient) continue;
-
-        std::string var1 = std::string(kernel_.varName(t1.powers[0].first));
-        std::string var2 = std::string(kernel_.varName(t2.powers[0].first));
-
-        const IntDomain* d1 = domains.getDomain(var1);
-        const IntDomain* d2 = domains.getDomain(var2);
-        if (!d1 && !d2) continue;
-
-        // A bound propagated through the equality x=y is justified by BOTH the
-        // equality (c.reason) AND the source bound's own reasons. Dropping the
-        // latter yields an over-strong (unsound) empty-domain conflict clause.
-        auto withEq = [&](const std::vector<SatLit>& src) {
-            std::vector<SatLit> rs = src;
-            rs.push_back(c.reason);
-            return rs;
-        };
-        auto propagate = [&](const std::string& srcVar, const std::string& dstVar,
-                             const IntDomain* srcDomain) {
-            if (!srcDomain) return false;
-            bool changed = false;
-            if (srcDomain->hasLower) {
-                domains.addLowerBound(dstVar, srcDomain->lower.value, withEq(srcDomain->lower.reasons));
-                changed = true;
-            }
-            if (srcDomain->hasUpper) {
-                domains.addUpperBound(dstVar, srcDomain->upper.value, withEq(srcDomain->upper.reasons));
-                changed = true;
-            }
-            return changed;
-        };
-
-        if (d1 && !d2) {
-            if (propagate(var1, var2, d1)) updated = true;
-        } else if (!d1 && d2) {
-            if (propagate(var2, var1, d2)) updated = true;
-        } else if (d1 && d2) {
-            // Both have bounds: tighten each with the other's bounds
-            if (d1->hasLower && (!d2->hasLower || d1->lower.value > d2->lower.value)) {
-                domains.addLowerBound(var2, d1->lower.value, withEq(d1->lower.reasons));
-                updated = true;
-            }
-            if (d1->hasUpper && (!d2->hasUpper || d1->upper.value < d2->upper.value)) {
-                domains.addUpperBound(var2, d1->upper.value, withEq(d1->upper.reasons));
-                updated = true;
-            }
-            if (d2->hasLower && (!d1->hasLower || d2->lower.value > d1->lower.value)) {
-                domains.addLowerBound(var1, d2->lower.value, withEq(d2->lower.reasons));
-                updated = true;
-            }
-            if (d2->hasUpper && (!d1->hasUpper || d2->upper.value < d1->upper.value)) {
-                domains.addUpperBound(var1, d2->upper.value, withEq(d2->upper.reasons));
-                updated = true;
-            }
-        }
+        // Single-variable constraints were already consumed above.
+        if (linear && row.lhs.terms.size() > 1) rows.push_back(std::move(row));
     }
+    WorkBudget budget(262144);
+    const auto propagated = LinearBoundPropagation::run(rows,
+        [&](const std::string& variable, bool lower) -> std::optional<ExplainedLinearBound> {
+            const auto* domain = domains.getDomain(variable);
+            if (!domain || (lower ? !domain->hasLower : !domain->hasUpper)) return std::nullopt;
+            const auto& bound = lower ? domain->lower : domain->upper;
+            return ExplainedLinearBound{mpq_class(bound.value), false, bound.reasons};
+        },
+        [&](const std::string& variable, bool lower, const ExplainedLinearBound& bound) {
+            const auto* domain = domains.getDomain(variable);
+            const auto value = bound.value.get_num();
+            if (domain && (lower ? domain->hasLower && domain->lower.value >= value
+                                 : domain->hasUpper && domain->upper.value <= value))
+                return LinearBoundUpdate::Unchanged;
+            if (lower) domains.addLowerBound(variable, value, bound.reasons);
+            else domains.addUpperBound(variable, value, bound.reasons);
+            return domains.isEmpty(variable) ? LinearBoundUpdate::Conflict : LinearBoundUpdate::Changed;
+        },
+        [](const std::string&) { return true; }, budget);
+    if (propagated.conflict)
+        return {NiaReasoningKind::Conflict, domains.buildEmptyDomainConflict(), std::nullopt};
+    updated |= propagated.updates != 0;
 
     if (updated) {
         return {NiaReasoningKind::DomainUpdated, std::nullopt, std::nullopt};
