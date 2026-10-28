@@ -56,7 +56,9 @@ struct BinaryFixture {
     ExprId variable(const char* name) { return ir.add({Kind::Variable, 1, {}, Payload(std::string(name))}); }
     ExprId term(Kind kind, std::vector<ExprId> children) {
         const bool arithmetic = kind == Kind::Add || kind == Kind::Mul || kind == Kind::Sub || kind == Kind::Neg;
-        return ir.add({kind, arithmetic ? SortId(1) : SortId(0), std::move(children), {}});
+        TermExpr expression{kind, arithmetic ? SortId(1) : SortId(0), {}, {}};
+        for (const auto child : children) expression.children.push_back(child);
+        return ir.add(std::move(expression));
     }
     void bounds(ExprId variable, std::vector<ExprId>& roots) {
         roots.push_back(term(Kind::Geq, {variable, integer(0)}));
