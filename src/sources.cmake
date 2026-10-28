@@ -87,6 +87,7 @@ set(XOLVER_SEARCH_SOURCES
     "search/bitblast/BitBlastSolver.cpp"
     "search/bitblast/EagerBitBlastSolver.cpp"
     "search/bitblast/PolyBitBlaster.cpp"
+    "search/bitblast/PseudoBooleanEncoder.cpp"
     "search/bitblast/SpaceEstimator.cpp"
     "search/boolean/ArithAtomExtractor.cpp"
     "search/boolean/Atomizer.cpp"

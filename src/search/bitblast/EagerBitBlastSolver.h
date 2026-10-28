@@ -13,7 +13,7 @@ namespace xolver::bitblast {
 
 // Whole-formula eager bit-blaster (BLAN-style) as a SOUND PORTFOLIO ARM.
 //
-// Translates the ENTIRE (lowered) QF_NIA formula — boolean skeleton via Tseitin
+// Translates the ENTIRE lowered integer formula — boolean skeleton via Tseitin
 // gates + each arithmetic atom reified via the ported bit-blaster (Int vars ->
 // two's-complement bit-vectors) — into ONE SAT instance and solves it once.
 //
@@ -21,7 +21,9 @@ namespace xolver::bitblast {
 // CANDIDATE; it is accepted only after EXACT integer re-evaluation of every
 // assertion (kernel arithmetic + the boolean structure). It NEVER returns Unsat
 // (a bit-blast UNSAT at a heuristic width proves nothing about the unbounded
-// integer problem) and NEVER returns an unvalidated Sat. Any encoding mistake
+// integer problem) and NEVER returns an unvalidated Sat. Binary-domain LIA
+// enters through solveBinary and uses fully reified pseudo-Boolean constraints.
+// Any encoding mistake
 // can therefore only downgrade a candidate to Unknown, never produce a wrong
 // answer. Widths are escalated (cascade); overflow of the var budget bails the
 // whole attempt to Unknown.
@@ -46,6 +48,11 @@ public:
 
     // Attempt to find (and exactly validate) a model for `assertions` in `ir`.
     Result solve(const NativeTerms& ir, const std::vector<ExprId>& assertions);
+
+    // Linear integer portfolio entry. Applies only when positive root facts
+    // prove every used integer variable lies in {0,1}; otherwise returns
+    // Unknown before polynomial conversion or SAT allocation.
+    Result solveBinary(const NativeTerms& ir, const std::vector<ExprId>& assertions);
 
     // Give eager-bb a SMALL slice for this one call (Farkas/termination shapes,
     // where its bilinear-λ width search diverges on UNSAT) so it bails to Unknown

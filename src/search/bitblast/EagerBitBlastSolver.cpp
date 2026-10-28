@@ -6,7 +6,9 @@
 #include "search/bitblast/PolyBitBlaster.h"
 #include "search/bitblast/BitVec.h"
 #include "search/bitblast/SpaceEstimator.h"
+#include "search/bitblast/PseudoBooleanEncoder.h"
 #include "search/linear/LinearBoundPropagation.h"
+#include "algebra/linear/LinearExpr.h"
 #include "contracts/SatSolver.h"
 #include <algorithm>
 #include <functional>
@@ -17,9 +19,118 @@
 
 namespace xolver::bitblast {
 
+namespace {
+bool hasBinaryIntegerDomains(const NativeTerms& ir, const std::vector<ExprId>& assertions) {
+    try {
+        WorkBudget work(8000000);
+        std::unordered_set<std::string> variables;
+        std::unordered_set<ExprId> seen;
+        std::vector<ExprId> stack = assertions;
+        while (!stack.empty()) {
+            work.tick();
+            const auto id = stack.back();
+            stack.pop_back();
+            if (!seen.insert(id).second) continue;
+            const auto& e = ir.get(id);
+            if (e.kind == Kind::Variable) {
+                if (ir.sortKind(e.sort) == SortKind::Int) {
+                    const auto* name = std::get_if<std::string>(&e.payload.value);
+                    if (!name) return false;
+                    variables.insert(*name);
+                } else if (ir.sortKind(e.sort) != SortKind::Bool) return false;
+            }
+            stack.insert(stack.end(), e.children.begin(), e.children.end());
+        }
+        if (variables.empty()) return false;
+        struct Bounds { std::optional<mpz_class> lower, upper; };
+        std::unordered_map<std::string, Bounds> bounds;
+        stack = assertions;
+        seen.clear();
+        while (!stack.empty()) {
+            work.tick();
+            const auto id = stack.back();
+            stack.pop_back();
+            if (!seen.insert(id).second) continue;
+            const auto& e = ir.get(id);
+            if (e.kind == Kind::And) {
+                stack.insert(stack.end(), e.children.begin(), e.children.end());
+                continue;
+            }
+            Relation relation;
+            switch (e.kind) {
+                case Kind::Eq: relation = Relation::Eq; break;
+                case Kind::Leq: relation = Relation::Leq; break;
+                case Kind::Lt: relation = Relation::Lt; break;
+                case Kind::Geq: relation = Relation::Geq; break;
+                case Kind::Gt: relation = Relation::Gt; break;
+                default: continue;
+            }
+            if (e.children.size() != 2 || ir.sortKind(ir.get(e.children[0]).sort) != SortKind::Int)
+                continue;
+            std::unordered_map<std::string, mpq_class> coefficients;
+            mpq_class constant = 0;
+            if (!extractLinearExpr(e.children[0], ir, coefficients, constant, 1, &work) ||
+                !extractLinearExpr(e.children[1], ir, coefficients, constant, -1, &work)) continue;
+            for (auto it = coefficients.begin(); it != coefficients.end();)
+                if (it->second == 0) it = coefficients.erase(it); else ++it;
+            if (coefficients.size() != 1) continue;
+            const auto& [name, coefficient] = *coefficients.begin();
+            mpq_class value = -constant / coefficient;
+            if (coefficient < 0) {
+                switch (relation) {
+                    case Relation::Leq: relation = Relation::Geq; break;
+                    case Relation::Lt: relation = Relation::Gt; break;
+                    case Relation::Geq: relation = Relation::Leq; break;
+                    case Relation::Gt: relation = Relation::Lt; break;
+                    default: break;
+                }
+            }
+            mpz_class floor, ceil;
+            mpz_fdiv_q(floor.get_mpz_t(), value.get_num_mpz_t(), value.get_den_mpz_t());
+            mpz_cdiv_q(ceil.get_mpz_t(), value.get_num_mpz_t(), value.get_den_mpz_t());
+            auto& domain = bounds[name];
+            auto lower = [&](const mpz_class& v) {
+                if (!domain.lower || v > *domain.lower) domain.lower = v;
+            };
+            auto upper = [&](const mpz_class& v) {
+                if (!domain.upper || v < *domain.upper) domain.upper = v;
+            };
+            switch (relation) {
+                case Relation::Eq:
+                    if (floor != ceil) return false;
+                    lower(floor); upper(floor); break;
+                case Relation::Leq: upper(floor); break;
+                case Relation::Lt: upper(ceil - 1); break;
+                case Relation::Geq: lower(ceil); break;
+                case Relation::Gt: lower(floor + 1); break;
+                default: break;
+            }
+        }
+        for (const auto& name : variables) {
+            const auto it = bounds.find(name);
+            if (it == bounds.end() || !it->second.lower || !it->second.upper ||
+                *it->second.lower < 0 || *it->second.upper > 1 ||
+                *it->second.lower > *it->second.upper) return false;
+        }
+        return true;
+    } catch (const ResourceExhausted&) {
+        return false;
+    }
+}
+} // namespace
+
 EagerBitBlastSolver::EagerBitBlastSolver()
     : kernel_(createPolynomialKernel()),
       converter_(std::make_unique<PolynomialConverter>(*kernel_)) {}
+
+EagerBitBlastSolver::Result EagerBitBlastSolver::solveBinary(
+    const NativeTerms& ir, const std::vector<ExprId>& assertions) {
+    const bool applicable = hasBinaryIntegerDomains(ir, assertions);
+    if (xolver::config::read<xolver::config::ReadKind::Presence>("NIA_EAGER_BB_DIAG"))
+        std::cerr << "[EAGER-BB] binary_integer_preflight=" << applicable << "\n";
+    if (!applicable) return {};
+    return solve(ir, assertions);
+}
 
 bool EagerBitBlastSolver::relationHolds(const mpz_class& v, Relation rel) {
     switch (rel) {
@@ -329,6 +440,12 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const NativeTerms& ir,
     ub_.clear();
     const bool diag = xolver::config::read<xolver::config::ReadKind::Presence>("NIA_EAGER_BB_DIAG");
     if (!collect(ir, assertions)) return out;   // unsupported construct -> Unknown
+    const bool binaryDomains = !intVars_.empty() && std::all_of(intVars_.begin(), intVars_.end(),
+        [&](const auto& variable) {
+            const auto lo = lb_.find(variable), hi = ub_.find(variable);
+            return lo != lb_.end() && hi != ub_.end() &&
+                lo->second >= 0 && hi->second <= 1 && lo->second <= hi->second;
+        });
     if (diag) {
         size_t bounded = 0, fixed = 0;
         for (const auto& variable : intVars_) {
@@ -448,6 +565,8 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const NativeTerms& ir,
         sat->setDeadline(deadline);
         BitBlastEncoder enc(*sat);
         enc.setVarBudget(budget);
+        WorkBudget pbWork(0);
+        PseudoBooleanEncoder pb(enc, pbWork, deadline);
 
         // Per-var width (BLAN collector discipline): both-sided-bounded vars get
         // their EXACT width (value provably fits — bound atom still encoded);
@@ -465,9 +584,54 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const NativeTerms& ir,
                     continue;
                 }
             }
-            varBits[v] = enc.mkVar(w);
+            if (binaryDomains) {
+                varBits[v] = enc.mkVar(1);
+                varBits[v].bits.push_back(enc.constFalse());
+            } else varBits[v] = enc.mkVar(w);
         }
         PolyBitBlaster blaster(enc, *kernel_, varBits);
+
+        auto encodeBinaryPolynomial = [&](PolyId polynomial, Relation relation) -> std::optional<SatLit> {
+            const auto terms = kernel_->terms(polynomial);
+            if (!terms) return std::nullopt;
+            std::vector<WeightedLiteral> weighted;
+            mpz_class constant = 0;
+            for (const auto& term : *terms) {
+                if (term.powers.empty()) { constant += term.coefficient; continue; }
+                auto literal = enc.constTrue();
+                // On {0,1}, every positive power equals the variable and every
+                // product is a conjunction. This also avoids multiplier
+                // circuits for binary nonlinear integer formulas.
+                for (const auto& [variable, exponent] : term.powers) {
+                    if (exponent == 0) continue;
+                    const auto bits = varBits.find(std::string(kernel_->varName(variable)));
+                    if (bits == varBits.end()) return std::nullopt;
+                    literal = enc.andGate(literal, bits->second.bits[0]);
+                }
+                weighted.push_back({literal, term.coefficient});
+            }
+            auto lessEqual = [&](bool negate, int adjustment) {
+                auto weights = weighted;
+                if (negate) for (auto& term : weights) term.weight = -term.weight;
+                mpz_class bound = constant;
+                if (!negate) bound = -bound;
+                bound += adjustment;
+                return pb.lessEqual(std::move(weights), bound);
+            };
+            switch (relation) {
+                case Relation::Leq: return lessEqual(false, 0);
+                case Relation::Lt: return lessEqual(false, -1);
+                case Relation::Geq: return lessEqual(true, 0);
+                case Relation::Gt: return lessEqual(true, -1);
+                case Relation::Eq: case Relation::Neq: {
+                    const auto upper = lessEqual(false, 0), lower = lessEqual(true, 0);
+                    if (!upper || !lower) return std::nullopt;
+                    const auto equal = enc.andGate(*upper, *lower);
+                    return relation == Relation::Eq ? equal : equal.negated();
+                }
+            }
+            return std::nullopt;
+        };
 
         std::unordered_map<ExprId, SatLit> memo;
         std::unordered_map<ExprId, SatLit> boolVars;
@@ -546,7 +710,11 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const NativeTerms& ir,
                             if (part.first == NullPoly)
                                 pl = (part.second == Relation::Eq) ? enc.constTrue()
                                                                    : enc.constFalse();
-                            else
+                            else if (binaryDomains) {
+                                const auto encoded = encodeBinaryPolynomial(part.first, part.second);
+                                if (!encoded) { encodeOk = false; break; }
+                                pl = *encoded;
+                            } else
                                 pl = enc.relZero(blaster.encodePoly(part.first), part.second);
                             r = enc.andGate(r, pl);
                         }
@@ -598,11 +766,15 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const NativeTerms& ir,
                                           res == SatSolver::SolveResult::Unsat ? "N" : "?")
                             << " encMs=" << encMs << " solveMs=" << (elapsedMs() - encMs) << "\n";
         if (res == SatSolver::SolveResult::Unsat) {
+            if (binaryDomains) break; // Exact domain: wider encodings are identical.
             ++consecutiveUnsat;
             continue;   // wider K (never claim UNSAT)
         }
         consecutiveUnsat = 0;  // reset on any non-Unsat (Unknown counts as continue too)
-        if (res != SatSolver::SolveResult::Sat) continue;
+        if (res != SatSolver::SolveResult::Sat) {
+            if (binaryDomains) break;
+            continue;
+        }
 
         // Candidate model -> EXACT integer re-validation over all assertions.
         std::unordered_map<std::string, mpz_class> model;
@@ -673,6 +845,7 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const NativeTerms& ir,
             }
             return out;
         }
+        if (binaryDomains) break;
         // SAT but candidate failed exact validation (narrow-width artifact) -> wider K.
     }
     return out;   // Unknown
