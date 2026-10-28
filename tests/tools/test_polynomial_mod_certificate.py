@@ -1,4 +1,5 @@
 import copy
+import math
 from pathlib import Path
 import sys
 import unittest
@@ -71,6 +72,8 @@ class PolynomialModCertificateTests(unittest.TestCase):
 
     def test_quoted_numeric_identifier_does_not_capture_numeral(self):
         self.checked(query('(let ((|0| x)) (not (= (mod (* 0 |0|) 2) 0)))'))
+        self.checked(query('(not (= (mod (+ (- (* |0| |0|) |0|) (* 0 |0|)) 2) 0))',
+                           '(declare-const |0| Int)'))
         data = query('(let ((|0| 0)) (not (= (mod (+ 1 |0|) 2) 0)))')
         with self.assertRaises(Unsupported):
             produce(data)
@@ -83,6 +86,16 @@ class PolynomialModCertificateTests(unittest.TestCase):
         # or filename assumption may turn it into an UNSAT certificate.
         with self.assertRaises(Unsupported):
             produce(query('(and (not (= x 0)) (= (mod x 2) 0))'))
+
+    def test_consecutive_integer_products_and_nonidentity_controls(self):
+        for degree in range(2, 7):
+            modulus = math.factorial(degree)
+            signed = str(modulus) if degree % 2 else '(- ' + str(modulus) + ')'
+            product = '(* ' + ' '.join('(- x ' + str(i) + ')' for i in range(degree)) + ')'
+            with self.subTest(degree=degree):
+                self.checked(query('(not (= (mod ' + product + ' ' + signed + ') 0))'))
+                with self.assertRaises(Unsupported):
+                    produce(query('(not (= (mod (+ ' + product + ' 1) ' + signed + ') 0))'))
 
 
 if __name__ == '__main__':
