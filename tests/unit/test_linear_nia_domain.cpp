@@ -170,3 +170,16 @@ TEST_CASE("LinearNiaDomain: affine chains retain endpoint explanations") {
     CHECK(std::find(derived->lower.reasons.begin(), derived->lower.reasons.end(), mkReason(1)) != derived->lower.reasons.end());
     CHECK(std::find(derived->upper.reasons.begin(), derived->upper.reasons.end(), mkReason(2)) != derived->upper.reasons.end());
 }
+
+TEST_CASE("LinearNiaDomain: unexplained stored endpoints are not unconditional premises") {
+    auto kernel = createPolynomialKernel();
+    LinearNiaDomainReasoner reasoner(*kernel);
+    DomainStore domains;
+    domains.addLowerBound("y", 0, std::vector<SatLit>{});
+    domains.addUpperBound("y", 0, std::vector<SatLit>{});
+    const auto x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    const auto y = kernel->mkVar(kernel->getOrCreateVar("y"));
+    reasoner.run({{kernel->sub(x, kernel->mul(kernel->mkConst(2), y)),
+                   Relation::Eq, mkReason(1)}}, domains);
+    CHECK(domains.getDomain("x") == nullptr);
+}
