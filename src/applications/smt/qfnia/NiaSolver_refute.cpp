@@ -268,8 +268,14 @@ std::optional<TheoryCheckResult> NiaSolver::stageDomainInference(TheoryLemmaStor
 
         mpz_class ub1 = product / d2->lower.value;
         mpz_class ub2 = product / d1->lower.value;
-        domains_.addUpperBound(v1, ub1, c.reason);
-        domains_.addUpperBound(v2, ub2, c.reason);
+        // Dividing xy=C by a positive lower bound needs BOTH premises. A
+        // conflict using x<=C/lb(y) must not forget the facts establishing lb(y).
+        auto reasons1 = d2->lower.reasons;
+        auto reasons2 = d1->lower.reasons;
+        reasons1.push_back(c.reason);
+        reasons2.push_back(c.reason);
+        domains_.addUpperBound(v1, ub1, reasons1);
+        domains_.addUpperBound(v2, ub2, reasons2);
     }
 
     // 4.6 Propagate bounds through equalities (after product bounds)
@@ -329,6 +335,9 @@ std::optional<TheoryCheckResult> NiaSolver::stageDomainInference(TheoryLemmaStor
             if (d2->hasUpper && (!d1->hasUpper || d2->upper.value < d1->upper.value))
                 domains_.addUpperBound(v1, d2->upper.value, withEq(d2->upper.reasons));
         }
+    }
+    if (domains_.isEmpty()) {
+        return TheoryCheckResult::mkConflict(domains_.buildEmptyDomainConflict());
     }
     return std::nullopt;
 }
