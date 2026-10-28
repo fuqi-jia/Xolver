@@ -12,8 +12,9 @@ BitBlastEncoder::BitBlastEncoder(SatSolver& sat) : sat_(sat) {
 
 // One fresh SAT variable, capped by maxVars_. Once the budget is exhausted we
 // stop creating variables and return the constant-false literal, setting over_;
-// the resulting encoding is incomplete and MUST NOT be solved (the caller
-// checks overflowed() and bails to Unknown). This is what turns a degree-5
+// the unfinished result MUST NOT be assumed. Completed facts remain exact;
+// callers may refute that prefix but cannot accept an incomplete SAT result.
+// This is what turns a degree-5
 // QF_NIA encoding blow-up into a clean Unknown instead of an OOM abort.
 SatLit BitBlastEncoder::freshVar() {
     if (maxVars_ != 0 && varCount_ >= maxVars_) { over_ = true; return false_; }
@@ -132,6 +133,7 @@ SatLit BitBlastEncoder::iteGate(SatLit s, SatLit t, SatLit e) {
     if (t == false_) return andGate(s.negated(), e);
     if (e == true_)  return orGate(s.negated(), t);
     SatLit c = freshVar();
+    if (over_) return c; // Preserve the already encoded prefix on exhaustion.
     sat_.addClause({s.negated(), t.negated(), c});
     sat_.addClause({s.negated(), t, c.negated()});
     sat_.addClause({s, e.negated(), c});
@@ -139,7 +141,9 @@ SatLit BitBlastEncoder::iteGate(SatLit s, SatLit t, SatLit e) {
     return c;
 }
 
-void BitBlastEncoder::assertLit(SatLit l) { sat_.addClause({l}); }
+void BitBlastEncoder::assertLit(SatLit l) {
+    if (!over_) sat_.addClause({l});
+}
 
 BitVec BitBlastEncoder::signExtend(const BitVec& a, unsigned width) {
     BitVec r = a;

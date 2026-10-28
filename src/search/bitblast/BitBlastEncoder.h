@@ -49,8 +49,9 @@ public:
     // will allocate. High-degree QF_NIA can blow the encoding past memory and
     // abort inside CaDiCaL with bad_alloc; once the budget is hit, freshVar()
     // stops allocating (returns the constant-false literal) and sets the
-    // overflow flag, so the caller can bail to Unknown WITHOUT solving the
-    // (now-incomplete) encoding. 0 = unlimited.
+    // overflow flag. No new clauses are emitted after failure. The unfinished
+    // result cannot be assumed; previously completed facts may still refute
+    // their exact prefix. SAT requires complete encoding/validation. 0 = unlimited.
     void setVarBudget(uint64_t maxVars) { maxVars_ = maxVars; }
     bool overflowed() const { return over_; }
     // Overflow can introduce dummy literals: check it before using a known

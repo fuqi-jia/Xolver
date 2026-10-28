@@ -38,46 +38,46 @@ bool BitBlastSolver::applicable(const std::vector<NormalizedNiaConstraint>& cs) 
     return true;
 }
 
-void BitBlastSolver::encodeDomainBounds(
+bool BitBlastSolver::encodeDomainBounds(
     BitBlastEncoder& enc,
     const std::unordered_map<std::string, BitVec>& varBits,
-    const DomainStore& domains) {
+    const DomainStore& domains, std::vector<EncodedFact>& facts) {
     // Confine the SAT search to the DomainStore box so the search space EQUALS
     // [lb,ub]^n ∩ cs (not the raw two's-complement width range).
     for (const auto& kv : varBits) {
-        if (enc.overflowed() || enc.inconsistent()) break;
+        if (enc.overflowed() || enc.inconsistent()) return false;
         const IntDomain* d = domains.getDomain(kv.first);
         if (!d) continue;
         const BitVec& x = kv.second;
-        // Sign fixing (BLAN): a strictly-negative domain pins the sign bit to 1,
-        // a non-negative domain pins it to 0. Redundant with the bound
-        // subtractors below, but a direct unit the SAT solver sees immediately
-        // (reuses the existing sign-bit literal — no new constant is minted).
+        auto append = [&](SatLit literal) {
+            if (enc.overflowed()) return false;
+            facts.push_back({literal, 0, &kv.first});
+            return literal != enc.constFalse();
+        };
         if (x.width() > 0) {
-            if (d->hasUpper && d->upper.value < 0)       enc.assertLit(x.sign());
-            else if (d->hasLower && d->lower.value >= 0) enc.assertLit(x.sign().negated());
-        }
-        if (d->hasLower) {  // x >= lb  <=>  (x - lb) >= 0
-            enc.assertLit(enc.relZero(enc.sub(x, enc.mkConst(d->lower.value)), Relation::Geq));
-        }
-        if (d->hasUpper) {  // x <= ub  <=>  (x - ub) <= 0
-            enc.assertLit(enc.relZero(enc.sub(x, enc.mkConst(d->upper.value)), Relation::Leq));
-        }
-        if (d->finiteValues) {  // x ∈ {v1,...}  <=>  OR_i (x == vi)
-            std::vector<SatLit> disj;
-            for (const auto& v : *d->finiteValues)
-                disj.push_back(enc.eq(x, enc.mkConst(v)));
-            if (disj.empty()) { enc.assertLit(enc.constFalse()); }   // empty set => UNSAT
-            else {
-                SatLit acc = disj[0];
-                for (size_t i = 1; i < disj.size(); ++i) acc = enc.orGate(acc, disj[i]);
-                enc.assertLit(acc);
+            if (d->hasUpper && d->upper.value < 0) {
+                if (!append(x.sign())) return false;
+            } else if (d->hasLower && d->lower.value >= 0) {
+                if (!append(x.sign().negated())) return false;
             }
         }
-        for (const auto& ex : d->excludedValues) {  // x != v
-            enc.assertLit(enc.relZero(enc.sub(x, enc.mkConst(ex.first)), Relation::Neq));
+        if (d->hasLower && !append(enc.relZero(
+                enc.sub(x, enc.mkConst(d->lower.value)), Relation::Geq))) return false;
+        if (d->hasUpper && !append(enc.relZero(
+                enc.sub(x, enc.mkConst(d->upper.value)), Relation::Leq))) return false;
+        if (d->finiteValues) {
+            SatLit member = enc.constFalse();
+            for (const auto& v : *d->finiteValues) {
+                member = enc.orGate(member, enc.eq(x, enc.mkConst(v)));
+                if (enc.overflowed()) return false;
+            }
+            if (!append(member)) return false;
         }
+        for (const auto& ex : d->excludedValues)
+            if (!append(enc.relZero(enc.sub(x, enc.mkConst(ex.first)), Relation::Neq)))
+                return false;
     }
+    return true;
 }
 
 bool BitBlastSolver::modelInDomains(const IntegerModel& model, const DomainStore& domains) {
@@ -96,7 +96,8 @@ bool BitBlastSolver::modelInDomains(const IntegerModel& model, const DomainStore
 }
 
 std::optional<TheoryConflict> BitBlastSolver::buildCompleteConflict(
-    const std::vector<NormalizedNiaConstraint>& cs, const DomainStore& domains) const {
+    const std::vector<NormalizedNiaConstraint>& cs, const DomainStore& domains,
+    const std::unordered_set<std::string>* variables) const {
     // The encoded conjunction (all cs constraints AND every encoded domain
     // restriction) is infeasible over the complete box, so the negation of
     // EVERY justifying reason literal is a sound theory lemma. CRITICAL: every
@@ -131,6 +132,7 @@ std::optional<TheoryConflict> BitBlastSolver::buildCompleteConflict(
         if (!pushOne(c.reason)) return std::nullopt;
     }
     for (const auto& entry : domains.getAllDomains()) {
+        if (variables && !variables->contains(entry.first)) continue;
         const IntDomain& d = entry.second;
         if (d.hasLower && !pushAll(d.lower.reasons)) return std::nullopt;
         if (d.hasUpper && !pushAll(d.upper.reasons)) return std::nullopt;
@@ -191,14 +193,19 @@ BitBlastSolver::Attempt BitBlastSolver::attemptAtWidths(
     for (const auto& kv : plan.width) varBits[kv.first] = enc.mkVar(kv.second);
 
     PolyBitBlaster blaster(enc, kernel_, varBits);
+    std::vector<EncodedFact> facts;
+    facts.reserve(cs.size() + 2 * varBits.size());
     size_t encoded = 0;
-    for (const auto& c : cs) {
-        if (enc.overflowed() || enc.inconsistent()) break;
-        blaster.assertConstraint(c);
+    bool full = true;
+    for (size_t index = 0; index < cs.size(); ++index) {
+        if (enc.overflowed() || enc.inconsistent()) { full = false; break; }
+        const auto literal = blaster.encodeConstraint(cs[index]);
+        if (enc.overflowed()) { full = false; break; }
+        facts.push_back({literal, index, nullptr});
         ++encoded;
+        if (literal == enc.constFalse()) { full = false; break; }
     }
-    if (!enc.overflowed() && !enc.inconsistent())
-        encodeDomainBounds(enc, varBits, domains); // confine SAT search to the box
+    if (full) full = encodeDomainBounds(enc, varBits, domains, facts);
     if (bbProf) {
         std::cerr << "[BB-PREFIX] encoded=" << encoded << '/' << cs.size()
                   << " satvars=" << enc.varCount()
@@ -211,10 +218,20 @@ BitBlastSolver::Attempt BitBlastSolver::attemptAtWidths(
         ++prof.attempts; prof.lastVars = (long)enc.varCount(); prof.maybeDump();
     }
 
-    if (enc.overflowed()) { a.kind = Attempt::Overflow; return a; }
+    // Gates and assertions emit no clauses after allocation fails. Thus the
+    // completed facts still describe an exact prefix; never assume a fact
+    // whose own encoding overflowed. SAT needs the entire encoding, while a
+    // complete refutation of this prefix can already settle the query.
+    if (facts.empty()) {
+        if (enc.overflowed()) a.kind = Attempt::Overflow;
+        return a;
+    }
+    std::vector<SatLit> assumptions;
+    assumptions.reserve(facts.size());
+    for (const auto& fact : facts) assumptions.push_back(fact.literal);
 
     auto satT0 = std::chrono::steady_clock::now();
-    auto res = sat->solve();
+    auto res = sat->solve(assumptions);
     if (bbProf) {
         prof.satMs += std::chrono::duration<double, std::milli>(
                           std::chrono::steady_clock::now() - satT0).count();
@@ -222,6 +239,10 @@ BitBlastSolver::Attempt BitBlastSolver::attemptAtWidths(
     }
     const bool bbDiag = xolver::config::read<xolver::config::ReadKind::Presence>("NIA_BITBLAST_DIAG");
     if (res == SatSolver::SolveResult::Sat) {
+        if (!full || enc.overflowed()) {
+            if (enc.overflowed()) a.kind = Attempt::Overflow;
+            return a;
+        }
         IntegerModel model;
         for (const auto& kv : varBits) model[kv.first] = readBitVec(*sat, kv.second);
         // Accept only a model that satisfies cs (exact) AND lies in the box.
@@ -242,8 +263,71 @@ BitBlastSolver::Attempt BitBlastSolver::attemptAtWidths(
     }
     if (res == SatSolver::SolveResult::Unsat) {
         if (bbDiag) std::cerr << "[BB-DIAG] UNSAT@vars=" << enc.varCount() << "\n";
-        a.kind = Attempt::Unsat; return a;
+        a.kind = Attempt::Unsat;
+        const auto failed = sat->getFailedAssumptions();
+        const auto key = [](SatLit literal) {
+            return (uint64_t(literal.var) << 1) | unsigned(literal.sign);
+        };
+        std::unordered_set<uint64_t> failedKeys;
+        for (const auto literal : failed) failedKeys.insert(key(literal));
+        struct Source {
+            const EncodedFact* fact;
+            std::vector<std::string> variables;
+            size_t unbounded;
+        };
+        std::unordered_map<uint64_t, Source> selected;
+        for (const auto& fact : facts) {
+            const auto id = key(fact.literal);
+            if (!failedKeys.contains(id)) continue;
+            auto variables = fact.domainVariable
+                ? std::vector<std::string>{*fact.domainVariable}
+                : kernel_.variables(cs[fact.constraint].poly);
+            size_t unbounded = 0;
+            for (const auto& variable : variables) {
+                const auto* d = domains.getDomain(variable);
+                unbounded += !d || !d->hasLower || !d->hasUpper;
+            }
+            const auto previous = selected.find(id);
+            // Equal SAT literals can name several predicates. Any one is a
+            // valid premise for that literal. Prefer a complete footprint.
+            if (previous == selected.end() || unbounded < previous->second.unbounded ||
+                (unbounded == previous->second.unbounded &&
+                 variables.size() < previous->second.variables.size()))
+                selected.insert_or_assign(id, Source{&fact, std::move(variables), unbounded});
+        }
+        if (!failedKeys.empty() && selected.size() == failedKeys.size()) {
+            std::unordered_set<std::string> variables;
+            std::vector<NormalizedNiaConstraint> premises;
+            a.complete = true;
+            for (const auto& [id, source] : selected) {
+                (void)id;
+                if (!source.fact->domainVariable)
+                    premises.push_back(cs[source.fact->constraint]);
+                for (const auto& variable : source.variables) {
+                    variables.insert(variable);
+                    const auto* d = domains.getDomain(variable);
+                    if (!d || !d->hasLower || !d->hasUpper) a.complete = false;
+                }
+            }
+            if (a.complete) a.conflict = buildCompleteConflict(premises, domains, &variables);
+            else for (const auto& variable : variables) {
+                const auto* d = domains.getDomain(variable);
+                if (!d || !d->hasLower || !d->hasUpper) a.refine.push_back(variable);
+            }
+            std::sort(a.refine.begin(), a.refine.end());
+            if (bbProf) std::cerr << "[BB-CORE] facts=" << facts.size()
+                << " selected=" << selected.size() << " variables=" << variables.size()
+                << " unbounded=" << a.refine.size() << " complete=" << a.complete << '\n';
+        } else if (full && !enc.overflowed() && plan.boxIsComplete) {
+            // A backend without a usable assumption core retains the original
+            // complete-box path, with every source/domain justification.
+            a.complete = true;
+            a.conflict = buildCompleteConflict(cs, domains);
+        }
+        if (enc.overflowed() && !a.complete) a.kind = Attempt::Overflow;
+        return a;
     }
+    if (enc.overflowed()) a.kind = Attempt::Overflow;
     if (bbDiag) std::cerr << "[BB-DIAG] SAT-solver-UNKNOWN@vars=" << enc.varCount() << "\n";
     return a;   // SAT solver Unknown
 }
@@ -323,31 +407,34 @@ BitBlastResult BitBlastSolver::solve(const std::vector<NormalizedNiaConstraint>&
                 unbounded.push_back(entry.first);
             }
         }
-        unsigned width = std::min(2u, maxBW_);
+        for (const auto& v : unbounded) plan.width[v] = std::min(2u, maxBW_);
         for (unsigned iter = 0; iter < maxIters_; ++iter) {
             if (wall::hasDeadline() && wall::remainingMs() == 0) return result;
-            for (const auto& v : unbounded) plan.width[v] = width;
             Attempt attempt = attemptAtWidths(plan, cs, domains, validator);
             if (attempt.kind == Attempt::Sat) {
                 result.status = BitBlastResult::Status::Sat;
                 result.model = std::move(attempt.model);
                 return result;
             }
-            if (plan.boxIsComplete) {
-                if (attempt.kind == Attempt::Unsat) {
-                    if (auto conflict = buildCompleteConflict(cs, domains)) {
-                        result.status = BitBlastResult::Status::UnsatComplete;
-                        result.conflict = std::move(conflict);
-                    }
+            if (attempt.complete) {
+                if (attempt.conflict) {
+                    result.status = BitBlastResult::Status::UnsatComplete;
+                    result.conflict = std::move(attempt.conflict);
                 }
-                return result; // A complete box needs only one attempt.
+                return result;
             }
-            if (attempt.kind == Attempt::Overflow || width == maxBW_) break;
-            // Widen only unbounded variables. Avoid overflow even for API-set
-            // caps larger than the configuration adapter's accepted range.
-            width = width > maxBW_ / 2 ? maxBW_ : width * 2;
+            if (plan.boxIsComplete || attempt.kind == Attempt::Overflow) return result;
+            const auto& refine = attempt.refine.empty() ? unbounded : attempt.refine;
+            bool changed = false;
+            for (const auto& v : refine) {
+                auto& width = plan.width.at(v);
+                if (width == maxBW_) continue;
+                width = width > maxBW_ / 2 ? maxBW_ : width * 2;
+                changed = true;
+            }
+            if (!changed) break;
         }
-        return result; // Incomplete boxes never establish global UNSAT.
+        return result; // Artificial bounds never justify an integer conflict.
     };
 
     BitBlastResult r = compute();

@@ -75,7 +75,7 @@ BitVec PolyBitBlaster::encodePoly(PolyId p) {
     return monos.front();
 }
 
-void PolyBitBlaster::assertConstraint(const NormalizedNiaConstraint& c) {
+SatLit PolyBitBlaster::encodeConstraint(const NormalizedNiaConstraint& c) {
     BitVec value = encodePoly(c.poly);
     const bool diag = xolver::config::read<xolver::config::ReadKind::Presence>("BB_ASSERT_DIAG");
     if (diag) {
@@ -84,7 +84,11 @@ void PolyBitBlaster::assertConstraint(const NormalizedNiaConstraint& c) {
                   << " poly=" << kernel_.toString(c.poly) << "\n";
         std::cerr.flush();
     }
-    enc_.assertLit(enc_.relZero(value, c.rel));
+    return enc_.relZero(value, c.rel);
+}
+
+void PolyBitBlaster::assertConstraint(const NormalizedNiaConstraint& c) {
+    enc_.assertLit(encodeConstraint(c));
 }
 
 } // namespace xolver::bitblast

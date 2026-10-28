@@ -22,6 +22,7 @@ public:
                    const std::unordered_map<std::string, BitVec>& varBits);
 
     void assertConstraint(const NormalizedNiaConstraint& c);
+    SatLit encodeConstraint(const NormalizedNiaConstraint& c);
 
     // Encode a polynomial to its value bit-vector (used by assertConstraint).
     BitVec encodePoly(PolyId p);
