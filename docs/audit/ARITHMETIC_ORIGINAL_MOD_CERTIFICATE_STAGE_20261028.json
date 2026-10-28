@@ -1,0 +1,1397 @@
+{
+  "schema": "xolver-arithmetic-stage/1",
+  "stage": "original-polynomial-modulo-certificate-20261028",
+  "base_commit": "67fe12af35087fb0f57bf9696351ff6642fe13ee",
+  "code_commit": "b03175d13ae0e8fff835794dae471aadfcb1c0d4",
+  "source_manifest": {
+    "path": "source-r284.tar.json",
+    "sha256": "bf3706831e856f8ba636e533562e85c8a9de6a73f6ef093fa7154a5889fffb21",
+    "archive_sha256": "9ab800733c5695bf49802bb3fd082dc6ca54b1b5a118c5371d8fe486ad1d001d"
+  },
+  "frozen_binaries": {
+    "xolver": "e7a8214e33b022d8e6acafc33fed8d00636d1da66c33ffb070a2695ed4504e34",
+    "xolver-sv": "99130012b880f255cd8bbaf456d4031d07649792c83c430acb5649a547bb89ef"
+  },
+  "native": {
+    "unit_cases": 1689,
+    "unit_assertions": 801249,
+    "certificate_tests": 11,
+    "unit_log_sha256": "a7c8794cff5e5fbae4f735fc57ca08a0e26509f7d9d746de967c39a9bd1f07ca",
+    "acceptance_tasks": 38,
+    "initial_successes": 37,
+    "initial_timeouts": 1,
+    "interval_recheck": {
+      "lease": [
+        1
+      ],
+      "input": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r284/intervals/cases/interval-0005.smt2",
+      "input_sha256": "c6542d6586eb1f515c3edadc4fe1b90abe6558645704e71b3ce314f37bafebec",
+      "initial_limit_seconds": 5,
+      "recheck_limit_seconds": 60,
+      "initial_failure": [
+        {
+          "case": "interval-0005",
+          "engine": "xolver",
+          "expected": "unsat",
+          "actual": "timeout"
+        }
+      ],
+      "rows": {
+        "xolver": {
+          "command": [
+            "prlimit",
+            "--as=17179869184",
+            "--cpu=62:63",
+            "--",
+            "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r284/xolver",
+            "solve",
+            "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r284/intervals/cases/interval-0005.smt2",
+            "--timeout",
+            "60"
+          ],
+          "rc": 0,
+          "seconds": 0.08375800214707851,
+          "result": "unsat",
+          "binary_sha256": "e7a8214e33b022d8e6acafc33fed8d00636d1da66c33ffb070a2695ed4504e34"
+        },
+        "z3": {
+          "command": [
+            "prlimit",
+            "--as=17179869184",
+            "--cpu=62:63",
+            "--",
+            "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+            "-T:60",
+            "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r284/intervals/cases/interval-0005.smt2"
+          ],
+          "rc": 0,
+          "seconds": 0.04124121367931366,
+          "result": "unsat",
+          "binary_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+        }
+      },
+      "scope": "Correctness recheck of a preserved acceptance timeout, excluded from fixed-suite performance scores"
+    },
+    "regressions": 916,
+    "acceptance": {
+      "affine": {
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        },
+        "commands_sha256": "fa0339cd26cc5da2fc5d8c5b1a504401c9fbd8d2eb88f7bfc2947750d7bf88d3"
+      },
+      "architecture": {
+        "metrics": {
+          "checks": 2,
+          "failures": 0
+        },
+        "commands_sha256": "530610efe69f671682f29e666d5261c8482f6f44ac3c9667508a1ae9e7a27c63"
+      },
+      "intervals": {
+        "metrics": {
+          "checks": 1,
+          "failures": 1
+        },
+        "commands_sha256": "d2cab6a5bb460db524b765fe5ca78b60dbbe5864ac5a75deee26e7e4b857a644"
+      },
+      "ite": {
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        },
+        "commands_sha256": "6ad7a34c966d8f5e58c57496d3b21bf3ff3da960341ecf7e186d199c64c3027e"
+      },
+      "ite-structure": {
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        },
+        "commands_sha256": "365ee7a2d0023778f6e12bbb3be41617dc2aa4fbb535ed732af439f5a0d4a351"
+      },
+      "known-gaps": {
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        },
+        "commands_sha256": "c8c9a32eb2a4f3081b9acae66f469289ed8363c6a965257964c2dde7d4dcd8bc"
+      },
+      "linear": {
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        },
+        "commands_sha256": "c5473ab69f31e669e4f55ad4c5ad58d9e58025b3c7e8d652685d2cb446a10280"
+      },
+      "partial": {
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        },
+        "commands_sha256": "642b8144b9643c9780caf316f3d85a3d670d6511abe90e721f70bdb03e56b7eb"
+      },
+      "qcp": {
+        "metrics": {
+          "checks": 3,
+          "failures": 0
+        },
+        "commands_sha256": "7399f8028f9e522a8325678c536e60b072509b8320fea2b2848dc6f0e2666658"
+      },
+      "quick": {
+        "metrics": {
+          "checks": 3,
+          "failures": 0
+        },
+        "commands_sha256": "63e015fb4b866285e567a1da43286b72818c9821b192546eb684edfd55f1b75a"
+      },
+      "regression-alia": {
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        },
+        "commands_sha256": "685b6cfd58731f5ee255948b5e9543c518dc50057d59b624180e475f88bebe95",
+        "regressions": 17
+      },
+      "regression-alra": {
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        },
+        "commands_sha256": "6891275a0dc72791135aeb6bd1c5470e50792bc967bdcfbe02aac733a74c94b4",
+        "regressions": 13
+      },
+      "regression-ania": {
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        },
+        "commands_sha256": "6a4c784c52a2374f6c8f9b70f1ac9343e605906b809a2032347b9e3625f56366",
+        "regressions": 10
+      },
+      "regression-auflia": {
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        },
+        "commands_sha256": "3a753294bdfeaa7c30eda64fdfea38d09fd4f7fe4d5820162cb0b002b7f1e6eb",
+        "regressions": 10
+      },
+      "regression-auflra": {
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        },
+        "commands_sha256": "a6363dc1cfb550730dd905573817e253d6a6e620cb57c54c924e3342f2c7689d",
+        "regressions": 5
+      },
+      "regression-aufnia": {
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        },
+        "commands_sha256": "80830a45b8f1698e03250445d01907801f2b4248269e1163274176608c14dcf8",
+        "regressions": 10
+      },
+      "regression-ax": {
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        },
+        "commands_sha256": "227850081a494d0583037d7f01a4ab4771cc366e650ffcd7c4447f0048891e2a",
+        "regressions": 12
+      },
+      "regression-bool": {
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        },
+        "commands_sha256": "28480a8dde9cdb21c36769f0262456944928cdcb318af9ce688728f2c9e62c89",
+        "regressions": 31
+      },
+      "regression-dt": {
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        },
+        "commands_sha256": "9a85600db488420789c77c04fbccbc1d76e87c714aecfeeaabaecbbcc6892d2a",
+        "regressions": 18
+      },
+      "regression-euf": {
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        },
+        "commands_sha256": "25ef1644ee3da6ade1bf17179e61e3694d2b0d89e36fb1e5d1a9d1b50b234d54",
+        "regressions": 63
+      },
+      "regression-idl": {
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        },
+        "commands_sha256": "403f4a01a91809e5bce64ef5a8524554b68cf32d535de74f578a8347ce0d21ae",
+        "regressions": 18
+      },
+      "regression-lia": {
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        },
+        "commands_sha256": "0716534c94051e154e80c25cd9940214b79f0369dcc526f08925a8fe88652a04",
+        "regressions": 80
+      },
+      "regression-lira": {
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        },
+        "commands_sha256": "e2ff96d58a1a5e78a945883b98f20b2cdedaf4faee29e97f0216ae3319efcc53",
+        "regressions": 37
+      },
+      "regression-lra": {
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        },
+        "commands_sha256": "6fc7231adefeb9139ec4f92276cd4cdc36981429879a0a7d289b3905572ad15d",
+        "regressions": 61
+      },
+      "regression-nia": {
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        },
+        "commands_sha256": "9b735424f19c5a1f26a8355aa81a2d751ff3e2e027e7c1753bc371706a3e62b0",
+        "regressions": 127
+      },
+      "regression-nira": {
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        },
+        "commands_sha256": "45bcae5194aba2dd6d9ca2ce7d2cce2a37ac8fb3c8c492aa63eb7e851c1f3643",
+        "regressions": 30
+      },
+      "regression-nra": {
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        },
+        "commands_sha256": "ecbf97b4f9744f214b3d7d5af5718bd5cd5422e4405312d4e6db157c97ec5e9f",
+        "regressions": 225
+      },
+      "regression-quantifiers": {
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        },
+        "commands_sha256": "92d9a7f4b17df23d5498347a25250dd8f9e8422ce0d7406bae1c3271762ab6e0",
+        "regressions": 34
+      },
+      "regression-rdl": {
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        },
+        "commands_sha256": "57a7c777e2d62a80a6daf2149febf497083f54c3b0a741a62472c0dcc019670d",
+        "regressions": 15
+      },
+      "regression-sl": {
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        },
+        "commands_sha256": "348b1fd78a290c14d6b3ec6060c27bd30b7eb31354fde88f38f68763a9975d1e",
+        "regressions": 14
+      },
+      "regression-ufdtlia": {
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        },
+        "commands_sha256": "5b2b09f3bb81fa38aa31c4a7f4ff70130fe20c93b2bc24b2dc0371039177ebca",
+        "regressions": 1
+      },
+      "regression-ufdtnia": {
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        },
+        "commands_sha256": "4733981376873ffb50e8c2e05f31ef69f0134b13b63c7b2c02408c316820249d",
+        "regressions": 8
+      },
+      "regression-uflia": {
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        },
+        "commands_sha256": "8c78771983f9c93febda3d164fc4eb41c2624d62575953dc2caa8f84efb66590",
+        "regressions": 29
+      },
+      "regression-uflra": {
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        },
+        "commands_sha256": "b8d2b9f8c8c4b2e9a87f63d9978f3139c89442a5b5d10b4d5a127675140fe90e",
+        "regressions": 12
+      },
+      "regression-ufnia": {
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        },
+        "commands_sha256": "8de4e4bf561e9a778553cb58318e8cfdc02006e12e6ca55764ae340b5e85810c",
+        "regressions": 20
+      },
+      "regression-ufnra": {
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        },
+        "commands_sha256": "b899d56a610fb47b6aa4e50de744d26993da4ee91fe767b7b02f445e511ca9cb",
+        "regressions": 13
+      },
+      "root-regressions": {
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        },
+        "commands_sha256": "9d8606da5e6369004e05ec5da7ebb237c1f6bb3f91cbdcd917c22b9bee3af4e0",
+        "regressions": 3
+      },
+      "theory-models": {
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        },
+        "commands_sha256": "47839e450cb11de0b037d233e4255d61c5df2211848788b81b2270cbbdeed0eb"
+      }
+    },
+    "theory_model_fuzz": {
+      "cases": 1018,
+      "models": 703,
+      "failures": [],
+      "commands": {
+        "xolver": [
+          "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r284/xolver",
+          "solve"
+        ],
+        "z3": [
+          "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2"
+        ],
+        "cvc5": [
+          "/pub/data/jiafq/xolver/dependencies/oracles/cvc5",
+          "--lang=smt2",
+          "--fp-exp",
+          "--arrays-exp"
+        ]
+      },
+      "oracles": {
+        "z3": {
+          "version": "Z3 version 5.3.2 - 64 bit - build hashcode b411c90217766c924e6ea3d0b51f452a89fd8fc2",
+          "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+        },
+        "cvc5": {
+          "version": "cvc5 1.4.2 [git 282d5e0 on branch HEAD]",
+          "sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102"
+        }
+      },
+      "seed": 20261023,
+      "solver_sha256": "e7a8214e33b022d8e6acafc33fed8d00636d1da66c33ffb070a2695ed4504e34"
+    }
+  },
+  "proof": {
+    "status": "checked-unsat",
+    "input_sha256": "02a58b11df8951543940a1090a140592e24de41dcaeb6470e7a50d42e804be64",
+    "assertion": 9,
+    "path": [
+      2
+    ],
+    "checked_residues": 12,
+    "index": 115,
+    "case": {
+      "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NIA/20230321-UltimateAutomizerSvcomp2023/ps6.c_7.smt2",
+      "member": "QF_NIA/20230321-UltimateAutomizerSvcomp2023/ps6.c_7.smt2",
+      "logic": "QF_NIA",
+      "family": "20230321-UltimateAutomizerSvcomp2023",
+      "bytes": 2673,
+      "sha256": "02a58b11df8951543940a1090a140592e24de41dcaeb6470e7a50d42e804be64",
+      "expected": "unknown",
+      "shared_archive_member": "non-incremental/QF_NIA/20230321-UltimateAutomizerSvcomp2023/ps6.c_7.smt2",
+      "shared_archive_sha256": "0ec220292ed6c506b6c5dd9241e27ca7c74d8bda10a3db42249dc3f23c6d6078",
+      "archive_matches_server": true,
+      "repetitions": 1
+    },
+    "lease": [
+      0
+    ],
+    "r101_row_sha256": "7b22123e5bdcbec019ecd5b973528dc2d51bff5e0d58b18c2df8e9b9a2804196",
+    "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+    "checker_sha256": "e4b5b0eb2b4f1e3b3d508d4d741dcac2e95e70af0a1a6c9075eb03159aae3098",
+    "parser_sha256": "23e8b6001327ea2d0e4970bf4c1983b7a30ff53462f65f9c501b90b825932881",
+    "certificate_sha256": "48f5d0ca9b19679a48f3248ac1183c31d09e0c198bfda0a70b3b4272b6d1a5ba",
+    "certificate": {
+      "kind": "integer-polynomial-mod-zero",
+      "version": 1,
+      "input_sha256": "02a58b11df8951543940a1090a140592e24de41dcaeb6470e7a50d42e804be64",
+      "assertion": 9,
+      "path": [
+        2
+      ],
+      "modulus": 12,
+      "variable": "v_ULTIMATE.start_main_~y~0#1_BEFORE_CALL_9",
+      "coefficients": [
+        0,
+        0,
+        1,
+        0,
+        7,
+        6,
+        10
+      ],
+      "residues": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "corrupted_residue_rejected": true,
+    "changed_source_rejected": true,
+    "scope": "Checked integer congruence certificate for the unchanged original query; no runtime oracle, extra solve or protected-set evaluation."
+  },
+  "prior_fixed_suite": {
+    "cases": 160,
+    "binaries": {
+      "baseline": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r258/xolver",
+        "sha256": "65ec6a15c7d4c61506689a6bbed023aaef8f95ac2e1e9738fc082ad7f687c33d"
+      },
+      "candidate": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r264/xolver",
+        "sha256": "e7a8214e33b022d8e6acafc33fed8d00636d1da66c33ffb070a2695ed4504e34"
+      },
+      "z3": {
+        "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+        "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      }
+    },
+    "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+    "timeout": 60,
+    "memory_bytes": 17179869184,
+    "counts": {
+      "baseline": {
+        "unsat": 40,
+        "decided": 90,
+        "verified_decided": 90,
+        "verified_par2": 8704.145292352885,
+        "raw_par2": 8704.145292352885,
+        "timeout": 70,
+        "sat": 50
+      },
+      "candidate": {
+        "unsat": 40,
+        "decided": 92,
+        "verified_decided": 92,
+        "verified_par2": 8473.629044843838,
+        "raw_par2": 8473.629044843838,
+        "timeout": 67,
+        "sat": 52,
+        "unknown": 1
+      },
+      "z3": {
+        "unsat": 58,
+        "decided": 124,
+        "verified_decided": 115,
+        "verified_par2": 5609.677275296301,
+        "raw_par2": 4637.454180160537,
+        "sat": 66,
+        "timeout": 36
+      }
+    },
+    "by_logic": {
+      "QF_LIA": {
+        "baseline": {
+          "unsat": 15,
+          "decided": 32,
+          "verified_decided": 32,
+          "verified_par2": 2068.325178183615,
+          "raw_par2": 2068.325178183615,
+          "timeout": 16,
+          "sat": 17
+        },
+        "candidate": {
+          "unsat": 15,
+          "decided": 32,
+          "verified_decided": 32,
+          "verified_par2": 2071.254667757079,
+          "raw_par2": 2071.254667757079,
+          "timeout": 16,
+          "sat": 17
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 38,
+          "verified_decided": 36,
+          "verified_par2": 1477.6585227083415,
+          "raw_par2": 1276.5576881933957,
+          "sat": 23,
+          "timeout": 10
+        }
+      },
+      "QF_NIA": {
+        "baseline": {
+          "timeout": 24,
+          "decided": 24,
+          "verified_decided": 24,
+          "verified_par2": 2989.9053190220147,
+          "raw_par2": 2989.9053190220147,
+          "unsat": 11,
+          "sat": 13
+        },
+        "candidate": {
+          "timeout": 24,
+          "decided": 24,
+          "verified_decided": 24,
+          "verified_par2": 2991.116396633908,
+          "raw_par2": 2991.116396633908,
+          "unsat": 11,
+          "sat": 13
+        },
+        "z3": {
+          "unsat": 22,
+          "decided": 34,
+          "verified_decided": 29,
+          "verified_par2": 2313.5041765961796,
+          "raw_par2": 1731.6509343329817,
+          "sat": 12,
+          "timeout": 14
+        }
+      },
+      "QF_LRA": {
+        "baseline": {
+          "timeout": 16,
+          "decided": 16,
+          "verified_decided": 16,
+          "verified_par2": 1955.62431942299,
+          "raw_par2": 1955.62431942299,
+          "sat": 7,
+          "unsat": 9
+        },
+        "candidate": {
+          "timeout": 16,
+          "decided": 16,
+          "verified_decided": 16,
+          "verified_par2": 1956.3106485325843,
+          "raw_par2": 1956.3106485325843,
+          "sat": 7,
+          "unsat": 9
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 26,
+          "verified_decided": 25,
+          "verified_par2": 883.8185899890959,
+          "raw_par2": 814.2923507783562,
+          "sat": 11,
+          "timeout": 6
+        }
+      },
+      "QF_NRA": {
+        "baseline": {
+          "sat": 13,
+          "decided": 18,
+          "verified_decided": 18,
+          "verified_par2": 1690.290475724265,
+          "raw_par2": 1690.290475724265,
+          "unsat": 5,
+          "timeout": 14
+        },
+        "candidate": {
+          "sat": 15,
+          "decided": 20,
+          "verified_decided": 20,
+          "verified_par2": 1454.9473319202662,
+          "raw_par2": 1454.9473319202662,
+          "unsat": 5,
+          "timeout": 11,
+          "unknown": 1
+        },
+        "z3": {
+          "sat": 20,
+          "decided": 26,
+          "verified_decided": 25,
+          "verified_par2": 934.6959860026836,
+          "raw_par2": 814.9532068558037,
+          "timeout": 6,
+          "unsat": 6
+        }
+      }
+    },
+    "changes": [
+      {
+        "index": 150,
+        "case": "QF_NRA/zankl/matrix-3-all-2.smt2",
+        "kind": "gained",
+        "truth": "sat",
+        "evidence": [
+          "candidate-exported-model-replay",
+          "z3-exported-model-replay"
+        ],
+        "observations": {
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.068924475461245
+          },
+          "candidate": {
+            "result": "sat",
+            "seconds": 0.6052654478698969
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 0.0791683029383421
+          }
+        }
+      },
+      {
+        "index": 157,
+        "case": "QF_NRA/20240407-pPDA-Chiari-Pontiggia-Winkler/past/geom_offspring_0.499_PRAY.smt2",
+        "kind": "gained",
+        "truth": "sat",
+        "evidence": [
+          "candidate-exported-model-replay",
+          "z3-exported-model-replay"
+        ],
+        "observations": {
+          "candidate": {
+            "result": "sat",
+            "seconds": 3.9704630747437477
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 0.04240056872367859
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.0902688447386
+          }
+        }
+      }
+    ],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "unverified": [
+      {
+        "index": 12,
+        "case": "QF_LIA/fft/Sz128_2823.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 24,
+        "case": "QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 27,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 42,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep2a.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 50,
+        "case": "QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_jain_5.i_2_4_3.bpl_7.smt2",
+        "results": {
+          "z3": "unsat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 80,
+        "case": "QF_LIA/cut_lemmas/20-vars/cut_lemma_03_004.smt2",
+        "results": {
+          "z3": "unsat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 114,
+        "case": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 122,
+        "case": "QF_NIA/20250331-elster/D_1.smt2",
+        "results": {
+          "z3": "sat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "model query did not return SAT"
+        }
+      },
+      {
+        "index": 159,
+        "case": "QF_NRA/20161105-Sturm-MGC/mgc_07.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      }
+    ],
+    "scoring": "Original R266 timed results, supplemented only by the checked original-source UNSAT115 certificate R284. No extra timed solve or performance change.",
+    "supplementary_certificate": {
+      "index": 115,
+      "input_sha256": "02a58b11df8951543940a1090a140592e24de41dcaeb6470e7a50d42e804be64",
+      "certificate_sha256": "48f5d0ca9b19679a48f3248ac1183c31d09e0c198bfda0a70b3b4272b6d1a5ba",
+      "checker_sha256": "e4b5b0eb2b4f1e3b3d508d4d741dcac2e95e70af0a1a6c9075eb03159aae3098",
+      "source_report_sha256": "4acc1faa8eed1003d27c8e3c22109580594ca5506e6990a55ec3d0c1c055c87c"
+    }
+  },
+  "lease_audit": {
+    "runs": 40,
+    "distinct_physical_cores": 38,
+    "overlaps": 0,
+    "experiments": {
+      "build": "efcc8d02605b",
+      "acceptance": "fa471d751a92",
+      "recheck": "9289099bb060"
+    },
+    "runs_detail": [
+      {
+        "run": "af484a60a9b0",
+        "kind": "build",
+        "input": "build",
+        "status": "success",
+        "cpu": 0,
+        "physical_core": [
+          "0",
+          "0"
+        ],
+        "started_at": "2026-10-28T03:51:08+00:00",
+        "ended_at": "2026-10-28T03:55:54+00:00",
+        "launch_sha256": "29ef154f102a1c8d8af530e7947c94170054b13ac237d4e57ebaeb437c631ffb"
+      },
+      {
+        "run": "da19ab3dc11a",
+        "kind": "acceptance",
+        "input": "intervals",
+        "status": "failed",
+        "cpu": 7,
+        "physical_core": [
+          "0",
+          "7"
+        ],
+        "started_at": "2026-10-28T03:56:30+00:00",
+        "ended_at": "2026-10-28T03:58:20+00:00",
+        "launch_sha256": "0426b244fa2b36bcf6a78f05c366780be060b62983fa424a93f4b2c9b8440483"
+      },
+      {
+        "run": "47c8da4a722a",
+        "kind": "acceptance",
+        "input": "root-regressions",
+        "status": "success",
+        "cpu": 0,
+        "physical_core": [
+          "0",
+          "0"
+        ],
+        "started_at": "2026-10-28T03:56:28+00:00",
+        "ended_at": "2026-10-28T03:56:36+00:00",
+        "launch_sha256": "ee5e21cfeb350768a091303ae9c594a8c477519273a816fc8a44901394e4b4cf"
+      },
+      {
+        "run": "55c0410204ea",
+        "kind": "acceptance",
+        "input": "theory-models",
+        "status": "success",
+        "cpu": 1,
+        "physical_core": [
+          "0",
+          "1"
+        ],
+        "started_at": "2026-10-28T03:56:29+00:00",
+        "ended_at": "2026-10-28T03:58:41+00:00",
+        "launch_sha256": "3ee91637b175c8efdf8e7e4a3c1ba155b94c82341953c67d9703c31ef7586884"
+      },
+      {
+        "run": "4e677bce3177",
+        "kind": "acceptance",
+        "input": "architecture",
+        "status": "success",
+        "cpu": 2,
+        "physical_core": [
+          "0",
+          "2"
+        ],
+        "started_at": "2026-10-28T03:56:29+00:00",
+        "ended_at": "2026-10-28T03:57:07+00:00",
+        "launch_sha256": "15503b94e1b99d01268ad494f62259868ac0e279d6732316f5100442fd3ca92c"
+      },
+      {
+        "run": "dbea545e436b",
+        "kind": "acceptance",
+        "input": "known-gaps",
+        "status": "success",
+        "cpu": 3,
+        "physical_core": [
+          "0",
+          "3"
+        ],
+        "started_at": "2026-10-28T03:56:29+00:00",
+        "ended_at": "2026-10-28T03:56:36+00:00",
+        "launch_sha256": "ce302e87697727b553088fd50c7b078c1364249d5101e9777e76c28c5f911b04"
+      },
+      {
+        "run": "25cb0d283472",
+        "kind": "acceptance",
+        "input": "affine",
+        "status": "success",
+        "cpu": 4,
+        "physical_core": [
+          "0",
+          "4"
+        ],
+        "started_at": "2026-10-28T03:56:29+00:00",
+        "ended_at": "2026-10-28T03:57:08+00:00",
+        "launch_sha256": "41a025faefab500d3859f6160c780e7ff2936637b3a7af7f6a84f285c6453a6d"
+      },
+      {
+        "run": "063733921d43",
+        "kind": "acceptance",
+        "input": "linear",
+        "status": "success",
+        "cpu": 5,
+        "physical_core": [
+          "0",
+          "5"
+        ],
+        "started_at": "2026-10-28T03:56:29+00:00",
+        "ended_at": "2026-10-28T03:57:08+00:00",
+        "launch_sha256": "09235e4cf50a17d58c4e577a40558428f686271f4ce0f616138cafe77134f005"
+      },
+      {
+        "run": "8738b249eddb",
+        "kind": "acceptance",
+        "input": "partial",
+        "status": "success",
+        "cpu": 6,
+        "physical_core": [
+          "0",
+          "6"
+        ],
+        "started_at": "2026-10-28T03:56:30+00:00",
+        "ended_at": "2026-10-28T03:57:34+00:00",
+        "launch_sha256": "c6371e14bdf6c6f2256a068d7b2d3c5ebaaa3c8bb2cedf8917b03995088d6cce"
+      },
+      {
+        "run": "2ec2e3e207b0",
+        "kind": "acceptance",
+        "input": "qcp",
+        "status": "success",
+        "cpu": 8,
+        "physical_core": [
+          "0",
+          "8"
+        ],
+        "started_at": "2026-10-28T03:56:30+00:00",
+        "ended_at": "2026-10-28T03:57:35+00:00",
+        "launch_sha256": "f5c0a6c2d36783ea1d23025b146c39900d0deeacb63f6857d3d01d3629faee1f"
+      },
+      {
+        "run": "9b4c969a6164",
+        "kind": "acceptance",
+        "input": "quick",
+        "status": "success",
+        "cpu": 9,
+        "physical_core": [
+          "0",
+          "9"
+        ],
+        "started_at": "2026-10-28T03:56:30+00:00",
+        "ended_at": "2026-10-28T03:56:37+00:00",
+        "launch_sha256": "78eba15b52de255f6132c0a94703e45aced0e874c5074472b8caccc16849633e"
+      },
+      {
+        "run": "90e26eb9e029",
+        "kind": "acceptance",
+        "input": "ite",
+        "status": "success",
+        "cpu": 10,
+        "physical_core": [
+          "0",
+          "10"
+        ],
+        "started_at": "2026-10-28T03:56:30+00:00",
+        "ended_at": "2026-10-28T03:56:38+00:00",
+        "launch_sha256": "41bfb499f8fb4253276bea1294874ed491cc4b0f221524dad9b1b8f3883c3cdf"
+      },
+      {
+        "run": "6c505c4cc546",
+        "kind": "acceptance",
+        "input": "ite-structure",
+        "status": "success",
+        "cpu": 11,
+        "physical_core": [
+          "0",
+          "11"
+        ],
+        "started_at": "2026-10-28T03:56:31+00:00",
+        "ended_at": "2026-10-28T03:57:35+00:00",
+        "launch_sha256": "69c09d5ff6aee6cede0793e5d7b78c4d493f018f8ad115f5f6d38038ae35f2ac"
+      },
+      {
+        "run": "c9c85380f25a",
+        "kind": "acceptance",
+        "input": "regression-alia",
+        "status": "success",
+        "cpu": 12,
+        "physical_core": [
+          "0",
+          "12"
+        ],
+        "started_at": "2026-10-28T03:56:31+00:00",
+        "ended_at": "2026-10-28T03:56:38+00:00",
+        "launch_sha256": "d0a1d7ec41a38b864c93e12972beb88820f4f5d98763ab1065262c74104ec5b7"
+      },
+      {
+        "run": "9abaf43f5c14",
+        "kind": "acceptance",
+        "input": "regression-alra",
+        "status": "success",
+        "cpu": 13,
+        "physical_core": [
+          "0",
+          "13"
+        ],
+        "started_at": "2026-10-28T03:56:31+00:00",
+        "ended_at": "2026-10-28T03:56:39+00:00",
+        "launch_sha256": "ade2a2286d04e3b9a5c4ad564f8f228c9e6e08282a57d743513c8e135b9d8fec"
+      },
+      {
+        "run": "c0ee99a1da88",
+        "kind": "acceptance",
+        "input": "regression-ania",
+        "status": "success",
+        "cpu": 14,
+        "physical_core": [
+          "0",
+          "14"
+        ],
+        "started_at": "2026-10-28T03:56:31+00:00",
+        "ended_at": "2026-10-28T03:56:39+00:00",
+        "launch_sha256": "db606b7b0946b8f4e13f74d8f26c149fbcd0c7bd3dfea759e859d17c7bb5f3e8"
+      },
+      {
+        "run": "e7c5c42bbd69",
+        "kind": "acceptance",
+        "input": "regression-auflia",
+        "status": "success",
+        "cpu": 15,
+        "physical_core": [
+          "0",
+          "15"
+        ],
+        "started_at": "2026-10-28T03:56:31+00:00",
+        "ended_at": "2026-10-28T03:56:40+00:00",
+        "launch_sha256": "96eb1c7871c1fbb40f98ed25b267d2c876e9f62d0562955ecd6bc8b15821b6a0"
+      },
+      {
+        "run": "3f40ad4b9c4f",
+        "kind": "acceptance",
+        "input": "regression-auflra",
+        "status": "success",
+        "cpu": 16,
+        "physical_core": [
+          "1",
+          "0"
+        ],
+        "started_at": "2026-10-28T03:56:32+00:00",
+        "ended_at": "2026-10-28T03:56:41+00:00",
+        "launch_sha256": "040f6b83074f921ef977beed79288e4c49fec83572f65dd181d5ece439450950"
+      },
+      {
+        "run": "97fa23afc61d",
+        "kind": "acceptance",
+        "input": "regression-aufnia",
+        "status": "success",
+        "cpu": 17,
+        "physical_core": [
+          "1",
+          "1"
+        ],
+        "started_at": "2026-10-28T03:56:32+00:00",
+        "ended_at": "2026-10-28T03:57:09+00:00",
+        "launch_sha256": "9f07506ec32fa0fc3c559cd2e7939a35fc725dc18f37cfbae3f3a7bae100e5d4"
+      },
+      {
+        "run": "f41ee434dc54",
+        "kind": "acceptance",
+        "input": "regression-ax",
+        "status": "success",
+        "cpu": 18,
+        "physical_core": [
+          "1",
+          "2"
+        ],
+        "started_at": "2026-10-28T03:56:32+00:00",
+        "ended_at": "2026-10-28T03:56:41+00:00",
+        "launch_sha256": "5bb4b544256da958134421c4c6e29bdc205311b181959502b256de18992b65be"
+      },
+      {
+        "run": "7c0c188dba0c",
+        "kind": "acceptance",
+        "input": "regression-bool",
+        "status": "success",
+        "cpu": 19,
+        "physical_core": [
+          "1",
+          "3"
+        ],
+        "started_at": "2026-10-28T03:56:32+00:00",
+        "ended_at": "2026-10-28T03:56:42+00:00",
+        "launch_sha256": "db2df0e3a24d84bc641f9af3ff6ddd7ba8c716aee665a7f0e2f7e21c01a9e2c1"
+      },
+      {
+        "run": "1ab9566806b1",
+        "kind": "acceptance",
+        "input": "regression-dt",
+        "status": "success",
+        "cpu": 20,
+        "physical_core": [
+          "1",
+          "4"
+        ],
+        "started_at": "2026-10-28T03:56:32+00:00",
+        "ended_at": "2026-10-28T03:59:26+00:00",
+        "launch_sha256": "bbf5a20e819c67c3a65a282a347826b0f8c3a15768e41ac0bcee597cf911170f"
+      },
+      {
+        "run": "cb5f600d727c",
+        "kind": "acceptance",
+        "input": "regression-euf",
+        "status": "success",
+        "cpu": 21,
+        "physical_core": [
+          "1",
+          "5"
+        ],
+        "started_at": "2026-10-28T03:56:33+00:00",
+        "ended_at": "2026-10-28T03:57:36+00:00",
+        "launch_sha256": "375d051bf09175c11f57719a0b598000b29357d82533b4993b88fb7eb90204b6"
+      },
+      {
+        "run": "e22102ed7059",
+        "kind": "acceptance",
+        "input": "regression-idl",
+        "status": "success",
+        "cpu": 22,
+        "physical_core": [
+          "1",
+          "6"
+        ],
+        "started_at": "2026-10-28T03:56:33+00:00",
+        "ended_at": "2026-10-28T03:56:42+00:00",
+        "launch_sha256": "e017cf1941031bc8c5a66ee2ad1d20d2ebf64a94ef778ee3a3146dd4459fb492"
+      },
+      {
+        "run": "dd665851ad62",
+        "kind": "acceptance",
+        "input": "regression-lia",
+        "status": "success",
+        "cpu": 23,
+        "physical_core": [
+          "1",
+          "7"
+        ],
+        "started_at": "2026-10-28T03:56:33+00:00",
+        "ended_at": "2026-10-28T03:56:43+00:00",
+        "launch_sha256": "196c7d400a77017d3458068e5305fceb8098040cc03473c1f82682c44a33d782"
+      },
+      {
+        "run": "de7c40f8e34e",
+        "kind": "acceptance",
+        "input": "regression-lira",
+        "status": "success",
+        "cpu": 24,
+        "physical_core": [
+          "1",
+          "8"
+        ],
+        "started_at": "2026-10-28T03:56:33+00:00",
+        "ended_at": "2026-10-28T03:56:43+00:00",
+        "launch_sha256": "7cf72a1809daed4c067550e052d736ca8d2549905c7bf6eb9d5e10349485d170"
+      },
+      {
+        "run": "7b8d5f7f61b2",
+        "kind": "acceptance",
+        "input": "regression-lra",
+        "status": "success",
+        "cpu": 25,
+        "physical_core": [
+          "1",
+          "9"
+        ],
+        "started_at": "2026-10-28T03:56:34+00:00",
+        "ended_at": "2026-10-28T04:05:07+00:00",
+        "launch_sha256": "e86dcbe2771f6892f3d9103f31f76c4713136197b9ffb546b5481036404ccde6"
+      },
+      {
+        "run": "a7be6565bed8",
+        "kind": "acceptance",
+        "input": "regression-nia",
+        "status": "success",
+        "cpu": 26,
+        "physical_core": [
+          "1",
+          "10"
+        ],
+        "started_at": "2026-10-28T03:56:34+00:00",
+        "ended_at": "2026-10-28T03:56:44+00:00",
+        "launch_sha256": "83fa99ee5d56f792d8403455529995b440b5b6f92cdc00eddc6a116ab45b4436"
+      },
+      {
+        "run": "464025cc9384",
+        "kind": "acceptance",
+        "input": "regression-nira",
+        "status": "success",
+        "cpu": 27,
+        "physical_core": [
+          "1",
+          "11"
+        ],
+        "started_at": "2026-10-28T03:56:34+00:00",
+        "ended_at": "2026-10-28T03:56:45+00:00",
+        "launch_sha256": "75b90c0061a40aa248f9dfd3222894b0b5a2dc67e226edab09fd1bcbde322928"
+      },
+      {
+        "run": "f6693d73de21",
+        "kind": "acceptance",
+        "input": "regression-nra",
+        "status": "success",
+        "cpu": 28,
+        "physical_core": [
+          "1",
+          "12"
+        ],
+        "started_at": "2026-10-28T03:56:34+00:00",
+        "ended_at": "2026-10-28T03:58:20+00:00",
+        "launch_sha256": "3d37559c688b94ccfe6d0a8a048e75a43a77f1450e6630f9a4e3ead3cc92d403"
+      },
+      {
+        "run": "df37b065f992",
+        "kind": "acceptance",
+        "input": "regression-quantifiers",
+        "status": "success",
+        "cpu": 29,
+        "physical_core": [
+          "1",
+          "13"
+        ],
+        "started_at": "2026-10-28T03:56:34+00:00",
+        "ended_at": "2026-10-28T04:05:30+00:00",
+        "launch_sha256": "b9691d3dddd8550ee2426e7789ccd8fbce7cd6c5734b0e6dcaaec97b93733114"
+      },
+      {
+        "run": "92941c7457ca",
+        "kind": "acceptance",
+        "input": "regression-rdl",
+        "status": "success",
+        "cpu": 30,
+        "physical_core": [
+          "1",
+          "14"
+        ],
+        "started_at": "2026-10-28T03:56:35+00:00",
+        "ended_at": "2026-10-28T04:05:30+00:00",
+        "launch_sha256": "1266d3afd8dd3e5c6e68dcf708925758602f8cd1a2b13697eabdc9174d1f7f64"
+      },
+      {
+        "run": "a7ed7e48153e",
+        "kind": "acceptance",
+        "input": "regression-sl",
+        "status": "success",
+        "cpu": 31,
+        "physical_core": [
+          "1",
+          "15"
+        ],
+        "started_at": "2026-10-28T03:56:35+00:00",
+        "ended_at": "2026-10-28T03:56:45+00:00",
+        "launch_sha256": "0195c8dd4a72bb47dd5b45b8667597a2ffa1e89cd6cf339c5f3a264a227b7b22"
+      },
+      {
+        "run": "045fdb47de5f",
+        "kind": "acceptance",
+        "input": "regression-ufdtlia",
+        "status": "success",
+        "cpu": 32,
+        "physical_core": [
+          "2",
+          "0"
+        ],
+        "started_at": "2026-10-28T03:56:35+00:00",
+        "ended_at": "2026-10-28T03:57:10+00:00",
+        "launch_sha256": "8c762d13325ef2b23eddc6d0022faccd1f32b82e442e2173c027207df75a46aa"
+      },
+      {
+        "run": "2a0757372f08",
+        "kind": "acceptance",
+        "input": "regression-ufdtnia",
+        "status": "success",
+        "cpu": 33,
+        "physical_core": [
+          "2",
+          "1"
+        ],
+        "started_at": "2026-10-28T03:56:35+00:00",
+        "ended_at": "2026-10-28T03:57:11+00:00",
+        "launch_sha256": "31a53f716157e836843d713f5c7971bb219e7f8e8242b31a75eea7b18c9973cf"
+      },
+      {
+        "run": "f88c7921b556",
+        "kind": "acceptance",
+        "input": "regression-uflia",
+        "status": "success",
+        "cpu": 34,
+        "physical_core": [
+          "2",
+          "2"
+        ],
+        "started_at": "2026-10-28T03:56:35+00:00",
+        "ended_at": "2026-10-28T04:05:08+00:00",
+        "launch_sha256": "77425a8bc84da83a9ec0dd77c9d0216e95e871f37d67b8879f6c445dba50e4ec"
+      },
+      {
+        "run": "5b741006bed1",
+        "kind": "acceptance",
+        "input": "regression-uflra",
+        "status": "success",
+        "cpu": 35,
+        "physical_core": [
+          "2",
+          "3"
+        ],
+        "started_at": "2026-10-28T03:56:36+00:00",
+        "ended_at": "2026-10-28T03:57:11+00:00",
+        "launch_sha256": "97897c0b95efcda81910ac231d40128bccdd1b0f470f2daaf6d380c914190f73"
+      },
+      {
+        "run": "dfd4560a8dcf",
+        "kind": "acceptance",
+        "input": "regression-ufnia",
+        "status": "success",
+        "cpu": 36,
+        "physical_core": [
+          "2",
+          "4"
+        ],
+        "started_at": "2026-10-28T03:56:36+00:00",
+        "ended_at": "2026-10-28T03:58:21+00:00",
+        "launch_sha256": "80364dbb2100bd124852bdb4227a4efae5a58f699e4d316796273e56cf5315d5"
+      },
+      {
+        "run": "2ffc52335314",
+        "kind": "acceptance",
+        "input": "regression-ufnra",
+        "status": "success",
+        "cpu": 37,
+        "physical_core": [
+          "2",
+          "5"
+        ],
+        "started_at": "2026-10-28T03:56:36+00:00",
+        "ended_at": "2026-10-28T03:57:12+00:00",
+        "launch_sha256": "33bcc68db980976f19243b89bb823aa28b8f92a2c127f35a587b83a0fb374f69"
+      },
+      {
+        "run": "88972823e3f8",
+        "kind": "interval_recheck",
+        "input": "interval-0005",
+        "status": "success",
+        "cpu": 1,
+        "physical_core": [
+          "0",
+          "1"
+        ],
+        "started_at": "2026-10-28T03:58:51+00:00",
+        "ended_at": "2026-10-28T03:59:05+00:00",
+        "launch_sha256": "34ec90245ea06de95440b519923ebbdf1f8bb05552c707419a9ca9bf2640da47"
+      }
+    ]
+  },
+  "interpretation": {
+    "new_algorithmic_solves": 0,
+    "original_r101_unconfirmed_remaining": [],
+    "latest_verified": 92,
+    "same_round_z3_verified": 115,
+    "above_z3": false,
+    "qcp_unique_programs": 2,
+    "qcp_new_coverage_claim": false
+  },
+  "protected_sets": {
+    "smt_evaluated": false,
+    "programs_evaluated": false
+  },
+  "server_extra_archive_required": false
+}

@@ -8,6 +8,7 @@ named source snapshots and binaries; they do not establish general completeness
 or performance superiority.
 
 Latest qualified arithmetic source: [partial linear models](#partial-boundary-assignment-and-linear-completion-r264r266).
+Latest supplementary verification: [original-input congruence certificate](#original-input-congruence-certificate-r284r285).
 Older result tables describe their own frozen rounds; use the latest table and
 its exact GitHub review/merge checks when continuing work.
 
@@ -1027,6 +1028,77 @@ only whole atoms whose current residual is affine, retaining one local context
 and original-model validation. It must be qualified independently; neither the
 new reproduction nor unit success establishes a benchmark gain. No full160 is
 run for the rejected variant. Its overlay is `source-r278.tar.json`.
+
+
+### Unselected lazy affine boundary context (R280/R281)
+
+The revision activates only complete atoms that become affine under a selected
+prefix. On 150 it reaches all 27 parameters using 87 definitions instead of
+exhausting the allocation after four choices / 518 definitions. All 1,694 native
+tests / 801,317 assertions, 68 targeted tests / 154,998 assertions and 32 mixed
+fixtures pass; both engines replay all 16 SAT models. It restores 150 but adds
+no solves over qualified R264: fresh NRA32 is **20→20 verified**, zero gains or
+losses. PAR-2 changes only 1454.170→1454.076 s (0.095 s), insufficient benefit.
+There are no wrong verdicts or invalid exported models. It remains **unselected**,
+without a full160 or production merge.
+
+Source `3241ebfc875e51193c59425f8e4821c2eb6e3ab4`; frozen CLI SHA-256
+`0b08d84767e484a9175c8ad20692e0f9f6fb6ee347a110f22b7047d06cdd5fd6`.
+EOS build `4b6288dbf67c`, NRA `45f2ecadfe8a`, fixtures `a284c82eed1d`, profiles
+`751526aa9793`. The last experimental overlay is `source-r280.tar.json`;
+restore it explicitly when returning to the selected R264/main source.
+
+## Original-input congruence certificate (R284/R285)
+
+The last original R101 unconfirmed result, UNSAT115 (`ps6.c_7.smt2`), now has
+an independently checked certificate anchored to its unchanged original SHA-256
+`02a58b11df8951543940a1090a140592e24de41dcaeb6470e7a50d42e804be64`.
+Together with R110's nine independent checks, this closes all ten original
+R101 confirmation questions. Earlier tables retain their then-known evidence.
+
+`tools/soundness/polynomial_mod_certificate.py` parses the original single-query
+integer input, expands simultaneous lets, and accepts only a positive conjunct
+`not (= (mod P m) 0)` with a nonzero constant modulus. For this query,
+`P(y) = 10*y^6 + 6*y^5 + 7*y^4 + y^2` is zero in every residue class modulo 12.
+Integer polynomial congruence makes this a proof for all integers, including
+negative values. It is not bounded sampling. The verifier checks every row by
+both Horner evaluation and direct source-AST evaluation, using Python integers
+independently of Xolver's kernel. Zero divisors, unsupported scopes, partial
+residue tables, source mismatches and corrupted witnesses are rejected.
+
+Reproduce with the original benchmark file and the committed certificate:
+
+```sh
+python3 tools/soundness/polynomial_mod_certificate.py check \
+  /path/to/ps6.c_7.smt2 docs/audit/ORIGINAL_UNSAT115_MOD_CERTIFICATE.json
+python3 -m unittest discover -s tests/tools -p test_polynomial_mod_certificate.py
+```
+
+Panda1/ExperimentOS passed all 11 certificate tests, 1,689 native tests /
+801,249 assertions and 916 regressions. Of 38 acceptance tasks, 37 passed at
+initial limits. The remaining task preserved one Xolver 5-second generated-case
+timeout; that identical input rechecked UNSAT in 0.084 seconds at the common
+60-second budget, with Z3 independently UNSAT in 0.041 seconds. This recheck is
+correctness evidence, excluded from fixed-suite performance scores. The
+remaining 127 cases and all 64 models in that task passed their original checks.
+Theory differential checks replayed 703 models without disagreement.
+
+Both frozen executables are byte-identical to qualified R264. Supplementing
+R266's original timed observations with this certificate changes its verified
+baseline/candidate counts from 89/91 to **90/92**; Z3 stays **115**. Verified
+PAR-2 totals become 8704.145 / 8473.629 / 5609.677 seconds respectively.
+**No new algorithmic solve or timing improvement is claimed by this stage.**
+The independent protected sets remain unused; the two qualified QCP development
+programs are unchanged.
+
+Evidence is committed in
+[the source-certificate stage record](ARITHMETIC_ORIGINAL_MOD_CERTIFICATE_STAGE_20261028.json)
+and [the certificate](ORIGINAL_UNSAT115_MOD_CERTIFICATE.json). EOS identities:
+build `efcc8d02605b`, acceptance `fa471d751a92`, interval recheck `9289099bb060`,
+and final evidence audit `75362afd43bf`. An initial audit started before all
+acceptance records existed and failed; it made no solver or scoring change.
+The final audit checks 40 native/recheck runs on 38 physical cores without
+lease overlaps. No extra server archive is a delivery requirement.
 
 ## Closed experiments and practical regressions
 
