@@ -306,3 +306,16 @@ TEST_CASE("BitBlastEncoder: overflow preserves the exact SAT prefix") {
     encoder.assertLit(encoder.constFalse());
     CHECK(sat->solve() == SatSolver::SolveResult::Sat);
 }
+
+TEST_CASE("BitBlastSolver: independent wide variables retain the default search reach") {
+    BudgetFixture f;
+    const auto y = f.kernel->mkVar(f.kernel->getOrCreateVar("y"));
+    const mpz_class value = mpz_class(1) << 64;
+    f.equalTo(value);
+    f.cs.push_back({f.kernel->sub(y, f.kernel->mkConst(mpq_class(value))),
+                    Relation::Eq, SatLit::positive(4)});
+    const auto result = f.solve();
+    REQUIRE(result.status == Status::Sat);
+    CHECK(result.model.at("x") == value);
+    CHECK(result.model.at("y") == value);
+}
