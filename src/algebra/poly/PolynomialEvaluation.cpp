@@ -75,7 +75,27 @@ public:
     }
 
     std::optional<mpq_class> evaluate(PolyId polynomial) const override {
-        const auto value = poly::evaluate(kernel_.getPolynomial(polynomial), assignment_);
+        const auto& source = kernel_.getPolynomial(polynomial);
+        struct BindingCheck { const lp_assignment_t* assignment; bool complete = true; };
+        BindingCheck bindings{assignment_.get_internal()};
+        lp_polynomial_traverse(source.get_internal(),
+            [](const lp_polynomial_context_t*, lp_monomial_t* monomial, void* opaque) {
+                auto& check = *static_cast<BindingCheck*>(opaque);
+                if (!check.complete) return;
+                for (size_t i = 0; i < monomial->n; ++i)
+                    if (!lp_assignment_is_set(check.assignment, monomial->p[i].x)) {
+                        check.complete = false;
+                        return;
+                    }
+            }, &bindings);
+        // libpoly's evaluator requires a complete assignment, and its C++
+        // wrapper neither checks that precondition nor owns the returned C
+        // value. Check actual monomials and manage the C result explicitly.
+        if (!bindings.complete) return std::nullopt;
+        const std::unique_ptr<lp_value_t, decltype(&lp_value_delete)> raw(
+            lp_polynomial_evaluate(source.get_internal(), assignment_.get_internal()), lp_value_delete);
+        if (!raw) return std::nullopt;
+        const poly::Value value(raw.get());
         if (poly::is_integer(value))
             return mpq_class(*poly::detail::cast_to_gmp(&poly::as_integer(value)));
         if (poly::is_rational(value))
