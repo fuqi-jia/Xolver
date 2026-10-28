@@ -208,12 +208,24 @@ BitBlastSolver::Attempt BitBlastSolver::attemptAtWidths(
     BitBlastEncoder& enc = context.encoder;
     auto& varBits = context.variables;
     const uint64_t previousVars = enc.varCount();
+    size_t boundedVariables = 0;
+    size_t fixedVariables = 0;
     auto encT0 = std::chrono::steady_clock::now();
     for (const auto& kv : plan.width) {
         auto& value = varBits[kv.first];
-        if (value.width() < kv.second) {
+        const auto* domain = domains.getDomain(kv.first);
+        if (value.bits.empty() && domain && domain->hasLower && domain->hasUpper &&
+                domain->lower.value == domain->upper.value) {
+            // The original polynomial still names this variable, so scoped
+            // conflicts retain its bound reasons even when its gates fold away.
+            value = enc.mkConst(domain->lower.value, kv.second);
+        } else if (value.width() < kv.second) {
             const auto extension = enc.mkVar(kv.second - value.width());
             value.bits.insert(value.bits.end(), extension.bits.begin(), extension.bits.end());
+        }
+        if (bbProf) {
+            boundedVariables += domain && domain->hasLower && domain->hasUpper;
+            fixedVariables += value.isConst;
         }
     }
 
@@ -235,6 +247,8 @@ BitBlastSolver::Attempt BitBlastSolver::attemptAtWidths(
         std::cerr << "[BB-PREFIX] encoded=" << encoded << '/' << cs.size()
                   << " satvars=" << enc.varCount()
                   << " fresh_satvars=" << enc.varCount() - previousVars
+                  << " bounded_variables=" << boundedVariables
+                  << " fixed_variables=" << fixedVariables
                   << " root_conflict=" << (!enc.overflowed() && enc.inconsistent())
                   << " overflow=" << enc.overflowed()
                   << " encode_ms=" << std::chrono::duration<double, std::milli>(
@@ -342,7 +356,8 @@ BitBlastSolver::Attempt BitBlastSolver::attemptAtWidths(
             if (a.complete) a.conflict = buildCompleteConflict(premises, domains, &variables);
             if (bbProf) std::cerr << "[BB-CORE] facts=" << facts.size()
                 << " selected=" << selected.size() << " variables=" << variables.size()
-                << " unbounded=" << unbounded << " complete=" << a.complete << '\n';
+                << " unbounded=" << unbounded << " complete=" << a.complete
+                << " explained=" << a.conflict.has_value() << '\n';
         } else if (full && !enc.overflowed() && plan.boxIsComplete) {
             // A backend without a usable assumption core retains the original
             // complete-box path, with every source/domain justification.
