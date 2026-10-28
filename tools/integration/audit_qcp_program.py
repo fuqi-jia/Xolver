@@ -7,6 +7,7 @@ record must authenticate that result against its ExperimentOS run evidence.
 import argparse
 import hashlib
 import json
+import math
 from pathlib import Path
 import re
 import sys
@@ -75,10 +76,23 @@ def assess(goal, proofs, final_check, backend_reports=(), *, state_path=None):
     for path in backend_reports:
         report = json.loads(path.read_text())
         identities.add((report['backend'], report['binary']['sha256']))
+        timeout = report.get('timeout')
+        finite = lambda value: (isinstance(value, (int, float)) and
+                                not isinstance(value, bool) and math.isfinite(value))
+        budget_valid = finite(timeout) and 0 < timeout <= 60
+        if not budget_valid or report.get('memory_bytes') != 16 * 1024**3:
+            backend_errors.append('valid per-query wall and memory budgets required')
+        if report.get('protocol_errors'):
+            backend_errors.append('backend wall budget overrun')
         if report['source_sha256'] != sha(goal):
             backend_errors.append('backend used a different original goal hash')
         for row in report['rows']:
             queries.extend(row['queries'])
+            for query in row['queries']:
+                seconds = query.get('seconds')
+                if (not finite(seconds) or seconds < 0 or not budget_valid or
+                        seconds > timeout or query.get('timed_out') or query.get('budget_overrun')):
+                    backend_errors.append('backend query lacks an in-budget decision: ' + row['name'])
             if row['status'] == 'proof-candidate' and row['queries'] and all(q['result'] == 'unsat' for q in row['queries']):
                 candidate = Path(row['candidate'])
                 if not candidate.is_file() or sha(candidate) != row['candidate_sha256']:

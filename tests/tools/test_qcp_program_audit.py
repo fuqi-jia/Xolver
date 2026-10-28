@@ -61,11 +61,28 @@ class QcpProgramAuditTests(unittest.TestCase):
                 rows.append(dict(name=name,lemma='proof_'+name,status='proof-candidate',
                     candidate=str(candidate),candidate_sha256=digest(candidate),
                     queries=[dict(result='unsat',seconds=.1)]))
-            backend=root/'backend.json';backend.write_text(json.dumps(dict(backend='xolver',
-                binary=dict(sha256='frozen'),source_sha256=digest(g),rows=rows)))
+            payload=dict(backend='xolver', binary=dict(sha256='frozen'),
+                source_sha256=digest(g), rows=rows, timeout=60, cpu=7,
+                memory_bytes=16*1024**3, protocol_errors=[])
+            backend=root/'backend.json';backend.write_text(json.dumps(payload))
             report=assess(g,[a,m],r,[backend],state_path=state)
             self.assertTrue(report['backend_qualified'])
             self.assertEqual(report['external_backend_queries'],2)
+            for key, value in [('timeout', 61), ('memory_bytes', 8*1024**3),
+                               ('protocol_errors', [{'seconds': 61.1}])]:
+                with self.subTest(key=key):
+                    backend.write_text(json.dumps(dict(payload, **{key: value})))
+                    invalid=assess(g,[a,m],r,[backend],state_path=state)
+                    self.assertTrue(invalid['program_verified'])
+                    self.assertFalse(invalid['backend_qualified'])
+            backend.write_text(json.dumps(payload))
+            for seconds in [60.01, float('nan')]:
+                with self.subTest(seconds=seconds):
+                    changed=json.loads(json.dumps(payload))
+                    changed['rows'][0]['queries'][0]['seconds']=seconds
+                    backend.write_text(json.dumps(changed))
+                    self.assertFalse(assess(g,[a,m],r,[backend],state_path=state)['backend_qualified'])
+            backend.write_text(json.dumps(payload))
             # A different reconstruction must not be labeled the same backend strategy.
             a.write_text('Lemma proof_a : a. Proof. trivial. Qed.')
             self.assertFalse(assess(g,[a,m],r,[backend],state_path=state)['backend_qualified'])

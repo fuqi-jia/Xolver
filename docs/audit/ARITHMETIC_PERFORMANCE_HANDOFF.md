@@ -1344,9 +1344,38 @@ timestamps as process exit times; its failure is retained. The corrected audit
 uses launcher-script creation through the executor's post-workload end file,
 and records the four collector-timestamp overlaps separately.
 
-GitHub PR CI and production merge remain pending. QCP has no additional
-qualified end-to-end program coverage from this stage. Both protected sets
-remain unused; no additional server archive is a delivery prerequisite.
+Delivered in [PR #56](https://github.com/fuqi-jia/Xolver/pull/56), merged as
+`2db4ca3e992d67b4574254c1ab6193aec4e8131e`. Both jobs passed in
+[PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/40687532135) and
+[main CI](https://github.com/fuqi-jia/Xolver/actions/runs/40691217044).
+Qualified main now uses the frozen R314 CLI above. QCP has no additional
+qualified end-to-end program coverage from this arithmetic stage. Both protected
+sets remain unused; no additional server archive is a delivery prerequisite.
+
+## Shared QCP process-budget correction (R334–R336)
+
+The QCP backend previously granted a full communication timeout after process
+creation and could accept an exit-zero UNSAT answer observed after its deadline.
+Its program audit also accepted over-budget or non-finite query times. R334
+reproduces six failing assertions against the unchanged implementation in EOS
+`f9cf2203bc68`; no timed program score is inferred from this reproduction.
+
+Commit `07766264` extracts the strict arithmetic process-budget implementation
+into `tools/process_budget.py` and reuses it in both arithmetic comparison and
+QCP discharge. Process creation consumes the same deadline; late answers cannot
+produce proof candidates. QCP audit separates independently verified programs
+from backend-budget qualification and rejects invalid budget evidence. The
+existing arithmetic timing semantics are retained.
+
+Panda1 qualification R336 (`b734810dd1d9`) passes **26 QCP tests**, **five process
+budget tests** (including a real detached output holder), **seven comparison
+summary tests**, the regression-harness CTest, and four actual Xolver/Z3 query
+smoke checks. Native C++ source and both frozen binaries remain byte-identical
+to R314, so no native rebuild or full160 repeat is attributed to this Python
+change. Evidence: `qcp-budget-r334/repro.json`, `qcp-budget-r336/report.json`,
+and `source-r336.tar.json`. The commit was rebased onto delivered PR56 with an
+identical file tree. This corrects the comparison protocol; it adds no solved
+SMT input or verified-program count. Neither protected set was used.
 
 ## Closed experiments and practical regressions
 
