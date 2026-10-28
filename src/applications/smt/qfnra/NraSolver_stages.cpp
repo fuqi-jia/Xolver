@@ -59,6 +59,7 @@ std::optional<TheoryCheckResult> NraSolver::stagePartialLinearModel(
     if (!profile.empty()) {
         std::ofstream out(profile.string() + ".boundary.log", std::ios::app);
         out << "variables=" << stats.variables << " parameters=" << stats.parameters
+            << " retained_equalities=" << stats.retainedEqualityVariables
             << " contexts=" << stats.contexts << " checks=" << stats.linearChecks
             << " choices=" << stats.choices << " rejected=" << stats.rejectedChoices
             << " definitions=" << stats.definitions << " models=" << stats.modelChecks

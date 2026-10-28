@@ -61,6 +61,7 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
         std::set<VarId> variables, pinned;
         std::vector<VarId> parameters;
         std::map<VarId, Interval> intervals;
+        std::map<VarId, size_t> equalityOccurrences, otherOccurrences;
         for (const auto& c : constraints) {
             tick();
             if (c.poly == NullPoly) return std::nullopt;
@@ -69,6 +70,7 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
             VarId unary = NullVar;
             mpq_class coefficient = 0, constant = 0;
             bool linearUnary = true;
+            std::set<VarId> support;
             for (auto& term : *terms) {
                 tick();
                 if (term.coefficient == 0) continue;
@@ -80,6 +82,7 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
                     if (var == previous || exponent <= 0) return std::nullopt;
                     previous = var;
                     variables.insert(var);
+                    support.insert(var);
                     degree += exponent;
                 }
                 if (degree > 1) monomials.push_back(term.powers);
@@ -89,6 +92,11 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
                     unary = term.powers[0].first;
                     coefficient += term.coefficient;
                 } else linearUnary = false;
+            }
+            auto& occurrences = c.rel == Relation::Eq ? equalityOccurrences : otherOccurrences;
+            for (const auto var : support) {
+                tick();
+                ++occurrences[var];
             }
             if (linearUnary && unary != NullVar && coefficient != 0 && c.rel != Relation::Neq) {
                 const auto relation = coefficient < 0 ? flip(c.rel) : c.rel;
@@ -104,6 +112,50 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
         if (monomials.empty()) return std::nullopt;
         stats.variables = variables.size();
 
+        // Keep a jointly affine block of equality unknowns. Pinning a shared
+        // unknown instead samples a finite grid on an exact equality surface:
+        // a*r=1, b*r=2, c*r=3 with fixed a,b,c need not have a sampled r.
+        // Include inequalities in the incidence relation too, so no remaining
+        // atom can contain a product of two retained unknowns. A power above
+        // one always makes its variable a parameter.
+        std::map<VarId, std::vector<size_t>> incidence;
+        std::set<VarId> powers;
+        for (size_t index = 0; index < monomials.size(); ++index)
+            for (const auto& [var, exponent] : monomials[index]) {
+                tick();
+                incidence[var].push_back(index);
+                if (exponent > 1) powers.insert(var);
+            }
+        std::vector<VarId> equalityUnknowns;
+        for (const auto& [var, count] : equalityOccurrences) {
+            tick();
+            (void)count;
+            if (incidence.contains(var) && !powers.contains(var)) equalityUnknowns.push_back(var);
+        }
+        std::sort(equalityUnknowns.begin(), equalityUnknowns.end(), [&](VarId a, VarId b) {
+            if (equalityOccurrences[a] != equalityOccurrences[b])
+                return equalityOccurrences[a] > equalityOccurrences[b];
+            if (otherOccurrences[a] != otherOccurrences[b])
+                return otherOccurrences[a] < otherOccurrences[b];
+            return a < b;
+        });
+        std::set<VarId> retained;
+        std::vector<bool> occupied(monomials.size(), false);
+        for (const auto var : equalityUnknowns) {
+            bool conflict = false;
+            for (const auto index : incidence.at(var)) {
+                tick();
+                if (occupied[index]) { conflict = true; break; }
+            }
+            if (conflict) continue;
+            retained.insert(var);
+            for (const auto index : incidence.at(var)) {
+                tick();
+                occupied[index] = true;
+            }
+        }
+        stats.retainedEqualityVariables = retained.size();
+
         // A deterministic greedy cover leaves at most one degree-one variable
         // in every monomial. Its complement can then be completed by simplex.
         for (;;) {
@@ -115,7 +167,7 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
                     if (!pinned.contains(var)) degree += exponent;
                 if (degree <= 1) continue;
                 for (const auto& [var, exponent] : monomial)
-                    if (!pinned.contains(var)) scores[var] += exponent;
+                    if (!pinned.contains(var) && !retained.contains(var)) scores[var] += exponent;
             }
             if (scores.empty()) break;
             auto best = scores.begin();
