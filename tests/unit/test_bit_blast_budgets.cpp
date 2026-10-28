@@ -144,3 +144,19 @@ TEST_CASE("BitBlastSolver: distinct constraints survive refinement from an insuf
         for (int j = i + 1; j < 5; ++j)
             CHECK(result.model.at("d" + std::to_string(i)) != result.model.at("d" + std::to_string(j)));
 }
+
+TEST_CASE("BitBlastSolver: established contradiction precedes unrelated encoding exhaustion") {
+    BudgetFixture f;
+    const auto y = f.kernel->mkVar(f.kernel->getOrCreateVar("y"));
+    f.cs = {{f.kernel->mkConst(1), Relation::Eq, SatLit::positive(1)},
+            {f.kernel->pow(y, 8), Relation::Eq, SatLit::positive(4)}};
+    f.domains.addLowerBound("x", 0, SatLit::positive(2));
+    f.domains.addUpperBound("x", 1, SatLit::positive(3));
+    f.domains.addLowerBound("y", 0, SatLit::positive(5));
+    f.domains.addUpperBound("y", 255, SatLit::positive(6));
+    f.solver.setGateBudget(32);
+    const auto result = f.solve();
+    REQUIRE(result.status == Status::UnsatComplete);
+    REQUIRE(result.conflict.has_value());
+    CHECK(result.conflict->clause.size() == 6);
+}
