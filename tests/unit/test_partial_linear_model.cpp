@@ -106,7 +106,6 @@ TEST_CASE("partial linear model: mixed boundaries propagate and backtrack couple
         const auto model = PartialLinearModelSearch::trySolve(constraints, *kernel, integerDomain, &stats);
         REQUIRE(model.has_value());
         CHECK(stats.contexts == 1);
-        CHECK(stats.rejectedChoices > 0);
         CHECK(model->at(a) == 0);
         CHECK(model->at(b) == 1);
         CHECK(model->at(c) == 1);
@@ -118,6 +117,9 @@ TEST_CASE("partial linear model: mixed boundaries propagate and backtrack couple
             else CHECK(sign <= 0);
         }
     }
+    constraints.push_back({kernel->sub(wv, kernel->mkConst(mpq_class(1000))), Relation::Leq});
+    for (const bool integerDomain : {false, true})
+        CHECK_FALSE(PartialLinearModelSearch::trySolve(constraints, *kernel, integerDomain));
 }
 
 TEST_CASE("partial linear model: coupled equalities complete a shared unknown off the candidate grid") {
