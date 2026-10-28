@@ -100,11 +100,9 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
       productPositivity_(*kernel_),
       gcdDivisibility_(*kernel_),
       modularResidue_(*kernel_) {
-    // Phase 2 reasoner pipeline. Order is load-bearing — it reproduces
-    // the original linear check() exactly: normalize first, then the
-    // presolve fixpoint, then the legacy NIA-Core engines in sequence,
-    // then bounded enumeration / local search / branch. `normalized_`
-    // and `domains_` are the shared state threaded across stages.
+    // Normalize and rebuild explained domains before bounded search. The
+    // remaining exact refinements and candidate stages share these snapshots;
+    // their explanations must refer to the current active prefix.
     auto add = [this](const char* nm,
                       std::optional<TheoryCheckResult> (NiaSolver::*m)(TheoryLemmaStorage&, TheoryEffort)) {
         reasoners_.push_back(std::make_unique<CallbackReasoner>(
