@@ -160,3 +160,48 @@ TEST_CASE("BitBlastSolver: established contradiction precedes unrelated encoding
     REQUIRE(result.conflict.has_value());
     CHECK(result.conflict->clause.size() == 6);
 }
+
+TEST_CASE("BitBlastSolver: early contradiction retains completeness and reason requirements") {
+    for (bool bounded : {false, true}) {
+        CAPTURE(bounded);
+        BudgetFixture f;
+        f.cs = {{f.kernel->mkConst(1), Relation::Eq,
+                 bounded ? SatLit{} : SatLit::positive(1)},
+                {f.x, Relation::Geq, SatLit::positive(2)}};
+        if (bounded) {
+            f.domains.addLowerBound("x", 0, SatLit::positive(3));
+            f.domains.addUpperBound("x", 1, SatLit::positive(4));
+        }
+        const auto result = f.solve();
+        CHECK(result.status == Status::Unknown);
+        CHECK_FALSE(result.conflict.has_value());
+    }
+}
+
+TEST_CASE("BitBlastSolver: overflow contradictions do not refute a satisfiable encoding") {
+    BudgetFixture f;
+    f.cs = {{f.kernel->pow(f.x, 8), Relation::Eq, SatLit::positive(1)}};
+    f.domains.addLowerBound("x", 0, SatLit::positive(2));
+    f.domains.addUpperBound("x", 255, SatLit::positive(3));
+    f.solver.setGateBudget(16);
+    const auto limited = f.solve();
+    CHECK(limited.status == Status::Unknown);
+    CHECK_FALSE(limited.conflict.has_value());
+    f.solver.setGateBudget(2000000);
+    const auto result = f.solve();
+    REQUIRE(result.status == Status::Sat);
+    CHECK(result.model.at("x") == 0);
+}
+
+TEST_CASE("SAT backend: permanent inconsistency excludes failed assumptions") {
+    auto sat = createSatSolver();
+    const auto x = SatLit::positive(sat->newVar());
+    sat->addClause({x});
+    CHECK_FALSE(sat->inconsistent());
+    REQUIRE(sat->solve({x.negated()}) == SatSolver::SolveResult::Unsat);
+    CHECK_FALSE(sat->inconsistent());
+    REQUIRE(sat->solve() == SatSolver::SolveResult::Sat);
+    sat->addClause({x.negated()});
+    CHECK(sat->inconsistent());
+    CHECK(sat->solve() == SatSolver::SolveResult::Unsat);
+}

@@ -518,6 +518,7 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const NativeTerms& ir,
 
         size_t aIdx = 0;
         for (ExprId a : assertions) {
+            if (enc.overflowed() || enc.inconsistent()) break;
             if (diag && (aIdx % 100) == 0)
                 std::cerr << "[EAGER-BB-ENC] K=" << K << " assertion=" << aIdx
                           << "/" << assertions.size()

@@ -76,6 +76,11 @@ public:
     // The deadline persists until replaced; max() removes the local limit.
     virtual void setDeadline(std::chrono::steady_clock::time_point deadline) = 0;
 
+    // A known contradiction of permanent clauses, independent of assumptions.
+    // Encoding clients may stop adding clauses once this holds. False means
+    // only that no such contradiction is known; it does not establish SAT.
+    virtual bool inconsistent() const { return false; }
+
     // Assumption / unsat-core support
     virtual std::vector<SatLit> getFailedAssumptions() const { return {}; }
 

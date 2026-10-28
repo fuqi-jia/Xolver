@@ -30,7 +30,9 @@ struct BitBlastResult {
 // SELF-CONTAINED SOUNDNESS: the solver encodes BOTH (a) every constraint in
 // `cs` AND (b) the DomainStore hard bounds of each variable, so the SAT search
 // space EQUALS the box [lb,ub]^n intersected with `cs` — it does not rely on
-// `cs` happening to contain the bound atoms. A SAT model is accepted only if it
+// `cs` happening to contain the bound atoms. A known root contradiction permits
+// stopping an exact encoded prefix: adding the remaining conjuncts cannot
+// restore satisfiability. A SAT model is accepted only if it
 // passes IntegerModelValidator over `cs` AND lies inside the DomainStore box
 // (`modelInDomains`). UNSAT is emitted only when `boxIsComplete`, with a
 // conflict over the reasons of BOTH the cs constraints and the domain bounds.

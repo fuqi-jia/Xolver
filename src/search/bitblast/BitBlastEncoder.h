@@ -53,6 +53,9 @@ public:
     // (now-incomplete) encoding. 0 = unlimited.
     void setVarBudget(uint64_t maxVars) { maxVars_ = maxVars; }
     bool overflowed() const { return over_; }
+    // Overflow can introduce dummy literals: check it before using a known
+    // contradiction as evidence about the intended, exact encoding.
+    bool inconsistent() const { return sat_.inconsistent(); }
     uint64_t varCount() const { return varCount_; }
 
 private:

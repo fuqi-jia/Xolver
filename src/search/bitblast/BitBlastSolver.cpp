@@ -45,6 +45,7 @@ void BitBlastSolver::encodeDomainBounds(
     // Confine the SAT search to the DomainStore box so the search space EQUALS
     // [lb,ub]^n ∩ cs (not the raw two's-complement width range).
     for (const auto& kv : varBits) {
+        if (enc.overflowed() || enc.inconsistent()) break;
         const IntDomain* d = domains.getDomain(kv.first);
         if (!d) continue;
         const BitVec& x = kv.second;
@@ -190,9 +191,21 @@ BitBlastSolver::Attempt BitBlastSolver::attemptAtWidths(
     for (const auto& kv : plan.width) varBits[kv.first] = enc.mkVar(kv.second);
 
     PolyBitBlaster blaster(enc, kernel_, varBits);
-    for (const auto& c : cs) blaster.assertConstraint(c);
-    encodeDomainBounds(enc, varBits, domains);   // confine search to the box
+    size_t encoded = 0;
+    for (const auto& c : cs) {
+        if (enc.overflowed() || enc.inconsistent()) break;
+        blaster.assertConstraint(c);
+        ++encoded;
+    }
+    if (!enc.overflowed() && !enc.inconsistent())
+        encodeDomainBounds(enc, varBits, domains); // confine SAT search to the box
     if (bbProf) {
+        std::cerr << "[BB-PREFIX] encoded=" << encoded << '/' << cs.size()
+                  << " satvars=" << enc.varCount()
+                  << " root_conflict=" << (!enc.overflowed() && enc.inconsistent())
+                  << " overflow=" << enc.overflowed()
+                  << " encode_ms=" << std::chrono::duration<double, std::milli>(
+                      std::chrono::steady_clock::now() - encT0).count() << '\n';
         prof.encodeMs += std::chrono::duration<double, std::milli>(
                              std::chrono::steady_clock::now() - encT0).count();
         ++prof.attempts; prof.lastVars = (long)enc.varCount(); prof.maybeDump();
