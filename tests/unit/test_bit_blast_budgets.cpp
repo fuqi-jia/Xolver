@@ -338,3 +338,20 @@ TEST_CASE("BitBlastSolver: refinement retracts narrow signed predicates") {
     CHECK(result.model.at("x") == 3);
     CHECK(result.model.at("y") == 4);
 }
+
+TEST_CASE("BitBlastSolver: fixed-value encoding retains domain justifications") {
+    BudgetFixture f;
+    f.equalTo(16);
+    f.domains.addLowerBound("x", 17, SatLit{});
+    f.domains.addUpperBound("x", 17, SatLit::positive(3));
+    f.solver.setGateBudget(1);
+    CHECK(f.solve().status == Status::Unknown);
+    f.domains.reset();
+    f.domains.addLowerBound("x", 17, SatLit::negative(2));
+    f.domains.addUpperBound("x", 17, SatLit::positive(3));
+    const auto result = f.solve();
+    REQUIRE(result.status == Status::UnsatComplete);
+    REQUIRE(result.conflict.has_value());
+    CHECK(result.conflict->clause == std::vector<SatLit>{
+        SatLit::positive(1), SatLit::negative(2), SatLit::positive(3)});
+}
