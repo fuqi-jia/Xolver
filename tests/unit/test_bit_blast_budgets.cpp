@@ -319,3 +319,22 @@ TEST_CASE("BitBlastSolver: independent wide variables retain the default search 
     CHECK(result.model.at("x") == value);
     CHECK(result.model.at("y") == value);
 }
+
+TEST_CASE("BitBlastSolver: refinement retracts narrow signed predicates") {
+    BudgetFixture f;
+    const auto y = f.kernel->mkVar(f.kernel->getOrCreateVar("y"));
+    f.cs = {{f.kernel->sub(f.kernel->pow(f.x, 2), f.kernel->mkConst(9)),
+             Relation::Eq, SatLit::positive(1)},
+            {f.kernel->sub(f.x, f.kernel->mkConst(3)), Relation::Eq, SatLit::positive(2)},
+            {f.kernel->sub(y, f.kernel->add(f.x, f.kernel->mkConst(1))),
+             Relation::Eq, SatLit::positive(3)}};
+    f.solver.setMaxIterations(1);
+    CHECK(f.solve().status == Status::Unknown);
+    f.solver.setMaxIterations(2);
+    const auto result = f.solve();
+    REQUIRE(result.status == Status::Sat);
+    // The low two bits of 3 formerly denoted -1. Old gates and assumptions
+    // must not impose that signed interpretation on the wider leaf.
+    CHECK(result.model.at("x") == 3);
+    CHECK(result.model.at("y") == 4);
+}

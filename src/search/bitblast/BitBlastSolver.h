@@ -24,7 +24,7 @@ struct BitBlastResult {
     std::optional<TheoryConflict> conflict;   // valid iff UnsatComplete
 };
 
-// Orchestrates one bit-blast attempt: size widths, encode over an independent
+// Orchestrates a bit-blast query: size widths, encode over an independent
 // CaDiCaL, solve, validate SAT, and refine widths in heuristic mode. Sound by
 // construction: SAT validated, UNSAT only when complete.
 //
@@ -76,6 +76,7 @@ public:
 
 private:
     bool applicable(const std::vector<NormalizedNiaConstraint>& cs) const;
+    struct EncodingContext;
 
     // One encode+solve+validate attempt at a fixed width plan. Sat carries a
     // validated in-box model; Unsat is box-dependent (caller decides global
@@ -86,7 +87,7 @@ private:
         bool complete = false;
         std::optional<TheoryConflict> conflict;
     };
-    Attempt attemptAtWidths(const BitWidthPlan& plan,
+    Attempt attemptAtWidths(EncodingContext& context, const BitWidthPlan& plan,
                             const std::vector<NormalizedNiaConstraint>& cs,
                             const DomainStore& domains,
                             const IntegerModelValidator& validator);
