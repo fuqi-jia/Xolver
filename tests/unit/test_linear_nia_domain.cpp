@@ -4,6 +4,7 @@
 #include "algebra/poly/PolynomialKernel.h"
 #include "contracts/SatSolver.h"
 #include <gmpxx.h>
+#include <algorithm>
 
 using namespace xolver;
 
