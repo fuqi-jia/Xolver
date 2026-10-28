@@ -354,10 +354,53 @@ BitBlastSolver::Attempt BitBlastSolver::attemptAtWidths(
             }
             a.complete = unbounded == 0;
             if (a.complete) a.conflict = buildCompleteConflict(premises, domains, &variables);
-            if (bbProf) std::cerr << "[BB-CORE] facts=" << facts.size()
-                << " selected=" << selected.size() << " variables=" << variables.size()
-                << " unbounded=" << unbounded << " complete=" << a.complete
-                << " explained=" << a.conflict.has_value() << '\n';
+            if (bbProf) {
+                std::cerr << "[BB-CORE] facts=" << facts.size()
+                    << " selected=" << selected.size() << " variables=" << variables.size()
+                    << " unbounded=" << unbounded << " complete=" << a.complete
+                    << " explained=" << a.conflict.has_value() << '\n';
+                std::vector<std::string> missing;
+                for (const auto& variable : variables) {
+                    const auto* d = domains.getDomain(variable);
+                    if (!d || !d->hasLower || !d->hasUpper) missing.push_back(variable);
+                }
+                std::sort(missing.begin(), missing.end());
+                for (const auto& variable : missing) {
+                    const auto* d = domains.getDomain(variable);
+                    std::cerr << "[BB-UNBOUNDED] variable=" << variable
+                        << " lower=" << (d && d->hasLower ? d->lower.value.get_str() : "none")
+                        << " upper=" << (d && d->hasUpper ? d->upper.value.get_str() : "none") << '\n';
+                }
+                size_t eligible = 0;
+                for (const auto& constraint : cs) {
+                    if (constraint.rel != Relation::Eq && constraint.rel != Relation::Leq &&
+                            constraint.rel != Relation::Geq) continue;
+                    const auto terms = kernel_.terms(constraint.poly);
+                    if (!terms) continue;
+                    size_t missingBounds = 0;
+                    std::string target;
+                    bool linear = true;
+                    for (const auto& term : *terms) {
+                        if (term.powers.empty()) continue;
+                        if (term.powers.size() != 1 || term.powers[0].second != 1) {
+                            linear = false;
+                            break;
+                        }
+                        const std::string variable(kernel_.varName(term.powers[0].first));
+                        const auto* d = domains.getDomain(variable);
+                        if (!d || !d->hasLower || !d->hasUpper) {
+                            ++missingBounds;
+                            target = variable;
+                        }
+                    }
+                    if (!linear || missingBounds != 1 ||
+                            !std::binary_search(missing.begin(), missing.end(), target)) continue;
+                    if (++eligible <= 8) std::cerr << "[BB-LINEAR-BOUND] target=" << target
+                        << " rel=" << int(constraint.rel) << " poly="
+                        << kernel_.toString(constraint.poly) << '\n';
+                }
+                std::cerr << "[BB-LINEAR-BOUND] eligible_rows=" << eligible << '\n';
+            }
         } else if (full && !enc.overflowed() && plan.boxIsComplete) {
             // A backend without a usable assumption core retains the original
             // complete-box path, with every source/domain justification.
