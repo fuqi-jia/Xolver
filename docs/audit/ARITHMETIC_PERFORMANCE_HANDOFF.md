@@ -1210,6 +1210,68 @@ Evidence: reproduction `1cda2a8bd9f2`, native build `0cffecdebcbb`, NIA48
 `c5d3b9e0267666980a9ec4e82a16bbde40db05f1`. Server overlay for this experiment
 is `source-r296.tar.json`. Neither protected set has been accessed.
 
+## Failed-assumption scope and width experiments (R300–R309)
+
+These branches remain experimental; qualified main is still `08b99eaf` and
+frozen CLI R280. No new full160 score or production merge is established here.
+
+R300 (`3fe3f2b02ec5`) reproduces a completeness gap: `x*x=2`, `0<=x<=2`,
+`x+y-z=0` returns unknown because y/z are unbounded, although the contradiction
+only needs x. R302 (`ac8080e0`) encodes completed predicates as assumptions,
+maps failed assumptions to source/domain support, and requires justified finite
+domains only for that support. SAT still requires a complete encoding and exact
+model validation. Overflow cannot assert unfinished gates or predicates.
+
+R302 passes **1,703 native tests / 801,355 assertions**; CLI SHA-256 is
+`e8711cd3efbb80b21462343ffc0e6840737a6c477e3dcec87a34d41fe591ebd0`.
+Its selective width refinement has one independently confirmed, protocol-valid
+added decision at index 40 (`UltimateAutomizer/gauss_sum_true-unreach-call.i.smt2`):
+baseline timeout 60.040 s, candidate UNSAT 43.322 s, Z3 UNSAT 0.168 s. Original
+input SHA-256 is `d25714f4c95ce2bc5fb613fe3807d43875a48ed8fda1a97d68757345ca23522e`.
+This is a single paired observation, not an accepted 48-case score: indices
+27/29/31/32/37 overrun the wall protocol; 24 has an infrastructure relaunch and
+an immutable-output collision; 106 reaches the EOS timeout without a final
+report. Preserve all original records. R302 acceptance is 37/38, with two NIA
+240-second timeouts. Fresh paired checks of those exact inputs return correct
+results with both frozen versions in 0.03–0.07 s, including independent SAT model
+replay; they do not erase the initial failures.
+
+The selective policy also has a reproducible search regression: independent
+`x=2^64`, `y=2^64` exhaust the shared seven-attempt budget and return unknown.
+R306 first reproduces that failure from `source-r304.tar.json`, then restores
+simultaneous refinement (`e11de3a2`). All **1,704 tests / 801,358 assertions**
+pass, including 32 targeted cases. CLI SHA-256 is
+`24698ee89ea0d5cd62a834f2e9e747100188ce75ad85c229dd7fccf0012ec449`.
+The four-case fresh comparison does not select this variant: 31 matches verified
+SAT, 40 times out with both versions, and 44 loses baseline UNSAT 45.011 s to a
+candidate timeout. Index 123 has an invalid 80.152-second baseline timeout and
+cannot count as a gain. Acceptance finishes 35/38: an Xolver generated-query
+timeout, a Z3 model-replay timeout, one LIA timeout, and a QCP arithmetic-check
+timeout in the unchanged SV binary remain recorded. No opposite verdict or
+invalid model was found in the inspected failure records. This variant is
+closed without a full160 rerun or merge.
+
+R308 (`01d6ceab`) next tests sharing SAT state and literal-keyed gate definitions
+across widths within one query. Low bits persist, high bits are added, current
+facts are assumptions, and width-dependent polynomial caches are rebuilt.
+Uniform widths and attempt limits remain; a new signed-refinement test checks
+that low bits formerly denoting -1 can denote 3 in the wider leaf. Native
+qualification is pending in EOS `eadd23a019f4`, using `source-r308.tar.json`.
+After successful freezing, `launch-r308.py` submits five paired development
+cases and R309 profiles against the uniform R306 variant. Do not claim a gain
+from this implementation before those results and full qualification exist.
+
+Evidence: R302 build `cd028a4720a1`, NIA48 `d89b89d50a21`, profiles
+`9d50b89a6627` / `b70de5e0449e`, acceptance `c23b54c5604a`, paired regression
+recheck `04b5bca03f88`; R306 build/reproduction `f82a12bc7a15`, four-case
+comparison `42daff1adcc3`, acceptance `c5be845d4e8b`. Budget diagnostics
+(`b9bdfd18`) distinguish late timeout notification from cleanup: observed large
+overruns occur before notification, with millisecond cleanup. File-backed output
+capture does not establish the cause of those overruns. Other root-owned fuzzers
+were observed consuming cores; their role in each timeout is unproven. QCP stays
+at two qualified unique development programs. Neither protected set was used;
+an additional server archive is not a delivery requirement.
+
 ## Closed experiments and practical regressions
 
 R178 replaced the square-cascade's ad hoc coefficient-Horner substitution with
