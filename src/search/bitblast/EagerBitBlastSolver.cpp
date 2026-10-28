@@ -395,6 +395,15 @@ bool EagerBitBlastSolver::collect(const NativeTerms& ir, const std::vector<ExprI
         }
     };
     for (ExprId a : assertions) markTop(a);
+    WorkBudget aggregateBudget(262144);
+    if (const auto conflict = LinearBoundPropagation::aggregateConflict(rows, aggregateBudget)) {
+        if (xolver::config::read<xolver::config::ReadKind::Presence>("NIA_EAGER_BB_DIAG"))
+            std::cerr << "[EAGER-BB] root linear aggregate conflict: rows="
+                      << conflict->multipliers.size() << " rhs=" << conflict->rhs << "\n";
+        // This SAT-only portfolio yields to the ordinary arithmetic solver,
+        // which explains the root contradiction through its existing path.
+        return false;
+    }
     WorkBudget boundBudget(262144);
     const auto propagated = LinearBoundPropagation::run(rows,
         [&](const std::string& variable, bool lower) -> std::optional<ExplainedLinearBound> {

@@ -29,6 +29,15 @@ struct LinearBoundPropagationResult {
     bool exhausted = false;
 };
 
+struct LinearAggregateConflict {
+    // Positive multipliers of source inequalities, after orienting >= and >
+    // as <= and <. Their exact sum has zero lhs and a contradictory rhs.
+    std::vector<std::pair<size_t, mpq_class>> multipliers;
+    mpq_class rhs;
+    bool strict = false;
+    std::vector<SatLit> reasons;
+};
+
 // Exact interval propagation shared by arithmetic clients. Rows already carry
 // their asserted polarity. All row/endpoint explanations must be complete;
 // an empty set denotes an unconditional fact. Lookup must omit unexplained
@@ -44,6 +53,15 @@ public:
     static LinearBoundPropagationResult run(const std::vector<LinearBoundRow>& rows,
         const Lookup& lookup, const Update& update, const IsInteger& isInteger,
         WorkBudget& budget);
+
+    // Cheap exact refutation before interval propagation or Boolean search.
+    // Sum non-univariate inequalities with unit or scale-normalizing weights;
+    // single-variable rows remain the interval engine's responsibility. A
+    // result carries a checkable linear-combination certificate. No result
+    // means no conclusion, including when work is exhausted. All source rows
+    // must already have their asserted polarity and complete explanations.
+    static std::optional<LinearAggregateConflict> aggregateConflict(
+        const std::vector<LinearBoundRow>& rows, WorkBudget& budget);
 };
 
 } // namespace xolver

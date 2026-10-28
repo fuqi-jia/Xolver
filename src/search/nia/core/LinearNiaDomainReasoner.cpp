@@ -152,6 +152,9 @@ NiaReasoningResult LinearNiaDomainReasoner::run(
         // Single-variable constraints were already consumed above.
         if (linear && row.lhs.terms.size() > 1) rows.push_back(std::move(row));
     }
+    WorkBudget aggregateBudget(262144);
+    if (const auto conflict = LinearBoundPropagation::aggregateConflict(rows, aggregateBudget))
+        return {NiaReasoningKind::Conflict, TheoryConflict{conflict->reasons}, std::nullopt};
     WorkBudget budget(262144);
     const auto propagated = LinearBoundPropagation::run(rows,
         [&](const std::string& variable, bool lower) -> std::optional<ExplainedLinearBound> {
