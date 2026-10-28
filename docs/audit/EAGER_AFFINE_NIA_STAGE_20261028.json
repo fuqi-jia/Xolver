@@ -1,0 +1,589 @@
+{
+  "schema": 1,
+  "summary": {
+    "cases": 48,
+    "binaries": {
+      "baseline": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r350/xolver",
+        "sha256": "b337850528f80c31d0a364a097bb4147181618e989df37173741b1d2f8831fca"
+      },
+      "candidate": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r362/xolver",
+        "sha256": "663ea64fbf924b1312d1be498d504b00a10b4f9671799621debcd4638a861988"
+      },
+      "z3": {
+        "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+        "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      }
+    },
+    "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+    "timeout": 60,
+    "memory_bytes": 17179869184,
+    "counts": {
+      "baseline": {
+        "timeout": 23,
+        "decided": 25,
+        "verified_decided": 25,
+        "verified_par2": 2834.9434948097914,
+        "raw_par2": 2834.9434948097914,
+        "unsat": 12,
+        "sat": 13
+      },
+      "candidate": {
+        "timeout": 23,
+        "decided": 25,
+        "verified_decided": 25,
+        "verified_par2": 2812.9782664366066,
+        "raw_par2": 2812.9782664366066,
+        "unsat": 12,
+        "sat": 13
+      },
+      "z3": {
+        "unsat": 22,
+        "decided": 34,
+        "verified_decided": 29,
+        "verified_par2": 2312.682713892311,
+        "raw_par2": 1731.2680944055319,
+        "sat": 12,
+        "timeout": 14
+      }
+    },
+    "by_logic": {
+      "QF_NIA": {
+        "baseline": {
+          "timeout": 23,
+          "decided": 25,
+          "verified_decided": 25,
+          "verified_par2": 2834.9434948097914,
+          "raw_par2": 2834.9434948097914,
+          "unsat": 12,
+          "sat": 13
+        },
+        "candidate": {
+          "timeout": 23,
+          "decided": 25,
+          "verified_decided": 25,
+          "verified_par2": 2812.9782664366066,
+          "raw_par2": 2812.9782664366066,
+          "unsat": 12,
+          "sat": 13
+        },
+        "z3": {
+          "unsat": 22,
+          "decided": 34,
+          "verified_decided": 29,
+          "verified_par2": 2312.682713892311,
+          "raw_par2": 1731.2680944055319,
+          "sat": 12,
+          "timeout": 14
+        }
+      }
+    },
+    "changes": [],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "unverified": [
+      {
+        "index": 24,
+        "case": "QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 27,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 42,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep2a.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 114,
+        "case": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 122,
+        "case": "QF_NIA/20250331-elster/D_1.smt2",
+        "results": {
+          "z3": "sat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "model query did not return SAT"
+        }
+      }
+    ],
+    "scoring": "Correct verdicts require a replayed model or an independent UNSAT decision on the identical input hash; unresolved results receive PAR-2 penalty.",
+    "supplementary_certificate": {
+      "index": 115,
+      "sha256": "48f5d0ca9b19679a48f3248ac1183c31d09e0c198bfda0a70b3b4272b6d1a5ba",
+      "check": {
+        "status": "checked-unsat",
+        "input_sha256": "02a58b11df8951543940a1090a140592e24de41dcaeb6470e7a50d42e804be64",
+        "assertion": 9,
+        "path": [
+          2
+        ],
+        "checked_residues": 12
+      },
+      "scope": "Independent truth evidence only; timed observations unchanged"
+    }
+  },
+  "pilot_summary": {
+    "cases": 5,
+    "binaries": {
+      "baseline": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r350/xolver",
+        "sha256": "b337850528f80c31d0a364a097bb4147181618e989df37173741b1d2f8831fca"
+      },
+      "candidate": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r362/xolver",
+        "sha256": "663ea64fbf924b1312d1be498d504b00a10b4f9671799621debcd4638a861988"
+      },
+      "z3": {
+        "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+        "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      }
+    },
+    "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+    "timeout": 60,
+    "memory_bytes": 17179869184,
+    "counts": {
+      "baseline": {
+        "sat": 1,
+        "decided": 4,
+        "verified_decided": 4,
+        "verified_par2": 181.88181195780635,
+        "raw_par2": 181.88181195780635,
+        "unsat": 3,
+        "timeout": 1
+      },
+      "candidate": {
+        "sat": 1,
+        "decided": 4,
+        "verified_decided": 4,
+        "verified_par2": 188.99737572483718,
+        "raw_par2": 188.99737572483718,
+        "unsat": 3,
+        "timeout": 1
+      },
+      "z3": {
+        "timeout": 1,
+        "decided": 4,
+        "verified_decided": 3,
+        "verified_par2": 241.1509302984923,
+        "raw_par2": 121.21642651595175,
+        "unsat": 4
+      }
+    },
+    "by_logic": {
+      "QF_NIA": {
+        "baseline": {
+          "sat": 1,
+          "decided": 4,
+          "verified_decided": 4,
+          "verified_par2": 181.88181195780635,
+          "raw_par2": 181.88181195780635,
+          "unsat": 3,
+          "timeout": 1
+        },
+        "candidate": {
+          "sat": 1,
+          "decided": 4,
+          "verified_decided": 4,
+          "verified_par2": 188.99737572483718,
+          "raw_par2": 188.99737572483718,
+          "unsat": 3,
+          "timeout": 1
+        },
+        "z3": {
+          "timeout": 1,
+          "decided": 4,
+          "verified_decided": 3,
+          "verified_par2": 241.1509302984923,
+          "raw_par2": 121.21642651595175,
+          "unsat": 4
+        }
+      }
+    },
+    "changes": [],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "unverified": [
+      {
+        "index": 114,
+        "case": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      }
+    ],
+    "scoring": "Correct verdicts require a replayed model or an independent UNSAT decision on the identical input hash; unresolved results receive PAR-2 penalty."
+  },
+  "native": {
+    "lease": [
+      0
+    ],
+    "overlay_rc": 0,
+    "build_rc": 0,
+    "targeted-unit_rc": 0,
+    "unit_rc": 0,
+    "checks_rc": 0
+  },
+  "native_tests": 1719,
+  "native_assertions": 859661,
+  "acceptance": {
+    "affine": {
+      "metrics": {
+        "checks": 1,
+        "failures": 1
+      },
+      "commands_sha256": "d02e4ce5a776220643bc87daa591248e1da3f30de65fe6a763494408a9895cdc",
+      "paired_recheck": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-paired-r369/affine/report.json",
+        "sha256": "7290d44af538984d5964a6abde18d79364071123fa1308039f23598193555af3",
+        "same_seed_count_and_5_second_budget": true
+      }
+    },
+    "architecture": {
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "2bbbcacfc5e86aaea5db2ec046e6a80c4e797eb2f3ac0c525ec1342ab66e8f01"
+    },
+    "intervals": {
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "7c9cb004a4b67af12d2d77e60a5b43e1e7d7ba7085d317e98c9a0fd3950b1a8e"
+    },
+    "ite": {
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "dbdcd5d81205f4ca8454bca2ac626d7c26e9fed06bdc4427e239d2dafee073f4"
+    },
+    "ite-structure": {
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "2e93a226b5f7e88b36ee31388e5eaac62cc11ffb57470a563c4ce26d015e7213"
+    },
+    "known-gaps": {
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "8b362075548c44b5e16a396c5c338711851a0bb6001b143dbe076be70759a0d1"
+    },
+    "linear": {
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "8b89e4beaafed9ea20520de0fbfaba599c7d2659f3a7a62c24bdb5afae1ac06c"
+    },
+    "partial": {
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "bd88e3578c152e4292adb11748237f37270fdf98eb846b8b7abe7ea88c840533"
+    },
+    "qcp": {
+      "metrics": {
+        "checks": 3,
+        "failures": 0
+      },
+      "commands_sha256": "5249c94bb58fa96fa2531cd73725f9a24fc126a484d9fcbfefff2bae2ef912d6"
+    },
+    "quick": {
+      "metrics": {
+        "checks": 3,
+        "failures": 0
+      },
+      "commands_sha256": "bf700ae8d802a1efed047a0c4b3bf29612b16f3890df69d03f311a9a41487ef0"
+    },
+    "regression-alia": {
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "2e627e31f5e54e6af8ccc11e504e21a13ec357fb3be5e3e621f1fb2550ef6da8"
+    },
+    "regression-alra": {
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "8735bc032982300a04d136323fd7d282dbd807fe93f6cd823deba2c4e8701616"
+    },
+    "regression-ania": {
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "25c6d0644134df78bbb84a266c2ef818ab26ed97168b0bf0db6ac4043113f85b"
+    },
+    "regression-auflia": {
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "47766b51e9f5b43ea21bb08a3467ca5be0afec02f0942d1a1fa35261bc05bca5"
+    },
+    "regression-auflra": {
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "34afc12ac7cdd290498bc496ae8d10b52b299c9b4b9291c52b1c275e6b571465"
+    },
+    "regression-aufnia": {
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "bd4eb3c270df61081da3c4503473f52b9e43564415e8789870a0286dc00f9645"
+    },
+    "regression-ax": {
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "8da7c14b9010ee22b6894e93177fe77a3a3cabd3d83d6b7403eced8e2436436b"
+    },
+    "regression-bool": {
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "6e6be0529114f47488b0d4e367ee806d438c375f35b0dfdecbc2ba1db3483090"
+    },
+    "regression-dt": {
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "caf152c8a5cd2c3d660878adee563d28655ea75e38118ec6c3ede046cd466bad"
+    },
+    "regression-euf": {
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "7a9750489449646149c5c0fb79a78531c958075763b68566e2380f3c0f088d7d"
+    },
+    "regression-idl": {
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "5866855c0a7a44d1b387b5fba6b6940e638af3ac8ceba71102080e1efc7da742"
+    },
+    "regression-lia": {
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "16651797fca03e05814930ca3c1fd15c5d05d1ffc5fface86be550cce2a6431d"
+    },
+    "regression-lira": {
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "3981ec75df0372ad8c3eeb3794bdd5d9686543d1e40cacdb3dc92a3bd03ae26b"
+    },
+    "regression-lra": {
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "fe11e9020e3f783843d12cd4af67d610b45082c7b6ed0c358a7f24e0edc285bf"
+    },
+    "regression-nia": {
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "5ea3192e9bc3e551267a4ce0a24d9617632c0c1149bc945350089d85597a1037"
+    },
+    "regression-nira": {
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "2f847721739f7aca18ca7bcb97bc616a1087bf3803645ffbe027b21a7f5614ee"
+    },
+    "regression-nra": {
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "7bdd2d5dcb11e891196bb2a5fdcc84a812546259fc88eb20ede8c7061768645f"
+    },
+    "regression-quantifiers": {
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "c42365990d9ca5e2dd3846110adedbff94fd549a57df620d31b0f0771ab0546a"
+    },
+    "regression-rdl": {
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "7a8b187c2c31ae8a8cab06d60fe339627254efcfbe71c0eeaed26d719aefe9df"
+    },
+    "regression-sl": {
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "d5fb6b720cae6f3d006fd3c6f267ec4c0a96893717f13295a418960bf4f6584b"
+    },
+    "regression-ufdtlia": {
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "fa46ba8f381925659a07167cdcdbc00cd04cf6b5b3cbc2bc083b0c67de9cd64f"
+    },
+    "regression-ufdtnia": {
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "50d8dd3433a754e40fa8529c4a26653025eade3d016487c19e9872ed37514bd0"
+    },
+    "regression-uflia": {
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "67045ae08de722504cecca24f4360f30efd1c93ef522c9147692f94764c2c2e3"
+    },
+    "regression-uflra": {
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "9e519f7deedb0f7c6ef75675fc9d96003fac6919bcd5cf152672163b143570b8"
+    },
+    "regression-ufnia": {
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "1518b33ea759883c1d7ea1626e2f3f0a0c68aa9ebbee64a84c34657e529fd8fd"
+    },
+    "regression-ufnra": {
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "dcfbdcad58d210e183531192522fe435cbe26b6ed456e1c3e5fa0c8a87ee422b"
+    },
+    "root-regressions": {
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "2147ee30b03d942428280f67f62e460907550838bde55d723b9a6849317ca905"
+    },
+    "theory-models": {
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "0055658ee9a74c80cdd02396dcea069bc82c4fbc64182eb81383d924e284a3db"
+    }
+  },
+  "superseded": {
+    "24": {
+      "original": "/pub/data/jiafq/xolver/validation/arithmetic-r103/targets-r364/case-024/report.json",
+      "original_sha256": "a977ae2619c0fa20a38871193992a70aebfb425de07a9cb825b9e045422a1ac5",
+      "replacement": "/pub/data/jiafq/xolver/validation/arithmetic-r103/retry-r366/case-024/report.json",
+      "replacement_sha256": "c2f6ce907fbe57f452347594658bafb9fd0d68821e0bbd0ee3fc2df2d6483167",
+      "reason": "wall-cleanup overrun",
+      "policy": "First complete protocol-valid unchanged-version paired retry; original evidence retained"
+    },
+    "118": {
+      "original": "/pub/data/jiafq/xolver/validation/arithmetic-r103/targets-r364/case-118/progress.json",
+      "original_sha256": "48b8e005192e6a08a34bfdb57c8fb9a11874e7201e2f5385c234e9cd00a01be8",
+      "replacement": "/pub/data/jiafq/xolver/validation/arithmetic-r103/retry-r372/case-118/report.json",
+      "replacement_sha256": "a24ba78189edc7276f7b2c1898bc4ba787dcdc3466fcffa0acd77dfa25b7b92f",
+      "reason": "outer task timed out without a complete report",
+      "policy": "First complete protocol-valid unchanged-version paired retry; original evidence retained"
+    },
+    "120": {
+      "original": "/pub/data/jiafq/xolver/validation/arithmetic-r103/targets-r364/case-120/progress.json",
+      "original_sha256": "2f8f0261bd7afbb61e052e7cafd86a6f5263601901f6df0d1c189f8878d7994c",
+      "replacement": "/pub/data/jiafq/xolver/validation/arithmetic-r103/retry-r372/case-120/report.json",
+      "replacement_sha256": "04825475761793882c99f9e45a9b51002e0a97d2c1553fc7dff8da65435520e1",
+      "reason": "outer task timed out without a complete report",
+      "policy": "First complete protocol-valid unchanged-version paired retry; original evidence retained"
+    }
+  },
+  "source_head": "c4043586160beed669c805f027d92b14ee1276f6",
+  "source_manifest_sha256": "0eff524944353d087d642685955ddcdc3d43dd77d0f10f334b85e99c71fcca7f",
+  "rebased_source_head": "eae83750c4364002cbe53fd3f6fef11aae77cbbf",
+  "source_rebase_evidence": "Local git diff --exit-code c4043586 eae83750 passed for the entire tree; only ancestry changed after PR58 squash.",
+  "experiments": {
+    "reproduction": "27977fbb21db",
+    "build": "2ae28933fd26",
+    "pilot": "ade58dbea747",
+    "nia": "c63a1766c7ba",
+    "retry24": "d07f85399276",
+    "retry118_120": "841a9c27db8e",
+    "targeted_acceptance": "6e45f7373f6a",
+    "remaining_acceptance": "2b12aa3bc531",
+    "paired_affine": "b9ecb6450588",
+    "phase_profiles": "e89f4331626a",
+    "paired_123_diagnostic": "8b208bf6935c"
+  },
+  "protected_sets_used": false,
+  "boundary": "NIA development qualification only. Original valid slow pilot row123 is retained. No whole-suite, protected-set or QCP program-speed conclusion."
+}

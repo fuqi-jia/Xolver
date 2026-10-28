@@ -1440,7 +1440,58 @@ observation are unchanged. The original aggregation is retained on Panda1.
 
 This establishes one additional verified solve in the primary development suite.
 It does not exceed Z3. Neither protected set has been used. The C++ code is in
-[PR58](https://github.com/fuqi-jia/Xolver/pull/58); PR CI and merge are pending.
+[PR58](https://github.com/fuqi-jia/Xolver/pull/58), merged as
+`0d937a71524fad58e8780cd2d3e72b2d007de320`. Both jobs passed in
+[PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/40708236349) and fresh
+[main CI](https://github.com/fuqi-jia/Xolver/actions/runs/40711539985).
+
+## Eager reuse of affine endpoints (R360–R378)
+
+The next omission was in whole-formula eager bit-blasting: it collected only
+single-variable unit-coefficient bounds, even after the NIA theory path gained
+general affine propagation. On fixed index 40 it spent about 19.8 seconds
+building circuits before the theory path proved UNSAT. R360 (`27977fbb21db`)
+also reproduces a missing exact model beyond the uniform width cascade.
+
+Core commit `eae83750` reuses the same linear worklist over positive root
+conjuncts, including chained equalities and signed affine inequalities. Empty
+guard sets explicitly denote unconditional facts; the DomainStore client
+continues to omit unexplained endpoints. Proven fixed integers become constant
+bit-vectors. Boolean branch predicates remain conditional, exact candidate
+validation remains mandatory, and this eager arm still never claims UNSAT.
+LRA/LIA backtracking policies and public API semantics are unchanged.
+
+The [NIA qualification record](EAGER_AFFINE_NIA_STAGE_20261028.json) records
+R362 (`2ae28933fd26`): **1,719 native tests / 859,661 assertions**, 61 targeted
+tests and three CTest checks pass. All 38 acceptance items qualify. The affine
+item originally had a five-second Z3 model-replay timeout; the first paired
+recheck at the same seed, count and five-second budget passes with both frozen
+versions. The original failure remains recorded. CLI SHA-256:
+`663ea64fbf924b1312d1be498d504b00a10b4f9671799621debcd4638a861988`;
+SV remains `99130012b880f255cd8bbaf456d4031d07649792c83c430acb5649a547bb89ef`.
+The source was rebased onto PR58's squash with an identical entire file tree.
+
+The 48-case NIA round verifies **25 / 25 / 29** solves for delivered main /
+candidate / Z3, with PAR-2 **2834.943 / 2812.978 / 2312.683 seconds**.
+The valid slow five-case pilot observation for index 123 (21.880 to 49.450 s)
+is retained. Separate diagnostics did not reproduce it; its cause is unresolved.
+
+The [full160 audit](EAGER_AFFINE_FULL_STAGE_20261028.json), EOS `efccf1b6610b`,
+verifies **93 / 93 / 115 solves**, PAR-2 **8309.014 / 8298.646 / 5618.248 s**.
+Both Xolver versions have 52 SAT, 41 UNSAT, 67 timeouts and no unknowns. There
+are no gained/lost solves, opposite verdicts or rejected models. Index 40 falls
+from 20.067 to 0.167 s; index 123 takes 11.449 versus 11.533 s in this round.
+Five protocol-invalid original rows and one incomplete outer-timeout row are
+retained. Their first unchanged-version paired retries replace only those
+invalid observations; the apparent original gain at 19 disappears. Timed
+observations and the original-input certificate for 115 remain distinct.
+
+Unrelated host workloads were observed during this round. The lease audit
+establishes non-overlap among the recorded ExperimentOS tasks, not exclusive
+use of the entire server; small timing differences may include host noise.
+This establishes a repeatable local encoding improvement, with no increased
+development-suite coverage or claim of overall superiority. Neither protected
+set was used. Server qualification is complete; PR CI and merge are pending.
 
 ## Additional complete QCP development program (max3 R334)
 
