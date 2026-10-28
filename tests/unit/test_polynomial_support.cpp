@@ -57,7 +57,7 @@ TEST_CASE("PolynomialKernel support: immutable caches survive registration and c
     kernel->getOrCreateVar("unrelated");
     CHECK(kernel->variables(polynomial) == support);
     CHECK(kernel->variables(kernel->sub(polynomial, polynomial)).empty());
-    CHECK(kernel->variables(kernel->mkConst(mpq_class(7, 3))).empty());
+    CHECK(kernel->variables(kernel->mkConst(7)).empty());
     CHECK(kernel->variables(y) == std::vector<std::string>{"y"});
     CHECK(kernel->variables(polynomial) == support);
 }
