@@ -1,0 +1,628 @@
+{
+  "schema": 1,
+  "summary": {
+    "cases": 48,
+    "binaries": {
+      "baseline": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r314/xolver",
+        "sha256": "eaa3b5b87c2b5df589729a728a5e6bc3d4bb4a0b23ca9205f1baea0581874567"
+      },
+      "candidate": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r350/xolver",
+        "sha256": "b337850528f80c31d0a364a097bb4147181618e989df37173741b1d2f8831fca"
+      },
+      "z3": {
+        "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+        "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      }
+    },
+    "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+    "timeout": 60,
+    "memory_bytes": 17179869184,
+    "counts": {
+      "baseline": {
+        "timeout": 24,
+        "decided": 24,
+        "verified_decided": 24,
+        "verified_par2": 2938.758192157373,
+        "raw_par2": 2938.758192157373,
+        "unsat": 11,
+        "sat": 13
+      },
+      "candidate": {
+        "timeout": 23,
+        "decided": 25,
+        "verified_decided": 25,
+        "verified_par2": 2837.2536571361125,
+        "raw_par2": 2837.2536571361125,
+        "unsat": 12,
+        "sat": 13
+      },
+      "z3": {
+        "unsat": 22,
+        "decided": 34,
+        "verified_decided": 29,
+        "verified_par2": 2313.6667676810175,
+        "raw_par2": 1733.6137364692986,
+        "sat": 12,
+        "timeout": 14
+      }
+    },
+    "by_logic": {
+      "QF_NIA": {
+        "baseline": {
+          "timeout": 24,
+          "decided": 24,
+          "verified_decided": 23,
+          "verified_par2": 3058.690927473828,
+          "raw_par2": 2938.758192157373,
+          "unsat": 11,
+          "sat": 13
+        },
+        "candidate": {
+          "timeout": 23,
+          "decided": 25,
+          "verified_decided": 24,
+          "verified_par2": 2957.2185610830784,
+          "raw_par2": 2837.2536571361125,
+          "unsat": 12,
+          "sat": 13
+        },
+        "z3": {
+          "unsat": 22,
+          "decided": 34,
+          "verified_decided": 29,
+          "verified_par2": 2313.6667676810175,
+          "raw_par2": 1733.6137364692986,
+          "sat": 12,
+          "timeout": 14
+        }
+      }
+    },
+    "changes": [
+      {
+        "index": 40,
+        "case": "QF_NIA/UltimateAutomizer/gauss_sum_true-unreach-call.i.smt2",
+        "kind": "gained",
+        "truth": "unsat",
+        "evidence": [
+          "independent-z3-xolver-agreement"
+        ],
+        "observations": {
+          "candidate": {
+            "result": "unsat",
+            "seconds": 20.04172989539802
+          },
+          "z3": {
+            "result": "unsat",
+            "seconds": 0.21686427108943462
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.013639939948916
+          }
+        }
+      }
+    ],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "unverified": [
+      {
+        "index": 24,
+        "case": "QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 27,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 42,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep2a.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 114,
+        "case": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 122,
+        "case": "QF_NIA/20250331-elster/D_1.smt2",
+        "results": {
+          "z3": "sat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "model query did not return SAT"
+        }
+      }
+    ],
+    "scoring": "Correct verdicts require a replayed model or an independent UNSAT decision on the identical input hash; unresolved results receive PAR-2 penalty.",
+    "supplementary_certificate": {
+      "index": 115,
+      "path": "/pub/data/jiafq/xolver/docs/audit/ORIGINAL_UNSAT115_MOD_CERTIFICATE.json",
+      "sha256": "48f5d0ca9b19679a48f3248ac1183c31d09e0c198bfda0a70b3b4272b6d1a5ba",
+      "check": {
+        "status": "checked-unsat",
+        "input_sha256": "02a58b11df8951543940a1090a140592e24de41dcaeb6470e7a50d42e804be64",
+        "assertion": 9,
+        "path": [
+          2
+        ],
+        "checked_residues": 12
+      },
+      "scope": "Independent evidence only; original timed observations unchanged"
+    }
+  },
+  "acceptance": {
+    "affine": {
+      "commands_sha256": "4c5ee9f3519e600a9a7d628cb052af704e81438d8e8e774f3cebb63057f854b8",
+      "metrics_sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5"
+    },
+    "architecture": {
+      "commands_sha256": "abb8c29ff2ec706f8b87a01560fc25578fd327f5f03b9e0fcd1f6cb7c66467bd",
+      "metrics_sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5"
+    },
+    "intervals": {
+      "commands_sha256": "397835cc9ba4ea1dd8950a588c35ee01e2dfb795d785ee7fc1c05ae2fe48b3d3",
+      "metrics_sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5"
+    },
+    "ite": {
+      "commands_sha256": "bdbb0a87d38ffb2098b6e18716338894c6ea1a7cec2ba01bddcde588982db81c",
+      "metrics_sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5"
+    },
+    "ite-structure": {
+      "commands_sha256": "518ff75745f7378f2e07d5748c983b85ea6ab049012ac0bd4b12010f9d2ed514",
+      "metrics_sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5"
+    },
+    "known-gaps": {
+      "commands_sha256": "0d586610e187e81ffa1e8db290b38e1cf45e3c712e30e9bed05f52f3f3ba267a",
+      "metrics_sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5"
+    },
+    "linear": {
+      "commands_sha256": "000abf79956573ee386d3b23b26717f874f4a5311e5118aa211f0b141ac0ea23",
+      "metrics_sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5"
+    },
+    "partial": {
+      "commands_sha256": "4d98c3784b700dad1b3e1e69d1aa2aff6f1fdc8951d52c73ef675b469f0d89b3",
+      "metrics_sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5"
+    },
+    "qcp": {
+      "commands_sha256": "5cd3bdc11488dc6020285cd116e26214717be416be81b55eba958191a4ac203b",
+      "metrics_sha256": "3e39476b7c773cc6cf2f9490ddc40a2ce6386a16f0f5fda5c9bfef7093d49869"
+    },
+    "quick": {
+      "commands_sha256": "ab4b3f12cc95f7b9dea95acc441dcbfb61a70f060d62c219371bea376dbaa7d1",
+      "metrics_sha256": "3e39476b7c773cc6cf2f9490ddc40a2ce6386a16f0f5fda5c9bfef7093d49869"
+    },
+    "regression-alia": {
+      "commands_sha256": "aaa3806e8c7aafb37bb1e015d944874fd0768ae1bed9195c80f9702e66d3534e",
+      "metrics_sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5"
+    },
+    "regression-alra": {
+      "commands_sha256": "f00eefcb0f318d0ff534adbfef1bec458e79cafef266d3c10246528022f36b3a",
+      "metrics_sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5"
+    },
+    "regression-ania": {
+      "commands_sha256": "ff7345eb6b62b549cbfe4238cad71a6a05adda5d005b6c771d6077a26d21c061",
+      "metrics_sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5"
+    },
+    "regression-auflia": {
+      "commands_sha256": "96f6d2cf5596a8d076eca38972755d368dbf556d56dbce6362b0f25e9550ab5c",
+      "metrics_sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5"
+    },
+    "regression-auflra": {
+      "commands_sha256": "7c05d3a74564feaffc485ad46274c3303d20f65f20514e4c67990ac3856ee3de",
+      "metrics_sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5"
+    },
+    "regression-aufnia": {
+      "commands_sha256": "da0062f384abb22c7eb8fc550029fa32a13c1b5dafe0f49d3a1dc1a4758f6899",
+      "metrics_sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5"
+    },
+    "regression-ax": {
+      "commands_sha256": "592a8f4bbcfff0090dcdc080bc2985d0779f0f223676179ece56daf4bb7f6902",
+      "metrics_sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5"
+    },
+    "regression-bool": {
+      "commands_sha256": "029a75679b7f775888d4f7dab44de8e52c4452cccd56aef287a7ce268cdce43a",
+      "metrics_sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5"
+    },
+    "regression-dt": {
+      "commands_sha256": "25eb41239f4efd6294d32d4450dd8ec4c91fe38036a02135a3c81f9903773f8e",
+      "metrics_sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5"
+    },
+    "regression-euf": {
+      "commands_sha256": "78c5abee6370008830271657f0c1d638ca4c0e992d1156c7be01ba9fc433a332",
+      "metrics_sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5"
+    },
+    "regression-idl": {
+      "commands_sha256": "7f73c72d9d1d1b357619b5e25f947598be847ba6fd5fbbfd0e2d5d29fe1cf98c",
+      "metrics_sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5"
+    },
+    "regression-lia": {
+      "commands_sha256": "5ae32aa63dcd0c82e44ca2225db929dbf03c85dfec5df781e8611843b57ef5b3",
+      "metrics_sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5"
+    },
+    "regression-lira": {
+      "commands_sha256": "b0d79f2f4a5f339899c688256deedfa8ed3268d52aeb68bf2d6045ab30855ce6",
+      "metrics_sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5"
+    },
+    "regression-lra": {
+      "commands_sha256": "22a9dcead2079c7bf2107fa481adbb8ef8427838fce13e9666ec34ee8bffe7f8",
+      "metrics_sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5"
+    },
+    "regression-nia": {
+      "commands_sha256": "490a8938cd8e6afd00bd10555f868ab4fa1d2a5bc2a346e98f6be68adb1120b7",
+      "metrics_sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5"
+    },
+    "regression-nira": {
+      "commands_sha256": "9578c49aedf60b107d28c96f865553bc46fe21b55c0e19f7ef4079a787c493fb",
+      "metrics_sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5"
+    },
+    "regression-nra": {
+      "commands_sha256": "f6152f96a8886469206defc48d7c389c347bbc33931ba23f26e988c2e99b6d12",
+      "metrics_sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5"
+    },
+    "regression-quantifiers": {
+      "commands_sha256": "fce541d29b36e1240761da9ec0042af92b518b8ed89aef2f146509fb6c580822",
+      "metrics_sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5"
+    },
+    "regression-rdl": {
+      "commands_sha256": "161978fff38a8f13b13c43cd3346ab6fa8171562cf87a1867e229b525ebcb142",
+      "metrics_sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5"
+    },
+    "regression-sl": {
+      "commands_sha256": "3f6640c4ed9d414f23a2fc2c5386839f8eddab9512f0accaa26dff5ffcd11e42",
+      "metrics_sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5"
+    },
+    "regression-ufdtlia": {
+      "commands_sha256": "260dbdbac8a0bd5e1163dc7b1fcf8e5c105cdd71d4eba49480ba188f9f4c9e8d",
+      "metrics_sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5"
+    },
+    "regression-ufdtnia": {
+      "commands_sha256": "90f8d6a88f976f87fdbb8651a4c2aacd8dda3145e5aa6823fb401bb71d6657e0",
+      "metrics_sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5"
+    },
+    "regression-uflia": {
+      "commands_sha256": "ba102471dae7914ff6cb83f106c6d1fb67bc269627d8350d99adf8764da8a659",
+      "metrics_sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5"
+    },
+    "regression-uflra": {
+      "commands_sha256": "b8e30d3c1a6c18810c8b9999c72d9615c1daf3d0b8c5912bceda357c551a4527",
+      "metrics_sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5"
+    },
+    "regression-ufnia": {
+      "commands_sha256": "31e8c6cf7ed3037199a2c79af8665d1fb73441dbc37f02f54bb05ed8e5de7ece",
+      "metrics_sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5"
+    },
+    "regression-ufnra": {
+      "commands_sha256": "7ec245d5f23b79e313141c0628af6f4270e0ce67cc13740001f3666e53e53cbc",
+      "metrics_sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5"
+    },
+    "root-regressions": {
+      "commands_sha256": "9af97803f8886a5783487a2f266d2f7d8af60789c57de139bdf176f74624c6dc",
+      "metrics_sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5"
+    },
+    "theory-models": {
+      "commands_sha256": "a565770e36ad9e3c6c867538f1303a4caae4ae58ecded1c565320acb4fa4f93f",
+      "metrics_sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5"
+    }
+  },
+  "acceptance_provenance": {
+    "theory-models": {
+      "experiment": "3482ec9a82bb",
+      "run": "04a43161d2c5",
+      "cpu_ids": [
+        "2"
+      ]
+    },
+    "regression-nia": {
+      "experiment": "3482ec9a82bb",
+      "run": "ee8731100ba9",
+      "cpu_ids": [
+        "4"
+      ]
+    },
+    "qcp": {
+      "experiment": "3482ec9a82bb",
+      "run": "787f3f9d2b13",
+      "cpu_ids": [
+        "5"
+      ]
+    },
+    "root-regressions": {
+      "experiment": "d08eb78a066c",
+      "run": "545b71f576b8",
+      "cpu_ids": [
+        "1"
+      ]
+    },
+    "architecture": {
+      "experiment": "d08eb78a066c",
+      "run": "8b02a6797782",
+      "cpu_ids": [
+        "3"
+      ]
+    },
+    "known-gaps": {
+      "experiment": "d08eb78a066c",
+      "run": "e590c75cf036",
+      "cpu_ids": [
+        "4"
+      ]
+    },
+    "affine": {
+      "experiment": "d08eb78a066c",
+      "run": "9f08075d47b7",
+      "cpu_ids": [
+        "6"
+      ]
+    },
+    "linear": {
+      "experiment": "d08eb78a066c",
+      "run": "dcafcf580e5a",
+      "cpu_ids": [
+        "7"
+      ]
+    },
+    "partial": {
+      "experiment": "d08eb78a066c",
+      "run": "238d0cb258bd",
+      "cpu_ids": [
+        "8"
+      ]
+    },
+    "intervals": {
+      "experiment": "d08eb78a066c",
+      "run": "87f715967584",
+      "cpu_ids": [
+        "9"
+      ]
+    },
+    "quick": {
+      "experiment": "d08eb78a066c",
+      "run": "a114289853c7",
+      "cpu_ids": [
+        "13"
+      ]
+    },
+    "ite": {
+      "experiment": "d08eb78a066c",
+      "run": "e78d02b0b895",
+      "cpu_ids": [
+        "15"
+      ]
+    },
+    "ite-structure": {
+      "experiment": "d08eb78a066c",
+      "run": "d03a66a7347a",
+      "cpu_ids": [
+        "16"
+      ]
+    },
+    "regression-alia": {
+      "experiment": "d08eb78a066c",
+      "run": "6472be3c858f",
+      "cpu_ids": [
+        "18"
+      ]
+    },
+    "regression-alra": {
+      "experiment": "d08eb78a066c",
+      "run": "e211bab56490",
+      "cpu_ids": [
+        "19"
+      ]
+    },
+    "regression-ania": {
+      "experiment": "d08eb78a066c",
+      "run": "4115b9efee11",
+      "cpu_ids": [
+        "20"
+      ]
+    },
+    "regression-auflia": {
+      "experiment": "d08eb78a066c",
+      "run": "30d1d577fa15",
+      "cpu_ids": [
+        "22"
+      ]
+    },
+    "regression-auflra": {
+      "experiment": "d08eb78a066c",
+      "run": "404d4c7fb8bf",
+      "cpu_ids": [
+        "23"
+      ]
+    },
+    "regression-aufnia": {
+      "experiment": "d08eb78a066c",
+      "run": "7aebf68b8497",
+      "cpu_ids": [
+        "24"
+      ]
+    },
+    "regression-ax": {
+      "experiment": "d08eb78a066c",
+      "run": "2dcfda799df1",
+      "cpu_ids": [
+        "25"
+      ]
+    },
+    "regression-bool": {
+      "experiment": "d08eb78a066c",
+      "run": "4852f956cd9c",
+      "cpu_ids": [
+        "27"
+      ]
+    },
+    "regression-dt": {
+      "experiment": "d08eb78a066c",
+      "run": "061bd09bee11",
+      "cpu_ids": [
+        "29"
+      ]
+    },
+    "regression-euf": {
+      "experiment": "d08eb78a066c",
+      "run": "523e05bb5470",
+      "cpu_ids": [
+        "31"
+      ]
+    },
+    "regression-idl": {
+      "experiment": "d08eb78a066c",
+      "run": "5392cbfd1aa4",
+      "cpu_ids": [
+        "32"
+      ]
+    },
+    "regression-lia": {
+      "experiment": "d08eb78a066c",
+      "run": "c08bd3d4b7b9",
+      "cpu_ids": [
+        "33"
+      ]
+    },
+    "regression-lira": {
+      "experiment": "d08eb78a066c",
+      "run": "e5d4ca3640e5",
+      "cpu_ids": [
+        "34"
+      ]
+    },
+    "regression-lra": {
+      "experiment": "d08eb78a066c",
+      "run": "92566ee1a3c5",
+      "cpu_ids": [
+        "35"
+      ]
+    },
+    "regression-nira": {
+      "experiment": "d08eb78a066c",
+      "run": "f5577a3c9cca",
+      "cpu_ids": [
+        "39"
+      ]
+    },
+    "regression-nra": {
+      "experiment": "d08eb78a066c",
+      "run": "336f3c6e64f5",
+      "cpu_ids": [
+        "40"
+      ]
+    },
+    "regression-quantifiers": {
+      "experiment": "d08eb78a066c",
+      "run": "890401eb7ca3",
+      "cpu_ids": [
+        "42"
+      ]
+    },
+    "regression-rdl": {
+      "experiment": "d08eb78a066c",
+      "run": "5244f4ae0eb0",
+      "cpu_ids": [
+        "44"
+      ]
+    },
+    "regression-sl": {
+      "experiment": "d08eb78a066c",
+      "run": "7bad382cd53d",
+      "cpu_ids": [
+        "46"
+      ]
+    },
+    "regression-ufdtlia": {
+      "experiment": "d08eb78a066c",
+      "run": "b0105c0bad05",
+      "cpu_ids": [
+        "47"
+      ]
+    },
+    "regression-ufdtnia": {
+      "experiment": "d08eb78a066c",
+      "run": "a044fd15e02e",
+      "cpu_ids": [
+        "48"
+      ]
+    },
+    "regression-uflia": {
+      "experiment": "d08eb78a066c",
+      "run": "7219e28dece2",
+      "cpu_ids": [
+        "49"
+      ]
+    },
+    "regression-uflra": {
+      "experiment": "d08eb78a066c",
+      "run": "950459445241",
+      "cpu_ids": [
+        "51"
+      ]
+    },
+    "regression-ufnia": {
+      "experiment": "d08eb78a066c",
+      "run": "fadcc38c2571",
+      "cpu_ids": [
+        "52"
+      ]
+    },
+    "regression-ufnra": {
+      "experiment": "d08eb78a066c",
+      "run": "b51ac757c535",
+      "cpu_ids": [
+        "53"
+      ]
+    }
+  },
+  "source_head": "1dbbc01d8a706a8f0a242e1017179674d73f845f",
+  "source_manifest_sha256": "2220b5c0f56363eac441f1a8aae9e31554c59135a5a4576d9e3f39a47ae90bd8",
+  "experiments": {
+    "nia": "b80b4aafd8e0",
+    "targeted_acceptance": "3482ec9a82bb",
+    "remaining_acceptance": "d08eb78a066c"
+  },
+  "duplicate_submission_error": {
+    "cause": "Submitted before updated spec upload completed; previous 38-name spec was parsed instead of the intended 35 remaining names.",
+    "failed_duplicates": [
+      "theory-models",
+      "qcp",
+      "regression-nia"
+    ],
+    "resolution": "Retain failed duplicates; use the original valid targeted runs without rerunning or replacing them."
+  },
+  "protected_sets_used": false,
+  "evidence_boundary": "48 NIA development cases only; full160 comparison is separate and in progress. No Z3 superiority claim."
+}

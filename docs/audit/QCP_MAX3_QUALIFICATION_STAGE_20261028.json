@@ -1,0 +1,86 @@
+{
+  "schema": 1,
+  "program": "QCP_examples/QCP_demos_human/simple_arith/max3.c",
+  "c_sha256": "7ddaa9f590cd9c37d3dd644ea280ecd3fa6cee084441c82caf9c0e1afb6dde5d",
+  "qcp_revision": "08cc7a0f1373a1db3800111a0205a340b6d6f99c",
+  "run": "max3_backend_r334-20261028203259",
+  "preserved_contract": "Signed 32-bit x,y,z; result >= x and result >= y and result >= z. C body and original specification unchanged.",
+  "audits": {
+    "xolver": {
+      "schema": 1,
+      "program_verified": true,
+      "backend_qualified": true,
+      "programs": 1,
+      "verification_conditions": 4,
+      "verified_vcs": 4,
+      "external_backend_queries": 12,
+      "external_unsat": 12,
+      "external_query_seconds": 0.4039072524756193,
+      "external_query_scope": "Supplied backend reports only; absent reports do not establish zero total calls",
+      "opaque_internal_qcp_queries": null,
+      "errors": [],
+      "backend_errors": [],
+      "hashes": {
+        "goal": "fbfdbcda4ce02d4e7c4ea5ee06b4912eb24b80c0702b1f800655ea029735c162",
+        "proofs": {
+          "/pub/data/jiafq/xolver/dependencies/qcp-08cc7a0f/Rocq/examples/QCP_demos_human/simple_arith/max3_backend_r334_proof_auto.v": "5a46cfd4b00c373afac18c43a1c9766b3c7d26a02562acf6acece037d07b7588",
+          "/pub/data/jiafq/xolver/dependencies/qcp-08cc7a0f/Rocq/examples/QCP_demos_human/simple_arith/max3_backend_r334_proof_manual.v": "d4f1ab42f176b6cc33be2b01e7eea5ae0353553831651b6b567ba6d7720002ba"
+        },
+        "final_check": "c40d13daf78acd147ea51e19c4b66bad470fbd297cef4c00355275e5ba8f565f",
+        "state": "2bcc4aa15e280824ab748e467a01f6c1503c6ed304d163241e08a8ec913af917",
+        "backend_reports": {
+          "/pub/data/jiafq/xolver/validation/arithmetic-r103/max3-r334/backend-xolver/report.json": "a44f7713a0f2945fdf5c0300f485db05920a9cd11ef98f70aa6865886bf3185c"
+        }
+      },
+      "evidence_boundary": "Consumes an authenticated canonical controller final-check plus current proof coverage; does not replace Rocq. Pinned QCP frontend and libraries remain the common trusted base. This is qualification, not a timed program performance comparison."
+    },
+    "z3": {
+      "schema": 1,
+      "program_verified": true,
+      "backend_qualified": true,
+      "programs": 1,
+      "verification_conditions": 4,
+      "verified_vcs": 4,
+      "external_backend_queries": 12,
+      "external_unsat": 12,
+      "external_query_seconds": 0.4025681782513857,
+      "external_query_scope": "Supplied backend reports only; absent reports do not establish zero total calls",
+      "opaque_internal_qcp_queries": null,
+      "errors": [],
+      "backend_errors": [],
+      "hashes": {
+        "goal": "fbfdbcda4ce02d4e7c4ea5ee06b4912eb24b80c0702b1f800655ea029735c162",
+        "proofs": {
+          "/pub/data/jiafq/xolver/dependencies/qcp-08cc7a0f/Rocq/examples/QCP_demos_human/simple_arith/max3_backend_r334_proof_auto.v": "5a46cfd4b00c373afac18c43a1c9766b3c7d26a02562acf6acece037d07b7588",
+          "/pub/data/jiafq/xolver/dependencies/qcp-08cc7a0f/Rocq/examples/QCP_demos_human/simple_arith/max3_backend_r334_proof_manual.v": "d4f1ab42f176b6cc33be2b01e7eea5ae0353553831651b6b567ba6d7720002ba"
+        },
+        "final_check": "c40d13daf78acd147ea51e19c4b66bad470fbd297cef4c00355275e5ba8f565f",
+        "state": "2bcc4aa15e280824ab748e467a01f6c1503c6ed304d163241e08a8ec913af917",
+        "backend_reports": {
+          "/pub/data/jiafq/xolver/validation/arithmetic-r103/max3-r334/backend-z3/report.json": "d2434f1bfbfd38112cd00a3293636985bce57f82c5840804b3a52dbbd0fe91c6"
+        }
+      },
+      "evidence_boundary": "Consumes an authenticated canonical controller final-check plus current proof coverage; does not replace Rocq. Pinned QCP frontend and libraries remain the common trusted base. This is qualification, not a timed program performance comparison."
+    }
+  },
+  "frozen_backends": {
+    "xolver": "eaa3b5b87c2b5df589729a728a5e6bc3d4bb4a0b23ca9205f1baea0581874567",
+    "z3": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+  },
+  "eos": {
+    "xolver_queries": "e52d69578ad1",
+    "z3_queries": "7df1902086c5",
+    "group_check": "a7c6b41dae1d",
+    "parent_check": "3fd76b775e50",
+    "final_apply": "b449248c4d5f",
+    "final_check": "b1425a26c02d",
+    "independent_program_audits": "a4c87f70584c"
+  },
+  "new_unique_development_programs": 1,
+  "total_unique_qualified_development_programs": 3,
+  "prior_programs": [
+    "branch_destruct",
+    "gcd"
+  ],
+  "boundary": "Qualification of one additional complete original C program. Both frozen backend candidates match the single canonical Rocq-checked proof. This is not two fresh independently timed end-to-end runs or a fair program-suite speed comparison. Native QCP internal SMT remains opaque/common; only post-VC backend queries are counted. GCD retains partial external-backend coverage. Neither protected set was read."
+}

@@ -1377,6 +1377,70 @@ and `source-r336.tar.json`. The commit was rebased onto delivered PR56 with an
 identical file tree. This corrects the comparison protocol; it adds no solved
 SMT input or verified-program count. Neither protected set was used.
 
+## Delivery receipt and explained affine endpoints (R346–R355)
+
+PR57 merged as `b15551b37d9154856b0c5671a971ac05dd919ad8`.
+Both jobs passed in [PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/40697097275)
+and [main CI](https://github.com/fuqi-jia/Xolver/actions/runs/40702037717).
+
+The presolve-domain transfer experiment R338–R345 remains unselected. It passed
+1,714 native tests, but the first valid five-case comparison solved three with
+each version: PAR-2 274.724 versus 277.424 seconds. Its sole apparent gain came
+from an invalid baseline timing; the first unchanged-version paired retry
+removed that gain. Original failures and superseded observations remain in
+`stage-r345.json`. This was not a propagation memory-pool experiment.
+
+R347 identifies a different omission: early NIA domain inference handled only
+single-variable atoms and zero-offset `x=y`. Active rows such as `x=2y` and
+the two inequalities expressing `i_next=i+1` left derivable endpoints absent.
+R348 (`dcf6b8e0a3f5`) reproduces missing bounds through an affine dependency
+chain. Core commit `1dbbc01d` replaces the narrow second pass with a shared
+linear worklist. It uses exact rational endpoints, strictness, complete row and
+endpoint guards, per-variable sort-aware integer rounding, and a work budget.
+Only rows affected by strict progress are revisited. NIA consumes the shared
+engine before early bit-blasting; LRA/LIA backtracking policies are unchanged.
+
+R350 native qualification (`821b38f26614`) passes **1,714 tests / 859,636
+assertions**, including **56 targeted tests / 86,214 assertions**, and three
+CTest checks. Frozen CLI SHA-256:
+`b337850528f80c31d0a364a097bb4147181618e989df37173741b1d2f8831fca`.
+SV retains `99130012b880f255cd8bbaf456d4031d07649792c83c430acb5649a547bb89ef`.
+
+The [R355 stage record](LINEAR_BOUND_PROPAGATION_STAGE_20261028.json) audits all
+48 fixed NIA cases (EOS `b80b4aafd8e0`): **24 / 25 / 29 independently verified
+solves** for main / candidate / Z3, with verified PAR-2 **2938.758 / 2837.254 /
+2313.667 seconds**. Z3 has 34 raw decisions; unresolved results stay excluded.
+The existing original-input certificate for 115 was checked again and attached
+as supplementary truth, without changing timed observations. The only gain is
+index 40, `gauss_sum`: main timeout, candidate UNSAT 20.042 s, Z3 UNSAT 0.217 s.
+It repeats the five-case pilot gain. No solve was lost; no wrong verdict,
+rejected model, or protocol-invalid row occurred. Instrumented diagnostics show
+145 bounded/fixed variables instead of four and zero allocated SAT variables;
+these diagnostic runs are excluded from timing scores. All 38 unique acceptance
+items pass. Three duplicate submissions failed before executing checks because
+an older spec was parsed during upload; their original valid targeted results
+are retained explicitly in the provenance.
+
+The frozen full160 comparison R354 (`7847f8d0c8cd`) is in progress. These NIA
+results do not establish whole-suite improvement or superiority to Z3. Neither
+protected set has been used.
+
+## Additional complete QCP development program (max3 R334)
+
+[The max3 record](QCP_MAX3_QUALIFICATION_STAGE_20261028.json) authenticates the
+unchanged original C body and signed-input maximum contract. All four original
+VCs have complete proofs; each frozen R314 Xolver/Z3 backend supplies 12 UNSAT
+queries. Group, parent, publication and fresh canonical final-check pass, followed
+by separate program audits for each frozen backend. Their candidates match the
+same Rocq-checked proof. The final-check EOS is `b1425a26c02d`; independent
+audits are `a4c87f70584c`.
+
+Unique qualified development programs increase from two to three: branch,
+GCD and max3. GCD still has partial external-backend coverage. This is not two
+fresh timed end-to-end runs or a fair program-suite comparison. The pinned
+native QCP frontend and opaque internal SMT remain common; external query
+counts cannot establish total internal calls. Neither protected set was read.
+
 ## Closed experiments and practical regressions
 
 R178 replaced the square-cascade's ad hoc coefficient-Horner substitution with
