@@ -9,6 +9,7 @@
 #include "search/bitblast/PseudoBooleanEncoder.h"
 #include "search/linear/LinearBoundPropagation.h"
 #include "algebra/linear/LinearExpr.h"
+#include "algebra/poly/PolynomialEvaluation.h"
 #include "contracts/SatSolver.h"
 #include <algorithm>
 #include <functional>
@@ -781,6 +782,7 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const NativeTerms& ir,
         for (const auto& v : intVars_) model[v] = readBitVec(*sat, varBits.at(v));
         std::unordered_map<ExprId, bool> boolModel;
         for (const auto& kv : boolVars) boolModel[kv.first] = litValue(*sat, kv.second);
+        const auto evaluation = makePolynomialEvaluation(*kernel_, model);
 
         std::function<bool(ExprId)> ev = [&](ExprId eid) -> bool {
             const TermExpr& e = ir.get(eid);
@@ -806,7 +808,7 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const NativeTerms& ir,
                                 if (part.second != Relation::Eq) return false;  // conflict marker
                                 continue;                                       // tautology marker
                             }
-                            auto val = kernel_->evalInteger(part.first, model);
+                            auto val = evaluation->evaluateInteger(part.first);
                             if (!val || !relationHolds(*val, part.second)) return false;
                         }
                         return true;

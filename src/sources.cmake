@@ -35,6 +35,7 @@ set(XOLVER_ALGEBRA_SOURCES
     "algebra/poly/LibPolyKernel.cpp"
     "algebra/poly/PolynomialConstraint.cpp"
     "algebra/poly/PolynomialConverter.cpp"
+    "algebra/poly/PolynomialEvaluation.cpp"
     "algebra/poly/PolynomialKernel.cpp"
     "algebra/poly/RationalPolynomial.cpp"
 )
