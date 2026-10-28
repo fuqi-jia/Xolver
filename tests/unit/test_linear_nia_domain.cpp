@@ -141,3 +141,31 @@ TEST_CASE("LinearNiaDomain: large coeff 1000000x+999999<=0 -> x<=-1") {
     CHECK(d->hasUpper);
     CHECK(d->upper.value == -1);
 }
+
+TEST_CASE("LinearNiaDomain: affine chains retain endpoint explanations") {
+    auto kernel = createPolynomialKernel();
+    LinearNiaDomainReasoner reasoner(*kernel);
+    DomainStore domains;
+    const auto x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    const auto y = kernel->mkVar(kernel->getOrCreateVar("y"));
+    const auto z = kernel->mkVar(kernel->getOrCreateVar("z"));
+    // Reverse dependency order requires revisiting x=2y after y=z+1.
+    std::vector<NormalizedNiaConstraint> constraints{
+        {kernel->sub(x, kernel->mul(kernel->mkConst(2), y)), Relation::Eq, mkReason(3)},
+        {kernel->sub(kernel->sub(y, z), kernel->mkConst(1)), Relation::Eq, mkReason(4)},
+        makeLinearConstraint(*kernel, "z", 1, 2, Relation::Geq, mkReason(1)),
+        makeLinearConstraint(*kernel, "z", 1, -5, Relation::Leq, mkReason(2))};
+    reasoner.run(constraints, domains);
+    const auto* derived = domains.getDomain("x");
+    REQUIRE(derived != nullptr);
+    REQUIRE(derived->hasLower);
+    REQUIRE(derived->hasUpper);
+    CHECK(derived->lower.value == -2);
+    CHECK(derived->upper.value == 12);
+    for (const auto& bound : {derived->lower, derived->upper}) {
+        CHECK(std::find(bound.reasons.begin(), bound.reasons.end(), mkReason(3)) != bound.reasons.end());
+        CHECK(std::find(bound.reasons.begin(), bound.reasons.end(), mkReason(4)) != bound.reasons.end());
+    }
+    CHECK(std::find(derived->lower.reasons.begin(), derived->lower.reasons.end(), mkReason(1)) != derived->lower.reasons.end());
+    CHECK(std::find(derived->upper.reasons.begin(), derived->upper.reasons.end(), mkReason(2)) != derived->upper.reasons.end());
+}
