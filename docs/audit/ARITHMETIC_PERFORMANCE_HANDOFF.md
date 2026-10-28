@@ -1406,7 +1406,7 @@ CTest checks. Frozen CLI SHA-256:
 `b337850528f80c31d0a364a097bb4147181618e989df37173741b1d2f8831fca`.
 SV retains `99130012b880f255cd8bbaf456d4031d07649792c83c430acb5649a547bb89ef`.
 
-The [R355 stage record](LINEAR_BOUND_PROPAGATION_STAGE_20261028.json) audits all
+The [NIA stage record](LINEAR_BOUND_PROPAGATION_STAGE_20261028.json) audits all
 48 fixed NIA cases (EOS `b80b4aafd8e0`): **24 / 25 / 29 independently verified
 solves** for main / candidate / Z3, with verified PAR-2 **2938.758 / 2837.254 /
 2313.667 seconds**. Z3 has 34 raw decisions; unresolved results stay excluded.
@@ -1421,9 +1421,26 @@ items pass. Three duplicate submissions failed before executing checks because
 an older spec was parsed during upload; their original valid targeted results
 are retained explicitly in the provenance.
 
-The frozen full160 comparison R354 (`7847f8d0c8cd`) is in progress. These NIA
-results do not establish whole-suite improvement or superiority to Z3. Neither
-protected set has been used.
+The frozen full160 comparison R354 (`7847f8d0c8cd`) and final audit R358
+(`2085da11c5ee`) pass. The [full comparison record](LINEAR_BOUND_FULL_COMPARISON_STAGE_20261028.json)
+reports **main 92 / candidate 93 / Z3 115 verified solves**, with verified PAR-2
+**8419.877 / 8322.680 / 5609.762 seconds**. Xolver changes from 52 SAT / 40
+UNSAT / 68 timeouts to 52 SAT / 41 UNSAT / 67 timeouts; neither has an unknown
+in this round. Z3 has 124 raw decisions, with nine unresolved decisions excluded.
+Index 40 is again the only gain: candidate UNSAT 20.078 s versus main timeout
+and Z3 UNSAT 0.218 s. No solve is lost, no verdict/model is rejected, and all
+160 original paired rows satisfy the timing protocol; no retry is substituted.
+
+The lease audit checks 254 task envelopes across the formal round, NIA round,
+pilot and acceptance runs, with one allocated physical CPU per task and zero
+physical execution overlap. All 38 unique acceptance items remain valid; failed
+duplicate submissions are explicitly retained. R359 corrects R355's omitted
+per-logic certificate counter adjustment; total NIA scores and every timed
+observation are unchanged. The original aggregation is retained on Panda1.
+
+This establishes one additional verified solve in the primary development suite.
+It does not exceed Z3. Neither protected set has been used. The C++ code is in
+[PR58](https://github.com/fuqi-jia/Xolver/pull/58); PR CI and merge are pending.
 
 ## Additional complete QCP development program (max3 R334)
 

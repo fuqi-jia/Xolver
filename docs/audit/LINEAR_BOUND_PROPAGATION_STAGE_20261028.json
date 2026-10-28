@@ -53,8 +53,8 @@
         "baseline": {
           "timeout": 24,
           "decided": 24,
-          "verified_decided": 23,
-          "verified_par2": 3058.690927473828,
+          "verified_decided": 24,
+          "verified_par2": 2938.758192157373,
           "raw_par2": 2938.758192157373,
           "unsat": 11,
           "sat": 13
@@ -62,8 +62,8 @@
         "candidate": {
           "timeout": 23,
           "decided": 25,
-          "verified_decided": 24,
-          "verified_par2": 2957.2185610830784,
+          "verified_decided": 25,
+          "verified_par2": 2837.2536571361125,
           "raw_par2": 2837.2536571361125,
           "unsat": 12,
           "sat": 13
@@ -171,7 +171,6 @@
     "scoring": "Correct verdicts require a replayed model or an independent UNSAT decision on the identical input hash; unresolved results receive PAR-2 penalty.",
     "supplementary_certificate": {
       "index": 115,
-      "path": "/pub/data/jiafq/xolver/docs/audit/ORIGINAL_UNSAT115_MOD_CERTIFICATE.json",
       "sha256": "48f5d0ca9b19679a48f3248ac1183c31d09e0c198bfda0a70b3b4272b6d1a5ba",
       "check": {
         "status": "checked-unsat",
@@ -182,7 +181,7 @@
         ],
         "checked_residues": 12
       },
-      "scope": "Independent evidence only; original timed observations unchanged"
+      "scope": "Independent evidence only; no original timed observation changed"
     }
   },
   "acceptance": {
@@ -624,5 +623,10 @@
     "resolution": "Retain failed duplicates; use the original valid targeted runs without rerunning or replacing them."
   },
   "protected_sets_used": false,
-  "evidence_boundary": "48 NIA development cases only; full160 comparison is separate and in progress. No Z3 superiority claim."
+  "evidence_boundary": "48 NIA development cases only; full160 comparison is separate and in progress. No Z3 superiority claim.",
+  "superseded_aggregation": {
+    "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/stage-r355.json",
+    "sha256": "e8387f55d7bc538afa298373d75b5645873e50f99bbf00afcd2189d4848e1dd6",
+    "reason": "Supplementary certificate was missing from per-logic counters; total scores and timed decisions are unchanged"
+  }
 }
