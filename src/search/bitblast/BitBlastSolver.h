@@ -85,7 +85,6 @@ private:
         IntegerModel model;
         bool complete = false;
         std::optional<TheoryConflict> conflict;
-        std::vector<std::string> refine;
     };
     Attempt attemptAtWidths(const BitWidthPlan& plan,
                             const std::vector<NormalizedNiaConstraint>& cs,

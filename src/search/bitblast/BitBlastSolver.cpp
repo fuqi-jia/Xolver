@@ -298,6 +298,7 @@ BitBlastSolver::Attempt BitBlastSolver::attemptAtWidths(
         if (!failedKeys.empty() && selected.size() == failedKeys.size()) {
             std::unordered_set<std::string> variables;
             std::vector<NormalizedNiaConstraint> premises;
+            size_t unbounded = 0;
             a.complete = true;
             for (const auto& [id, source] : selected) {
                 (void)id;
@@ -305,19 +306,17 @@ BitBlastSolver::Attempt BitBlastSolver::attemptAtWidths(
                     premises.push_back(cs[source.fact->constraint]);
                 for (const auto& variable : source.variables) {
                     variables.insert(variable);
-                    const auto* d = domains.getDomain(variable);
-                    if (!d || !d->hasLower || !d->hasUpper) a.complete = false;
                 }
             }
-            if (a.complete) a.conflict = buildCompleteConflict(premises, domains, &variables);
-            else for (const auto& variable : variables) {
+            for (const auto& variable : variables) {
                 const auto* d = domains.getDomain(variable);
-                if (!d || !d->hasLower || !d->hasUpper) a.refine.push_back(variable);
+                if (!d || !d->hasLower || !d->hasUpper) ++unbounded;
             }
-            std::sort(a.refine.begin(), a.refine.end());
+            a.complete = unbounded == 0;
+            if (a.complete) a.conflict = buildCompleteConflict(premises, domains, &variables);
             if (bbProf) std::cerr << "[BB-CORE] facts=" << facts.size()
                 << " selected=" << selected.size() << " variables=" << variables.size()
-                << " unbounded=" << a.refine.size() << " complete=" << a.complete << '\n';
+                << " unbounded=" << unbounded << " complete=" << a.complete << '\n';
         } else if (full && !enc.overflowed() && plan.boxIsComplete) {
             // A backend without a usable assumption core retains the original
             // complete-box path, with every source/domain justification.
@@ -407,9 +406,14 @@ BitBlastResult BitBlastSolver::solve(const std::vector<NormalizedNiaConstraint>&
                 unbounded.push_back(entry.first);
             }
         }
-        for (const auto& v : unbounded) plan.width[v] = std::min(2u, maxBW_);
+        // A failed core can settle a bounded subproblem, but refining only its
+        // variables lets independent contradictions consume the shared attempt
+        // budget one after another. Preserve the original simultaneous width
+        // cascade so an irrelevant core cannot starve another integer variable.
+        unsigned width = std::min(2u, maxBW_);
         for (unsigned iter = 0; iter < maxIters_; ++iter) {
             if (wall::hasDeadline() && wall::remainingMs() == 0) return result;
+            for (const auto& v : unbounded) plan.width[v] = width;
             Attempt attempt = attemptAtWidths(plan, cs, domains, validator);
             if (attempt.kind == Attempt::Sat) {
                 result.status = BitBlastResult::Status::Sat;
@@ -424,15 +428,8 @@ BitBlastResult BitBlastSolver::solve(const std::vector<NormalizedNiaConstraint>&
                 return result;
             }
             if (plan.boxIsComplete || attempt.kind == Attempt::Overflow) return result;
-            const auto& refine = attempt.refine.empty() ? unbounded : attempt.refine;
-            bool changed = false;
-            for (const auto& v : refine) {
-                auto& width = plan.width.at(v);
-                if (width == maxBW_) continue;
-                width = width > maxBW_ / 2 ? maxBW_ : width * 2;
-                changed = true;
-            }
-            if (!changed) break;
+            if (width == maxBW_) break;
+            width = width > maxBW_ / 2 ? maxBW_ : width * 2;
         }
         return result; // Artificial bounds never justify an integer conflict.
     };
