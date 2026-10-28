@@ -1,0 +1,34 @@
+{
+  "kind": "integer-polynomial-mod-zero",
+  "version": 1,
+  "input_sha256": "02a58b11df8951543940a1090a140592e24de41dcaeb6470e7a50d42e804be64",
+  "assertion": 9,
+  "path": [
+    2
+  ],
+  "modulus": 12,
+  "variable": "v_ULTIMATE.start_main_~y~0#1_BEFORE_CALL_9",
+  "coefficients": [
+    0,
+    0,
+    1,
+    0,
+    7,
+    6,
+    10
+  ],
+  "residues": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+  ]
+}
