@@ -1173,6 +1173,43 @@ PR55's original-input checker was merged as `15586431` after both
 passed; its [main CI](https://github.com/fuqi-jia/Xolver/actions/runs/40653122590)
 is the sequential integration checkpoint before merging PR54.
 
+## Main delivery receipt and unselected root-stop experiment (R294–R297)
+
+PR55 merged as `15586431`; both PR CI jobs (`40651147379`) and both main CI
+jobs (`40653122590`) passed. PR54 subsequently merged as `08b99eaf`; both
+final-head PR CI jobs (`40654254640`) and both main jobs (`40656544660`) passed.
+These are the qualified GitHub delivery checkpoints, without an additional
+server archive requirement.
+
+R294 reproduces unnecessary encoding after a known permanent SAT contradiction:
+one new bounded-prefix test returns unknown after an unrelated polynomial
+exhausts its encoding budget. R296 adds a conservative permanent-inconsistency
+query to the common SAT interface and stops both bit-blast clients after a
+known root conflict. Overflow remains distinct from a logical contradiction;
+assumption-only UNSAT must not become a permanent conflict. All **1,698 native
+tests / 801,334 assertions** pass. The frozen CLI is
+`fd37e61a74fe4709e0570d675565a6300c9fc22c9248f1b40856006555cea413`.
+
+The actual 48-case NIA observation contains **no gained decisions**, six
+protocol-invalid budget overruns (30–35), and one unmatched result at 31:
+baseline SAT in 1.460 s, candidate timeout with an invalid 74.512 s observation.
+No opposite verdict or invalid exported model was seen. This is **not a formally
+qualified coverage/PAR-2 round**; the invalid rows and possible loss are retained.
+No full160 or production merge is justified. The standalone root-stop experiment
+is closed without a performance claim. Its implementation remains an experimental
+base for further proof-scope work, not selected production code.
+
+The paired profile explains the limited opportunity: later root conflicts occur
+after approximately 16,962–16,968 of 17,081 constraints. Stopping this short tail
+does not remove the dominant repeated construction across bit widths. Continue
+by testing completeness of the actual refutation footprint and core-guided width
+refinement; those are hypotheses until separately reproduced and qualified.
+
+Evidence: reproduction `1cda2a8bd9f2`, native build `0cffecdebcbb`, NIA48
+`c540b543de9e`, profiles `0a332286213c`, and frozen source
+`c5d3b9e0267666980a9ec4e82a16bbde40db05f1`. Server overlay for this experiment
+is `source-r296.tar.json`. Neither protected set has been accessed.
+
 ## Closed experiments and practical regressions
 
 R178 replaced the square-cascade's ad hoc coefficient-Horner substitution with

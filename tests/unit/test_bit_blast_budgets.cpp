@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 #include "base/EnvParam.h"
 #include "search/bitblast/BitBlastSolver.h"
+#include <algorithm>
 
 using namespace xolver;
 using Status = bitblast::BitBlastResult::Status;
@@ -204,4 +205,24 @@ TEST_CASE("SAT backend: permanent inconsistency excludes failed assumptions") {
     sat->addClause({x.negated()});
     CHECK(sat->inconsistent());
     CHECK(sat->solve() == SatSolver::SolveResult::Unsat);
+}
+
+TEST_CASE("BitBlastSolver: finite refutation survives connected unbounded variables") {
+    BudgetFixture f;
+    const auto y = f.kernel->mkVar(f.kernel->getOrCreateVar("y"));
+    const auto z = f.kernel->mkVar(f.kernel->getOrCreateVar("z"));
+    f.cs = {{f.kernel->sub(f.kernel->pow(f.x, 2), f.kernel->mkConst(2)),
+             Relation::Eq, SatLit::positive(1)},
+            {f.kernel->sub(f.kernel->add(f.x, y), z), Relation::Eq, SatLit::positive(4)}};
+    f.domains.addLowerBound("x", 0, SatLit::positive(2));
+    f.domains.addUpperBound("x", 2, SatLit::positive(3));
+    f.solver.setMaxIterations(1);
+    const auto result = f.solve();
+    REQUIRE(result.status == Status::UnsatComplete);
+    REQUIRE(result.conflict.has_value());
+    for (unsigned reason : {1u, 2u, 3u})
+        CHECK(std::find(result.conflict->clause.begin(), result.conflict->clause.end(),
+                        SatLit::positive(reason)) != result.conflict->clause.end());
+    CHECK(std::find(result.conflict->clause.begin(), result.conflict->clause.end(),
+                    SatLit::positive(4)) == result.conflict->clause.end());
 }
