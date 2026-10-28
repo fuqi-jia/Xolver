@@ -6,6 +6,7 @@
 #include "search/bitblast/PolyBitBlaster.h"
 #include "search/bitblast/BitVec.h"
 #include "search/bitblast/SpaceEstimator.h"
+#include "search/linear/LinearBoundPropagation.h"
 #include "contracts/SatSolver.h"
 #include <algorithm>
 #include <functional>
@@ -252,19 +253,59 @@ bool EagerBitBlastSolver::collect(const NativeTerms& ir, const std::vector<ExprI
     // guaranteed true — extracting a bound from it (e.g. `(= rfc0 0)` under
     // `(not ...)`) would wrongly pin rfc0=0 and produce an invalid model.
     std::unordered_set<ExprId> topSeen;
+    std::vector<LinearBoundRow> rows;
     std::function<void(ExprId)> markTop = [&](ExprId eid) {
         if (!topSeen.insert(eid).second) return;
         const TermExpr& e = ir.get(eid);
         if (e.kind == Kind::And) { for (ExprId c : e.children) markTop(c); return; }
         auto it = atomCs_.find(eid);
         if (it == atomCs_.end()) return;                 // not an asserted arith atom
-        if (it->second.parts.size() != 1) return;
-        PolyId diff = it->second.parts[0].first;
-        if (diff == NullPoly) return;
-        tryExtractBound(diff, it->second.parts[0].second);
+        for (const auto& [diff, rel] : it->second.parts) {
+            if (diff == NullPoly || rel == Relation::Neq) continue;
+            tryExtractBound(diff, rel);
+            const auto terms = kernel_->terms(diff);
+            if (!terms) continue;
+            // Every collected row is an unconditional positive conjunct of
+            // this query. No branch-dependent literal is used as a premise.
+            LinearBoundRow row{{}, rel, 0, {}};
+            bool linear = true;
+            for (const auto& term : *terms) {
+                if (term.powers.empty()) row.rhs -= term.coefficient;
+                else if (term.powers.size() == 1 && term.powers[0].second == 1)
+                    row.lhs.terms.emplace_back(std::string(kernel_->varName(term.powers[0].first)),
+                                               term.coefficient);
+                else {
+                    linear = false;
+                    break;
+                }
+            }
+            if (linear && !row.lhs.terms.empty()) rows.push_back(std::move(row));
+        }
     };
     for (ExprId a : assertions) markTop(a);
-    return true;
+    WorkBudget boundBudget(262144);
+    const auto propagated = LinearBoundPropagation::run(rows,
+        [&](const std::string& variable, bool lower) -> std::optional<ExplainedLinearBound> {
+            const auto& bounds = lower ? lb_ : ub_;
+            const auto found = bounds.find(variable);
+            if (found == bounds.end()) return std::nullopt;
+            return ExplainedLinearBound{mpq_class(found->second), false, {}};
+        },
+        [&](const std::string& variable, bool lower, const ExplainedLinearBound& bound) {
+            auto& bounds = lower ? lb_ : ub_;
+            const auto value = bound.value.get_num();
+            const auto found = bounds.find(variable);
+            if (found != bounds.end() && (lower ? found->second >= value : found->second <= value))
+                return LinearBoundUpdate::Unchanged;
+            bounds[variable] = value;
+            const auto lo = lb_.find(variable), hi = ub_.find(variable);
+            if (lo != lb_.end() && hi != ub_.end() && lo->second > hi->second)
+                return LinearBoundUpdate::Conflict;
+            return LinearBoundUpdate::Changed;
+        }, [](const std::string&) { return true; }, boundBudget);
+    // This arm never claims UNSAT, including for contradictory root bounds.
+    // Let the ordinary theory path explain and check the contradiction.
+    return !propagated.conflict;
 }
 
 Relation EagerBitBlastSolver::relOf(Kind k) {
@@ -288,8 +329,18 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const NativeTerms& ir,
     ub_.clear();
     const bool diag = xolver::config::read<xolver::config::ReadKind::Presence>("NIA_EAGER_BB_DIAG");
     if (!collect(ir, assertions)) return out;   // unsupported construct -> Unknown
-    if (diag) std::cerr << "[EAGER-BB] collect done: intVars=" << intVars_.size()
-                        << " atoms=" << atomCs_.size() << "\n";
+    if (diag) {
+        size_t bounded = 0, fixed = 0;
+        for (const auto& variable : intVars_) {
+            const auto lo = lb_.find(variable), hi = ub_.find(variable);
+            if (lo == lb_.end() || hi == ub_.end()) continue;
+            ++bounded;
+            fixed += lo->second == hi->second;
+        }
+        std::cerr << "[EAGER-BB] collect done: intVars=" << intVars_.size()
+                  << " atoms=" << atomCs_.size() << " bounded_variables=" << bounded
+                  << " fixed_variables=" << fixed << "\n";
+    }
 
     // Var-budget cap (encode SIZE): bounds a single attempt's encoding so a huge
     // formula bails (overflow->Unknown) instead of OOM. Competition has 30GB, so
@@ -407,8 +458,13 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const NativeTerms& ir,
         for (const auto& v : intVars_) {
             unsigned w = K;
             auto il = lb_.find(v), iu = ub_.find(v);
-            if (il != lb_.end() && iu != ub_.end() && il->second <= iu->second)
+            if (il != lb_.end() && iu != ub_.end() && il->second <= iu->second) {
                 w = SpaceEstimator::bitsToCover(il->second, iu->second);
+                if (il->second == iu->second) {
+                    varBits[v] = enc.mkConst(il->second, w);
+                    continue;
+                }
+            }
             varBits[v] = enc.mkVar(w);
         }
         PolyBitBlaster blaster(enc, *kernel_, varBits);

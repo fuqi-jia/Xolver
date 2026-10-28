@@ -158,6 +158,9 @@ NiaReasoningResult LinearNiaDomainReasoner::run(
             const auto* domain = domains.getDomain(variable);
             if (!domain || (lower ? !domain->hasLower : !domain->hasUpper)) return std::nullopt;
             const auto& bound = lower ? domain->lower : domain->upper;
+            // DomainStore's empty explanations denote missing provenance,
+            // not globally asserted facts as in whole-formula collection.
+            if (bound.reasons.empty()) return std::nullopt;
             return ExplainedLinearBound{mpq_class(bound.value), false, bound.reasons};
         },
         [&](const std::string& variable, bool lower, const ExplainedLinearBound& bound) {

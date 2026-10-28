@@ -9,7 +9,7 @@ namespace xolver {
 namespace {
 
 bool explained(const std::vector<SatLit>& reasons) {
-    return !reasons.empty() && std::all_of(reasons.begin(), reasons.end(),
+    return std::all_of(reasons.begin(), reasons.end(),
         [](SatLit literal) { return literal.var != 0; });
 }
 

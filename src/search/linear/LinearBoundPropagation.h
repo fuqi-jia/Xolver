@@ -30,8 +30,9 @@ struct LinearBoundPropagationResult {
 };
 
 // Exact interval propagation shared by arithmetic clients. Rows already carry
-// their asserted polarity. All row/endpoint explanations must be complete and
-// nonempty. The sink owns bounds and detects conflicts; only strict progress
+// their asserted polarity. All row/endpoint explanations must be complete;
+// an empty set denotes an unconditional fact. Lookup must omit unexplained
+// endpoints. The sink owns bounds and detects conflicts; only strict progress
 // may return Changed. Partial progress remains valid after budget exhaustion.
 class LinearBoundPropagation {
 public:

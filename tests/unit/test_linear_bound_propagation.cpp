@@ -104,15 +104,24 @@ TEST_CASE("LinearBoundPropagation: signed rows and their explanations preserve i
     }
 }
 
-TEST_CASE("LinearBoundPropagation: exhausted or unexplained inputs yield no unsupported fact") {
+TEST_CASE("LinearBoundPropagation: exhausted or invalid inputs yield no unsupported fact") {
     const LinearBoundRow row{{{{"x", 1}, {"y", -1}}}, Relation::Eq, 1, {SatLit::positive(2)}};
     Bounds limited;
     limited.values[{"y", true}] = {0, false, {SatLit::positive(1)}};
     CHECK(limited.run({row}, true, 1).exhausted);
     CHECK(limited.values.size() == 1);
     Bounds unexplained;
-    unexplained.values[{"y", true}] = {0, false, {}};
+    unexplained.values[{"y", true}] = {0, false, {SatLit::positive(0)}};
     CHECK(unexplained.run({row}, true).updates == 0);
-    unexplained.values[{"y", true}].reasons = {SatLit::positive(0)};
-    CHECK(unexplained.run({row}, true).updates == 0);
+    CHECK(unexplained.values.size() == 1);
+}
+
+TEST_CASE("LinearBoundPropagation: unconditional facts need no conditional guard") {
+    Bounds bounds;
+    bounds.values[{"y", true}] = {0, false, {}};
+    const LinearBoundRow row{{{{"x", 1}, {"y", -1}}}, Relation::Eq, 1, {}};
+    CHECK(bounds.run({row}, true).updates == 1);
+    const auto& lower = bounds.values.at({"x", true});
+    CHECK(lower.value == 1);
+    CHECK(lower.reasons.empty());
 }
