@@ -4,13 +4,41 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from tools.integration.qcp_backend import discharge, leased_cpu, pending_goals, proof_candidate
+from tools.integration.qcp_backend import discharge, invoke, leased_cpu, pending_goals, proof_candidate
 
 
 class QcpBackendTests(unittest.TestCase):
+    def test_late_success_cannot_supply_a_backend_candidate(self):
+        # Both process creation and solving spend the same wall budget. A
+        # supervisor can resume after a deadline even when the child exited 0.
+        clock = [0.0]
+        process = Mock(pid=17, returncode=0)
+        def spawn(*args, **kwargs):
+            clock[0] = 55.0
+            if hasattr(kwargs['stdout'], 'write'):
+                kwargs['stdout'].write(b'unsat\n')
+            return process
+        def finish(*args, **kwargs):
+            clock[0] = 61.1
+            return b'unsat\n', b''
+        process.communicate.side_effect = finish
+        process.wait.side_effect = finish
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            query = root / 'query.smt2'
+            query.write_text('(set-logic QF_LIA)(assert false)(check-sat)\n')
+            with patch('subprocess.Popen', side_effect=spawn), \
+                    patch('time.monotonic', side_effect=lambda: clock[0]):
+                result = invoke('xolver', root / 'binary', query, 60, root / 'answer')
+        self.assertEqual(result['result'], 'timeout')
+        self.assertTrue(result['timed_out'])
+        self.assertTrue(result['budget_overrun'])
+        self.assertAlmostEqual(result['seconds'], 61.1)
+        process.wait.assert_called_once_with(timeout=5)
+
     def fixture(self, root):
         goals = root / 'goal.v'
         goals.write_text('''Definition safety := forall (x: Z) (H: x >= 0),

@@ -11,14 +11,11 @@ import math
 import os
 from pathlib import Path
 import re
-import resource
-import signal
-import subprocess
 import sys
-import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from tools.integration.qcp import comments, export_goals
+from tools.process_budget import run_with_budget
 
 IDENTIFIER = r"[A-Za-z_][A-Za-z_0-9']*"
 LEMMA = re.compile(r"\bLemma\s+(" + IDENTIFIER + r")\s*:\s*(" + IDENTIFIER + r")\s*\.")
@@ -58,32 +55,19 @@ def leased_cpu():
 def invoke(backend, binary, query, timeout, output):
     command = ([str(binary), 'solve', str(query), '--timeout', str(math.ceil(timeout))]
                if backend == 'xolver' else [str(binary), '-T:' + str(math.ceil(timeout)), str(query)])
-    def limits():
-        resource.setrlimit(resource.RLIMIT_AS, (MEMORY_BYTES, MEMORY_BYTES))
+    command = ['prlimit', '--as=' + str(MEMORY_BYTES),
+               '--cpu=' + str(math.ceil(timeout) + 2) + ':' + str(math.ceil(timeout) + 3),
+               '--', *command]
     controls = Path(__file__).resolve().parents[2] / 'src/base/controls.json'
     names = {c['name'] for c in json.loads(controls.read_text())['controls']}
     environment = {k: v for k, v in os.environ.items() if k not in names}
-    started = time.monotonic()
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                               start_new_session=True, preexec_fn=limits, env=environment)
-    timed_out = False
-    try:
-        stdout, stderr = process.communicate(timeout=timeout)
-    except subprocess.TimeoutExpired:
-        timed_out = True
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        stdout, stderr = process.communicate()
-    seconds = time.monotonic() - started
+    stdout, stderr, timing = run_with_budget(command, timeout, environment)
     output.with_suffix('.stdout').write_bytes(stdout)
     output.with_suffix('.stderr').write_bytes(stderr)
     words = stdout.decode('utf-8', errors='replace').strip().splitlines()
-    verdict = ('timeout' if timed_out else words[0] if process.returncode == 0 and
+    verdict = ('timeout' if timing['timed_out'] else words[0] if timing['returncode'] == 0 and
                len(words) == 1 and words[0] in ('sat', 'unsat', 'unknown') else 'error')
-    return dict(command=command, result=verdict, returncode=process.returncode,
-                seconds=seconds, query_sha256=sha256(query),
+    return dict(command=command, result=verdict, **timing, query_sha256=sha256(query),
                 stdout_sha256=hashlib.sha256(stdout).hexdigest(),
                 stderr_sha256=hashlib.sha256(stderr).hexdigest())
 
@@ -134,7 +118,7 @@ def discharge(goals, manual, assigned, backend, binary, timeout, output):
                   exporter_sha256=sha256(Path(__file__).with_name('qcp.py')), cpu=cpu,
                   timeout=timeout, memory_bytes=MEMORY_BYTES, rows=[],
                   program_verified=False, verified_vcs=0, kernel_checks=0,
-                  internal_qcp_smt_queries=None)
+                  internal_qcp_smt_queries=None, protocol_errors=[])
     for index, name in enumerate(assigned):
         record = dict(name=name, lemma=pending[name], queries=[], status='unsupported')
         report['rows'].append(record)
@@ -151,6 +135,9 @@ def discharge(goals, manual, assigned, backend, binary, timeout, output):
                 raise ValueError('exported query changed')
             record['queries'].append(invoke(backend, binary, path, timeout,
                                             output / f'vc-{index}-query-{number}'))
+            if record['queries'][-1].get('budget_overrun'):
+                report['protocol_errors'].append(dict(goal=name, query=number,
+                    seconds=record['queries'][-1]['seconds']))
         if all(q['result'] == 'unsat' for q in record['queries']):
             candidate = output / f'vc-{index}-candidate.v'
             candidate.write_text(proof_candidate(pending[name], name,
@@ -184,7 +171,8 @@ def main():
                        a.assigned, a.backend, a.binary, a.timeout, a.output.resolve())
     print(json.dumps({k: report[k] for k in ('backend', 'backend_invocations', 'proof_candidates',
                                            'verified_vcs', 'program_verified')}))
-    return int(any(q['result'] == 'error' for r in report['rows'] for q in r['queries']))
+    return int(bool(report['protocol_errors']) or
+               any(q['result'] == 'error' for r in report['rows'] for q in r['queries']))
 
 
 if __name__ == '__main__':

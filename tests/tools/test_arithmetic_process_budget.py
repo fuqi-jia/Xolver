@@ -7,8 +7,8 @@ from pathlib import Path
 import unittest
 from unittest.mock import Mock, patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'tools/remote'))
-from compare_arithmetic_case import run_with_budget
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from tools.process_budget import run_with_budget
 
 
 class ArithmeticProcessBudget(unittest.TestCase):
@@ -22,8 +22,8 @@ class ArithmeticProcessBudget(unittest.TestCase):
 
     def test_slow_process_creation_consumes_the_existing_budget(self):
         process = Mock(pid=17, returncode=0)
-        with patch('compare_arithmetic_case.subprocess.Popen', side_effect=self.output(process)), \
-                patch('compare_arithmetic_case.time.monotonic', side_effect=[0, 55, 58]):
+        with patch('tools.process_budget.subprocess.Popen', side_effect=self.output(process)), \
+                patch('tools.process_budget.time.monotonic', side_effect=[0, 55, 58]):
             stdout, _, timing = run_with_budget(['solver'], 60, {})
         process.wait.assert_called_once_with(timeout=5)
         process.communicate.assert_not_called()
@@ -35,9 +35,9 @@ class ArithmeticProcessBudget(unittest.TestCase):
     def test_creation_overrun_never_grants_another_full_solve_budget(self):
         process = Mock(pid=17, returncode=-9)
         process.wait.side_effect = [subprocess.TimeoutExpired('solver', 0), -9]
-        with patch('compare_arithmetic_case.subprocess.Popen', return_value=process), \
-                patch('compare_arithmetic_case.time.monotonic', side_effect=[0, 226, 226.01, 226.1]), \
-                patch('compare_arithmetic_case.os.killpg') as kill:
+        with patch('tools.process_budget.subprocess.Popen', return_value=process), \
+                patch('tools.process_budget.time.monotonic', side_effect=[0, 226, 226.01, 226.1]), \
+                patch('tools.process_budget.os.killpg') as kill:
             _, _, timing = run_with_budget(['solver'], 60, {})
         self.assertEqual(process.wait.call_args_list[0].kwargs['timeout'], 0)
         kill.assert_called_once()
@@ -47,9 +47,9 @@ class ArithmeticProcessBudget(unittest.TestCase):
     def test_normal_timeout_cleanup_and_already_exited_process(self):
         process = Mock(pid=17, returncode=-9)
         process.wait.side_effect = [subprocess.TimeoutExpired('solver', 59), -9]
-        with patch('compare_arithmetic_case.subprocess.Popen', return_value=process), \
-                patch('compare_arithmetic_case.time.monotonic', side_effect=[0, 1, 60, 60.1]), \
-                patch('compare_arithmetic_case.os.killpg', side_effect=ProcessLookupError):
+        with patch('tools.process_budget.subprocess.Popen', return_value=process), \
+                patch('tools.process_budget.time.monotonic', side_effect=[0, 1, 60, 60.1]), \
+                patch('tools.process_budget.os.killpg', side_effect=ProcessLookupError):
             _, _, timing = run_with_budget(['solver'], 60, {})
         self.assertTrue(timing['timed_out'])
         self.assertFalse(timing['budget_overrun'])
@@ -57,9 +57,9 @@ class ArithmeticProcessBudget(unittest.TestCase):
     def test_slow_reaping_is_distinct_from_late_timeout_notification(self):
         process = Mock(pid=17, returncode=-9)
         process.wait.side_effect = [subprocess.TimeoutExpired('solver', 60), -9]
-        with patch('compare_arithmetic_case.subprocess.Popen', return_value=process), \
-                patch('compare_arithmetic_case.time.monotonic', side_effect=[0, .001, 60.05, 283]), \
-                patch('compare_arithmetic_case.os.killpg'):
+        with patch('tools.process_budget.subprocess.Popen', return_value=process), \
+                patch('tools.process_budget.time.monotonic', side_effect=[0, .001, 60.05, 283]), \
+                patch('tools.process_budget.os.killpg'):
             _, _, timing = run_with_budget(['solver'], 60, {})
         self.assertEqual(timing['timeout_notified_seconds'], 60.05)
         self.assertAlmostEqual(timing['cleanup_seconds'], 222.95)
