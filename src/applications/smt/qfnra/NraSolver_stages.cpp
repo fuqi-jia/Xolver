@@ -52,7 +52,21 @@ std::optional<TheoryCheckResult> NraSolver::stagePartialLinearModel(
         if (c.poly == NullPoly) return std::nullopt;
         constraints.push_back({c.poly, c.rel});
     }
-    auto model = PartialLinearModelSearch::trySolve(constraints, *kernel_);
+    PartialLinearModelSearch::Statistics stats;
+    const auto started = std::chrono::steady_clock::now();
+    auto model = PartialLinearModelSearch::trySolve(constraints, *kernel_, false, &stats);
+    const auto profile = config::read<config::ReadKind::ProfilePath>("ARITH_STAGE_PROF", "/tmp/xolver_stageprof.txt");
+    if (!profile.empty()) {
+        std::ofstream out(profile.string() + ".boundary.log", std::ios::app);
+        out << "variables=" << stats.variables << " parameters=" << stats.parameters
+            << " contexts=" << stats.contexts << " checks=" << stats.linearChecks
+            << " choices=" << stats.choices << " rejected=" << stats.rejectedChoices
+            << " definitions=" << stats.definitions << " models=" << stats.modelChecks
+            << " depth=" << stats.maxDepth << " exhausted=" << stats.exhausted
+            << " found=" << bool(model) << " us="
+            << std::chrono::duration_cast<std::chrono::microseconds>(
+                   std::chrono::steady_clock::now() - started).count() << '\n';
+    }
     if (!model) return std::nullopt;
     satFastModel_ = std::move(*model);
     return TheoryCheckResult::consistent();

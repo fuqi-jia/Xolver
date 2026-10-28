@@ -7,7 +7,7 @@ API contracts are described in [the architecture reference](../ARCHITECTURE.md),
 named source snapshots and binaries; they do not establish general completeness
 or performance superiority.
 
-Latest qualified arithmetic source: [partial linear models](#partial-boundary-assignment-and-linear-completion-r264r266).
+Latest qualified arithmetic source: [mixed boundary propagation](#mixed-boundary-propagation-r288r290r293).
 Latest supplementary verification: [original-input congruence certificate](#original-input-congruence-certificate-r284r285).
 Older result tables describe their own frozen rounds; use the latest table and
 its exact GitHub review/merge checks when continuing work.
@@ -1039,8 +1039,10 @@ tests / 801,317 assertions, 68 targeted tests / 154,998 assertions and 32 mixed
 fixtures pass; both engines replay all 16 SAT models. It restores 150 but adds
 no solves over qualified R264: fresh NRA32 is **20→20 verified**, zero gains or
 losses. PAR-2 changes only 1454.170→1454.076 s (0.095 s), insufficient benefit.
-There are no wrong verdicts or invalid exported models. It remains **unselected**,
-without a full160 or production merge.
+There are no wrong verdicts or invalid exported models. At R280 it remained
+**unselected**, without a full160 or production merge. The user subsequently
+requested sequential integration; R288/R290 below qualify its general capability
+without claiming a primary-suite performance gain.
 
 Source `3241ebfc875e51193c59425f8e4821c2eb6e3ab4`; frozen CLI SHA-256
 `0b08d84767e484a9175c8ad20692e0f9f6fb6ee347a110f22b7047d06cdd5fd6`.
@@ -1099,6 +1101,77 @@ and final evidence audit `75362afd43bf`. An initial audit started before all
 acceptance records existed and failed; it made no solver or scoring change.
 The final audit checks 40 native/recheck runs on 38 physical cores without
 lease overlaps. No extra server archive is a delivery requirement.
+
+## Mixed boundary propagation (R288/R290/R293)
+
+The user requested sequential integration after the initial neutral NRA32
+experiment. This stage qualifies the lazy affine implementation as a general
+capability repair. The earlier eager monomial variant remains rejected.
+
+A theory-independent finite candidate traversal balances every local push/pop,
+including rejection, interruption and successful model extraction. The theory
+supplies admissible candidates, propagation and a complete-model checker. The
+arithmetic adapter reuses one private simplex context, activates an original
+atom only after its whole residual becomes affine, and withdraws its bounds
+and activation state on backtracking. It now finds mixed parameter endpoints
+such as `a=0,b=c=1` for `a+b=1, ab=ac=0, bc=1` on `[0,1]`. Failure never exports
+UNSAT. Integer scaling is separate; public APIs and the verified LRA/LIA root
+backtracking policies are unchanged. Production integration remains pure NRA.
+
+Panda1 qualification passed **1,694 tests / 801,317 assertions**, 36 targeted
+tests / 146,307 assertions, all **38 acceptance tasks / 917 regressions**, and
+703 model replays in the theory differential suite. All 32 generated mixed
+fixtures pass both independent solvers, including all 16 SAT models. Combined
+source qualification also passes architecture, standalone-evidence and the
+complete Python regression harness, and checks the original UNSAT115 certificate.
+
+Fresh frozen fixed160 uses 60 seconds, one leased physical core and 16 GiB per
+solver invocation. With the independently checked original-input certificate:
+
+| Version | Raw decisions | Verified decisions | Verified PAR-2 total (s) |
+| --- | ---: | ---: | ---: |
+| Qualified R264 baseline | 92 | 92 | 8469.997 |
+| Lazy boundary candidate | 92 | 92 | 8472.375 |
+| Same-round frozen Z3 | 124 | 116 | 5533.482 |
+
+There are **zero verified gains or losses**, opposite verdicts, invalid exported
+models, solver errors or memory failures. Candidate time is slightly worse by
+2.378 seconds overall; this does **not** establish a performance improvement or
+superiority over Z3. Candidate has 67 timeouts / one unknown; baseline has 68
+timeouts. QCP remains two qualified unique development C programs, without a
+new end-to-end coverage/timing claim. Neither independent protected set was used.
+
+The benchmark harness now charges process creation to the existing absolute
+wall budget, records launch/wait time, enforces the exact EOS CPU lease, and
+rejects material budget overruns instead of scoring them as solver gains.
+Ten timing/summary tests pass on Panda1. Initial R288 is superseded because of
+wall overruns and one EOS timeout. R290 preserves one invalid index-5 observation
+(283 seconds); its only protocol-failed case is retried with the **same driver,
+versions, input and limits**, all three solvers sharing the retry's physical
+CPU. The first protocol-valid retry is retained regardless of verdict, and both
+Xolver versions return SAT with checked models. Original invalid records remain
+available. No solver change, filename heuristic or answer-based selection is
+introduced for this retry. The cause of the exceptional wait remains unresolved;
+a separate baseline diagnostic on another leased CPU returns SAT in 6.298 s.
+
+The [stage record](ARITHMETIC_BOUNDARY_PROPAGATION_STAGE_20261028.json) records
+all 160 accepted report hashes, the superseded data, source inventories and 234
+build/comparison/retry/acceptance/tooling/fixture leases without physical-core
+overlaps. Native code is `3241ebfc875e51193c59425f8e4821c2eb6e3ab4`; timing
+validation is `6fa40d7809261ba8c07d6c1399a933f8013625fa`. CLI SHA-256 is
+`0b08d84767e484a9175c8ad20692e0f9f6fb6ee347a110f22b7047d06cdd5fd6`;
+SV remains `99130012b880f255cd8bbaf456d4031d07649792c83c430acb5649a547bb89ef`.
+
+EOS: build `97160349ae0d`, formal `db06c3224f3c`, retry `d898ed180e00`,
+acceptance `e56938f8b97c`, timing tests `255a1a5d166c`, combined qualification
+`03466fdb3066`, final audit `823a2f824d36`. The last applied source overlay for
+this qualification is `source-r292.tar.json`; use it with `--since` for the next
+server update. No extra server archive is a delivery requirement.
+
+PR55's original-input checker was merged as `15586431` after both
+[PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/40651147379)
+passed; its [main CI](https://github.com/fuqi-jia/Xolver/actions/runs/40653122590)
+is the sequential integration checkpoint before merging PR54.
 
 ## Closed experiments and practical regressions
 

@@ -56,6 +56,21 @@ class ArithmeticComparisonSummary(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'mixed protocol'):
                 self.report([first, second])
 
+    def test_budget_overruns_cannot_be_scored_as_solver_gains(self):
+        for nested in (None, 'model', 'replay', 'unsat_check'):
+            row = self.row()
+            observation = row['observations']['baseline']
+            if nested:
+                observation[nested] = dict(result='timeout', seconds=286)
+            else:
+                observation.update(result='timeout', seconds=286)
+            with self.assertRaisesRegex(ValueError, 'wall budget overrun'):
+                self.report([row])
+        row = self.row()
+        row['protocol_errors'] = [dict(label='candidate', budget_overrun=True)]
+        with self.assertRaisesRegex(ValueError, 'wall budget overrun'):
+            self.report([row])
+
     def test_invalid_exported_model_is_not_hidden_by_an_agreeing_verdict(self):
         row = self.row()
         row['observations']['candidate']['replay'] = dict(result='unsat')
