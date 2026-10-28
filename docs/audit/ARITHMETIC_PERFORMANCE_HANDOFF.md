@@ -969,6 +969,84 @@ QCP component regressions pass; unique qualified development C coverage stays
 two, without a new end-to-end claim. Neither protected set was used. The
 cancelled server archive remains unnecessary.
 
+The stage was merged through [PR #53](https://github.com/fuqi-jia/Xolver/pull/53)
+as main `67fe12af35087fb0f57bf9696351ff6642fe13ee`. Both `build-test` and
+`proof-gate` passed on the [PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/40505591792)
+and the [actual main CI](https://github.com/fuqi-jia/Xolver/actions/runs/40508939783).
+These delivery checks do not introduce an additional server archive requirement.
+
+### Rejected pending-inference scheduling experiment (R270–R275)
+
+Profiles on primary NIA 24/37/113 showed 11/10/12 prepared linear inferences
+still queued at CDCAC entry. R274 delivered these explained inferences earlier,
+while retaining candidate-model commitments at their previous late stage.
+The native failing reproduction is EOS `79f25a983699`; the repair passed
+1,690 unit tests / 801,458 assertions, including 68 targeted tests / 9,100
+assertions. Before/after profiles (`7e0340d22bad` / `9c7b7334f76d`) confirm that
+the queues become empty, but all three target inputs still time out.
+
+The fresh comparison covered **all 48 actual QF_NIA inputs** (24–47 and
+104–127), not the older mixed-logic "linear96" subset. EOS `25abad104e9f`
+records **23→22 verified results**, zero gains and one loss: primary 125,
+`calypto/problem-000123.cvc.1.smt2`, changes from independently confirmed UNSAT
+in 21.798 s to timeout. Verified PAR-2 worsens 3125.931→3215.507 s. There are
+no opposite verdicts or invalid models. The variant is **rejected**; no full160
+or production PR follows. Retain `perf/pending-theory-progress`, commit
+`0f6d15c3bb08578718662a91f885a11c79d134cc`, frozen CLI SHA-256
+`73994944b6919e0586443f69679d9baaebba4d7ef8783ef7009867cdb0dbb577`
+and `core-r274`/`targets-r274` evidence. Queue delivery alone did not address
+the measured solving gap; no claim is made about its causing older regressions.
+
+The last applied server overlay is `source-r274.tar.json`. A subsequent overlay
+must restore its abandoned NIA changes using `package_overlay.py --since`.
+Continue from the qualified R264/main source and binary, not this experiment.
+
+### Rejected eager monomial boundary context (R276–R279)
+
+The old helper fails the mixed-boundary unit reproduction (EOS `436ed44afc14`):
+`a,b,c` in `[0,1]`, `a+b=1`, `ab=ac=0`, `bc=1` require the mixed assignment
+`a=0,b=c=1`, which its coherent whole-cover corners miss. R278 adds a generic
+balanced candidate traversal and one incremental monomial relaxation, but its
+eager quotient-chain expansion is **not selected**. It passes 1,694 unit tests /
+801,317 assertions, 68 targeted tests / 154,998 assertions, and 32 independent
+mixed-boundary fixtures. Both Z3 and cvc5 check all fixture decisions and replay
+all 16 SAT models; those fixtures add no primary-suite solves or QCP programs.
+
+Fresh NRA32 (EOS `ba33cd60d1f4`) verifies **20→19** results, zero gains, losing
+SAT150 (`zankl/matrix-3-all-2.smt2`): baseline 0.625 s, candidate timeout.
+Verified PAR-2 worsens 1455.632→1575.366 s. Same-round Z3 verifies 25; there are
+no wrong verdicts or invalid models. Build EOS `156d24bb9270`, fixture checks
+`83f5c292af30`, and diagnostics `619c15082cd3`. Source commit
+`c4bdd84ccdafc4891c2010437f2020db01ebcd9b`; CLI SHA-256
+`c831a9d06958e5854aacc79da63c4986f6151cec5375bef74083174776853fcf`.
+
+The profile identifies avoidable construction work: 150 has 27 cover parameters
+but exhausts the 20 ms allocation after only four choices and 518 row definitions.
+149 similarly stops at depth 18 of 28. The next implementation should activate
+only whole atoms whose current residual is affine, retaining one local context
+and original-model validation. It must be qualified independently; neither the
+new reproduction nor unit success establishes a benchmark gain. No full160 is
+run for the rejected variant. Its overlay is `source-r278.tar.json`.
+
+
+### Unselected lazy affine boundary context (R280/R281)
+
+The revision activates only complete atoms that become affine under a selected
+prefix. On 150 it reaches all 27 parameters using 87 definitions instead of
+exhausting the allocation after four choices / 518 definitions. All 1,694 native
+tests / 801,317 assertions, 68 targeted tests / 154,998 assertions and 32 mixed
+fixtures pass; both engines replay all 16 SAT models. It restores 150 but adds
+no solves over qualified R264: fresh NRA32 is **20→20 verified**, zero gains or
+losses. PAR-2 changes only 1454.170→1454.076 s (0.095 s), insufficient benefit.
+There are no wrong verdicts or invalid exported models. It remains **unselected**,
+without a full160 or production merge.
+
+Source `3241ebfc875e51193c59425f8e4821c2eb6e3ab4`; frozen CLI SHA-256
+`0b08d84767e484a9175c8ad20692e0f9f6fb6ee347a110f22b7047d06cdd5fd6`.
+EOS build `4b6288dbf67c`, NRA `45f2ecadfe8a`, fixtures `a284c82eed1d`, profiles
+`751526aa9793`. The last experimental overlay is `source-r280.tar.json`;
+restore it explicitly when returning to the selected R264/main source.
+
 ## Closed experiments and practical regressions
 
 R178 replaced the square-cascade's ad hoc coefficient-Horner substitution with
@@ -1020,8 +1098,8 @@ The final source overlay restores the ordinary propagation storage.
   speed superiority has not been demonstrated.
 - `geom_offspring_0.499_PRAY.smt2` (primary index 157, SHA-256
   `d3941102878489abc44c6b3fafc7671a34c6d229ecf1820b0810e90dc61ef1cc`)
-  remains unresolved at 60 seconds. Root-bracket compaction removed its observed
-  GMP allocation abort; it did not solve the formula.
+  is now solved and its model replayed in R264/R266. Earlier root-bracket
+  compaction removed a GMP allocation abort but had not solved it on its own.
 - `tests/known_gaps/nra/box_sector_joint_reasons.smt2` remains a known SAT case
   for which sound `unknown` is allowed by the explicit known-gap contract.
 - General quantified PA/SL coverage and formal C++ end-to-end verification
