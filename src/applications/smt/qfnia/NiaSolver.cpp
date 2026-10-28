@@ -118,6 +118,11 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     };
     add("nia.pending",        &NiaSolver::stagePending);
     add("nia.normalize",      &NiaSolver::stageNormalize);
+    add("nia.trivial-const",  &NiaSolver::stageTrivialConstants);
+    // Bounded search consumes the domains of this active prefix. Rebuild them
+    // before encoding so the first check sees its bounds and a retracted branch
+    // cannot supply stale restrictions or explanation literals.
+    add("nia.domain",         &NiaSolver::stageDomainInference);
     // Bit-blast can examine the active constraints at partial and full effort.
     add("nia.bit-blast-early", &NiaSolver::stageBitBlastEarly);
     // Complete-candidate linear integer decision. The stage checks that every
@@ -127,10 +132,8 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     add("nia.presolve", &NiaSolver::stagePresolveFixpoint);
     // Full-effort shape cuts derived from explained single-variable bounds.
     addFull("nia.nla-cuts",   &NiaSolver::stageNlaCuts);
-    add("nia.trivial-const",  &NiaSolver::stageTrivialConstants);
     add("nia.poly-conflict",  &NiaSolver::stagePolyConflict);
     add("nia.diff-conflict",  &NiaSolver::stageDifferenceConflict);
-    add("nia.domain",         &NiaSolver::stageDomainInference);
     add("nia.square-bound",   &NiaSolver::stageSquareBound);
     add("nia.sos-bound",      &NiaSolver::stageSumOfSquares);
     // L2 (default-ON). The univariate rational-root search (findIntegerRoots ->
@@ -191,6 +194,7 @@ void NiaSolver::onReset() {
     active_.clear();
     trail_.clear();
     normalized_.clear();
+    domains_.reset();
     activeSet_.reset();
     pendingConflict_.reset();
     pendingUnknown_.reset();
@@ -264,6 +268,9 @@ void NiaSolver::onBacktrack(int level) {
         trail_.pop_back();
     }
     activeSet_.rebuildFromActive(active_, [](const auto& c) { return c.reason; });
+    // Derived bounds can depend on any removed assignment. The domain stage
+    // rebuilds them from the retained prefix before the next search attempt.
+    domains_.reset();
     if (pendingConflict_ && pendingConflict_->level > level) {
         pendingConflict_.reset();
     }
