@@ -35,6 +35,7 @@ public:
     bool configure(const char* name, int64_t value) override;
     bool limit(const char* name, int value) override;
     void setDeadline(std::chrono::steady_clock::time_point deadline) override;
+    bool inconsistent() const override;
     std::vector<SatLit> getFailedAssumptions() const override;
     void addObservedVar(SatVar v) override;
     void setDefaultPhase(SatVar v, bool value) override;

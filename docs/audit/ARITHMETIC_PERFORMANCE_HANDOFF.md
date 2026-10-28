@@ -1173,6 +1173,181 @@ PR55's original-input checker was merged as `15586431` after both
 passed; its [main CI](https://github.com/fuqi-jia/Xolver/actions/runs/40653122590)
 is the sequential integration checkpoint before merging PR54.
 
+## Main delivery receipt and unselected root-stop experiment (R294–R297)
+
+PR55 merged as `15586431`; both PR CI jobs (`40651147379`) and both main CI
+jobs (`40653122590`) passed. PR54 subsequently merged as `08b99eaf`; both
+final-head PR CI jobs (`40654254640`) and both main jobs (`40656544660`) passed.
+These are the qualified GitHub delivery checkpoints, without an additional
+server archive requirement.
+
+R294 reproduces unnecessary encoding after a known permanent SAT contradiction:
+one new bounded-prefix test returns unknown after an unrelated polynomial
+exhausts its encoding budget. R296 adds a conservative permanent-inconsistency
+query to the common SAT interface and stops both bit-blast clients after a
+known root conflict. Overflow remains distinct from a logical contradiction;
+assumption-only UNSAT must not become a permanent conflict. All **1,698 native
+tests / 801,334 assertions** pass. The frozen CLI is
+`fd37e61a74fe4709e0570d675565a6300c9fc22c9248f1b40856006555cea413`.
+
+The actual 48-case NIA observation contains **no gained decisions**, six
+protocol-invalid budget overruns (30–35), and one unmatched result at 31:
+baseline SAT in 1.460 s, candidate timeout with an invalid 74.512 s observation.
+No opposite verdict or invalid exported model was seen. This is **not a formally
+qualified coverage/PAR-2 round**; the invalid rows and possible loss are retained.
+No full160 or production merge is justified. The standalone root-stop experiment
+is closed without a performance claim. Its implementation remains an experimental
+base for further proof-scope work, not selected production code.
+
+The paired profile explains the limited opportunity: later root conflicts occur
+after approximately 16,962–16,968 of 17,081 constraints. Stopping this short tail
+does not remove the dominant repeated construction across bit widths. Continue
+by testing completeness of the actual refutation footprint and core-guided width
+refinement; those are hypotheses until separately reproduced and qualified.
+
+Evidence: reproduction `1cda2a8bd9f2`, native build `0cffecdebcbb`, NIA48
+`c540b543de9e`, profiles `0a332286213c`, and frozen source
+`c5d3b9e0267666980a9ec4e82a16bbde40db05f1`. Server overlay for this experiment
+is `source-r296.tar.json`. Neither protected set has been accessed.
+
+## Failed-assumption scope and width experiments (R300–R309)
+
+These branches remain experimental; qualified main is still `08b99eaf` and
+frozen CLI R280. No new full160 score or production merge is established here.
+
+R300 (`3fe3f2b02ec5`) reproduces a completeness gap: `x*x=2`, `0<=x<=2`,
+`x+y-z=0` returns unknown because y/z are unbounded, although the contradiction
+only needs x. R302 (`ac8080e0`) encodes completed predicates as assumptions,
+maps failed assumptions to source/domain support, and requires justified finite
+domains only for that support. SAT still requires a complete encoding and exact
+model validation. Overflow cannot assert unfinished gates or predicates.
+
+R302 passes **1,703 native tests / 801,355 assertions**; CLI SHA-256 is
+`e8711cd3efbb80b21462343ffc0e6840737a6c477e3dcec87a34d41fe591ebd0`.
+Its selective width refinement has one independently confirmed, protocol-valid
+added decision at index 40 (`UltimateAutomizer/gauss_sum_true-unreach-call.i.smt2`):
+baseline timeout 60.040 s, candidate UNSAT 43.322 s, Z3 UNSAT 0.168 s. Original
+input SHA-256 is `d25714f4c95ce2bc5fb613fe3807d43875a48ed8fda1a97d68757345ca23522e`.
+This is a single paired observation, not an accepted 48-case score: indices
+27/29/31/32/37 overrun the wall protocol; 24 has an infrastructure relaunch and
+an immutable-output collision; 106 reaches the EOS timeout without a final
+report. Preserve all original records. R302 acceptance is 37/38, with two NIA
+240-second timeouts. Fresh paired checks of those exact inputs return correct
+results with both frozen versions in 0.03–0.07 s, including independent SAT model
+replay; they do not erase the initial failures.
+
+The selective policy also has a reproducible search regression: independent
+`x=2^64`, `y=2^64` exhaust the shared seven-attempt budget and return unknown.
+R306 first reproduces that failure from `source-r304.tar.json`, then restores
+simultaneous refinement (`e11de3a2`). All **1,704 tests / 801,358 assertions**
+pass, including 32 targeted cases. CLI SHA-256 is
+`24698ee89ea0d5cd62a834f2e9e747100188ce75ad85c229dd7fccf0012ec449`.
+The four-case fresh comparison does not select this variant: 31 matches verified
+SAT, 40 times out with both versions, and 44 loses baseline UNSAT 45.011 s to a
+candidate timeout. Index 123 has an invalid 80.152-second baseline timeout and
+cannot count as a gain. Acceptance finishes 35/38: an Xolver generated-query
+timeout, a Z3 model-replay timeout, one LIA timeout, and a QCP arithmetic-check
+timeout in the unchanged SV binary remain recorded. No opposite verdict or
+invalid model was found in the inspected failure records. This variant is
+closed without a full160 rerun or merge.
+
+R308 (`01d6ceab`) next tests sharing SAT state and literal-keyed gate definitions
+across widths within one query. Low bits persist, high bits are added, current
+facts are assumptions, and width-dependent polynomial caches are rebuilt.
+Uniform widths and attempt limits remain; a new signed-refinement test checks
+that low bits formerly denoting -1 can denote 3 in the wider leaf. Native
+qualification passes in EOS `eadd23a019f4`: **1,705 tests / 801,362 assertions**,
+using `source-r308.tar.json`. Frozen CLI SHA-256 is
+`d7e813c75da5d1c4e2c93762364b442fb799ec25ae2145e2f1ec4be316492904`.
+The five accepted paired development observations establish no added or lost
+solve. Cases 44 and 123 improve from 48.73 to 33.62 seconds and 47.45 to 27.58
+seconds; 40/114 still time out. Original empty-CPU launches and an over-budget
+observation remain recorded separately. Evidence: pilot `5497e15e0145`, first
+protocol-valid retries `5958cd25add3`, profiles `9b5da2819172`. This local speed
+benefit alone did not qualify a production merge or a full160 score.
+
+Evidence: R302 build `cd028a4720a1`, NIA48 `d89b89d50a21`, profiles
+`9d50b89a6627` / `b70de5e0449e`, acceptance `c23b54c5604a`, paired regression
+recheck `04b5bca03f88`; R306 build/reproduction `f82a12bc7a15`, four-case
+comparison `42daff1adcc3`, acceptance `c5be845d4e8b`. Budget diagnostics
+(`b9bdfd18`) distinguish late timeout notification from cleanup: observed large
+overruns occur before notification, with millisecond cleanup. File-backed output
+capture does not establish the cause of those overruns. Other root-owned fuzzers
+were observed consuming cores; their role in each timeout is unproven. QCP stays
+at two qualified unique development programs. Neither protected set was used;
+an additional server archive is not a delivery requirement.
+
+## Current-domain and complete-reason repair (R312–R332)
+
+R312 (`e1d24fe79f7c`) first reproduces four failing native cases: the early NIA
+bit-blast stage misses current bounds, reset/backtrack retains obsolete domains,
+a product-derived upper bound omits its divisor lower-bound premise, and a fixed
+integer unnecessarily exhausts a one-gate encoding budget. Five assertions fail
+before the implementation. R314 repairs the current-prefix domain lifecycle,
+retains all premises of product-bound propagation, and encodes explained fixed
+domains as constants. Source commits are `620be852`, `f2a29d2f`, `e6bf8dcd`, and
+`1e318da1`; the candidate also includes the scoped-refutation and shared-gate
+implementation above. SAT still requires exact whole-query model validation.
+
+For example, `x*y=10`, `x>=6`, `y>=2` is inconsistent, but omitting either lower
+bound permits a model. The new unit test catches the invalid internal conflict
+explanation. Four original/removed-premise SMT checks agree with independent Z3;
+all three SAT cases have independently replayed models. This reproduces an
+explanation bug, not an observed opposite whole-input solver verdict. Evidence:
+`e215592be97d`, first missing-lease retries `bf6b9ab75514`.
+
+Native qualification `7a47b2ba6f79` passes **1,709 tests / 801,383 assertions**,
+including 38 targeted cases / 323 assertions and three CTest checks. Source is
+`source-r314.tar.json`, head `1e318da14f96c73bbe26fabe14041f9288ef3a7f`.
+Frozen CLI SHA-256 is
+`eaa3b5b87c2b5df589729a728a5e6bc3d4bb4a0b23ca9205f1baea0581874567`;
+SV remains byte-identical to qualified main.
+
+Fresh NIA48 R318 (`db9f3de0f7ed`) completes all 48 physical-core leases without
+protocol errors, opposite verdicts, or rejected exported models. With the
+previously checked original-input certificate for 115, verified solves are
+**main 23 / candidate 24 / Z3 30**; verified PAR-2 is **3086.186 / 2953.553 /
+2237.162 seconds**. The sole coverage change is index 123: main timeout 60.092 s,
+candidate UNSAT 22.607 s, independent Z3 UNSAT 0.367 s. Main solved this same
+input in other paired rounds, so this is a round-dependent budget improvement,
+not newly established logical capability. Four Z3-only UNSAT results remain
+unconfirmed within budget. The certificate is supplementary truth evidence,
+not a fabricated timed oracle observation.
+
+Full160 R320 (`4d95a146ec30`) finishes with the same frozen versions and
+60-second / one-physical-core / 16-GiB protocol. Four original rows (8/24/32/42)
+overrun the wall budget and are excluded. Their first unchanged-version paired
+rechecks are retained from `9f97d11f73bd`, `2d30731b5b2f`, and `8cd0f1970d29`.
+Verified solves are **main 92 / candidate 92 / Z3 115**; verified PAR-2 is
+**8468.816 / 8426.471 / 5614.750 seconds**. Candidate coverage by logic is
+LIA 32/48, NIA 24/48, LRA 16/32, NRA 20/32, matching main exactly. There are
+zero added or lost solves, 67 timeouts and one unknown for each Xolver version,
+and no opposite verdict or rejected exported model. Overall PAR-2 improves
+0.50% in this round; NIA alone improves 2988.311 to 2935.691 seconds. This is
+not evidence of overall superiority to Z3 or a full-suite coverage gain.
+Z3 has 124 raw decisions, with nine still unconfirmed in this round.
+
+Server acceptance R314 (`63deb994f18d`) initially passes 36/38 tasks: partial
+integer arithmetic has five oracle timeouts; interval checks have an Xolver
+model-query failure and a verdict timeout. First paired rechecks R322
+(`e5796f92791a`) keep the original seed/count/five-second budget and pass with
+both frozen versions: 27 partial-arithmetic cases and 128 interval cases,
+including model replay. Original failures remain recorded. All **921
+regressions**, **703 theory-model replays**, and existing QCP checks pass.
+
+Final source/result/lease audit R332 (`f6e4c98d5c69`) passes; evidence is
+`stage-r332.json`, SHA-256
+`464be41c1da1db24656aebefbe35b9da2005d69db3b562439f5776193cef2ed6`.
+All 204 audited tasks have physical CPU leases and disjoint execution envelopes.
+An earlier audit (`ab66920e6e5a`) incorrectly treated delayed collector end
+timestamps as process exit times; its failure is retained. The corrected audit
+uses launcher-script creation through the executor's post-workload end file,
+and records the four collector-timestamp overlaps separately.
+
+GitHub PR CI and production merge remain pending. QCP has no additional
+qualified end-to-end program coverage from this stage. Both protected sets
+remain unused; no additional server archive is a delivery prerequisite.
+
 ## Closed experiments and practical regressions
 
 R178 replaced the square-cascade's ad hoc coefficient-Horner substitution with

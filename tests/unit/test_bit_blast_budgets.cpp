@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 #include "base/EnvParam.h"
 #include "search/bitblast/BitBlastSolver.h"
+#include <algorithm>
 
 using namespace xolver;
 using Status = bitblast::BitBlastResult::Status;
@@ -143,4 +144,214 @@ TEST_CASE("BitBlastSolver: distinct constraints survive refinement from an insuf
     for (int i = 0; i < 5; ++i)
         for (int j = i + 1; j < 5; ++j)
             CHECK(result.model.at("d" + std::to_string(i)) != result.model.at("d" + std::to_string(j)));
+}
+
+TEST_CASE("BitBlastSolver: established contradiction precedes unrelated encoding exhaustion") {
+    BudgetFixture f;
+    const auto y = f.kernel->mkVar(f.kernel->getOrCreateVar("y"));
+    f.cs = {{f.kernel->mkConst(1), Relation::Eq, SatLit::positive(1)},
+            {f.kernel->pow(y, 8), Relation::Eq, SatLit::positive(4)}};
+    f.domains.addLowerBound("x", 0, SatLit::positive(2));
+    f.domains.addUpperBound("x", 1, SatLit::positive(3));
+    f.domains.addLowerBound("y", 0, SatLit::positive(5));
+    f.domains.addUpperBound("y", 255, SatLit::positive(6));
+    f.solver.setGateBudget(32);
+    const auto result = f.solve();
+    REQUIRE(result.status == Status::UnsatComplete);
+    REQUIRE(result.conflict.has_value());
+    CHECK(result.conflict->clause == std::vector<SatLit>{SatLit::positive(1)});
+}
+
+TEST_CASE("BitBlastSolver: early contradiction retains completeness and reason requirements") {
+    for (bool bounded : {false, true}) {
+        CAPTURE(bounded);
+        BudgetFixture f;
+        f.cs = {{f.kernel->mkConst(1), Relation::Eq,
+                 bounded ? SatLit{} : SatLit::positive(1)},
+                {f.x, Relation::Geq, SatLit::positive(2)}};
+        if (!bounded) {
+            // This two-bit contradiction has a wider integer model. It must
+            // not become a global conflict merely because another fact holds.
+            f.cs[0].poly = f.kernel->sub(f.x, f.kernel->mkConst(2));
+            f.solver.setMaxIterations(1);
+        }
+        if (bounded) {
+            f.domains.addLowerBound("x", 0, SatLit::positive(3));
+            f.domains.addUpperBound("x", 1, SatLit::positive(4));
+        }
+        const auto result = f.solve();
+        CHECK(result.status == Status::Unknown);
+        CHECK_FALSE(result.conflict.has_value());
+    }
+}
+
+TEST_CASE("BitBlastSolver: overflow contradictions do not refute a satisfiable encoding") {
+    BudgetFixture f;
+    f.cs = {{f.kernel->pow(f.x, 8), Relation::Eq, SatLit::positive(1)}};
+    f.domains.addLowerBound("x", 0, SatLit::positive(2));
+    f.domains.addUpperBound("x", 255, SatLit::positive(3));
+    f.solver.setGateBudget(16);
+    const auto limited = f.solve();
+    CHECK(limited.status == Status::Unknown);
+    CHECK_FALSE(limited.conflict.has_value());
+    f.solver.setGateBudget(2000000);
+    const auto result = f.solve();
+    REQUIRE(result.status == Status::Sat);
+    CHECK(result.model.at("x") == 0);
+}
+
+TEST_CASE("SAT backend: permanent inconsistency excludes failed assumptions") {
+    auto sat = createSatSolver();
+    const auto x = SatLit::positive(sat->newVar());
+    sat->addClause({x});
+    CHECK_FALSE(sat->inconsistent());
+    REQUIRE(sat->solve({x.negated()}) == SatSolver::SolveResult::Unsat);
+    CHECK_FALSE(sat->inconsistent());
+    REQUIRE(sat->solve() == SatSolver::SolveResult::Sat);
+    sat->addClause({x.negated()});
+    CHECK(sat->inconsistent());
+    CHECK(sat->solve() == SatSolver::SolveResult::Unsat);
+}
+
+TEST_CASE("BitBlastSolver: finite refutation survives connected unbounded variables") {
+    BudgetFixture f;
+    const auto y = f.kernel->mkVar(f.kernel->getOrCreateVar("y"));
+    const auto z = f.kernel->mkVar(f.kernel->getOrCreateVar("z"));
+    f.cs = {{f.kernel->sub(f.kernel->pow(f.x, 2), f.kernel->mkConst(2)),
+             Relation::Eq, SatLit::positive(1)},
+            {f.kernel->sub(f.kernel->add(f.x, y), z), Relation::Eq, SatLit::positive(4)}};
+    f.domains.addLowerBound("x", 0, SatLit::positive(2));
+    f.domains.addUpperBound("x", 2, SatLit::positive(3));
+    f.solver.setMaxIterations(1);
+    const auto result = f.solve();
+    REQUIRE(result.status == Status::UnsatComplete);
+    REQUIRE(result.conflict.has_value());
+    for (unsigned reason : {1u, 2u, 3u})
+        CHECK(std::find(result.conflict->clause.begin(), result.conflict->clause.end(),
+                        SatLit::positive(reason)) != result.conflict->clause.end());
+    CHECK(std::find(result.conflict->clause.begin(), result.conflict->clause.end(),
+                    SatLit::positive(4)) == result.conflict->clause.end());
+}
+
+TEST_CASE("BitBlastSolver: scoped refutations retain bound reasons and source polarity") {
+    BudgetFixture f;
+    const auto y = f.kernel->mkVar(f.kernel->getOrCreateVar("y"));
+    f.cs = {{f.kernel->add(f.x, y), Relation::Eq, SatLit{}},
+            {f.kernel->sub(f.kernel->pow(f.x, 2), f.kernel->mkConst(2)),
+             Relation::Eq, SatLit::negative(7)}};
+    f.solver.setMaxIterations(1);
+    f.domains.addLowerBound("x", 0, SatLit{});
+    f.domains.addUpperBound("x", 2, SatLit::positive(3));
+    CHECK(f.solve().status == Status::Unknown);
+    f.domains.reset();
+    f.domains.addLowerBound("x", 0, SatLit::positive(2));
+    f.domains.addUpperBound("x", 2, SatLit::positive(3));
+    const auto result = f.solve();
+    REQUIRE(result.status == Status::UnsatComplete);
+    REQUIRE(result.conflict.has_value());
+    CHECK(result.conflict->clause.size() == 3);
+    CHECK(std::find(result.conflict->clause.begin(), result.conflict->clause.end(),
+                    SatLit::negative(7)) != result.conflict->clause.end());
+}
+
+TEST_CASE("BitBlastSolver: a narrow failed core refines only a candidate box") {
+    BudgetFixture f;
+    const auto y = f.kernel->mkVar(f.kernel->getOrCreateVar("y"));
+    f.cs = {{f.kernel->sub(f.kernel->pow(f.x, 2), f.kernel->mkConst(16)),
+             Relation::Eq, SatLit::positive(1)},
+            {y, Relation::Eq, SatLit::positive(4)}};
+    f.domains.addLowerBound("y", 0, SatLit::positive(2));
+    f.domains.addUpperBound("y", 0, SatLit::positive(3));
+    f.solver.setMaxIterations(1);
+    const auto limited = f.solve();
+    CHECK(limited.status == Status::Unknown);
+    CHECK_FALSE(limited.conflict.has_value());
+    f.solver.setMaxIterations(2);
+    const auto result = f.solve();
+    REQUIRE(result.status == Status::Sat);
+    CHECK((result.model.at("x") == 4 || result.model.at("x") == -4));
+    CHECK(result.model.at("y") == 0);
+}
+
+TEST_CASE("BitBlastSolver: completed refutations survive a later encoding overflow") {
+    BudgetFixture f;
+    const auto y = f.kernel->mkVar(f.kernel->getOrCreateVar("y"));
+    f.cs = {{f.x, Relation::Eq, SatLit::positive(1)},
+            {f.kernel->sub(f.x, f.kernel->mkConst(1)), Relation::Eq, SatLit::positive(4)},
+            {f.kernel->pow(y, 32), Relation::Eq, SatLit::positive(7)}};
+    f.domains.addLowerBound("x", 0, SatLit::positive(2));
+    f.domains.addUpperBound("x", 1, SatLit::positive(3));
+    f.domains.addLowerBound("y", 0, SatLit::positive(5));
+    f.domains.addUpperBound("y", 255, SatLit::positive(6));
+    f.solver.setGateBudget(128);
+    const auto result = f.solve();
+    REQUIRE(result.status == Status::UnsatComplete);
+    REQUIRE(result.conflict.has_value());
+    CHECK(std::find(result.conflict->clause.begin(), result.conflict->clause.end(),
+                    SatLit::positive(7)) == result.conflict->clause.end());
+}
+
+TEST_CASE("BitBlastEncoder: overflow preserves the exact SAT prefix") {
+    auto sat = createSatSolver();
+    bitblast::BitBlastEncoder encoder(*sat);
+    encoder.setVarBudget(3);
+    const auto s = encoder.mkVar(1).bits[0];
+    const auto t = encoder.mkVar(1).bits[0];
+    const auto e = encoder.mkVar(1).bits[0];
+    encoder.assertLit(s);
+    encoder.assertLit(t);
+    encoder.assertLit(e.negated());
+    encoder.iteGate(s, t, e);
+    REQUIRE(encoder.overflowed());
+    encoder.assertLit(encoder.constFalse());
+    CHECK(sat->solve() == SatSolver::SolveResult::Sat);
+}
+
+TEST_CASE("BitBlastSolver: independent wide variables retain the default search reach") {
+    BudgetFixture f;
+    const auto y = f.kernel->mkVar(f.kernel->getOrCreateVar("y"));
+    const mpz_class value = mpz_class(1) << 64;
+    f.equalTo(value);
+    f.cs.push_back({f.kernel->sub(y, f.kernel->mkConst(mpq_class(value))),
+                    Relation::Eq, SatLit::positive(4)});
+    const auto result = f.solve();
+    REQUIRE(result.status == Status::Sat);
+    CHECK(result.model.at("x") == value);
+    CHECK(result.model.at("y") == value);
+}
+
+TEST_CASE("BitBlastSolver: refinement retracts narrow signed predicates") {
+    BudgetFixture f;
+    const auto y = f.kernel->mkVar(f.kernel->getOrCreateVar("y"));
+    f.cs = {{f.kernel->sub(f.kernel->pow(f.x, 2), f.kernel->mkConst(9)),
+             Relation::Eq, SatLit::positive(1)},
+            {f.kernel->sub(f.x, f.kernel->mkConst(3)), Relation::Eq, SatLit::positive(2)},
+            {f.kernel->sub(y, f.kernel->add(f.x, f.kernel->mkConst(1))),
+             Relation::Eq, SatLit::positive(3)}};
+    f.solver.setMaxIterations(1);
+    CHECK(f.solve().status == Status::Unknown);
+    f.solver.setMaxIterations(2);
+    const auto result = f.solve();
+    REQUIRE(result.status == Status::Sat);
+    // The low two bits of 3 formerly denoted -1. Old gates and assumptions
+    // must not impose that signed interpretation on the wider leaf.
+    CHECK(result.model.at("x") == 3);
+    CHECK(result.model.at("y") == 4);
+}
+
+TEST_CASE("BitBlastSolver: fixed-value encoding retains domain justifications") {
+    BudgetFixture f;
+    f.equalTo(16);
+    f.domains.addLowerBound("x", 17, SatLit{});
+    f.domains.addUpperBound("x", 17, SatLit::positive(3));
+    f.solver.setGateBudget(1);
+    CHECK(f.solve().status == Status::Unknown);
+    f.domains.reset();
+    f.domains.addLowerBound("x", 17, SatLit::negative(2));
+    f.domains.addUpperBound("x", 17, SatLit::positive(3));
+    const auto result = f.solve();
+    REQUIRE(result.status == Status::UnsatComplete);
+    REQUIRE(result.conflict.has_value());
+    CHECK(result.conflict->clause == std::vector<SatLit>{
+        SatLit::positive(1), SatLit::negative(2), SatLit::positive(3)});
 }

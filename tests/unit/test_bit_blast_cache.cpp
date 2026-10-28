@@ -9,6 +9,7 @@
 #include <chrono>
 #include <stdexcept>
 #include <thread>
+#include <tuple>
 
 using namespace xolver;
 using Status = bitblast::BitBlastResult::Status;
@@ -37,6 +38,13 @@ public:
         for (auto& stage : reasoners_)
             if (stage->name() == name) return stage->run(db, TheoryEffort::Full);
         throw std::runtime_error("missing NIA stage: " + name);
+    }
+    std::optional<TheoryCheckResult> runThroughEarly(TheoryLemmaStorage& db) {
+        for (auto& stage : reasoners_) {
+            const auto result = stage->run(db, TheoryEffort::Full);
+            if (result || stage->name() == "nia.bit-blast-early") return result;
+        }
+        throw std::runtime_error("missing early bit-blast stage");
     }
 };
 }
@@ -182,4 +190,78 @@ TEST_CASE("NiaSolver: early bit-blast retries changed constraints after backtrac
     const auto result = solver.runStage("nia.bit-blast-early", db);
     REQUIRE(result.has_value());
     CHECK(result->kind == TheoryCheckResult::Kind::Consistent);
+}
+
+TEST_CASE("NiaSolver: early bit-blast sees current justified bounds") {
+    env::Scope scope(env::Snapshot::capture({{"XOLVER_NIA_BB_EARLY_MIN_ACTIVE", "0"},
+        {"XOLVER_NIA_BITBLAST_MAX_ITERS", "1"}}));
+    auto kernel = createPolynomialKernel();
+    const auto x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    const auto square = kernel->sub(kernel->pow(x, 2), kernel->mkConst(2));
+    const auto upper = kernel->sub(x, kernel->mkConst(2));
+    BitBlastStageProbe solver(std::move(kernel));
+    TheoryLemmaDatabase db;
+    for (const auto& [poly, rel, reason] : std::vector<std::tuple<PolyId, Relation, unsigned>>{
+            {square, Relation::Eq, 1}, {x, Relation::Geq, 2}, {upper, Relation::Leq, 3}}) {
+        TheoryAtomRecord atom{reason, TheoryId::NIA, false, NullExpr,
+            PolynomialAtomPayload{poly, rel, RealValue::fromInt(0)}};
+        solver.assertLit(atom, true, 1, SatLit::positive(reason));
+    }
+    const auto result = solver.runThroughEarly(db);
+    REQUIRE(result.has_value());
+    CHECK(result->kind == TheoryCheckResult::Kind::Conflict);
+}
+
+TEST_CASE("NiaSolver: early bit-blast drops domains from retracted branches") {
+    env::Scope scope(env::Snapshot::capture({{"XOLVER_NIA_BB_EARLY_MIN_ACTIVE", "0"},
+        {"XOLVER_NIA_BITBLAST_MAX_ITERS", "1"}}));
+    for (bool reset : {false, true}) {
+        CAPTURE(reset);
+        auto kernel = createPolynomialKernel();
+        const auto x = kernel->mkVar(kernel->getOrCreateVar("x"));
+        const auto one = kernel->sub(x, kernel->mkConst(1));
+        BitBlastStageProbe solver(std::move(kernel));
+        TheoryLemmaDatabase db;
+        TheoryAtomRecord old{1, TheoryId::NIA, false, NullExpr,
+            PolynomialAtomPayload{x, Relation::Eq, RealValue::fromInt(0)}};
+        solver.assertLit(old, true, 1, SatLit::positive(1));
+        REQUIRE_FALSE(solver.runStage("nia.normalize", db).has_value());
+        REQUIRE_FALSE(solver.runStage("nia.domain", db).has_value());
+        if (reset) solver.reset();
+        else solver.backtrackToLevel(0);
+        TheoryAtomRecord current{2, TheoryId::NIA, false, NullExpr,
+            PolynomialAtomPayload{one, Relation::Eq, RealValue::fromInt(0)}};
+        solver.assertLit(current, true, 1, SatLit::positive(2));
+        const auto result = solver.runThroughEarly(db);
+        REQUIRE(result.has_value());
+        CHECK(result->kind == TheoryCheckResult::Kind::Consistent);
+    }
+}
+
+TEST_CASE("NiaSolver: product bounds retain both divisor lower-bound reasons") {
+    auto kernel = createPolynomialKernel();
+    const auto x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    const auto y = kernel->mkVar(kernel->getOrCreateVar("y"));
+    const auto product = kernel->sub(kernel->mul(x, y), kernel->mkConst(10));
+    const auto lowerY = kernel->sub(y, kernel->mkConst(2));
+    const auto lowerX = kernel->sub(x, kernel->mkConst(6));
+    BitBlastStageProbe solver(std::move(kernel));
+    TheoryLemmaDatabase db;
+    for (const auto& [poly, rel, reason] : std::vector<std::tuple<PolyId, Relation, unsigned>>{
+            {product, Relation::Eq, 1}, {lowerY, Relation::Geq, 2}, {lowerX, Relation::Geq, 3}}) {
+        TheoryAtomRecord atom{reason, TheoryId::NIA, false, NullExpr,
+            PolynomialAtomPayload{poly, rel, RealValue::fromInt(0)}};
+        solver.assertLit(atom, true, 1, SatLit::positive(reason));
+    }
+    REQUIRE_FALSE(solver.runStage("nia.normalize", db).has_value());
+    const auto domain = solver.runStage("nia.domain", db);
+    const auto result = domain ? domain : solver.runStage("nia.square-bound", db);
+    REQUIRE(result.has_value());
+    REQUIRE(result->kind == TheoryCheckResult::Kind::Conflict);
+    REQUIRE(result->conflictOpt.has_value());
+    // Neither xy=10 and x>=6 alone, nor xy=10 and y>=2 alone is inconsistent.
+    // Omitting either bound would make this a false globally learned lemma.
+    for (unsigned reason : {1u, 2u, 3u})
+        CHECK(std::find(result->conflictOpt->clause.begin(), result->conflictOpt->clause.end(),
+                        SatLit::positive(reason)) != result->conflictOpt->clause.end());
 }

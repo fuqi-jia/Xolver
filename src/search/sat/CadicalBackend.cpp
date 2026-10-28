@@ -93,6 +93,12 @@ void CadicalBackend::setDeadline(std::chrono::steady_clock::time_point deadline)
     wallTerm_.deadline = deadline;
 }
 
+bool CadicalBackend::inconsistent() const {
+    // This is a construction-time query. Avoid CaDiCaL API calls from an
+    // external-propagator callback or after an exceptional solve destroyed it.
+    return solver_ && !inSolving_ && solver_->inconsistent();
+}
+
 CadicalBackend::CadicalBackend() : solver_(std::make_unique<CaDiCaL::Solver>()) {
     // Note: we do NOT set factor=0 here.  The state-aware newVar() below
     // handles the SOLVING-state issue; disabling BVA globally hurts SAT

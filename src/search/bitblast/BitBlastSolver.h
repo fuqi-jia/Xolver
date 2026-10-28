@@ -12,6 +12,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace xolver::bitblast {
@@ -23,17 +24,20 @@ struct BitBlastResult {
     std::optional<TheoryConflict> conflict;   // valid iff UnsatComplete
 };
 
-// Orchestrates one bit-blast attempt: size widths, encode over an independent
+// Orchestrates a bit-blast query: size widths, encode over an independent
 // CaDiCaL, solve, validate SAT, and refine widths in heuristic mode. Sound by
 // construction: SAT validated, UNSAT only when complete.
 //
 // SELF-CONTAINED SOUNDNESS: the solver encodes BOTH (a) every constraint in
 // `cs` AND (b) the DomainStore hard bounds of each variable, so the SAT search
 // space EQUALS the box [lb,ub]^n intersected with `cs` — it does not rely on
-// `cs` happening to contain the bound atoms. A SAT model is accepted only if it
+// `cs` happening to contain the bound atoms. A known root contradiction permits
+// stopping an exact encoded prefix: adding the remaining conjuncts cannot
+// restore satisfiability. A SAT model is accepted only if it
 // passes IntegerModelValidator over `cs` AND lies inside the DomainStore box
-// (`modelInDomains`). UNSAT is emitted only when `boxIsComplete`, with a
-// conflict over the reasons of BOTH the cs constraints and the domain bounds.
+// (`modelInDomains`). UNSAT requires complete domains for every variable in
+// the failed-assumption proof, including the reasons for those domains. An
+// unrelated unbounded variable does not invalidate a finite refutation.
 class BitBlastSolver {
 public:
     explicit BitBlastSolver(PolynomialKernel& kernel)
@@ -72,6 +76,7 @@ public:
 
 private:
     bool applicable(const std::vector<NormalizedNiaConstraint>& cs) const;
+    struct EncodingContext;
 
     // One encode+solve+validate attempt at a fixed width plan. Sat carries a
     // validated in-box model; Unsat is box-dependent (caller decides global
@@ -79,17 +84,27 @@ private:
     struct Attempt {
         enum Kind { Sat, Unsat, Unknown, Overflow } kind = Unknown;
         IntegerModel model;
+        bool complete = false;
+        std::optional<TheoryConflict> conflict;
     };
-    Attempt attemptAtWidths(const BitWidthPlan& plan,
+    Attempt attemptAtWidths(EncodingContext& context, const BitWidthPlan& plan,
                             const std::vector<NormalizedNiaConstraint>& cs,
                             const DomainStore& domains,
                             const IntegerModelValidator& validator);
 
     // Encode `x >= lb` and `x <= ub` (and finite-set / exclusions) for every
     // bounded variable, so the SAT search is confined to the DomainStore box.
-    void encodeDomainBounds(BitBlastEncoder& enc,
+    // Domain pointers refer to varBits keys, which remain stable throughout
+    // one attempt. Only fully encoded facts enter the assumption list.
+    struct EncodedFact {
+        SatLit literal;
+        size_t constraint;
+        const std::string* domainVariable;
+    };
+    bool encodeDomainBounds(BitBlastEncoder& enc,
                             const std::unordered_map<std::string, BitVec>& varBits,
-                            const DomainStore& domains);
+                            const DomainStore& domains,
+                            std::vector<EncodedFact>& facts);
 
     // Independent check that a candidate model lies inside the DomainStore box
     // (bounds, finite sets, exclusions). Belt-and-suspenders with the encoding.
@@ -100,7 +115,8 @@ private:
     // Returns nullopt if no usable reason literal exists, or if the clause is
     // self-contradictory.
     std::optional<TheoryConflict> buildCompleteConflict(
-        const std::vector<NormalizedNiaConstraint>& cs, const DomainStore& domains) const;
+        const std::vector<NormalizedNiaConstraint>& cs, const DomainStore& domains,
+        const std::unordered_set<std::string>* variables = nullptr) const;
 
     PolynomialKernel& kernel_;
     SpaceEstimator estimator_;
