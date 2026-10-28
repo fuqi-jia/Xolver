@@ -1256,10 +1256,15 @@ across widths within one query. Low bits persist, high bits are added, current
 facts are assumptions, and width-dependent polynomial caches are rebuilt.
 Uniform widths and attempt limits remain; a new signed-refinement test checks
 that low bits formerly denoting -1 can denote 3 in the wider leaf. Native
-qualification is pending in EOS `eadd23a019f4`, using `source-r308.tar.json`.
-After successful freezing, `launch-r308.py` submits five paired development
-cases and R309 profiles against the uniform R306 variant. Do not claim a gain
-from this implementation before those results and full qualification exist.
+qualification passes in EOS `eadd23a019f4`: **1,705 tests / 801,362 assertions**,
+using `source-r308.tar.json`. Frozen CLI SHA-256 is
+`d7e813c75da5d1c4e2c93762364b442fb799ec25ae2145e2f1ec4be316492904`.
+The five accepted paired development observations establish no added or lost
+solve. Cases 44 and 123 improve from 48.73 to 33.62 seconds and 47.45 to 27.58
+seconds; 40/114 still time out. Original empty-CPU launches and an over-budget
+observation remain recorded separately. Evidence: pilot `5497e15e0145`, first
+protocol-valid retries `5958cd25add3`, profiles `9b5da2819172`. This local speed
+benefit alone did not qualify a production merge or a full160 score.
 
 Evidence: R302 build `cd028a4720a1`, NIA48 `d89b89d50a21`, profiles
 `9d50b89a6627` / `b70de5e0449e`, acceptance `c23b54c5604a`, paired regression
@@ -1271,6 +1276,77 @@ capture does not establish the cause of those overruns. Other root-owned fuzzers
 were observed consuming cores; their role in each timeout is unproven. QCP stays
 at two qualified unique development programs. Neither protected set was used;
 an additional server archive is not a delivery requirement.
+
+## Current-domain and complete-reason repair (R312–R332)
+
+R312 (`e1d24fe79f7c`) first reproduces four failing native cases: the early NIA
+bit-blast stage misses current bounds, reset/backtrack retains obsolete domains,
+a product-derived upper bound omits its divisor lower-bound premise, and a fixed
+integer unnecessarily exhausts a one-gate encoding budget. Five assertions fail
+before the implementation. R314 repairs the current-prefix domain lifecycle,
+retains all premises of product-bound propagation, and encodes explained fixed
+domains as constants. Source commits are `620be852`, `f2a29d2f`, `e6bf8dcd`, and
+`1e318da1`; the candidate also includes the scoped-refutation and shared-gate
+implementation above. SAT still requires exact whole-query model validation.
+
+For example, `x*y=10`, `x>=6`, `y>=2` is inconsistent, but omitting either lower
+bound permits a model. The new unit test catches the invalid internal conflict
+explanation. Four original/removed-premise SMT checks agree with independent Z3;
+all three SAT cases have independently replayed models. This reproduces an
+explanation bug, not an observed opposite whole-input solver verdict. Evidence:
+`e215592be97d`, first missing-lease retries `bf6b9ab75514`.
+
+Native qualification `7a47b2ba6f79` passes **1,709 tests / 801,383 assertions**,
+including 38 targeted cases / 323 assertions and three CTest checks. Source is
+`source-r314.tar.json`, head `1e318da14f96c73bbe26fabe14041f9288ef3a7f`.
+Frozen CLI SHA-256 is
+`eaa3b5b87c2b5df589729a728a5e6bc3d4bb4a0b23ca9205f1baea0581874567`;
+SV remains byte-identical to qualified main.
+
+Fresh NIA48 R318 (`db9f3de0f7ed`) completes all 48 physical-core leases without
+protocol errors, opposite verdicts, or rejected exported models. With the
+previously checked original-input certificate for 115, verified solves are
+**main 23 / candidate 24 / Z3 30**; verified PAR-2 is **3086.186 / 2953.553 /
+2237.162 seconds**. The sole coverage change is index 123: main timeout 60.092 s,
+candidate UNSAT 22.607 s, independent Z3 UNSAT 0.367 s. Main solved this same
+input in other paired rounds, so this is a round-dependent budget improvement,
+not newly established logical capability. Four Z3-only UNSAT results remain
+unconfirmed within budget. The certificate is supplementary truth evidence,
+not a fabricated timed oracle observation.
+
+Full160 R320 (`4d95a146ec30`) finishes with the same frozen versions and
+60-second / one-physical-core / 16-GiB protocol. Four original rows (8/24/32/42)
+overrun the wall budget and are excluded. Their first unchanged-version paired
+rechecks are retained from `9f97d11f73bd`, `2d30731b5b2f`, and `8cd0f1970d29`.
+Verified solves are **main 92 / candidate 92 / Z3 115**; verified PAR-2 is
+**8468.816 / 8426.471 / 5614.750 seconds**. Candidate coverage by logic is
+LIA 32/48, NIA 24/48, LRA 16/32, NRA 20/32, matching main exactly. There are
+zero added or lost solves, 67 timeouts and one unknown for each Xolver version,
+and no opposite verdict or rejected exported model. Overall PAR-2 improves
+0.50% in this round; NIA alone improves 2988.311 to 2935.691 seconds. This is
+not evidence of overall superiority to Z3 or a full-suite coverage gain.
+Z3 has 124 raw decisions, with nine still unconfirmed in this round.
+
+Server acceptance R314 (`63deb994f18d`) initially passes 36/38 tasks: partial
+integer arithmetic has five oracle timeouts; interval checks have an Xolver
+model-query failure and a verdict timeout. First paired rechecks R322
+(`e5796f92791a`) keep the original seed/count/five-second budget and pass with
+both frozen versions: 27 partial-arithmetic cases and 128 interval cases,
+including model replay. Original failures remain recorded. All **921
+regressions**, **703 theory-model replays**, and existing QCP checks pass.
+
+Final source/result/lease audit R332 (`f6e4c98d5c69`) passes; evidence is
+`stage-r332.json`, SHA-256
+`464be41c1da1db24656aebefbe35b9da2005d69db3b562439f5776193cef2ed6`.
+All 204 audited tasks have physical CPU leases and disjoint execution envelopes.
+An earlier audit (`ab66920e6e5a`) incorrectly treated delayed collector end
+timestamps as process exit times; its failure is retained. The corrected audit
+uses launcher-script creation through the executor's post-workload end file,
+and records the four collector-timestamp overlaps separately.
+
+GitHub PR CI and production merge remain pending. QCP has no additional
+qualified end-to-end program coverage from this stage. Both protected sets
+remain unused; no additional server archive is a delivery prerequisite.
 
 ## Closed experiments and practical regressions
 
