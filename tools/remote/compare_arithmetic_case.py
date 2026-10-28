@@ -16,6 +16,29 @@ def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def run_with_budget(command, timeout, environment):
+    """Charge process creation to the same wall budget as communication."""
+    start = time.monotonic()
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                               start_new_session=True, env=environment)
+    launched = time.monotonic()
+    expired = False
+    try:
+        stdout, stderr = process.communicate(timeout=max(0, timeout - (launched - start)))
+    except subprocess.TimeoutExpired:
+        expired = True
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        stdout, stderr = process.communicate()
+    end = time.monotonic()
+    return stdout, stderr, dict(seconds=end - start, launch_seconds=launched - start,
+                               wait_seconds=end - launched, returncode=process.returncode,
+                               timed_out=expired or end - start > timeout,
+                               budget_overrun=end - start > timeout + 1)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('manifest', 'baseline', 'candidate', 'z3', 'output'):
@@ -28,7 +51,10 @@ def main():
     args = parser.parse_args()
     if not os.environ.get('EOS_CPU_IDS'):
         parser.error('run through ExperimentOS with a leased CPU')
-    cpu = min(os.sched_getaffinity(0))
+    leased = {int(value) for value in os.environ['EOS_CPU_IDS'].split(',')}
+    if len(leased) != 1 or os.sched_getaffinity(0) != leased:
+        parser.error('exactly one leased CPU must match the process affinity')
+    cpu = next(iter(leased))
     os.sched_setaffinity(0, {cpu})
     manifest = json.loads(args.manifest.read_text())
     case = manifest['cases'][args.index]
@@ -42,34 +68,27 @@ def main():
     names = {c['name'] for c in json.loads(controls.read_text())['controls']}
     environment = {k: v for k, v in os.environ.items() if k not in names}
 
+    protocol_errors = []
+
     def invoke(label, command, source, tail=()):
         cmd = ['prlimit', '--as=' + str(args.memory_gib * 1024**3),
                '--cpu=' + str(args.timeout + 2) + ':' + str(args.timeout + 3),
                '--', *command, str(source), *tail]
-        start = time.monotonic()
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                   start_new_session=True, env=environment)
-        timeout = False
-        try:
-            stdout, stderr = process.communicate(timeout=args.timeout)
-        except subprocess.TimeoutExpired:
-            timeout = True
-            os.killpg(process.pid, signal.SIGKILL)
-            stdout, stderr = process.communicate()
-        seconds = time.monotonic() - start
+        stdout, stderr, timing = run_with_budget(cmd, args.timeout, environment)
+        if timing['budget_overrun']:
+            protocol_errors.append(dict(label=label, **timing))
         (out / (label + '.stdout')).write_bytes(stdout)
         (out / (label + '.stderr')).write_bytes(stderr)
         answers = re.findall(r'^(sat|unsat|unknown)\s*$', stdout.decode(errors='replace'), re.M)
-        if timeout or stdout.strip() == b'timeout':
+        if timing['timed_out'] or stdout.strip() == b'timeout':
             result = 'timeout'
-        elif process.returncode == 0 and len(answers) == 1:
+        elif timing['returncode'] == 0 and len(answers) == 1:
             result = answers[0]
         elif re.search(rb'bad_alloc|out of memory|cannot allocate', stderr, re.I):
             result = 'memout'
         else:
             result = 'error'
-        return dict(result=result, seconds=seconds, returncode=process.returncode,
-                    command=cmd, cpu=cpu)
+        return dict(result=result, **timing, command=cmd, cpu=cpu)
 
     binaries = {name: dict(path=cmd[0], sha256=digest(cmd[0])) for name, cmd in commands.items()}
     report = dict(index=args.index, case=case, binaries=binaries,
@@ -88,6 +107,7 @@ def main():
     expected = case.get('expected', 'unknown')
     wrong = len(verdicts) > 1 or expected in ('sat', 'unsat') and any(v != expected for v in verdicts)
     report['wrong_verdict'] = bool(wrong)
+    report['protocol_errors'] = protocol_errors
     if args.validate_models:
         sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'fuzz'))
         from fuzz_theory_applications import parse, emit, replay
@@ -134,10 +154,11 @@ def main():
             raise ValueError('solver changed during comparison: ' + name)
     (out / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
     metrics = dict(cases=1, wrong=int(wrong),
-                   errors=sum(o['result'] == 'error' for o in report['observations'].values()))
+                   errors=sum(o['result'] == 'error' for o in report['observations'].values()),
+                   protocol_errors=len(protocol_errors))
     (out / 'metrics.json').write_text(json.dumps(metrics) + '\n')
     Path(os.environ['EOS_METRICS_FILE']).write_text(json.dumps(metrics) + '\n')
-    return int(bool(metrics['wrong'] or metrics['errors']))
+    return int(bool(metrics['wrong'] or metrics['errors'] or metrics['protocol_errors']))
 
 
 if __name__ == '__main__':

@@ -21,6 +21,13 @@ def summarize(directory, expected_cases):
                 raise ValueError('mixed protocol or frozen versions: ' + key)
         if len({o['cpu'] for o in row['observations'].values()}) != 1:
             raise ValueError('versions did not share one CPU: ' + str(row['index']))
+        if row.get('protocol_errors'):
+            raise ValueError('wall budget overrun: ' + str(row['index']))
+        for observation in row['observations'].values():
+            for attempt in [observation, *(observation[key] for key in
+                    ('model', 'replay', 'unsat_check') if key in observation)]:
+                if attempt.get('budget_overrun') or attempt.get('seconds', 0) > row['timeout'] + 1:
+                    raise ValueError('wall budget overrun: ' + str(row['index']))
     counts = {name: Counter() for name in first['binaries']}
     wrong, invalid_models, unverified, comparisons = [], [], [], []
     by_logic = {}
