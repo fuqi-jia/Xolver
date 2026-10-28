@@ -7,7 +7,9 @@ API contracts are described in [the architecture reference](../ARCHITECTURE.md),
 named source snapshots and binaries; they do not establish general completeness
 or performance superiority.
 
-Latest qualified arithmetic source: [mixed boundary propagation](#mixed-boundary-propagation-r288r290r293).
+Latest qualified arithmetic candidate: [binary integer solving, model reuse and aggregate refutation](#binary-integer-solving-model-reuse-and-aggregate-refutation-r400r424r442r460).
+Preceding delivered main: [eager affine domains, PR59](https://github.com/fuqi-jia/Xolver/pull/59),
+`0fa0f87bdbd6980e1266e34912daf6dbd1974c12`, with green main CI.
 Latest supplementary verification: [original-input congruence certificate](#original-input-congruence-certificate-r284r285).
 Older result tables describe their own frozen rounds; use the latest table and
 its exact GitHub review/merge checks when continuing work.
@@ -51,11 +53,14 @@ to congruence. The differential harness checks both original verdicts and the
 exported interpretation with Z3 and cvc5. Two negative controls ensure replay
 rejects an incorrect or missing zero-divisor interpretation.
 
-No dependency working-tree changes are part of this delivery. Pins are:
+The qualified candidate uses clean dependency commits. Its parser change is
+[SOMTParser PR65](https://github.com/fuqi-jia/SOMTParser/pull/65), whose three
+CI jobs pass; required review and merge remain pending. The preceding delivered
+main pins parser `49136bd1936eb34302a380a753731e577d503475`. Candidate pins are:
 
 | Dependency | Revision |
 | --- | --- |
-| SOMTParser | `49136bd1936eb34302a380a753731e577d503475` |
+| SOMTParser | `b9063faeab2e89d87525432eaedb8f0a5b6eb1ea` |
 | CaDiCaL | `7b99c07f0bcab5824a5a3ce62c7066554017f641` |
 | libpoly | `3d5e6fbd98639cb0941b029e23ca17c0e3c4a80a` |
 
@@ -1491,7 +1496,79 @@ establishes non-overlap among the recorded ExperimentOS tasks, not exclusive
 use of the entire server; small timing differences may include host noise.
 This establishes a repeatable local encoding improvement, with no increased
 development-suite coverage or claim of overall superiority. Neither protected
-set was used. Server qualification is complete; PR CI and merge are pending.
+set was used. [PR59](https://github.com/fuqi-jia/Xolver/pull/59) merged as
+`0fa0f87bdbd6980e1266e34912daf6dbd1974c12`. Both jobs passed in
+[PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/40721530284) and fresh
+[main CI](https://github.com/fuqi-jia/Xolver/actions/runs/40724656537).
+
+## Binary integer solving, model reuse and aggregate refutation (R400/R424/R442/R460)
+
+Qualified core commit: `a643d62b11c4b63e49f97bf1a9a0003fefaecbba`.
+The [initial context record](BINARY_INTEGER_CONTEXT_STAGE_20261029.json) and
+[final full160 audit](BINARY_INTEGER_AGGREGATE_FULL_STAGE_20261029.json) retain
+both the gains and the intermediate regressions.
+
+Root facts proving every used integer belongs to `{0,1}` enable fully reified,
+exact pseudo-Boolean thresholds over the complete Boolean formula. Signed and
+large coefficients, complementary literals and binary polynomial products are
+handled without width escalation. Applicability is structural; this SAT-only
+arm still validates every original assertion with exact arithmetic.
+
+Two general quadratic costs prevented large cases from completing. Parser
+source positions rescanned the entire input prefix per command (141/143 and
+141/142 profile samples). A line-start index preserves source-location semantics.
+After that fix, model validation rebuilt a 19k/26k-variable assignment for each
+of 105k/141k atoms. An immutable polynomial evaluation context now binds it once;
+integer and rational clients retain exact results and missing-binding checks.
+The initial partial-assignment crash is retained as rejected qualification R418;
+the original test passes after explicit support checking and value ownership.
+
+The intermediate candidate solved two extra SAT cases but delayed two easy
+UNSAT cases by about 20 seconds. R440 found 48/48 and 49/49 samples in SAT
+search, with encoding taking only 2 ms. Shared linear aggregation now sums
+asserted inequalities using exact positive multipliers and retains a checkable
+contradiction and every premise. The eager arm yields to arithmetic; the NIA
+domain reasoner can emit the explained conflict. Strict rational, scaled,
+conditional and feasible-witness controls pass. The targeted round restores
+20.006→0.220 s and 20.007→0.166 s; diagnostics show 29/27-row certificates
+`0 <= -1` and no SAT search. LRA/LIA backtracking policies and public API
+semantics are unchanged. There is no new runtime gate or external oracle.
+
+R442, EOS `54f07ddcba2b`, passes **1,737 tests / 876,303 assertions**, 79
+targeted tests, all 63 parser CTests and three architecture/evidence/harness
+checks. All 38 R450 acceptance items pass. An additional **192 distinct**
+LIA/LRA/NIA cycle/guard cases agree with Z3 and cvc5; all **156 SAT models**
+have both independent replays. One original target exceeds its budget and one
+QA batch records two Z3 timeouts while unrelated root workloads occupy leased
+CPUs. Their first unchanged-input/version/budget rechecks pass; original records
+are retained. No valid slow observation is replaced: full160 index 18 remains
+46.478→50.709 seconds.
+
+Fresh full160 R448, EOS `48450ccfd508`, has 160 complete, protocol-valid rows,
+with **main 93 / candidate 95 / Z3 115 verified solves** and verified PAR-2
+**8295.528 / 8111.836 / 5616.976 seconds**. Candidate results are 54 SAT,
+41 UNSAT, 65 timeouts, zero unknowns; there are two gained SAT cases (indices
+2 and 97, 37.301 and 34.391 seconds), no lost solves, opposite verdicts or
+rejected models. Each gain has an independently replayed model. Z3 has 124 raw
+decisions; nine unresolved confirmations remain excluded. The original-input
+certificate for 115 is checked independently without changing timed results.
+The earlier R428 round has its own 116 confirmed Z3 results; do not transfer
+that count between rounds.
+
+Frozen CLI SHA-256:
+`6ce2bc442b9576124956deb73a5f9c5cd9cae64f26512ff38dfc90f6ae948aa2`;
+SV: `74fe8d8fe48db4b9745ae466d9128fc25adab870765694dc09f6cc8ecba2d3af`.
+R460, EOS `f94a0ac1341f`, checks source manifest, binaries, logs, input hashes,
+models, the certificate and 221 physical CPU execution envelopes without overlap
+among recorded tasks. This is not exclusive-host evidence. Last applied overlay
+is `source-r442.tar.json`; use it for the next incremental export. Source and
+binary qualification is sealed before subsequent documentation-only commits.
+
+The parent PR CI and merge receipt are pending. Parser PR65 requires a reviewer;
+ordinary and automatic merging are blocked, and no admin bypass is authorized.
+Neither protected set was read or evaluated. This stage increases development
+coverage by two, remains below same-round Z3, and establishes no real QCP
+program-suite speed superiority. Continue toward the full SMT and program goals.
 
 ## Additional complete QCP development program (max3 R334)
 
