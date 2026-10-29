@@ -269,8 +269,10 @@ class QuadraticSignContext {
         RationalPolynomial quotient, remainder = dividend;
         for (int current = degree; current >= divisorDegree;) {
             tick(remainder.terms().size() + 1);
-            auto term = multiply(remainder.leadingCoefficient(var),
-                RationalPolynomial::fromVar(var, current - divisorDegree, inverse));
+            const auto factor = current == divisorDegree
+                ? RationalPolynomial::fromConstant(inverse)
+                : RationalPolynomial::fromVar(var, current - divisorDegree, inverse);
+            auto term = multiply(remainder.leadingCoefficient(var), factor);
             quotient += term;
             remainder -= multiply(divisor, term);
             const int next = remainder.degree(var);
