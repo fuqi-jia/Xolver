@@ -1,0 +1,473 @@
+{
+  "schema": "xolver-batched-tableau-closed/1",
+  "source_head": "766b8f9433ec0227f63facf3aae9a0085cafe50f",
+  "native_qualification_sha256": "144807a042f68692ce53b7464935f4f63bb32a770630b658b660a47fc556e2b7",
+  "binaries": {
+    "baseline": "97f5b897ab377b9c029821584ed798666035cea30b240b6ca9894dc8bf64dc8f",
+    "candidate": "e5cef924e3ad5de59037680494b5d8cd3655af5c1e5914ffbbad62964532e88f",
+    "z3": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+  },
+  "experiment": "f2588254e416",
+  "cases": 16,
+  "summary": {
+    "baseline": {
+      "verified_decided": 5,
+      "verified_par2": 1394.4230959154665,
+      "results": {
+        "unsat": 2,
+        "timeout": 11,
+        "sat": 3
+      }
+    },
+    "candidate": {
+      "verified_decided": 5,
+      "verified_par2": 1391.6204793211073,
+      "results": {
+        "unsat": 2,
+        "timeout": 11,
+        "sat": 3
+      }
+    },
+    "z3": {
+      "verified_decided": 14,
+      "verified_par2": 286.8906330168247,
+      "results": {
+        "unsat": 5,
+        "timeout": 1,
+        "sat": 10
+      }
+    }
+  },
+  "verified_changes": [],
+  "rows": [
+    {
+      "index": 7,
+      "report_sha256": "3426681daff2ee72deaff182009d2a295a361497236f62b036322d08bc899cd8",
+      "observations": {
+        "candidate": {
+          "result": "unsat",
+          "seconds": 20.172977892681956,
+          "verified": true
+        },
+        "z3": {
+          "result": "unsat",
+          "seconds": 0.11610304564237595,
+          "verified": true
+        },
+        "baseline": {
+          "result": "unsat",
+          "seconds": 19.971511483192444,
+          "verified": true
+        }
+      }
+    },
+    {
+      "index": 10,
+      "report_sha256": "300193bd39f62434cc88cdfc1d9a6df54c204905f31cdde44875ec682bde0615",
+      "observations": {
+        "candidate": {
+          "result": "timeout",
+          "seconds": 60.14977143146098,
+          "verified": false
+        },
+        "z3": {
+          "result": "timeout",
+          "seconds": 60.01475437544286,
+          "verified": false
+        },
+        "baseline": {
+          "result": "timeout",
+          "seconds": 60.20065244100988,
+          "verified": false
+        }
+      }
+    },
+    {
+      "index": 13,
+      "report_sha256": "76932bee9fbd49c698f3c6b315db01bc7df148accfd875c6845fbdf5b531681b",
+      "observations": {
+        "candidate": {
+          "result": "timeout",
+          "seconds": 60.283520463854074,
+          "verified": false
+        },
+        "z3": {
+          "result": "sat",
+          "seconds": 0.9711920004338026,
+          "verified": true
+        },
+        "baseline": {
+          "result": "timeout",
+          "seconds": 60.02731497772038,
+          "verified": false
+        }
+      }
+    },
+    {
+      "index": 47,
+      "report_sha256": "864892e393e4df9f77448b1c606e97ed0d6497a87d81f8b7271ffb7101c486be",
+      "observations": {
+        "z3": {
+          "result": "sat",
+          "seconds": 17.658196937292814,
+          "verified": true
+        },
+        "baseline": {
+          "result": "timeout",
+          "seconds": 60.0880495198071,
+          "verified": false
+        },
+        "candidate": {
+          "result": "timeout",
+          "seconds": 60.08906784467399,
+          "verified": false
+        }
+      }
+    },
+    {
+      "index": 51,
+      "report_sha256": "ecd4822089d229f078ecc45065460272c970d956784cf0356e7a8adce2b15fa9",
+      "observations": {
+        "baseline": {
+          "result": "timeout",
+          "seconds": 60.02169606089592,
+          "verified": false
+        },
+        "candidate": {
+          "result": "timeout",
+          "seconds": 60.0203509517014,
+          "verified": false
+        },
+        "z3": {
+          "result": "sat",
+          "seconds": 0.6671552900224924,
+          "verified": true
+        }
+      }
+    },
+    {
+      "index": 56,
+      "report_sha256": "872261a510bbd52c51d12acc22e372c5e6883873c103f15bdc22b50b9828be22",
+      "observations": {
+        "z3": {
+          "result": "unsat",
+          "seconds": 4.326103400439024,
+          "verified": true
+        },
+        "baseline": {
+          "result": "timeout",
+          "seconds": 60.004631355404854,
+          "verified": false
+        },
+        "candidate": {
+          "result": "timeout",
+          "seconds": 60.006717815995216,
+          "verified": false
+        }
+      }
+    },
+    {
+      "index": 59,
+      "report_sha256": "503bb582e4e961a984e05a58a984dc3285e827ee9ac76e89392d4b57f9cd6ccf",
+      "observations": {
+        "z3": {
+          "result": "sat",
+          "seconds": 0.4169429522007704,
+          "verified": true
+        },
+        "baseline": {
+          "result": "sat",
+          "seconds": 53.35014093108475,
+          "verified": true
+        },
+        "candidate": {
+          "result": "sat",
+          "seconds": 50.346627505496144,
+          "verified": true
+        }
+      }
+    },
+    {
+      "index": 72,
+      "report_sha256": "c178b71a70388b1a18b408ae299d75e4daed18a18a599916bcfca48c09a4b8d8",
+      "observations": {
+        "baseline": {
+          "result": "timeout",
+          "seconds": 60.21105560101569,
+          "verified": false
+        },
+        "candidate": {
+          "result": "timeout",
+          "seconds": 60.20290604047477,
+          "verified": false
+        },
+        "z3": {
+          "result": "sat",
+          "seconds": 8.484843047335744,
+          "verified": true
+        }
+      }
+    },
+    {
+      "index": 94,
+      "report_sha256": "a9031cdbaec14b87c3e0eea8456e4e90d7f94354dbbba2a5f9c2476174fe4d40",
+      "observations": {
+        "candidate": {
+          "result": "timeout",
+          "seconds": 60.097485929727554,
+          "verified": false
+        },
+        "z3": {
+          "result": "sat",
+          "seconds": 52.6520512457937,
+          "verified": false
+        },
+        "baseline": {
+          "result": "timeout",
+          "seconds": 60.110357424244285,
+          "verified": false
+        }
+      }
+    },
+    {
+      "index": 113,
+      "report_sha256": "559d36858aed46f940a549f0079b0e42d2e763ed7bebe6e394421562cb2c8631",
+      "observations": {
+        "z3": {
+          "result": "unsat",
+          "seconds": 0.4169544577598572,
+          "verified": true
+        },
+        "baseline": {
+          "result": "timeout",
+          "seconds": 60.01534518413246,
+          "verified": false
+        },
+        "candidate": {
+          "result": "timeout",
+          "seconds": 60.015473103150725,
+          "verified": false
+        }
+      }
+    },
+    {
+      "index": 129,
+      "report_sha256": "e9e7589db03e6e3f875245b6b6a6e09ff12ca56f9111c02b85cc5e9e272d0d50",
+      "observations": {
+        "baseline": {
+          "result": "timeout",
+          "seconds": 60.00741886161268,
+          "verified": false
+        },
+        "candidate": {
+          "result": "timeout",
+          "seconds": 60.00772473216057,
+          "verified": false
+        },
+        "z3": {
+          "result": "unsat",
+          "seconds": 5.6794304475188255,
+          "verified": true
+        }
+      }
+    },
+    {
+      "index": 131,
+      "report_sha256": "2da45848a9df2d04fb5d231a4ff5e0821627be62d2ae2b6aa8c046f501ae335a",
+      "observations": {
+        "z3": {
+          "result": "sat",
+          "seconds": 0.46713715977966785,
+          "verified": true
+        },
+        "baseline": {
+          "result": "timeout",
+          "seconds": 60.00806103087962,
+          "verified": false
+        },
+        "candidate": {
+          "result": "timeout",
+          "seconds": 60.00850822776556,
+          "verified": false
+        }
+      }
+    },
+    {
+      "index": 144,
+      "report_sha256": "a8962a28cace5cba54d5541cbc13b098b1a12d15efbe7161df2bea26edc3622d",
+      "observations": {
+        "baseline": {
+          "result": "timeout",
+          "seconds": 60.13049101084471,
+          "verified": false
+        },
+        "candidate": {
+          "result": "timeout",
+          "seconds": 60.136156333610415,
+          "verified": false
+        },
+        "z3": {
+          "result": "sat",
+          "seconds": 7.436393054202199,
+          "verified": true
+        }
+      }
+    },
+    {
+      "index": 150,
+      "report_sha256": "008b35032c8b9d516916b542ed87b084068529cb1e112c1816f1e91abd95b470",
+      "observations": {
+        "baseline": {
+          "result": "sat",
+          "seconds": 0.6672060713171959,
+          "verified": true
+        },
+        "candidate": {
+          "result": "sat",
+          "seconds": 0.666966250166297,
+          "verified": true
+        },
+        "z3": {
+          "result": "sat",
+          "seconds": 0.11629354953765869,
+          "verified": true
+        }
+      }
+    },
+    {
+      "index": 155,
+      "report_sha256": "e124f832b845d0b241ec62385b87d83f85595a88e948ba0662c37e4e11763bc5",
+      "observations": {
+        "z3": {
+          "result": "unsat",
+          "seconds": 0.0673174187541008,
+          "verified": true
+        },
+        "baseline": {
+          "result": "unsat",
+          "seconds": 0.3673763554543257,
+          "verified": true
+        },
+        "candidate": {
+          "result": "unsat",
+          "seconds": 0.3676049876958132,
+          "verified": true
+        }
+      }
+    },
+    {
+      "index": 158,
+      "report_sha256": "2b8ba6cbc3480706d4a5579ac823a5e149aed093c6481210c331cf3a1f4c3610",
+      "observations": {
+        "z3": {
+          "result": "sat",
+          "seconds": 0.06657025590538979,
+          "verified": true
+        },
+        "baseline": {
+          "result": "sat",
+          "seconds": 0.06686107441782951,
+          "verified": true
+        },
+        "candidate": {
+          "result": "sat",
+          "seconds": 0.06630268506705761,
+          "verified": true
+        }
+      }
+    }
+  ],
+  "paired_components": [
+    {
+      "width": 12,
+      "updates": 8,
+      "rational": 0,
+      "ratios": [
+        0.9753861312654357,
+        0.9444302411715735,
+        0.9758626426646257
+      ],
+      "median_ratio": 0.9753861312654357
+    },
+    {
+      "width": 12,
+      "updates": 8,
+      "rational": 1,
+      "ratios": [
+        1.0082982674722019,
+        0.9787736570620881,
+        0.9834690458804544
+      ],
+      "median_ratio": 0.9834690458804544
+    },
+    {
+      "width": 48,
+      "updates": 32,
+      "rational": 0,
+      "ratios": [
+        0.9378559402410064,
+        0.9398785375479538,
+        0.944921987586447
+      ],
+      "median_ratio": 0.9398785375479538
+    },
+    {
+      "width": 48,
+      "updates": 32,
+      "rational": 1,
+      "ratios": [
+        0.9465372302977315,
+        0.9500104206984845,
+        0.9469739265386198
+      ],
+      "median_ratio": 0.9469739265386198
+    },
+    {
+      "width": 128,
+      "updates": 64,
+      "rational": 0,
+      "ratios": [
+        0.9360981903912323,
+        0.9375724664881593,
+        0.9369779739351293
+      ],
+      "median_ratio": 0.9369779739351293
+    },
+    {
+      "width": 128,
+      "updates": 64,
+      "rational": 1,
+      "ratios": [
+        0.935814660083555,
+        0.9469514217652204,
+        0.9393601078974975
+      ],
+      "median_ratio": 0.9393601078974975
+    },
+    {
+      "width": 512,
+      "updates": 8,
+      "rational": 0,
+      "ratios": [
+        1.0242583447164721,
+        1.04580209393739,
+        1.0356422576148532
+      ],
+      "median_ratio": 1.0356422576148532
+    },
+    {
+      "width": 512,
+      "updates": 8,
+      "rational": 1,
+      "ratios": [
+        1.031875077456934,
+        1.0534071412385484,
+        1.0352988988446579
+      ],
+      "median_ratio": 1.0352988988446579
+    }
+  ],
+  "protected_sets_used": false,
+  "merged": false,
+  "decision": "Close without merge or full160 expansion: no verified gains in the representative16; a small SAT59 speed change does not close the remaining gaps. Proceed with the independent demanded-context implementation."
+}
