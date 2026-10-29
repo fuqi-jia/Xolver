@@ -38,6 +38,31 @@ fix is retained under the user's explicit functionality-first instruction,
 including its known SAT59 timeout regression. No performance superiority is claimed.
 Older tables describe their own frozen versions and evidence boundaries.
 
+## Current arithmetic and ASP continuation
+
+[PR67](https://github.com/fuqi-jia/Xolver/pull/67) is merged as main
+`e7c7917c9a9c997a8649ad736c8548f4de186bca`, after its
+[PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/40899442555) passed.
+The [fresh main CI](https://github.com/fuqi-jia/Xolver/actions/runs/40903458473)
+is pending at this update. The row-snapshot stage below restores verified
+fixed160 coverage from **94 to 95**, with no losses; same-round Z3 retains
+**115 verified / 124 raw**. Its eight unconfirmed UNSATs and one unconfirmed SAT
+remain excluded. No solver-superiority claim follows from this local gain.
+
+[PR68](https://github.com/fuqi-jia/Xolver/pull/68) adds finite native ASP under
+`satisfiability/asp`, reusable exact integer Boolean optimization under
+`search/optimization`, and the current Draco 2 instance-local backend. Its
+[first qualification](DRACO2_ASP_FUNCTION_STAGE_20261029.json) binds the latest
+frozen Draco 2 source, original rules/weights/examples and real native calls:
+1,771 unit tests, 102 independent ASPIF cases, 36 independently checked native
+calls through three original examples, and five weighted-dependency probes.
+The [first PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/40898756245)
+passed before rebasing onto PR67; it does not qualify the rebased combination.
+Grounding is forced ground-only; Xolver performs stable-model search and
+optimization. Unsupported fragments fail explicitly. These are functional
+checks, not a Draco or solver performance comparison. Neither protected set
+was evaluated, and the cancelled current-main archive remains unnecessary.
+
 ## Delivery contract
 
 The delivered arithmetic implementation includes:
