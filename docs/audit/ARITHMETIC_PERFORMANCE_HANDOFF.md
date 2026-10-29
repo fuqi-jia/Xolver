@@ -1851,3 +1851,31 @@ R608 (`bdf65444c9e7`) authenticates the complete stage;
 This is a functional accuracy/API delivery. It does not meet the goal of beating
 Z3, and no protection-set results are claimed. No extra current-main server
 archive is required after GitHub CI.
+
+
+## Paired linear propagation snapshots (R659/R664)
+
+The [qualified row-snapshot implementation](LINEAR_PROPAGATION_ROW_SNAPSHOTS_20261029.json)
+is based on main `07ea0c36`. It shares exact contribution sums and premise
+multiplicities between adjacent lower/upper visits to one unchanged tableau row.
+Non-basic endpoint updates invalidate the local snapshot; no cached state crosses
+a theory check or backtrack. LRA/LIA backtracking and exact model phases remain unchanged.
+
+R659 passes 1,762 unit cases / 876,943 assertions, 243 targeted cases and 63 parser
+checks. A checked reproduction observes two visits, one snapshot build and one
+reuse hit. R665's 37 regression, independent arithmetic/model, QCP and certificate
+groups all pass on the frozen implementation.
+
+Fresh R664 uses 60 seconds, one leased physical CPU and 16 GiB per solver/case.
+Verified results increase **94 to 95**, with one added SAT (index59), no losses,
+no opposite verdicts and no invalid exported models. Aggregate verified PAR-2
+changes from 8220.612 to 8156.644 seconds. Index59 completes in 56.013 seconds;
+three separate diagnostic repeats complete in 49.403, 47.361 and 47.227 seconds,
+with independent exported-model replay; their timings do not replace R664.
+
+Same-round Z3 has **115 verified / 124 raw** decisions. Its nine unconfirmed
+results (eight UNSAT and one SAT) remain excluded. The existing input115 modular certificate was
+rechecked against the identical input hash before counting that UNSAT for either
+Xolver version; original measurements are preserved. This is a local improvement,
+with a remaining 20-result verified gap to Z3. Neither protected set was evaluated.
+An additional current-main server archive remains unnecessary.
