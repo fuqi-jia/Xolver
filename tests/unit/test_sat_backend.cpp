@@ -62,7 +62,7 @@ TEST_CASE("SAT: decision sources preserve explicit steering and mandatory model 
     registry.atom.satVar = p;
     registry.atom.theory = TheoryId::LRA;
     // p represents the valid arithmetic atom 0 = 0.
-    registry.atom.payload = LinearAtomPayload{{}, Relation::Eq, RealValue(mpq_class(0))};
+    registry.atom.payload = LinearAtomPayload{{}, Relation::Eq, RealValue::fromInt(0)};
     theories.truth = p;
     CadicalTheoryPropagator propagator{registry, theories, lemmas, backend};
     backend.connectPropagator(&propagator);
