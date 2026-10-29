@@ -227,10 +227,4 @@ public:
     virtual std::optional<TheoryModel> getModelWithInternal() const { return getModel(); }
 };
 
-// Legacy struct (for backward compatibility during transition)
-struct TheoryAtom {
-    SatVar satVar;
-    ExprId exprId;
-};
-
 } // namespace xolver

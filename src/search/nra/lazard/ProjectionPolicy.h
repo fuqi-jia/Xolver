@@ -1,6 +1,6 @@
 #pragma once
 
-#include "search/nra/core/CdcacTypes.h"
+#include "search/nra/core/CdcacResult.h"
 #include <memory>
 
 namespace xolver {

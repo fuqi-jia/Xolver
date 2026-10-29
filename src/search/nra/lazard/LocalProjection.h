@@ -1,7 +1,7 @@
 #pragma once
 
 #include "algebra/poly/RationalPolynomial.h"
-#include "search/nra/core/CdcacTypes.h"
+#include "search/nra/core/CdcacResult.h"
 #include <vector>
 
 namespace xolver {
@@ -17,7 +17,7 @@ RationalPolynomial resultant(
 // ------------------------------------------------------------------
 // Local projection engine (Collins conservative, local call)
 // ------------------------------------------------------------------
-// PolyRole, ReasonedPolynomial, LocalProjectionResult are now defined in CdcacTypes.h
+// Projection types are declared in CdcacCommon.h and CdcacResult.h
 
 class LocalProjectionEngine {
 public:

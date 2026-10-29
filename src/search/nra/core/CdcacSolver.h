@@ -1,7 +1,7 @@
 #pragma once
 
 #include "algebra/poly/PolynomialKernel.h"
-#include "search/nra/core/CdcacTypes.h"
+#include "search/nra/core/CdcacResult.h"
 #include "search/nra/core/CdcacConstraint.h"
 #include "contracts/TheorySolver.h"
 #include "base/RealValue.h"

@@ -1,5 +1,5 @@
-#include "applications/smt/Solver.h"
-#include "applications/sv/verification/Range.h"
+#include "applications/satisfiability/smt/Solver.h"
+#include "applications/verification/model_checking/Range.h"
 #include "frontend/parser/NativeTheoryPolicy.h"
 #include <fstream>
 #include <iostream>
@@ -12,7 +12,7 @@
 // relying on the final DAG node retaining a source-level NOT connective.
 int main(int argc, char **argv) {
     using namespace xolver;
-    namespace v = applications::sv::verification;
+    namespace v = applications::verification::model_checking;
     nlohmann::json output;
     try {
         if (argc != 2)
@@ -34,7 +34,7 @@ int main(int argc, char **argv) {
         v::Obligation obligation{argv[1], assertions, conclusion};
         obligation.assumptions.pop_back();
         DecisionOracle oracle = [](const NativeAssertions &q) {
-            return applications::smt::Solver().solve({q, {}, {}, {}});
+            return applications::satisfiability::smt::Solver().solve({q, {}, {}, {}});
         };
         auto answer = v::RangeAssistedSolver(oracle).solve(obligation);
         const char *status = answer.status == v::Status::Valid     ? "valid"

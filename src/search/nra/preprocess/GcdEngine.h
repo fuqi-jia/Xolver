@@ -1,7 +1,7 @@
 #pragma once
 
 #include "algebra/poly/RationalPolynomial.h"
-#include "search/nra/core/CdcacTypes.h"
+#include "search/nra/core/CdcacResult.h"
 #include <optional>
 
 namespace xolver {

@@ -26,6 +26,13 @@ LAYERS = {
                 "frontend", "parallel", "search", "quantifiers", "applications"],
 }
 INCLUDE = re.compile(r'^\s*#\s*include\s*[<"]([^">]+)[">]', re.M)
+APPLICATION_CATEGORIES = {
+    "satisfiability": {"sat", "smt", "common"},
+    "optimization": {"maxsat", "maxsmt", "cp", "milp", "omt", "common"},
+    "counting": None,
+    "verification": {"pa", "sl", "model_checking", "common"},
+    "dynamics": {"ode", "pde", "common"},
+}
 
 
 def inspect(root: Path = ROOT) -> tuple[dict, list[str]]:
@@ -44,12 +51,15 @@ def inspect(root: Path = ROOT) -> tuple[dict, list[str]]:
         text = re.sub(r"/\*.*?\*/|//[^\n]*", "", path.read_text(), flags=re.S)
         if re.search(r"\b(?:CoreIr|CoreExpr)\b", text):
             errors.append(f"retired duplicate expression representation: {name}")
-        if name.startswith(("applications/sv/pa/", "quantifiers/integer/")) and re.search(r"\b(?:NativeTerms|TermExpr|Kind|ExprId)\b", text):
+        if name.startswith(("applications/verification/pa/", "quantifiers/integer/")) and re.search(r"\b(?:NativeTerms|TermExpr|Kind|ExprId)\b", text):
             errors.append(f"PA still consumes the general compatibility vocabulary: {name}")
         if name.startswith("applications/"):
             parts = Path(name).parts
-            if len(parts) > 2 and parts[1] not in ("smt", "omt", "cp", "milp", "de", "sv", "counting", "maxsmt"):
-                errors.append(f"unowned application family: {name}")
+            if len(parts) > 2:
+                if parts[1] not in APPLICATION_CATEGORIES:
+                    errors.append(f"unowned application category: {name}")
+                elif len(parts) > 3 and APPLICATION_CATEGORIES[parts[1]] is not None and parts[2] not in APPLICATION_CATEGORIES[parts[1]]:
+                    errors.append(f"unowned application family: {name}")
         for include in INCLUDE.findall(text):
             if any(part in (".", "..") for part in include.split("/")):
                 errors.append(f"noncanonical include bypasses ownership: {name} -> {include}")
@@ -62,8 +72,10 @@ def inspect(root: Path = ROOT) -> tuple[dict, list[str]]:
                     elif len(source_parts) > 2 and len(target_parts) > 2:
                         if source_parts[1] != target_parts[1]:
                             errors.append(f"cross-application dependency: {name} -> {include}")
-                        elif source_parts[1] == "sv" and source_parts[2] != target_parts[2] and target_parts[2] != "common":
+                        elif source_parts[1] == "verification" and source_parts[2] != target_parts[2] and target_parts[2] != "common":
                             errors.append(f"cross-SV solver dependency: {name} -> {include}")
+                        elif source_parts[1:3] == ("satisfiability", "smt") and len(source_parts) > 3 and source_parts[3] == "common" and len(target_parts) > 4 and target_parts[3] != "common":
+                            errors.append(f"application common depends on private solver: {name} -> {include}")
                         elif source_parts[2] == "common" and len(target_parts) > 3 and target_parts[2] != "common":
                             errors.append(f"application common depends on private solver: {name} -> {include}")
                 target = include.split("/")[0]

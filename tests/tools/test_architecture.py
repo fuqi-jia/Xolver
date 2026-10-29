@@ -31,55 +31,63 @@ class ArchitectureTests(unittest.TestCase):
 
     def test_pa_cannot_reintroduce_compatibility_terms(self):
         self.assertTrue(self.inspect({"quantifiers/integer/Input.h": "TermExpr value;\n"}))
-        self.assertTrue(self.inspect({"applications/sv/pa/Input.h": "const NativeTerms& input;\n"}))
+        self.assertTrue(self.inspect({"applications/verification/pa/Input.h": "const NativeTerms& input;\n"}))
 
     def test_applications_are_independent(self):
         self.assertTrue(self.inspect({
-            "applications/smt/Solver.h": '#include "applications/sv/pa/Solver.h"',
-            "applications/sv/pa/Solver.h": "#pragma once"}))
+            "applications/satisfiability/smt/Solver.h": '#include "applications/verification/pa/Solver.h"',
+            "applications/verification/pa/Solver.h": "#pragma once"}))
         self.assertTrue(self.inspect({
-            "applications/sv/sl/Solver.h": '#include "applications/sv/pa/Solver.h"',
-            "applications/sv/pa/Solver.h": "#pragma once"}))
+            "applications/verification/sl/Solver.h": '#include "applications/verification/pa/Solver.h"',
+            "applications/verification/pa/Solver.h": "#pragma once"}))
 
     def test_unowned_logic_directory_rejected(self):
         self.assertTrue(self.inspect({
-            "logic/first_order/Solver.h": '#include "applications/smt/Solver.h"',
-            "applications/smt/Solver.h": "#pragma once"}))
+            "logic/first_order/Solver.h": '#include "applications/satisfiability/smt/Solver.h"',
+            "applications/satisfiability/smt/Solver.h": "#pragma once"}))
 
     def test_parallel_execution_is_independent_of_solver_applications(self):
         self.assertEqual(self.inspect({
             "parallel/Executor.h": "#pragma once",
             "search/Worker.h": '#include "parallel/Executor.h"'}), [])
         self.assertTrue(self.inspect({
-            "parallel/Executor.h": '#include "applications/maxsmt/Solver.h"',
-            "applications/maxsmt/Solver.h": "#pragma once"}))
+            "parallel/Executor.h": '#include "applications/optimization/maxsmt/Solver.h"',
+            "applications/optimization/maxsmt/Solver.h": "#pragma once"}))
 
     def test_maxsmt_uses_injected_contracts_without_a_sibling_solver_dependency(self):
         self.assertEqual(self.inspect({
-            "applications/maxsmt/Solver.h": '#include "contracts/DecisionOracle.h"',
+            "applications/optimization/maxsmt/Solver.h": '#include "contracts/DecisionOracle.h"',
             "contracts/DecisionOracle.h": "#pragma once"}), [])
         self.assertTrue(self.inspect({
-            "applications/maxsmt/Solver.h": '#include "applications/smt/Solver.h"',
-            "applications/smt/Solver.h": "#pragma once"}))
+            "applications/optimization/maxsmt/Solver.h": '#include "applications/satisfiability/smt/Solver.h"',
+            "applications/satisfiability/smt/Solver.h": "#pragma once"}))
+
+    def test_categories_contain_solver_kinds_and_reject_retired_roots(self):
+        for name in ("sat", "smt", "omt", "cp", "milp", "maxsmt", "sv", "de"):
+            self.assertTrue(self.inspect({"applications/" + name + "/Solver.h": "#pragma once"}))
+        self.assertEqual(self.inspect({
+            "applications/optimization/maxsat/Solver.h": '#include "applications/optimization/maxsmt/Solver.h"',
+            "applications/optimization/maxsmt/Solver.h": "#pragma once"}), [])
+        self.assertTrue(self.inspect({"applications/optimization/smt/Solver.h": "#pragma once"}))
 
     def test_search_cannot_depend_on_application(self):
         self.assertTrue(self.inspect({
-            "search/Test.h": '#include "applications/smt/Solver.h"',
-            "applications/smt/Solver.h": "#pragma once"}))
+            "search/Test.h": '#include "applications/satisfiability/smt/Solver.h"',
+            "applications/satisfiability/smt/Solver.h": "#pragma once"}))
 
     def test_common_is_local_to_its_application(self):
         self.assertTrue(self.inspect({"applications/common/Test.h": "#pragma once"}))
         self.assertEqual(self.inspect({
-            "applications/smt/qfnia/Private.h": '#include "applications/smt/common/Shared.h"',
-            "applications/smt/common/Shared.h": "#pragma once"}), [])
+            "applications/satisfiability/smt/qfnia/Private.h": '#include "applications/satisfiability/smt/common/Shared.h"',
+            "applications/satisfiability/smt/common/Shared.h": "#pragma once"}), [])
         self.assertTrue(self.inspect({
-            "applications/smt/common/Shared.h": '#include "applications/smt/qfnia/Private.h"',
-            "applications/smt/qfnia/Private.h": "#pragma once"}))
+            "applications/satisfiability/smt/common/Shared.h": '#include "applications/satisfiability/smt/qfnia/Private.h"',
+            "applications/satisfiability/smt/qfnia/Private.h": "#pragma once"}))
 
     def test_application_base_cannot_depend_on_implementation(self):
         self.assertTrue(self.inspect({
-            "applications/Solver.h": '#include "applications/smt/Private.h"',
-            "applications/smt/Private.h": "#pragma once"}))
+            "applications/Solver.h": '#include "applications/satisfiability/smt/Private.h"',
+            "applications/satisfiability/smt/Private.h": "#pragma once"}))
 
     def test_elimination_algebra_is_parser_independent(self):
         self.assertTrue(self.inspect({
@@ -98,8 +106,8 @@ class ArchitectureTests(unittest.TestCase):
 
     def test_quantifiers_cannot_depend_on_application_driver(self):
         self.assertTrue(self.inspect({
-            "quantifiers/integer/Test.h": '#include "applications/smt/Solver.h"',
-            "applications/smt/Solver.h": "#pragma once"}))
+            "quantifiers/integer/Test.h": '#include "applications/satisfiability/smt/Solver.h"',
+            "applications/satisfiability/smt/Solver.h": "#pragma once"}))
 
     def test_untyped_read_rejected(self):
         self.assertTrue(self.inspect({"search/Test.cpp": 'auto v = env::flag("XOLVER_BAD");'}))

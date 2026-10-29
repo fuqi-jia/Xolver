@@ -51,13 +51,6 @@ public:
     MergeResult merge(EufTermId a, EufTermId b, const MergeReason& reason,
                       int level,
                       std::deque<PendingMerge>& outQueue);
-    // 3-arg overload (level defaulted to 0): preserves legacy unit-test call
-    // sites that don't exercise multi-level backtrack. Production callers in
-    // EufSolver::applyMerge always pass the explicit level via the 4-arg form.
-    MergeResult merge(EufTermId a, EufTermId b, const MergeReason& reason,
-                      std::deque<PendingMerge>& outQueue) {
-        return merge(a, b, reason, 0, outQueue);
-    }
 
     // 扫描 kept/killed 的 parents，refresh signature，
     // 把发现的 congruence merges 推到 outQueue。

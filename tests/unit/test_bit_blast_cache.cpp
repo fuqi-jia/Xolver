@@ -2,7 +2,7 @@
 #include "base/EnvParam.h"
 #include "base/SolveClock.h"
 #include "search/bitblast/BitBlastSolver.h"
-#include "applications/smt/qfnia/NiaSolver.h"
+#include "applications/satisfiability/smt/qfnia/NiaSolver.h"
 #include "search/arith/Reasoner.h"
 #include "search/coordination/TheoryLemmaDatabase.h"
 #include <algorithm>

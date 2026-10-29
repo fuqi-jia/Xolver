@@ -1,0 +1,542 @@
+#include "base/RuntimeConfig.h"
+#include "applications/satisfiability/smt/common/lia/LiaSolver.h"
+#include "base/MpqUtils.h"
+#include "base/EnvParam.h"
+#include "search/coordination/TheoryAtomRegistry.h"
+#include "search/coordination/TheoryLemmaDatabase.h"
+#include "contracts/TheoryAtomTypes.h"
+#include "search/arith/Reasoner.h"
+#include "search/linear/SimplexDiseqSplitter.h"
+#include "search/linear/IntegerAffineModel.h"
+#include "search/linear/IntegerAffineProjection.h"
+#include "algebra/linear/LinearConstraintNormalizer.h"
+#include "search/lia/GomoryCut.h"
+#include "applications/satisfiability/smt/common/lia/LiaSolverDetail.h"  // isIntegerLinearForm / roundNearest (shared across split TUs)
+#include <cassert>
+#include <algorithm>
+#include <iostream>
+#include <fstream>
+#include <filesystem>
+#include <cstdlib>
+#include <sstream>
+#include <map>
+
+namespace xolver {
+
+// NOTE: This translation unit was split out of LiaSolver.cpp for readability.
+// It compiles into the same xolver_core target and shares the class's
+// private state via the declarations in the corresponding header.
+// Behavior is byte-identical to the pre-split definitions.
+
+TheoryCheckResult LiaSolver::handleDisequalities(TheoryLemmaStorage& lemmaDb) {
+    std::vector<ActiveLinearAtom> combinationContext;
+    const auto* context = &activeAtoms_;
+    if (!interfaceEqualities_.empty() && sharedTermRegistry_) {
+        combinationContext = activeAtoms_;
+        for (const auto& equality : interfaceEqualities_) {
+            LinearFormKey form;
+            mpq_class rhs = 0;
+            auto append = [&](SharedTermId id, int coefficient) {
+                if (auto value = sharedTermRegistry_->constValue(id)) {
+                    rhs -= coefficient * *value;
+                    return true;
+                }
+                const auto name = getVarNameForSharedTerm(id);
+                if (name.empty() || name.rfind("__const_", 0) == 0) return false;
+                form.terms.push_back({name, mpq_class(coefficient)});
+                return true;
+            };
+            if (append(equality.a, 1) && append(equality.b, -1))
+                combinationContext.push_back({NullExpr, -1, Relation::Eq, true,
+                                              std::move(form), rhs, equality.reason});
+        }
+        context = &combinationContext;
+    }
+    WorkBudget contextBudget(8192);
+    auto affineContext = IntegerAffineContext::build(*context, contextBudget);
+    return handleSimplexDisequalities(
+        disequalities_, gs_, lemmaDb,
+        [this, &affineContext](const DiseqInfo& d) -> TheoryCheckResult {
+            // If the disequality is forced to be false by current bounds
+            // (auxVar is fixed to 0), return a precise conflict.
+            auto val = gs_.value(d.auxVar);
+            auto proved = val.isZero() ? gs_.proveFixedValue(d.auxVar) : std::nullopt;
+            if (proved && proved->first.isZero()) {
+                TheoryConflict tc;
+                for (const auto& br : proved->second) {
+                    tc.clause.push_back(br.reason);
+                }
+                tc.clause.push_back(d.lit);
+                bool ok = normalizeTheoryClause(tc.clause);
+                assert(ok && "complementary literal in disequality conflict");
+                (void)ok;
+                return TheoryCheckResult::mkConflict(std::move(tc));
+            }
+
+            // Clear denominators before using an integer lattice. Scale the
+            // auxiliary model difference too, so the gap test uses the same
+            // units as its generated bounds. Integral forms need no copy.
+            mpz_class scale = d.rhs.get_den();
+            for (const auto& term : d.lhs.terms)
+                mpz_lcm(scale.get_mpz_t(), scale.get_mpz_t(), term.second.get_den_mpz_t());
+            LinearFormKey integralForm;
+            const LinearFormKey* form = &d.lhs;
+            mpq_class rhs = d.rhs;
+            if (scale != 1) {
+                integralForm = d.lhs;
+                for (auto& term : integralForm.terms) term.second *= scale;
+                rhs *= scale;
+                val = mpq_class(scale) * val;
+                form = &integralForm;
+            }
+
+            mpz_class g = 0;
+            for (const auto& t : form->terms) {
+                const mpq_class& c = t.second;
+                if (c.get_den() != 1) {
+                    g = 1;
+                    break;
+                }
+                mpz_class a = c.get_num();
+                if (a < 0) a = -a;
+                if (a == 0) continue;
+                if (g == 0) {
+                    g = a;
+                } else {
+                    mpz_class tmp;
+                    mpz_gcd(tmp.get_mpz_t(), g.get_mpz_t(), a.get_mpz_t());
+                    g = tmp;
+                }
+            }
+
+            mpz_class c = rhs.get_num();
+            mpz_class offset = 0;
+            std::vector<SatLit> equalityReasons;
+            WorkBudget projectionBudget(8192);
+            if (affineContext && !affineContext->empty()) {
+                if (auto projection = affineContext->project(*form, projectionBudget)) {
+                    g = projection->step;
+                    offset = projection->offset;
+                    equalityReasons = std::move(projection->reasons);
+                }
+            }
+            const mpz_class residual = c - offset;
+
+            if (g == 0) {
+                if (residual == 0) {
+                    TheoryConflict tc;
+                    tc.clause = equalityReasons;
+                    tc.clause.push_back(d.lit);
+                    bool ok = normalizeTheoryClause(tc.clause);
+                    assert(ok && "complementary literal in gcd conflict");
+                    (void)ok;
+                    return TheoryCheckResult::mkConflict(std::move(tc));
+                }
+                return TheoryCheckResult::consistent();
+            }
+
+            if (residual % g != 0) {
+                return TheoryCheckResult::consistent();
+            }
+
+            // The integer form cannot take any value in (c-g,c+g) except c,
+            // which its disequality excludes. A nonzero fractional LP model
+            // in this gap needs the same aggregate split as a zero model;
+            // otherwise integrality branches on unrelated individual values.
+            const DeltaRational lowerGap{mpq_class(-g)}, upperGap{mpq_class(g)};
+            if (val <= lowerGap || val >= upperGap)
+                return TheoryCheckResult::consistent();
+
+            if (!registry_) return TheoryCheckResult::unknown();
+            mpq_class leRhs = mpq_class(c - g, 1);
+            mpq_class geRhs = mpq_class(c + g, 1);
+
+            auto lit1 = registry_->getOrCreateLinearBoundAtom(
+                *form, Relation::Leq, leRhs, TheoryId::LIA);
+            auto lit2 = registry_->getOrCreateLinearBoundAtom(
+                *form, Relation::Geq, geRhs, TheoryId::LIA);
+
+            TheoryLemma lemma{{d.lit.negated(), lit1, lit2}};
+            for (const auto reason : equalityReasons) lemma.lits.push_back(reason.negated());
+            return TheoryCheckResult::mkLemma(std::move(lemma));
+        }, [](const DiseqInfo&, const DeltaRational&) { return true; });
+}
+
+TheoryCheckResult LiaSolver::checkIntegrality(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
+    // Cap Gomory cuts per solve so branch-and-bound still terminates AND the
+    // tableau doesn't bloat into degeneracy (too many near-degenerate cut rows
+    // make the anti-cycling pivot rule blow past the iteration cap -> unknown,
+    // the CAV coef-size regression).
+    //
+    // Default 4 ("cut-and-branch"): measured on the QF_LIA panda regressors
+    // (dillig 25-*/45-*, Bromberger *.slack), every cut a fractional SAT node
+    // generates perturbs the branching search and mints a fresh bound atom that
+    // enlarges the boolean search — on SAT instances cuts are pure overhead and
+    // the old default of 32 turned 16-20s base solves into >30s timeouts. A
+    // small budget concentrates cuts near the root (where they tighten the
+    // initial relaxation, helping UNSAT) and then lets branch-and-bound run
+    // undisturbed. Tunable via XOLVER_LIA_CUT_MAXPERSOLVE; raise it for
+    // UNSAT-heavy divisions if a differential shows more root cuts help there.
+    const int kMaxCutsPerSolve = []() {
+        int v = config::read<config::ReadKind::Int>("XOLVER_LIA_CUT_MAXPERSOLVE", 4);
+        return v >= 0 ? v : 4;
+    }();
+    int bestVar = -1;
+    mpq_class bestFrac(-1);
+
+    for (int v : integerVars_) {
+        auto val = gs_.value(v);
+        if (val.b != 0 || val.a.get_den() != 1) {
+            mpq_class frac;
+            if (val.b != 0) {
+                // Delta-rational: value is a + b·δ where δ is infinitesimal.
+                // If b > 0, value is just above a (frac ≈ 1).
+                // If b < 0, value is just below a (frac ≈ 0).
+                // Use 1/2 as a representative fractional distance.
+                frac = mpq_class(1, 2);
+            } else {
+                // Compute fractional part = |val.a - floor(val.a)|
+                mpz_class num = val.a.get_num();
+                mpz_class den = val.a.get_den();
+                mpz_class f = num / den;  // truncates toward zero
+                mpz_class r = num % den;
+                mpz_class floorVal;
+                if (r == 0) {
+                    floorVal = f;
+                } else if (num >= 0) {
+                    floorVal = f;
+                } else {
+                    floorVal = f - 1;
+                }
+                frac = val.a - mpq_class(floorVal, 1);
+                if (frac < 0) frac = -frac;
+            }
+            if (frac > bestFrac) {
+                bestFrac = frac;
+                bestVar = v;
+            }
+        }
+    }
+
+    if (bestVar != -1) {
+        // Standard effort checks a partial assignment. Its branch lemmas are
+        // not installed by the SAT callback, but registering their atoms would
+        // still extend the observed vocabulary and postpone model checking.
+        // Let Full effort try the validated integer repair before adding cuts
+        // or branch atoms. LP conflicts remain available at either effort.
+        if (effort != TheoryEffort::Full) return TheoryCheckResult::unknown();
+        // Before splitting, try to round the LRA relaxation
+        // to a nearby integer point and exact-validate it. Only at Full effort
+        // (a real, complete relaxation model is in hand). A success short-cuts
+        // potentially deep branch-and-bound to an immediate SAT.
+        // Soundness gate: repair validates only the LIA atoms + disequalities,
+        // NOT Nelson-Oppen interface (dis)equalities. In a combined logic a
+        // rounded point could violate an asserted x=y and produce a wrong SAT,
+        // so repair only fires when no interface constraints are active (always
+        // the case in pure QF_LIA).
+        if (effort == TheoryEffort::Full &&
+            interfaceEqualities_.empty() && interfaceDisequalities_.empty() &&
+            tryIntegralityRepair()) {
+            return TheoryCheckResult::consistent();
+        }
+        // Try an explanation-carrying cut before splitting, within the solve budget.
+        if (effort == TheoryEffort::Full &&
+            cutsThisSolve_ < kMaxCutsPerSolve) {
+            if (auto cut = generateGomoryCut(bestVar)) {
+                if (!lemmaDb.contains(*cut)) {
+                    ++cutsThisSolve_;
+                    return TheoryCheckResult::mkLemma(std::move(*cut));
+                }
+            }
+        }
+        if (!registry_) return TheoryCheckResult::unknown();
+        return TheoryCheckResult::mkLemma(buildBranchSplitLemma(bestVar, gs_.value(bestVar)));
+    }
+    return TheoryCheckResult::consistent();
+}
+
+bool LiaSolver::pointSatisfiesAll(
+    const std::unordered_map<std::string, mpq_class>& pt) const {
+    auto eval = [&](const LinearFormKey& lhs, mpq_class& out) -> bool {
+        out = 0;
+        for (const auto& [name, coeff] : lhs.terms) {
+            auto it = pt.find(name);
+            if (it == pt.end()) return false;  // value unknown -> cannot validate
+            out += coeff * it->second;
+        }
+        return true;
+    };
+    for (const auto& a : activeAtoms_) {
+        mpq_class f;
+        if (!eval(a.lhs, f)) return false;
+        Relation rel = a.value ? a.rel : negateRelation(a.rel);
+        bool ok;
+        switch (rel) {
+            case Relation::Eq:  ok = (f == a.rhs); break;
+            case Relation::Neq: ok = (f != a.rhs); break;
+            case Relation::Lt:  ok = (f <  a.rhs); break;
+            case Relation::Leq: ok = (f <= a.rhs); break;
+            case Relation::Gt:  ok = (f >  a.rhs); break;
+            case Relation::Geq: ok = (f >= a.rhs); break;
+            default:            ok = false; break;
+        }
+        if (!ok) return false;
+    }
+    for (const auto& d : disequalities_) {
+        mpq_class f;
+        if (!eval(d.lhs, f)) return false;
+        if (f == d.rhs) return false;  // disequality violated
+    }
+    return true;
+}
+
+bool LiaSolver::tryIntegralityRepair() {
+    // Collect (name, floor, ceil, nearest) for every original integer variable.
+    struct VarRound {
+        std::string name;
+        mpq_class lo, hi, nearest;
+    };
+    std::vector<VarRound> vr;
+    vr.reserve(integerVars_.size());
+    for (int v : integerVars_) {
+        std::string name = manager_.getVarName(v);
+        if (name.empty()) continue;            // aux/slack vars are determined
+        const mpq_class& a = gs_.value(v).a;
+        mpz_class fl, cl;
+        mpz_fdiv_q(fl.get_mpz_t(), a.get_num().get_mpz_t(), a.get_den().get_mpz_t());
+        mpz_cdiv_q(cl.get_mpz_t(), a.get_num().get_mpz_t(), a.get_den().get_mpz_t());
+        vr.push_back({name, mpq_class(fl), mpq_class(cl), mpq_class(roundNearest(a))});
+    }
+    if (vr.empty()) return false;
+
+    auto tryPoint = [&](const std::unordered_map<std::string, mpq_class>& pt) -> bool {
+        if (!pointSatisfiesAll(pt)) return false;
+        repairModel_ = pt;
+        return true;
+    };
+    auto buildUniform = [&](int which) {  // 0=nearest, 1=floor, 2=ceil
+        std::unordered_map<std::string, mpq_class> pt;
+        pt.reserve(vr.size());
+        for (const auto& r : vr) pt[r.name] = (which == 1 ? r.lo : which == 2 ? r.hi : r.nearest);
+        return pt;
+    };
+
+    bool ok = false;
+    // 1) Round-to-nearest, then the all-floor / all-ceil corners.
+    if (tryPoint(buildUniform(0)) || tryPoint(buildUniform(1)) || tryPoint(buildUniform(2))) {
+        ok = true;
+    } else {
+        // 2) One-variable flip neighbourhood around the nearest point: flip each
+        //    single variable to its other neighbour (floor<->ceil). Bounded by
+        //    #vars, catches the common "one coordinate rounded the wrong way".
+        auto base = buildUniform(0);
+        for (const auto& r : vr) {
+            mpq_class other = (base[r.name] == r.lo) ? r.hi : r.lo;
+            if (other == base[r.name]) continue;  // already integral
+            mpq_class saved = base[r.name];
+            base[r.name] = other;
+            if (tryPoint(base)) { ok = true; break; }
+            base[r.name] = saved;
+        }
+    }
+    if (ok) return true;
+    std::vector<NormalizedConstraint> constraints;
+    std::unordered_set<int> pinnedForms;
+    for (const auto& atom : activeAtoms_) {
+        if (auto normalized = IntegerReasoner::normalize(atom.lhs, atom.rhs, atom.rel, atom.value))
+            constraints.push_back(std::move(*normalized));
+        // Opposite inequalities can fix a form even when neither input atom
+        // is syntactically an equality. Include that exact consequence once.
+        if (!pinnedForms.insert(atom.auxVar).second) continue;
+        const auto fixed = gs_.fixedValue(atom.auxVar);
+        if (!fixed || fixed->b != 0) continue;
+        if (auto equality = IntegerReasoner::normalize(atom.lhs, atom.rhs + fixed->a, Relation::Eq, true))
+            constraints.push_back(std::move(*equality));
+    }
+    for (const auto& disequality : disequalities_)
+        if (auto normalized = IntegerReasoner::normalize(disequality.lhs, disequality.rhs, Relation::Neq, true))
+            constraints.push_back(std::move(*normalized));
+    if (auto point = findIntegerAffineModel(constraints, buildUniform(0))) return tryPoint(*point);
+    return false;
+}
+
+bool LiaSolver::isSimplexVarInteger(int idx) const {
+    std::string nm = manager_.getVarName(idx);
+    if (!nm.empty()) {
+        // Original variable: integer iff registered as an integer variable.
+        return integerVars_.count(idx) > 0;
+    }
+    // Auxiliary variable s = Σ c_k * v_k - rhs: integer iff every c_k and rhs
+    // are integers and every v_k is an integer variable.
+    LinearFormKey form;
+    mpq_class auxRhs;
+    if (!manager_.auxForm(idx, form, auxRhs)) return false;
+    if (auxRhs.get_den() != 1) return false;
+    for (const auto& [vn, c] : form.terms) {
+        if (c.get_den() != 1) return false;
+        int vi = manager_.findVarIndex(vn);
+        if (vi < 0 || integerVars_.count(vi) == 0) return false;
+    }
+    return true;
+}
+
+std::optional<TheoryLemma> LiaSolver::generateGomoryCut(int xi) {
+    if (!registry_) return std::nullopt;
+    if (!gs_.isBasic(xi)) return std::nullopt;     // need a tableau row
+    int r = gs_.basicRowOfVar(xi);
+    const SparseRow& row = gs_.tableau().row(r);
+
+    DeltaRational beta = gs_.value(xi);
+    if (beta.b != 0) return std::nullopt;          // delta-valued: skip
+    mpq_class f0 = gmiFractionalPart(beta.a);
+    if (f0 == 0) return std::nullopt;              // not actually fractional
+
+    // x_i = beta_i + Σ_j chat_j y_j, y_j = (x_j - bound_j), each nonbasic at a
+    // bound. chat_j = +a_ij at lower, -a_ij at upper.
+    struct NbInfo { int var; bool atLower; mpq_class bound; SatLit reason; };
+    std::vector<GmiNonbasicTerm> terms;
+    std::vector<NbInfo> nb;
+    for (const auto& e : row.entries) {
+        int xj = e.col;
+        const mpq_class& aij = e.coeff;
+        if (aij == 0) continue;
+        auto st = gs_.varState(xj);
+        DeltaRational vj = gs_.value(xj);
+        bool atLower = st.lower.bound.isFinite() && vj == st.lower.bound.value;
+        bool atUpper = !atLower && st.upper.bound.isFinite() && vj == st.upper.bound.value;
+        if (!atLower && !atUpper) return std::nullopt;       // free nonbasic: no y >= 0
+        const BoundInfo& bi = atLower ? st.lower : st.upper;
+        if (bi.bound.value.b != 0) return std::nullopt;      // strict/delta bound: skip
+        if (!bi.reason.has_value()) return std::nullopt;     // need reason for explanation
+        mpq_class boundVal = bi.bound.value.a;
+        mpq_class chat = atLower ? aij : -aij;
+        bool yInt = isSimplexVarInteger(xj) && (boundVal.get_den() == 1);
+        terms.push_back({chat, yInt});
+        nb.push_back({xj, atLower, boundVal, *bi.reason});
+    }
+    if (terms.empty()) return std::nullopt;
+
+    // Pure integer rows use fractional cuts; mixed rows use GMI.
+    // Both return the same shape for exact back-substitution below.
+    const bool integerRow = std::all_of(terms.begin(), terms.end(),
+        [](const GmiNonbasicTerm& term) { return term.isInteger; });
+    auto cutOpt = integerRow ? deriveGomoryCut(f0, terms) : deriveGmiCut(f0, terms);
+    if (!cutOpt) return std::nullopt;              // non-integer term / vacuous
+
+    // Re-express Σ gamma_j y_j >= R over original variables:
+    //   Σ tau_j x_j >= R + Σ tau_j bound_j (+ aux form-constant adjustment),
+    //   tau_j = +gamma_j (at lower) / -gamma_j (at upper).
+    std::unordered_map<std::string, mpq_class> coeff;
+    mpq_class rhsFinal = cutOpt->rhs;
+    std::vector<SatLit> reasons;
+    for (size_t j = 0; j < nb.size(); ++j) {
+        const mpq_class& gamma = cutOpt->gamma[j];
+        if (gamma == 0) continue;                  // absent term: bound not needed
+        mpq_class tau = nb[j].atLower ? gamma : mpq_class(-gamma);
+        rhsFinal += tau * nb[j].bound;
+        std::string nm = manager_.getVarName(nb[j].var);
+        if (!nm.empty()) {
+            coeff[nm] += tau;
+        } else {
+            LinearFormKey form;
+            mpq_class auxRhs;
+            if (!manager_.auxForm(nb[j].var, form, auxRhs)) return std::nullopt;
+            for (const auto& [vn, c] : form.terms) coeff[vn] += tau * c;
+            rhsFinal += tau * auxRhs;
+        }
+        reasons.push_back(nb[j].reason);
+    }
+
+    LinearFormKey cutForm;
+    for (const auto& [vn, c] : coeff) if (c != 0) cutForm.terms.push_back({vn, c});
+    if (cutForm.terms.empty()) return std::nullopt;  // degenerate constant cut
+    std::sort(cutForm.terms.begin(), cutForm.terms.end(),
+              [](const auto& a, const auto& b) { return a.first < b.first; });
+
+    // Cut-coefficient size cap: reject blown-up cuts. On large-coefficient
+    // instances (CAV coef-size) the Gomory fractional parts compound into huge
+    // rationals; such cuts bog down the exact-rational simplex (it hits its
+    // iteration cap -> unknown) without improving the bound. Rejecting them lets
+    // the solver fall back to branching, which is fast. Tunable for A/B.
+    {
+        const int kMaxBits = []() {
+            int v = config::read<config::ReadKind::Int>("XOLVER_LIA_CUT_MAXBITS", 8);
+            return v > 0 ? v : 8;
+        }();
+        auto bits = [](const mpq_class& q) -> size_t {
+            return std::max(mpz_sizeinbase(q.get_num().get_mpz_t(), 2),
+                            mpz_sizeinbase(q.get_den().get_mpz_t(), 2));
+        };
+        size_t mx = bits(rhsFinal);
+        for (const auto& [vn, c] : cutForm.terms) mx = std::max(mx, bits(c));
+        if (mx > static_cast<size_t>(kMaxBits)) return std::nullopt;
+    }
+
+    SatLit cutLit = registry_->getOrCreateLinearBoundAtom(
+        cutForm, Relation::Geq, rhsFinal, TheoryId::LIA);
+
+    // Explanation-aware lemma: (Σ reasons) -> cut, i.e. clause {¬reasons, cutLit}.
+    std::vector<SatLit> clause;
+    clause.reserve(reasons.size() + 1);
+    for (SatLit rr : reasons) clause.push_back(rr.negated());
+    clause.push_back(cutLit);
+    std::sort(clause.begin(), clause.end(), [](SatLit a, SatLit b) {
+        return a.var < b.var || (a.var == b.var && a.sign < b.sign);
+    });
+    clause.erase(std::unique(clause.begin(), clause.end(), [](SatLit a, SatLit b) {
+        return a.var == b.var && a.sign == b.sign;
+    }), clause.end());
+    return TheoryLemma{clause};
+}
+
+TheoryLemma LiaSolver::buildBranchSplitLemma(int var, const DeltaRational& val) {
+    mpq_class q = val.a;
+    mpz_class num = q.get_num();
+    mpz_class den = q.get_den();
+
+    mpq_class floorVal;
+    mpq_class ceilVal;
+
+    if (den == 1) {
+        if (val.b > 0) {
+            // value = a + epsilon, strictly greater than a
+            floorVal = q;
+            ceilVal = mpq_class(num + 1, 1);
+        } else if (val.b < 0) {
+            // value = a - epsilon, strictly less than a
+            floorVal = mpq_class(num - 1, 1);
+            ceilVal = q;
+        } else {
+            floorVal = q;
+            ceilVal = q;
+        }
+    } else {
+        mpz_class f = num / den;
+        mpz_class r = num % den;
+        if (r == 0) {
+            floorVal = mpq_class(f, 1);
+            ceilVal = mpq_class(f, 1);
+        } else if (num >= 0) {
+            floorVal = mpq_class(f, 1);
+            ceilVal = mpq_class(f + 1, 1);
+        } else {
+            floorVal = mpq_class(f - 1, 1);
+            ceilVal = mpq_class(f, 1);
+        }
+    }
+
+    std::string name = manager_.getVarName(var);
+    if (name.empty()) {
+        return TheoryLemma{};
+    }
+
+    LinearFormKey form;
+    form.terms.push_back({name, mpq_class(1)});
+
+    auto litLo = registry_->getOrCreateLinearBoundAtom(form, Relation::Leq, floorVal, TheoryId::LIA);
+    auto litHi = registry_->getOrCreateLinearBoundAtom(form, Relation::Geq, ceilVal, TheoryId::LIA);
+
+    return TheoryLemma{{litLo, litHi}};
+}
+
+} // namespace xolver

@@ -6,7 +6,7 @@
 // every SAT case must NOT be wrongly refuted.
 #include <doctest/doctest.h>
 #include "search/nra/core/CdcacCore.h"
-#include "search/nra/core/CdcacTypes.h"
+#include "search/nra/core/CdcacResult.h"
 #include "search/nra/core/CdcacConstraint.h"
 #include "search/nra/backend/LibpolyBackend.h"
 #include "algebra/poly/PolynomialKernel.h"

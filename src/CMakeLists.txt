@@ -120,6 +120,7 @@ add_library(xolver_core STATIC ${XOLVER_CORE_OBJECTS})
 target_link_libraries(xolver_core PUBLIC xolver_build_options
     somtparser cadical ${XOLVER_POLY_TARGET} ${MPFR_LIBRARIES} ${GMP_LIBRARIES} Threads::Threads)
 set_target_properties(xolver_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
+include("${CMAKE_SOURCE_DIR}/cmake/ParallelBackends.cmake")
 
 # Evidence-only archive: no search, parser, SAT, portfolio or decision objects.
 add_library(xolver_checkers STATIC

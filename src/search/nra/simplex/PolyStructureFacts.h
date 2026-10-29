@@ -1,6 +1,6 @@
 #pragma once
 #include "algebra/poly/PolynomialKernel.h"
-#include "search/nra/core/CdcacTypes.h"
+#include "search/nra/core/CdcacResult.h"
 #include "search/nra/core/CdcacConstraint.h" // CdcacConstraint, Relation, SatLit
 #include "ir/types.h"
 #include <unordered_map>

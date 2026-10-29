@@ -1,4 +1,4 @@
-#include "applications/smt/Solver.h"
+#include "applications/satisfiability/smt/Solver.h"
 #include "frontend/parser/NativeTheoryPolicy.h"
 #include "ir/NativeBuilder.h"
 #include "search/arith/IntegerBounds.h"
@@ -18,7 +18,7 @@ TEST_CASE("SMT ranges: standard dispatch proves variable-divisor bounds") {
                         "(- (mod (ite (< x 0) (- x) x) y)) (mod (ite (< x 0) (- x) x) y))) 4)))"));
     auto roots = parser.getAssertions();
     bool groundCalled = false;
-    applications::smt::Solver solver([&](const applications::smt::Problem &) {
+    applications::satisfiability::smt::Solver solver([&](const applications::satisfiability::smt::Problem &) {
         groundCalled = true;
         return SolverAnswer{};
     });
@@ -39,7 +39,7 @@ TEST_CASE("SMT ranges: nonlinear machine bounds use the shared arithmetic proof"
                             "(<= (- 2147483648) b) (<= b 2147483647)))"
                             "(assert (not (and (<= (* a b) 9223372036854775807)"
                             "(<= (- 9223372036854775808) (* a b)))))"));
-    CHECK((applications::smt::Solver().solve({parser.getAssertions(), {}, {}, {}}).result ==
+    CHECK((applications::satisfiability::smt::Solver().solve({parser.getAssertions(), {}, {}, {}}).result ==
            Result::Unsat));
 }
 TEST_CASE("SMT ranges: an open proof preserves the original ground query") {
@@ -50,7 +50,7 @@ TEST_CASE("SMT ranges: an open proof preserves the original ground query") {
                             "(assert (> (* x y) 10))"));
     auto roots = parser.getAssertions();
     bool called = false;
-    applications::smt::Solver solver([&](const applications::smt::Problem &p) {
+    applications::satisfiability::smt::Solver solver([&](const applications::satisfiability::smt::Problem &p) {
         CHECK(p.assertions == roots);
         called = true;
         SolverAnswer answer;

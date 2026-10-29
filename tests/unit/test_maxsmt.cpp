@@ -1,5 +1,5 @@
-#include "applications/maxsmt/Solver.h"
-#include "applications/smt/Solver.h"
+#include "applications/optimization/maxsmt/Solver.h"
+#include "applications/satisfiability/smt/Solver.h"
 #include "ir/NativeBuilder.h"
 #include "quantifiers/FiniteFormula.h"
 #include <doctest/doctest.h>
@@ -8,7 +8,7 @@
 using namespace xolver;
 namespace {
 DecisionOracle maxsmtOracle = [](const NativeAssertions& roots) {
-    return applications::smt::Solver().solve({roots, {}, {}, {}});
+    return applications::satisfiability::smt::Solver().solve({roots, {}, {}, {}});
 };
 auto proposition(native::Nodes& nodes, const char* name) {
     return nodes.make(SOMTParser::SortManager::getBool(), native::K::NT_VAR, {}, name);
@@ -16,7 +16,7 @@ auto proposition(native::Nodes& nodes, const char* name) {
 }
 
 TEST_CASE("maxsmt: weighted soft formulas return an exact optimum and model") {
-    using namespace applications::maxsmt;
+    using namespace applications::optimization::maxsmt;
     native::Nodes nodes({});
     auto a = proposition(nodes, "a"), b = proposition(nodes, "b");
     Problem problem;
@@ -37,7 +37,7 @@ TEST_CASE("maxsmt: weighted soft formulas return an exact optimum and model") {
 }
 
 TEST_CASE("maxsmt: injected arithmetic backend preserves theory constraints") {
-    using namespace applications::maxsmt;
+    using namespace applications::optimization::maxsmt;
     native::Nodes nodes({});
     auto x = nodes.make(SOMTParser::SortManager::getInt(), native::K::NT_VAR, {}, "x");
     auto low = nodes.logical(native::K::NT_LE, {x, nodes.numeral(0)});
@@ -54,7 +54,7 @@ TEST_CASE("maxsmt: injected arithmetic backend preserves theory constraints") {
 }
 
 TEST_CASE("maxsmt: rational weighted results match independent truth-table enumeration") {
-    using namespace applications::maxsmt;
+    using namespace applications::optimization::maxsmt;
     native::Nodes nodes({});
     auto a = proposition(nodes, "a"), b = proposition(nodes, "b"), c = proposition(nodes, "c");
     auto hard = nodes.all({nodes.negate(nodes.equal(a, c)), nodes.any({b, c})});
@@ -86,7 +86,7 @@ TEST_CASE("maxsmt: rational weighted results match independent truth-table enume
 }
 
 TEST_CASE("maxsmt: hard infeasibility, empty objectives and invalid inputs stay distinct") {
-    using namespace applications::maxsmt;
+    using namespace applications::optimization::maxsmt;
     native::Nodes nodes({});
     Solver solver(maxsmtOracle);
     CHECK(solver.solve({{nodes.boolean(false)}, {}, {}}).status == Status::Infeasible);
@@ -101,7 +101,7 @@ TEST_CASE("maxsmt: hard infeasibility, empty objectives and invalid inputs stay 
 }
 
 TEST_CASE("maxsmt: cheaper unknown prevents an optimality claim") {
-    using namespace applications::maxsmt;
+    using namespace applications::optimization::maxsmt;
     native::Nodes nodes({});
     auto p = proposition(nodes, "p");
     int calls = 0;
@@ -123,7 +123,7 @@ TEST_CASE("maxsmt: cheaper unknown prevents an optimality claim") {
 }
 
 TEST_CASE("maxsmt: resource exhaustion and cancellation cannot imply optimality") {
-    using namespace applications::maxsmt;
+    using namespace applications::optimization::maxsmt;
     native::Nodes nodes({});
     auto p = proposition(nodes, "p");
     Solver solver(maxsmtOracle);

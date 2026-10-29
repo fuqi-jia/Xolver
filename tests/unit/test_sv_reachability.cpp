@@ -1,14 +1,14 @@
-#include "applications/smt/Solver.h"
-#include "applications/sv/verification/Reachability.h"
+#include "applications/satisfiability/smt/Solver.h"
+#include "applications/verification/model_checking/Reachability.h"
 #include "ir/NativeBuilder.h"
 #include <doctest/doctest.h>
 #include <queue>
 
 using namespace xolver;
-namespace v = applications::sv::verification;
+namespace v = applications::verification::model_checking;
 namespace {
 DecisionOracle oracle = [](const NativeAssertions &q) {
-    return applications::smt::Solver().solve({q, {}, {}, {}});
+    return applications::satisfiability::smt::Solver().solve({q, {}, {}, {}});
 };
 } // namespace
 TEST_CASE("SV reachability: synthesize an unbounded region without candidate templates") {

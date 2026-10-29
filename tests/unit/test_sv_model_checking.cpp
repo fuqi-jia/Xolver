@@ -1,14 +1,14 @@
-#include "applications/smt/Solver.h"
-#include "applications/sv/verification/ModelChecking.h"
+#include "applications/satisfiability/smt/Solver.h"
+#include "applications/verification/model_checking/ModelChecking.h"
 #include "ir/NativeBuilder.h"
 #include <doctest/doctest.h>
 #include <queue>
 
 using namespace xolver;
-namespace v = applications::sv::verification;
+namespace v = applications::verification::model_checking;
 namespace {
 DecisionOracle decide = [](const NativeAssertions &q) {
-    return applications::smt::Solver().solve({q, {}, {}, {}});
+    return applications::satisfiability::smt::Solver().solve({q, {}, {}, {}});
 };
 struct ArithmeticSystem {
     native::Nodes b{{}};

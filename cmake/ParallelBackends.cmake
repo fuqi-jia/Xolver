@@ -1,0 +1,70 @@
+# Optional backends are isolated from the default solver build. No SDK or
+# Python framework is searched or imported unless its option is enabled.
+foreach(feature MPI SPARK DASK CUDA HIP OPENACC)
+    target_compile_definitions(xolver_parallel PRIVATE
+        XOLVER_WITH_${feature}=$<BOOL:${XOLVER_ENABLE_${feature}}>)
+    target_compile_definitions(xolver_core PUBLIC
+        XOLVER_WITH_${feature}=$<BOOL:${XOLVER_ENABLE_${feature}}>)
+    if(XOLVER_ENABLE_${feature})
+        set(XOLVER_PY_${feature} true)
+    else()
+        set(XOLVER_PY_${feature} false)
+    endif()
+endforeach()
+
+if(XOLVER_ENABLE_MPI)
+    find_package(MPI REQUIRED COMPONENTS CXX)
+    target_link_libraries(xolver_parallel PRIVATE MPI::MPI_CXX)
+    target_link_libraries(xolver_core PUBLIC MPI::MPI_CXX)
+endif()
+if(XOLVER_ENABLE_CUDA)
+    if(CMAKE_VERSION VERSION_LESS 3.17)
+        message(FATAL_ERROR "CUDA backend requires CMake 3.17 or newer")
+    endif()
+    find_package(CUDAToolkit REQUIRED)
+    target_link_libraries(xolver_parallel PRIVATE CUDA::cudart)
+    target_link_libraries(xolver_core PRIVATE CUDA::cudart)
+endif()
+if(XOLVER_ENABLE_HIP)
+    find_package(hip CONFIG REQUIRED)
+    if(NOT TARGET hip::host)
+        message(FATAL_ERROR "HIP backend requires the hip::host runtime target")
+    endif()
+    target_link_libraries(xolver_parallel PRIVATE hip::host)
+    target_link_libraries(xolver_core PRIVATE hip::host)
+endif()
+if(XOLVER_ENABLE_OPENACC)
+    find_package(OpenACC REQUIRED COMPONENTS CXX)
+    target_link_libraries(xolver_parallel PRIVATE OpenACC::OpenACC_CXX)
+    target_link_libraries(xolver_core PRIVATE OpenACC::OpenACC_CXX)
+    # FindOpenACC exposes compiler flags. Static-archive consumers also need
+    # those flags at the final driver link to select the OpenACC runtime.
+    separate_arguments(XOLVER_OPENACC_LINK_OPTIONS NATIVE_COMMAND "${OpenACC_CXX_FLAGS}")
+    target_link_options(xolver_core INTERFACE ${XOLVER_OPENACC_LINK_OPTIONS})
+endif()
+
+foreach(framework SPARK DASK)
+    if(XOLVER_ENABLE_${framework})
+        if(framework STREQUAL "SPARK")
+            set(module pyspark)
+            find_package(Java REQUIRED COMPONENTS Runtime)
+        else()
+            set(module distributed)
+        endif()
+        execute_process(COMMAND "${Python3_EXECUTABLE}" -c
+            "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('${module}') else 1)"
+            RESULT_VARIABLE module_status)
+        if(NOT module_status EQUAL 0)
+            message(FATAL_ERROR "${framework} was requested but Python module '${module}' is unavailable in ${Python3_EXECUTABLE}")
+        endif()
+    endif()
+endforeach()
+
+set(XOLVER_PARALLEL_PYTHON_DIR "${CMAKE_BINARY_DIR}/python/xolver_parallel")
+file(MAKE_DIRECTORY "${XOLVER_PARALLEL_PYTHON_DIR}")
+foreach(module __init__.py executors.py protocol.py)
+    configure_file("${CMAKE_SOURCE_DIR}/python/xolver_parallel/${module}"
+                   "${XOLVER_PARALLEL_PYTHON_DIR}/${module}" COPYONLY)
+endforeach()
+configure_file("${CMAKE_SOURCE_DIR}/cmake/parallel_features.json.in"
+               "${XOLVER_PARALLEL_PYTHON_DIR}/_build_features.json" @ONLY)

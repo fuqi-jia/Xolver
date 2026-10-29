@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
-#include "applications/sv/sl/NativeSeparation.h"
-#include "applications/sv/sl/NativeInductive.h"
+#include "applications/verification/sl/NativeSeparation.h"
+#include "applications/verification/sl/NativeInductive.h"
 #include <somtparser/frontend/parser.h>
 
 using namespace xolver;

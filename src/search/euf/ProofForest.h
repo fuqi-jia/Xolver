@@ -10,7 +10,7 @@ namespace xolver {
 //
 // Each term node has at most one parent (a true FOREST, never a general graph),
 // with the edge labelled by the MergeReason that justified node == parent. A
-// merge of two DISTINCT classes calls addEdge(u,v,r): we first re-root u's tree
+// merge of two DISTINCT classes calls addEdgeAtLevel(u,v,r,level): we first re-root u's tree
 // (reverse the u→root chain so u becomes a root) and then point u at v. This
 // keeps the structure a forest in which the path between any two same-tree nodes
 // is UNIQUE, so explaining a==b = collecting the edge labels along a→NCA→b is a
@@ -26,12 +26,8 @@ namespace xolver {
 // ---------------------------------------------------------------------------
 class ProofForest {
 public:
-    // addEdge is only ever called to merge two DISTINCT classes (the caller
-    // checks union-find first), so u and v are always in different trees here.
-    void addEdge(EufTermId u, EufTermId v, const MergeReason& reason);
-    // Level-tagged variant: every parent change pushed during this addEdge is
-    // tagged with `level`, enabling a level-FILTER rollback that complements
-    // the standard count-based rollback (see rollbackByLevel below).
+    // Merge two DISTINCT classes with an explicit decision level. Every parent
+    // change receives this level for level-filtered and snapshot rollback.
     void addEdgeAtLevel(EufTermId u, EufTermId v, const MergeReason& reason, int level);
 
     size_t snapshot() const { return trail_.size(); }
@@ -79,7 +75,7 @@ private:
     void ensureNode(EufTermId t);
     void setParent(EufTermId node, EufTermId newParent, size_t newLabelIdx);
     // currentLevel_ is captured into ParentChange.level at every setParent.
-    // addEdgeAtLevel sets it before reorienting; addEdge legacy keeps it 0.
+    // addEdgeAtLevel sets it before reorienting and restores it afterwards.
     int currentLevel_ = 0;
     void makeRoot(EufTermId u);
 };

@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
 #include "search/nra/engine/ReasonMinimizer.h"
-#include "search/nra/core/CdcacTypes.h"
+#include "search/nra/core/CdcacResult.h"
 
 using namespace xolver;
 

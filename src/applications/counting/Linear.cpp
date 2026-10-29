@@ -31,7 +31,7 @@ Answer countLinear(const Problem &problem) {
             projected.push_back(std::size_t(it - compiler.variables.begin()));
         }
         struct Branch {
-            optimization::LinearProgram lp;
+            ::xolver::optimization::LinearProgram lp;
             std::vector<bool> strict;
         };
         std::vector<Branch> branches;
@@ -44,10 +44,10 @@ Answer countLinear(const Problem &problem) {
                 b.lp.constraints.push_back({a.expression.coefficients, -a.expression.constant});
                 b.strict.push_back(a.strict);
             }
-            auto witness = optimization::feasible(b.lp, b.strict, integer, budget);
-            if (witness.status == optimization::Status::Infeasible)
+            auto witness = ::xolver::optimization::feasible(b.lp, b.strict, integer, budget);
+            if (witness.status == ::xolver::optimization::Status::Infeasible)
                 continue;
-            if (witness.status == optimization::Status::Unknown) {
+            if (witness.status == ::xolver::optimization::Status::Unknown) {
                 unknown = true;
                 continue;
             }
@@ -60,18 +60,18 @@ Answer countLinear(const Problem &problem) {
                 b.lp.objective.assign(b.lp.variables, 0);
                 b.lp.objective[projected[k]] = 1;
                 b.lp.maximize = false;
-                auto lo = optimization::solveMixedInteger(b.lp, integer, budget);
+                auto lo = ::xolver::optimization::solveMixedInteger(b.lp, integer, budget);
                 b.lp.maximize = true;
-                auto hi = optimization::solveMixedInteger(b.lp, integer, budget);
-                if (lo.status == optimization::Status::Unbounded ||
-                    hi.status == optimization::Status::Unbounded) {
+                auto hi = ::xolver::optimization::solveMixedInteger(b.lp, integer, budget);
+                if (lo.status == ::xolver::optimization::Status::Unbounded ||
+                    hi.status == ::xolver::optimization::Status::Unbounded) {
                     // A strict feasible integer point plus the rational recession
                     // ray gives infinitely many distinct projected tuples.
                     answer.status = Status::Infinite;
                     return answer;
                 }
-                if (lo.status != optimization::Status::Optimal ||
-                    hi.status != optimization::Status::Optimal)
+                if (lo.status != ::xolver::optimization::Status::Optimal ||
+                    hi.status != ::xolver::optimization::Status::Optimal)
                     throw ResourceExhausted("counting bound search exhausted");
                 const mpz_class l = lo.value->get_num(), h = hi.value->get_num();
                 if (!bounded || l < lower[k])
@@ -103,7 +103,7 @@ Answer countLinear(const Problem &problem) {
                 auto query = branch.lp;
                 auto strict = branch.strict;
                 for (std::size_t i = 0; i < tuple.size(); ++i) {
-                    optimization::Row row{std::vector<mpq_class>(query.variables),
+                    ::xolver::optimization::Row row{std::vector<mpq_class>(query.variables),
                                           mpq_class(tuple[i])};
                     row.coefficients[projected[i]] = 1;
                     query.constraints.push_back(row);
@@ -113,12 +113,12 @@ Answer countLinear(const Problem &problem) {
                     query.constraints.push_back(std::move(row));
                     strict.push_back(false);
                 }
-                auto r = optimization::feasible(query, strict, integer, budget);
-                if (r.status == optimization::Status::Optimal) {
+                auto r = ::xolver::optimization::feasible(query, strict, integer, budget);
+                if (r.status == ::xolver::optimization::Status::Optimal) {
                     ++answer.count;
                     return;
                 }
-                undecided |= r.status == optimization::Status::Unknown;
+                undecided |= r.status == ::xolver::optimization::Status::Unknown;
             }
             if (undecided)
                 throw ResourceExhausted("projected tuple feasibility budget exhausted");

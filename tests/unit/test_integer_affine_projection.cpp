@@ -113,7 +113,7 @@ TEST_CASE("IntegerAffineContext: repeated projections ignore unrelated equality 
         CHECK(result->reasons == std::vector<SatLit>{SatLit::positive(1)});
         CHECK(projection.used() < 128);
     }
-    // The compatibility API charges preparation too; it cannot scan a
+    // The one-shot projection charges preparation too; it cannot scan a
     // thousand source equations within the small per-projection budget.
     WorkBudget oneShot(128);
     CHECK_FALSE(projectIntegerAffineForm(LinearFormKey{{{"x", 2}, {"y", -1}, {"z", 512}}},

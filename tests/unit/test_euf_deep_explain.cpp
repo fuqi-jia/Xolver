@@ -54,7 +54,7 @@ TEST_CASE("EUF: deeply-nested UF congruence explanation does not overflow") {
         while (!q.empty()) {
             PendingMerge m = q.front();
             q.pop_front();
-            eg.merge(m.a, m.b, m.reason, q);
+            eg.merge(m.a, m.b, m.reason, 0, q);
         }
     };
 
@@ -69,7 +69,7 @@ TEST_CASE("EUF: deeply-nested UF congruence explanation does not overflow") {
     MergeReason mr;
     mr.kind = MergeReasonKind::AssertedEquality;
     mr.lit = abLit;
-    eg.merge(ta, tb, mr, q);
+    eg.merge(ta, tb, mr, 0, q);
     drain();
 
     REQUIRE(eg.same(tfa, tfb));   // congruence reached the full depth
@@ -126,7 +126,7 @@ TEST_CASE("EUF: deeply-nested store-tower congruence explanation does not overfl
         while (!q.empty()) {
             PendingMerge m = q.front();
             q.pop_front();
-            eg.merge(m.a, m.b, m.reason, q);
+            eg.merge(m.a, m.b, m.reason, 0, q);
         }
     };
     eg.ensureTermRegistered(tsA, q);
@@ -137,7 +137,7 @@ TEST_CASE("EUF: deeply-nested store-tower congruence explanation does not overfl
     MergeReason mr;
     mr.kind = MergeReasonKind::AssertedEquality;
     mr.lit = abLit;
-    eg.merge(tA, tB, mr, q);
+    eg.merge(tA, tB, mr, 0, q);
     drain();
 
     REQUIRE(eg.same(tsA, tsB));

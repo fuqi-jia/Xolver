@@ -1,12 +1,12 @@
 #include "applications/counting/Solver.h"
-#include "applications/cp/Solver.h"
-#include "applications/de/ode/Solver.h"
-#include "applications/de/pde/Solver.h"
-#include "applications/milp/Solver.h"
-#include "applications/omt/Optimize.h"
-#include "applications/smt/Solver.h"
-#include "applications/smt/qfbv/Solver.h"
-#include "applications/sv/verification/Solver.h"
+#include "applications/optimization/cp/Solver.h"
+#include "applications/dynamics/ode/Solver.h"
+#include "applications/dynamics/pde/Solver.h"
+#include "applications/optimization/milp/Solver.h"
+#include "applications/optimization/omt/Optimize.h"
+#include "applications/satisfiability/smt/Solver.h"
+#include "applications/satisfiability/smt/qfbv/Solver.h"
+#include "applications/verification/model_checking/Solver.h"
 #include "ir/NativeBuilder.h"
 #include "quantifiers/FiniteFormula.h"
 #include <doctest/doctest.h>
@@ -22,7 +22,7 @@ Node symbol(SOMTParser::Parser &p, const std::string &name) {
     throw std::runtime_error("missing declared variable");
 }
 DecisionOracle oracle = [](const NativeAssertions &roots) {
-    return applications::smt::Solver().solve({roots, {}, {}, {}});
+    return applications::satisfiability::smt::Solver().solve({roots, {}, {}, {}});
 };
 } // namespace
 TEST_CASE("application prototypes: projected model counting") {
@@ -41,7 +41,7 @@ TEST_CASE("application prototypes: projected model counting") {
            applications::counting::Status::InvalidInput));
 }
 TEST_CASE("application prototypes: lexicographic bit-vector optimization") {
-    using namespace applications::omt;
+    using namespace applications::optimization::omt;
     SOMTParser::Parser p;
     REQUIRE(p.parseStr("(set-logic QF_BV)(declare-const x (_ BitVec 4))(declare-const y (_ BitVec "
                        "4))(assert (= (bvadd x y) #x9))"));
@@ -61,7 +61,7 @@ TEST_CASE("application prototypes: lexicographic bit-vector optimization") {
         {{}, {{x, Direction::Minimize, Order::SignedBitVector}}, Priority::Lexicographic, {}});
     REQUIRE((signedAnswer.status == Status::Optimal));
     CHECK((signedAnswer.objectiveValues[0] == RealValue::fromInt(-8)));
-    applications::smt::qfbv::Solver satisfiable;
+    applications::satisfiability::smt::qfbv::Solver satisfiable;
     CHECK((satisfiable.solve({p.getAssertions(), {}, {}, {}}).result == Result::Sat));
 }
 TEST_CASE("application prototypes: counts and optima agree with exhaustive assignments") {
@@ -71,7 +71,7 @@ TEST_CASE("application prototypes: counts and optima agree with exhaustive assig
     auto y = nodes.make(sort, native::K::NT_VAR, {}, "y");
     auto sum = nodes.make(sort, native::K::NT_BV_ADD, {x, y});
     applications::counting::Solver counter;
-    applications::omt::Solver optimizer;
+    applications::optimization::omt::Solver optimizer;
     for (int target = 0; target < 8; ++target) {
         INFO(target);
         auto constraint = nodes.all({nodes.equal(sum, nodes.bv(target, 3)),
@@ -93,7 +93,7 @@ TEST_CASE("application prototypes: counts and optima agree with exhaustive assig
         auto projected = counter.solve({{constraint}, {x}, {}});
         REQUIRE(projected.status == applications::counting::Status::Exact);
         CHECK((projected.count == count)); // Each x has exactly one possible y.
-        using namespace applications::omt;
+        using namespace applications::optimization::omt;
         auto optimum = optimizer.solve({{constraint},
                                         {{x, Direction::Minimize, Order::SignedBitVector},
                                          {y, Direction::Minimize, Order::UnsignedBitVector}},
@@ -117,26 +117,26 @@ TEST_CASE("application prototypes: CP domains and verification conditions") {
     auto ints = SOMTParser::SortManager::getInt();
     auto x = b.make(ints, native::K::NT_VAR, {}, "x"), y = b.make(ints, native::K::NT_VAR, {}, "y");
     auto zero = b.numeral(0), one = b.numeral(1);
-    applications::cp::Solver cp(oracle);
-    applications::cp::Problem problem;
-    problem.domains = {{x, applications::cp::Domain::Kind::Enumeration, {zero, one}, {}, {}},
-                       {y, applications::cp::Domain::Kind::Enumeration, {zero, one}, {}, {}}};
+    applications::optimization::cp::Solver cp(oracle);
+    applications::optimization::cp::Problem problem;
+    problem.domains = {{x, applications::optimization::cp::Domain::Kind::Enumeration, {zero, one}, {}, {}},
+                       {y, applications::optimization::cp::Domain::Kind::Enumeration, {zero, one}, {}, {}}};
     problem.allDifferent = {{x, y}};
     CHECK((cp.solve(problem).result == Result::Sat));
     problem.domains[0].values = {zero};
     problem.domains[1].values = {zero};
     CHECK((cp.solve(problem).result == Result::Unsat));
-    applications::sv::verification::Solver verifier(oracle);
+    applications::verification::model_checking::Solver verifier(oracle);
     auto nonnegative = b.logical(native::K::NT_GE, {x, zero}),
          positive = b.logical(native::K::NT_GT, {x, zero});
     auto valid = verifier.solve({{{"reflexive", {nonnegative}, nonnegative}}});
-    CHECK((valid.status == applications::sv::verification::Status::Valid));
+    CHECK((valid.status == applications::verification::model_checking::Status::Valid));
     auto invalid = verifier.solve({{{"strict", {nonnegative}, positive}}});
-    CHECK((invalid.status == applications::sv::verification::Status::Invalid));
+    CHECK((invalid.status == applications::verification::model_checking::Status::Invalid));
     CHECK(invalid.counterexample.has_value());
 }
 TEST_CASE("application prototypes: exact mixed-integer optimization") {
-    using namespace applications::milp;
+    using namespace applications::optimization::milp;
     Problem p;
     p.variables = {{"x", VariableKind::Integer, mpq_class(0), mpq_class(3)},
                    {"y", VariableKind::Continuous, mpq_class(0), mpq_class(4)}};
@@ -166,7 +166,7 @@ TEST_CASE("application prototypes: exact mixed-integer optimization") {
     CHECK((solver.solve(p).status == Status::Unknown));
 }
 TEST_CASE("application prototypes: ODE and PDE solutions satisfy exact identities") {
-    using namespace applications::de;
+    using namespace applications::dynamics;
     native::Nodes b({});
     auto reals = SOMTParser::SortManager::getReal();
     auto var = [&](const char *name) { return b.make(reals, native::K::NT_VAR, {}, name); };

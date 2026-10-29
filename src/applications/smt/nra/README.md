@@ -1,1 +1,0 @@
-Quantified polynomial real arithmetic is selected by `applications/smt/FirstOrderSolver.cpp` and solved by `quantifiers/real`. Ground NRA uses the `qfnra` CDCL(T) components. Binder detection precedes ground rewriting and atomization, including for formulas whose declared logic differs from their syntax.

@@ -1,7 +1,7 @@
 #include <doctest/doctest.h>
 #include "xolver/Solver.h"
 #include "ir/NativeTerms.h"
-#include "applications/smt/qfuf/EufSolver.h"
+#include "applications/satisfiability/smt/qfuf/EufSolver.h"
 #include "search/coordination/TheoryLemmaDatabase.h"
 #include <fstream>
 #include <filesystem>
