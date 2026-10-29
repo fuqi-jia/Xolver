@@ -7,6 +7,16 @@
 using namespace xolver;
 
 namespace {
+struct RegistrySat : SatSolver {
+    SatVar next = 1;
+    SatVar newVar() override { return next++; }
+    void addClause(const std::vector<SatLit>&) override {}
+    SolveResult solve() override { return SolveResult::Unknown; }
+    SolveResult solve(const std::vector<SatLit>&) override { return SolveResult::Unknown; }
+    bool value(SatVar) const override { return false; }
+    void setDeadline(std::chrono::steady_clock::time_point) override {}
+};
+
 struct CountingAssignment : TheoryAssignmentView {
     std::map<SatVar, LitValue> values;
     mutable int queries = 0;
@@ -60,8 +70,10 @@ void registerLinear(TheoryAtomRegistry& registry, SatVar variable) {
 }
 
 TEST_CASE("TheoryManager: theories without context consumers avoid assignment scans") {
+    RegistrySat sat;
     TheoryManager manager;
     TheoryAtomRegistry registry;
+    registry.setContext(&sat, nullptr);
     CountingAssignment assignment;
     TheoryLemmaDatabase lemmas;
     for (SatVar variable = 1; variable <= 64; ++variable) {
@@ -80,8 +92,10 @@ TEST_CASE("TheoryManager: theories without context consumers avoid assignment sc
 }
 
 TEST_CASE("TheoryManager: context consumers share a fresh snapshot across state changes") {
+    RegistrySat sat;
     TheoryManager manager;
     TheoryAtomRegistry registry;
+    registry.setContext(&sat, nullptr);
     CountingAssignment assignment;
     TheoryLemmaDatabase lemmas;
     for (SatVar variable = 1; variable <= 3; ++variable) registerLinear(registry, variable);
