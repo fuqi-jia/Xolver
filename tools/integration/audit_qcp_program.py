@@ -72,7 +72,7 @@ def assess(goal, proofs, final_check, backend_reports=(), *, state_path=None):
     expected_proofs = {(root / targets.get(k, '')).resolve() for k in ['proof_auto_file', 'proof_manual_file']}
     if expected_proofs != {p.resolve() for p in proofs}:
         errors.append('proof paths do not match the checked canonical case')
-    backend_errors, discharged, queries, identities = [], set(), [], set()
+    backend_errors, discharged, auxiliary, queries, identities = [], set(), set(), [], set()
     for path in backend_reports:
         report = json.loads(path.read_text())
         identities.add((report['backend'], report['binary']['sha256']))
@@ -100,11 +100,15 @@ def assess(goal, proofs, final_check, backend_reports=(), *, state_path=None):
                 else:
                     cmask = token_mask(candidate.read_text())
                     tokens = lambda value: re.findall(IDENTIFIER + r'|[0-9]+|[^\s]', value)
-                    if (expected.get(row['lemma']) != row['name'] or
+                    if (completed.get(row['lemma']) != row['name'] or
                             tokens(cmask) != tokens(completed_blocks.get(row['lemma'], ''))):
                         backend_errors.append('checked proof differs from backend candidate: ' + row['name'])
-                    else:
+                    elif expected.get(row['lemma']) == row['name']:
                         discharged.add(row['name'])
+                    else:
+                        # Generated split statements also have complete checked
+                        # witnesses, but cannot replace a top-level obligation.
+                        auxiliary.add(row['name'])
     if len(identities) != 1:
         backend_errors.append('one frozen backend identity required')
     if not set(expected.values()).issubset(discharged):
@@ -116,6 +120,8 @@ def assess(goal, proofs, final_check, backend_reports=(), *, state_path=None):
                 verified_vcs=len(expected) if verified else 0,
                 external_backend_queries=len(queries) if backend_reports else None,
                 external_unsat=sum(q['result'] == 'unsat' for q in queries) if backend_reports else None,
+                external_discharged_vcs=len(discharged),
+                external_auxiliary_conditions=len(auxiliary),
                 external_query_seconds=sum(q['seconds'] for q in queries) if backend_reports else None,
                 external_query_scope='Supplied backend reports only; absent reports do not establish zero total calls',
                 opaque_internal_qcp_queries=None,

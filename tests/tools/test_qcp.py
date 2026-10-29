@@ -5,10 +5,100 @@ import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from tools.integration.qcp import Unsupported, binders, export_goals, owned_int_ranges, parse
+from tools.integration.qcp import (Unsupported, binders, export_goals,
+    integer_function_facts, owned_int_ranges, parse, sufficient_leaves)
 
 
 class QcpAdapterTests(unittest.TestCase):
+    def test_signed_gcd_uses_shared_ground_instances_without_answer_unrolling(self):
+        symbols = {'a': 'Int', 'b': 'Int'}
+        self.assertEqual(parse('Zgcd a b', symbols), parse('Z.gcd b a', symbols))
+        term = parse('Zgcd b (a % b) = Zgcd a b', symbols)
+        declarations, facts = integer_function_facts([term])
+        self.assertEqual(declarations, ['(declare-fun |qcp.gcd| (Int Int) Int)'])
+        euclid = [f for f in facts if f['lemma'] == 'Z.gcd_rem + Z.gcd_comm']
+        self.assertEqual(len(euclid), 1)
+        self.assertIn('(=> (not (= |b| 0))', euclid[0]['assertion'])
+        self.assertTrue(any(f['lemma'] == 'Z.gcd_0_r' for f in facts))
+        self.assertNotIn('forall', '\n'.join(f['assertion'] for f in facts))
+        self.assertEqual(integer_function_facts([parse('a % b = 0', symbols)]), ([], []))
+        for source in ['forall (Zgcd: Z), Zgcd = 0', 'forall (Zabs: Z), Zabs = 0']:
+            with self.subTest(source=source), self.assertRaises(Unsupported):
+                binders(source)
+
+    def test_gcd_ground_facts_hold_for_signed_and_zero_inputs_independently(self):
+        import math
+        import re
+        _, facts = integer_function_facts([parse('Zgcd b (a % b) = Zgcd a b',
+                                                   {'a': 'Int', 'b': 'Int'})])
+        def expression(tokens):
+            token = next(tokens)
+            if token != '(':
+                return token
+            result = []
+            while True:
+                token = next(tokens)
+                if token == ')':
+                    return result
+                # Push one token back without sharing the source parser.
+                import itertools
+                child = expression(itertools.chain([token], tokens))
+                result.append(child)
+        trees = [expression(iter(re.findall(r'\(|\)|[^\s()]+', f['assertion']))) for f in facts]
+        def evaluate(tree, values):
+            if isinstance(tree, str):
+                return values[tree] if tree in values else int(tree)
+            op, *children = tree
+            args = [evaluate(c, values) for c in children]
+            return {'|qcp.gcd|': lambda: math.gcd(*args),
+                    '=>': lambda: not args[0] or args[1], 'not': lambda: not args[0],
+                    '=': lambda: args[0] == args[1], '>=': lambda: args[0] >= args[1],
+                    '<': lambda: args[0] < args[1], '-': lambda: -args[0],
+                    'ite': lambda: args[1] if args[0] else args[2],
+                    # SMT-LIB integer mod is Euclidean for either divisor sign.
+                    'mod': lambda: args[0] % abs(args[1]) if args[1] else 0}[op]()
+        for a in range(-12, 13):
+            for b in range(-12, 13):
+                for fact, tree in zip(facts, trees):
+                    with self.subTest(a=a, b=b, lemma=fact['lemma']):
+                        self.assertTrue(evaluate(tree, {'|a|': a, '|b|': b}))
+
+    def test_composed_vcs_expand_sufficient_children_without_assuming_parents(self):
+        definitions = {'a': 'forall (x: Z), x = x',
+                       'b': 'forall (y: Z), y = 0',
+                       'c': 'forall (z: Z), z = 1'}
+        leaves = sufficient_leaves('a /\\ b \\/ c', definitions)
+        self.assertEqual([l['body'] for l in leaves], [definitions['a'], definitions['b']])
+        self.assertEqual(leaves[0]['proof_path'][0], dict(direction='left'))
+        self.assertEqual(sufficient_leaves('a -> b \\/ c', definitions)[0]['body'], definitions['b'])
+        for source in ['missing', 'a /\\ missing', '(a', 'a)']:
+            with self.subTest(source=source), self.assertRaises(Unsupported):
+                sufficient_leaves(source, definitions)
+        with self.assertRaises(Unsupported):
+            sufficient_leaves('a', {'a': 'b', 'b': 'a'})
+
+    def test_gcd_parent_and_split_conditions_export_with_independent_query_evidence(self):
+        text = '''Definition step := forall (a: Z) (b: Z) (r: Z)
+  (H: b <> 0) (Hr: r = Zgcd b (a % b)), r = Zgcd a b.
+Definition base := forall (a: Z) (r: Z) (H: r = Zabs a), r = Zgcd a 0.
+Definition parent := step \\/ base.
+Definition combined := step /\\ base.
+Definition implication := base -> step.
+'''
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            source = root / 'goals.v'; source.write_text(text)
+            report = export_goals(source, root / 'out')
+            self.assertEqual([g['status'] for g in report['goals']], ['exported'] * 5)
+            self.assertEqual(len(report['queries']), 6)
+            parent = next(q for q in report['queries'] if q['name'] == 'parent')
+            self.assertEqual(parent['proof_path'], [dict(direction='left'), dict(unfold='step')])
+            self.assertTrue(parent['integer_function_facts'])
+            script = (root / 'out' / parent['file']).read_text()
+            self.assertNotIn('(assert |step|)', script)
+            self.assertIn('(declare-fun |qcp.gcd| (Int Int) Int)', script)
+            self.assertFalse(report['program_verified'])
+
     def test_requires_declared_types_and_consumes_whole_expression(self):
         for expression in ('mystery + 1 = 2', 'f (x) = 1', 'x = 0 trailing', 'x + True = 2'):
             with self.subTest(expression=expression), self.assertRaises(Unsupported):

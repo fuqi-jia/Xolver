@@ -72,11 +72,42 @@ def invoke(backend, binary, query, timeout, output):
                 stderr_sha256=hashlib.sha256(stderr).hexdigest())
 
 
-def proof_candidate(lemma, goal, derived=(), residual_heap=True):
+INTEGER_TACTIC = '''first [lia | nia | congruence |
+    repeat (rewrite Z.gcd_0_r in * || rewrite Z.gcd_0_l in *);
+    repeat match goal with
+    | H : context [Z.gcd ?b (Z.rem ?a ?b)] |- _ =>
+        rewrite (Z.gcd_comm b (Z.rem a b)) in H;
+        rewrite (Z.gcd_rem a b ltac:(lia)) in H
+    | |- context [Z.gcd ?b (Z.rem ?a ?b)] =>
+        rewrite (Z.gcd_comm b (Z.rem a b));
+        rewrite (Z.gcd_rem a b ltac:(lia))
+    end;
+    first [lia | nia | congruence |
+      match goal with
+      | |- context [Z.gcd ?a ?b] =>
+          pose proof (Z.gcd_comm a b); congruence
+      end] |
+    match goal with
+    | |- context [Z.rem ?a ?b] =>
+        let Hr := fresh "Hremainder" in
+        pose proof (Z.rem_bound_abs a b ltac:(lia)) as Hr;
+        destruct (Z.abs_spec b) as [[? ?] | [? ?]];
+        destruct (Z.abs_spec (Z.rem a b)) as [[? ?] | [? ?]]; lia
+    end]'''
+
+
+def proof_candidate(lemma, goal, derived=(), residual_heap=True, proof_path=()):
     # Both backends use identical proof reconstruction. These tactics must
     # reconstruct the whole original Rocq statement; no SMT result is an axiom.
-    lines = [f'Lemma {lemma} : {goal}.', 'Proof.',
-             '  LLM_pre_process ltac:(first [lia | nia]).']
+    lines = [f'Lemma {lemma} : {goal}.', 'Proof.']
+    for step in proof_path:
+        if 'unfold' in step:
+            lines.append(f"  unfold {step['unfold']}.")
+        elif step.get('direction') == 'left':
+            lines.append('  left.')
+        elif step.get('direction') == 'consequent':
+            lines.append('  intros _.')
+    lines.append(f'  LLM_pre_process ltac:({INTEGER_TACTIC}).')
     for fact in derived:
         address, value = fact['address'], fact['value']
         lines.extend([
@@ -90,9 +121,9 @@ def proof_candidate(lemma, goal, derived=(), residual_heap=True):
         if residual_heap:
             cells = '; '.join(f"cancel (({f['address']}) # Int |-> ({f['value']}))" for f in derived)
             lines.extend(['  all: split_pure_spatial.', f'  all: solve [{cells}',
-                          '    | split_pures; dump_pre_spatial; first [lia | nia]].'])
+                          f'    | split_pures; dump_pre_spatial; {INTEGER_TACTIC}].'])
         else:
-            lines.append('  all: split_pures; dump_pre_spatial; first [lia | nia].')
+            lines.append(f'  all: split_pures; dump_pre_spatial; {INTEGER_TACTIC}.')
     lines.append('Qed.')
     return '\n'.join(lines) + '\n'
 
@@ -135,6 +166,8 @@ def discharge(goals, manual, assigned, backend, binary, timeout, output):
                 raise ValueError('exported query changed')
             record['queries'].append(invoke(backend, binary, path, timeout,
                                             output / f'vc-{index}-query-{number}'))
+            record['queries'][-1]['integer_function_facts'] = query.get('integer_function_facts', [])
+            record['queries'][-1]['proof_path'] = query.get('proof_path', [])
             if record['queries'][-1].get('budget_overrun'):
                 report['protocol_errors'].append(dict(goal=name, query=number,
                     seconds=record['queries'][-1]['seconds']))
@@ -142,7 +175,8 @@ def discharge(goals, manual, assigned, backend, binary, timeout, output):
             candidate = output / f'vc-{index}-candidate.v'
             candidate.write_text(proof_candidate(pending[name], name,
                                  by_name[name].get('derived_assumptions', ()),
-                                 by_name[name].get('residual_heap', False)))
+                                 by_name[name].get('residual_heap', False),
+                                 by_name[name].get('proof_path', ())))
             record.update(status='proof-candidate', candidate=str(candidate),
                           candidate_sha256=sha256(candidate), kernel_checked=False)
         else:

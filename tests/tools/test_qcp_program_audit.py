@@ -92,6 +92,40 @@ class QcpProgramAuditTests(unittest.TestCase):
             g, a, m, r, state = self.fixture(Path(d));a.write_text('(* Proof. Admitted. *) Lemma proof_a : a. Proof. exact I. Qed.')
             self.assertTrue(assess(g,[a,m],r, state_path=state)['program_verified'])
 
+    def test_checked_split_queries_are_counted_without_replacing_primary_vcs(self):
+        import hashlib
+        digest = lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            g, a, m, r, state = self.fixture(root)
+            a.write_text('Lemma proof_a : a. Proof. exact I. Qed.')
+            split = 'Lemma proof_split : split. Proof. exact I. Qed.'
+            m.write_text(m.read_text() + '\n' + split)
+            rows = []
+            for name, block in [('a', a.read_text()),
+                                ('b', 'Lemma proof_b : b. Proof. exact I. Qed.'),
+                                ('split', split)]:
+                candidate = root/(name+'-candidate.v'); candidate.write_text(block)
+                rows.append(dict(name=name, lemma='proof_'+name, status='proof-candidate',
+                    candidate=str(candidate), candidate_sha256=digest(candidate),
+                    queries=[dict(result='unsat', seconds=.1)]))
+            payload = dict(backend='xolver', binary=dict(sha256='frozen'),
+                source_sha256=digest(g), rows=rows, timeout=60, cpu=7,
+                memory_bytes=16*1024**3, protocol_errors=[])
+            backend = root/'backend.json'; backend.write_text(json.dumps(payload))
+            report = assess(g, [a,m], r, [backend], state_path=state)
+            self.assertTrue(report['backend_qualified'])
+            self.assertEqual(report['verified_vcs'], 2)
+            self.assertEqual(report['external_discharged_vcs'], 2)
+            self.assertEqual(report['external_auxiliary_conditions'], 1)
+            self.assertEqual(report['external_backend_queries'], 3)
+            payload['rows'] = rows[1:] # split cannot substitute for primary a
+            backend.write_text(json.dumps(payload))
+            report = assess(g, [a,m], r, [backend], state_path=state)
+            self.assertTrue(report['program_verified'])
+            self.assertFalse(report['backend_qualified'])
+            self.assertEqual(report['external_discharged_vcs'], 1)
+
 
 if __name__ == '__main__':
     unittest.main()
