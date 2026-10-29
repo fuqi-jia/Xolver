@@ -1,0 +1,494 @@
+{
+  "schema": "xolver-qcp-integer-functions/1",
+  "source_head": "60cbf1a8adffd78fa3dd40a0e62462add6ec3a68",
+  "qcp_revision": "08cc7a0f1373a1db3800111a0205a340b6d6f99c",
+  "controller_manifest_sha256": "1a46d9b5ce793dabcb76378618f7c2f4d5f9ef1694620450cf404d5bb1620250",
+  "programs": {
+    "xolver": {
+      "run": "gcd_function_xolver_r588-20261029164240",
+      "ledger": {
+        "schema": 1,
+        "program_verified": true,
+        "backend_qualified": true,
+        "programs": 1,
+        "verification_conditions": 9,
+        "verified_vcs": 9,
+        "external_backend_queries": 34,
+        "external_unsat": 34,
+        "external_discharged_vcs": 9,
+        "external_auxiliary_conditions": 3,
+        "external_query_seconds": 7.225582901388407,
+        "external_query_scope": "Supplied backend reports only; absent reports do not establish zero total calls",
+        "opaque_internal_qcp_queries": null,
+        "errors": [],
+        "backend_errors": [],
+        "hashes": {
+          "goal": "8f85baa2d2fd8afb8346f8b5d9f425932e3eb600b1d239193bf80c602ddc1db9",
+          "proofs": {
+            "/pub/data/jiafq/xolver/dependencies/qcp-08cc7a0f/Rocq/examples/QCP_demos_human/simple_arith/gcd_function_xolver_r588_proof_auto.v": "b881363a54a0fe560d2f2a3d22c638835b79890c2c8f3b8a5282c1d416f4f217",
+            "/pub/data/jiafq/xolver/dependencies/qcp-08cc7a0f/Rocq/examples/QCP_demos_human/simple_arith/gcd_function_xolver_r588_proof_manual.v": "84a395376ba72efcead3b6fc518e1c36d6301860cfe6180c4663c4a6c2fb7b48"
+          },
+          "final_check": "f93c6ee375c6ed1d2cb834a053d19e7b061d14ad47af46c6a298d68b55784382",
+          "state": "2b04a02a9e68d985b773565520b6ae4004cc24635b1b77e752a05da1dcb5cfa8",
+          "backend_reports": {
+            "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-gcd-function-xolver-remainder-r594/report-finalized.json": "63834f0e82a34f4db13505d856c3f6709e4ef9bc57f35f9cee37c91f17829b85",
+            "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-gcd-function-xolver-returns-r594/report.finalized.json": "611e2ae1355867ba2f336c9f3b6b6891bc3709f42b08883e0ff1690d604a4d66",
+            "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-gcd-function-xolver-safety-r594/report-finalized.json": "55c422353b7f616a4b4a6e95c57b6f6329ce1771c31f58f371255e6e1e97f856"
+          }
+        },
+        "evidence_boundary": "Consumes an authenticated canonical controller final-check plus current proof coverage; does not replace Rocq. Pinned QCP frontend and libraries remain the common trusted base. This is qualification, not a timed program performance comparison."
+      },
+      "final_check": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-jobs/20261029091332-gcd-final-check-xolver-r588-2b8342/result.json",
+        "sha256": "f93c6ee375c6ed1d2cb834a053d19e7b061d14ad47af46c6a298d68b55784382",
+        "lease": [
+          {
+            "run": "c81f3bdfd744",
+            "experiment": "153003018743",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "3"
+              ]
+            },
+            "started_at": "2026-10-29T09:13:38+00:00",
+            "ended_at": "2026-10-29T09:14:32+00:00",
+            "metrics": {
+              "completed": 1,
+              "exit_code": 0
+            }
+          }
+        ]
+      },
+      "state_sha256": "2b04a02a9e68d985b773565520b6ae4004cc24635b1b77e752a05da1dcb5cfa8",
+      "backend_reports": [
+        {
+          "finalized_report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-gcd-function-xolver-remainder-r594/report-finalized.json",
+          "sha256": "63834f0e82a34f4db13505d856c3f6709e4ef9bc57f35f9cee37c91f17829b85",
+          "original_report_sha256": "a8b961f77c1cfe2eb0f75045c8d0487f1cf9591eb996c8a77520508291fc0fa0",
+          "lease": [
+            {
+              "run": "bc4cf7b6b71e",
+              "experiment": "f45b1cb79da6",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              },
+              "started_at": "2026-10-29T08:56:40+00:00",
+              "ended_at": "2026-10-29T08:56:44+00:00",
+              "metrics": {
+                "completed": 1,
+                "exit_code": 0
+              }
+            }
+          ]
+        },
+        {
+          "finalized_report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-gcd-function-xolver-returns-r594/report.finalized.json",
+          "sha256": "611e2ae1355867ba2f336c9f3b6b6891bc3709f42b08883e0ff1690d604a4d66",
+          "original_report_sha256": "51690df47b01d3b300d3824097b0013a197ca7fc7bbcde704918b78ade1ce0b6",
+          "lease": [
+            {
+              "run": "42c052ed3fff",
+              "experiment": "8d539c91fed1",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "1"
+                ]
+              },
+              "started_at": "2026-10-29T08:57:25+00:00",
+              "ended_at": "2026-10-29T08:57:40+00:00",
+              "metrics": {
+                "completed": 1,
+                "exit_code": 0
+              }
+            }
+          ]
+        },
+        {
+          "finalized_report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-gcd-function-xolver-safety-r594/report-finalized.json",
+          "sha256": "55c422353b7f616a4b4a6e95c57b6f6329ce1771c31f58f371255e6e1e97f856",
+          "original_report_sha256": "997a43eb32585111bf1b2156f9c01ebac12fdb7a70dbadfc44236e0ee907d243",
+          "lease": [
+            {
+              "run": "95062a836b53",
+              "experiment": "edc9addfe53b",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "1"
+                ]
+              },
+              "started_at": "2026-10-29T09:02:30+00:00",
+              "ended_at": "2026-10-29T09:02:32+00:00",
+              "metrics": {
+                "completed": 1,
+                "exit_code": 0
+              }
+            }
+          ]
+        }
+      ],
+      "source_files": {
+        "c_file": {
+          "path": "QCP_examples/QCP_demos_human/simple_arith/gcd.c",
+          "sha256": "255cd902a923b5044acdbe6372652e0b422af3a5a723cc37355040e613a8b3a3"
+        },
+        "goal_file": {
+          "path": "Rocq/examples/QCP_demos_human/simple_arith/gcd_function_xolver_r588_goal.v",
+          "sha256": "8f85baa2d2fd8afb8346f8b5d9f425932e3eb600b1d239193bf80c602ddc1db9"
+        },
+        "proof_auto_file": {
+          "path": "Rocq/examples/QCP_demos_human/simple_arith/gcd_function_xolver_r588_proof_auto.v",
+          "sha256": "b881363a54a0fe560d2f2a3d22c638835b79890c2c8f3b8a5282c1d416f4f217"
+        },
+        "proof_manual_file": {
+          "path": "Rocq/examples/QCP_demos_human/simple_arith/gcd_function_xolver_r588_proof_manual.v",
+          "sha256": "84a395376ba72efcead3b6fc518e1c36d6301860cfe6180c4663c4a6c2fb7b48"
+        },
+        "goal_check_file": {
+          "path": "Rocq/examples/QCP_demos_human/simple_arith/gcd_function_xolver_r588_goal_check.v",
+          "sha256": "0868d35435045e63fa581b2b7a90a1dce58d3b4795134c77dc343b0e02f4c72d"
+        }
+      }
+    },
+    "z3": {
+      "run": "gcd_function_z3_r588-20261029164251",
+      "ledger": {
+        "schema": 1,
+        "program_verified": true,
+        "backend_qualified": true,
+        "programs": 1,
+        "verification_conditions": 9,
+        "verified_vcs": 9,
+        "external_backend_queries": 34,
+        "external_unsat": 34,
+        "external_discharged_vcs": 9,
+        "external_auxiliary_conditions": 3,
+        "external_query_seconds": 1.3482088670134544,
+        "external_query_scope": "Supplied backend reports only; absent reports do not establish zero total calls",
+        "opaque_internal_qcp_queries": null,
+        "errors": [],
+        "backend_errors": [],
+        "hashes": {
+          "goal": "8f85baa2d2fd8afb8346f8b5d9f425932e3eb600b1d239193bf80c602ddc1db9",
+          "proofs": {
+            "/pub/data/jiafq/xolver/dependencies/qcp-08cc7a0f/Rocq/examples/QCP_demos_human/simple_arith/gcd_function_z3_r588_proof_auto.v": "253479de71e94b094e145ee055eb4e105540f791dc25acaa82a7fa96642d0fe5",
+            "/pub/data/jiafq/xolver/dependencies/qcp-08cc7a0f/Rocq/examples/QCP_demos_human/simple_arith/gcd_function_z3_r588_proof_manual.v": "7ad72d7ee399794bc04dc6b6332550849bd7ccacf3a4ee9e383f986b681842a0"
+          },
+          "final_check": "68b642cbc650b104a360b40cea120258cb4e906b952e647d59d4fdd2088616b7",
+          "state": "8d3f319163b0e208ed2ca83c9584514d365a6d5c0f58bbd0eb123735c3905b88",
+          "backend_reports": {
+            "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-gcd-function-z3-remainder-r594/report-finalized.json": "6c6123e3152bf35dcefcc498fb18d9f20685739e5c32144053a58237d0ef7db1",
+            "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-gcd-function-z3-returns-r594/report-finalized.json": "746b46e949fd5e7a8f6513f022bc54fc48d8037738dd9581d0b373eedde3ca47",
+            "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-gcd-function-z3-safety-r594/report-finalized.json": "6ebcd9dcbed670352107074acff91da5f243b4ff0f3c5900156bb314de6ce832"
+          }
+        },
+        "evidence_boundary": "Consumes an authenticated canonical controller final-check plus current proof coverage; does not replace Rocq. Pinned QCP frontend and libraries remain the common trusted base. This is qualification, not a timed program performance comparison."
+      },
+      "final_check": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-jobs/20261029091339-gcd-final-check-z3-r588-b2d21d/result.json",
+        "sha256": "68b642cbc650b104a360b40cea120258cb4e906b952e647d59d4fdd2088616b7",
+        "lease": [
+          {
+            "run": "901193936dea",
+            "experiment": "0084f08e15ab",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "5"
+              ]
+            },
+            "started_at": "2026-10-29T09:13:45+00:00",
+            "ended_at": "2026-10-29T09:14:32+00:00",
+            "metrics": {
+              "completed": 1,
+              "exit_code": 0
+            }
+          }
+        ]
+      },
+      "state_sha256": "8d3f319163b0e208ed2ca83c9584514d365a6d5c0f58bbd0eb123735c3905b88",
+      "backend_reports": [
+        {
+          "finalized_report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-gcd-function-z3-remainder-r594/report-finalized.json",
+          "sha256": "6c6123e3152bf35dcefcc498fb18d9f20685739e5c32144053a58237d0ef7db1",
+          "original_report_sha256": "ab2ae43099b244ee7a78c48166804bd9068f31c0c9bc68e542fe8bdd90f2cdbf",
+          "lease": [
+            {
+              "run": "f8b228dffc91",
+              "experiment": "a5651cb0caf5",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              },
+              "started_at": "2026-10-29T08:56:47+00:00",
+              "ended_at": "2026-10-29T08:57:00+00:00",
+              "metrics": {
+                "completed": 1,
+                "exit_code": 0
+              }
+            }
+          ]
+        },
+        {
+          "finalized_report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-gcd-function-z3-returns-r594/report-finalized.json",
+          "sha256": "746b46e949fd5e7a8f6513f022bc54fc48d8037738dd9581d0b373eedde3ca47",
+          "original_report_sha256": "2bfd06d3abe450ea6b1128bb9bdc0452aabf81cbe0233fead206640bb436fddb",
+          "lease": [
+            {
+              "run": "05dbde796692",
+              "experiment": "317695e2a5a8",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "3"
+                ]
+              },
+              "started_at": "2026-10-29T09:01:15+00:00",
+              "ended_at": "2026-10-29T09:01:29+00:00",
+              "metrics": {
+                "completed": 1,
+                "exit_code": 0
+              }
+            }
+          ]
+        },
+        {
+          "finalized_report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-gcd-function-z3-safety-r594/report-finalized.json",
+          "sha256": "6ebcd9dcbed670352107074acff91da5f243b4ff0f3c5900156bb314de6ce832",
+          "original_report_sha256": "fea71b1b42babe3b403f7ee78d4d92d8a027662fec6e56a3782cff89ac5a45da",
+          "lease": [
+            {
+              "run": "c475d1e0b5ca",
+              "experiment": "3050f5f637c3",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "1"
+                ]
+              },
+              "started_at": "2026-10-29T09:02:40+00:00",
+              "ended_at": "2026-10-29T09:02:47+00:00",
+              "metrics": {
+                "completed": 1,
+                "exit_code": 0
+              }
+            }
+          ]
+        }
+      ],
+      "source_files": {
+        "c_file": {
+          "path": "QCP_examples/QCP_demos_human/simple_arith/gcd.c",
+          "sha256": "255cd902a923b5044acdbe6372652e0b422af3a5a723cc37355040e613a8b3a3"
+        },
+        "goal_file": {
+          "path": "Rocq/examples/QCP_demos_human/simple_arith/gcd_function_z3_r588_goal.v",
+          "sha256": "8f85baa2d2fd8afb8346f8b5d9f425932e3eb600b1d239193bf80c602ddc1db9"
+        },
+        "proof_auto_file": {
+          "path": "Rocq/examples/QCP_demos_human/simple_arith/gcd_function_z3_r588_proof_auto.v",
+          "sha256": "253479de71e94b094e145ee055eb4e105540f791dc25acaa82a7fa96642d0fe5"
+        },
+        "proof_manual_file": {
+          "path": "Rocq/examples/QCP_demos_human/simple_arith/gcd_function_z3_r588_proof_manual.v",
+          "sha256": "7ad72d7ee399794bc04dc6b6332550849bd7ccacf3a4ee9e383f986b681842a0"
+        },
+        "goal_check_file": {
+          "path": "Rocq/examples/QCP_demos_human/simple_arith/gcd_function_z3_r588_goal_check.v",
+          "sha256": "270b705d4e375c72958037e27d16ff707698df06eebdf7408bba09aa5fe98a96"
+        }
+      }
+    }
+  },
+  "unique_programs_in_this_stage": 1,
+  "cumulative_development_programs": 3,
+  "verified_programs_per_backend": {
+    "xolver": 1,
+    "z3": 1
+  },
+  "verified_vcs_per_backend": 9,
+  "auxiliary_checked_conditions_per_backend": 3,
+  "external_queries_per_backend": 34,
+  "final_combined_native_query_check": {
+    "binary": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r596/xolver",
+      "sha256": "c919846a8c7b8880b28a43f7201499e0d761c27d74adf3615177b21b375f9284"
+    },
+    "definitions": 14,
+    "queries": 50,
+    "independent_oracle_calls": 150,
+    "leases": [
+      {
+        "run": "d86cc87af38b",
+        "experiment": "ce9bd19e1968",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "0"
+          ]
+        },
+        "started_at": "2026-10-29T09:12:41+00:00",
+        "ended_at": "2026-10-29T09:12:45+00:00",
+        "metrics": {
+          "cases": 7,
+          "checked": 7,
+          "failures": 0
+        }
+      },
+      {
+        "run": "93ad3708ac26",
+        "experiment": "ce9bd19e1968",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "4"
+          ]
+        },
+        "started_at": "2026-10-29T09:12:41+00:00",
+        "ended_at": "2026-10-29T09:12:55+00:00",
+        "metrics": {
+          "cases": 7,
+          "checked": 7,
+          "failures": 0
+        }
+      },
+      {
+        "run": "c3f4be6cf04f",
+        "experiment": "ce9bd19e1968",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "6"
+          ]
+        },
+        "started_at": "2026-10-29T09:12:41+00:00",
+        "ended_at": "2026-10-29T09:12:56+00:00",
+        "metrics": {
+          "cases": 6,
+          "checked": 6,
+          "failures": 0
+        }
+      },
+      {
+        "run": "28f0c6796962",
+        "experiment": "ce9bd19e1968",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "8"
+          ]
+        },
+        "started_at": "2026-10-29T09:12:41+00:00",
+        "ended_at": "2026-10-29T09:12:45+00:00",
+        "metrics": {
+          "cases": 6,
+          "checked": 6,
+          "failures": 0
+        }
+      },
+      {
+        "run": "e4ce4e4cbdce",
+        "experiment": "ce9bd19e1968",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "11"
+          ]
+        },
+        "started_at": "2026-10-29T09:12:42+00:00",
+        "ended_at": "2026-10-29T09:12:46+00:00",
+        "metrics": {
+          "cases": 6,
+          "checked": 6,
+          "failures": 0
+        }
+      },
+      {
+        "run": "5c5cd6517ee2",
+        "experiment": "ce9bd19e1968",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "12"
+          ]
+        },
+        "started_at": "2026-10-29T09:12:42+00:00",
+        "ended_at": "2026-10-29T09:12:46+00:00",
+        "metrics": {
+          "cases": 6,
+          "checked": 6,
+          "failures": 0
+        }
+      },
+      {
+        "run": "7c37bee6bee2",
+        "experiment": "ce9bd19e1968",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "14"
+          ]
+        },
+        "started_at": "2026-10-29T09:12:42+00:00",
+        "ended_at": "2026-10-29T09:12:47+00:00",
+        "metrics": {
+          "cases": 6,
+          "checked": 6,
+          "failures": 0
+        }
+      },
+      {
+        "run": "e275b229089e",
+        "experiment": "ce9bd19e1968",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "16"
+          ]
+        },
+        "started_at": "2026-10-29T09:12:42+00:00",
+        "ended_at": "2026-10-29T09:12:47+00:00",
+        "metrics": {
+          "cases": 6,
+          "checked": 6,
+          "failures": 0
+        }
+      }
+    ],
+    "wrong_answers": 0
+  },
+  "python_tests": {
+    "cases": 32,
+    "receipt_sha256": "01b062214c128ce7599516410ee52298773e25ecbcf75a114f9bca67cb9dafd3",
+    "leases": [
+      {
+        "run": "b17ca1771812",
+        "experiment": "d198d80518ed",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "1"
+          ]
+        },
+        "started_at": "2026-10-29T09:01:31+00:00",
+        "ended_at": "2026-10-29T09:01:50+00:00",
+        "metrics": {
+          "completed": 1,
+          "exit_code": 0
+        }
+      }
+    ]
+  },
+  "proof_reconstruction": "All mathematical split/safety closers passed unchanged. Five outer parent routes per backend were adapted to controller-required LLM/aggressive entry; immutable generated candidates and explicit route repair records remain beside each finalized report.",
+  "scope": "Complete external pending-VC coverage for the unchanged signed recursive gcd contract. QCP internal symbolic-executor SMT remains common and opaque. Repeated gcd workflows do not increase unique program coverage. These interactive workflows qualify functionality, not timed end-to-end superiority.",
+  "above_z3": false,
+  "protected_sets_used": false,
+  "extra_current_main_server_archive_required": false
+}
