@@ -145,3 +145,66 @@ TEST_CASE("subtropical: materialize builds s * base^a") {
     CHECK(m.at(X) == mpq_class(-9));               // -(3^2)
     CHECK(m.at(Y) == mpq_class(1, 3));             // +(3^-1)
 }
+
+TEST_CASE("subtropical: shared linear rows withdraw failed frame bounds") {
+    // The first frame x needs a_x > a_y and a_x > 0, contradicting 1-x.
+    // The sibling frame y works with a_y > 0 > a_x. A failed child must not
+    // retain its bounds, and the repeated 1-x row must remain reusable.
+    std::vector<SubtropicalConstraint> cs = {
+        {{mono(1, {{X, 1}}), mono(1, {{Y, 1}}), mono(-1, {})}, Relation::Gt},
+        {{mono(1, {}), mono(-1, {{X, 1}})}, Relation::Gt},
+        {{mono(1, {{X, 1}})}, Relation::Gt},
+        {{mono(1, {{Y, 1}})}, Relation::Gt}};
+    SubtropicalSatFinder::Statistics stats;
+    const auto r = SubtropicalSatFinder{}.find(cs, {X, Y}, &stats);
+    REQUIRE(r.found);
+    CHECK(witnessValidatesAtSomeBase(r, cs, {X, Y}));
+    CHECK(stats.contexts == 1);
+    CHECK(stats.backtracks > 0);
+    CHECK(stats.reusedRows > 0);
+    CHECK(stats.parityConflicts > 0);
+}
+
+TEST_CASE("subtropical: mixed dense direction rows retain a feasible common ray") {
+    std::vector<VarId> vars;
+    for (unsigned i = 1; i <= 8; ++i) vars.push_back(VarId{i});
+    std::vector<SubtropicalConstraint> cs;
+    unsigned state = 947;
+    for (unsigned c = 0; c < 8; ++c) {
+        SubtropicalConstraint constraint{{}, Relation::Gt};
+        std::vector<std::pair<VarId, int>> frame;
+        for (auto var : vars) frame.emplace_back(var, 4);
+        constraint.monomials.push_back(mono(1, frame));
+        for (unsigned j = 0; j < 6; ++j) {
+            std::vector<int> exponents(vars.size(), 0);
+            for (unsigned degree = 0; degree < 31; ++degree) {
+                state = state * 1664525U + 1013904223U;
+                ++exponents[(state >> 16) % vars.size()];
+            }
+            std::vector<std::pair<VarId, int>> powers;
+            for (size_t i = 0; i < vars.size(); ++i)
+                if (exponents[i]) powers.emplace_back(vars[i], exponents[i]);
+            constraint.monomials.push_back(mono(-1, powers));
+        }
+        cs.push_back(std::move(constraint));
+    }
+    for (auto var : vars) cs.push_back({{mono(1, {{var, 1}})}, Relation::Gt});
+    SubtropicalSatFinder::Statistics stats;
+    const auto r = SubtropicalSatFinder{}.find(cs, vars, &stats);
+    REQUIRE(r.found);
+    CHECK(witnessValidatesAtSomeBase(r, cs, vars));
+    CHECK(stats.contexts == 1);
+    CHECK_FALSE(stats.exhausted);
+}
+
+TEST_CASE("subtropical: shared linear allocation limits leave the decision open") {
+    const std::vector<SubtropicalConstraint> cs = {
+        {{mono(1, {{X, 2}}), mono(-2, {})}, Relation::Gt}};
+    SubtropicalSatFinder::Config cfg;
+    cfg.linearRowCap = 0;
+    SubtropicalSatFinder::Statistics stats;
+    CHECK_FALSE(SubtropicalSatFinder{cfg}.find(cs, {X}, &stats).found);
+    CHECK(stats.exhausted);
+    CHECK(stats.definitions == 0);
+    CHECK(SubtropicalSatFinder{}.find(cs, {X}).found);
+}

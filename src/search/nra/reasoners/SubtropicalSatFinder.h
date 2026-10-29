@@ -2,6 +2,7 @@
 
 #include "ir/types.h"   // VarId, Relation
 #include <gmpxx.h>
+#include <cstddef>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -20,8 +21,8 @@ namespace xolver {
 // every constraint, the dominating term carries the relation's required sign,
 // then x_i = s_i * B^{a_i} satisfies the whole system for B large enough.
 //
-//   - direction a : a linear-programming feasibility problem (exact, ration­al
-//                   Fourier-Motzkin), one row  <e_f - e_g, a> >= 1  per
+//   - direction a : a linear-programming feasibility problem (one exact, incremental
+//                   GeneralSimplex context), one row  <e_f - e_g, a> >= 1  per
 //                   non-frame monomial g of each constraint (frame f dominates
 //                   with an integer margin).
 //   - signs   s   : a GF(2) parity system. The signed value of frame f is
@@ -77,8 +78,15 @@ public:
         int maxVars = 16;           // skip the whole attempt above this
         int maxConstraints = 64;
         int maxMonomials = 256;     // total across all constraints
-        long fmRowCap = 20000;      // Fourier-Motzkin row blow-up guard
+        long linearRowCap = 20000;  // unique shared linear-row allocation guard
         long searchNodeCap = 50000; // frame-backtracking node budget
+    };
+
+    struct Statistics {
+        long nodes = 0;
+        size_t contexts = 0, frames = 0, definitions = 0, reusedRows = 0;
+        size_t linearChecks = 0, parityConflicts = 0, backtracks = 0;
+        bool exhausted = false;
     };
 
     SubtropicalSatFinder() = default;
@@ -87,7 +95,7 @@ public:
     // Search for a witness direction. CANDIDATE ONLY — caller must validate the
     // materialized assignment exactly.
     SubtropicalResult find(const std::vector<SubtropicalConstraint>& constraints,
-                           const std::vector<VarId>& vars) const;
+                           const std::vector<VarId>& vars, Statistics* statistics = nullptr) const;
 
     // Build a concrete rational assignment  x_i = s_i * base^{a_i}  from a
     // direction. `base` should be an integer > 1. Variables in `vars` not pinned

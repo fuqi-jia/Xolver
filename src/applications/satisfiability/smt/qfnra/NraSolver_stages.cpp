@@ -237,7 +237,21 @@ std::optional<TheoryCheckResult> NraSolver::stageSubtropical(TheoryLemmaStorage&
     std::vector<VarId> vars(varSet.begin(), varSet.end());
 
     SubtropicalSatFinder finder;
-    SubtropicalResult r = finder.find(subCons, vars);
+    SubtropicalSatFinder::Statistics stats;
+    const auto started = std::chrono::steady_clock::now();
+    SubtropicalResult r = finder.find(subCons, vars, &stats);
+    const auto profile = config::read<config::ReadKind::ProfilePath>("ARITH_STAGE_PROF", "/tmp/xolver_stageprof.txt");
+    if (!profile.empty()) {
+        std::ofstream out(profile.string() + ".subtropical.log", std::ios::app);
+        out << "variables=" << vars.size() << " constraints=" << subCons.size()
+            << " contexts=" << stats.contexts << " nodes=" << stats.nodes
+            << " frames=" << stats.frames << " definitions=" << stats.definitions
+            << " reused_rows=" << stats.reusedRows << " checks=" << stats.linearChecks
+            << " parity_conflicts=" << stats.parityConflicts << " backtracks=" << stats.backtracks
+            << " exhausted=" << stats.exhausted << " found=" << r.found << " us="
+            << std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - started).count() << '\n';
+    }
     if (!r.found) return std::nullopt;
 
     // Guard against pathological magnitudes (base^exp blow-up). Sound to skip.
