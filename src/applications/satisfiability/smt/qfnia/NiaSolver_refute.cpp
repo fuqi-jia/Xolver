@@ -1,5 +1,6 @@
 #include "base/RuntimeConfig.h"
 #include "search/refute/SignDefinitenessRefuter.h"
+#include "search/refute/PolynomialSignClosure.h"
 #include "applications/satisfiability/smt/qfnia/NiaSolver.h"
 #include <algorithm>
 #include "search/dl/DifferenceGraph.h"
@@ -56,6 +57,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageSignRefute(TheoryLemmaStorage&,
         if (polynomial) constraints.push_back({std::move(*polynomial), source.rel, source.reason});
     }
     auto conflict = refuteBySignDefiniteness(constraints);
+    if (!conflict) conflict = refuteByPolynomialSignClosure(constraints);
     if (!conflict) conflict = refuteByQuadraticSigns(constraints);
     if (!conflict) return std::nullopt;
     return TheoryCheckResult::mkConflict(TheoryConflict{std::move(*conflict)});

@@ -21,6 +21,7 @@
 #include "search/icp/IcpTypes.h"
 #include "search/nra/core/CdcacCommon.h"                 // #63 relationHolds() for rational-fallback
 #include "search/refute/SignDefinitenessRefuter.h"       // sign-definiteness refutation
+#include "search/refute/PolynomialSignClosure.h"
 #include "search/nra/core/CdcacCore.h"
 #include "search/nra/core/CdcacConstraint.h"
 #include "search/nra/engine/ReasonManager.h"
@@ -182,6 +183,7 @@ std::optional<TheoryCheckResult> NraSolver::stageSignRefute(TheoryLemmaStorage& 
         cs.push_back({std::move(*rp), c.rel, c.reason});
     }
     auto conflict = refuteBySignDefiniteness(cs);
+    if (!conflict && effort == TheoryEffort::Full) conflict = refuteByPolynomialSignClosure(cs);
     if (!conflict && effort == TheoryEffort::Full) {
         QuadraticSignStatistics stats;
         const auto started = std::chrono::steady_clock::now();
