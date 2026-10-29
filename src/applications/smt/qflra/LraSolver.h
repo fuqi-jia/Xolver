@@ -170,21 +170,6 @@ private:
     // Buffer of this check's entailment propagations.
     std::vector<TheoryLemma> entailmentProps_;
 
-    // cb_decide feasibility-eval cache (v2): per atom satVar, the STATIC linear
-    // form as (var-NAME, double coeff) pairs + double rhs + relation, resolved
-    // ONCE from the atom record (the expensive findBySatVar / payload step).
-    // Eval resolves each var's simplex index FRESH via an O(1) findVarIndex —
-    // we cache the resolution, never the index, so a lazily-registered or
-    // backtracked var can't produce a stale out-of-bounds index. Atoms whose
-    // vars aren't in the simplex yet are skipped O(1) (first missing var exits).
-    struct AtomEvalForm {
-        bool isLinear = false;  // resolvable bound atom?
-        std::vector<std::pair<std::string, double>> terms;  // (var name, coeff)
-        double rhs = 0.0;
-        Relation rel = Relation::Leq;
-    };
-    std::unordered_map<SatVar, AtomEvalForm> atomEvalCache_;
-
 #ifdef XOLVER_LRA_PROFILE
     struct ProfileStats {
         int solveCount = 0;

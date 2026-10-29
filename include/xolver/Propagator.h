@@ -24,6 +24,17 @@ enum class CheckEffort { Standard, Full };
 /// Outcome of a theory consistency check.
 enum class CheckOutcome { Consistent, Conflict, Lemma, Unknown };
 
+/// Source of a decision when decide() supplies no usable explicit literal.
+/// SatActivity delegates variable and phase selection to the SAT backend over
+/// its Boolean abstraction (which also contains theory atoms). TheoryModel
+/// preserves Xolver's existing model-directed theory-atom selection.
+enum class DecisionSource { TheoryModel, SatActivity };
+
+struct DecisionContext {
+    uint32_t level = 0;
+    uint64_t requests = 0;
+};
+
 /**
  * User Propagator — a "one-step" control surface over the CDCL(T) search,
  * exposing BOTH levels of the loop:
@@ -68,6 +79,14 @@ public:
     /// 0 to defer to Xolver. Must name an UNASSIGNED variable; an already-fixed
     /// pick is safely ignored. Pure heuristic.
     virtual int decide() { return 0; }
+    /// Select the fallback for this decision request. Explicit, unassigned
+    /// decide() picks take priority. The default preserves the existing search.
+    /// This changes search order only: all theory and complete-model checks
+    /// still run. The borrowed context is valid only during this callback.
+    virtual DecisionSource decisionSource(const DecisionContext& context) {
+        (void)context;
+        return DecisionSource::TheoryModel;
+    }
 
     // ---- SMT / theory level ----------------------------------------------
     /// A theory atom `atom` (SAT var `var`) was fixed to `value`.

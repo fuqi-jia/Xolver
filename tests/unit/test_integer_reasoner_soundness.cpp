@@ -69,6 +69,74 @@ struct Fixture {
 };
 }
 
+TEST_CASE("Linear model phase hints: strict endpoints respect infinitesimals") {
+    const std::vector<Relation> relations{Relation::Eq,Relation::Neq,Relation::Lt,
+        Relation::Leq,Relation::Gt,Relation::Geq};
+    for (bool lower : {true,false}) for (int sign : {-1,1}) {
+        CAPTURE(lower);
+        CAPTURE(sign);
+        Allocator allocator;
+        TheoryAtomRegistry registry;
+        registry.setContext(&allocator,&allocator);
+        LraSolver solver;
+        solver.setRegistry(&registry);
+        const mpq_class endpoint(lower ? 2 : -2);
+        auto atom = [&](const LinearFormKey& lhs, Relation relation, const mpq_class& rhs) {
+            const auto variable = allocator.newVar();
+            registry.registerParsedTheoryAtom(variable,NullExpr,TheoryId::LRA,
+                LinearAtomPayload{lhs,relation,RealValue::fromMpq(rhs)});
+            return variable;
+        };
+        const auto premise = atom({{{"x",1}}},lower ? Relation::Gt : Relation::Lt,endpoint);
+        const mpq_class coefficient(3*sign), rhs = coefficient*endpoint;
+        std::vector<SatVar> targets;
+        for (auto relation : relations) targets.push_back(atom({{{"x",coefficient}}},relation,rhs));
+        solver.assertLit(*registry.findBySatVar(premise),true,0,SatLit::positive(premise));
+        TheoryLemmaDatabase database;
+        REQUIRE(solver.check(database,TheoryEffort::Standard).kind == TheoryCheckResult::Kind::Consistent);
+        const auto model = solver.getModel();
+        REQUIRE(model.has_value());
+        const mpq_class value(model->assignments.at("x"));
+        REQUIRE(compare(lower ? Relation::Gt : Relation::Lt,value,endpoint));
+        for (size_t i = 0; i < relations.size(); ++i) {
+            const auto evaluated = solver.evalAtomAtModel(targets[i]);
+            REQUIRE(evaluated.has_value());
+            CHECK(*evaluated == compare(relations[i],coefficient*value,rhs));
+        }
+    }
+}
+
+TEST_CASE("Linear model phase hints: large rational endpoints preserve unit differences") {
+    Allocator allocator;
+    TheoryAtomRegistry registry;
+    registry.setContext(&allocator,&allocator);
+    LraSolver solver;
+    solver.setRegistry(&registry);
+    const mpz_class integer = mpz_class(1)<<200;
+    const mpq_class endpoint(integer), actual = endpoint+1;
+    const LinearFormKey x{{{"x",1}}};
+    const auto premise = allocator.newVar();
+    registry.registerParsedTheoryAtom(premise,NullExpr,TheoryId::LRA,
+        LinearAtomPayload{x,Relation::Eq,RealValue::fromMpq(actual)});
+    std::vector<SatVar> targets;
+    const std::vector<Relation> relations{Relation::Eq,Relation::Neq,Relation::Lt,
+        Relation::Leq,Relation::Gt,Relation::Geq};
+    for (auto relation : relations) {
+        const auto variable = allocator.newVar();
+        registry.registerParsedTheoryAtom(variable,NullExpr,TheoryId::LRA,
+            LinearAtomPayload{x,relation,RealValue::fromMpq(endpoint)});
+        targets.push_back(variable);
+    }
+    solver.assertLit(*registry.findBySatVar(premise),true,0,SatLit::positive(premise));
+    TheoryLemmaDatabase database;
+    REQUIRE(solver.check(database,TheoryEffort::Standard).kind == TheoryCheckResult::Kind::Consistent);
+    for (size_t i = 0; i < relations.size(); ++i) {
+        const auto evaluated = solver.evalAtomAtModel(targets[i]);
+        REQUIRE(evaluated.has_value());
+        CHECK(*evaluated == compare(relations[i],actual,endpoint));
+    }
+}
+
 TEST_CASE("LiaSolver: partial checks leave integer search to full effort") {
     for (int divisor : {2, 3}) for (int sign : {-1, 1}) {
         CAPTURE(divisor);

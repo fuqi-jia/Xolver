@@ -10,13 +10,102 @@
 #include <doctest/doctest.h>
 #include "contracts/SatSolver.h"
 #include "search/sat/CadicalBackend.h"
+#include "search/sat/CadicalTheoryPropagator.h"
+#include "search/coordination/TheoryLemmaDatabase.h"
 #include <algorithm>
 #include <stdexcept>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <limits>
 
 using namespace xolver;
+
+TEST_CASE("SAT: decision sources preserve explicit steering and mandatory model checks") {
+    struct Lookup : TheoryAtomLookup {
+        TheoryAtomRecord atom{};
+        const TheoryAtomRecord* findBySatVar(SatVar v) const override {
+            return v == atom.satVar ? &atom : nullptr;
+        }
+        std::vector<SatVar> linearAtomVars() const override { return {atom.satVar}; }
+        std::vector<SatVar> allAtomVars() const override { return {atom.satVar}; }
+    } registry;
+    struct Callbacks : TheoryPropagationCallbacks {
+        TheoryAssignmentView* view = nullptr;
+        SatVar truth = 0;
+        int evaluations = 0, fullChecks = 0;
+        void assertTheoryLit(const TheoryAtomRecord&, SatLit, int) override {}
+        void backtrackToLevel(int) override {}
+        void setAssignmentView(TheoryAssignmentView* v) override { view = v; }
+        std::optional<bool> evalTheoryAtom(SatVar) override { ++evaluations; return true; }
+        TheoryCheckResult check(TheoryLemmaStorage&, TheoryEffort effort) override {
+            if (effort == TheoryEffort::Full) {
+                ++fullChecks;
+                if (!view || view->value(SatLit::positive(truth)) != LitValue::True)
+                    return TheoryCheckResult::mkLemma(TheoryLemma{{SatLit::positive(truth)}});
+            }
+            return TheoryCheckResult::consistent();
+        }
+    } theories;
+    struct Selection : Propagator {
+        DecisionSource source = DecisionSource::TheoryModel;
+        DecisionContext last;
+        int pick = 0, sourceCalls = 0;
+        int decide() override { return pick; }
+        DecisionSource decisionSource(const DecisionContext& c) override {
+            last = c; ++sourceCalls; return source;
+        }
+    } selection;
+    TheoryLemmaDatabase lemmas;
+    CadicalBackend backend;
+    const auto p = backend.newVar(), q = backend.newVar(), r = backend.newVar();
+    registry.atom.satVar = p;
+    registry.atom.theory = TheoryId::LRA;
+    // p represents the valid arithmetic atom 0 = 0.
+    registry.atom.payload = LinearAtomPayload{{}, Relation::Eq, RealValue::fromInt(0)};
+    theories.truth = p;
+    CadicalTheoryPropagator propagator{registry, theories, lemmas, backend};
+    backend.connectPropagator(&propagator);
+    struct Disconnect {
+        CadicalBackend& backend;
+        ~Disconnect() { backend.disconnectPropagator(); }
+    } disconnect{backend};
+    backend.addObservedVar(p);
+    backend.addObservedVar(q);
+
+    SUBCASE("default, native SAT, explicit choices, and backtracking") {
+        CHECK(propagator.cb_decide() == static_cast<int>(p));
+        propagator.setUserPropagator(&selection);
+        CHECK(propagator.cb_decide() == static_cast<int>(p));
+        const auto previousEvaluations = theories.evaluations;
+        selection.source = DecisionSource::SatActivity;
+        propagator.notify_new_decision_level();
+        CHECK(propagator.cb_decide() == 0);
+        CHECK(theories.evaluations == previousEvaluations);
+        CHECK(selection.last.level == 1);
+        CHECK(selection.last.requests == 3);
+        selection.pick = -static_cast<int>(q);
+        const auto previousSourceCalls = selection.sourceCalls;
+        CHECK(propagator.cb_decide() == selection.pick);
+        CHECK(selection.sourceCalls == previousSourceCalls);
+        propagator.notify_assignment({selection.pick});
+        CHECK(propagator.cb_decide() == 0); // already assigned explicit pick
+        propagator.notify_backtrack(0);
+        CHECK(propagator.cb_decide() == selection.pick);
+        selection.pick = std::numeric_limits<int>::min();
+        CHECK(propagator.cb_decide() == 0); // cannot negate INT_MIN
+    }
+    SUBCASE("native SAT still rejects theory-invalid complete models") {
+        selection.source = DecisionSource::SatActivity;
+        propagator.setUserPropagator(&selection);
+        backend.addClause({SatLit::positive(q), SatLit::positive(r)});
+        backend.setDefaultPhase(p, false);
+        backend.setDeadline(std::chrono::steady_clock::now() + std::chrono::seconds(5));
+        REQUIRE((backend.solve() == SatSolver::SolveResult::Sat));
+        CHECK(backend.value(p));
+        CHECK(theories.fullChecks > 0);
+    }
+}
 
 #ifdef XOLVER_ENABLE_PROOFS
 TEST_CASE("SAT: preprocessing theory clauses remain explicit proof assumptions") {
