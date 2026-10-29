@@ -60,7 +60,7 @@ Answer InvariantSolver::solve(const TransitionSystem &system) {
         auto invariantNext = transition.next(system.invariant);
         auto inductiveAssumptions = system.transition;
         inductiveAssumptions.push_back(system.invariant);
-        return verification::Solver(decide_).solve(
+        return ::xolver::applications::verification::model_checking::Solver(decide_).solve(
             {{{"initiation", system.initial, system.invariant},
               {"consecution", inductiveAssumptions, invariantNext},
               {"safety", {system.invariant}, system.safety}}});

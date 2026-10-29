@@ -41,7 +41,7 @@ RangeAssistedAnswer RangeAssistedSolver::solve(const Obligation &o) {
             return answer;
         }
     }
-    static_cast<Answer &>(answer) = verification::Solver(decide_).solve({{o}});
+    static_cast<Answer &>(answer) = ::xolver::applications::verification::model_checking::Solver(decide_).solve({{o}});
     return answer;
 }
 } // namespace xolver::applications::verification::model_checking
