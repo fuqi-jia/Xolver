@@ -37,7 +37,7 @@
     "cpu_ids": [
       2
     ],
-    "memory_gib": 16,
+    "memory_gib": 20,
     "single_build_tree": "/pub/data/jiafq/xolver/build",
     "build_write_lock": "build/.writer.lock EX",
     "optional_backends_enabled": false,
