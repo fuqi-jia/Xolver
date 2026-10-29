@@ -90,12 +90,9 @@ public:
     bool cb_check_found_model(const std::vector<int>& model) override;
     int cb_propagate() override;
 
-    // Behavior-neutral decision-steering PROBE (returns 0 = decline; CaDiCaL
-    // decides as normal, so OFF==ON). Counts decision requests and, via the
-    // first assignment after each new decision level, buckets decisions into
-    // theory bound-atoms vs boolean-structure literals. Periodic stderr dump
-    // gated by env XOLVER_DECIDE_PROBE. Measures whether decision-steering has
-    // any leverage before building a real cb_decide steering heuristic.
+    // Explicit user decisions take priority, followed by the requested source.
+    // The default uses theory-model phases; return 0 delegates to CaDiCaL.
+    // Optional diagnostics count the resulting Boolean/theory decisions.
     int cb_decide() override;
 
     bool cb_has_external_clause(bool& is_forgettable) override;

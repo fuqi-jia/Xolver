@@ -11,6 +11,7 @@
 #include <vector>
 #include <cstdlib>
 #include <variant>
+#include <limits>
 
 // Inline replacement for theory/core/DebugTrace.h to avoid sat/ -> theory/ include.
 #define NO_DBG if (true) {} else std::cerr
@@ -250,7 +251,7 @@ int CadicalTheoryPropagator::cb_decide() {
     if (user_) {
         maybeUserSetup();
         int d = user_->decide();
-        if (d != 0) {
+        if (d != 0 && d != std::numeric_limits<int>::min()) {
             // CaDiCaL requires external decisions over UNASSIGNED variables; a
             // user can't always know the live trail, so silently ignore an
             // already-assigned pick (defer to the built-in heuristics) instead
@@ -260,6 +261,13 @@ int CadicalTheoryPropagator::cb_decide() {
                 ++steeredDecisions_;
                 return d;
             }
+        }
+        const DecisionContext context{static_cast<uint32_t>(currentLevel_),
+                                      static_cast<uint64_t>(decideCalls_)};
+        if (user_->decisionSource(context) == DecisionSource::SatActivity) {
+            // IPASIR-UP's zero result asks the SAT backend to select its own
+            // Boolean variable and phase. It bypasses no theory check.
+            return 0;
         }
     }
 
