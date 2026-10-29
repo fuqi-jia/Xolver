@@ -389,7 +389,10 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         if (solvers_.empty()) {
             return TheoryCheckResult::consistent();
         }
-        auto activeLinearContext = collectActiveLinearConstraints();
+        const bool needsLinearContext = std::any_of(solvers_.begin(), solvers_.end(),
+            [](const auto& solver) { return solver->needsActiveLinearContext(); });
+        auto activeLinearContext = needsLinearContext
+            ? collectActiveLinearConstraints() : std::vector<ActiveLinearConstraint>{};
         for (auto& solver : solvers_) {
             solver->setActiveLinearContext(&activeLinearContext);
             auto tr = solver->check(lemmaDb, effort);
