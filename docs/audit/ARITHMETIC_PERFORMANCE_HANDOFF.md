@@ -1874,7 +1874,7 @@ three separate diagnostic repeats complete in 49.403, 47.361 and 47.227 seconds,
 with independent exported-model replay; their timings do not replace R664.
 
 Same-round Z3 has **115 verified / 124 raw** decisions. Its nine unconfirmed
-UNSAT results remain excluded. The existing input115 modular certificate was
+results (eight UNSAT and one SAT) remain excluded. The existing input115 modular certificate was
 rechecked against the identical input hash before counting that UNSAT for either
 Xolver version; original measurements are preserved. This is a local improvement,
 with a remaining 20-result verified gap to Z3. Neither protected set was evaluated.

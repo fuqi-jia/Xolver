@@ -266,6 +266,6 @@
     "protected_sets_evaluated": false,
     "z3_superiority_established": false,
     "server_current_main_archive_required": false,
-    "note": "Only case59 is newly solved. The 9 unconfirmed Z3 UNSAT decisions remain excluded. Existing input115 certificate was rechecked without changing timed observations."
+    "note": "Only case59 is newly solved. The 9 unconfirmed Z3 decisions (8 UNSAT and 1 SAT) remain excluded. Existing input115 certificate was rechecked without changing timed observations."
   }
 }
