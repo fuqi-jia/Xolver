@@ -133,6 +133,11 @@ TEST_CASE("Polynomial sign closure: known rational models survive generated sign
         for (VarId id = 0; id < 3; ++id)
             point[id] = mpq_class(static_cast<int>(random() % 9) - 4, static_cast<int>(random() % 3) + 1);
         std::vector<SignRefuteConstraint> constraints;
+        for (VarId id = 0; id < 3; ++id) {
+            constraint(constraints, variable(id), point[id] >= 0 ? Relation::Geq : Relation::Leq);
+            if (point[id] != 0 && random() % 2)
+                constraint(constraints, variable(id), Relation::Neq);
+        }
         for (int row = 0; row < 8; ++row) {
             Polynomial polynomial;
             for (int term = 0; term < 5; ++term) {

@@ -357,6 +357,7 @@ public:
     void run(const std::vector<SignRefuteConstraint>& constraints) {
         if (constraints.size() > 128) throw ResourceExhausted("sign closure input allocation exhausted");
         for (const auto& constraint : constraints) add(constraint.poly, signsOf(constraint.rel), {constraint.reason});
+        stats_.inferredFacts = 0;
         for (size_t round = 0; round < 32; ++round) {
             ++stats_.rounds;
             changed_ = false;
