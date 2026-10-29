@@ -16,7 +16,6 @@
 #include <algorithm>
 #include <cassert>
 #include <chrono>
-#include <cmath>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
@@ -89,7 +88,6 @@ void LraSolver::onReset() {
     theoryTrail_.clear();
     appliedCursor_ = 0;
     pendingConflict_.reset();
-    atomEvalCache_.clear();
     gs_.resetActiveBounds();
 }
 
@@ -801,105 +799,10 @@ std::vector<TheoryLemma> LraSolver::takeEntailmentPropagations() {
 }
 
 std::optional<bool> LraSolver::evalAtomAtModel(SatVar v) {
-    // Build the STATIC form once (expensive findBySatVar + payload extraction).
-    auto cit = atomEvalCache_.find(v);
-    if (cit == atomEvalCache_.end()) {
-        AtomEvalForm form;
-        const TheoryAtomRecord* rec = registry_ ? registry_->findBySatVar(v) : nullptr;
-        if (rec && std::holds_alternative<LinearAtomPayload>(rec->payload)) {
-            const auto& p = std::get<LinearAtomPayload>(rec->payload);
-            if (p.rhs.isRational()) {
-                form.isLinear = true;
-                form.rel = p.rel;
-                form.rhs = p.rhs.asRational().get_d();
-                form.terms.reserve(p.lhs.terms.size());
-                for (const auto& t : p.lhs.terms) {
-                    form.terms.push_back({t.first, t.second.get_d()});
-                }
-            }
-        }
-        cit = atomEvalCache_.emplace(v, std::move(form)).first;
-    }
-    const AtomEvalForm& f = cit->second;
-    if (!f.isLinear) return std::nullopt;
-
-    // Resolve indices FRESH (O(1) per term). A var not yet in the simplex (or
-    // gone after backtrack) -> skip O(1). Caching the name not the index keeps
-    // this crash-safe under lazy registration. double arithmetic, zero alloc.
-    double s = 0.0;
-    for (const auto& term : f.terms) {
-        int idx = manager_.findVarIndex(term.first);
-        if (idx < 0) return std::nullopt;  // pending: var not registered yet
-        s += term.second * gs_.value(idx).a.get_d();
-    }
-    bool fast;
-    switch (f.rel) {
-        case Relation::Leq: fast = s <= f.rhs; break;
-        case Relation::Lt:  fast = s <  f.rhs; break;
-        case Relation::Geq: fast = s >= f.rhs; break;
-        case Relation::Gt:  fast = s >  f.rhs; break;
-        case Relation::Eq:  fast = s == f.rhs; break;
-        case Relation::Neq: fast = s != f.rhs; break;
-        default:            return std::nullopt;
-    }
-    if (config::read<config::ReadKind::Presence>("XOLVER_SELFPROF")) {
-        struct Trace {
-            const LraSolver* owner = nullptr;
-            uint64_t calls = 0, sampled = 0, mismatches = 0;
-            uint64_t deltaMismatches = 0, roundingMismatches = 0, nonfinite = 0, exactUs = 0;
-        };
-        static thread_local Trace trace;
-        if (trace.owner != this) { trace = {}; trace.owner = this; }
-        ++trace.calls;
-        if (trace.sampled < 4096 || trace.calls % 1024 == 0) {
-            const auto started = std::chrono::steady_clock::now();
-            const auto* record = registry_->findBySatVar(v);
-            const auto* atom = record ? std::get_if<LinearAtomPayload>(&record->payload) : nullptr;
-            if (atom && atom->rhs.isRational()) {
-                DeltaRational exactValue;
-                bool available = true;
-                for (const auto& [name, coefficient] : atom->lhs.terms) {
-                    const auto index = manager_.findVarIndex(name);
-                    if (index < 0) { available = false; break; }
-                    exactValue += coefficient * gs_.value(index);
-                }
-                if (available) {
-                    const int base = mpq_cmp(exactValue.a.get_mpq_t(), atom->rhs.asRational().get_mpq_t());
-                    const int delta = mpq_sgn(exactValue.b.get_mpq_t());
-                    const auto truth = [&](int sign) {
-                        switch (f.rel) {
-                            case Relation::Leq: return sign <= 0;
-                            case Relation::Lt: return sign < 0;
-                            case Relation::Geq: return sign >= 0;
-                            case Relation::Gt: return sign > 0;
-                            case Relation::Eq: return sign == 0;
-                            case Relation::Neq: return sign != 0;
-                        }
-                        return false;
-                    };
-                    const bool exact = truth(base ? base : delta);
-                    ++trace.sampled;
-                    trace.mismatches += fast != exact;
-                    trace.deltaMismatches += truth(base) != exact;
-                    trace.roundingMismatches += fast != truth(base);
-                    trace.nonfinite += !std::isfinite(s) || !std::isfinite(f.rhs);
-                    trace.exactUs += std::chrono::duration_cast<std::chrono::microseconds>(
-                        std::chrono::steady_clock::now() - started).count();
-                    if (fast != exact && trace.mismatches <= 16)
-                        std::cerr << "[LRA-PHASE-MISMATCH] var=" << v << " relation=" << int(f.rel)
-                            << " base_cmp=" << base << " delta_sign=" << delta
-                            << " fast=" << fast << " exact=" << exact << '\n';
-                    if (trace.sampled <= 4 || trace.sampled % 128 == 0)
-                        std::cerr << "[LRA-PHASE-CENSUS] calls=" << trace.calls
-                            << " sampled=" << trace.sampled << " mismatches=" << trace.mismatches
-                            << " delta_mismatches=" << trace.deltaMismatches
-                            << " rounding_mismatches=" << trace.roundingMismatches
-                            << " nonfinite=" << trace.nonfinite << " exact_us=" << trace.exactUs << '\n';
-                }
-            }
-        }
-    }
-    return fast;
+    const auto* record = registry_ ? registry_->findBySatVar(v) : nullptr;
+    if (!record) return std::nullopt;
+    const auto* atom = std::get_if<LinearAtomPayload>(&record->payload);
+    return atom ? manager_.evaluateAtModel(gs_, *atom) : std::nullopt;
 }
 
 std::optional<RealValue> LraSolver::sharedTermArithValue(SharedTermId s) const {

@@ -25,25 +25,7 @@ std::optional<bool> LiaSolver::evalAtomAtModel(SatVar variable) {
     const auto* record = registry_ ? registry_->findBySatVar(variable) : nullptr;
     if (!record) return std::nullopt;
     const auto* atom = std::get_if<LinearAtomPayload>(&record->payload);
-    if (!atom || !atom->rhs.isRational()) return std::nullopt;
-    DeltaRational value;
-    for (const auto& [name, coefficient] : atom->lhs.terms) {
-        const int index = manager_.findVarIndex(name);
-        if (index < 0) return std::nullopt;
-        value += coefficient * gs_.value(index);
-    }
-    const DeltaRational rhs(atom->rhs.asRational());
-    // A backtrackable phase hint only, never a deduction or a SAT answer.
-    // Exact evaluation avoids overflow and preserves strict infinitesimals.
-    switch (atom->rel) {
-    case Relation::Eq: return value == rhs;
-    case Relation::Neq: return value != rhs;
-    case Relation::Lt: return value < rhs;
-    case Relation::Leq: return value <= rhs;
-    case Relation::Gt: return value > rhs;
-    case Relation::Geq: return value >= rhs;
-    }
-    return std::nullopt;
+    return atom ? manager_.evaluateAtModel(gs_, *atom) : std::nullopt;
 }
 
 // NOTE: This translation unit was split out of LiaSolver.cpp for readability.

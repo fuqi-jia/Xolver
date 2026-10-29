@@ -83,6 +83,12 @@ public:
     // the name has never been registered. Does NOT create a variable.
     int findVarIndex(const std::string& name) const;
 
+    // Interpret a linear atom at the current simplex point using exact
+    // rational/infinitesimal ordering. Missing coordinates leave the hint open.
+    // A point value is a backtrackable phase hint, not an entailment or verdict.
+    std::optional<bool> evaluateAtModel(
+        const GeneralSimplex& gs, const LinearAtomPayload& atom) const;
+
     // Reverse of getOrCreateAuxVar: if `aux` is an auxiliary variable created
     // for some constraint, recover its defining form (aux = Σ lhs - rhs over
     // ORIGINAL variable names). Returns false for original (non-aux) vars. Used

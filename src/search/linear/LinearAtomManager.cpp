@@ -31,6 +31,27 @@ int LinearAtomManager::findVarIndex(const std::string& name) const {
     return it != varToIndex_.end() ? it->second : -1;
 }
 
+std::optional<bool> LinearAtomManager::evaluateAtModel(
+    const GeneralSimplex& gs, const LinearAtomPayload& atom) const {
+    if (!atom.rhs.isRational()) return std::nullopt;
+    DeltaRational value;
+    for (const auto& [name, coefficient] : atom.lhs.terms) {
+        const int index = findVarIndex(name);
+        if (index < 0 || index >= gs.numVars()) return std::nullopt;
+        value += coefficient * gs.value(index);
+    }
+    const DeltaRational rhs(atom.rhs.asRational());
+    switch (atom.rel) {
+        case Relation::Eq: return value == rhs;
+        case Relation::Neq: return value != rhs;
+        case Relation::Lt: return value < rhs;
+        case Relation::Leq: return value <= rhs;
+        case Relation::Gt: return value > rhs;
+        case Relation::Geq: return value >= rhs;
+    }
+    return std::nullopt;
+}
+
 int LinearAtomManager::getOrCreateAuxVar(GeneralSimplex& gs,
                                           const LinearFormKey& lhs,
                                           const mpq_class& rhs) {
