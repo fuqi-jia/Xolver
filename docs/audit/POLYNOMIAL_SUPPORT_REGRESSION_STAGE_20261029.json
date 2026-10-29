@@ -1,0 +1,1038 @@
+{
+  "schema": 1,
+  "summary": {
+    "cases": 160,
+    "binaries": {
+      "baseline": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r362/xolver",
+        "sha256": "663ea64fbf924b1312d1be498d504b00a10b4f9671799621debcd4638a861988"
+      },
+      "candidate": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r472/xolver",
+        "sha256": "d9ddca9e7eb6ea7fea5b6551bfb3f15b5f0f22275c333eaf5c1aeceabf8c5f72"
+      },
+      "z3": {
+        "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+        "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      }
+    },
+    "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+    "timeout": 60,
+    "memory_bytes": 17179869184,
+    "counts": {
+      "baseline": {
+        "unsat": 41,
+        "decided": 93,
+        "verified_decided": 93,
+        "verified_par2": 8308.594569824636,
+        "raw_par2": 8308.594569824636,
+        "timeout": 66,
+        "sat": 52,
+        "unknown": 1
+      },
+      "candidate": {
+        "unsat": 41,
+        "decided": 94,
+        "verified_decided": 94,
+        "verified_par2": 8243.535450398922,
+        "raw_par2": 8243.535450398922,
+        "timeout": 65,
+        "sat": 53,
+        "unknown": 1
+      },
+      "z3": {
+        "unsat": 58,
+        "decided": 124,
+        "verified_decided": 115,
+        "verified_par2": 5617.040909860283,
+        "raw_par2": 4656.44200880453,
+        "sat": 66,
+        "timeout": 36
+      }
+    },
+    "by_logic": {
+      "QF_LIA": {
+        "baseline": {
+          "unsat": 15,
+          "decided": 32,
+          "verified_decided": 32,
+          "verified_par2": 2075.313875162974,
+          "raw_par2": 2075.313875162974,
+          "timeout": 16,
+          "sat": 17
+        },
+        "candidate": {
+          "unsat": 15,
+          "decided": 34,
+          "verified_decided": 34,
+          "verified_par2": 1906.037582013756,
+          "raw_par2": 1906.037582013756,
+          "timeout": 14,
+          "sat": 19
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 38,
+          "verified_decided": 36,
+          "verified_par2": 1482.1380235031247,
+          "raw_par2": 1281.7696204986423,
+          "sat": 23,
+          "timeout": 10
+        }
+      },
+      "QF_NIA": {
+        "baseline": {
+          "timeout": 23,
+          "decided": 25,
+          "verified_decided": 25,
+          "verified_par2": 2814.202706221491,
+          "raw_par2": 2814.202706221491,
+          "unsat": 12,
+          "sat": 13
+        },
+        "candidate": {
+          "timeout": 23,
+          "decided": 25,
+          "verified_decided": 25,
+          "verified_par2": 2811.964067460969,
+          "raw_par2": 2811.964067460969,
+          "unsat": 12,
+          "sat": 13
+        },
+        "z3": {
+          "unsat": 22,
+          "decided": 34,
+          "verified_decided": 29,
+          "verified_par2": 2312.0945675391704,
+          "raw_par2": 1741.1273903418332,
+          "sat": 12,
+          "timeout": 14
+        }
+      },
+      "QF_LRA": {
+        "baseline": {
+          "timeout": 16,
+          "decided": 16,
+          "verified_decided": 16,
+          "verified_par2": 1963.785820774734,
+          "raw_par2": 1963.785820774734,
+          "sat": 7,
+          "unsat": 9
+        },
+        "candidate": {
+          "timeout": 16,
+          "decided": 16,
+          "verified_decided": 16,
+          "verified_par2": 1953.9689504988492,
+          "raw_par2": 1953.9689504988492,
+          "sat": 7,
+          "unsat": 9
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 26,
+          "verified_decided": 25,
+          "verified_par2": 885.5510073918849,
+          "raw_par2": 816.0218680147082,
+          "sat": 11,
+          "timeout": 6
+        }
+      },
+      "QF_NRA": {
+        "baseline": {
+          "sat": 15,
+          "decided": 20,
+          "verified_decided": 20,
+          "verified_par2": 1455.2921676654369,
+          "raw_par2": 1455.2921676654369,
+          "unsat": 5,
+          "timeout": 11,
+          "unknown": 1
+        },
+        "candidate": {
+          "sat": 14,
+          "decided": 19,
+          "verified_decided": 19,
+          "verified_par2": 1571.5648504253477,
+          "raw_par2": 1571.5648504253477,
+          "unsat": 5,
+          "timeout": 12,
+          "unknown": 1
+        },
+        "z3": {
+          "sat": 20,
+          "decided": 26,
+          "verified_decided": 25,
+          "verified_par2": 937.2573114261031,
+          "raw_par2": 817.5231299493462,
+          "timeout": 6,
+          "unsat": 6
+        }
+      }
+    },
+    "changes": [
+      {
+        "index": 2,
+        "case": "QF_LIA/pb2010/normalized-j9042_5-sat.smt2",
+        "kind": "gained",
+        "truth": "sat",
+        "evidence": [
+          "z3-exported-model-replay",
+          "candidate-exported-model-replay"
+        ],
+        "observations": {
+          "z3": {
+            "result": "sat",
+            "seconds": 8.034133903682232
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.01266139931977
+          },
+          "candidate": {
+            "result": "sat",
+            "seconds": 37.65580934844911
+          }
+        }
+      },
+      {
+        "index": 97,
+        "case": "QF_LIA/pb2010/normalized-j12022_9-sat.smt2",
+        "kind": "gained",
+        "truth": "sat",
+        "evidence": [
+          "candidate-exported-model-replay",
+          "z3-exported-model-replay"
+        ],
+        "observations": {
+          "candidate": {
+            "result": "sat",
+            "seconds": 38.55880966037512
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 11.846987143158913
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.013558665290475
+          }
+        }
+      },
+      {
+        "index": 158,
+        "case": "QF_NRA/20180501-Economics-Mulligan/MulliganEconomicsModel0054a.smt2",
+        "kind": "lost",
+        "truth": "sat",
+        "evidence": [
+          "z3-exported-model-replay",
+          "baseline-exported-model-replay"
+        ],
+        "observations": {
+          "z3": {
+            "result": "sat",
+            "seconds": 0.06630798242986202
+          },
+          "baseline": {
+            "result": "sat",
+            "seconds": 3.697422683238983
+          },
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.01056531816721
+          }
+        }
+      }
+    ],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "unverified": [
+      {
+        "index": 12,
+        "case": "QF_LIA/fft/Sz128_2823.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 24,
+        "case": "QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 27,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 42,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep2a.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 50,
+        "case": "QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_jain_5.i_2_4_3.bpl_7.smt2",
+        "results": {
+          "z3": "unsat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 80,
+        "case": "QF_LIA/cut_lemmas/20-vars/cut_lemma_03_004.smt2",
+        "results": {
+          "z3": "unsat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 114,
+        "case": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 122,
+        "case": "QF_NIA/20250331-elster/D_1.smt2",
+        "results": {
+          "z3": "sat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "model query did not return SAT"
+        }
+      },
+      {
+        "index": 159,
+        "case": "QF_NRA/20161105-Sturm-MGC/mgc_07.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      }
+    ],
+    "scoring": "Correct verdicts require a replayed model or an independent UNSAT decision on the identical input hash; unresolved results receive PAR-2 penalty.",
+    "supplementary_certificate": {
+      "index": 115,
+      "sha256": "48f5d0ca9b19679a48f3248ac1183c31d09e0c198bfda0a70b3b4272b6d1a5ba",
+      "check": {
+        "status": "checked-unsat",
+        "input_sha256": "02a58b11df8951543940a1090a140592e24de41dcaeb6470e7a50d42e804be64",
+        "assertion": 9,
+        "path": [
+          2
+        ],
+        "checked_residues": 12
+      }
+    }
+  },
+  "qualification_sha256": "470d562e549340a69b13db5c66cbc09d4b7f86caca72dac407dfe23a2d76c459",
+  "provenance": {
+    "0": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-000/report.json",
+      "sha256": "e88cc17b8b29387717bdb9ab2732d5b6da4eaccf3de510c085d180a8d4f1c351"
+    },
+    "1": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-001/report.json",
+      "sha256": "5394d0e160968f78abfc9e342c46d3dbc4397e5bbcad4191543b4c04649c37a7"
+    },
+    "2": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-002/report.json",
+      "sha256": "c657bac842a58a0b4ba0647c522d2c32768fdc67e044c9af6ea2c6dde516f7ae"
+    },
+    "3": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-003/report.json",
+      "sha256": "4b438fc1e191403f8eac1e2ef17050055496098068046ffa5e757bc7f4b13ce9"
+    },
+    "4": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-004/report.json",
+      "sha256": "c95281cd29f69219ddcff91da785ee80fb1b4b4cbc299955d9d14ee14ab7d642"
+    },
+    "5": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-005/report.json",
+      "sha256": "ec4bdb8487123e4393c82eed1d9c0f8c3412afb41c2d341f38ec9a0b17909776"
+    },
+    "6": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-006/report.json",
+      "sha256": "a465453032bfd276788352e86e8b251fb2a0fdeeec80b264278252255d02f44a"
+    },
+    "7": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-007/report.json",
+      "sha256": "442212fcd33f51c74ab38995a1ae1a3a31c597bbba11722c0e5f1145c5bb69fd"
+    },
+    "8": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-008/report.json",
+      "sha256": "60c4b2fac48e4b860e7e86d5b7a74d489217dc53739eca49938f44d51153b2af"
+    },
+    "9": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-009/report.json",
+      "sha256": "e84959618a47ceedcd031a7e4ed1b08b9d0a41f7bd79420378d2590f07e5814c"
+    },
+    "10": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-010/report.json",
+      "sha256": "a9450a6d1b55338e0d8c05b32a3434bfda0050d93ca3dd1a3505a27a51b702b7"
+    },
+    "11": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-011/report.json",
+      "sha256": "269fc4ed4d5a38c2b32e25a5bd270b0c4d80f51b6856444baadfc8c83c1d91fd"
+    },
+    "12": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-012/report.json",
+      "sha256": "e5663011ffc4d28a394fc4e0583ca257feb87bfdc18800e53412d044ddf46289"
+    },
+    "13": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-013/report.json",
+      "sha256": "6df2dce3acc38ec65f80e65e0eb8a4194885a49d2c4128434564646a7cf5cd6c"
+    },
+    "14": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-014/report.json",
+      "sha256": "bb00be6a072c776e063dc21b230bad9e196106bd790fae05741b2bf12f56472f"
+    },
+    "15": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-015/report.json",
+      "sha256": "3025845326ed0146854977224405bc66bc5f9ddcc3cab8378b246ebbd45d1768"
+    },
+    "16": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-016/report.json",
+      "sha256": "cff31b2b5af22ed30dd76037baa95ade088ac628a7abe26b410ec037b05ba434"
+    },
+    "17": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-017/report.json",
+      "sha256": "c6847bcef3b593ab37e2b0eb3b448edcb2db4cc07a2dd20c4077f53aa99705c1"
+    },
+    "18": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-018/report.json",
+      "sha256": "90a7e59d58e954934f3da508bee183433f1b0564da616785ef0315c2c8d18e88"
+    },
+    "19": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/retry-r485/case-019/report.json",
+      "sha256": "b84b001f79def92ae3c48fd7e7e9ef3cfde527e5a8ce0a28580038dce573ddac"
+    },
+    "20": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-020/report.json",
+      "sha256": "b1428f186348f077e947fc821fbaac7585dd4bf65fbaa23733a51d3158008365"
+    },
+    "21": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-021/report.json",
+      "sha256": "d9c6214d3259ec273cbd695c3674a625f23088702594d1406ad97d7182b530f0"
+    },
+    "22": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-022/report.json",
+      "sha256": "5a0dfc4c56f48251fd99c4ba276f49b6489a4ede60f6165cbfbd886b9d3ffe5f"
+    },
+    "23": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-023/report.json",
+      "sha256": "cfbe5856ff558e05b2578fe0607464cb84065881b3c36c477e8cc154e0bd5564"
+    },
+    "24": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-024/report.json",
+      "sha256": "0676ab47a47ee16240b253aab7da30b1bc2b8199bcf70bad99568bb30c3c2c5b"
+    },
+    "25": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-025/report.json",
+      "sha256": "41c7f6f5de02c4d827a13aa4cfdc575d4b5bd230e2bca606a44c66c7acc83fb5"
+    },
+    "26": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-026/report.json",
+      "sha256": "a61d2c32bef4aab14c6ceb28f49c3634e81785c530a6588a224ad4994ca43ed8"
+    },
+    "27": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-027/report.json",
+      "sha256": "6d6175112349b95db01778fb43a08759a1264bd91bab09ffea46db75f802525c"
+    },
+    "28": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-028/report.json",
+      "sha256": "8d2fa0f9ef8f5f39c3ebe520ecfbd7775fc14d64a1b6f4d4e8eda3ebc029550f"
+    },
+    "29": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-029/report.json",
+      "sha256": "9a6278b6af3aacf0c37b5e863f5394f7d330cf4fc71c704a38b3a8964f6daf3c"
+    },
+    "30": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-030/report.json",
+      "sha256": "ebefc54dfd2b46702f43e3679c76c40916e3239cf4e47283e0ce5c17e5d9f8b3"
+    },
+    "31": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-031/report.json",
+      "sha256": "b99f541f8a8ac9c2f67fa2f5a7550e85636d7b0ac2e5aa91c62f44bb51eef2ed"
+    },
+    "32": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-032/report.json",
+      "sha256": "578c6b5db9b09cc1b18e559609854da73f5f3d22ec82d90bdd2559e143f947e9"
+    },
+    "33": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-033/report.json",
+      "sha256": "9e311b2eaa9e11ffcbcd0f3f03be8523d922b2400ee2c97c47646b2dd8d94cf4"
+    },
+    "34": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-034/report.json",
+      "sha256": "3a188187b8cbb6af4e946e28ca5f73ea9c95c1e75932d567fc3999b3460812c3"
+    },
+    "35": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-035/report.json",
+      "sha256": "8e0fd448984f08ae42a6753c816855dc45b853ff5fb7c4f4607b31b7412414af"
+    },
+    "36": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-036/report.json",
+      "sha256": "637042e68c9df6dd4e2e8d72fcd4d5cc1be8d20595cdb7f036bd20a9973ef497"
+    },
+    "37": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-037/report.json",
+      "sha256": "07c6fb549b6f88aa43bca83f5cef6e1a8e85f13fb1917b9f2124f4a6478a5f38"
+    },
+    "38": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-038/report.json",
+      "sha256": "d515dd48f30f8ccad2a6e360622ae99b4e841fd25f848bafc8cd73cdfa02a848"
+    },
+    "39": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-039/report.json",
+      "sha256": "3ff871a869dbc7691c258a18d5c5a4b13f3d58146b622bb7ce3278e050822baa"
+    },
+    "40": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-040/report.json",
+      "sha256": "87af891030f81b1ff7fd982fd303c6a3b63004796b171bdd27e914caa87dd559"
+    },
+    "41": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-041/report.json",
+      "sha256": "af2251ec6eac1e37ab6b9589202f6a6f962ac9f699694f928c7eaced9f361f36"
+    },
+    "42": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-042/report.json",
+      "sha256": "5463d91d01e934615b6b6af94eeaba39ab55aea12d6fae6f0134d7dc507fcabc"
+    },
+    "43": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-043/report.json",
+      "sha256": "c94c97c82b91f74d75198e894aa5eea4e8635744417c273b661c178aeaec39aa"
+    },
+    "44": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-044/report.json",
+      "sha256": "18cd6e557d759860f37029c576a2a9ff7d5c6bf882fbe0f510291eb766b167e0"
+    },
+    "45": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-045/report.json",
+      "sha256": "539ec5e45a95f03da1468d7d3ba69d453e7be88ae91df412e99563f57ac07460"
+    },
+    "46": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-046/report.json",
+      "sha256": "5b16102b7b0af552adaa3bd013d7c31da0669b4408f2dab29b39995aa2ee63fe"
+    },
+    "47": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-047/report.json",
+      "sha256": "0bb1cf543e204a42089e826611d8d49a2b71bb9280b752c416a18ebaf99fac76"
+    },
+    "48": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-048/report.json",
+      "sha256": "11b6fe21c8e1490b45ef951f8485ef02daf4b5c2e0a9cfb6bf8f34f7f9e2d620"
+    },
+    "49": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-049/report.json",
+      "sha256": "b2edac21d7e2f6c80940383c8685c1e632b9b6ef703f756f0d5ae387f9faa0fc"
+    },
+    "50": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-050/report.json",
+      "sha256": "81ddaf1f88928b9d05244540a7d82b2aedda72d8002b6115b055d5d55dcc69a9"
+    },
+    "51": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-051/report.json",
+      "sha256": "17d8971e5d73d8033e1949cb96ae1006f5d0a31e03842fb3dd5b57d3d6510a90"
+    },
+    "52": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-052/report.json",
+      "sha256": "d6ac696dce66b2af25f9f67dfb6f6689faafd54bf352104e86b896212f22277b"
+    },
+    "53": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-053/report.json",
+      "sha256": "43953a7d12672918c590a12e72c8ed750ef22f04ea13bd4e67d3a59bc23bdd23"
+    },
+    "54": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-054/report.json",
+      "sha256": "6a92adf1c7c89420e8705a4834e078ecba0aa5caef3cecb4ec856a781b173478"
+    },
+    "55": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-055/report.json",
+      "sha256": "3862ac0be5192c7f8727685d23b7e26b133bbb274e5c129958f5321bae02692a"
+    },
+    "56": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-056/report.json",
+      "sha256": "5d793c7be1d72d99e7bb5ccad22578c547a67672b46c19d95f1798fba4006f3b"
+    },
+    "57": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/retry-r485/case-057/report.json",
+      "sha256": "86dc04a87e657f8fc2222aa901f01141d5ee53bd5cf038933959d74504e6822f"
+    },
+    "58": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-058/report.json",
+      "sha256": "15c903d986c60c05f70668595657cc6d1447cd0062b0e238f64fdf7d0e745a34"
+    },
+    "59": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-059/report.json",
+      "sha256": "5c8e671ed88c029dc07db97ee4692377041ed164d7979609aef37945c8823902"
+    },
+    "60": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-060/report.json",
+      "sha256": "938a8d02b205edd9e572b8a2d712624b9059439f7b81c770db5024346bf95264"
+    },
+    "61": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-061/report.json",
+      "sha256": "4d313fa9ffc17be4a76f643b2f3b896664994c9ca28b1d759bb9358ca25a1c32"
+    },
+    "62": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-062/report.json",
+      "sha256": "b3d7e4be394d88ca5b3c5dde272e6dfce692111d26adc517067e1b4b4a1c4d1e"
+    },
+    "63": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-063/report.json",
+      "sha256": "f0f630831ac63bb7dc41fa3202ab9cd8ba4375383572dcab32ee4899cb6f28a7"
+    },
+    "64": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-064/report.json",
+      "sha256": "a5d99f745c5d4d26b6bda967c90ab560c8c3c53ba1cd0cd5f9cd7a894306909f"
+    },
+    "65": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-065/report.json",
+      "sha256": "474fac78a534b793dac81c99be85a46e89c47903ecc508f55d8a25d3961f39b7"
+    },
+    "66": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-066/report.json",
+      "sha256": "b37aacb13c0e376403fe0d2c6c429310de2fc5920d6bf00a733c8e1651cd2ba6"
+    },
+    "67": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-067/report.json",
+      "sha256": "73b73a5fd1a4b43f95085bcfec771585e5d66698519c42a10b1ac986283e5d21"
+    },
+    "68": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-068/report.json",
+      "sha256": "7291df907febd59375605ecd69e39976a80f5e3ea8d6df7e5d02f59ffe973c3b"
+    },
+    "69": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-069/report.json",
+      "sha256": "78f6a3cea4c02314a1b8a512b852ce5ff5d208101c88ed2fc1b17f9e115bb73f"
+    },
+    "70": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-070/report.json",
+      "sha256": "c7d84ff79964d9eaec3f440ae753aa9d9202b485f7c7804bfba5d8fdd6539d6b"
+    },
+    "71": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-071/report.json",
+      "sha256": "65baa3f67ae531a27b4bd1a2c99ff120d32d844ae05c152f2760271e216dc55e"
+    },
+    "72": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-072/report.json",
+      "sha256": "c78f417df70ba11a1ee5e6688b36c42024b41b866b5c50c31503bae94f5c63b7"
+    },
+    "73": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-073/report.json",
+      "sha256": "6058ffcb034664bbc4c93e7008673c3bbe4a962ce9bda62b4ad355950cfe23f3"
+    },
+    "74": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-074/report.json",
+      "sha256": "ed2bd884c6aec610c5a733b759600d9001747b2a6dd144d5a99edd91dff30153"
+    },
+    "75": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-075/report.json",
+      "sha256": "11c7d8fc6a2b725de65f5e30eaf51569cf1387c1675ec69ce12dee8b5c790a4d"
+    },
+    "76": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-076/report.json",
+      "sha256": "bb4c79f994f6e94e24283cd61ef23067386ca29c5ba5c24037a2d7e31ce57133"
+    },
+    "77": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-077/report.json",
+      "sha256": "54d23f6923fe910dad29c9919f228f18c00ed8b6d05cb8ebe22d3627c4687766"
+    },
+    "78": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-078/report.json",
+      "sha256": "79ef5b95f164b482105de12a78a7a395f02d271b0df15878fa6fbe6718dae72f"
+    },
+    "79": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-079/report.json",
+      "sha256": "55a7536ad39bcfd803d33d8baa0e5cb301ac8341cfc6ead5b61ea4cbdcf97938"
+    },
+    "80": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-080/report.json",
+      "sha256": "551adac27380817edc930cd44ec661d2a21b05b122204a961ceaa0cd708e2b61"
+    },
+    "81": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-081/report.json",
+      "sha256": "6cb714667fd322525d3465cf37a5e2e6051b68df9b4b8425c69337a03d752795"
+    },
+    "82": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-082/report.json",
+      "sha256": "c8b568be000370013a64ac40bb1d93c7b8de1016f3f9b036ca6d9bf67fc00237"
+    },
+    "83": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-083/report.json",
+      "sha256": "a3a22da8be68ce4303810d17dc306a3fff7ac1d62d13a2e0c4626fb016dfae32"
+    },
+    "84": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-084/report.json",
+      "sha256": "a696ee2f57c611435f416ccffd99e97cbef31216c89f4bf24d6fc87bb874e486"
+    },
+    "85": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-085/report.json",
+      "sha256": "b96594c86e581bbe0c4781016b6c3b376ec08441441fa45db7cecfcbb70ac23c"
+    },
+    "86": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-086/report.json",
+      "sha256": "9b5148b23c81e434fb496bdb3f708079d9790bd6db1034de0d1c5b40427077bc"
+    },
+    "87": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-087/report.json",
+      "sha256": "ce1d01c5a91fd7adcd11a9048f48390469f1d28cebf9cc79c1e5ecd5b56f33dc"
+    },
+    "88": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-088/report.json",
+      "sha256": "d938afd596ade72841e59eab05a68c6bd453c8153c98e52c4d742cef9ef2efb8"
+    },
+    "89": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-089/report.json",
+      "sha256": "352d4c56a5c674604d3a02d358fce6fc3a874cd0a3869966ce31fb4fe99a87bd"
+    },
+    "90": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-090/report.json",
+      "sha256": "012c89b51e177f2891d69297629184609fa36d1eeb787b3229567dfa7eeed58f"
+    },
+    "91": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-091/report.json",
+      "sha256": "b83a3884522d938f8750b7f4630a7c36c4d3333263e4735a3b590dac789af933"
+    },
+    "92": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-092/report.json",
+      "sha256": "de6e0f6a1d5a72796521fe341a3dbcf1808b03459298107de5ca1dba7f429478"
+    },
+    "93": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-093/report.json",
+      "sha256": "961773eec5ef03e566412a2b461dca2495b1cb824d28fb0db1763b959a8c1aec"
+    },
+    "94": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-094/report.json",
+      "sha256": "cb241e342dcec4b87e6dd50ca8d800334184131e5b35bf951ce61609af51ec0a"
+    },
+    "95": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-095/report.json",
+      "sha256": "83b4ff32db70af4f2bf1a3a96d963adeda00ceb3e63433eef8941e3dd7af7699"
+    },
+    "96": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-096/report.json",
+      "sha256": "c827123c294ab6fb6d67d70ad85d32a7e5e9e02fb429f29e1c89791ab24d852f"
+    },
+    "97": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-097/report.json",
+      "sha256": "b8a56290ee61b25192b56f366bdf8f28c89c19d74faaaad4f29cbf2a0880227f"
+    },
+    "98": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-098/report.json",
+      "sha256": "d912ee4e8fabeccfab7c74bd756f18fc1abefcad8630ab3aed3b6c93fe542e1c"
+    },
+    "99": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-099/report.json",
+      "sha256": "f27a0c374e37df9a5e10a180e0295a16b240fd5b0395b4beea3743f1f5a03763"
+    },
+    "100": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-100/report.json",
+      "sha256": "3f3fccb8363b7b6794458db6e1f83710ed23e1da2245515490bcd44ff4d6b1f4"
+    },
+    "101": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-101/report.json",
+      "sha256": "c866ee08f76fa83a369448fa79ed91d17bbe30010e517601b158a7f093277c92"
+    },
+    "102": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-102/report.json",
+      "sha256": "c0107c777eaeea088428abfb256738c018ea1e55cde6677361b32cf021fb0572"
+    },
+    "103": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-103/report.json",
+      "sha256": "13aac016a85fb1f29f571728bd414bb07c2cb13c5c68bb0fd88b5d694deb866d"
+    },
+    "104": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-104/report.json",
+      "sha256": "c2e2eb22bf58edf65483428ea62cedf7c671d67f89aa6d99096b3d22662bc9f6"
+    },
+    "105": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-105/report.json",
+      "sha256": "3408150cdd5f5edad8c1e4e24357221f2b3c81583c199d304afea009c53ac228"
+    },
+    "106": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-106/report.json",
+      "sha256": "4d88720d93df7709241d87d69d0f88a07910b92017ec8f7e64a7e7212dce57d2"
+    },
+    "107": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-107/report.json",
+      "sha256": "427bfc79368c7159d9f6f2971b18b4d1cdef1e0ffe9e468e719e264b6dd84f26"
+    },
+    "108": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-108/report.json",
+      "sha256": "3cda048d94d56fe8f5098ba5c3b6b72094376dafd9b57b001c1f42cceb618d6b"
+    },
+    "109": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-109/report.json",
+      "sha256": "b44055faa3435764c3117ed9c6e700f19c5803d7cc76450e0239ca1347fc3dca"
+    },
+    "110": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-110/report.json",
+      "sha256": "7acfb0b48fb45bf0c9930af29c4f063d271fe2cb9071c6a0d3ccf49ff8f0f48e"
+    },
+    "111": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-111/report.json",
+      "sha256": "815f143e46f87926934e912d36671962ef74288ef58d2ebe41c64672cc0e40f7"
+    },
+    "112": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-112/report.json",
+      "sha256": "c01618544495ca1723318b21c42440f73be4b8ab00564e393ef49d9dc7612a66"
+    },
+    "113": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-113/report.json",
+      "sha256": "566b875ff55591a1580d45db3e2cbeb493fa4cdaa1c4a21292bd3070408b7f71"
+    },
+    "114": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-114/report.json",
+      "sha256": "ef5a8f84738d241b0a80b6a5a54b67fa9390e1ca7706f70b4d1be66b9424d790"
+    },
+    "115": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-115/report.json",
+      "sha256": "eff32379570f6ec04f2b49d919365813267bbf0b65bef51418b29a4bb95a01ed"
+    },
+    "116": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-116/report.json",
+      "sha256": "b66138c163bce840bc12707fbdb1ca494fc2c21731341d414a5f454da39d465d"
+    },
+    "117": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-117/report.json",
+      "sha256": "067e55ba5bee90db7b9af4e0708aac9e092e66e5d55db655dc40e1c9b45fe00e"
+    },
+    "118": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-118/report.json",
+      "sha256": "d4e903ef4191dae003796164f1d16c94c5886e5a300f5c8b172caea99c848fe9"
+    },
+    "119": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-119/report.json",
+      "sha256": "89922f4f01ce8960fefbe746caa8d3a17beb3b5e7155b2a12f0b2702fc26209b"
+    },
+    "120": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-120/report.json",
+      "sha256": "55b33579eebfb7cdce9f4f75082fd0076ccefd547aabf3d3b1e615a091b41de4"
+    },
+    "121": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-121/report.json",
+      "sha256": "4831e715375e712b52d54bd6151357d22399af1d672aa05b4ba3c17b8baf75eb"
+    },
+    "122": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-122/report.json",
+      "sha256": "3359fff6ffc9328eae577e991196142572f25fe101dfbd33d8dadc1597188162"
+    },
+    "123": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-123/report.json",
+      "sha256": "e867220b50ac88e5bcf891d5b1ebb3fde118efb6fb1d22e7c559669b746f4f6e"
+    },
+    "124": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-124/report.json",
+      "sha256": "6ff45a5c3a770957982ab0fe91afe7fa4368d0b1f9cf44e461dccc926857d138"
+    },
+    "125": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-125/report.json",
+      "sha256": "8ab04ab738f7051afc753210ccb9a24a460f6d25e592b0bb2a0d0174582dd7ad"
+    },
+    "126": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-126/report.json",
+      "sha256": "c14908e8209634673d1a2efcb4486bdf8dd5a3ec7bba4e883c3cb2dd1e39e9d9"
+    },
+    "127": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-127/report.json",
+      "sha256": "6e2d9fe266027e49eb7e37b883e8c2f3dd53d1957f1e4e567f8b2ed1e58d4863"
+    },
+    "128": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-128/report.json",
+      "sha256": "421f67c24e9369855368f9b5ae1f316cb6d1b4808d893d9c7b504ababb267ff1"
+    },
+    "129": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-129/report.json",
+      "sha256": "53adefc4642852853c78669e00991cd81853e3d1f47823aea682da37e3286588"
+    },
+    "130": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-130/report.json",
+      "sha256": "59f6b8999f69894b3824aa3d0ab256b0bb8b476cb39321f9075f2d601813464f"
+    },
+    "131": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-131/report.json",
+      "sha256": "62b9e3f89b1b387000bd2c70dd77b017444f5d81494cc7cdb250ff627cdb23c7"
+    },
+    "132": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-132/report.json",
+      "sha256": "79da9406f15472157b35a62a6bc3b58a9a19fc94c68bd955c40728e5334cbfe6"
+    },
+    "133": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-133/report.json",
+      "sha256": "6e1515b77cc79a49ca40a3caad46e8589a83590a6b29034fea53f37faf7360f2"
+    },
+    "134": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-134/report.json",
+      "sha256": "138528113ee9fb9a6ab292aef4b046ec2d8f4a8c6115914962685f6fa7bb07f4"
+    },
+    "135": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-135/report.json",
+      "sha256": "9ddd58420d10a42fc1cb8802b38dd08b06d3f1ba711bbfbd9d84df448e070eef"
+    },
+    "136": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-136/report.json",
+      "sha256": "0b90fcd0c324b6643fca6205cc3569bfd7bf9c5b2428e93c07296e5e60981ad6"
+    },
+    "137": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-137/report.json",
+      "sha256": "f6a06c01f4ef6af086c9ca6bfaf685a381a60fd9a7a6aaad8b7df309730c984a"
+    },
+    "138": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-138/report.json",
+      "sha256": "d73cc2391835a6f18c6f75bf0688ba10a0074d1c771ad338dce7a800cdf03773"
+    },
+    "139": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-139/report.json",
+      "sha256": "168a6bf70421cd6dd07dea3d26c5df3e80e6974e654edbce7cd79c4afbb9e742"
+    },
+    "140": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-140/report.json",
+      "sha256": "dbe9e0175fb0762c98eb3415868aff4db2c32bb15720b2b21438729e1538e6f6"
+    },
+    "141": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-141/report.json",
+      "sha256": "5ce877cddf915f1a799226ad42fb64cca76a2805571a9917b07745cb0286a64f"
+    },
+    "142": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-142/report.json",
+      "sha256": "f75aa7e000c996d8a037be5fe2ebc1dc379438e21def33eb64edda2fe7a75fa7"
+    },
+    "143": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-143/report.json",
+      "sha256": "cba19a5ab540d59f88f0ac61d3b87a740faa26dbd88ac55d0295369c69e05c7d"
+    },
+    "144": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-144/report.json",
+      "sha256": "abcf68c3af5cb1f908ec597ff0d2a2db0a2952db96b03054ffd9db95162a94a5"
+    },
+    "145": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-145/report.json",
+      "sha256": "70b9ab83ffb0a60b0af7d82900720b266131ff2d845d647739eb498898221221"
+    },
+    "146": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-146/report.json",
+      "sha256": "39fa3037b5bf5287250df3e30ff266265641b3bf72666eb885f553af9f27d47c"
+    },
+    "147": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-147/report.json",
+      "sha256": "43d3d0d7820fc7e7126eb245d9a040105346a70e3892708891fa694f3d2ab863"
+    },
+    "148": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-148/report.json",
+      "sha256": "e529dbd56ffcd492a965e75e5a2fa1618f7b45315816ad9484d5ddf1a61c46eb"
+    },
+    "149": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-149/report.json",
+      "sha256": "ab1c6d72d8becb41b077965e68ed6c62456c23a5eb5aa02662a3cd80d407ccb8"
+    },
+    "150": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-150/report.json",
+      "sha256": "973f74333c0ee9f9174e4035a2fc7a82c8dc33a6bc244a45d86ec50ec8eb3a5a"
+    },
+    "151": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-151/report.json",
+      "sha256": "3a95adf40370e9deb90e3a3afe3974258477faa3b9dc2b03a27261992591571a"
+    },
+    "152": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-152/report.json",
+      "sha256": "60dc706eef83e3c66e5962866c85339f77981e42bfd8e38aa56b8d138d43d557"
+    },
+    "153": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-153/report.json",
+      "sha256": "f430a6bfc7029ef55c220aae5a6685381d260de2ecb6bb767867079f84bfe112"
+    },
+    "154": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-154/report.json",
+      "sha256": "d1a6c444adcdc1bf19d441d32bff43b969eec47dd9f33f40f0de3efc78f306a2"
+    },
+    "155": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-155/report.json",
+      "sha256": "2b8715c9f26fe66f28c22986db5e435d5e92e2e3812a8ca886280afb7dadfa56"
+    },
+    "156": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-156/report.json",
+      "sha256": "081df9fcca5393056077fc41388487f5a24b5d8528fb1e23c38c4b301d9fee18"
+    },
+    "157": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-157/report.json",
+      "sha256": "cd35e0072c3c57890101b55fa2392c0b93dc7fb23b54889ababd2e5fa1063e9e"
+    },
+    "158": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-158/report.json",
+      "sha256": "2f5ab6ddb3dd116c134c9604cb19f9211f0076324792616d516e9ac292d43f94"
+    },
+    "159": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-159/report.json",
+      "sha256": "38a56823fd8226db5b7d6ffe2f3eb731225dc8dba98babdfc2c2741e9141db58"
+    }
+  },
+  "replacements": {
+    "19": {
+      "original": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-019/report.json",
+      "original_sha256": "b22b070e41e6fe923df1da74eff41eea71944468711ed1430682a014251b6ac7",
+      "replacement": "/pub/data/jiafq/xolver/validation/arithmetic-r103/retry-r485/case-019/report.json",
+      "replacement_sha256": "b84b001f79def92ae3c48fd7e7e9ef3cfde527e5a8ce0a28580038dce573ddac",
+      "policy": "First unchanged-binary, same-budget paired retry; only original invalid or missing formal rows are replaced"
+    },
+    "57": {
+      "original": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r478/case-057/report.json",
+      "original_sha256": null,
+      "replacement": "/pub/data/jiafq/xolver/validation/arithmetic-r103/retry-r485/case-057/report.json",
+      "replacement_sha256": "86dc04a87e657f8fc2222aa901f01141d5ee53bd5cf038933959d74504e6822f",
+      "policy": "First unchanged-binary, same-budget paired retry; only original invalid or missing formal rows are replaced"
+    }
+  },
+  "formal_experiment": "b869147adbc1",
+  "retry_experiment": "5a474d8c7dda",
+  "selection": "Not eligible for merge while fixed158 remains a valid lost solve; correct dependency support is retained for the next algorithmic repair",
+  "protected_sets_used": false,
+  "evidence_boundary": "Development fixed160 diagnostic stage, 60 s / one physical CPU / 16 GiB. Original invalid rows retained; no valid loss is retried away. This does not establish superiority over Z3."
+}

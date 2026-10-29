@@ -1,0 +1,5095 @@
+{
+  "schema": 1,
+  "summary": {
+    "cases": 160,
+    "binaries": {
+      "baseline": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r362/xolver",
+        "sha256": "663ea64fbf924b1312d1be498d504b00a10b4f9671799621debcd4638a861988"
+      },
+      "candidate": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r424/xolver",
+        "sha256": "29984ba1edb5f10d2da4bd4e35631881dd5210e739da72bb547adeadc58f392d"
+      },
+      "z3": {
+        "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+        "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      }
+    },
+    "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+    "timeout": 60,
+    "memory_bytes": 17179869184,
+    "counts": {
+      "baseline": {
+        "unsat": 41,
+        "decided": 93,
+        "verified_decided": 93,
+        "verified_par2": 8292.916837159544,
+        "raw_par2": 8292.916837159544,
+        "timeout": 67,
+        "sat": 52
+      },
+      "candidate": {
+        "unsat": 41,
+        "decided": 95,
+        "verified_decided": 95,
+        "verified_par2": 8148.4302036408335,
+        "raw_par2": 8148.4302036408335,
+        "timeout": 65,
+        "sat": 54
+      },
+      "z3": {
+        "unsat": 58,
+        "decided": 124,
+        "verified_decided": 116,
+        "verified_par2": 5525.973192088306,
+        "raw_par2": 4656.735694665462,
+        "sat": 66,
+        "timeout": 36
+      }
+    },
+    "by_logic": {
+      "QF_LIA": {
+        "baseline": {
+          "unsat": 15,
+          "decided": 32,
+          "verified_decided": 32,
+          "verified_par2": 2064.852569963783,
+          "raw_par2": 2064.852569963783,
+          "timeout": 16,
+          "sat": 17
+        },
+        "candidate": {
+          "unsat": 15,
+          "decided": 34,
+          "verified_decided": 34,
+          "verified_par2": 1930.6608414594084,
+          "raw_par2": 1930.6608414594084,
+          "timeout": 14,
+          "sat": 19
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 38,
+          "verified_decided": 36,
+          "verified_par2": 1480.0854731481522,
+          "raw_par2": 1279.8277549464256,
+          "sat": 23,
+          "timeout": 10
+        }
+      },
+      "QF_NIA": {
+        "baseline": {
+          "timeout": 23,
+          "decided": 25,
+          "verified_decided": 25,
+          "verified_par2": 2816.8017219156027,
+          "raw_par2": 2816.8017219156027,
+          "unsat": 12,
+          "sat": 13
+        },
+        "candidate": {
+          "timeout": 23,
+          "decided": 25,
+          "verified_decided": 25,
+          "verified_par2": 2814.3568429350853,
+          "raw_par2": 2814.3568429350853,
+          "unsat": 12,
+          "sat": 13
+        },
+        "z3": {
+          "unsat": 22,
+          "decided": 34,
+          "verified_decided": 30,
+          "verified_par2": 2225.550581846386,
+          "raw_par2": 1746.215833535418,
+          "sat": 12,
+          "timeout": 14
+        }
+      },
+      "QF_LRA": {
+        "baseline": {
+          "timeout": 16,
+          "decided": 16,
+          "verified_decided": 16,
+          "verified_par2": 1956.2476593367755,
+          "raw_par2": 1956.2476593367755,
+          "sat": 7,
+          "unsat": 9
+        },
+        "candidate": {
+          "timeout": 16,
+          "decided": 16,
+          "verified_decided": 16,
+          "verified_par2": 1948.5539707373828,
+          "raw_par2": 1948.5539707373828,
+          "sat": 7,
+          "unsat": 9
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 26,
+          "verified_decided": 25,
+          "verified_par2": 884.497764589265,
+          "raw_par2": 814.5862373672426,
+          "sat": 11,
+          "timeout": 6
+        }
+      },
+      "QF_NRA": {
+        "baseline": {
+          "sat": 15,
+          "decided": 20,
+          "verified_decided": 20,
+          "verified_par2": 1455.014885943383,
+          "raw_par2": 1455.014885943383,
+          "unsat": 5,
+          "timeout": 12
+        },
+        "candidate": {
+          "sat": 15,
+          "decided": 20,
+          "verified_decided": 20,
+          "verified_par2": 1454.858548508957,
+          "raw_par2": 1454.858548508957,
+          "unsat": 5,
+          "timeout": 12
+        },
+        "z3": {
+          "sat": 20,
+          "decided": 26,
+          "verified_decided": 25,
+          "verified_par2": 935.8393725045025,
+          "raw_par2": 816.1058688163757,
+          "timeout": 6,
+          "unsat": 6
+        }
+      }
+    },
+    "changes": [
+      {
+        "index": 2,
+        "case": "QF_LIA/pb2010/normalized-j9042_5-sat.smt2",
+        "kind": "gained",
+        "truth": "sat",
+        "evidence": [
+          "z3-exported-model-replay",
+          "candidate-exported-model-replay"
+        ],
+        "observations": {
+          "z3": {
+            "result": "sat",
+            "seconds": 7.933756660670042
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.01232800446451
+          },
+          "candidate": {
+            "result": "sat",
+            "seconds": 35.798140628263354
+          }
+        }
+      },
+      {
+        "index": 97,
+        "case": "QF_LIA/pb2010/normalized-j12022_9-sat.smt2",
+        "kind": "gained",
+        "truth": "sat",
+        "evidence": [
+          "candidate-exported-model-replay",
+          "z3-exported-model-replay"
+        ],
+        "observations": {
+          "candidate": {
+            "result": "sat",
+            "seconds": 35.29765352420509
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 10.444685330614448
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.014131508767605
+          }
+        }
+      }
+    ],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "unverified": [
+      {
+        "index": 12,
+        "case": "QF_LIA/fft/Sz128_2823.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 24,
+        "case": "QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 27,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 42,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep2a.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 50,
+        "case": "QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_jain_5.i_2_4_3.bpl_7.smt2",
+        "results": {
+          "z3": "unsat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 80,
+        "case": "QF_LIA/cut_lemmas/20-vars/cut_lemma_03_004.smt2",
+        "results": {
+          "z3": "unsat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 114,
+        "case": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 159,
+        "case": "QF_NRA/20161105-Sturm-MGC/mgc_07.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      }
+    ],
+    "scoring": "Correct verdicts require a replayed model or an independent UNSAT decision on the identical input hash; unresolved results receive PAR-2 penalty.",
+    "supplementary_certificate": {
+      "index": 115,
+      "sha256": "48f5d0ca9b19679a48f3248ac1183c31d09e0c198bfda0a70b3b4272b6d1a5ba",
+      "check": {
+        "status": "checked-unsat",
+        "input_sha256": "02a58b11df8951543940a1090a140592e24de41dcaeb6470e7a50d42e804be64",
+        "assertion": 9,
+        "path": [
+          2
+        ],
+        "checked_residues": 12
+      },
+      "scope": "Independent truth evidence; all original timed observations are unchanged"
+    }
+  },
+  "timing_changes": [
+    {
+      "index": 101,
+      "case": "QF_LIA/2019-ezsmt/incrementalScheduling/251-incremental_scheduling-40518-0.smt2",
+      "baseline_seconds": 8.533026967197657,
+      "candidate_seconds": 0.6175677087157965,
+      "delta_seconds": -7.91545925848186
+    },
+    {
+      "index": 52,
+      "case": "QF_LRA/TM/p5-zenonumeric_s5.smt2",
+      "baseline_seconds": 12.142933215945959,
+      "candidate_seconds": 5.630973119288683,
+      "delta_seconds": -6.511960096657276
+    },
+    {
+      "index": 20,
+      "case": "QF_LIA/2019-cmodelsdiff/hamiltonianCircuit/7.lp.smt2",
+      "baseline_seconds": 4.02349136210978,
+      "candidate_seconds": 0.8683188930153847,
+      "delta_seconds": -3.1551724690943956
+    },
+    {
+      "index": 123,
+      "case": "QF_NIA/UltimateLassoRanker/diff-alloca_true-termination.c.i_Iteration7_Lasso+nonterminationTemplate.smt2",
+      "baseline_seconds": 14.454379742965102,
+      "candidate_seconds": 13.04730161651969,
+      "delta_seconds": -1.4070781264454126
+    },
+    {
+      "index": 63,
+      "case": "QF_LRA/latendresse/ecoliFBAyicesTest-3875-4.smt2",
+      "baseline_seconds": 8.987919233739376,
+      "candidate_seconds": 7.786361839622259,
+      "delta_seconds": -1.201557394117117
+    },
+    {
+      "index": 4,
+      "case": "QF_LIA/bofill-scheduling/SMT_real_LIA/ex8600_2400_100.smt2",
+      "baseline_seconds": 33.59694492071867,
+      "candidate_seconds": 35.35311321541667,
+      "delta_seconds": 1.756168294698
+    },
+    {
+      "index": 18,
+      "case": "QF_LIA/20210219-Dartagnan/ReachSafety-Loops/count_up_down-1-O0.smt2",
+      "baseline_seconds": 40.71826479583979,
+      "candidate_seconds": 44.97111331485212,
+      "delta_seconds": 4.252848519012332
+    },
+    {
+      "index": 23,
+      "case": "QF_LIA/pidgeons/pigeon-hole-14.smt2",
+      "baseline_seconds": 0.21834714524447918,
+      "candidate_seconds": 20.01624407991767,
+      "delta_seconds": 19.79789693467319
+    },
+    {
+      "index": 81,
+      "case": "QF_LIA/pidgeons/pigeon-hole-13.smt2",
+      "baseline_seconds": 0.1665696520358324,
+      "candidate_seconds": 20.00960524752736,
+      "delta_seconds": 19.84303559549153
+    }
+  ],
+  "source_head": "11a810f733b4a3f9c5a4e1a2db83fb5f135c0c2d",
+  "source_manifest_sha256": "fe84727180b6fc449ffd0627919ebe769ee70d59f1a74f1e6961110d780e9a66",
+  "qualification_record_sha256": "53d81c0080694429b8c43574b03577bfda63677ef40b0db1b4d418f9dee28506",
+  "qualification": {
+    "source_head": "11a810f733b4a3f9c5a4e1a2db83fb5f135c0c2d",
+    "source_manifest_sha256": "fe84727180b6fc449ffd0627919ebe769ee70d59f1a74f1e6961110d780e9a66",
+    "checked_source_files": 220,
+    "submodule_pins": {
+      "third_party/SOMTParser": "b9063faeab2e89d87525432eaedb8f0a5b6eb1ea",
+      "third_party/cadical": "7b99c07f0bcab5824a5a3ce62c7066554017f641",
+      "third_party/libpoly": "3d5e6fbd98639cb0941b029e23ca17c0e3c4a80a"
+    },
+    "native": {
+      "lease": [
+        0
+      ],
+      "overlay_rc": 0,
+      "configure_rc": 0,
+      "build_rc": 0,
+      "targeted-unit_rc": 0,
+      "parser-tests_rc": 0,
+      "unit_rc": 0,
+      "checks_rc": 0
+    },
+    "binaries": {
+      "xolver": "29984ba1edb5f10d2da4bd4e35631881dd5210e739da72bb547adeadc58f392d",
+      "xolver-sv": "74fe8d8fe48db4b9745ae466d9128fc25adab870765694dc09f6cc8ecba2d3af"
+    },
+    "unit_binary_sha256": "9b9d09f2d7e6b3a7c78770d7a124ff161824f8cba984803bf16252fd255bdf4d",
+    "logs": {
+      "build.log": "7e4ced012511ed5e216d960eab1c2b8f39e0e399cb4dd19fa4e7e835ffff5bd3",
+      "targeted-unit.log": "50566a93eff8b8b7c5677f9408f93b198fe1470686f30a3348cd701d6a323a5f",
+      "parser-tests.log": "7160eb3f09cf53f6c7873f48a79dc10e991c546289dd64f74acdbfc8643f1234",
+      "unit.log": "967960e726ff4b3a5bd6d16bd2f25dd848b783b2e08785f5d090e5c4f886e5da",
+      "checks.log": "abd07c3cdb1cc6b12a04d044717f75f8a4f0b73310c9aec759d782fb867565b1"
+    },
+    "protected_sets_used": false
+  },
+  "native_tests": 1731,
+  "native_assertions": 875969,
+  "native": {
+    "lease": [
+      0
+    ],
+    "overlay_rc": 0,
+    "configure_rc": 0,
+    "build_rc": 0,
+    "targeted-unit_rc": 0,
+    "parser-tests_rc": 0,
+    "unit_rc": 0,
+    "checks_rc": 0
+  },
+  "ablations": {
+    "420": {
+      "cases": 8,
+      "binaries": {
+        "baseline": {
+          "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r400/xolver",
+          "sha256": "cbc91886192b4261dfa6842b1ec3cddcd141f97344791dded70fb34fd10c61ba"
+        },
+        "candidate": {
+          "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r424/xolver",
+          "sha256": "29984ba1edb5f10d2da4bd4e35631881dd5210e739da72bb547adeadc58f392d"
+        },
+        "z3": {
+          "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+          "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+        }
+      },
+      "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+      "timeout": 60,
+      "memory_bytes": 17179869184,
+      "counts": {
+        "baseline": {
+          "unsat": 4,
+          "decided": 6,
+          "verified_decided": 6,
+          "verified_par2": 303.34114591032267,
+          "raw_par2": 303.34114591032267,
+          "timeout": 2,
+          "sat": 2
+        },
+        "candidate": {
+          "unsat": 4,
+          "decided": 8,
+          "verified_decided": 8,
+          "verified_par2": 136.59011527523398,
+          "raw_par2": 136.59011527523398,
+          "sat": 4
+        },
+        "z3": {
+          "unsat": 4,
+          "decided": 7,
+          "verified_decided": 7,
+          "verified_par2": 138.85538453422487,
+          "raw_par2": 138.85538453422487,
+          "sat": 3,
+          "timeout": 1
+        }
+      },
+      "by_logic": {
+        "QF_LIA": {
+          "baseline": {
+            "unsat": 2,
+            "decided": 3,
+            "verified_decided": 3,
+            "verified_par2": 290.71624204330146,
+            "raw_par2": 290.71624204330146,
+            "timeout": 2,
+            "sat": 1
+          },
+          "candidate": {
+            "unsat": 2,
+            "decided": 5,
+            "verified_decided": 5,
+            "verified_par2": 123.41497340239584,
+            "raw_par2": 123.41497340239584,
+            "sat": 3
+          },
+          "z3": {
+            "unsat": 2,
+            "decided": 5,
+            "verified_decided": 5,
+            "verified_par2": 18.322257723659277,
+            "raw_par2": 18.322257723659277,
+            "sat": 3
+          }
+        },
+        "QF_NIA": {
+          "baseline": {
+            "sat": 1,
+            "decided": 3,
+            "verified_decided": 3,
+            "verified_par2": 12.624903867021203,
+            "raw_par2": 12.624903867021203,
+            "unsat": 2
+          },
+          "candidate": {
+            "sat": 1,
+            "decided": 3,
+            "verified_decided": 3,
+            "verified_par2": 13.17514187283814,
+            "raw_par2": 13.17514187283814,
+            "unsat": 2
+          },
+          "z3": {
+            "timeout": 1,
+            "decided": 2,
+            "verified_decided": 2,
+            "verified_par2": 120.53312681056559,
+            "raw_par2": 120.53312681056559,
+            "unsat": 2
+          }
+        }
+      },
+      "changes": [
+        {
+          "index": 2,
+          "case": "QF_LIA/pb2010/normalized-j9042_5-sat.smt2",
+          "kind": "gained",
+          "truth": "sat",
+          "evidence": [
+            "z3-exported-model-replay",
+            "candidate-exported-model-replay"
+          ],
+          "observations": {
+            "z3": {
+              "result": "sat",
+              "seconds": 7.483502428978682
+            },
+            "baseline": {
+              "result": "timeout",
+              "seconds": 60.108875438570976
+            },
+            "candidate": {
+              "result": "sat",
+              "seconds": 36.056403659284115
+            }
+          }
+        },
+        {
+          "index": 97,
+          "case": "QF_LIA/pb2010/normalized-j12022_9-sat.smt2",
+          "kind": "gained",
+          "truth": "sat",
+          "evidence": [
+            "candidate-exported-model-replay",
+            "z3-exported-model-replay"
+          ],
+          "observations": {
+            "candidate": {
+              "result": "sat",
+              "seconds": 34.840982450172305
+            },
+            "z3": {
+              "result": "sat",
+              "seconds": 9.83897102624178
+            },
+            "baseline": {
+              "result": "timeout",
+              "seconds": 60.09073702991009
+            }
+          }
+        }
+      ],
+      "wrong_verdicts": [],
+      "invalid_exported_models": [],
+      "unverified": [],
+      "scoring": "Correct verdicts require a replayed model or an independent UNSAT decision on the identical input hash; unresolved results receive PAR-2 penalty."
+    },
+    "422": {
+      "cases": 8,
+      "binaries": {
+        "baseline": {
+          "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r404/xolver",
+          "sha256": "1b14671956790c22ed1870c2f79c083afd0b21c4020ab8f0534f61f9155e0b52"
+        },
+        "candidate": {
+          "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r424/xolver",
+          "sha256": "29984ba1edb5f10d2da4bd4e35631881dd5210e739da72bb547adeadc58f392d"
+        },
+        "z3": {
+          "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+          "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+        }
+      },
+      "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+      "timeout": 60,
+      "memory_bytes": 17179869184,
+      "counts": {
+        "baseline": {
+          "unsat": 4,
+          "decided": 6,
+          "verified_decided": 6,
+          "verified_par2": 305.90057449042797,
+          "raw_par2": 305.90057449042797,
+          "timeout": 2,
+          "sat": 2
+        },
+        "candidate": {
+          "unsat": 4,
+          "decided": 8,
+          "verified_decided": 8,
+          "verified_par2": 131.420642869547,
+          "raw_par2": 131.420642869547,
+          "sat": 4
+        },
+        "z3": {
+          "unsat": 4,
+          "decided": 7,
+          "verified_decided": 7,
+          "verified_par2": 139.3070877287537,
+          "raw_par2": 139.3070877287537,
+          "sat": 3,
+          "timeout": 1
+        }
+      },
+      "by_logic": {
+        "QF_LIA": {
+          "baseline": {
+            "unsat": 2,
+            "decided": 3,
+            "verified_decided": 3,
+            "verified_par2": 292.7232734411955,
+            "raw_par2": 292.7232734411955,
+            "timeout": 2,
+            "sat": 1
+          },
+          "candidate": {
+            "unsat": 2,
+            "decided": 5,
+            "verified_decided": 5,
+            "verified_par2": 118.44394650682807,
+            "raw_par2": 118.44394650682807,
+            "sat": 3
+          },
+          "z3": {
+            "unsat": 2,
+            "decided": 5,
+            "verified_decided": 5,
+            "verified_par2": 18.72229154035449,
+            "raw_par2": 18.72229154035449,
+            "sat": 3
+          }
+        },
+        "QF_NIA": {
+          "baseline": {
+            "sat": 1,
+            "decided": 3,
+            "verified_decided": 3,
+            "verified_par2": 13.177301049232483,
+            "raw_par2": 13.177301049232483,
+            "unsat": 2
+          },
+          "candidate": {
+            "sat": 1,
+            "decided": 3,
+            "verified_decided": 3,
+            "verified_par2": 12.97669636271894,
+            "raw_par2": 12.97669636271894,
+            "unsat": 2
+          },
+          "z3": {
+            "timeout": 1,
+            "decided": 2,
+            "verified_decided": 2,
+            "verified_par2": 120.5847961883992,
+            "raw_par2": 120.5847961883992,
+            "unsat": 2
+          }
+        }
+      },
+      "changes": [
+        {
+          "index": 2,
+          "case": "QF_LIA/pb2010/normalized-j9042_5-sat.smt2",
+          "kind": "gained",
+          "truth": "sat",
+          "evidence": [
+            "z3-exported-model-replay",
+            "candidate-exported-model-replay"
+          ],
+          "observations": {
+            "z3": {
+              "result": "sat",
+              "seconds": 7.934601237997413
+            },
+            "baseline": {
+              "result": "timeout",
+              "seconds": 60.1925436090678
+            },
+            "candidate": {
+              "result": "sat",
+              "seconds": 34.134361838921905
+            }
+          }
+        },
+        {
+          "index": 97,
+          "case": "QF_LIA/pb2010/normalized-j12022_9-sat.smt2",
+          "kind": "gained",
+          "truth": "sat",
+          "evidence": [
+            "candidate-exported-model-replay",
+            "z3-exported-model-replay"
+          ],
+          "observations": {
+            "candidate": {
+              "result": "sat",
+              "seconds": 35.14543533325195
+            },
+            "z3": {
+              "result": "sat",
+              "seconds": 9.737703781574965
+            },
+            "baseline": {
+              "result": "timeout",
+              "seconds": 60.20175124891102
+            }
+          }
+        }
+      ],
+      "wrong_verdicts": [],
+      "invalid_exported_models": [],
+      "unverified": [],
+      "scoring": "Correct verdicts require a replayed model or an independent UNSAT decision on the identical input hash; unresolved results receive PAR-2 penalty."
+    }
+  },
+  "acceptance": {
+    "affine": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/affine/metrics.json",
+      "sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "7c1771f4be43f71463332a224684f0a92c5b23bd9376ecffab7af70726ee1ad2"
+    },
+    "architecture": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/architecture/metrics.json",
+      "sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "bf148d293a27754053d083e75dfc28f019626fa27fa486231a5fb92fd82dc6a1"
+    },
+    "intervals": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/intervals/metrics.json",
+      "sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "19782c360614502ff53d6cb3b86095eea47df16a371d42d9ea63200e3755f8e1"
+    },
+    "ite": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/ite/metrics.json",
+      "sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "8b65ef8c8d56804505b115c9d1b7acf7206061a601191251061bb3718a3bb3c6"
+    },
+    "ite-structure": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r436/ite-structure/metrics.json",
+      "sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "e96b6794184dd2442400bb79cc110c9bb655c6f33fbecb624c76ed656aac3125"
+    },
+    "known-gaps": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/known-gaps/metrics.json",
+      "sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "2dd8075f36c6fa179d0d9c8c899354cd5cb5a8845dec084fc60476d32e9f5d68"
+    },
+    "linear": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/linear/metrics.json",
+      "sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "79657469c4a89b71940dddc9456c8ab77e82fc9020b96e3a79f5bb0cfeea25e1"
+    },
+    "partial": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/partial/metrics.json",
+      "sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "4826a02d7d84e3702c75a86e012d76bfc467ba2c86d519e6a9807686bffb190f"
+    },
+    "qcp": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/qcp/metrics.json",
+      "sha256": "3e39476b7c773cc6cf2f9490ddc40a2ce6386a16f0f5fda5c9bfef7093d49869",
+      "metrics": {
+        "checks": 3,
+        "failures": 0
+      },
+      "commands_sha256": "a9089be6d529202896c8ad2798ad54bc4a06dfe03f3a64c583320c0e14831cdf"
+    },
+    "quick": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/quick/metrics.json",
+      "sha256": "3e39476b7c773cc6cf2f9490ddc40a2ce6386a16f0f5fda5c9bfef7093d49869",
+      "metrics": {
+        "checks": 3,
+        "failures": 0
+      },
+      "commands_sha256": "b414a8b69bf0bb936b1c007b45210b69eb83062270a71fb6afff17906627fd69"
+    },
+    "regression-alia": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/regression-alia/metrics.json",
+      "sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "220cc4f082ff438375f992dad6a074d28d832064d0bf9be25b68bcfdfccb45ec"
+    },
+    "regression-alra": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/regression-alra/metrics.json",
+      "sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "a6b51e985ff0cc6972fa6ca674c0d7f335c7e22de6cc07aaa6637cabb872d7db"
+    },
+    "regression-ania": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/regression-ania/metrics.json",
+      "sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "d094c246cebb427a511859ff89d0edaab52d4cf9c9c4a593dc4561b972cd9975"
+    },
+    "regression-auflia": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/regression-auflia/metrics.json",
+      "sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "7027fa7896e62215d003b8e8aacf6b887a716c648562185f82f0f91833e8b217"
+    },
+    "regression-auflra": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/regression-auflra/metrics.json",
+      "sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "47c8a2292805f961ecc8270367232e165a0eb2f563902ed9c537d6906d274c57"
+    },
+    "regression-aufnia": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/regression-aufnia/metrics.json",
+      "sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "5fa4fdb77593b59bcd9fe075baec23e7d567e850f0911200841057507d079820"
+    },
+    "regression-ax": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/regression-ax/metrics.json",
+      "sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "7e0afb7327b0e343f952a22d4faa59a3cba619fc3f7f0f5de3aeabc3242595a5"
+    },
+    "regression-bool": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/regression-bool/metrics.json",
+      "sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "624d4594eee5cea2169340012778c9987e5873ab39ace403282ba474c90ba546"
+    },
+    "regression-dt": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/regression-dt/metrics.json",
+      "sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "850153bce0d486f22c39457891d5e71480ba61766d2c5b777fc752d79bc4732c"
+    },
+    "regression-euf": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/regression-euf/metrics.json",
+      "sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "31d962f5a34f6f1b5b54a853b1fd39bcacf0b4e6a0c81cacebea692e15813bc9"
+    },
+    "regression-idl": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/regression-idl/metrics.json",
+      "sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "b68bea4140a8299a268f28220f369bf070a9d2ce434bbaa52245a7110da2a8cc"
+    },
+    "regression-lia": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/regression-lia/metrics.json",
+      "sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "a204f586e19b2d7ef61d0cb3da269f9640195ce8f9da98219073b55032706507"
+    },
+    "regression-lira": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/regression-lira/metrics.json",
+      "sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "2b7c17f33550e549f282aea8458258162cd45b66b02782107ff7f3dd59c3a55a"
+    },
+    "regression-lra": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/regression-lra/metrics.json",
+      "sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "7957c0eb3c41a4ba2bb3e66921115fd88779441530adf8fdb3f3cfcc0e24c057"
+    },
+    "regression-nia": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/regression-nia/metrics.json",
+      "sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "5eb877ff562911fa910d81edd2781644e14a4c47863110a65665966dd595eda6"
+    },
+    "regression-nira": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/regression-nira/metrics.json",
+      "sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "a78ed51c3104fabe791cd6de79b90949db20ae41543e4c8110b3eb1842f4ffba"
+    },
+    "regression-nra": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/regression-nra/metrics.json",
+      "sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "ecfda15715cc007a3223654371928f369f53078e6fb8040d17c5890cee851b8a"
+    },
+    "regression-quantifiers": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/regression-quantifiers/metrics.json",
+      "sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "9eafe3cb5c5c06f494fd2870b0d7714da0d7395cc4f8c265da6d6fcaa99e4181"
+    },
+    "regression-rdl": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/regression-rdl/metrics.json",
+      "sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "16b4da0539f44bdd5d926270c5159e258a7067104d38a963cb87c2e41f36039d"
+    },
+    "regression-sl": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/regression-sl/metrics.json",
+      "sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "703bc0207878da2bd213c981a52274186c50aa4b22b9bb9bf3fa3b30b627eca7"
+    },
+    "regression-ufdtlia": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/regression-ufdtlia/metrics.json",
+      "sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "5f87493de2433c41c76a17c5327bf945eb2095d7aa47f701370ebd085d3e348b"
+    },
+    "regression-ufdtnia": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/regression-ufdtnia/metrics.json",
+      "sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "3b459a1ae9165d493b581ab7706f53d352dc6c5d4dcfecc7806d13fd375ababc"
+    },
+    "regression-uflia": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/regression-uflia/metrics.json",
+      "sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "18314b8800089c22dd9b70dacbafc8cef56c92eeeaf5cf91b7bb6fbfd31363ea"
+    },
+    "regression-uflra": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/regression-uflra/metrics.json",
+      "sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "2fde1f7ae9b4bf9ae9c4a5e8d75a19747c4b4239e1e450f8fdbabbba4345c1c2"
+    },
+    "regression-ufnia": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/regression-ufnia/metrics.json",
+      "sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "192b867dcb488aedec32241443de5d7568c6913d1c9e7e5a82257e40153dc7b5"
+    },
+    "regression-ufnra": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/regression-ufnra/metrics.json",
+      "sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "c860c750bf5776ab53c43f92cf4ab3533b85fd7e770bb982ed73a32ca6f1d479"
+    },
+    "root-regressions": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/root-regressions/metrics.json",
+      "sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "e5c247102f747a51d82653b910d41552daa3113921a371b32ee53096c6651085"
+    },
+    "theory-models": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/theory-models/metrics.json",
+      "sha256": "8c9e4806a72395edf48690987846dbdc956a6f332fde064991b85ec4d6ddd7a5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      },
+      "commands_sha256": "4a1ced09181eda7de61d7dd2c6ce428993371c2f018d6f2476ba737be51196b9"
+    }
+  },
+  "original_harness_failures": [
+    {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r430/ite-structure/metrics.json",
+      "sha256": "5fdf879fc1dc27c53e266dfd3fb71a059e9f5196653110855cea43c720fe4dea",
+      "metrics": {
+        "checks": 1,
+        "failures": 1
+      },
+      "reason": "Harness referenced nonexistent core-r430; corrected first run uses frozen core-r424"
+    }
+  ],
+  "additional_correctness": {
+    "cases": 256,
+    "checked_models": 228,
+    "opposite_verdicts": 0,
+    "invalid_models": 0,
+    "independent_original_truth": "Complete finite-domain enumeration and Z3 decisions",
+    "model_validation": "Every SAT model replayed by both Z3 and cvc5",
+    "original_cvc5_timeouts": [
+      {
+        "batch": "QF_NIA-20261029",
+        "case": "binary-0009",
+        "engine": "cvc5",
+        "actual": "timeout"
+      },
+      {
+        "batch": "QF_NIA-20261029",
+        "case": "binary-0013",
+        "engine": "cvc5",
+        "actual": "timeout"
+      },
+      {
+        "batch": "QF_NIA-20261029",
+        "case": "binary-0014",
+        "engine": "cvc5",
+        "actual": "timeout"
+      },
+      {
+        "batch": "QF_NIA-20261029",
+        "case": "binary-0018",
+        "engine": "cvc5",
+        "actual": "timeout"
+      },
+      {
+        "batch": "QF_NIA-20261029",
+        "case": "binary-0022",
+        "engine": "cvc5",
+        "actual": "timeout"
+      },
+      {
+        "batch": "QF_NIA-20261030",
+        "case": "binary-0013",
+        "engine": "cvc5",
+        "actual": "timeout"
+      },
+      {
+        "batch": "QF_NIA-20261030",
+        "case": "binary-0017",
+        "engine": "cvc5",
+        "actual": "timeout"
+      },
+      {
+        "batch": "QF_NIA-20261030",
+        "case": "binary-0024",
+        "engine": "cvc5",
+        "actual": "timeout"
+      },
+      {
+        "batch": "QF_NIA-20261030",
+        "case": "binary-0030",
+        "engine": "cvc5",
+        "actual": "timeout"
+      },
+      {
+        "batch": "QF_NIA-20261031",
+        "case": "binary-0000",
+        "engine": "cvc5",
+        "actual": "timeout"
+      },
+      {
+        "batch": "QF_NIA-20261031",
+        "case": "binary-0014",
+        "engine": "cvc5",
+        "actual": "timeout"
+      },
+      {
+        "batch": "QF_NIA-20261031",
+        "case": "binary-0021",
+        "engine": "cvc5",
+        "actual": "timeout"
+      },
+      {
+        "batch": "QF_NIA-20261032",
+        "case": "binary-0000",
+        "engine": "cvc5",
+        "actual": "timeout"
+      },
+      {
+        "batch": "QF_NIA-20261032",
+        "case": "binary-0023",
+        "engine": "cvc5",
+        "actual": "timeout"
+      }
+    ],
+    "qa": [
+      {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/binary-model-r426/QF_LIA-20261029/summary.json",
+        "sha256": "7da69947ef973d000334d19b183b46fc8f69df4b705031766c75c636b7c50033",
+        "generator": {
+          "logic": "QF_LIA",
+          "sha256": "8a4756cf466b9c2fe0f23bae53e67a0ae05e0593bf7a966dd1ee759fcaaaac3b",
+          "truth": "Complete enumeration of every binary integer and Boolean assignment; both independent oracles replay each exported model"
+        }
+      },
+      {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/binary-model-r426/QF_LIA-20261030/summary.json",
+        "sha256": "bcef71b99183aed8abd172bc850d191aff268de4a03ba671c1eddb2e958d2198",
+        "generator": {
+          "logic": "QF_LIA",
+          "sha256": "8a4756cf466b9c2fe0f23bae53e67a0ae05e0593bf7a966dd1ee759fcaaaac3b",
+          "truth": "Complete enumeration of every binary integer and Boolean assignment; both independent oracles replay each exported model"
+        }
+      },
+      {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/binary-model-r426/QF_LIA-20261031/summary.json",
+        "sha256": "d06f1407f23efec627e252f4144164782c07dc9d18b9046ac4a13f2defd26bda",
+        "generator": {
+          "logic": "QF_LIA",
+          "sha256": "8a4756cf466b9c2fe0f23bae53e67a0ae05e0593bf7a966dd1ee759fcaaaac3b",
+          "truth": "Complete enumeration of every binary integer and Boolean assignment; both independent oracles replay each exported model"
+        }
+      },
+      {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/binary-model-r426/QF_LIA-20261032/summary.json",
+        "sha256": "26d6c7dde1d3c4b95e02bee63cba03ae97f4562de34087dc0598cbea8cbbf5f0",
+        "generator": {
+          "logic": "QF_LIA",
+          "sha256": "8a4756cf466b9c2fe0f23bae53e67a0ae05e0593bf7a966dd1ee759fcaaaac3b",
+          "truth": "Complete enumeration of every binary integer and Boolean assignment; both independent oracles replay each exported model"
+        }
+      },
+      {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/binary-model-r426/QF_NIA-20261029/summary.json",
+        "sha256": "d411a78a2d1311a7ebfeeb5abcc1799d3867775632461c72f420d8c95b8ff444",
+        "generator": {
+          "logic": "QF_NIA",
+          "sha256": "8a4756cf466b9c2fe0f23bae53e67a0ae05e0593bf7a966dd1ee759fcaaaac3b",
+          "truth": "Complete enumeration of every binary integer and Boolean assignment; both independent oracles replay each exported model"
+        }
+      },
+      {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/binary-model-r426/QF_NIA-20261030/summary.json",
+        "sha256": "63e528334fe36f4fd1f16259d26bb00689c4bcda76362e9f9947d3a6a06fdf50",
+        "generator": {
+          "logic": "QF_NIA",
+          "sha256": "8a4756cf466b9c2fe0f23bae53e67a0ae05e0593bf7a966dd1ee759fcaaaac3b",
+          "truth": "Complete enumeration of every binary integer and Boolean assignment; both independent oracles replay each exported model"
+        }
+      },
+      {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/binary-model-r426/QF_NIA-20261031/summary.json",
+        "sha256": "55a818ac8287e89f7106dbb4459d4609812e77ad9dd13954d3969efbe4fd4f8f",
+        "generator": {
+          "logic": "QF_NIA",
+          "sha256": "8a4756cf466b9c2fe0f23bae53e67a0ae05e0593bf7a966dd1ee759fcaaaac3b",
+          "truth": "Complete enumeration of every binary integer and Boolean assignment; both independent oracles replay each exported model"
+        }
+      },
+      {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/binary-model-r426/QF_NIA-20261032/summary.json",
+        "sha256": "cb4635ba89e7546530e7669b5913a59e1cf62b51eb10671e39f916da1ff1c326",
+        "generator": {
+          "logic": "QF_NIA",
+          "sha256": "8a4756cf466b9c2fe0f23bae53e67a0ae05e0593bf7a966dd1ee759fcaaaac3b",
+          "truth": "Complete enumeration of every binary integer and Boolean assignment; both independent oracles replay each exported model"
+        }
+      }
+    ]
+  },
+  "closed_qualification_failure": {
+    "experiment": "6d0a44b7b325",
+    "frozen": false,
+    "reason": "Initial context crashed on partial assignments; original test retained, fixed with explicit support checking and raw-value ownership",
+    "debug_experiment": "6bd8edcf8559",
+    "debug_boundary": "gdb unavailable; no debugger stack was obtained"
+  },
+  "experiments": {
+    "native": "1a80474869c8",
+    "ablation_r420": "f19db88f857e",
+    "ablation_r422": "c76c878ebde4",
+    "qa": "b366c5835630",
+    "acceptance": "41ee7590b222",
+    "corrected_harness": "654940f6494e",
+    "formal": "f3dddf04487e"
+  },
+  "leases": [
+    {
+      "kind": "native",
+      "experiment": "1a80474869c8",
+      "run": "78d6df1f7f32",
+      "input": "controller",
+      "cpu": 0,
+      "physical_core": [
+        "0",
+        "0"
+      ],
+      "execution_begin_ns": 1793206893934556077,
+      "execution_end_ns": 1793207179303124620,
+      "status": "success"
+    },
+    {
+      "kind": "ablation_r420",
+      "experiment": "f19db88f857e",
+      "run": "abab61792d92",
+      "input": "0",
+      "cpu": 0,
+      "physical_core": [
+        "0",
+        "0"
+      ],
+      "execution_begin_ns": 1793207343686028159,
+      "execution_end_ns": 1793207345983040784,
+      "status": "success"
+    },
+    {
+      "kind": "ablation_r420",
+      "experiment": "f19db88f857e",
+      "run": "d1ef476c21b8",
+      "input": "2",
+      "cpu": 1,
+      "physical_core": [
+        "0",
+        "1"
+      ],
+      "execution_begin_ns": 1793207344064030236,
+      "execution_end_ns": 1793207507201926931,
+      "status": "success"
+    },
+    {
+      "kind": "ablation_r420",
+      "experiment": "f19db88f857e",
+      "run": "1334db44554c",
+      "input": "18",
+      "cpu": 2,
+      "physical_core": [
+        "0",
+        "2"
+      ],
+      "execution_begin_ns": 1793207344258031303,
+      "execution_end_ns": 1793207446394592702,
+      "status": "success"
+    },
+    {
+      "kind": "ablation_r420",
+      "experiment": "f19db88f857e",
+      "run": "3574c5989c51",
+      "input": "31",
+      "cpu": 3,
+      "physical_core": [
+        "0",
+        "3"
+      ],
+      "execution_begin_ns": 1793207344452032369,
+      "execution_end_ns": 1793207411555401207,
+      "status": "success"
+    },
+    {
+      "kind": "ablation_r420",
+      "experiment": "f19db88f857e",
+      "run": "d40d87e345cf",
+      "input": "40",
+      "cpu": 4,
+      "physical_core": [
+        "0",
+        "4"
+      ],
+      "execution_begin_ns": 1793207344651033463,
+      "execution_end_ns": 1793207346164041779,
+      "status": "success"
+    },
+    {
+      "kind": "ablation_r420",
+      "experiment": "f19db88f857e",
+      "run": "db3f9ed9ac3e",
+      "input": "92",
+      "cpu": 5,
+      "physical_core": [
+        "0",
+        "5"
+      ],
+      "execution_begin_ns": 1793207344845034529,
+      "execution_end_ns": 1793207349652060951,
+      "status": "success"
+    },
+    {
+      "kind": "ablation_r420",
+      "experiment": "f19db88f857e",
+      "run": "89b93ad4c4cf",
+      "input": "97",
+      "cpu": 6,
+      "physical_core": [
+        "0",
+        "6"
+      ],
+      "execution_begin_ns": 1793207345039035596,
+      "execution_end_ns": 1793207510971485589,
+      "status": "success"
+    },
+    {
+      "kind": "ablation_r420",
+      "experiment": "f19db88f857e",
+      "run": "af4de8ae8283",
+      "input": "123",
+      "cpu": 7,
+      "physical_core": [
+        "0",
+        "7"
+      ],
+      "execution_begin_ns": 1793207345234036667,
+      "execution_end_ns": 1793207371866581483,
+      "status": "success"
+    },
+    {
+      "kind": "ablation_r422",
+      "experiment": "c76c878ebde4",
+      "run": "d712fa8ce368",
+      "input": "0",
+      "cpu": 0,
+      "physical_core": [
+        "0",
+        "0"
+      ],
+      "execution_begin_ns": 1793207350061063200,
+      "execution_end_ns": 1793207352427076204,
+      "status": "success"
+    },
+    {
+      "kind": "ablation_r422",
+      "experiment": "c76c878ebde4",
+      "run": "36299dafefe4",
+      "input": "2",
+      "cpu": 4,
+      "physical_core": [
+        "0",
+        "4"
+      ],
+      "execution_begin_ns": 1793207350299064507,
+      "execution_end_ns": 1793207508248932686,
+      "status": "success"
+    },
+    {
+      "kind": "ablation_r422",
+      "experiment": "c76c878ebde4",
+      "run": "f7364c2e2883",
+      "input": "18",
+      "cpu": 8,
+      "physical_core": [
+        "0",
+        "8"
+      ],
+      "execution_begin_ns": 1793207350503065629,
+      "execution_end_ns": 1793207450752616657,
+      "status": "success"
+    },
+    {
+      "kind": "ablation_r422",
+      "experiment": "c76c878ebde4",
+      "run": "3279f14d5f0f",
+      "input": "31",
+      "cpu": 9,
+      "physical_core": [
+        "0",
+        "9"
+      ],
+      "execution_begin_ns": 1793207350691066662,
+      "execution_end_ns": 1793207417895436055,
+      "status": "success"
+    },
+    {
+      "kind": "ablation_r422",
+      "experiment": "c76c878ebde4",
+      "run": "6b6e49f49123",
+      "input": "40",
+      "cpu": 10,
+      "physical_core": [
+        "0",
+        "10"
+      ],
+      "execution_begin_ns": 1793207350886067734,
+      "execution_end_ns": 1793207352489076545,
+      "status": "success"
+    },
+    {
+      "kind": "ablation_r422",
+      "experiment": "c76c878ebde4",
+      "run": "ce7e4917d9e8",
+      "input": "92",
+      "cpu": 11,
+      "physical_core": [
+        "0",
+        "11"
+      ],
+      "execution_begin_ns": 1793207351078068789,
+      "execution_end_ns": 1793207357187102368,
+      "status": "success"
+    },
+    {
+      "kind": "ablation_r422",
+      "experiment": "c76c878ebde4",
+      "run": "b8bb53e7ebd6",
+      "input": "97",
+      "cpu": 12,
+      "physical_core": [
+        "0",
+        "12"
+      ],
+      "execution_begin_ns": 1793207351274069867,
+      "execution_end_ns": 1793207516836979891,
+      "status": "success"
+    },
+    {
+      "kind": "ablation_r422",
+      "experiment": "c76c878ebde4",
+      "run": "13259414da67",
+      "input": "123",
+      "cpu": 13,
+      "physical_core": [
+        "0",
+        "13"
+      ],
+      "execution_begin_ns": 1793207351468070933,
+      "execution_end_ns": 1793207378231218038,
+      "status": "success"
+    },
+    {
+      "kind": "qa",
+      "experiment": "b366c5835630",
+      "run": "7c28d3d51eca",
+      "input": "QF_LIA:20261029",
+      "cpu": 0,
+      "physical_core": [
+        "0",
+        "0"
+      ],
+      "execution_begin_ns": 1793207357645104885,
+      "execution_end_ns": 1793207363063134666,
+      "status": "success"
+    },
+    {
+      "kind": "qa",
+      "experiment": "b366c5835630",
+      "run": "80ca354e0f9c",
+      "input": "QF_LIA:20261030",
+      "cpu": 5,
+      "physical_core": [
+        "0",
+        "5"
+      ],
+      "execution_begin_ns": 1793207357989106776,
+      "execution_end_ns": 1793207363304135991,
+      "status": "success"
+    },
+    {
+      "kind": "qa",
+      "experiment": "b366c5835630",
+      "run": "9b9308c1a39d",
+      "input": "QF_LIA:20261031",
+      "cpu": 10,
+      "physical_core": [
+        "0",
+        "10"
+      ],
+      "execution_begin_ns": 1793207358385108953,
+      "execution_end_ns": 1793207363593137579,
+      "status": "success"
+    },
+    {
+      "kind": "qa",
+      "experiment": "b366c5835630",
+      "run": "7525a7e6897b",
+      "input": "QF_LIA:20261032",
+      "cpu": 14,
+      "physical_core": [
+        "0",
+        "14"
+      ],
+      "execution_begin_ns": 1793207358579110019,
+      "execution_end_ns": 1793207415060420472,
+      "status": "success"
+    },
+    {
+      "kind": "qa",
+      "experiment": "b366c5835630",
+      "run": "7e60d84df7e7",
+      "input": "QF_NIA:20261029",
+      "cpu": 15,
+      "physical_core": [
+        "0",
+        "15"
+      ],
+      "execution_begin_ns": 1793207358791111184,
+      "execution_end_ns": 1793207389211278391,
+      "status": "success"
+    },
+    {
+      "kind": "qa",
+      "experiment": "b366c5835630",
+      "run": "153b07a5f17a",
+      "input": "QF_NIA:20261030",
+      "cpu": 16,
+      "physical_core": [
+        "1",
+        "0"
+      ],
+      "execution_begin_ns": 1793207358978112212,
+      "execution_end_ns": 1793207384109250347,
+      "status": "success"
+    },
+    {
+      "kind": "qa",
+      "experiment": "b366c5835630",
+      "run": "9e656e8423fb",
+      "input": "QF_NIA:20261031",
+      "cpu": 17,
+      "physical_core": [
+        "1",
+        "1"
+      ],
+      "execution_begin_ns": 1793207359168113257,
+      "execution_end_ns": 1793207379310223969,
+      "status": "success"
+    },
+    {
+      "kind": "qa",
+      "experiment": "b366c5835630",
+      "run": "468dde850598",
+      "input": "QF_NIA:20261032",
+      "cpu": 18,
+      "physical_core": [
+        "1",
+        "2"
+      ],
+      "execution_begin_ns": 1793207359384114444,
+      "execution_end_ns": 1793207374632198256,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "9fc8bfe08efb",
+      "input": "ite-structure",
+      "cpu": 9,
+      "physical_core": [
+        "0",
+        "9"
+      ],
+      "execution_begin_ns": 1793207552356175124,
+      "execution_end_ns": 1793207553502181424,
+      "status": "failed"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "429ebddffd00",
+      "input": "root-regressions",
+      "cpu": 0,
+      "physical_core": [
+        "0",
+        "0"
+      ],
+      "execution_begin_ns": 1793207550550165198,
+      "execution_end_ns": 1793207551587170897,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "f9da342b34d6",
+      "input": "architecture",
+      "cpu": 1,
+      "physical_core": [
+        "0",
+        "1"
+      ],
+      "execution_begin_ns": 1793207550737166225,
+      "execution_end_ns": 1793207553210564728,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "145f82b88711",
+      "input": "known-gaps",
+      "cpu": 2,
+      "physical_core": [
+        "0",
+        "2"
+      ],
+      "execution_begin_ns": 1793207550935167314,
+      "execution_end_ns": 1793207551980173058,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "117537d7e965",
+      "input": "affine",
+      "cpu": 3,
+      "physical_core": [
+        "0",
+        "3"
+      ],
+      "execution_begin_ns": 1793207551141168446,
+      "execution_end_ns": 1793207565321246388,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "a0bf39a83234",
+      "input": "linear",
+      "cpu": 4,
+      "physical_core": [
+        "0",
+        "4"
+      ],
+      "execution_begin_ns": 1793207551354169617,
+      "execution_end_ns": 1793207574532297017,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "8205bcd903c7",
+      "input": "partial",
+      "cpu": 5,
+      "physical_core": [
+        "0",
+        "5"
+      ],
+      "execution_begin_ns": 1793207551559199095,
+      "execution_end_ns": 1793207556275196665,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "08db79735d73",
+      "input": "intervals",
+      "cpu": 6,
+      "physical_core": [
+        "0",
+        "6"
+      ],
+      "execution_begin_ns": 1793207551765171876,
+      "execution_end_ns": 1793207635509632182,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "86ee90b546c6",
+      "input": "quick",
+      "cpu": 7,
+      "physical_core": [
+        "0",
+        "7"
+      ],
+      "execution_begin_ns": 1793207551952172904,
+      "execution_end_ns": 1793207556297196787,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "e18dbfc4dda3",
+      "input": "ite",
+      "cpu": 8,
+      "physical_core": [
+        "0",
+        "8"
+      ],
+      "execution_begin_ns": 1793207552149173986,
+      "execution_end_ns": 1793207554087184639,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "da701a43f166",
+      "input": "regression-alia",
+      "cpu": 10,
+      "physical_core": [
+        "0",
+        "10"
+      ],
+      "execution_begin_ns": 1793207552554176213,
+      "execution_end_ns": 1793207554098184700,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "71ddd7afe6e5",
+      "input": "regression-alra",
+      "cpu": 11,
+      "physical_core": [
+        "0",
+        "11"
+      ],
+      "execution_begin_ns": 1793207552757177329,
+      "execution_end_ns": 1793207554299185804,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "b4d9599f1caf",
+      "input": "regression-ania",
+      "cpu": 12,
+      "physical_core": [
+        "0",
+        "12"
+      ],
+      "execution_begin_ns": 1793207552951223485,
+      "execution_end_ns": 1793207554281185705,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "e63b52673cfd",
+      "input": "regression-auflia",
+      "cpu": 13,
+      "physical_core": [
+        "0",
+        "13"
+      ],
+      "execution_begin_ns": 1793207553153992022,
+      "execution_end_ns": 1793207554502186920,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "f6d3afc44b0b",
+      "input": "regression-auflra",
+      "cpu": 14,
+      "physical_core": [
+        "0",
+        "14"
+      ],
+      "execution_begin_ns": 1793207553354180610,
+      "execution_end_ns": 1793207554501186914,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "6eae4b13eaaf",
+      "input": "regression-aufnia",
+      "cpu": 15,
+      "physical_core": [
+        "0",
+        "15"
+      ],
+      "execution_begin_ns": 1793207553556181720,
+      "execution_end_ns": 1793207559715215574,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "90aad08a8902",
+      "input": "regression-ax",
+      "cpu": 16,
+      "physical_core": [
+        "1",
+        "0"
+      ],
+      "execution_begin_ns": 1793207553773182913,
+      "execution_end_ns": 1793207555132190383,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "a40989d74d06",
+      "input": "regression-bool",
+      "cpu": 17,
+      "physical_core": [
+        "1",
+        "1"
+      ],
+      "execution_begin_ns": 1793207553977184034,
+      "execution_end_ns": 1793207555917194698,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "7073203938df",
+      "input": "regression-dt",
+      "cpu": 18,
+      "physical_core": [
+        "1",
+        "2"
+      ],
+      "execution_begin_ns": 1793207554172185106,
+      "execution_end_ns": 1793207555691193455,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "5ca5e0796713",
+      "input": "regression-euf",
+      "cpu": 19,
+      "physical_core": [
+        "1",
+        "3"
+      ],
+      "execution_begin_ns": 1793207554378186239,
+      "execution_end_ns": 1793207798443527760,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "9567d7e0eb9c",
+      "input": "regression-idl",
+      "cpu": 20,
+      "physical_core": [
+        "1",
+        "4"
+      ],
+      "execution_begin_ns": 1793207554562187250,
+      "execution_end_ns": 1793207797739523891,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "41fa49e938d5",
+      "input": "regression-lia",
+      "cpu": 21,
+      "physical_core": [
+        "1",
+        "5"
+      ],
+      "execution_begin_ns": 1793207554760188338,
+      "execution_end_ns": 1793207558297207779,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "2900e6cb6bb1",
+      "input": "regression-lira",
+      "cpu": 22,
+      "physical_core": [
+        "1",
+        "6"
+      ],
+      "execution_begin_ns": 1793207554964189459,
+      "execution_end_ns": 1793207557612204015,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "823ad7efa6bb",
+      "input": "regression-lra",
+      "cpu": 23,
+      "physical_core": [
+        "1",
+        "7"
+      ],
+      "execution_begin_ns": 1793207555163513306,
+      "execution_end_ns": 1793207558113206768,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "fd578eae298f",
+      "input": "regression-nira",
+      "cpu": 24,
+      "physical_core": [
+        "1",
+        "8"
+      ],
+      "execution_begin_ns": 1793207555373191707,
+      "execution_end_ns": 1793207557830006165,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "908c16b508e3",
+      "input": "regression-nra",
+      "cpu": 25,
+      "physical_core": [
+        "1",
+        "9"
+      ],
+      "execution_begin_ns": 1793207555639193170,
+      "execution_end_ns": 1793207601981447893,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "b57c1b9a3ac6",
+      "input": "regression-quantifiers",
+      "cpu": 26,
+      "physical_core": [
+        "1",
+        "10"
+      ],
+      "execution_begin_ns": 1793207556054195451,
+      "execution_end_ns": 1793207558032206323,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "7399f918da9d",
+      "input": "regression-rdl",
+      "cpu": 27,
+      "physical_core": [
+        "1",
+        "11"
+      ],
+      "execution_begin_ns": 1793207556231196423,
+      "execution_end_ns": 1793207557660204278,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "e0faa2e14b0e",
+      "input": "regression-sl",
+      "cpu": 28,
+      "physical_core": [
+        "1",
+        "12"
+      ],
+      "execution_begin_ns": 1793207556444197594,
+      "execution_end_ns": 1793207914894167838,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "fb0c801ba947",
+      "input": "regression-ufdtlia",
+      "cpu": 29,
+      "physical_core": [
+        "1",
+        "13"
+      ],
+      "execution_begin_ns": 1793207556657198765,
+      "execution_end_ns": 1793207557710204553,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "ee62eb05ab84",
+      "input": "regression-ufdtnia",
+      "cpu": 30,
+      "physical_core": [
+        "1",
+        "14"
+      ],
+      "execution_begin_ns": 1793207556850199826,
+      "execution_end_ns": 1793207558409208395,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "eb1c9dd779af",
+      "input": "regression-uflia",
+      "cpu": 31,
+      "physical_core": [
+        "1",
+        "15"
+      ],
+      "execution_begin_ns": 1793207557054200947,
+      "execution_end_ns": 1793207559002211655,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "5c5237c4f51a",
+      "input": "regression-uflra",
+      "cpu": 32,
+      "physical_core": [
+        "2",
+        "0"
+      ],
+      "execution_begin_ns": 1793207557251202030,
+      "execution_end_ns": 1793207558588419401,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "32f9f7ced9d7",
+      "input": "regression-ufnia",
+      "cpu": 33,
+      "physical_core": [
+        "2",
+        "1"
+      ],
+      "execution_begin_ns": 1793207557448203113,
+      "execution_end_ns": 1793207564596242402,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "ef51822284ea",
+      "input": "regression-ufnra",
+      "cpu": 34,
+      "physical_core": [
+        "2",
+        "2"
+      ],
+      "execution_begin_ns": 1793207557654204245,
+      "execution_end_ns": 1793207559182212644,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "47142918514c",
+      "input": "theory-models",
+      "cpu": 35,
+      "physical_core": [
+        "2",
+        "3"
+      ],
+      "execution_begin_ns": 1793207557849205317,
+      "execution_end_ns": 1793207917301181068,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "bd879a12519d",
+      "input": "regression-nia",
+      "cpu": 36,
+      "physical_core": [
+        "2",
+        "4"
+      ],
+      "execution_begin_ns": 1793207558022206268,
+      "execution_end_ns": 1793207565754248768,
+      "status": "success"
+    },
+    {
+      "kind": "acceptance",
+      "experiment": "41ee7590b222",
+      "run": "bb2b643a98dd",
+      "input": "qcp",
+      "cpu": 37,
+      "physical_core": [
+        "2",
+        "5"
+      ],
+      "execution_begin_ns": 1793207558203207263,
+      "execution_end_ns": 1793207587679369280,
+      "status": "success"
+    },
+    {
+      "kind": "corrected_harness",
+      "experiment": "654940f6494e",
+      "run": "22f36d9cd3c0",
+      "input": "ite-structure",
+      "cpu": 0,
+      "physical_core": [
+        "0",
+        "0"
+      ],
+      "execution_begin_ns": 1793207689860930930,
+      "execution_end_ns": 1793207735599182332,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "7221321c87e7",
+      "input": "0",
+      "cpu": 1,
+      "physical_core": [
+        "0",
+        "1"
+      ],
+      "execution_begin_ns": 1793207693954953432,
+      "execution_end_ns": 1793207697758974341,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "04e2c611d941",
+      "input": "1",
+      "cpu": 2,
+      "physical_core": [
+        "0",
+        "2"
+      ],
+      "execution_begin_ns": 1793207694139954450,
+      "execution_end_ns": 1793207816966629574,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "0203f14386b4",
+      "input": "2",
+      "cpu": 3,
+      "physical_core": [
+        "0",
+        "3"
+      ],
+      "execution_begin_ns": 1793207694318955433,
+      "execution_end_ns": 1793207858436857517,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "b84950e37dde",
+      "input": "3",
+      "cpu": 4,
+      "physical_core": [
+        "0",
+        "4"
+      ],
+      "execution_begin_ns": 1793207694512956499,
+      "execution_end_ns": 1793207696917969719,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "a49ba6fac4f4",
+      "input": "4",
+      "cpu": 5,
+      "physical_core": [
+        "0",
+        "5"
+      ],
+      "execution_begin_ns": 1793207694720957643,
+      "execution_end_ns": 1793207837732743716,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "0f9c2d176b85",
+      "input": "5",
+      "cpu": 6,
+      "physical_core": [
+        "0",
+        "6"
+      ],
+      "execution_begin_ns": 1793207694903958649,
+      "execution_end_ns": 1793207718331087417,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "53af71a29230",
+      "input": "6",
+      "cpu": 7,
+      "physical_core": [
+        "0",
+        "7"
+      ],
+      "execution_begin_ns": 1793207695099959726,
+      "execution_end_ns": 1793207697696974001,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "672e238903a5",
+      "input": "7",
+      "cpu": 8,
+      "physical_core": [
+        "0",
+        "8"
+      ],
+      "execution_begin_ns": 1793207695286960754,
+      "execution_end_ns": 1793207735212180205,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "35ed336ac90e",
+      "input": "8",
+      "cpu": 9,
+      "physical_core": [
+        "0",
+        "9"
+      ],
+      "execution_begin_ns": 1793207695473961782,
+      "execution_end_ns": 1793207700279988199,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "a21e86c3cbb7",
+      "input": "9",
+      "cpu": 10,
+      "physical_core": [
+        "0",
+        "10"
+      ],
+      "execution_begin_ns": 1793207695667962848,
+      "execution_end_ns": 1793207697172971121,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "d0a47d7813cd",
+      "input": "10",
+      "cpu": 11,
+      "physical_core": [
+        "0",
+        "11"
+      ],
+      "execution_begin_ns": 1793207695849963849,
+      "execution_end_ns": 1793207878102965613,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "e3aa7ac3736d",
+      "input": "11",
+      "cpu": 12,
+      "physical_core": [
+        "0",
+        "12"
+      ],
+      "execution_begin_ns": 1793207696039964893,
+      "execution_end_ns": 1793207735394181206,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "06039b8b51a5",
+      "input": "12",
+      "cpu": 13,
+      "physical_core": [
+        "0",
+        "13"
+      ],
+      "execution_begin_ns": 1793207696237965981,
+      "execution_end_ns": 1793207916900178864,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "2165368ff9e5",
+      "input": "13",
+      "cpu": 14,
+      "physical_core": [
+        "0",
+        "14"
+      ],
+      "execution_begin_ns": 1793207696411966937,
+      "execution_end_ns": 1793207819878645580,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "4180d161e99d",
+      "input": "14",
+      "cpu": 15,
+      "physical_core": [
+        "0",
+        "15"
+      ],
+      "execution_begin_ns": 1793207696601968861,
+      "execution_end_ns": 1793207877949964772,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "a3e59c7d5516",
+      "input": "15",
+      "cpu": 16,
+      "physical_core": [
+        "1",
+        "0"
+      ],
+      "execution_begin_ns": 1793207696801969081,
+      "execution_end_ns": 1793207699418983466,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "e60a0a180789",
+      "input": "16",
+      "cpu": 17,
+      "physical_core": [
+        "1",
+        "1"
+      ],
+      "execution_begin_ns": 1793207696986970098,
+      "execution_end_ns": 1793207878740969120,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "69dbe1aaae47",
+      "input": "17",
+      "cpu": 18,
+      "physical_core": [
+        "1",
+        "2"
+      ],
+      "execution_begin_ns": 1793207697173971126,
+      "execution_end_ns": 1793207698461978206,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "1773f0ed3d00",
+      "input": "18",
+      "cpu": 21,
+      "physical_core": [
+        "1",
+        "5"
+      ],
+      "execution_begin_ns": 1793207697363972170,
+      "execution_end_ns": 1793207784080448813,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "076b86bdf62b",
+      "input": "19",
+      "cpu": 22,
+      "physical_core": [
+        "1",
+        "6"
+      ],
+      "execution_begin_ns": 1793207697552973209,
+      "execution_end_ns": 1793207699057981482,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "9316778921ae",
+      "input": "20",
+      "cpu": 23,
+      "physical_core": [
+        "1",
+        "7"
+      ],
+      "execution_begin_ns": 1793207697750974297,
+      "execution_end_ns": 1793207709665039784,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "9dc7331c7935",
+      "input": "21",
+      "cpu": 24,
+      "physical_core": [
+        "1",
+        "8"
+      ],
+      "execution_begin_ns": 1793207697945975369,
+      "execution_end_ns": 1793207880564979145,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "7d50aa366e76",
+      "input": "22",
+      "cpu": 25,
+      "physical_core": [
+        "1",
+        "9"
+      ],
+      "execution_begin_ns": 1793207698133976403,
+      "execution_end_ns": 1793207699435983559,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "81c39401c745",
+      "input": "23",
+      "cpu": 26,
+      "physical_core": [
+        "1",
+        "10"
+      ],
+      "execution_begin_ns": 1793207698322977441,
+      "execution_end_ns": 1793207779728424892,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "08ec7804fde2",
+      "input": "24",
+      "cpu": 27,
+      "physical_core": [
+        "1",
+        "11"
+      ],
+      "execution_begin_ns": 1793207698510978475,
+      "execution_end_ns": 1793207880433978425,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "0654ab340e77",
+      "input": "25",
+      "cpu": 29,
+      "physical_core": [
+        "1",
+        "13"
+      ],
+      "execution_begin_ns": 1793207698693979481,
+      "execution_end_ns": 1793207699899986110,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "25b722a5bf05",
+      "input": "26",
+      "cpu": 30,
+      "physical_core": [
+        "1",
+        "14"
+      ],
+      "execution_begin_ns": 1793207698883980525,
+      "execution_end_ns": 1793207700196987742,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "0d8b5168bf78",
+      "input": "27",
+      "cpu": 31,
+      "physical_core": [
+        "1",
+        "15"
+      ],
+      "execution_begin_ns": 1793207699094981685,
+      "execution_end_ns": 1793207880263977491,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "1bcc92ce6e3d",
+      "input": "28",
+      "cpu": 32,
+      "physical_core": [
+        "2",
+        "0"
+      ],
+      "execution_begin_ns": 1793207699294982784,
+      "execution_end_ns": 1793207701021992277,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "3b3e30616eb6",
+      "input": "29",
+      "cpu": 33,
+      "physical_core": [
+        "2",
+        "1"
+      ],
+      "execution_begin_ns": 1793207699501983922,
+      "execution_end_ns": 1793207822964662542,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "517010f1c204",
+      "input": "30",
+      "cpu": 34,
+      "physical_core": [
+        "2",
+        "2"
+      ],
+      "execution_begin_ns": 1793207699693984977,
+      "execution_end_ns": 1793207702111998268,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "11012810ff8a",
+      "input": "31",
+      "cpu": 36,
+      "physical_core": [
+        "2",
+        "4"
+      ],
+      "execution_begin_ns": 1793207699888986049,
+      "execution_end_ns": 1793207766910354436,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "77647140ea85",
+      "input": "32",
+      "cpu": 37,
+      "physical_core": [
+        "2",
+        "5"
+      ],
+      "execution_begin_ns": 1793207700099987209,
+      "execution_end_ns": 1793207883053992826,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "70dbb8b943d0",
+      "input": "33",
+      "cpu": 38,
+      "physical_core": [
+        "2",
+        "6"
+      ],
+      "execution_begin_ns": 1793207700290988259,
+      "execution_end_ns": 1793207977486512409,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "1016fed5b4b1",
+      "input": "34",
+      "cpu": 39,
+      "physical_core": [
+        "2",
+        "7"
+      ],
+      "execution_begin_ns": 1793207700484989325,
+      "execution_end_ns": 1793207822846661894,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "6e6a4575c5e2",
+      "input": "35",
+      "cpu": 40,
+      "physical_core": [
+        "2",
+        "8"
+      ],
+      "execution_begin_ns": 1793207700678990391,
+      "execution_end_ns": 1793207977472512332,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "2bbad568cb74",
+      "input": "36",
+      "cpu": 41,
+      "physical_core": [
+        "2",
+        "9"
+      ],
+      "execution_begin_ns": 1793207700862991403,
+      "execution_end_ns": 1793207703374950531,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "e44c196542ac",
+      "input": "37",
+      "cpu": 42,
+      "physical_core": [
+        "2",
+        "10"
+      ],
+      "execution_begin_ns": 1793207701048992425,
+      "execution_end_ns": 1793207917684183174,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "03960360e877",
+      "input": "38",
+      "cpu": 43,
+      "physical_core": [
+        "2",
+        "11"
+      ],
+      "execution_begin_ns": 1793207701249993530,
+      "execution_end_ns": 1793207977665513400,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "623501578aab",
+      "input": "39",
+      "cpu": 44,
+      "physical_core": [
+        "2",
+        "12"
+      ],
+      "execution_begin_ns": 1793207701451994641,
+      "execution_end_ns": 1793207823036662938,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "bc152b6d93cd",
+      "input": "40",
+      "cpu": 45,
+      "physical_core": [
+        "2",
+        "13"
+      ],
+      "execution_begin_ns": 1793207701651995740,
+      "execution_end_ns": 1793207703370005183,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "bc53f783f51d",
+      "input": "41",
+      "cpu": 46,
+      "physical_core": [
+        "2",
+        "14"
+      ],
+      "execution_begin_ns": 1793207701853996850,
+      "execution_end_ns": 1793207703053003440,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "91bf936051e4",
+      "input": "42",
+      "cpu": 47,
+      "physical_core": [
+        "2",
+        "15"
+      ],
+      "execution_begin_ns": 1793207702028997812,
+      "execution_end_ns": 1793207883299665495,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "e9433a56832c",
+      "input": "43",
+      "cpu": 48,
+      "physical_core": [
+        "3",
+        "0"
+      ],
+      "execution_begin_ns": 1793207702219998862,
+      "execution_end_ns": 1793207705754018287,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "918658e54427",
+      "input": "44",
+      "cpu": 49,
+      "physical_core": [
+        "3",
+        "1"
+      ],
+      "execution_begin_ns": 1793207702414999933,
+      "execution_end_ns": 1793207744790232852,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "f298aa583781",
+      "input": "45",
+      "cpu": 50,
+      "physical_core": [
+        "3",
+        "2"
+      ],
+      "execution_begin_ns": 1793207702607166779,
+      "execution_end_ns": 1793207775611402262,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "c316ed5bbc9b",
+      "input": "46",
+      "cpu": 51,
+      "physical_core": [
+        "3",
+        "3"
+      ],
+      "execution_begin_ns": 1793207702803002066,
+      "execution_end_ns": 1793207914794167288,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "289093e525eb",
+      "input": "47",
+      "cpu": 52,
+      "physical_core": [
+        "3",
+        "4"
+      ],
+      "execution_begin_ns": 1793207702980003039,
+      "execution_end_ns": 1793207860415868395,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "6f724d86cac3",
+      "input": "48",
+      "cpu": 53,
+      "physical_core": [
+        "3",
+        "5"
+      ],
+      "execution_begin_ns": 1793207703181004144,
+      "execution_end_ns": 1793207898992080431,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "558094be22d8",
+      "input": "49",
+      "cpu": 54,
+      "physical_core": [
+        "3",
+        "6"
+      ],
+      "execution_begin_ns": 1793207703452005634,
+      "execution_end_ns": 1793208039202853911,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "e5e41f7c4baf",
+      "input": "50",
+      "cpu": 55,
+      "physical_core": [
+        "3",
+        "7"
+      ],
+      "execution_begin_ns": 1793207703671006838,
+      "execution_end_ns": 1793207934992278309,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "b1fe656d5b6b",
+      "input": "51",
+      "cpu": 56,
+      "physical_core": [
+        "3",
+        "8"
+      ],
+      "execution_begin_ns": 1793207703899008090,
+      "execution_end_ns": 1793207827285686293,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "d50fb3810729",
+      "input": "52",
+      "cpu": 57,
+      "physical_core": [
+        "3",
+        "9"
+      ],
+      "execution_begin_ns": 1793207704106009228,
+      "execution_end_ns": 1793207741995217489,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "8648c211876f",
+      "input": "53",
+      "cpu": 58,
+      "physical_core": [
+        "3",
+        "10"
+      ],
+      "execution_begin_ns": 1793207704350010569,
+      "execution_end_ns": 1793207705744018232,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "56c67f1ca223",
+      "input": "54",
+      "cpu": 59,
+      "physical_core": [
+        "3",
+        "11"
+      ],
+      "execution_begin_ns": 1793207704650012218,
+      "execution_end_ns": 1793207705852018826,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "d8a56ac6f476",
+      "input": "55",
+      "cpu": 60,
+      "physical_core": [
+        "3",
+        "12"
+      ],
+      "execution_begin_ns": 1793207704841013268,
+      "execution_end_ns": 1793207718556088654,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "becc1313a1f5",
+      "input": "56",
+      "cpu": 61,
+      "physical_core": [
+        "3",
+        "13"
+      ],
+      "execution_begin_ns": 1793207705055014445,
+      "execution_end_ns": 1793207849045805899,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "7267e81a0108",
+      "input": "57",
+      "cpu": 62,
+      "physical_core": [
+        "3",
+        "14"
+      ],
+      "execution_begin_ns": 1793207705252015527,
+      "execution_end_ns": 1793207886302010679,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "6eba2bb741d7",
+      "input": "58",
+      "cpu": 0,
+      "physical_core": [
+        "0",
+        "0"
+      ],
+      "execution_begin_ns": 1793207779335422732,
+      "execution_end_ns": 1793207971713480465,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "e792a147e13d",
+      "input": "59",
+      "cpu": 1,
+      "physical_core": [
+        "0",
+        "1"
+      ],
+      "execution_begin_ns": 1793207779545423886,
+      "execution_end_ns": 1793207797080520269,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "aa52f3e902f5",
+      "input": "60",
+      "cpu": 4,
+      "physical_core": [
+        "0",
+        "4"
+      ],
+      "execution_begin_ns": 1793207779755425040,
+      "execution_end_ns": 1793207781169432812,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "9e3e12e112cc",
+      "input": "61",
+      "cpu": 6,
+      "physical_core": [
+        "0",
+        "6"
+      ],
+      "execution_begin_ns": 1793207779958426156,
+      "execution_end_ns": 1793207781275163325,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "c08f7af6a0e9",
+      "input": "62",
+      "cpu": 7,
+      "physical_core": [
+        "0",
+        "7"
+      ],
+      "execution_begin_ns": 1793207780162427277,
+      "execution_end_ns": 1793207961331423083,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "f1cf5ea09b6e",
+      "input": "63",
+      "cpu": 8,
+      "physical_core": [
+        "0",
+        "8"
+      ],
+      "execution_begin_ns": 1793207780350428311,
+      "execution_end_ns": 1793207816614627639,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "8f75030e291e",
+      "input": "64",
+      "cpu": 9,
+      "physical_core": [
+        "0",
+        "9"
+      ],
+      "execution_begin_ns": 1793207780555429437,
+      "execution_end_ns": 1793207782564440480,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "1c4234cd9fbc",
+      "input": "65",
+      "cpu": 10,
+      "physical_core": [
+        "0",
+        "10"
+      ],
+      "execution_begin_ns": 1793207780756430542,
+      "execution_end_ns": 1793207842358769143,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "87acb6741194",
+      "input": "66",
+      "cpu": 12,
+      "physical_core": [
+        "0",
+        "12"
+      ],
+      "execution_begin_ns": 1793207780958431653,
+      "execution_end_ns": 1793207844675781879,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "4f574c9719d7",
+      "input": "67",
+      "cpu": 16,
+      "physical_core": [
+        "1",
+        "0"
+      ],
+      "execution_begin_ns": 1793207781162432774,
+      "execution_end_ns": 1793207782774441634,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "c2e6469a4033",
+      "input": "68",
+      "cpu": 18,
+      "physical_core": [
+        "1",
+        "2"
+      ],
+      "execution_begin_ns": 1793207781367433901,
+      "execution_end_ns": 1793207782883442233,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "79bc8723548c",
+      "input": "69",
+      "cpu": 22,
+      "physical_core": [
+        "1",
+        "6"
+      ],
+      "execution_begin_ns": 1793207781569435011,
+      "execution_end_ns": 1793207904356109915,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "3ee372f21616",
+      "input": "70",
+      "cpu": 23,
+      "physical_core": [
+        "1",
+        "7"
+      ],
+      "execution_begin_ns": 1793207781774436138,
+      "execution_end_ns": 1793207783282444427,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "5ad865ee1ea6",
+      "input": "71",
+      "cpu": 25,
+      "physical_core": [
+        "1",
+        "9"
+      ],
+      "execution_begin_ns": 1793207781975437242,
+      "execution_end_ns": 1793207833404719927,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "cf54f7259c32",
+      "input": "72",
+      "cpu": 29,
+      "physical_core": [
+        "1",
+        "13"
+      ],
+      "execution_begin_ns": 1793207782165438287,
+      "execution_end_ns": 1793207952070372179,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "4901049a65fc",
+      "input": "73",
+      "cpu": 30,
+      "physical_core": [
+        "1",
+        "14"
+      ],
+      "execution_begin_ns": 1793207782362439370,
+      "execution_end_ns": 1793207783912447889,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "0578a9949785",
+      "input": "74",
+      "cpu": 32,
+      "physical_core": [
+        "2",
+        "0"
+      ],
+      "execution_begin_ns": 1793207782731757482,
+      "execution_end_ns": 1793207964510638231,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "3260d968420e",
+      "input": "75",
+      "cpu": 34,
+      "physical_core": [
+        "2",
+        "2"
+      ],
+      "execution_begin_ns": 1793207782931442497,
+      "execution_end_ns": 1793207785519456723,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "017ee1b363f5",
+      "input": "76",
+      "cpu": 36,
+      "physical_core": [
+        "2",
+        "4"
+      ],
+      "execution_begin_ns": 1793207783120443536,
+      "execution_end_ns": 1793207802281548856,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "fc4b82ab9294",
+      "input": "77",
+      "cpu": 41,
+      "physical_core": [
+        "2",
+        "9"
+      ],
+      "execution_begin_ns": 1793207783327444674,
+      "execution_end_ns": 1793207906317246630,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "a54b54a9aa33",
+      "input": "78",
+      "cpu": 45,
+      "physical_core": [
+        "2",
+        "13"
+      ],
+      "execution_begin_ns": 1793207783535445817,
+      "execution_end_ns": 1793207964698441647,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "96934ccbd00f",
+      "input": "79",
+      "cpu": 46,
+      "physical_core": [
+        "2",
+        "14"
+      ],
+      "execution_begin_ns": 1793207783729446883,
+      "execution_end_ns": 1793207794737832018,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "ee59dd2f772a",
+      "input": "80",
+      "cpu": 48,
+      "physical_core": [
+        "3",
+        "0"
+      ],
+      "execution_begin_ns": 1793207783927447972,
+      "execution_end_ns": 1793207965078443750,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "9840a37a4a6f",
+      "input": "81",
+      "cpu": 49,
+      "physical_core": [
+        "3",
+        "1"
+      ],
+      "execution_begin_ns": 1793207784117449016,
+      "execution_end_ns": 1793207865434895982,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "f0861214728a",
+      "input": "82",
+      "cpu": 50,
+      "physical_core": [
+        "3",
+        "2"
+      ],
+      "execution_begin_ns": 1793207784316450110,
+      "execution_end_ns": 1793207785512456684,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "a45589401c2f",
+      "input": "83",
+      "cpu": 1,
+      "physical_core": [
+        "0",
+        "1"
+      ],
+      "execution_begin_ns": 1793207806733573327,
+      "execution_end_ns": 1793207988258572016,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "eaac88bb8bc3",
+      "input": "84",
+      "cpu": 4,
+      "physical_core": [
+        "0",
+        "4"
+      ],
+      "execution_begin_ns": 1793207806910574300,
+      "execution_end_ns": 1793207821229653006,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "1ccd64132297",
+      "input": "85",
+      "cpu": 6,
+      "physical_core": [
+        "0",
+        "6"
+      ],
+      "execution_begin_ns": 1793207807101575350,
+      "execution_end_ns": 1793207808497583023,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "546ec875a7f6",
+      "input": "86",
+      "cpu": 9,
+      "physical_core": [
+        "0",
+        "9"
+      ],
+      "execution_begin_ns": 1793207807278576323,
+      "execution_end_ns": 1793207988338572459,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "379eb0454045",
+      "input": "87",
+      "cpu": 16,
+      "physical_core": [
+        "1",
+        "0"
+      ],
+      "execution_begin_ns": 1793207807467577362,
+      "execution_end_ns": 1793207808964585590,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "982d989b8311",
+      "input": "88",
+      "cpu": 18,
+      "physical_core": [
+        "1",
+        "2"
+      ],
+      "execution_begin_ns": 1793207807651578373,
+      "execution_end_ns": 1793207810354593230,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "7f57d2f31a98",
+      "input": "89",
+      "cpu": 21,
+      "physical_core": [
+        "1",
+        "5"
+      ],
+      "execution_begin_ns": 1793207807833579373,
+      "execution_end_ns": 1793207930894255784,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "b7323707be95",
+      "input": "90",
+      "cpu": 23,
+      "physical_core": [
+        "1",
+        "7"
+      ],
+      "execution_begin_ns": 1793207808018580390,
+      "execution_end_ns": 1793207811580599969,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "2feee455ed15",
+      "input": "91",
+      "cpu": 26,
+      "physical_core": [
+        "1",
+        "10"
+      ],
+      "execution_begin_ns": 1793207808251581671,
+      "execution_end_ns": 1793207821089652236,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "3846842e0f1d",
+      "input": "92",
+      "cpu": 30,
+      "physical_core": [
+        "1",
+        "14"
+      ],
+      "execution_begin_ns": 1793207808478582919,
+      "execution_end_ns": 1793207813527610671,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "687ebfdeac65",
+      "input": "93",
+      "cpu": 34,
+      "physical_core": [
+        "2",
+        "2"
+      ],
+      "execution_begin_ns": 1793207808678584018,
+      "execution_end_ns": 1793207990542584655,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "bea16271c2b8",
+      "input": "94",
+      "cpu": 36,
+      "physical_core": [
+        "2",
+        "4"
+      ],
+      "execution_begin_ns": 1793207808887658160,
+      "execution_end_ns": 1793207993361600253,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "28097ed97bc5",
+      "input": "95",
+      "cpu": 46,
+      "physical_core": [
+        "2",
+        "14"
+      ],
+      "execution_begin_ns": 1793207809108586381,
+      "execution_end_ns": 1793207810611594643,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "2d9d43d27e57",
+      "input": "96",
+      "cpu": 50,
+      "physical_core": [
+        "3",
+        "2"
+      ],
+      "execution_begin_ns": 1793207809307587475,
+      "execution_end_ns": 1793207833937722856,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "8d240c12e82d",
+      "input": "97",
+      "cpu": 2,
+      "physical_core": [
+        "0",
+        "2"
+      ],
+      "execution_begin_ns": 1793207833537720658,
+      "execution_end_ns": 1793208010587695573,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "ca8461dd9bf4",
+      "input": "98",
+      "cpu": 4,
+      "physical_core": [
+        "0",
+        "4"
+      ],
+      "execution_begin_ns": 1793207833745721801,
+      "execution_end_ns": 1793207980973531705,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "f11e2b82c9b6",
+      "input": "99",
+      "cpu": 6,
+      "physical_core": [
+        "0",
+        "6"
+      ],
+      "execution_begin_ns": 1793207833951722933,
+      "execution_end_ns": 1793207835480731338,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "30248a71eeac",
+      "input": "100",
+      "cpu": 8,
+      "physical_core": [
+        "0",
+        "8"
+      ],
+      "execution_begin_ns": 1793207834150724027,
+      "execution_end_ns": 1793207859873865415,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "30617f7c93cf",
+      "input": "101",
+      "cpu": 14,
+      "physical_core": [
+        "0",
+        "14"
+      ],
+      "execution_begin_ns": 1793207834333725033,
+      "execution_end_ns": 1793207844848782830,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "bb00619ff704",
+      "input": "102",
+      "cpu": 16,
+      "physical_core": [
+        "1",
+        "0"
+      ],
+      "execution_begin_ns": 1793207834513726022,
+      "execution_end_ns": 1793207836009734245,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "9dadaa9b6c78",
+      "input": "103",
+      "cpu": 18,
+      "physical_core": [
+        "1",
+        "2"
+      ],
+      "execution_begin_ns": 1793207834700727050,
+      "execution_end_ns": 1793207836399736389,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "ddecaff640a3",
+      "input": "104",
+      "cpu": 19,
+      "physical_core": [
+        "1",
+        "3"
+      ],
+      "execution_begin_ns": 1793207834892728106,
+      "execution_end_ns": 1793207898477077600,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "a946ff2a6907",
+      "input": "105",
+      "cpu": 20,
+      "physical_core": [
+        "1",
+        "4"
+      ],
+      "execution_begin_ns": 1793207835087729177,
+      "execution_end_ns": 1793208016148726345,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "cd430ff65a8b",
+      "input": "106",
+      "cpu": 23,
+      "physical_core": [
+        "1",
+        "7"
+      ],
+      "execution_begin_ns": 1793207835270730183,
+      "execution_end_ns": 1793207957735403317,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "b4ccfdc61112",
+      "input": "107",
+      "cpu": 26,
+      "physical_core": [
+        "1",
+        "10"
+      ],
+      "execution_begin_ns": 1793207835453731189,
+      "execution_end_ns": 1793208016598728835,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "d9ad92ccedae",
+      "input": "108",
+      "cpu": 30,
+      "physical_core": [
+        "1",
+        "14"
+      ],
+      "execution_begin_ns": 1793207835632732173,
+      "execution_end_ns": 1793207967494457119,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "11341e43b401",
+      "input": "109",
+      "cpu": 33,
+      "physical_core": [
+        "2",
+        "1"
+      ],
+      "execution_begin_ns": 1793207835816733184,
+      "execution_end_ns": 1793207838713749108,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "58a3ef7a9f76",
+      "input": "110",
+      "cpu": 39,
+      "physical_core": [
+        "2",
+        "7"
+      ],
+      "execution_begin_ns": 1793207835991734146,
+      "execution_end_ns": 1793207837184740704,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "1adf1d4dd3ba",
+      "input": "111",
+      "cpu": 44,
+      "physical_core": [
+        "2",
+        "12"
+      ],
+      "execution_begin_ns": 1793207836169735125,
+      "execution_end_ns": 1793207838299746833,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "050938de867c",
+      "input": "112",
+      "cpu": 46,
+      "physical_core": [
+        "2",
+        "14"
+      ],
+      "execution_begin_ns": 1793207836392736350,
+      "execution_end_ns": 1793207839073751087,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "588c22223de8",
+      "input": "113",
+      "cpu": 5,
+      "physical_core": [
+        "0",
+        "5"
+      ],
+      "execution_begin_ns": 1793207859843865250,
+      "execution_end_ns": 1793207981391534018,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "a5d88150f9f2",
+      "input": "114",
+      "cpu": 6,
+      "physical_core": [
+        "0",
+        "6"
+      ],
+      "execution_begin_ns": 1793207860026866256,
+      "execution_end_ns": 1793208041560866959,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "714006d9d3b6",
+      "input": "115",
+      "cpu": 10,
+      "physical_core": [
+        "0",
+        "10"
+      ],
+      "execution_begin_ns": 1793207860206867246,
+      "execution_end_ns": 1793208041536936333,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "c1aa20c79a19",
+      "input": "116",
+      "cpu": 12,
+      "physical_core": [
+        "0",
+        "12"
+      ],
+      "execution_begin_ns": 1793207860389868252,
+      "execution_end_ns": 1793207992874597558,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "2c3b8c9cddeb",
+      "input": "117",
+      "cpu": 14,
+      "physical_core": [
+        "0",
+        "14"
+      ],
+      "execution_begin_ns": 1793207860569869241,
+      "execution_end_ns": 1793207871073926977,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "64b20e66b0e9",
+      "input": "118",
+      "cpu": 16,
+      "physical_core": [
+        "1",
+        "0"
+      ],
+      "execution_begin_ns": 1793207860742870192,
+      "execution_end_ns": 1793208041789868226,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "5c7d709d689d",
+      "input": "119",
+      "cpu": 18,
+      "physical_core": [
+        "1",
+        "2"
+      ],
+      "execution_begin_ns": 1793207860938871269,
+      "execution_end_ns": 1793207925330225201,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "e032779ea70f",
+      "input": "120",
+      "cpu": 25,
+      "physical_core": [
+        "1",
+        "9"
+      ],
+      "execution_begin_ns": 1793207861127872308,
+      "execution_end_ns": 1793208042185870417,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "9ffd44274ea0",
+      "input": "121",
+      "cpu": 33,
+      "physical_core": [
+        "2",
+        "1"
+      ],
+      "execution_begin_ns": 1793207861308538669,
+      "execution_end_ns": 1793207925088223870,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "f5952c0f6c03",
+      "input": "122",
+      "cpu": 39,
+      "physical_core": [
+        "2",
+        "7"
+      ],
+      "execution_begin_ns": 1793207861484874270,
+      "execution_end_ns": 1793208076969062888,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "588ef9910773",
+      "input": "123",
+      "cpu": 44,
+      "physical_core": [
+        "2",
+        "12"
+      ],
+      "execution_begin_ns": 1793207861661875243,
+      "execution_end_ns": 1793207893706051376,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "b431f57adb33",
+      "input": "124",
+      "cpu": 46,
+      "physical_core": [
+        "2",
+        "14"
+      ],
+      "execution_begin_ns": 1793207861840876227,
+      "execution_end_ns": 1793207863625032907,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "11a1d8dc4d81",
+      "input": "125",
+      "cpu": 50,
+      "physical_core": [
+        "3",
+        "2"
+      ],
+      "execution_begin_ns": 1793207862015286069,
+      "execution_end_ns": 1793207888757024173,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "182b1908c80e",
+      "input": "126",
+      "cpu": 56,
+      "physical_core": [
+        "3",
+        "8"
+      ],
+      "execution_begin_ns": 1793207862203878222,
+      "execution_end_ns": 1793207864615891481,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "739daaa69145",
+      "input": "127",
+      "cpu": 3,
+      "physical_core": [
+        "0",
+        "3"
+      ],
+      "execution_begin_ns": 1793207881891986440,
+      "execution_end_ns": 1793208004144659921,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "0eeecb9e4332",
+      "input": "128",
+      "cpu": 8,
+      "physical_core": [
+        "0",
+        "8"
+      ],
+      "execution_begin_ns": 1793207882072987434,
+      "execution_end_ns": 1793208026241782194,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "13839151e65d",
+      "input": "129",
+      "cpu": 14,
+      "physical_core": [
+        "0",
+        "14"
+      ],
+      "execution_begin_ns": 1793207882248988402,
+      "execution_end_ns": 1793208027828790975,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "6d277e3f2398",
+      "input": "130",
+      "cpu": 46,
+      "physical_core": [
+        "2",
+        "14"
+      ],
+      "execution_begin_ns": 1793207882415989320,
+      "execution_end_ns": 1793208013969714287,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "efad64ff6aee",
+      "input": "131",
+      "cpu": 49,
+      "physical_core": [
+        "3",
+        "1"
+      ],
+      "execution_begin_ns": 1793207882575990199,
+      "execution_end_ns": 1793208004758740117,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "98179fbcb576",
+      "input": "132",
+      "cpu": 52,
+      "physical_core": [
+        "3",
+        "4"
+      ],
+      "execution_begin_ns": 1793207882888991919,
+      "execution_end_ns": 1793207884042600825,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "56124484a00b",
+      "input": "133",
+      "cpu": 56,
+      "physical_core": [
+        "3",
+        "8"
+      ],
+      "execution_begin_ns": 1793207883137993288,
+      "execution_end_ns": 1793207898012075044,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "bcc8355bdf48",
+      "input": "134",
+      "cpu": 11,
+      "physical_core": [
+        "0",
+        "11"
+      ],
+      "execution_begin_ns": 1793207901254092865,
+      "execution_end_ns": 1793207902765101170,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "5a18ad5aa3ed",
+      "input": "135",
+      "cpu": 15,
+      "physical_core": [
+        "0",
+        "15"
+      ],
+      "execution_begin_ns": 1793207901462094008,
+      "execution_end_ns": 1793207902765101170,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "4342eba71ba9",
+      "input": "136",
+      "cpu": 17,
+      "physical_core": [
+        "1",
+        "1"
+      ],
+      "execution_begin_ns": 1793207901665095123,
+      "execution_end_ns": 1793208082908095751,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "f6d3d52252fc",
+      "input": "137",
+      "cpu": 24,
+      "physical_core": [
+        "1",
+        "8"
+      ],
+      "execution_begin_ns": 1793207901858096184,
+      "execution_end_ns": 1793208082965096067,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "552cef78a02f",
+      "input": "138",
+      "cpu": 27,
+      "physical_core": [
+        "1",
+        "11"
+      ],
+      "execution_begin_ns": 1793207902053097256,
+      "execution_end_ns": 1793208083113096886,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "5ac08c735094",
+      "input": "139",
+      "cpu": 31,
+      "physical_core": [
+        "1",
+        "15"
+      ],
+      "execution_begin_ns": 1793207902256098372,
+      "execution_end_ns": 1793207906868123722,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "816ee7f524b5",
+      "input": "140",
+      "cpu": 37,
+      "physical_core": [
+        "2",
+        "5"
+      ],
+      "execution_begin_ns": 1793207902452099449,
+      "execution_end_ns": 1793208083519099133,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "a7ebc56a4041",
+      "input": "141",
+      "cpu": 44,
+      "physical_core": [
+        "2",
+        "12"
+      ],
+      "execution_begin_ns": 1793207902645100510,
+      "execution_end_ns": 1793207903864107210,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "5aa174b30069",
+      "input": "142",
+      "cpu": 47,
+      "physical_core": [
+        "2",
+        "15"
+      ],
+      "execution_begin_ns": 1793207902844101604,
+      "execution_end_ns": 1793207904146108760,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "ba231132e0ab",
+      "input": "143",
+      "cpu": 50,
+      "physical_core": [
+        "3",
+        "2"
+      ],
+      "execution_begin_ns": 1793207903046102714,
+      "execution_end_ns": 1793207904161108843,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "7a7cf1420e6d",
+      "input": "144",
+      "cpu": 52,
+      "physical_core": [
+        "3",
+        "4"
+      ],
+      "execution_begin_ns": 1793207903265103918,
+      "execution_end_ns": 1793208056772951134,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "1828c5ff7967",
+      "input": "145",
+      "cpu": 56,
+      "physical_core": [
+        "3",
+        "8"
+      ],
+      "execution_begin_ns": 1793207903448104924,
+      "execution_end_ns": 1793207904850112630,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "785b153bde3b",
+      "input": "146",
+      "cpu": 57,
+      "physical_core": [
+        "3",
+        "9"
+      ],
+      "execution_begin_ns": 1793207903636105957,
+      "execution_end_ns": 1793208067151760149,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "ca48d31bb581",
+      "input": "147",
+      "cpu": 11,
+      "physical_core": [
+        "0",
+        "11"
+      ],
+      "execution_begin_ns": 1793207926172229828,
+      "execution_end_ns": 1793207927410236633,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "bde7f2d5e2fb",
+      "input": "148",
+      "cpu": 15,
+      "physical_core": [
+        "0",
+        "15"
+      ],
+      "execution_begin_ns": 1793207926363230879,
+      "execution_end_ns": 1793207928993245334,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "5c4e64f0860f",
+      "input": "149",
+      "cpu": 19,
+      "physical_core": [
+        "1",
+        "3"
+      ],
+      "execution_begin_ns": 1793207926582232082,
+      "execution_end_ns": 1793208048229942201,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "921eed21a389",
+      "input": "150",
+      "cpu": 22,
+      "physical_core": [
+        "1",
+        "6"
+      ],
+      "execution_begin_ns": 1793207926775233143,
+      "execution_end_ns": 1793207930879255701,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "3c14c65211ed",
+      "input": "151",
+      "cpu": 31,
+      "physical_core": [
+        "1",
+        "15"
+      ],
+      "execution_begin_ns": 1793207926968234204,
+      "execution_end_ns": 1793207928689243663,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "0e1ecbe6342c",
+      "input": "152",
+      "cpu": 41,
+      "physical_core": [
+        "2",
+        "9"
+      ],
+      "execution_begin_ns": 1793207927176235347,
+      "execution_end_ns": 1793207929278246901,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "094c381cb22d",
+      "input": "153",
+      "cpu": 44,
+      "physical_core": [
+        "2",
+        "12"
+      ],
+      "execution_begin_ns": 1793207927388236512,
+      "execution_end_ns": 1793207928698243713,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "ebe851a1a38e",
+      "input": "154",
+      "cpu": 47,
+      "physical_core": [
+        "2",
+        "15"
+      ],
+      "execution_begin_ns": 1793207927599237672,
+      "execution_end_ns": 1793208109064240485,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "ae6f368d2a83",
+      "input": "155",
+      "cpu": 50,
+      "physical_core": [
+        "3",
+        "2"
+      ],
+      "execution_begin_ns": 1793207927806238810,
+      "execution_end_ns": 1793208049892913064,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "5f4c42ea726a",
+      "input": "156",
+      "cpu": 51,
+      "physical_core": [
+        "3",
+        "3"
+      ],
+      "execution_begin_ns": 1793207928006239909,
+      "execution_end_ns": 1793208109067240501,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "b4b2047f814b",
+      "input": "157",
+      "cpu": 53,
+      "physical_core": [
+        "3",
+        "5"
+      ],
+      "execution_begin_ns": 1793207928210241031,
+      "execution_end_ns": 1793207944032327998,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "724eb56e9ded",
+      "input": "158",
+      "cpu": 56,
+      "physical_core": [
+        "3",
+        "8"
+      ],
+      "execution_begin_ns": 1793207928403242091,
+      "execution_end_ns": 1793207943924327404,
+      "status": "success"
+    },
+    {
+      "kind": "formal",
+      "experiment": "f3dddf04487e",
+      "run": "d971ef3d2118",
+      "input": "159",
+      "cpu": 11,
+      "physical_core": [
+        "0",
+        "11"
+      ],
+      "execution_begin_ns": 1793207952414374070,
+      "execution_end_ns": 1793208133650376531,
+      "status": "success"
+    }
+  ],
+  "provenance": {
+    "0": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-000/report.json",
+      "sha256": "690befd203f56a26dd8d499a5b4d097a58c1eb561b97f6582066a73c0a88d3e2"
+    },
+    "1": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-001/report.json",
+      "sha256": "69d266a213eed174c68ca98a50d27f0f17a7c7761d2c41eeba438f92b6d3eeef"
+    },
+    "2": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-002/report.json",
+      "sha256": "4763d4e07182ac8e72b794623998376fee5ab857d068cbca94345087020772b4"
+    },
+    "3": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-003/report.json",
+      "sha256": "d918e9f09fd6e3d92500a4a5ef8c1f949453227fca918aae07a8a15072d413bc"
+    },
+    "4": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-004/report.json",
+      "sha256": "def147d7123612a882ccb5b6f95a32bd6b1690a2ff16716c208ed64cdc994053"
+    },
+    "5": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-005/report.json",
+      "sha256": "8fa72d1f362b92007bf605f79d396b8467af5852d3389a1997124727167fbd16"
+    },
+    "6": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-006/report.json",
+      "sha256": "5bac98b99bbb52fb13b55e66211e3383f3ea834d06a6cb8826d2920eab6d91f9"
+    },
+    "7": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-007/report.json",
+      "sha256": "d084b8a566bc8c523b8b1bc1d0ca1ecf189b810052cdd59cfcdbbae34c9cad21"
+    },
+    "8": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-008/report.json",
+      "sha256": "7aea5cf6201ef0b216ee9ec6c63aaa0bd855cc9b6b9ff33f83eab3053e9eb542"
+    },
+    "9": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-009/report.json",
+      "sha256": "418b2885b1de75ba3da8f2cdd870ea8505172e5bacaf3f6dd37fc4f50fb668cd"
+    },
+    "10": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-010/report.json",
+      "sha256": "f1c5fd83e9a7181c0b69616208b620e12e06b70ad021371c2192de865cc97c5e"
+    },
+    "11": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-011/report.json",
+      "sha256": "06647e5b4c0274afcaf709c27135bbb46680c66258f17fc7c1594c7788c78277"
+    },
+    "12": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-012/report.json",
+      "sha256": "7924b066b502c1af5f50c854147e83ee8ae5e004561e8cd962a8e13c5be06e9c"
+    },
+    "13": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-013/report.json",
+      "sha256": "059d2ee2a2472e49d586aa99e1a9ca6f7bf11d2cd933040eccc0669cd2956a78"
+    },
+    "14": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-014/report.json",
+      "sha256": "2314fd6435188960f8a2dc2692f5b9002f03563dc716102d29dd1ad3d1bd98d8"
+    },
+    "15": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-015/report.json",
+      "sha256": "a7777d51fa339d67f1126dc057a85d900048e796200ee07d2f0c1b3836a84e3c"
+    },
+    "16": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-016/report.json",
+      "sha256": "d97e04a6be29e8fa1e675fd307bbcb64bec4a0f6cc68be514331fcc8ed1dff8f"
+    },
+    "17": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-017/report.json",
+      "sha256": "f2a3d9da5fedcbfc3fee07a5fb153d2a88751de02defd1c8e059b6046bad4f96"
+    },
+    "18": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-018/report.json",
+      "sha256": "93de747ed26b2f1886a9fa1c25f5ebee3a6fe950f5e744aef17957ce72bb9809"
+    },
+    "19": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-019/report.json",
+      "sha256": "f11b8bcdc47753364e52bc42c1686df08d7bcf1e1926d9336ee85b94200ee517"
+    },
+    "20": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-020/report.json",
+      "sha256": "81e39fa62501988c2149fa155ba002bf3a3d149b71212d26c5c95d97a05c1276"
+    },
+    "21": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-021/report.json",
+      "sha256": "a0cb5b604ebdc62bad6e5d1130c96a5588fc3897c4603e6d157f462f463315fa"
+    },
+    "22": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-022/report.json",
+      "sha256": "9f9b3ab87833d52561d453a6f8d4565ce9b856433221d2c2a85fc0baeb2c0772"
+    },
+    "23": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-023/report.json",
+      "sha256": "571fc6ebe061005c68a0844bc6d024dc1df8fc8c0b3653218ab7e930c5526800"
+    },
+    "24": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-024/report.json",
+      "sha256": "9e1e47d69559fdcf302997bac3f2c3332d71af901af453c90fe316ca9708cc98"
+    },
+    "25": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-025/report.json",
+      "sha256": "7f8c987032e8a0a6ba26612e3cba824c488c5cb346974414af4de2d5387f2e07"
+    },
+    "26": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-026/report.json",
+      "sha256": "879f488eec3d36717889c9a7fe8866b172c7d50f0b7e88aa420c2ece06ea72ad"
+    },
+    "27": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-027/report.json",
+      "sha256": "3c204bf1273a3811e343fd7b5e46c479176198f7ea9b0d2ccc0d81af9f652726"
+    },
+    "28": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-028/report.json",
+      "sha256": "21ebfff94eba7af73902b504403a781a2e29a39e4606407925983970d5742c85"
+    },
+    "29": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-029/report.json",
+      "sha256": "52c2e3f1e328418f5eef1c39d922786e6fe567624494788d8520e4ce04e816e2"
+    },
+    "30": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-030/report.json",
+      "sha256": "9825210f249369e0934d193d81e5f45b8d83bcc9a6b4c704726a3652990b557c"
+    },
+    "31": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-031/report.json",
+      "sha256": "1f0384e4192d1639b2ba36b6627444f726e6595ed8d153f7d5972c236e7b1f2a"
+    },
+    "32": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-032/report.json",
+      "sha256": "2103285c4edea5a8a42ed311e663b03ff65964f1d45733972ad720c4ab793c13"
+    },
+    "33": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-033/report.json",
+      "sha256": "12ddb69b1a95bac722111d3ba1ca4d108565e6aa24c518690d1e292f8bab2b54"
+    },
+    "34": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-034/report.json",
+      "sha256": "63700676b43a898231de6b84d51f0a56b2b24b03a82a6cacde89be793ec1f762"
+    },
+    "35": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-035/report.json",
+      "sha256": "2a1f48a8c9098c42c91bef0f2a374961e3b9350be0b653076eddc62a6c77a1a1"
+    },
+    "36": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-036/report.json",
+      "sha256": "511d9dd1727bff4672aa382fce6c2f64e027075b68f7977798f2fbc35036afe2"
+    },
+    "37": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-037/report.json",
+      "sha256": "b3776c429e073a468b5813bf51a61f69c7bcdbc0f81baf257a868e029b2c9c3b"
+    },
+    "38": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-038/report.json",
+      "sha256": "97d7ecc3b7092fffbc9d17a5e2dee095e60ab27f44e0e998a1c6071e3e99136c"
+    },
+    "39": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-039/report.json",
+      "sha256": "9b7564e3a89814854670f02c3debf0f127a0d9e45ab041d3de115cc0a012cf6b"
+    },
+    "40": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-040/report.json",
+      "sha256": "8dbae480ffd74ac02d59cd22528d91cb3342efe13fc9ff6bd93eedb110c198ac"
+    },
+    "41": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-041/report.json",
+      "sha256": "91c97012b747d9f702c0462632ef256ec9c838da766fc1690aab884c2f46047e"
+    },
+    "42": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-042/report.json",
+      "sha256": "e7189695ce88ba2940504ad6ec60de9b9890af673662047464d84e8391352cab"
+    },
+    "43": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-043/report.json",
+      "sha256": "4faaa0472faa819f2d381442295d7d08980b4df4e383c0357593470529e8fba1"
+    },
+    "44": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-044/report.json",
+      "sha256": "a8153cf60f5e7e5986d63b3ac321a56f20505619d81884950f95dbfbc9848924"
+    },
+    "45": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-045/report.json",
+      "sha256": "2f70558c3c67978c1346e60d951e5af8e9cde0e17a55ab72e8c92e43355061dd"
+    },
+    "46": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-046/report.json",
+      "sha256": "a4c0b1533f63f85f73b3ccdc2e935cf17e9562b17d7d3a77033cab6e250ee938"
+    },
+    "47": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-047/report.json",
+      "sha256": "e30b7391036e54712c8795deba35b0f63a5f7606c59bc66a7fc541f18aa4364c"
+    },
+    "48": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-048/report.json",
+      "sha256": "4f0c2845dd87bea391c57467985f2a80af9c3b77bbfb90ea9bb3829c46786da7"
+    },
+    "49": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-049/report.json",
+      "sha256": "6f03780eea287c2786b6bd329542f926b6b873230de9da856fed3eae0dda3724"
+    },
+    "50": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-050/report.json",
+      "sha256": "c87f45ce1686a7c25b51e6155aa282aec951c6356d6256556ec7f78aa7dab092"
+    },
+    "51": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-051/report.json",
+      "sha256": "dfec9f46f2d4b1e39651817f21dcdc690e1d55f6e3fa910ff3bd62d5f3bbb800"
+    },
+    "52": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-052/report.json",
+      "sha256": "55e3c67b7bc929feda16e6caf19ce240fef8ade0ecb458ffa0b313d3218e77f7"
+    },
+    "53": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-053/report.json",
+      "sha256": "791c8d05ee918077d2a4628c7920e5a852b0b94082a9e30e2a50dd42529ffd3b"
+    },
+    "54": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-054/report.json",
+      "sha256": "f90ae4e7337bff25a8f496f9e6b5162004aa82a017fa3fd97002900a0390c992"
+    },
+    "55": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-055/report.json",
+      "sha256": "8a1fc6e56a5469b3fb47ee68ddbd3946e1249a276e70f9164fd584ab2bda1e3f"
+    },
+    "56": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-056/report.json",
+      "sha256": "b7e36872073e2df8d058c927350507b46074f8817ee27b5e42e6143b6c26f5fe"
+    },
+    "57": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-057/report.json",
+      "sha256": "eb4db7ba2decd958b71c85035e9611cb7d2989b89113194aa560394e28612f47"
+    },
+    "58": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-058/report.json",
+      "sha256": "b9457cccd5114a9921f3d2c1b776ae7b36224e0b9e477fafc5472a7dc0a1cc02"
+    },
+    "59": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-059/report.json",
+      "sha256": "fa300e97a921d3f4ae5c486f9bb6fb4ca887455fce4a0cbec5b67e28cc68555b"
+    },
+    "60": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-060/report.json",
+      "sha256": "0cd6e53a1c380f243168df332b7ed5a808636c22b632123652be195a3b7c720f"
+    },
+    "61": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-061/report.json",
+      "sha256": "539c541cfba49caacbef8b676b39b7ffb6643e9ae25a7b8dc69a9c2a81fd488b"
+    },
+    "62": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-062/report.json",
+      "sha256": "a2788547eb2e7c12e09b06c073c433e77e244b0cbed696425bf844edc17d6cd0"
+    },
+    "63": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-063/report.json",
+      "sha256": "e84fb7d80eb565abc02624b40754dce05916720c40786dab4ab02c1071f24053"
+    },
+    "64": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-064/report.json",
+      "sha256": "fc576ccba0c15c71776842a0ad2b4543038c87cce0de132d78d9faf6ab9042e4"
+    },
+    "65": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-065/report.json",
+      "sha256": "3227571a3e503a9358a769cc5b57d0a55a1afd5ed0c7701719700c04fe38fa66"
+    },
+    "66": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-066/report.json",
+      "sha256": "434f8a5ccbb1962dd37e5b4efb15540e71dd13d986d5900d03fa9f11f4a9cbc2"
+    },
+    "67": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-067/report.json",
+      "sha256": "24f92102a9eb098231c3e7e8063c634c891ed1b8803f05b7436be544e8a32222"
+    },
+    "68": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-068/report.json",
+      "sha256": "a01530090229663e4c89767186cdbffe398a114f06df7722c8bab2c618b0d856"
+    },
+    "69": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-069/report.json",
+      "sha256": "c862c24f4e907324e67ef795b0ca41f2be745a98f398f22cc5b1c1f80c49fbe5"
+    },
+    "70": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-070/report.json",
+      "sha256": "9d187845a9bb9f701e868ea0b9965bde7e614165d0912467f260b1a5bc175aa9"
+    },
+    "71": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-071/report.json",
+      "sha256": "6bbd372d7e15810b24472bb1fb184cb4bbc9522393f42e9ca083ca4d82ea62ec"
+    },
+    "72": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-072/report.json",
+      "sha256": "df51f231662b591b51d7d6b81f3941eff207d81ae815cd35b9878c51a181ba15"
+    },
+    "73": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-073/report.json",
+      "sha256": "98a524ddc4b3a752103db9f2502f130a7087cdd6f1dc096bf210ed8916bcef94"
+    },
+    "74": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-074/report.json",
+      "sha256": "cf06d9d8995f5af609dbe5c775a3e8ead20d368d843a09113265567a0051a12d"
+    },
+    "75": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-075/report.json",
+      "sha256": "55aa7d7a1fde42df5316d3b9e8402a080e6eec5700663091c969b91f1211f8f0"
+    },
+    "76": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-076/report.json",
+      "sha256": "7eb087cd169dac7f88ae228409fb35ab69c8a3419e3527d177ae985aa3a47385"
+    },
+    "77": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-077/report.json",
+      "sha256": "237662b8a2472b26118638670225818388c1ecca56a637f5de16934431170ed2"
+    },
+    "78": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-078/report.json",
+      "sha256": "34b893b0f2e2b183a6cbdd57d5ba84277541757e01ab0aa10fd3554ff805ad79"
+    },
+    "79": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-079/report.json",
+      "sha256": "b19ff3a80971f1318ee4af36662d555cdaebb6074602d71df3454efb2382e174"
+    },
+    "80": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-080/report.json",
+      "sha256": "5c5b8bb551ab76e5c4caff6a61bb482a0e47c2a192cde515782bd6850a4d7045"
+    },
+    "81": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-081/report.json",
+      "sha256": "779ec86e4512e9fe8410a7c2c3d41bc331a9f0e4895118c07134e17beefa8476"
+    },
+    "82": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-082/report.json",
+      "sha256": "57fc4704bbce9d29478f72029e48f739a618853a3c8da1731a3285cd46039fcb"
+    },
+    "83": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-083/report.json",
+      "sha256": "6f22159ecff9ac30655013e4db8f5ef0bb3457c68896e0cbe2ca427b55aef000"
+    },
+    "84": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-084/report.json",
+      "sha256": "7011dab18fb63b5e57fbd9a7b4def699665c4ef2ecc8c93c0532537ccefd1eb5"
+    },
+    "85": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-085/report.json",
+      "sha256": "d1875b4a87a6be50d8ac441cdaa84184e18301972ce36984f282c0cc741c7973"
+    },
+    "86": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-086/report.json",
+      "sha256": "60dca318a26c5183a1a2654b42042ad3a28905725016798a311885b4345c64f6"
+    },
+    "87": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-087/report.json",
+      "sha256": "302320d644bfd3a1a559ddbcbc5137b598d5ace90cc0f5501d55d5b5386eeea1"
+    },
+    "88": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-088/report.json",
+      "sha256": "faf2bd028f106c33b4143753384ced52a4e46118b999d018ae8318ecc89518a2"
+    },
+    "89": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-089/report.json",
+      "sha256": "c30b776a2460606c4b0b233448fe57a00cc9c4b34f3b610f474ca42edb81a0af"
+    },
+    "90": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-090/report.json",
+      "sha256": "236a9f0f47f92237874203061f6e26ba3adfc429124df7151c479076e313fffa"
+    },
+    "91": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-091/report.json",
+      "sha256": "f4ad42a26c74be81e50216ecf55376631a0430d9abee492ff4861c621635562f"
+    },
+    "92": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-092/report.json",
+      "sha256": "586119c037340086bdb188365cc3ec169fa0493bb003070d9d8421585ace7ca6"
+    },
+    "93": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-093/report.json",
+      "sha256": "c37a17acf9cc56d7cdd6848c4c7b314f18ca8e50b7258f07cfd5abfb859cd76c"
+    },
+    "94": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-094/report.json",
+      "sha256": "4311dcd02cc931861955a7161f87fe8820b11d29e66c897a29b3b7097842ae32"
+    },
+    "95": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-095/report.json",
+      "sha256": "302eb15c62bf6c2aaf7e2328b9b95d0949170fe0af91bea1c4747135f971bed4"
+    },
+    "96": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-096/report.json",
+      "sha256": "8a141c3958e4337dcc090161e96e1b4295d85ee4a03d0e669e3573f1bf76a681"
+    },
+    "97": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-097/report.json",
+      "sha256": "065d36445f7d72c8b992928367c3d32adc679f10131ac557d96ba7226d8c03b2"
+    },
+    "98": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-098/report.json",
+      "sha256": "fc6f0bcf783f9c2c8298848f8f81c1d22b1a3cfedb597c009d9cebb42c2a9742"
+    },
+    "99": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-099/report.json",
+      "sha256": "7a6605ceeab5b552cbd973bf53cb585f6bece63a79fcef332e295ff2e88989d5"
+    },
+    "100": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-100/report.json",
+      "sha256": "096621a048481e3d2736df7f965c0564fcf5710bc3616636175f3387718ac9df"
+    },
+    "101": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-101/report.json",
+      "sha256": "c81477612721500f217d150dd7577da29c9ee399adc35cc7c284667b2f15c02d"
+    },
+    "102": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-102/report.json",
+      "sha256": "e01a61e3b577aedb6770ebabd2f7bcb45d751ceec1f8feebfc86fa241bb6a65f"
+    },
+    "103": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-103/report.json",
+      "sha256": "3fcda842f3dcae7ee62e485a091021cc218957091422af9aade87b88564e2c9d"
+    },
+    "104": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-104/report.json",
+      "sha256": "a895f645f6243ea2310ce6f5eba08b11b479f6abe12237dae461df2e546aa450"
+    },
+    "105": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-105/report.json",
+      "sha256": "2e56717b445a65d363204c2e80230185897a80b58e98ec6405987636fde314b2"
+    },
+    "106": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-106/report.json",
+      "sha256": "71d5047ede2d10df14510a761e47e6ad355452f5488db48a0369c7bb0c79abad"
+    },
+    "107": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-107/report.json",
+      "sha256": "a78cfbbca8a0fb8b32a437432e5150d0254649603c8fcec9277e7693cc5f1fec"
+    },
+    "108": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-108/report.json",
+      "sha256": "70579bba31b6df5152bf47cab9fb617bce4aaa3008a3e220c69dbfd01e354993"
+    },
+    "109": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-109/report.json",
+      "sha256": "7533143562921959d0186dbfb2ea1714f971ca17c2865e1551164352c208b44f"
+    },
+    "110": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-110/report.json",
+      "sha256": "de4394540f9ebf29d37facacd6e57dc643e20be5f29b6349b4fb1ca5bb90578d"
+    },
+    "111": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-111/report.json",
+      "sha256": "a181366b79d0d484ebd5fefe1b8c2540bc07251c6983d2379c022fac41e5eef1"
+    },
+    "112": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-112/report.json",
+      "sha256": "61e95800b7e8c3d3532c8101f6fd92b8fd152fc9e1d4bbedcabc617e6276998d"
+    },
+    "113": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-113/report.json",
+      "sha256": "083fd39d9e2c687a330d994467e639943af9a1321bcd007c2277671e233c72f9"
+    },
+    "114": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-114/report.json",
+      "sha256": "47b546dc65de4304d8dfceb152b4e6dec05cfd0a099e315d92e59a9206696684"
+    },
+    "115": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-115/report.json",
+      "sha256": "9b49127b3dee7470aa4c945a7acdd8d2d805f5c25af84a822a85e0a0b1bd021b"
+    },
+    "116": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-116/report.json",
+      "sha256": "07b78237a51924499278fc75f4d5ec1999b7898acfafdfab472f5de2a3a75560"
+    },
+    "117": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-117/report.json",
+      "sha256": "0e04976d67b3f4703527bc198468c9035a42123d9a5679ef6c2f7d95773621e0"
+    },
+    "118": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-118/report.json",
+      "sha256": "f89f34dc92b1e88493247b7f7eb8e4c1adac82e44c73eafaa337f4f9d547f723"
+    },
+    "119": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-119/report.json",
+      "sha256": "8ee978fffc020d34f030f4fb8f0ef8326427b68e5a2b8e69b98b3531b4ceff05"
+    },
+    "120": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-120/report.json",
+      "sha256": "ac358762820c2abf5458d0070aa672b0e14e86d9f200c527893cf1e1c0bcfca6"
+    },
+    "121": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-121/report.json",
+      "sha256": "407c439ffa92bc61f7e39d2ebf959189cb96a2bffa4cfa4bbf9068619eb8bd40"
+    },
+    "122": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-122/report.json",
+      "sha256": "c218338b1535441ccfbd13c027c46b0bf647b930a4046aecdae87800d31b753a"
+    },
+    "123": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-123/report.json",
+      "sha256": "b992af06383ca733e85a1e130ee7e2b8cc6ac6315258e8da1777332c9bf109db"
+    },
+    "124": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-124/report.json",
+      "sha256": "ee46e489669c41248a1476ae2c29ebd06a44e63b1f4cc202d5ce8b2ea3e72694"
+    },
+    "125": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-125/report.json",
+      "sha256": "07cb817b707b68b9a0215d9353d98991a73c9fe0ff276547f8f27cf489ad6979"
+    },
+    "126": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-126/report.json",
+      "sha256": "8872acd6b25f915ed0bf2c1bea8e9c6ae354ac9f3321e44573c483edc40ad2a0"
+    },
+    "127": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-127/report.json",
+      "sha256": "5b2bb5902fe3568950c0bf60ec1a70346ae75fe2a06ed10d34acdeca62f83c98"
+    },
+    "128": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-128/report.json",
+      "sha256": "e37469bd90da80d078f47f8402cd90dbcf98e9d3703fd92dd89a1cae9f74ab1c"
+    },
+    "129": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-129/report.json",
+      "sha256": "56ec96e8fd0c5f0244c8be76e19e1f29446310360eb9be9d1e401c3d53dbd41a"
+    },
+    "130": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-130/report.json",
+      "sha256": "6faaec3708e7b5e9a94a0d260c24607f73a25993dae1b4a98a422a96ecf7b25c"
+    },
+    "131": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-131/report.json",
+      "sha256": "f2d6239a4cb233b2a5a03c5e5b8efc19094b1cb8d2ffccf713b271fc0f2adffc"
+    },
+    "132": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-132/report.json",
+      "sha256": "012ec702edaafb0dfcf323013d0e1019f55ef67436b6acbccf5e179aca5f2140"
+    },
+    "133": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-133/report.json",
+      "sha256": "c9b30d73c4bd1bba974aaef6e96b1b3c0954501dde809c05986ca2b51c52308a"
+    },
+    "134": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-134/report.json",
+      "sha256": "92bca2c48fec0fc31f0e9aa16386d9571cca184f99419e84355e5e3b2c5a1725"
+    },
+    "135": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-135/report.json",
+      "sha256": "02dde8c5d55a766115ad3a469c499d7312805be60990f0cf8b01740447bbcf3c"
+    },
+    "136": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-136/report.json",
+      "sha256": "8ee43f7910084ca0d8bba16c34646464ab8eac46b98cf48ba5f4e18aaf5677fb"
+    },
+    "137": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-137/report.json",
+      "sha256": "51469e1537f85ad42207460be37d0663a750cd1f7e478cd25813e4821f662561"
+    },
+    "138": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-138/report.json",
+      "sha256": "c913c05adc876a5f93dc65c407235ff3d8e0684a9c7aaa0a37a113bce44d5907"
+    },
+    "139": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-139/report.json",
+      "sha256": "b4d1d255941329e9f9d17ea146e65913b323dbd87d8cc7e332b7fdc91b806baf"
+    },
+    "140": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-140/report.json",
+      "sha256": "3add23a080b0ab973155379ee9d76bf9ce7ddff06c52df7dd0967ca3a6062a7c"
+    },
+    "141": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-141/report.json",
+      "sha256": "a9fbf1891f202b0d00b8b2c0cf2fed060db7e658dd4a55dd4920b02762d1a639"
+    },
+    "142": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-142/report.json",
+      "sha256": "38831460efea44cc27c22168bfafac21fa4ebb9ae74f63491edb28cf7e852442"
+    },
+    "143": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-143/report.json",
+      "sha256": "8b1a5b8c1cf7088490e559d1c4610454a47b7cb11b2eafbeb91e84c5047c836d"
+    },
+    "144": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-144/report.json",
+      "sha256": "7a9d62d79751b7e6398486b5ad907fb718f0c5c559c1866b8ad4dafa3bf7c588"
+    },
+    "145": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-145/report.json",
+      "sha256": "399a0827b337e70f45d9d9ba171eda19ee4c0e4f6d050acabf12b7171aa5e21c"
+    },
+    "146": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-146/report.json",
+      "sha256": "6610587e357fcaae534f954a5d0e7844c74daaa57b7965963825f19699333ddb"
+    },
+    "147": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-147/report.json",
+      "sha256": "11a46e2eaca89610202c74a0150247999d3bc439dfbc1cd3751b226ff2cb90f9"
+    },
+    "148": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-148/report.json",
+      "sha256": "2f0372a46d083987b3b6c6c07e2ba63bb1ccb74b57d1afe08a48bda75cca18a7"
+    },
+    "149": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-149/report.json",
+      "sha256": "7a738f0265d07de310f37886d83e00aaed4f22896efa943cb2e6702a7b84f7c5"
+    },
+    "150": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-150/report.json",
+      "sha256": "ed05748155bb532d39634c02df8dfef3a61b94e1cac0871d2e106d177ba04de8"
+    },
+    "151": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-151/report.json",
+      "sha256": "00585c9e89eaffc4cc4392eaeee63ed28affa0f85206498014cf33756a9b7a43"
+    },
+    "152": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-152/report.json",
+      "sha256": "fd151f6825d8c04d75bc7fd10ca936f825eb6c8d5f6e13d6320786e64285ad61"
+    },
+    "153": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-153/report.json",
+      "sha256": "81fe3c506e342d3efa171c394e636bd544761bd54461ae83314c7f0e220b79c9"
+    },
+    "154": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-154/report.json",
+      "sha256": "fd35d2f55d1d715fb8d5ec91a84ea81df600d0a7ec8a909500f9b66a7bf521fc"
+    },
+    "155": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-155/report.json",
+      "sha256": "04ff1bdf3a7a7183017ea4e1c7bdcf73f74a499e52e9de49dae3b0f6a37a178e"
+    },
+    "156": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-156/report.json",
+      "sha256": "395f191f503d1a5747211d965b3417dcb23ff03e4784c9ddf2ed6fa095e35274"
+    },
+    "157": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-157/report.json",
+      "sha256": "b19e4d8c9cecfa29156b43cb6441d240c6a6f884b020a28df62bbd4100d45056"
+    },
+    "158": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-158/report.json",
+      "sha256": "0d97d7f9bc505a5d4f7c264b317fa2f426b4e8f108af425589f56cc28a662870"
+    },
+    "159": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/full-r428/case-159/report.json",
+      "sha256": "86b790d6b6434000ad9319a2a70dd20eed7c68daf46504ae955111d77db581c8"
+    }
+  },
+  "superseded_formal_rows": {},
+  "lease_audit": {
+    "runs": 224,
+    "physical_execution_overlaps": 0,
+    "method": "Conservative envelope: launch.sh mtime through executor ended_at-file mtime"
+  },
+  "protected_sets_used": false,
+  "evidence_boundary": "Development fixed160 only, frozen same-round 60 s / one physical CPU / 16 GiB. No protected-set or real-QCP-program superiority claim. Fourteen cvc5 original-query limits are retained; all SAT model replays passed."
+}

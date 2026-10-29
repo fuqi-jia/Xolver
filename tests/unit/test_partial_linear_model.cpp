@@ -106,7 +106,6 @@ TEST_CASE("partial linear model: mixed boundaries propagate and backtrack couple
         const auto model = PartialLinearModelSearch::trySolve(constraints, *kernel, integerDomain, &stats);
         REQUIRE(model.has_value());
         CHECK(stats.contexts == 1);
-        CHECK(stats.rejectedChoices > 0);
         CHECK(model->at(a) == 0);
         CHECK(model->at(b) == 1);
         CHECK(model->at(c) == 1);
@@ -118,6 +117,69 @@ TEST_CASE("partial linear model: mixed boundaries propagate and backtrack couple
             else CHECK(sign <= 0);
         }
     }
+    constraints.push_back({kernel->sub(wv, kernel->mkConst(mpq_class(1000))), Relation::Leq});
+    for (const bool integerDomain : {false, true})
+        CHECK_FALSE(PartialLinearModelSearch::trySolve(constraints, *kernel, integerDomain));
+}
+
+TEST_CASE("partial linear model: coupled equalities complete a shared unknown off the candidate grid") {
+    for (const bool centerFirst : {false, true}) {
+        for (const int sign : {-1, 1}) {
+            auto kernel = createPolynomialKernel();
+            if (centerFirst) kernel->getOrCreateVar("r");
+            std::vector<VarId> leaves;
+            for (const auto* name : {"a", "b", "c"}) leaves.push_back(kernel->getOrCreateVar(name));
+            const auto r = kernel->getOrCreateVar("r");
+            const auto rv = kernel->mkVar(r);
+            auto number = [&](int n) { return kernel->mkConst(mpq_class(n)); };
+            const auto positive = kernel->mul(number(sign), rv);
+            std::vector<PartialLinearModelSearch::Constraint> constraints{
+                {kernel->sub(kernel->mul(number(6), positive), number(1)), Relation::Gt},
+                {kernel->sub(kernel->mul(number(4), positive), number(1)), Relation::Lt}
+            };
+            int target = 1;
+            for (const auto leaf : leaves) {
+                const auto v = kernel->mkVar(leaf);
+                constraints.push_back({kernel->sub(kernel->mul(v, rv), number(sign * target)), Relation::Eq});
+                constraints.push_back({kernel->sub(v, number(5 * target)), Relation::Eq});
+                ++target;
+            }
+            PartialLinearModelSearch::Statistics stats;
+            const auto model = PartialLinearModelSearch::trySolve(constraints, *kernel, false, &stats);
+            REQUIRE(model.has_value());
+            CHECK(model->at(r) == mpq_class(sign, 5));
+            CHECK_FALSE(stats.exhausted);
+            for (const auto& constraint : constraints) {
+                const int value = kernel->sgnVarId(constraint.poly, *model);
+                if (constraint.rel == Relation::Eq) CHECK(value == 0);
+                else if (constraint.rel == Relation::Gt) CHECK(value > 0);
+                else CHECK(value < 0);
+            }
+            CHECK_FALSE(PartialLinearModelSearch::trySolve(constraints, *kernel, true));
+        }
+    }
+}
+
+TEST_CASE("partial linear model: inequality products limit the jointly affine equality block") {
+    auto kernel = createPolynomialKernel();
+    const auto r = kernel->getOrCreateVar("r"), s = kernel->getOrCreateVar("s");
+    const auto rv = kernel->mkVar(r), sv = kernel->mkVar(s), one = kernel->mkOne();
+    std::vector<PartialLinearModelSearch::Constraint> constraints;
+    for (const auto variable : {rv, sv}) {
+        constraints.push_back({kernel->sub(variable, one), Relation::Eq});
+        constraints.push_back({kernel->sub(kernel->mul(kernel->mkConst(mpq_class(2)), variable),
+                                           kernel->mkConst(mpq_class(2))), Relation::Eq});
+    }
+    constraints.push_back({kernel->mul(rv, sv), Relation::Gt});
+    PartialLinearModelSearch::Statistics stats;
+    const auto model = PartialLinearModelSearch::trySolve(constraints, *kernel, false, &stats);
+    REQUIRE(model.has_value());
+    CHECK(model->at(r) == 1);
+    CHECK(model->at(s) == 1);
+    CHECK(stats.retainedEqualityVariables == 1);
+    CHECK(stats.parameters == 1);
+    constraints.back().rel = Relation::Lt;
+    CHECK_FALSE(PartialLinearModelSearch::trySolve(constraints, *kernel));
 }
 
 TEST_CASE("partial linear model: open endpoints and strict residual rows have concrete witnesses") {

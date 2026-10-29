@@ -35,6 +35,7 @@ set(XOLVER_ALGEBRA_SOURCES
     "algebra/poly/LibPolyKernel.cpp"
     "algebra/poly/PolynomialConstraint.cpp"
     "algebra/poly/PolynomialConverter.cpp"
+    "algebra/poly/PolynomialEvaluation.cpp"
     "algebra/poly/PolynomialKernel.cpp"
     "algebra/poly/RationalPolynomial.cpp"
 )
@@ -87,6 +88,7 @@ set(XOLVER_SEARCH_SOURCES
     "search/bitblast/BitBlastSolver.cpp"
     "search/bitblast/EagerBitBlastSolver.cpp"
     "search/bitblast/PolyBitBlaster.cpp"
+    "search/bitblast/PseudoBooleanEncoder.cpp"
     "search/bitblast/SpaceEstimator.cpp"
     "search/boolean/ArithAtomExtractor.cpp"
     "search/boolean/Atomizer.cpp"

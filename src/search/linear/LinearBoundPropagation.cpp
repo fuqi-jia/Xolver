@@ -1,6 +1,7 @@
 #include "search/linear/LinearBoundPropagation.h"
 
 #include <algorithm>
+#include <array>
 #include <deque>
 #include <map>
 #include <unordered_map>
@@ -21,6 +22,76 @@ void normalizeReasons(std::vector<SatLit>& reasons) {
 }
 
 } // namespace
+
+std::optional<LinearAggregateConflict> LinearBoundPropagation::aggregateConflict(
+    const std::vector<LinearBoundRow>& rows, WorkBudget& budget) {
+    try {
+        std::array<std::map<std::string, mpq_class>, 2> sums;
+        std::array<LinearAggregateConflict, 2> aggregates;
+        auto finish = [&](size_t attempt) -> std::optional<LinearAggregateConflict> {
+            const auto& sum = sums[attempt];
+            auto& aggregate = aggregates[attempt];
+            if (!sum.empty() || aggregate.rhs > 0 ||
+                (aggregate.rhs == 0 && !aggregate.strict)) return std::nullopt;
+            for (const auto& [index, multiplier] : aggregate.multipliers) {
+                (void)multiplier;
+                budget.tick(rows[index].reasons.size());
+                aggregate.reasons.insert(aggregate.reasons.end(), rows[index].reasons.begin(),
+                                         rows[index].reasons.end());
+            }
+            normalizeReasons(aggregate.reasons);
+            return aggregate;
+        };
+        for (size_t index = 0; index < rows.size(); ++index) {
+            budget.tick();
+            const auto& row = rows[index];
+            if (row.rel != Relation::Leq && row.rel != Relation::Lt &&
+                row.rel != Relation::Geq && row.rel != Relation::Gt) continue;
+            budget.tick(row.reasons.size());
+            if (!explained(row.reasons)) continue;
+            std::map<std::string, mpq_class> coefficients;
+            for (const auto& [variable, coefficient] : row.lhs.terms) {
+                budget.tick();
+                coefficients[variable] += coefficient;
+                if (coefficients[variable] == 0) coefficients.erase(variable);
+            }
+            const int direction = row.rel == Relation::Geq || row.rel == Relation::Gt ? -1 : 1;
+            const bool strict = row.rel == Relation::Lt || row.rel == Relation::Gt;
+            if (coefficients.empty()) {
+                if (direction * row.rhs < 0 || (row.rhs == 0 && strict))
+                    return LinearAggregateConflict{{{index, 1}}, direction * row.rhs, strict, row.reasons};
+                continue;
+            }
+            if (coefficients.size() == 1) continue;
+            // A positive scale preserves inequality orientation. Normalize by
+            // the first nonzero coefficient's magnitude so equivalent scaled
+            // constraints contribute the same form, with exact rational math.
+            mpq_class magnitude = coefficients.begin()->second;
+            if (magnitude < 0) magnitude = -magnitude;
+            for (size_t attempt = 0; attempt < aggregates.size(); ++attempt) {
+                const mpq_class multiplier = attempt ? mpq_class(1 / magnitude) : mpq_class(1);
+                auto& sum = sums[attempt];
+                auto& aggregate = aggregates[attempt];
+                for (const auto& [variable, coefficient] : coefficients) {
+                    budget.tick();
+                    sum[variable] += direction * multiplier * coefficient;
+                    if (sum[variable] == 0) sum.erase(variable);
+                }
+                aggregate.multipliers.emplace_back(index, multiplier);
+                aggregate.rhs += direction * multiplier * row.rhs;
+                aggregate.strict |= strict;
+                // A contradictory prefix is itself a valid nonnegative linear
+                // combination; later unrelated rows cannot invalidate its proof.
+                if (sum.empty()) {
+                    if (auto conflict = finish(attempt)) return conflict;
+                }
+            }
+        }
+    } catch (const ResourceExhausted&) {
+        // An incomplete aggregate is never a refutation.
+    }
+    return std::nullopt;
+}
 
 LinearBoundPropagationResult LinearBoundPropagation::run(
     const std::vector<LinearBoundRow>& input, const Lookup& lookup,

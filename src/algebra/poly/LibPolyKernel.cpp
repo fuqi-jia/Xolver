@@ -305,18 +305,17 @@ std::vector<std::string> LibPolyKernel::variables(PolyId a) const {
     std::vector<std::string> result;
     const auto& p = get(a);
 
-    // Recursively collect all variables by traversing coefficients.
+    // A repeated main variable can head different coefficient subtrees. Seeing
+    // its name once does not mean that the other subtree's variables were
+    // visited (e.g. y + z*x*y). Traverse actual monomials without copying each
+    // recursive coefficient; retain the existing variable-id ordering/cache.
     std::set<lp_variable_t> found;
-    std::function<void(const poly::Polynomial&)> collect = [&](const poly::Polynomial& poly) {
-        if (poly::is_constant(poly)) return;
-        lp_variable_t mv = poly::main_variable(poly).get_internal();
-        if (found.insert(mv).second) {
-            for (size_t i = 0; i <= poly::degree(poly); ++i) {
-                collect(poly::coefficient(poly, i));
-            }
-        }
-    };
-    collect(p);
+    lp_polynomial_traverse(p.get_internal(),
+        [](const lp_polynomial_context_t*, lp_monomial_t* monomial, void* opaque) {
+            auto& variables = *static_cast<std::set<lp_variable_t>*>(opaque);
+            for (size_t i = 0; i < monomial->n; ++i)
+                variables.insert(monomial->p[i].x);
+        }, &found);
 
     for (lp_variable_t v : found) {
         auto it = polyVarToVarId_.find(v);
