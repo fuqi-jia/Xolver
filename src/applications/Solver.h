@@ -2,7 +2,7 @@
 #include <string_view>
 
 namespace xolver::applications {
-enum class Family { Smt, Omt, Cp, Milp, DifferentialEquations, SoftwareVerification, Counting };
+enum class Family { Smt, Omt, Cp, Milp, DifferentialEquations, SoftwareVerification, Counting, MaxSmt };
 
 // Common lifetime and identity for application solvers. Theory callbacks,
 // simplex, quantifier projection and SAT search are implementation components,

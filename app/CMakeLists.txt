@@ -17,3 +17,9 @@ target_link_libraries(xolver-sv PRIVATE xolver_core Threads::Threads)
 set_target_properties(xolver-sv PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
+
+add_executable(xolver-api-examples api_examples.cpp)
+target_link_libraries(xolver-api-examples PRIVATE xolver_core gmpxx Threads::Threads)
+set_target_properties(xolver-api-examples PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+)

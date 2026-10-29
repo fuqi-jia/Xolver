@@ -1,6 +1,7 @@
 # Source ownership is explicit; configuration rejects undeclared sources and
 # reverse dependencies before C++ compilation. No recursive source globbing.
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
+find_package(Threads REQUIRED)
 execute_process(
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/governance/architecture.py"
     RESULT_VARIABLE XOLVER_ARCHITECTURE_STATUS
@@ -77,7 +78,7 @@ endif()
 set(XOLVER_CORE_OBJECTS)
 # Preserve archive member order while automatically including a layer when its
 # first compiled source is added.
-foreach(layer base ir contracts algebra evidence quantifiers applications frontend search runtime)
+foreach(layer base parallel ir contracts algebra evidence quantifiers applications frontend search runtime)
     string(TOUPPER "${layer}" upper)
     if(NOT XOLVER_${upper}_SOURCES)
         add_library(xolver_${layer} INTERFACE)
@@ -91,6 +92,9 @@ foreach(layer base ir contracts algebra evidence quantifiers applications fronte
     list(APPEND XOLVER_CORE_OBJECTS $<TARGET_OBJECTS:xolver_${layer}>)
     set_target_properties(xolver_${layer} PROPERTIES POSITION_INDEPENDENT_CODE ON)
     target_link_libraries(xolver_${layer} PRIVATE xolver_build_options)
+    if(layer STREQUAL "parallel")
+        target_link_libraries(xolver_${layer} PRIVATE Threads::Threads)
+    endif()
     if(layer MATCHES "^(algebra|search|applications|runtime)$")
         target_link_libraries(xolver_${layer} PRIVATE ${XOLVER_POLY_TARGET})
     endif()
@@ -114,7 +118,7 @@ endforeach()
 
 add_library(xolver_core STATIC ${XOLVER_CORE_OBJECTS})
 target_link_libraries(xolver_core PUBLIC xolver_build_options
-    somtparser cadical ${XOLVER_POLY_TARGET} ${MPFR_LIBRARIES} ${GMP_LIBRARIES})
+    somtparser cadical ${XOLVER_POLY_TARGET} ${MPFR_LIBRARIES} ${GMP_LIBRARIES} Threads::Threads)
 set_target_properties(xolver_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 # Evidence-only archive: no search, parser, SAT, portfolio or decision objects.

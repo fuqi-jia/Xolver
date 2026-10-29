@@ -32,6 +32,8 @@ other application families; SV/SL and SV/PA are also independent.
 | Component | Owner |
 | --- | --- |
 | Abstract application identity and typed `solve` | `applications/Solver.h` |
+| Theory-independent task submission and bounded worker execution | `parallel` |
+| Rational weighted soft constraints over an injected decision oracle | `applications/maxsmt` |
 | SMT input classification and theory composition | `applications/smt` |
 | Shared SMT integer reasoning | `applications/smt/common/lia` |
 | SMT mixed linear feasibility | `applications/smt/qflira` |
@@ -51,6 +53,11 @@ the appropriate lower layer with explicit, application-independent contracts.
 Application outputs have distinct semantics: a satisfiability result, optimum,
 count or differential-equation solution cannot share an untyped result contract.
 `TheorySolver` is the CDCL(T) callback interface in the infrastructure layer.
+
+The `parallel` layer depends only on base infrastructure and the C++ standard
+library. It does not depend on applications or search engines. MaxSMT consumes
+the common decision-oracle contract; its initial exact truth-pattern backend
+preserves unknown results and bounded-search incumbents.
 
 Definition preprocessing uses exact model reconstruction. `SolveEqs` accepts
 linear definitions by default; its explicit polynomial policy accepts products
