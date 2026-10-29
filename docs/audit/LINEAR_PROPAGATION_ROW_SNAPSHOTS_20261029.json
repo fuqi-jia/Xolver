@@ -1,0 +1,271 @@
+{
+  "schema": "xolver-linear-propagation-row-snapshots/1",
+  "date": "2026-10-29",
+  "code_commit": "4235b7750099a5058869b679e9f02e81d8e40acf",
+  "base_main": "07ea0c36e29a03e06881c1c5213383c969b60bde",
+  "source_manifest_sha256": "12e0db654dd70369f92c9ca93ddcf999e9b470608c813f7b186ae2746a73fc16",
+  "native": {
+    "experiment": "3638f2cf9dbf",
+    "unit_cases": 1762,
+    "unit_assertions": 876943,
+    "targeted_cases": 243,
+    "parser_checks": 63,
+    "binary_sha256": "ea3f5589906689ea4153f655193de1584bcdc4190f00c64ce01a769465ce57dd",
+    "qualification_sha256": "eb32f56d5a27b50d992085519f11a61f259ea7d5a77a62a7fb64bd55dc36c60e"
+  },
+  "algorithm": {
+    "scope": "One propagation call over an immutable canonical tableau",
+    "cache": "At most one row of exact endpoint contributions and premise multiplicities",
+    "invalidation": "Every published non-basic endpoint change increments the local input revision",
+    "cross_check_state_retained": false,
+    "counter_example": {
+      "row_visits": 2,
+      "row_snapshots": 1,
+      "snapshot_hits": 1,
+      "term_pairs": 2
+    }
+  },
+  "comparison": {
+    "experiments": [
+      "acd48aad93a9",
+      "5f70203d540a",
+      "8b4b73d3d63c",
+      "6053b60ef80d",
+      "a3792bcc5887"
+    ],
+    "cases": 160,
+    "seconds_per_case": 60,
+    "physical_cpus_per_case": 1,
+    "memory_bytes": 17179869184,
+    "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+    "binaries": {
+      "baseline": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r653/xolver",
+        "sha256": "4455b68d79baca96abd9c1db90b5e8443580e9fdb211d985e785a9a87e76106a"
+      },
+      "candidate": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r659/xolver",
+        "sha256": "ea3f5589906689ea4153f655193de1584bcdc4190f00c64ce01a769465ce57dd"
+      },
+      "z3": {
+        "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+        "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      }
+    },
+    "counts": {
+      "baseline": {
+        "unsat": 41,
+        "decided": 94,
+        "verified_decided": 94,
+        "verified_par2": 8220.612066259608,
+        "raw_par2": 8220.612066259608,
+        "timeout": 65,
+        "sat": 53,
+        "unknown": 1
+      },
+      "candidate": {
+        "unsat": 41,
+        "decided": 95,
+        "verified_decided": 95,
+        "verified_par2": 8156.64365885593,
+        "raw_par2": 8156.64365885593,
+        "timeout": 64,
+        "sat": 54,
+        "unknown": 1
+      },
+      "z3": {
+        "unsat": 58,
+        "decided": 124,
+        "verified_decided": 115,
+        "verified_par2": 5612.219121329486,
+        "raw_par2": 4644.725080933422,
+        "sat": 66,
+        "timeout": 36
+      }
+    },
+    "changes": [
+      {
+        "index": 59,
+        "case": "QF_LRA/tta_startup/simple_startup_10nodes.missing.induct.smt2",
+        "kind": "gained",
+        "truth": "sat",
+        "evidence": [
+          "z3-exported-model-replay",
+          "candidate-exported-model-replay"
+        ],
+        "observations": {
+          "z3": {
+            "result": "sat",
+            "seconds": 0.3673398308455944
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.009874084964395
+          },
+          "candidate": {
+            "result": "sat",
+            "seconds": 56.012632593512535
+          }
+        }
+      }
+    ],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "unconfirmed_results": [
+      {
+        "index": 12,
+        "case": "QF_LIA/fft/Sz128_2823.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 24,
+        "case": "QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 27,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 42,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep2a.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 50,
+        "case": "QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_jain_5.i_2_4_3.bpl_7.smt2",
+        "results": {
+          "z3": "unsat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 80,
+        "case": "QF_LIA/cut_lemmas/20-vars/cut_lemma_03_004.smt2",
+        "results": {
+          "z3": "unsat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 114,
+        "case": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 122,
+        "case": "QF_NIA/20250331-elster/D_1.smt2",
+        "results": {
+          "z3": "sat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "model query did not return SAT"
+        }
+      },
+      {
+        "index": 159,
+        "case": "QF_NRA/20161105-Sturm-MGC/mgc_07.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      }
+    ],
+    "certificate_evidence": [
+      {
+        "index": 115,
+        "input_sha256": "02a58b11df8951543940a1090a140592e24de41dcaeb6470e7a50d42e804be64",
+        "certificate": "docs/audit/ORIGINAL_UNSAT115_MOD_CERTIFICATE.json",
+        "certificate_sha256": "48f5d0ca9b19679a48f3248ac1183c31d09e0c198bfda0a70b3b4272b6d1a5ba",
+        "checker_result": {
+          "status": "checked-unsat",
+          "input_sha256": "02a58b11df8951543940a1090a140592e24de41dcaeb6470e7a50d42e804be64",
+          "assertion": 9,
+          "path": [
+            2
+          ],
+          "checked_residues": 12
+        },
+        "checker_experiment": "e4e83d2c56f6",
+        "original_timings_preserved": true
+      }
+    ]
+  },
+  "diagnostic_repeats": {
+    "experiment": "279b5198e6cf",
+    "index": 59,
+    "repetitions": 3,
+    "baseline": [
+      "timeout",
+      "timeout",
+      "timeout"
+    ],
+    "candidate_verified_sat_seconds": [
+      49.403,
+      47.361,
+      47.227
+    ],
+    "included_in_fixed160_score": false
+  },
+  "server_acceptance": {
+    "experiment": "e4e83d2c56f6",
+    "groups": 37,
+    "all_success": true
+  },
+  "boundaries": {
+    "protected_sets_evaluated": false,
+    "z3_superiority_established": false,
+    "server_current_main_archive_required": false,
+    "note": "Only case59 is newly solved. The 9 unconfirmed Z3 UNSAT decisions remain excluded. Existing input115 certificate was rechecked without changing timed observations."
+  }
+}
