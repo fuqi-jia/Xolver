@@ -209,5 +209,107 @@
   "evidence_boundary": "Functional qualification only. Full Clingo is an independent development reference; production subprocess mode is forced ground-only and no external solver provides Xolver decisions. These are development examples and randomized small programs, not a fresh solver performance comparison or exhaustive ASP/Draco coverage.",
   "performance_superiority_claimed": false,
   "protected_sets_used": false,
-  "extra_current_main_server_archive_required": false
+  "extra_current_main_server_archive_required": false,
+  "combined_with_delivered_arithmetic": {
+    "main_commit": "e7c7917c9a9c997a8649ad736c8548f4de186bca",
+    "arithmetic_pr": "https://github.com/fuqi-jia/Xolver/pull/67",
+    "asp_pr": "https://github.com/fuqi-jia/Xolver/pull/68",
+    "source_commit": "d0b676c45b1e02e3f0841e089913b35d2b16cbb9",
+    "source_manifest": {
+      "path": "/pub/data/jiafq/xolver/validation/draco-asp-r2/source-native-r3.tar.json",
+      "sha256": "7a33262ad0f3720c2c624888f6fd37aedc5a51c109c3e4e5a0561c6d65ba2cbb"
+    },
+    "delta_from": "validation/arithmetic-r103/source-r667.tar.json",
+    "unmerged_polynomial_batch_experiment_restored": true,
+    "restored_rational_polynomial_sha256": "bd58b1658dfb6bdb429d65c73f2af968061fb639bdec418fbdd1412aeda34f13",
+    "native": {
+      "experiment": "4b01adbd9ad0",
+      "run": "9eb98cdf1fbb",
+      "status": "success",
+      "cpu_ids": [
+        0
+      ],
+      "memory_gib": 16,
+      "unit_tests": 1772,
+      "unit_assertions": 877704,
+      "targeted_tests": 10,
+      "targeted_assertions": 761,
+      "qualification": {
+        "path": "/pub/data/jiafq/xolver/validation/draco-asp-r2/core-r3/qualification.json",
+        "sha256": "bf230481224b0e17951a010a0456e95c52d3de3fc47dddec2afa45f961db59e4"
+      },
+      "unit_log_sha256": "4073158bc34e1a58643116716d77a0cfa3a77607470539437c9dc9532f01a8f2",
+      "targeted_log_sha256": "4256719b04cfdad7c3278c12450ba5bbd3f8bc93a49908ef25d86d9ab25fb55d",
+      "checks": [
+        "architecture",
+        "standalone-evidence",
+        "regression-harness",
+        "parallel-local",
+        "parallel-worker",
+        "asp-cli",
+        "api-examples"
+      ],
+      "failures": 0
+    },
+    "binaries": {
+      "asp": {
+        "path": "/pub/data/jiafq/xolver/validation/draco-asp-r2/core-r3/xolver-asp",
+        "sha256": "78e3104ce1f54843e2556a0bf4c76d169e061296690f7c1dfa4ec1b2272c891c",
+        "identical_to_first_qualified_asp_binary": true
+      },
+      "main": {
+        "path": "/pub/data/jiafq/xolver/build/bin/xolver",
+        "sha256": "ea3f5589906689ea4153f655193de1584bcdc4190f00c64ce01a769465ce57dd",
+        "identical_to_frozen_arithmetic_r659": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r659/xolver"
+      }
+    },
+    "independent_validation": {
+      "experiment": "6b3f8d139d31",
+      "status": "success",
+      "fresh_repetition": true,
+      "memory_gib_per_task": 16,
+      "aspif": {
+        "run": "9646991d806a",
+        "cpu_ids": [
+          0
+        ],
+        "cases": 102,
+        "independently_verified": 102,
+        "report": {
+          "path": "/pub/data/jiafq/xolver/validation/draco-asp-r2/validate-r3-aspif/cases/report.json",
+          "sha256": "53ab776919bdd7f6166735cd69596abc9801bc794c0ff440ab77e563a7a63403"
+        },
+        "binding": {
+          "path": "/pub/data/jiafq/xolver/validation/draco-asp-r2/validate-r3-aspif/binding.json",
+          "sha256": "c6b6a1a4de5e09ba8b99b0f87b73b3f3b400248c821c9e5b3dde3dfa4ccd5ff5"
+        }
+      },
+      "draco2": {
+        "run": "93d1cdde24a7",
+        "cpu_ids": [
+          1
+        ],
+        "original_examples": 3,
+        "native_invocations": 36,
+        "independently_verified": 36,
+        "report": {
+          "path": "/pub/data/jiafq/xolver/validation/draco-asp-r2/validate-r3-draco2/cases/report.json",
+          "sha256": "2e1a95cec48d0551a8cd69a91faef8b49bd25bb23e551f42496d61216999f684"
+        },
+        "binding": {
+          "path": "/pub/data/jiafq/xolver/validation/draco-asp-r2/validate-r3-draco2/binding.json",
+          "sha256": "70c95eafd78d90cf576bbf2f24263df79ad253d8cfa7cdc6a212965e3ff1642d"
+        }
+      },
+      "wrong_answers": 0,
+      "additional_unique_original_examples": 0
+    },
+    "main_ci_at_record": {
+      "run": 40903458473,
+      "proof_gate": "success",
+      "build_test": "in_progress",
+      "receipt_location": "Current PR68 description; this status is a historical observation, not a new archive requirement"
+    },
+    "evidence_boundary": "Fresh combination correctness qualification, not extra unique example coverage or a new performance round. The main SMT binary is byte-identical to the frozen R659 binary; ASP CLI is byte-identical to first qualification. Subsequent documentation commits do not imply a new binary. PR68 must pass fresh CI after this rebase; do not infer that from the earlier green PR run."
+  }
 }

@@ -58,6 +58,14 @@ frozen Draco 2 source, original rules/weights/examples and real native calls:
 calls through three original examples, and five weighted-dependency probes.
 The [first PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/40898756245)
 passed before rebasing onto PR67; it does not qualify the rebased combination.
+The rebased server combination passes **1,772 unit cases / 877,704 assertions**
+and freshly repeats all 102 ASPIF checks and 36 independently checked Draco 2
+native calls. The same record binds EOS native `4b01adbd9ad0`, independent run
+`6b3f8d139d31`, and `source-native-r3.tar.json`; the overlay restores the unmerged
+polynomial-batching experiment. Its main SMT binary is byte-identical to frozen
+R659, and its ASP binary is byte-identical to first qualification. These repeats
+do not increase unique original-example coverage. Fresh combined PR CI receipts
+are tracked on PR68; the earlier PR CI is not substituted for them.
 Grounding is forced ground-only; Xolver performs stable-model search and
 optimization. Unsupported fragments fail explicitly. These are functional
 checks, not a Draco or solver performance comparison. Neither protected set
