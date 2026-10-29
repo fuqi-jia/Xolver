@@ -200,3 +200,9 @@ is a development oracle in these checkers; the production adapter only uses its
 ground-only mode and symbol parser. See the
 [ASP contract](../../src/applications/satisfiability/asp/README.md) for supported
 rules, budgets and evidence limits.
+
+The [server functional qualification](../../docs/audit/DRACO2_ASP_FUNCTION_STAGE_20261029.json)
+records 1,771 passing native tests, 102 independent ASPIF checks and 36 actual
+latest-Draco-2 native invocations with independent checks. It identifies the
+frozen source, binary and grounder separately; these results do not establish
+performance superiority.

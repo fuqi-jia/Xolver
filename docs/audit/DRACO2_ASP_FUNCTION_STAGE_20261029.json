@@ -1,0 +1,213 @@
+{
+  "schema": "xolver-draco2-asp-functional-qualification/1",
+  "date": "2026-10-29",
+  "source_commit": "f6361d68060fb51d3aec406f860a6b892b30363c",
+  "base_main": "07ea0c36e29a03e06881c1c5213383c969b60bde",
+  "source_manifest": {
+    "path": "/pub/data/jiafq/xolver/validation/draco-asp-r2/source-native-r2.tar.json",
+    "sha256": "8d3c59918563484ed41d1d87eba93ffc83937169155e15f0c9a59a3293111cbb"
+  },
+  "upstream": {
+    "repository": "https://github.com/cmudig/draco2",
+    "revision": "580047a9b5a41b153b24059275e8050b36c38658",
+    "version": "2.0.1",
+    "source_manifest": "tools/integration/draco-source.json"
+  },
+  "dependency_install": {
+    "experiment": "3a4110a7cfc0",
+    "run": "f229f19eab23",
+    "status": "success",
+    "prefix": "/pub/data/jiafq/xolver/dependencies/draco2-asp",
+    "receipt": {
+      "path": "/pub/data/jiafq/xolver/validation/draco-asp-r2/dependencies/receipt.json",
+      "sha256": "b15718663e168c0bad1cd8ee8135c11fce3ae3dcccde387131a3846f39e3be88"
+    },
+    "clingo_version": "5.8.0",
+    "grounder_artifacts": {
+      "/pub/data/jiafq/xolver/dependencies/draco2-asp/python/bin/clingo": "b3b1d3f91c30147455e7ee07e5e39afefb5f4db70b47589d1264b87e2bbc5123",
+      "/pub/data/jiafq/xolver/dependencies/parallel-cpu/bin/python3.11": "930a771314bdf9353c950c996524bfc679dc0046c852fc55dc7bcd15563c82c6",
+      "/pub/data/jiafq/xolver/dependencies/draco2-asp/python/lib/python3.11/site-packages/clingo/_clingo.cpython-311-x86_64-linux-gnu.so": "b77c8d05c2994aec3064bcf53d9267d210b9a10177ef931df3a136e4c91cc3bf",
+      "/pub/data/jiafq/xolver/dependencies/draco2-asp/python/lib/python3.11/site-packages/clingo/__main__.py": "ce9135fa69df02f822d9e7ff4079a5e27acfdb774ab6e943be60ff2eb59a20c5"
+    }
+  },
+  "native": {
+    "experiment": "76cf4b83d8be",
+    "run": "3b4bac5b43d2",
+    "status": "success",
+    "cpu_ids": [
+      2
+    ],
+    "memory_gib": 16,
+    "single_build_tree": "/pub/data/jiafq/xolver/build",
+    "build_write_lock": "build/.writer.lock EX",
+    "optional_backends_enabled": false,
+    "unit_tests": 1771,
+    "unit_assertions": 877691,
+    "targeted_tests": 10,
+    "targeted_assertions": 761,
+    "unit_log_sha256": "8b87fa4b7e12103e38ad90d58c2f388fda57173b8219d455b468569cd5b283f7",
+    "targeted_log_sha256": "ad9c1ae2e6417c2280404cede512044ce05339f3453099335cfeca4a48a2613c",
+    "qualification": {
+      "path": "/pub/data/jiafq/xolver/validation/draco-asp-r2/core-r2/qualification.json",
+      "sha256": "16bf977c9f1a6d3e3c66b74f679d10f0e0b1d0770c0c03c681ad6c5c2de7f2b1"
+    },
+    "binary": {
+      "path": "/pub/data/jiafq/xolver/validation/draco-asp-r2/core-r2/xolver-asp",
+      "sha256": "78e3104ce1f54843e2556a0bf4c76d169e061296690f7c1dfa4ec1b2272c891c"
+    },
+    "checks": [
+      "architecture",
+      "standalone-evidence",
+      "regression-harness",
+      "parallel-local",
+      "parallel-worker",
+      "asp-cli",
+      "api-examples"
+    ],
+    "failures": 0
+  },
+  "independent_validation": {
+    "experiment": "dc26b8fd6bc6",
+    "status": "success",
+    "read_lock": "build/.writer.lock SH",
+    "memory_gib_per_task": 16,
+    "aspif": {
+      "run": "e4e3a31b8311",
+      "cpu_ids": [
+        0
+      ],
+      "timeout_seconds_per_call": 10,
+      "cases": 102,
+      "independently_verified": 102,
+      "seed": 385714,
+      "reference": "Full Clingo verdict and exact objective vector; complete internal model pinned for stable replay",
+      "report": {
+        "path": "/pub/data/jiafq/xolver/validation/draco-asp-r2/validate-r2-aspif/cases/report.json",
+        "sha256": "53ab776919bdd7f6166735cd69596abc9801bc794c0ff440ab77e563a7a63403"
+      }
+    },
+    "draco2": {
+      "run": "640bbdbf25a2",
+      "cpu_ids": [
+        1
+      ],
+      "timeout_seconds_per_call": 60,
+      "original_examples": [
+        {
+          "name": "scatter",
+          "input_sha256": "ed52c743c0861c10a268aed060a39b95c01dea983e4589c71cd8f401398f2519",
+          "cost": [
+            12
+          ],
+          "native_calls": [
+            5
+          ]
+        },
+        {
+          "name": "histogram",
+          "input_sha256": "483000bcddcf15718af6a2e2161bb806dec4cecdb6e1851608c126248d7fdeda",
+          "cost": [
+            9
+          ],
+          "native_calls": [
+            6
+          ]
+        },
+        {
+          "name": "binned_histogram",
+          "input_sha256": "cf6734550f6a405e59ef1ff6e15253626e962660ad5333dbff083a4bbc8dfb37",
+          "cost": [
+            9
+          ],
+          "native_calls": [
+            7
+          ]
+        }
+      ],
+      "native_invocations": 36,
+      "independently_verified": 36,
+      "report": {
+        "path": "/pub/data/jiafq/xolver/validation/draco-asp-r2/validate-r2-draco2/cases/report.json",
+        "sha256": "2e1a95cec48d0551a8cd69a91faef8b49bd25bb23e551f42496d61216999f684"
+      },
+      "covered": [
+        "check_spec SAT/UNSAT",
+        "count_preferences",
+        "get_violations",
+        "original example complete_spec through original rules and current Model conversion",
+        "top-K distinct full stable models and cost tiers",
+        "finite all-model generation",
+        "explicit objective-ignore semantics",
+        "grounder constants",
+        "duplicate objective tuple deduplication",
+        "coexisting concurrent Clingo and Xolver instances"
+      ],
+      "production_guard": "clingo.Control.solve raises throughout initial import, Draco construction, backend binding and full generator iteration; Xolver native calls counted and each independently checked",
+      "cache_policy": "Instance-local injected runners; no adapter result cache; original module runners unchanged"
+    },
+    "wrong_answers": 0
+  },
+  "weighted_semantics": {
+    "independent_experiment": "8a49d39950dc",
+    "independent_run": "6d94a1c3cbf0",
+    "native_experiment": "af3e6a2d1146",
+    "native_run": "633edbb98441",
+    "status": "success",
+    "independently_verified": 5,
+    "report": {
+      "path": "/pub/data/jiafq/xolver/validation/draco-asp-r2/probe-weight-r2/report.json",
+      "sha256": "be7bd1b7fd5e733f52ed9be3f1525b24685aaf5f7657193ae8656875cf0fa3b6"
+    },
+    "cases": [
+      {
+        "name": "weighted-complement",
+        "input_sha256": "1cfce225832995a29b885516f5922d5e0e8ebfcd02f73451ad34dd9b6cad6080",
+        "result": "UNSATISFIABLE",
+        "independent_reference": "/pub/data/jiafq/xolver/validation/draco-asp-r2/probe-weight-r1/weighted-complement.stdout"
+      },
+      {
+        "name": "weighted-duplicate",
+        "input_sha256": "93b0068ea105fa602bedaa25c05761cbe02263a7e1708d7fc50c63a436bb7642",
+        "result": "SATISFIABLE",
+        "independent_reference": "/pub/data/jiafq/xolver/validation/draco-asp-r2/probe-weight-r1/weighted-duplicate.stdout"
+      },
+      {
+        "name": "weighted-complement-false",
+        "input_sha256": "51fbfe36717161d143cc730dad8dad9546ee0603e1944d7517172eca25d2a1ba",
+        "result": "SATISFIABLE",
+        "independent_reference": "/pub/data/jiafq/xolver/validation/draco-asp-r2/probe-weight-r1/weighted-complement-false.stdout"
+      },
+      {
+        "name": "choice-complement",
+        "input_sha256": "e4a09b395b4c3c2e95de6226e126d99a108cd0c80bc87b0c271699fe127f02de",
+        "result": "SATISFIABLE",
+        "independent_reference": "/pub/data/jiafq/xolver/validation/draco-asp-r2/probe-weight-r1/choice-complement.stdout"
+      },
+      {
+        "name": "source-complement",
+        "input_sha256": "ec111ed73cc61ec3594d63243b85c3f6723412f2b4bb65a72886f50f4b171d73",
+        "result": "UNSATISFIABLE",
+        "independent_reference": "/pub/data/jiafq/xolver/validation/draco-asp-r2/probe-weight-r1/source-complement.stdout"
+      }
+    ],
+    "conclusion": "Keep original positive dependencies across both Program and ASPIF boundaries. A classically tautological weighted body is not a founded ASP fact. Source a :- 1 {a; not a}. and its actual grounded ASPIF are UNSAT in Clingo and Xolver."
+  },
+  "resolved_incompatibility": {
+    "initial_validation_experiment": "3b6151553be1",
+    "initial_result": "Explicit Unsupported on standard incremental-marked header; no opposite verdict",
+    "fix": "Accept exactly one initial ASPIF step with optional incremental marker. Reject further steps. Native/source requalified and latest Draco2 rerun successfully."
+  },
+  "capability_boundary": [
+    "Finite normal and independent choice heads; nonnegative weighted bodies; exact signed integer objectives with lexicographic priorities",
+    "Disjunctive multi-atom heads and full incremental sessions return Unsupported",
+    "External/theory/acyclic-edge/heuristic semantic directives are unsupported",
+    "Noninteger ignored objective tuples such as #inf raise UnsupportedGrounding",
+    "Current Draco2 runner seam is source-hash checked; future upstream changes require explicit review",
+    "Rendering and FastAPI routing are separate clients, not qualified by this stage"
+  ],
+  "shared_infrastructure": "Generic search/optimization/BooleanOptimizer uses injected feasibility/value/publication callbacks and exact integer priorities; existing rational MaxSMT API is unchanged. Incumbent model and costs publish atomically, with initial/later budget-exhaustion tests.",
+  "evidence_boundary": "Functional qualification only. Full Clingo is an independent development reference; production subprocess mode is forced ground-only and no external solver provides Xolver decisions. These are development examples and randomized small programs, not a fresh solver performance comparison or exhaustive ASP/Draco coverage.",
+  "performance_superiority_claimed": false,
+  "protected_sets_used": false,
+  "extra_current_main_server_archive_required": false
+}
