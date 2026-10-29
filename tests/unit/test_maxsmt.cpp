@@ -60,14 +60,16 @@ TEST_CASE("maxsmt: rational weighted results match independent truth-table enume
     auto hard = nodes.all({nodes.negate(nodes.equal(a, c)), nodes.any({b, c})});
     for (int i = 0; i < 9; ++i) {
         std::vector<mpq_class> weights{mpq_class(i, 3), mpq_class(9-i, 2), mpq_class(i+1, 5)};
+        auto referenceWeights = weights;
+        for (auto& weight : referenceWeights) weight.canonicalize();
         std::optional<mpq_class> expected;
         for (int bits = 0; bits < 8; ++bits) {
             const bool av = bits & 1, bv = bits & 2, cv = bits & 4;
             if (av == cv || !(bv || cv)) continue;
             mpq_class cost = 0;
-            if (!av) cost += weights[0];
-            if (!bv) cost += weights[1];
-            if (!cv) cost += weights[2];
+            if (!av) cost += referenceWeights[0];
+            if (!bv) cost += referenceWeights[1];
+            if (!cv) cost += referenceWeights[2];
             if (!expected || cost < *expected) expected = cost;
         }
         Problem problem;
