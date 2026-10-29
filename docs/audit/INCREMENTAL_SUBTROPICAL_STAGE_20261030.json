@@ -1,0 +1,698 @@
+{
+  "schema": "xolver-incremental-subtropical-qualification/1",
+  "qualified_source": "9398d55d1494d18693c9252cec7d421729f39235",
+  "source_manifest_sha256": "9c7566325b8b3e2d3e353dc6ab62ddd0df8fe7609a4192a2835b746abbc393a8",
+  "binaries": {
+    "xolver": "ac4c3142f19f2055fa35dd4f81ab9c61d56e136518bd9e9db81b9ff75a3474a2",
+    "xolver-sv": "f32e7948cd2e603e1d05fa48fd397471464a5156e57f7d55215fbe6306ec581f"
+  },
+  "unit_binary_sha256": "7d966a4382de8a0c4bcee95c517f91573e114f03cbaeeeba83af9f3d30a33e48",
+  "implementation": {
+    "path": "src/search/nra/reasoners/SubtropicalSatFinder.cpp",
+    "linear_backend": "GeneralSimplex",
+    "state": "One exact context per find; unconditional row definitions cached; frame bounds withdrawn by level with local assignment preservation.",
+    "parity": "Reject parity-inconsistent frames before linear feasibility.",
+    "retired": "Private Fourier-Motzkin reconstruction and its projection-row configuration field are removed.",
+    "soundness": "Candidate only. No UNSAT verdict is derived from search failure; callers validate original models. Existing LRA/LIA public backtracking and exact model phases remain unchanged."
+  },
+  "native": {
+    "experiment": "e56748f5455f",
+    "tests": 1775,
+    "assertions": 877718,
+    "focused_cases": 12,
+    "focused_assertions": 33,
+    "parser_tests": 63,
+    "structural_checks": 4,
+    "qualification": {
+      "source_head": "9398d55d1494d18693c9252cec7d421729f39235",
+      "source_manifest_sha256": "9c7566325b8b3e2d3e353dc6ab62ddd0df8fe7609a4192a2835b746abbc393a8",
+      "checked_source_files": 494,
+      "submodule_pins": {
+        "third_party/SOMTParser": "b9063faeab2e89d87525432eaedb8f0a5b6eb1ea",
+        "third_party/cadical": "7b99c07f0bcab5824a5a3ce62c7066554017f641",
+        "third_party/libpoly": "3d5e6fbd98639cb0941b029e23ca17c0e3c4a80a"
+      },
+      "native": {
+        "lease": [
+          3
+        ],
+        "probe_baseline_sha256": "d4899e9a739dd2a279810ba68851ad0686ab83e8b0e98d0e815a54e55d2de7fd",
+        "probe-baseline_rc": 124,
+        "overlay_rc": 0,
+        "configure_rc": 0,
+        "build_rc": 0,
+        "probe_candidate_sha256": "e8043dbc8b577850a2060b4fee8249d780d95953fafe584fcd7958bc3d8d4cd8",
+        "probe-candidate_rc": 0,
+        "probe-candidate-replay_rc": 0,
+        "fixed-values-unit_rc": 0,
+        "api-example_rc": 0,
+        "parallel-local_rc": 0,
+        "python-parallel_rc": 0,
+        "row-counters_rc": 0,
+        "targeted-unit_rc": 0,
+        "parser-tests_rc": 0,
+        "unit_rc": 0,
+        "checks_rc": 0
+      },
+      "binaries": {
+        "xolver": "ac4c3142f19f2055fa35dd4f81ab9c61d56e136518bd9e9db81b9ff75a3474a2",
+        "xolver-sv": "f32e7948cd2e603e1d05fa48fd397471464a5156e57f7d55215fbe6306ec581f"
+      },
+      "unit_binary_sha256": "7d966a4382de8a0c4bcee95c517f91573e114f03cbaeeeba83af9f3d30a33e48",
+      "logs": {
+        "build.log": "09085e7b011b93256f17ceff5c998a02d2701e1d5f1fd397d8d682bc45fe4020",
+        "targeted-unit.log": "787e1be379214084387386a0157ea11da82e19268bde68c4059d1c3f67c2b275",
+        "parser-tests.log": "789f7f63e3b37b12727619aa7d976e1caba51f397c4983d881f41e1050ae42e2",
+        "unit.log": "9fd97144d306b692d3722c57b5acdfc59e2826f243c79099d7abd7886dcf3692",
+        "checks.log": "7dfc2356fee80dc8180f889df46f9cc5fbe3dcf9a453c946a2a1b3ce9ddce585",
+        "api-example.log": "369f5404dda928a96e17df08c4654d49eafb2621fdc13e8d8c4d3f0d484e24ce",
+        "parallel-local.log": "a31b6868ba36b0ca36324ae71c5716ab0a90679f09fe953788b2ed1f73767b06",
+        "python-parallel.log": "46c284234753f855ba2ff18564764eb5e6770d7e981a85bdb44482e46951bf93",
+        "row-counters.log": "4016f14a5a87cce7d4191d7a52fecfc53d76b354d3fc6e1369fa9ae53168326b",
+        "fixed-values-unit.log": "c0f1278c3a9b464444656048c3471171d0150d3f161f7eefb25d3e041e1d65b2",
+        "probe-baseline.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "probe-candidate.log": "ab6e8dded7ef135d98be24d2f9be3d89bd492d98a3a5987abc73d7d6784d706a",
+        "probe-candidate-replay.log": "d9dbf94b05b8314af9ca7f2034e92685c33447917605a7243b1099c693a12e5e"
+      },
+      "protected_sets_used": false
+    },
+    "baseline_component_timeout_is_expected": true
+  },
+  "acceptance": {
+    "groups": 37,
+    "experiments": [
+      "def6c2bf269d",
+      "9a51b845488c"
+    ],
+    "names": [
+      "root-regressions",
+      "architecture",
+      "known-gaps",
+      "affine",
+      "linear",
+      "partial",
+      "intervals",
+      "quick",
+      "regression-alia",
+      "regression-alra",
+      "regression-ania",
+      "regression-auflia",
+      "regression-auflra",
+      "regression-aufnia",
+      "regression-ax",
+      "regression-bool",
+      "regression-dt",
+      "regression-euf",
+      "regression-idl",
+      "regression-lia",
+      "regression-lira",
+      "regression-lra",
+      "regression-nira",
+      "regression-nra",
+      "regression-quantifiers",
+      "regression-rdl",
+      "regression-sl",
+      "regression-ufdtlia",
+      "regression-ufdtnia",
+      "regression-uflia",
+      "regression-uflra",
+      "regression-ufnia",
+      "regression-ufnra",
+      "theory-models",
+      "regression-nia",
+      "qcp",
+      "certificate-115"
+    ]
+  },
+  "component": {
+    "baseline_timeout_seconds": 20,
+    "candidate_seconds": 0.00221975,
+    "independent_model_replay": true,
+    "fixture": "tests/unit/test_subtropical.cpp: dense common direction; eight positive variables, degree-32 frame and six degree-31 competitors per constraint; deterministic generator seed947.",
+    "probe_source_sha256": "24c915798b362d1b8d47a6077a6c97884e61c602288cef10d19668d3daa4f408",
+    "replay_sha256": "a4189ff850993c23fe06726d1b6bb65013e4882bcc8dcf1fe56db14b9f943fb8"
+  },
+  "diagnostic": {
+    "experiment": "8552fa0d56c6",
+    "index": 155,
+    "baseline_stage_seconds": 16.294696,
+    "candidate_stage_seconds": 0.040087,
+    "counters": "variables=5 constraints=16 contexts=1 nodes=30 frames=250 definitions=146 reused_rows=2442 checks=158 parity_conflicts=92 backtracks=158 exhausted=0 found=0 us=39987\n",
+    "boundary": "Instrumented diagnostic only. Direction remains unfound and the full input remains unresolved; timings are excluded from formal scores."
+  },
+  "formal": {
+    "cases": 160,
+    "binaries": {
+      "baseline": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r659/xolver",
+        "sha256": "ea3f5589906689ea4153f655193de1584bcdc4190f00c64ce01a769465ce57dd"
+      },
+      "candidate": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r681/xolver",
+        "sha256": "ac4c3142f19f2055fa35dd4f81ab9c61d56e136518bd9e9db81b9ff75a3474a2"
+      },
+      "z3": {
+        "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+        "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      }
+    },
+    "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+    "timeout": 60,
+    "memory_bytes": 17179869184,
+    "counts": {
+      "baseline": {
+        "unsat": 41,
+        "decided": 95,
+        "verified_decided": 95,
+        "verified_par2": 8146.500157346949,
+        "raw_par2": 8146.500157346949,
+        "timeout": 64,
+        "sat": 54,
+        "unknown": 1
+      },
+      "candidate": {
+        "unsat": 41,
+        "decided": 95,
+        "verified_decided": 95,
+        "verified_par2": 8142.88406676054,
+        "raw_par2": 8142.88406676054,
+        "timeout": 63,
+        "sat": 54,
+        "unknown": 2
+      },
+      "z3": {
+        "unsat": 58,
+        "decided": 125,
+        "verified_decided": 116,
+        "verified_par2": 5541.432299658656,
+        "raw_par2": 4570.87472192198,
+        "sat": 67,
+        "timeout": 35
+      }
+    },
+    "by_logic": {
+      "QF_LIA": {
+        "baseline": {
+          "unsat": 15,
+          "decided": 34,
+          "verified_decided": 34,
+          "verified_par2": 1887.5616737958044,
+          "raw_par2": 1887.5616737958044,
+          "timeout": 14,
+          "sat": 19
+        },
+        "candidate": {
+          "unsat": 15,
+          "decided": 34,
+          "verified_decided": 34,
+          "verified_par2": 1889.3711450584233,
+          "raw_par2": 1889.3711450584233,
+          "timeout": 14,
+          "sat": 19
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 39,
+          "verified_decided": 37,
+          "verified_par2": 1411.8179035782814,
+          "raw_par2": 1210.9935914929956,
+          "sat": 24,
+          "timeout": 9
+        }
+      },
+      "QF_NIA": {
+        "baseline": {
+          "timeout": 23,
+          "decided": 25,
+          "verified_decided": 25,
+          "verified_par2": 2815.6987426020205,
+          "raw_par2": 2815.6987426020205,
+          "unsat": 12,
+          "sat": 13
+        },
+        "candidate": {
+          "timeout": 23,
+          "decided": 25,
+          "verified_decided": 25,
+          "verified_par2": 2813.878733390942,
+          "raw_par2": 2813.878733390942,
+          "unsat": 12,
+          "sat": 13
+        },
+        "z3": {
+          "unsat": 22,
+          "decided": 34,
+          "verified_decided": 29,
+          "verified_par2": 2312.56498115696,
+          "raw_par2": 1731.9023707788438,
+          "sat": 12,
+          "timeout": 14
+        }
+      },
+      "QF_LRA": {
+        "baseline": {
+          "timeout": 16,
+          "decided": 16,
+          "verified_decided": 16,
+          "verified_par2": 1991.9767561722547,
+          "raw_par2": 1991.9767561722547,
+          "sat": 7,
+          "unsat": 9
+        },
+        "candidate": {
+          "timeout": 16,
+          "decided": 16,
+          "verified_decided": 16,
+          "verified_par2": 1988.5647677425295,
+          "raw_par2": 1988.5647677425295,
+          "sat": 7,
+          "unsat": 9
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 26,
+          "verified_decided": 25,
+          "verified_par2": 882.6157853733748,
+          "raw_par2": 813.2288554403931,
+          "sat": 11,
+          "timeout": 6
+        }
+      },
+      "QF_NRA": {
+        "baseline": {
+          "sat": 15,
+          "decided": 20,
+          "verified_decided": 20,
+          "verified_par2": 1451.2629847768694,
+          "raw_par2": 1451.2629847768694,
+          "unsat": 5,
+          "timeout": 11,
+          "unknown": 1
+        },
+        "candidate": {
+          "sat": 15,
+          "decided": 20,
+          "verified_decided": 20,
+          "verified_par2": 1451.069420568645,
+          "raw_par2": 1451.069420568645,
+          "unsat": 5,
+          "timeout": 10,
+          "unknown": 2
+        },
+        "z3": {
+          "sat": 20,
+          "decided": 26,
+          "verified_decided": 25,
+          "verified_par2": 934.4336295500398,
+          "raw_par2": 814.7499042097479,
+          "timeout": 6,
+          "unsat": 6
+        }
+      }
+    },
+    "changes": [],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "unverified": [
+      {
+        "index": 12,
+        "case": "QF_LIA/fft/Sz128_2823.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 24,
+        "case": "QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 27,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 42,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep2a.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 50,
+        "case": "QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_jain_5.i_2_4_3.bpl_7.smt2",
+        "results": {
+          "z3": "unsat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 80,
+        "case": "QF_LIA/cut_lemmas/20-vars/cut_lemma_03_004.smt2",
+        "results": {
+          "z3": "unsat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 114,
+        "case": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 122,
+        "case": "QF_NIA/20250331-elster/D_1.smt2",
+        "results": {
+          "z3": "sat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "model query did not return SAT"
+        }
+      },
+      {
+        "index": 159,
+        "case": "QF_NRA/20161105-Sturm-MGC/mgc_07.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      }
+    ],
+    "scoring": "Correct verdicts require a replayed model or an independent UNSAT decision on the identical input hash; unresolved results receive PAR-2 penalty.",
+    "supplementary_certificate": {
+      "index": 115,
+      "sha256": "48f5d0ca9b19679a48f3248ac1183c31d09e0c198bfda0a70b3b4272b6d1a5ba",
+      "check": {
+        "status": "checked-unsat",
+        "input_sha256": "02a58b11df8951543940a1090a140592e24de41dcaeb6470e7a50d42e804be64",
+        "assertion": 9,
+        "path": [
+          2
+        ],
+        "checked_residues": 12
+      },
+      "boundary": "Independent truth evidence only; timed observations unchanged."
+    },
+    "supplementary_sat_witnesses": [
+      {
+        "experiment": "177f0064c0f2",
+        "run": "797d8dcebce2",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "0"
+          ]
+        },
+        "record_sha256": "4a21e80b8187003976316d3d06fecfb56e93ff8121ba3a62208e747760dd98c7",
+        "proof": {
+          "index": 47,
+          "input_sha256": "2c37069c8324458e8f3ad46cc6dbe0cc3a6c2f31012ed504123e660bfdf7aba4",
+          "current_report_sha256": "eb7dfa5becf8cf45a61fd683e2f0437783b7a10594382a7d862343b21fcee866",
+          "model_origin": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r664/case-047/z3-model.stdout",
+          "model_sha256": "4e2aa1e621917cb12f9b64c83fa8088a472a5356a333fbde051021e9f375166f",
+          "model_report_sha256": "94d3115b2a45cb04456f93aeeba05d91243aab53dd794012c97aa3d2c0a1d36e",
+          "original_symbols": 7448,
+          "ignored_model_private_bindings": 0,
+          "selected_values": "Every original symbol is nullary Int/Bool with a checked ground literal; no selected value depends on ignored model-private syntax.",
+          "replay_sha256": "d5bf7dee32ef48efb5c1a5da272ff293cc1d48370172cfd4d8432cb9248aa0d0",
+          "oracle_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+          "command": [
+            "prlimit",
+            "--as=17179869184",
+            "--cpu=62:63",
+            "--",
+            "/pub/data/jiafq/xolver/dependencies/oracles/cvc5",
+            "--lang=smt2",
+            "--tlimit=60000",
+            "/pub/data/jiafq/xolver/validation/arithmetic-r103/model-replay-r694/case-047/replay.smt2"
+          ],
+          "result": "sat",
+          "timing": {
+            "seconds": 0.6674441266804934,
+            "launch_seconds": 0.0023199841380119324,
+            "wait_seconds": 0.6651241425424814,
+            "returncode": 0,
+            "timeout_notified_seconds": null,
+            "cleanup_seconds": null,
+            "timed_out": false,
+            "budget_overrun": false
+          },
+          "verified": true,
+          "boundary": "Supplementary truth on the same original input hash. All original assertions retained. Timed solver verdicts, get-model limitations, resource budgets and observations are unchanged."
+        }
+      },
+      {
+        "experiment": "177f0064c0f2",
+        "run": "9c97073f3131",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "1"
+          ]
+        },
+        "record_sha256": "448c7b4bb306de60a72e07afe3c12d6e99dbd2666b0952d63a83baba2ac466da",
+        "proof": {
+          "index": 94,
+          "input_sha256": "a6b68604187a341c570d8bd76135552ece1bbf958a1d7e9d4ff7f3eae998fd8f",
+          "current_report_sha256": "580023e20a17ae4176a1f1eb734e98cece1a7d677d7b836a95bb7bffcbaa0522",
+          "model_origin": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r692/case-094/z3-model.stdout",
+          "model_sha256": "6236638ba899c1b28ca4caaf5c00c781e8bbe8ce9c8f48b6a68ac4800c308a21",
+          "model_report_sha256": "580023e20a17ae4176a1f1eb734e98cece1a7d677d7b836a95bb7bffcbaa0522",
+          "original_symbols": 47343,
+          "ignored_model_private_bindings": 247,
+          "selected_values": "Every original symbol is nullary Int/Bool with a checked ground literal; no selected value depends on ignored model-private syntax.",
+          "replay_sha256": "56e5f92326bbd1255c2aadb0f7ec36911c5ca421d20438cf8158c1da8f7bd49b",
+          "oracle_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+          "command": [
+            "prlimit",
+            "--as=17179869184",
+            "--cpu=62:63",
+            "--",
+            "/pub/data/jiafq/xolver/dependencies/oracles/cvc5",
+            "--lang=smt2",
+            "--tlimit=60000",
+            "/pub/data/jiafq/xolver/validation/arithmetic-r103/model-replay-r694/case-094/replay.smt2"
+          ],
+          "result": "sat",
+          "timing": {
+            "seconds": 2.671869231387973,
+            "launch_seconds": 0.002715596929192543,
+            "wait_seconds": 2.6691536344587803,
+            "returncode": 0,
+            "timeout_notified_seconds": null,
+            "cleanup_seconds": null,
+            "timed_out": false,
+            "budget_overrun": false
+          },
+          "verified": true,
+          "boundary": "Supplementary truth on the same original input hash. All original assertions retained. Timed solver verdicts, get-model limitations, resource budgets and observations are unchanged."
+        }
+      }
+    ]
+  },
+  "formal_experiments": [
+    "b6acf95b136c",
+    "22ff5175dbea",
+    "01770633f287",
+    "016c40261218",
+    "51851b6bf4c6"
+  ],
+  "infrastructure_retry": {
+    "experiment": "9a3a5c5f4359",
+    "original_attempt": {
+      "rejected_attempts": [
+        {
+          "id": "415bcd25517e",
+          "experiment_id": "016c40261218",
+          "trial_id": "0e7bf292f63e",
+          "stage_id": "6cf91131f86f",
+          "run_key": "a638de5c0464",
+          "input": "94",
+          "seed": null,
+          "cmd": "taskset -c \"$EOS_CPU_IDS\" python3 tools/remote/compare_arithmetic_case.py --manifest validation/z3-gap-setup-r32-20261026/fixed160-60s.json --baseline /pub/data/jiafq/xolver/validation/arithmetic-r103/core-r659/xolver --candidate /pub/data/jiafq/xolver/validation/arithmetic-r103/core-r681/xolver --z3 /pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2 --cvc5 /pub/data/jiafq/xolver/dependencies/oracles/cvc5 --output validation/arithmetic-r103/fair-r687 --index 94 --validate-models && test -s \"$EOS_METRICS_FILE\"",
+          "status": "failed",
+          "host": "panda1",
+          "workdir": "/pub/data/jiafq/eos/runs/xolver-incremental-subtropical-r687c-remaining-20261030/415bcd25517e",
+          "pid": 1883723,
+          "exit_code": 1,
+          "attempt": 0,
+          "infra_attempt": 0,
+          "created_at": "2026-10-29T17:24:08+00:00",
+          "started_at": "2026-10-29T17:24:12+00:00",
+          "ended_at": "2026-10-29T17:33:56+00:00",
+          "duration_s": 584.534495,
+          "metrics_json": "{\"cases\": 1, \"wrong\": 0, \"errors\": 0, \"protocol_errors\": 1}",
+          "checks_json": "[{\"expr\": \"cases == 1\", \"passed\": true, \"detail\": \"\"}, {\"expr\": \"wrong == 0\", \"passed\": true, \"detail\": \"\"}, {\"expr\": \"errors == 0\", \"passed\": true, \"detail\": \"\"}, {\"expr\": \"protocol_errors == 0\", \"passed\": false, \"detail\": \"\u5b9e\u9645 protocol_errors=1\uff0c\u671f\u671b == 0\"}]",
+          "h_actual_json": "{\"hostname\": \"panda1.ios.ac.cn\", \"nproc\": 256, \"kernel\": \"7.0.0-15-generic\", \"started_at\": \"2026-10-30T01:24:12+08:00\", \"cwd\": \"/pub/data/jiafq/xolver\", \"run_dir\": \"/pub/data/jiafq/eos/runs/xolver-incremental-subtropical-r687c-remaining-20261030/415bcd25517e\", \"user\": \"jiafq\", \"cuda_visible_devices\": \"\", \"eos_cpu_ids\": \"22\", \"cpus_allowed_list\": \"0-255\"}",
+          "log_tail": "",
+          "error": "",
+          "input_meta_json": "{}",
+          "resources_json": "{\"cpu_slots\": 1, \"cpu_ids\": [\"22\"]}"
+        }
+      ],
+      "cleanup_record_sha256": "3775d09263720b9536a3c67859823d57ac0cf558851c6dac47cee388f5b70c6d",
+      "original_report_sha256": "a294c087ce2b7d45df843e1e03451e0a09a8f4a45dbd821677fdd460baa983b0",
+      "explanation": "Original input94 exceeded the 60-second envelope on the baseline phase. Preserve and reject the whole row. A complete same-budget three-solver R692 retry supplies this input; no valid complete attempt was replaced."
+    },
+    "policy": "Reject original over-budget input94 row. Preserve original records; use only the complete three-solver retry, with unchanged frozen versions and budgets."
+  },
+  "supplemental_sat_checks": {
+    "experiment": "177f0064c0f2",
+    "proofs": [
+      {
+        "experiment": "177f0064c0f2",
+        "run": "797d8dcebce2",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "0"
+          ]
+        },
+        "record_sha256": "4a21e80b8187003976316d3d06fecfb56e93ff8121ba3a62208e747760dd98c7",
+        "proof": {
+          "index": 47,
+          "input_sha256": "2c37069c8324458e8f3ad46cc6dbe0cc3a6c2f31012ed504123e660bfdf7aba4",
+          "current_report_sha256": "eb7dfa5becf8cf45a61fd683e2f0437783b7a10594382a7d862343b21fcee866",
+          "model_origin": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r664/case-047/z3-model.stdout",
+          "model_sha256": "4e2aa1e621917cb12f9b64c83fa8088a472a5356a333fbde051021e9f375166f",
+          "model_report_sha256": "94d3115b2a45cb04456f93aeeba05d91243aab53dd794012c97aa3d2c0a1d36e",
+          "original_symbols": 7448,
+          "ignored_model_private_bindings": 0,
+          "selected_values": "Every original symbol is nullary Int/Bool with a checked ground literal; no selected value depends on ignored model-private syntax.",
+          "replay_sha256": "d5bf7dee32ef48efb5c1a5da272ff293cc1d48370172cfd4d8432cb9248aa0d0",
+          "oracle_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+          "command": [
+            "prlimit",
+            "--as=17179869184",
+            "--cpu=62:63",
+            "--",
+            "/pub/data/jiafq/xolver/dependencies/oracles/cvc5",
+            "--lang=smt2",
+            "--tlimit=60000",
+            "/pub/data/jiafq/xolver/validation/arithmetic-r103/model-replay-r694/case-047/replay.smt2"
+          ],
+          "result": "sat",
+          "timing": {
+            "seconds": 0.6674441266804934,
+            "launch_seconds": 0.0023199841380119324,
+            "wait_seconds": 0.6651241425424814,
+            "returncode": 0,
+            "timeout_notified_seconds": null,
+            "cleanup_seconds": null,
+            "timed_out": false,
+            "budget_overrun": false
+          },
+          "verified": true,
+          "boundary": "Supplementary truth on the same original input hash. All original assertions retained. Timed solver verdicts, get-model limitations, resource budgets and observations are unchanged."
+        }
+      },
+      {
+        "experiment": "177f0064c0f2",
+        "run": "9c97073f3131",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "1"
+          ]
+        },
+        "record_sha256": "448c7b4bb306de60a72e07afe3c12d6e99dbd2666b0952d63a83baba2ac466da",
+        "proof": {
+          "index": 94,
+          "input_sha256": "a6b68604187a341c570d8bd76135552ece1bbf958a1d7e9d4ff7f3eae998fd8f",
+          "current_report_sha256": "580023e20a17ae4176a1f1eb734e98cece1a7d677d7b836a95bb7bffcbaa0522",
+          "model_origin": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r692/case-094/z3-model.stdout",
+          "model_sha256": "6236638ba899c1b28ca4caaf5c00c781e8bbe8ce9c8f48b6a68ac4800c308a21",
+          "model_report_sha256": "580023e20a17ae4176a1f1eb734e98cece1a7d677d7b836a95bb7bffcbaa0522",
+          "original_symbols": 47343,
+          "ignored_model_private_bindings": 247,
+          "selected_values": "Every original symbol is nullary Int/Bool with a checked ground literal; no selected value depends on ignored model-private syntax.",
+          "replay_sha256": "56e5f92326bbd1255c2aadb0f7ec36911c5ca421d20438cf8158c1da8f7bd49b",
+          "oracle_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+          "command": [
+            "prlimit",
+            "--as=17179869184",
+            "--cpu=62:63",
+            "--",
+            "/pub/data/jiafq/xolver/dependencies/oracles/cvc5",
+            "--lang=smt2",
+            "--tlimit=60000",
+            "/pub/data/jiafq/xolver/validation/arithmetic-r103/model-replay-r694/case-094/replay.smt2"
+          ],
+          "result": "sat",
+          "timing": {
+            "seconds": 2.671869231387973,
+            "launch_seconds": 0.002715596929192543,
+            "wait_seconds": 2.6691536344587803,
+            "returncode": 0,
+            "timeout_notified_seconds": null,
+            "cleanup_seconds": null,
+            "timed_out": false,
+            "budget_overrun": false
+          },
+          "verified": true,
+          "boundary": "Supplementary truth on the same original input hash. All original assertions retained. Timed solver verdicts, get-model limitations, resource budgets and observations are unchanged."
+        }
+      }
+    ],
+    "checker_sha256": "e94eaadc1f586d9d909664ad09e059e5544bd79a70dd89e8dd1d0c302a7fdae7",
+    "interpretation": "Input47 replays an existing witness freshly against the identical original hash. Input94 extracts every original nullary Int/Bool interpretation from the current exported model; all values are checked ground literals, so unused solver-private declarations cannot affect the assignment. CVC5 checks every original assertion. Timings and current get-model limitations are unchanged."
+  },
+  "audits": {
+    "qualification": "8950579db111",
+    "confirmed_score": "bcd16663862a",
+    "qualification_sha256": "ec515d3c3e284fd846ec8d5fa6f4a77c8786eebc5739181ead1c557c6114f7be",
+    "confirmed_score_sha256": "ca1cf502f07edb3c22194bfd5443111abdd67f695668b8a2c12f0e3742508c2d"
+  },
+  "interpretation": "Local candidate-LP cost is reduced; fixed160 verified coverage is unchanged at95 and aggregate PAR-2 improves only3.616 seconds. No claim of overall solver superiority or statistical significance. Same-round Z3 verifies116 of125 raw decisions; nine remain excluded.",
+  "separate_rejected_experiment": "AFFINE_COMPLETION_REJECTED_20261030.json",
+  "selected_for_delivery": true,
+  "above_z3": false,
+  "protected_sets_used": false,
+  "end_to_end_qcp_superiority": false,
+  "extra_current_main_server_archive_required": false
+}

@@ -21,7 +21,7 @@ must distinguish OpenACC host execution from CUDA/HIP hardware execution.
 This API stage makes no fixed160, protected-set or end-to-end QCP superiority claim.
 The cancelled `validation/current-main.json` server archive remains unnecessary.
 
-Latest functional delivery: [complete GCD coverage](#complete-gcd-backend-coverage-r588r606)
+Earlier functional delivery: [complete GCD coverage](#complete-gcd-backend-coverage-r588r606)
 ([PR62](https://github.com/fuqi-jia/Xolver/pull/62)) and
 [exact linear phases with a decision interface](#exact-linear-phases-and-decision-interface-r596r608)
 ([PR63](https://github.com/fuqi-jia/Xolver/pull/63)), combined implementation main
@@ -44,12 +44,12 @@ Older tables describe their own frozen versions and evidence boundaries.
 `e7c7917c9a9c997a8649ad736c8548f4de186bca`, after its
 [PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/40899442555) passed.
 The [fresh main CI](https://github.com/fuqi-jia/Xolver/actions/runs/40903458473)
-is pending at this update. The row-snapshot stage below restores verified
+is fully green. The row-snapshot stage below restores verified
 fixed160 coverage from **94 to 95**, with no losses; same-round Z3 retains
 **115 verified / 124 raw**. Its eight unconfirmed UNSATs and one unconfirmed SAT
 remain excluded. No solver-superiority claim follows from this local gain.
 
-[PR68](https://github.com/fuqi-jia/Xolver/pull/68) adds finite native ASP under
+[PR68](https://github.com/fuqi-jia/Xolver/pull/68), merged as `28985eac`, adds finite native ASP under
 `satisfiability/asp`, reusable exact integer Boolean optimization under
 `search/optimization`, and the current Draco 2 instance-local backend. Its
 [first qualification](DRACO2_ASP_FUNCTION_STAGE_20261029.json) binds the latest
@@ -64,8 +64,10 @@ native calls. The same record binds EOS native `4b01adbd9ad0`, independent run
 `6b3f8d139d31`, and `source-native-r3.tar.json`; the overlay restores the unmerged
 polynomial-batching experiment. Its main SMT binary is byte-identical to frozen
 R659, and its ASP binary is byte-identical to first qualification. These repeats
-do not increase unique original-example coverage. Fresh combined PR CI receipts
-are tracked on PR68; the earlier PR CI is not substituted for them.
+do not increase unique original-example coverage. The combined
+[PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/40905899311) and fresh
+[main CI](https://github.com/fuqi-jia/Xolver/actions/runs/40909040387) are fully
+green; the earlier PR CI is not substituted for them.
 Grounding is forced ground-only; Xolver performs stable-model search and
 optimization. Unsupported fragments fail explicitly. These are functional
 checks, not a Draco or solver performance comparison. Neither protected set
@@ -1912,3 +1914,79 @@ rechecked against the identical input hash before counting that UNSAT for either
 Xolver version; original measurements are preserved. This is a local improvement,
 with a remaining 20-result verified gap to Z3. Neither protected set was evaluated.
 An additional current-main server archive remains unnecessary.
+
+
+## Rejected affine completion experiment (R671–R691, 2026-10-30)
+
+The [closed experiment](AFFINE_COMPLETION_REJECTED_20261030.json) propagated exact
+values entailed by the local affine context, minimized bipartite parameter
+covers, supplied exact affine-slice candidates and connected the NIA client.
+Its final R678 source passes 1,780 tests / 880,677 assertions, including exhaustive
+small bipartite covers, signed/strict boundaries and independently replayed
+integer and real witnesses. The parameter reductions on inputs77/149 are real,
+but they do not establish a solver improvement.
+
+The complete frozen comparison verifies **95 to 93**, with no new decisions and
+two lost SATs: input150 (0.668 seconds to timeout) and input158 (0.066 seconds to
+timeout). Verified PAR-2 worsens from 8154.269 to 8394.211 seconds. Same-round Z3
+verifies 115 of 124 raw decisions; nine remain excluded. No opposite verdict or
+invalid exported model occurs. Original invalid timing attempts for input7 and
+the incomplete input10 run are preserved; complete same-budget three-solver
+retries alone supply those two rows. R691 authenticates this distinction.
+
+Diagnostics show that the new bounded search fails to reach complete original
+models: input150 stops at depth14, while its prior search succeeds at depth27;
+input158 uses fewer parameters but exhausts its allocation after 248 choices.
+This is a candidate-search regression, not evidence of an incorrect SAT verdict.
+The whole experiment is rejected and remains unmerged. Neither protected set
+was read. Subsequent work starts independently from delivered main.
+
+## Shared linear feasibility for nonlinear directions (R681)
+
+`SubtropicalSatFinder` now reuses the existing exact `GeneralSimplex` through
+frame choices, caching unconditional linear-row definitions and withdrawing
+choice bounds at their levels. Local assignment preservation leaves the public
+LRA/LIA backtracking policies unchanged. Parity contradictions reject frames
+before linear feasibility. The private Fourier-Motzkin implementation is removed;
+there is one linear backend, with no compatibility wrapper or new feature gate.
+
+R681 passes 1,775 unit cases / 877,718 assertions, 12 focused subtropical cases,
+63 parser checks, API examples and all four structural/evidence/ASP CLI checks.
+A dense direction fixture changes from a 20-second component timeout to a
+0.002220-second candidate, with independent original-model replay. On input155,
+matching instrumented profiles show the nonlinear direction stage falling from
+16.295 seconds to 0.040 seconds: one context, 146 definitions, 2,442 row reuses
+and 158 linear checks. The direction search still finds no witness there; it
+never turns this failure into UNSAT. These diagnostic results are excluded from
+formal solver scores. Neither protected set has been evaluated.
+
+
+The [qualified stage record](INCREMENTAL_SUBTROPICAL_STAGE_20261030.json) binds
+source `9398d55d`, frozen CLI
+`ac4c3142f19f2055fa35dd4f81ab9c61d56e136518bd9e9db81b9ff75a3474a2`, all
+37 server acceptance groups, and R689/R695's complete original-hash audits.
+The fixed160 round uses 60 seconds, one leased physical CPU and 16 GiB per
+solver/case. The original input94 timing failure is preserved and excluded;
+a complete same-budget three-solver retry supplies that row. No valid completed
+attempt was replaced, and no source tuning occurred between pilot and remainder.
+
+| Frozen version | Verified | SAT raw | UNSAT raw | Unknown | Timeout | Verified PAR-2 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Delivered main | 95 | 54 | 41 | 1 | 64 | 8146.500 |
+| Incremental direction LP | 95 | 54 | 41 | 2 | 63 | 8142.884 |
+| Z3 | 116 | 67 | 58 | 0 | 35 | 5541.432 |
+
+There are no gained/lost verified decisions, opposite verdicts or invalid
+exported models. Input155 changes from timeout to `unknown` in 47.643 seconds.
+The 3.616-second aggregate PAR-2 difference is small; the demonstrated benefit
+is the local direction-stage reduction, not closure of the verified solve gap.
+
+Z3 has 125 raw decisions. R694 independently checks two supplementary SAT
+witnesses on identical original hashes: input47 replays an existing exported
+witness; input94 replays all 47,343 original ground Int/Bool interpretations,
+which do not depend on 247 unused solver-private declarations. Every original
+assertion is retained. CVC5 confirms both, in 0.667 and 2.672 seconds. Original
+query/model timings and limitations remain recorded. Nine other results (eight
+UNSAT and SAT122) remain unconfirmed and excluded. The remaining verified gap
+is **21**, and neither a protected-set result nor an end-to-end QCP speed win
+has been established. No extra current-main server archive is required.

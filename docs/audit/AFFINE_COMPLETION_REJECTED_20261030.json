@@ -1,0 +1,383 @@
+{
+  "schema": "xolver-affine-completion-negative-result/1",
+  "qualified_source": "e4916330fede682f2930cebbb43eb94312a5e2f6",
+  "source_manifest_sha256": "f8f4561703ccbee03bb18fd613537d82a87b121373d602f38b43a488da8cbf60",
+  "binaries": {
+    "xolver": "a722a2497dab8077212c31264423121e9d06de6fe0e707a3a677325111cfcb16",
+    "xolver-sv": "f32e7948cd2e603e1d05fa48fd397471464a5156e57f7d55215fbe6306ec581f"
+  },
+  "experiments": {
+    "native": "accc80f1e0c3",
+    "formal": [
+      "8c8f7ad0998e",
+      "134d6438e7dc",
+      "a264c7f08622",
+      "dc9a27b88b72",
+      "2d9ab0a0bf05",
+      "eb4d3f549843"
+    ],
+    "invalid_attempt_retries": [
+      "0cb98d59207e",
+      "b3a7cd9daf31"
+    ],
+    "closure": "6dd4375cbdb2"
+  },
+  "native": {
+    "tests": 1780,
+    "assertions": 880677
+  },
+  "formal": {
+    "cases": 160,
+    "binaries": {
+      "baseline": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r659/xolver",
+        "sha256": "ea3f5589906689ea4153f655193de1584bcdc4190f00c64ce01a769465ce57dd"
+      },
+      "candidate": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r678/xolver",
+        "sha256": "a722a2497dab8077212c31264423121e9d06de6fe0e707a3a677325111cfcb16"
+      },
+      "z3": {
+        "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+        "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      }
+    },
+    "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+    "timeout": 60,
+    "memory_bytes": 17179869184,
+    "counts": {
+      "baseline": {
+        "unsat": 41,
+        "decided": 95,
+        "verified_decided": 95,
+        "verified_par2": 8154.269390873611,
+        "raw_par2": 8154.269390873611,
+        "timeout": 64,
+        "sat": 54,
+        "unknown": 1
+      },
+      "candidate": {
+        "unsat": 41,
+        "decided": 93,
+        "verified_decided": 93,
+        "verified_par2": 8394.210889458656,
+        "raw_par2": 8394.210889458656,
+        "timeout": 66,
+        "sat": 52,
+        "unknown": 1
+      },
+      "z3": {
+        "unsat": 58,
+        "decided": 124,
+        "verified_decided": 115,
+        "verified_par2": 5613.1309228129685,
+        "raw_par2": 4641.574121452868,
+        "sat": 66,
+        "timeout": 36
+      }
+    },
+    "by_logic": {
+      "QF_LIA": {
+        "baseline": {
+          "unsat": 15,
+          "decided": 34,
+          "verified_decided": 34,
+          "verified_par2": 1895.6694746855646,
+          "raw_par2": 1895.6694746855646,
+          "timeout": 14,
+          "sat": 19
+        },
+        "candidate": {
+          "unsat": 15,
+          "decided": 34,
+          "verified_decided": 34,
+          "verified_par2": 1897.5921480562538,
+          "raw_par2": 1897.5921480562538,
+          "timeout": 14,
+          "sat": 19
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 38,
+          "verified_decided": 36,
+          "verified_par2": 1478.4723741542548,
+          "raw_par2": 1277.6109807826579,
+          "sat": 23,
+          "timeout": 10
+        }
+      },
+      "QF_NIA": {
+        "baseline": {
+          "timeout": 23,
+          "decided": 25,
+          "verified_decided": 25,
+          "verified_par2": 2817.200925387442,
+          "raw_par2": 2817.200925387442,
+          "unsat": 12,
+          "sat": 13
+        },
+        "candidate": {
+          "timeout": 23,
+          "decided": 25,
+          "verified_decided": 25,
+          "verified_par2": 2817.010499453172,
+          "raw_par2": 2817.010499453172,
+          "unsat": 12,
+          "sat": 13
+        },
+        "z3": {
+          "unsat": 22,
+          "decided": 34,
+          "verified_decided": 29,
+          "verified_par2": 2313.8826018981636,
+          "raw_par2": 1733.114204665646,
+          "sat": 12,
+          "timeout": 14
+        }
+      },
+      "QF_LRA": {
+        "baseline": {
+          "timeout": 16,
+          "decided": 16,
+          "verified_decided": 16,
+          "verified_par2": 1989.5424499437213,
+          "raw_par2": 1989.5424499437213,
+          "sat": 7,
+          "unsat": 9
+        },
+        "candidate": {
+          "timeout": 16,
+          "decided": 16,
+          "verified_decided": 16,
+          "verified_par2": 1988.8783984202892,
+          "raw_par2": 1988.8783984202892,
+          "sat": 7,
+          "unsat": 9
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 26,
+          "verified_decided": 25,
+          "verified_par2": 883.6675351560116,
+          "raw_par2": 813.4235163964331,
+          "sat": 11,
+          "timeout": 6
+        }
+      },
+      "QF_NRA": {
+        "baseline": {
+          "sat": 15,
+          "decided": 20,
+          "verified_decided": 20,
+          "verified_par2": 1451.856540856883,
+          "raw_par2": 1451.856540856883,
+          "unsat": 5,
+          "timeout": 11,
+          "unknown": 1
+        },
+        "candidate": {
+          "sat": 13,
+          "decided": 18,
+          "verified_decided": 18,
+          "verified_par2": 1690.7298435289413,
+          "raw_par2": 1690.7298435289413,
+          "unsat": 5,
+          "timeout": 13,
+          "unknown": 1
+        },
+        "z3": {
+          "sat": 20,
+          "decided": 26,
+          "verified_decided": 25,
+          "verified_par2": 937.1084116045386,
+          "raw_par2": 817.425419608131,
+          "timeout": 6,
+          "unsat": 6
+        }
+      }
+    },
+    "changes": [
+      {
+        "index": 150,
+        "case": "QF_NRA/zankl/matrix-3-all-2.smt2",
+        "kind": "lost",
+        "truth": "sat",
+        "evidence": [
+          "baseline-exported-model-replay",
+          "z3-exported-model-replay"
+        ],
+        "observations": {
+          "baseline": {
+            "result": "sat",
+            "seconds": 0.6675817500799894
+          },
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.352452266961336
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 0.11562579870223999
+          }
+        }
+      },
+      {
+        "index": 158,
+        "case": "QF_NRA/20180501-Economics-Mulligan/MulliganEconomicsModel0054a.smt2",
+        "kind": "lost",
+        "truth": "sat",
+        "evidence": [
+          "z3-exported-model-replay",
+          "baseline-exported-model-replay"
+        ],
+        "observations": {
+          "z3": {
+            "result": "sat",
+            "seconds": 0.06605402380228043
+          },
+          "baseline": {
+            "result": "sat",
+            "seconds": 0.06596246734261513
+          },
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.008901093155146
+          }
+        }
+      }
+    ],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "unverified": [
+      {
+        "index": 12,
+        "case": "QF_LIA/fft/Sz128_2823.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 24,
+        "case": "QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 27,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 42,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep2a.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 50,
+        "case": "QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_jain_5.i_2_4_3.bpl_7.smt2",
+        "results": {
+          "z3": "unsat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 80,
+        "case": "QF_LIA/cut_lemmas/20-vars/cut_lemma_03_004.smt2",
+        "results": {
+          "z3": "unsat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 114,
+        "case": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 122,
+        "case": "QF_NIA/20250331-elster/D_1.smt2",
+        "results": {
+          "z3": "sat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "model query did not return SAT"
+        }
+      },
+      {
+        "index": 159,
+        "case": "QF_NRA/20161105-Sturm-MGC/mgc_07.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      }
+    ],
+    "scoring": "Correct verdicts require a replayed model or an independent UNSAT decision on the identical input hash; unresolved results receive PAR-2 penalty.",
+    "supplementary_certificate": {
+      "index": 115,
+      "sha256": "48f5d0ca9b19679a48f3248ac1183c31d09e0c198bfda0a70b3b4272b6d1a5ba",
+      "check": {
+        "status": "checked-unsat",
+        "input_sha256": "02a58b11df8951543940a1090a140592e24de41dcaeb6470e7a50d42e804be64",
+        "assertion": 9,
+        "path": [
+          2
+        ],
+        "checked_residues": 12
+      },
+      "boundary": "Independent truth evidence only; original timed observations are unchanged."
+    }
+  },
+  "closed": true,
+  "selected_for_delivery": false,
+  "protected_sets_used": false,
+  "evidence_record_sha256": "77819d0220f97e4ccae97f97c0c6020fee63a174645116f84132a887b594baa9",
+  "interpretation": "Fewer cover parameters and new exact off-grid candidates did not improve fixed160 solving. Two existing SAT witnesses were lost when bounded search no longer reached complete validated assignments. No opposite verdict or invalid exported model occurred. Preserve this rejected experiment; the incremental subtropical LP implementation starts independently from main.",
+  "infrastructure": "Original input7 exceeded the timing envelope and input10 lacked a complete report. Both original failures are retained; valid complete same-budget three-solver retries alone supply these rows. The first R682 audit correctly rejected the timing failure."
+}
