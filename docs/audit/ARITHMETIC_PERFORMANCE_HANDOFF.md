@@ -45,6 +45,12 @@ The latest qualified arithmetic stage is
 97/160, versus 117 verified / 125 raw same-round Z3 decisions. Earlier receipts
 below retain their original snapshot and evidence boundaries.
 
+[PR71](https://github.com/fuqi-jia/Xolver/pull/71) merged consumer-directed
+active context as main`61ea31ee44cf48b839e285ad888ba57d58c23bc2`, after both
+[PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/40956284799) jobs passed.
+Its fresh exact-head [main CI](https://github.com/fuqi-jia/Xolver/actions/runs/40959749179)
+is running; it must turn fully green before the next stage is merged.
+
 [PR70](https://github.com/fuqi-jia/Xolver/pull/70) delivered quadratic sign refutation as main
 `d8768ce172aa4c3c0f215f29f4a88fd96ac30796`. Both its
 [PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/40937654370) and fresh,

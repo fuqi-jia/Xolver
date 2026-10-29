@@ -1140,5 +1140,13 @@
   "above_z3": false,
   "protected_sets_used": false,
   "end_to_end_qcp_superiority": false,
-  "extra_current_main_server_archive_required": false
+  "extra_current_main_server_archive_required": false,
+  "delivery": {
+    "pr": "https://github.com/fuqi-jia/Xolver/pull/71",
+    "merged_main": "61ea31ee44cf48b839e285ad888ba57d58c23bc2",
+    "pr_ci": "https://github.com/fuqi-jia/Xolver/actions/runs/40956284799",
+    "pr_ci_conclusion": "success",
+    "main_ci": "https://github.com/fuqi-jia/Xolver/actions/runs/40959749179",
+    "main_ci_conclusion": "pending"
+  }
 }
