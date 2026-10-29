@@ -37,6 +37,10 @@ if(XOLVER_ENABLE_OPENACC)
     find_package(OpenACC REQUIRED COMPONENTS CXX)
     target_link_libraries(xolver_parallel PRIVATE OpenACC::OpenACC_CXX)
     target_link_libraries(xolver_core PRIVATE OpenACC::OpenACC_CXX)
+    # FindOpenACC exposes compiler flags. Static-archive consumers also need
+    # those flags at the final driver link to select the OpenACC runtime.
+    separate_arguments(XOLVER_OPENACC_LINK_OPTIONS NATIVE_COMMAND "${OpenACC_CXX_FLAGS}")
+    target_link_options(xolver_core INTERFACE ${XOLVER_OPENACC_LINK_OPTIONS})
 endif()
 
 foreach(framework SPARK DASK)
