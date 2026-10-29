@@ -42,8 +42,16 @@ Older tables describe their own frozen versions and evidence boundaries.
 
 The latest qualified arithmetic stage is
 [shared polynomial sign closure](#shared-polynomial-sign-closure-r721r723r726r733):
-97/160, versus 117 verified / 125 raw same-round Z3 decisions. Earlier receipts
-below retain their original snapshot and evidence boundaries.
+97/160, versus 117 verified / 125 raw same-round Z3 decisions at the original
+R733 verification boundary. Supplementary offline verification below confirms
+one further Z3 UNSAT, yielding118 verified; the original timed observations and
+Xolver count remain unchanged. Earlier receipts retain their own boundaries.
+
+[PR72](https://github.com/fuqi-jia/Xolver/pull/72) is delivered as main
+`6802c5e4d5ddea0ef8a86614521d96bf3605c424`. Both its
+[PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/40959877474) and fresh,
+exact-head [main CI](https://github.com/fuqi-jia/Xolver/actions/runs/40963240045)
+are fully green. PR71's fresh main CI below is also fully green.
 
 [PR71](https://github.com/fuqi-jia/Xolver/pull/71) merged consumer-directed
 active context as main`61ea31ee44cf48b839e285ad888ba57d58c23bc2`, after both
@@ -2189,5 +2197,24 @@ The frozen candidate CLI SHA-256 is
 baseline is`7f30dc0c8b55f53135a0a9c7a422ded45339db807e8ab2bfc940935389427973`.
 This closes one real gap and does **not** establish superiority over Z3 or
 whole-program QCP performance. Neither protected set has been inspected or run.
-Server qualification is complete; PR CI, merge and fresh main CI receipts
-remain pending. No extra current-main server archive is required.
+Server qualification, PR CI, merge and fresh main CI are complete; the current
+continuation section links the exact delivery receipts. No extra current-main
+server archive is required.
+
+### Supplementary independent truth (R761/R770)
+
+The [source-bound supplemental record](SUPPLEMENTARY_INDEPENDENT_TRUTH_20261030.json)
+binds unchanged original input50
+`7e71a151d917978f1b5afc2791abf589e30c8ff97e930979df6ef82ad72dcdc0`.
+Independent cvc5 returns UNSAT in141.087235s with a300s offline verification
+budget, one physical CPU and16GiB. This confirms Z3's original49.448217s timed
+UNSAT; formal solver budgets remain60s and no timed row is replaced.
+Z3's supplemented verified score is118/125raw, verified PAR-2 is5368.151597;
+Xolver remains97 and7902.244466. The original R733 table remains unchanged.
+
+Inputs12,24,27,80,114,159 time out in independent verification. Input42 hits
+the separate ExperimentOS outer timeout without a completed checker record.
+All seven remain unconfirmed and excluded. No opposite verdict is observed.
+The initial audit used the wrong checker-output filename; its failure is
+preserved and R770 rechecks the immutable evidence without rerunning solvers.
+Neither protected set is used.

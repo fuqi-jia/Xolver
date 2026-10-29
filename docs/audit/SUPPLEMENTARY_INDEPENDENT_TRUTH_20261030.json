@@ -1,0 +1,499 @@
+{
+  "schema": "xolver-supplementary-independent-truth/1",
+  "original_stage_sha256": "eb580b2d2b70528ded24bc20e78949d88531f8080237dcb98931d4dabf270d10",
+  "initial_audit_failure": {
+    "experiment": "21851240a8d5",
+    "reason": "Audit checked stdout rather than checker.stdout; no solver rerun or evidence change."
+  },
+  "original_counts": {
+    "baseline": {
+      "unsat": 42,
+      "decided": 96,
+      "verified_decided": 96,
+      "verified_par2": 8005.205803351477,
+      "raw_par2": 8005.205803351477,
+      "timeout": 63,
+      "sat": 54,
+      "unknown": 1
+    },
+    "candidate": {
+      "unsat": 43,
+      "decided": 97,
+      "verified_decided": 97,
+      "verified_par2": 7902.244465578347,
+      "raw_par2": 7902.244465578347,
+      "timeout": 62,
+      "sat": 54,
+      "unknown": 1
+    },
+    "z3": {
+      "unsat": 58,
+      "decided": 125,
+      "verified_decided": 117,
+      "verified_par2": 5438.703379813582,
+      "raw_par2": 4568.022415664047,
+      "sat": 67,
+      "timeout": 35
+    }
+  },
+  "supplemented_counts": {
+    "baseline": {
+      "unsat": 42,
+      "decided": 96,
+      "verified_decided": 96,
+      "verified_par2": 8005.205803351477,
+      "raw_par2": 8005.205803351477,
+      "timeout": 63,
+      "sat": 54,
+      "unknown": 1
+    },
+    "candidate": {
+      "unsat": 43,
+      "decided": 97,
+      "verified_decided": 97,
+      "verified_par2": 7902.244465578347,
+      "raw_par2": 7902.244465578347,
+      "timeout": 62,
+      "sat": 54,
+      "unknown": 1
+    },
+    "z3": {
+      "unsat": 58,
+      "decided": 125,
+      "verified_decided": 118,
+      "verified_par2": 5368.151596950367,
+      "raw_par2": 4568.022415664047,
+      "sat": 67,
+      "timeout": 35
+    }
+  },
+  "newly_confirmed": [
+    50
+  ],
+  "remaining_unconfirmed": [
+    12,
+    24,
+    27,
+    42,
+    80,
+    114,
+    159
+  ],
+  "evidence": [
+    {
+      "index": 12,
+      "experiment": "4615256f5d34",
+      "run": "ce060006acfc",
+      "status": "success",
+      "exit_code": 0,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "1"
+        ]
+      },
+      "timed_report_sha256": "e75bc59f5c39eb035fe808e0f55761068613bbb5e81f9f1d6872a73aa1509c0e",
+      "record_sha256": "4f1e65ad739285a558c14190b1a49d29dc7d7d8c213a33c3efe91cabe82405cf",
+      "record": {
+        "index": 12,
+        "case": {
+          "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LIA/fft/Sz128_2823.smt2",
+          "member": "QF_LIA/fft/Sz128_2823.smt2",
+          "logic": "QF_LIA",
+          "family": "fft",
+          "bytes": 20672,
+          "sha256": "e62aa48a7ec4ae656514927d79b4f34f7b05e187e4bf8eb43cb1eda0cdbc6a54",
+          "expected": "unsat",
+          "shared_archive_member": "non-incremental/QF_LIA/fft/Sz128_2823.smt2",
+          "shared_archive_sha256": "47f34fff3323f52e04ee33e611b80fd31b8f7f0177b7a9891b2499b259da69cf",
+          "archive_matches_server": true,
+          "archive_member_found": true,
+          "repetitions": 1
+        },
+        "oracle_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+        "command": [
+          "prlimit",
+          "--as=17179869184",
+          "--cpu=302:303",
+          "--",
+          "/pub/data/jiafq/xolver/dependencies/oracles/cvc5",
+          "--lang=smt2",
+          "--tlimit=300000",
+          "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LIA/fft/Sz128_2823.smt2"
+        ],
+        "result": "timeout",
+        "timing": {
+          "seconds": 300.06493115238845,
+          "launch_seconds": 0.0025312118232250214,
+          "wait_seconds": 300.06239994056523,
+          "returncode": -9,
+          "timeout_notified_seconds": 300.00014331005514,
+          "cleanup_seconds": 0.0647878423333168,
+          "timed_out": true,
+          "budget_overrun": false
+        },
+        "verified_unsat": false,
+        "opposite_to_timed_z3": false,
+        "boundary": "OFFLINE supplementary truth on an unchanged original public fixed160 input hash, with300s verification budget/one physical CPU/16GiB. Formal Xolver/Z3 observations remain exactly60s and are neither rerun nor replaced. Verification is not a timed solution or an Xolver runtime oracle. SAT requires model replay before acceptance. No protected input."
+      }
+    },
+    {
+      "index": 24,
+      "experiment": "4615256f5d34",
+      "run": "40c2bf0e6994",
+      "status": "success",
+      "exit_code": 0,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "2"
+        ]
+      },
+      "timed_report_sha256": "34dc1fce443e4a988c09c749354315806f13c999a0249e765841737e766dc6ff",
+      "record_sha256": "e169d76dcada29163cf28590685cb41d28e6678c7d3b828afc8d5e193ca3ae29",
+      "record": {
+        "index": 24,
+        "case": {
+          "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+          "member": "QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+          "logic": "QF_NIA",
+          "family": "LassoRanker",
+          "bytes": 24177,
+          "sha256": "68798a8ba5809648e09994276b2bc1fed413b743b8fce6d21d9de3a4865aa057",
+          "expected": "unsat",
+          "shared_archive_member": "non-incremental/QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+          "shared_archive_sha256": "0ec220292ed6c506b6c5dd9241e27ca7c74d8bda10a3db42249dc3f23c6d6078",
+          "archive_matches_server": true,
+          "archive_member_found": true,
+          "repetitions": 1
+        },
+        "oracle_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+        "command": [
+          "prlimit",
+          "--as=17179869184",
+          "--cpu=302:303",
+          "--",
+          "/pub/data/jiafq/xolver/dependencies/oracles/cvc5",
+          "--lang=smt2",
+          "--tlimit=300000",
+          "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2"
+        ],
+        "result": "timeout",
+        "timing": {
+          "seconds": 300.018572056666,
+          "launch_seconds": 0.00268477201461792,
+          "wait_seconds": 300.0158872846514,
+          "returncode": -9,
+          "timeout_notified_seconds": 300.0001287795603,
+          "cleanup_seconds": 0.01844327710568905,
+          "timed_out": true,
+          "budget_overrun": false
+        },
+        "verified_unsat": false,
+        "opposite_to_timed_z3": false,
+        "boundary": "OFFLINE supplementary truth on an unchanged original public fixed160 input hash, with300s verification budget/one physical CPU/16GiB. Formal Xolver/Z3 observations remain exactly60s and are neither rerun nor replaced. Verification is not a timed solution or an Xolver runtime oracle. SAT requires model replay before acceptance. No protected input."
+      }
+    },
+    {
+      "index": 27,
+      "experiment": "4615256f5d34",
+      "run": "433203666981",
+      "status": "success",
+      "exit_code": 0,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "4"
+        ]
+      },
+      "timed_report_sha256": "aa6ee2ba3c81fffbd6c0ea83de035871b948a0f8e7a51cea064d3bcdce2ed131",
+      "record_sha256": "c0fbd8dcc10cd0f8262ca86d425265c1b0de5f432e4ad7e994e913d163625b78",
+      "record": {
+        "index": 27,
+        "case": {
+          "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+          "member": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+          "logic": "QF_NIA",
+          "family": "20230328-sqrtmodinv-hoenicke",
+          "bytes": 1077,
+          "sha256": "4be4382761af8ae34ba468d292dedbbce60a1adbce104d03ebecaf9217d020d8",
+          "expected": "unsat",
+          "shared_archive_member": "non-incremental/QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+          "shared_archive_sha256": "0ec220292ed6c506b6c5dd9241e27ca7c74d8bda10a3db42249dc3f23c6d6078",
+          "archive_matches_server": true,
+          "archive_member_found": true,
+          "repetitions": 1
+        },
+        "oracle_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+        "command": [
+          "prlimit",
+          "--as=17179869184",
+          "--cpu=302:303",
+          "--",
+          "/pub/data/jiafq/xolver/dependencies/oracles/cvc5",
+          "--lang=smt2",
+          "--tlimit=300000",
+          "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2"
+        ],
+        "result": "timeout",
+        "timing": {
+          "seconds": 300.0113151334226,
+          "launch_seconds": 0.0026454441249370575,
+          "wait_seconds": 300.0086696892977,
+          "returncode": -9,
+          "timeout_notified_seconds": 300.00011914782226,
+          "cleanup_seconds": 0.011195985600352287,
+          "timed_out": true,
+          "budget_overrun": false
+        },
+        "verified_unsat": false,
+        "opposite_to_timed_z3": false,
+        "boundary": "OFFLINE supplementary truth on an unchanged original public fixed160 input hash, with300s verification budget/one physical CPU/16GiB. Formal Xolver/Z3 observations remain exactly60s and are neither rerun nor replaced. Verification is not a timed solution or an Xolver runtime oracle. SAT requires model replay before acceptance. No protected input."
+      }
+    },
+    {
+      "index": 50,
+      "experiment": "4615256f5d34",
+      "run": "e05d0e5a22c0",
+      "status": "success",
+      "exit_code": 0,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "7"
+        ]
+      },
+      "timed_report_sha256": "ea59568ed49b8d33c503294d410a6a8fe790d0d507471c836174c7341747eea5",
+      "record_sha256": "13a20b8e90bb8a8fff028fd665ee4ef661ae88e851766af64ed9b83ee255175c",
+      "record": {
+        "index": 50,
+        "case": {
+          "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_jain_5.i_2_4_3.bpl_7.smt2",
+          "member": "QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_jain_5.i_2_4_3.bpl_7.smt2",
+          "logic": "QF_LRA",
+          "family": "2017-Heizmann-UltimateInvariantSynthesis",
+          "bytes": 580508,
+          "sha256": "7e71a151d917978f1b5afc2791abf589e30c8ff97e930979df6ef82ad72dcdc0",
+          "expected": "unsat",
+          "shared_archive_member": "non-incremental/QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_jain_5.i_2_4_3.bpl_7.smt2",
+          "shared_archive_sha256": "c594f41da343112c66598ffb4cbf9bd8f8aa8c4c1283cef09d4c79b06fb4504c",
+          "archive_matches_server": true,
+          "archive_member_found": true,
+          "repetitions": 1
+        },
+        "oracle_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+        "command": [
+          "prlimit",
+          "--as=17179869184",
+          "--cpu=302:303",
+          "--",
+          "/pub/data/jiafq/xolver/dependencies/oracles/cvc5",
+          "--lang=smt2",
+          "--tlimit=300000",
+          "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_jain_5.i_2_4_3.bpl_7.smt2"
+        ],
+        "result": "unsat",
+        "timing": {
+          "seconds": 141.08723516203463,
+          "launch_seconds": 0.002185344696044922,
+          "wait_seconds": 141.0850498173386,
+          "returncode": 0,
+          "timeout_notified_seconds": null,
+          "cleanup_seconds": null,
+          "timed_out": false,
+          "budget_overrun": false
+        },
+        "verified_unsat": true,
+        "opposite_to_timed_z3": false,
+        "boundary": "OFFLINE supplementary truth on an unchanged original public fixed160 input hash, with300s verification budget/one physical CPU/16GiB. Formal Xolver/Z3 observations remain exactly60s and are neither rerun nor replaced. Verification is not a timed solution or an Xolver runtime oracle. SAT requires model replay before acceptance. No protected input."
+      }
+    },
+    {
+      "index": 80,
+      "experiment": "4615256f5d34",
+      "run": "58642824b960",
+      "status": "success",
+      "exit_code": 0,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "9"
+        ]
+      },
+      "timed_report_sha256": "e2d87e886292f342a9061e37c77c94ade4606838868cd39fd2cef18b857d6630",
+      "record_sha256": "f90f10422780d8acf2628bf03e83b46d1427149ee7d59d4de38463838b7ac0a3",
+      "record": {
+        "index": 80,
+        "case": {
+          "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LIA/cut_lemmas/20-vars/cut_lemma_03_004.smt2",
+          "member": "QF_LIA/cut_lemmas/20-vars/cut_lemma_03_004.smt2",
+          "logic": "QF_LIA",
+          "family": "cut_lemmas",
+          "bytes": 2940,
+          "sha256": "1bcb3b052ef1f9ebe04cf76147f19dc54fb0678342d72b829a38a936c56959fe",
+          "expected": "unsat",
+          "shared_archive_member": "non-incremental/QF_LIA/cut_lemmas/20-vars/cut_lemma_03_004.smt2",
+          "shared_archive_sha256": "47f34fff3323f52e04ee33e611b80fd31b8f7f0177b7a9891b2499b259da69cf",
+          "archive_matches_server": true,
+          "repetitions": 1
+        },
+        "oracle_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+        "command": [
+          "prlimit",
+          "--as=17179869184",
+          "--cpu=302:303",
+          "--",
+          "/pub/data/jiafq/xolver/dependencies/oracles/cvc5",
+          "--lang=smt2",
+          "--tlimit=300000",
+          "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LIA/cut_lemmas/20-vars/cut_lemma_03_004.smt2"
+        ],
+        "result": "timeout",
+        "timing": {
+          "seconds": 300.0025342460722,
+          "launch_seconds": 0.0026235431432724,
+          "wait_seconds": 299.9999107029289,
+          "returncode": -9,
+          "timeout_notified_seconds": 300.0001148749143,
+          "cleanup_seconds": 0.0024193711578845978,
+          "timed_out": true,
+          "budget_overrun": false
+        },
+        "verified_unsat": false,
+        "opposite_to_timed_z3": false,
+        "boundary": "OFFLINE supplementary truth on an unchanged original public fixed160 input hash, with300s verification budget/one physical CPU/16GiB. Formal Xolver/Z3 observations remain exactly60s and are neither rerun nor replaced. Verification is not a timed solution or an Xolver runtime oracle. SAT requires model replay before acceptance. No protected input."
+      }
+    },
+    {
+      "index": 114,
+      "experiment": "4615256f5d34",
+      "run": "f9057e0d1834",
+      "status": "success",
+      "exit_code": 0,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "10"
+        ]
+      },
+      "timed_report_sha256": "0d72d5a4d45a5b6b30f025fee5a0552de95324fbffdd4f14f71228dab64ec09e",
+      "record_sha256": "9cbce09728938dcbad398d05b8ba108b8f19c598ec0c8c1568f5baed5a6e88db",
+      "record": {
+        "index": 114,
+        "case": {
+          "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+          "member": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+          "logic": "QF_NIA",
+          "family": "20210219-Dartagnan",
+          "bytes": 165175,
+          "sha256": "1aea29b746e949da62b784ed14b262444d87c36051a63e0aa197d313fd3f8d99",
+          "expected": "unknown",
+          "shared_archive_member": "non-incremental/QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+          "shared_archive_sha256": "0ec220292ed6c506b6c5dd9241e27ca7c74d8bda10a3db42249dc3f23c6d6078",
+          "archive_matches_server": true,
+          "repetitions": 1
+        },
+        "oracle_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+        "command": [
+          "prlimit",
+          "--as=17179869184",
+          "--cpu=302:303",
+          "--",
+          "/pub/data/jiafq/xolver/dependencies/oracles/cvc5",
+          "--lang=smt2",
+          "--tlimit=300000",
+          "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2"
+        ],
+        "result": "timeout",
+        "timing": {
+          "seconds": 300.2114037964493,
+          "launch_seconds": 0.0030959397554397583,
+          "wait_seconds": 300.20830785669386,
+          "returncode": -9,
+          "timeout_notified_seconds": 300.0001001395285,
+          "cleanup_seconds": 0.21130365692079067,
+          "timed_out": true,
+          "budget_overrun": false
+        },
+        "verified_unsat": false,
+        "opposite_to_timed_z3": false,
+        "boundary": "OFFLINE supplementary truth on an unchanged original public fixed160 input hash, with300s verification budget/one physical CPU/16GiB. Formal Xolver/Z3 observations remain exactly60s and are neither rerun nor replaced. Verification is not a timed solution or an Xolver runtime oracle. SAT requires model replay before acceptance. No protected input."
+      }
+    },
+    {
+      "index": 159,
+      "experiment": "4615256f5d34",
+      "run": "94324b749f3b",
+      "status": "success",
+      "exit_code": 0,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "12"
+        ]
+      },
+      "timed_report_sha256": "8963fa3c39479497d2ee2983d171d82ef3e7e636dbedf560ef6862161e2c7824",
+      "record_sha256": "bc979db0099308359bfffbb14fdc4d240f24ea756d509258afd10a97229f98b7",
+      "record": {
+        "index": 159,
+        "case": {
+          "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NRA/20161105-Sturm-MGC/mgc_07.smt2",
+          "member": "QF_NRA/20161105-Sturm-MGC/mgc_07.smt2",
+          "logic": "QF_NRA",
+          "family": "20161105-Sturm-MGC",
+          "bytes": 2733,
+          "sha256": "3b3f35580e39c21659d09f507edd67f5c0d5271a2957125d9e99cca86db44033",
+          "expected": "unsat",
+          "shared_archive_member": "non-incremental/QF_NRA/20161105-Sturm-MGC/mgc_07.smt2",
+          "shared_archive_sha256": "fd4a0d330192dc622d1746daef26649f52803dcd197923e4a26c5596e226546c",
+          "archive_matches_server": true,
+          "repetitions": 1
+        },
+        "oracle_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+        "command": [
+          "prlimit",
+          "--as=17179869184",
+          "--cpu=302:303",
+          "--",
+          "/pub/data/jiafq/xolver/dependencies/oracles/cvc5",
+          "--lang=smt2",
+          "--tlimit=300000",
+          "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NRA/20161105-Sturm-MGC/mgc_07.smt2"
+        ],
+        "result": "timeout",
+        "timing": {
+          "seconds": 300.0486388336867,
+          "launch_seconds": 0.003033732995390892,
+          "wait_seconds": 300.0456051006913,
+          "returncode": -9,
+          "timeout_notified_seconds": 300.00102063827217,
+          "cleanup_seconds": 0.04761819541454315,
+          "timed_out": true,
+          "budget_overrun": false
+        },
+        "verified_unsat": false,
+        "opposite_to_timed_z3": false,
+        "boundary": "OFFLINE supplementary truth on an unchanged original public fixed160 input hash, with300s verification budget/one physical CPU/16GiB. Formal Xolver/Z3 observations remain exactly60s and are neither rerun nor replaced. Verification is not a timed solution or an Xolver runtime oracle. SAT requires model replay before acceptance. No protected input."
+      }
+    },
+    {
+      "index": 42,
+      "experiment": "4615256f5d34",
+      "run": "7f1e0bb097f3",
+      "status": "timeout",
+      "exit_code": 124,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "5"
+        ]
+      },
+      "timed_report_sha256": "5b5f5b79c8cf80c1b74aacc22ac3f25ccfbf9a481c7632cd78818db49063aa0c",
+      "boundary": "Outer ExperimentOS timeout: no completed independent-check record. No truth conclusion."
+    }
+  ],
+  "boundary": "Independent offline verification uses300s, one physical CPU and16GiB. All original same-round Xolver/Z3 timings remain60s and immutable. Only truth eligibility and verified PAR-2 change, using the original49.448s Z3 result for input50. This adds no Xolver solve or timed300s result. Six check timeouts and the separate42 outer failure remain unconfirmed.",
+  "protected_sets_used": false,
+  "above_z3": false,
+  "extra_current_main_server_archive_required": false
+}

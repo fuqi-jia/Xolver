@@ -10,6 +10,10 @@ struct PolynomialSignStatistics {
     size_t substitutions = 0;
     size_t cancellations = 0;
     size_t divisions = 0;
+    size_t eliminations = 0;
+    size_t variableLookups = 0;
+    size_t variableIndexHits = 0;
+    size_t indexedVariables = 0;
     bool exhausted = false;
 };
 
