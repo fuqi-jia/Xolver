@@ -165,3 +165,33 @@ programs, VCs and external SMT queries separately. The stage evidence must
 authenticate the supplied controller record; this ledger does not replace Rocq.
 Missing backend reports leave external query counts unknown; they do not
 establish that no solver calls occurred.
+
+## Original Draco and ASP
+
+`draco_backend.DracoBackend` connects the original
+[uwdata/draco](https://github.com/uwdata/draco) query and result interfaces to
+`xolver-asp`. `SubprocessGrounder` forces `--mode=gringo --output=intermediate`;
+Xolver alone performs stable-model search and optimization. The source revision
+and rule/example hashes are in `draco-source.json`.
+
+```python
+import importlib
+from pathlib import Path
+from draco_backend import DracoBackend, SubprocessGrounder
+original = importlib.import_module("draco.run")
+backend = DracoBackend(original, Path("build/bin/xolver-asp"),
+                       SubprocessGrounder(("clingo",)))
+with backend.attach():
+    result = original.run(["encoding(e0).", "fieldtype(x,number)."],
+                          constants={"max_extra_encs": "0"})
+```
+
+Run `check_asp_backend.py --solver ... --clingo ... --output ...` for generic
+ASPIF differential checks, or `check_draco_backend.py --draco ... --solver ...
+--clingo ... --output ...` for the pinned original Draco API and rules. The latter
+retains grounding and solving separately, compares exact objective vectors with
+full Clingo, and pins the complete internal witness for independent ASP replay.
+Full Clingo is a development oracle in these checkers, never the production
+backend. A grounder warning that discards an objective tuple is unsupported.
+See the [ASP contract](../../src/applications/satisfiability/asp/README.md) for
+supported rules, budgets and evidence limits.

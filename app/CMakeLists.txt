@@ -30,3 +30,7 @@ foreach(tool parallel-worker parallel-examples)
     target_link_libraries(xolver-${tool} PRIVATE xolver_core Threads::Threads)
     set_target_properties(xolver-${tool} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 endforeach()
+
+add_executable(xolver-asp asp.cpp)
+target_link_libraries(xolver-asp PRIVATE xolver_core gmpxx Threads::Threads)
+set_target_properties(xolver-asp PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)

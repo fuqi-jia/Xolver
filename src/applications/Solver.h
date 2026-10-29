@@ -2,7 +2,7 @@
 #include <string_view>
 
 namespace xolver::applications {
-enum class Family { Smt, Omt, Cp, Milp, DifferentialEquations, SoftwareVerification, Counting, MaxSmt, MaxSat, Sat };
+enum class Family { Smt, Omt, Cp, Milp, DifferentialEquations, SoftwareVerification, Counting, MaxSmt, MaxSat, Sat, Asp };
 enum class Category { Satisfiability, Optimization, Counting, Verification, Dynamics };
 
 // Common lifetime and identity for application solvers. Theory callbacks,
@@ -15,7 +15,7 @@ public:
     virtual std::string_view name() const noexcept = 0;
     Category category() const noexcept {
         switch (family()) {
-            case Family::Sat: case Family::Smt: return Category::Satisfiability;
+            case Family::Sat: case Family::Smt: case Family::Asp: return Category::Satisfiability;
             case Family::Omt: case Family::Cp: case Family::Milp:
             case Family::MaxSmt: case Family::MaxSat: return Category::Optimization;
             case Family::Counting: return Category::Counting;

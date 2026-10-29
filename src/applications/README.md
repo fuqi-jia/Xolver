@@ -11,6 +11,7 @@ backend support does not restrict the shape of these contracts.
 | Application | Problem and result | Executable backend |
 | --- | --- | --- |
 | `satisfiability/sat` | DIMACS clauses and assumptions; checked assignments or failed assumptions | Injectable SAT backend, sparse variable mapping |
+| `satisfiability/asp` | Finite normal/choice/weighted rules, stable models and lexicographic costs | SAT completion, reduct validation and unfounded-set refinement |
 | `satisfiability/smt` | Native assertions; sat/unsat/unknown and models | Arithmetic, UF, arrays, datatypes, finite BV combinations, FP predicates/concrete arithmetic and strings |
 | `optimization/omt` | Native objectives, priorities and exact objective values | Lexicographic Bool/BV and linear arithmetic optimization |
 | `optimization/maxsat` | Hard clauses and exact rational weighted soft clauses | Shared MaxSMT optimization engine |

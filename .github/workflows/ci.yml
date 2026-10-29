@@ -114,7 +114,7 @@ jobs:
 
       - name: Architecture and validation harness tests
         if: ${{ !cancelled() && steps.test_build.outcome == 'success' }}
-        run: ctest --test-dir build --output-on-failure -R '^(architecture|standalone-evidence|regression-harness|parallel-local|parallel-worker)$'
+        run: ctest --test-dir build --output-on-failure -R '^(architecture|standalone-evidence|regression-harness|parallel-local|parallel-worker|asp-cli)$'
 
       # Each regression has its own deadline; a timeout remains a failure.
       # Keep the longer allowance for the MetiTarski polynomial instances.

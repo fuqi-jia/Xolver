@@ -28,7 +28,7 @@ flowchart TD
 `quantifiers` may use `search` and `algebra`. Lower layers cannot depend on
 quantifier algorithms or application headers. Applications cannot depend on
 other application categories; verification/SL, PA and model checking remain independent.
-Satisfiability contains SAT/SMT, optimization contains MaxSAT/MaxSMT/OMT/CP/MILP,
+Satisfiability contains SAT/SMT/ASP, optimization contains MaxSAT/MaxSMT/OMT/CP/MILP,
 and dynamics contains ODE/PDE. `Solver::category()` exposes this grouping.
 
 | Component | Owner |
@@ -36,6 +36,7 @@ and dynamics contains ODE/PDE. `Solver::category()` exposes this grouping.
 | Abstract application identity and typed `solve` | `applications/Solver.h` |
 | Theory-independent task submission and bounded worker execution | `parallel` |
 | Rational weighted soft constraints over an injected decision oracle | `applications/optimization/maxsmt` |
+| Finite ASP stability and weighted rule composition | `applications/satisfiability/asp` |
 | SMT input classification and theory composition | `applications/satisfiability/smt` |
 | Shared SMT integer reasoning | `applications/satisfiability/smt/common/lia` |
 | SMT mixed linear feasibility | `applications/satisfiability/smt/qflira` |
@@ -44,6 +45,7 @@ and dynamics contains ODE/PDE. `Solver::category()` exposes this grouping.
 | Native binder compilation and domain-specific elimination | `quantifiers` |
 | CRT, integer witnesses and polynomial operations | `algebra` |
 | SAT, simplex, ICP, root isolation and reusable search | `search` |
+| Exact Boolean lexicographic optimization with injected feasibility | `search/optimization/BooleanOptimizer` |
 | Rational objective optimization and mixed-integer branch search | `search/optimization` |
 | Native affine formula compilation and exact linear systems | `algebra/linear` |
 
