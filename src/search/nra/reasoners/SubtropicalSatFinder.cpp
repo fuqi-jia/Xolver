@@ -1,88 +1,13 @@
 #include "search/nra/reasoners/SubtropicalSatFinder.h"
+#include "search/lra/GeneralSimplex.h"
 
 #include <algorithm>
 #include <functional>
+#include <map>
 
 namespace xolver {
 
 namespace {
-
-// --- Exact rational Fourier-Motzkin ----------------------------------------
-// A row encodes the inequality  <coeff, a>  >=  rhs.
-struct LpRow {
-    std::vector<mpq_class> coeff;  // length n
-    mpq_class rhs;
-};
-
-// Eliminate variable `j` from `rows` (Fourier-Motzkin) into `out`, the reduced
-// system in the remaining variables. Returns false on row-count overflow.
-bool eliminateVar(const std::vector<LpRow>& rows, int j, int n, long rowCap,
-                  std::vector<LpRow>& out) {
-    std::vector<const LpRow*> pos, neg;
-    out.clear();
-    for (const auto& r : rows) {
-        const int s = sgn(r.coeff[j]);
-        if (s > 0) pos.push_back(&r);
-        else if (s < 0) neg.push_back(&r);
-        else out.push_back(r);  // var j absent: carry through unchanged
-    }
-    for (const LpRow* p : pos) {
-        for (const LpRow* q : neg) {
-            // Positive combination cancelling a_j: mp = -q[j] (>0), mq = p[j] (>0).
-            const mpq_class mp = -q->coeff[j];
-            const mpq_class mq = p->coeff[j];
-            LpRow comb;
-            comb.coeff.assign(n, mpq_class(0));
-            for (int i = 0; i < n; ++i) comb.coeff[i] = mp * p->coeff[i] + mq * q->coeff[i];
-            comb.coeff[j] = 0;  // exact cancellation
-            comb.rhs = mp * p->rhs + mq * q->rhs;
-            out.push_back(std::move(comb));
-            if (static_cast<long>(out.size()) > rowCap) return false;
-        }
-    }
-    return true;
-}
-
-// Feasibility of  {<c,a> >= rhs}  over the rationals. If `witness` is non-null
-// and feasible, fills a feasible point. Returns false on infeasibility OR
-// row-cap overflow (sound for our use: caller treats it as "no witness here").
-bool fmSolve(std::vector<LpRow> rows, int n, long rowCap,
-             std::vector<mpq_class>* witness) {
-    // systems[k+1] = the system in variables 0..k, captured just before
-    // eliminating variable k (we eliminate from n-1 down to 0).
-    std::vector<std::vector<LpRow>> systems(n + 1);
-    std::vector<LpRow> cur = std::move(rows);
-    for (int j = n - 1; j >= 0; --j) {
-        systems[j + 1] = cur;
-        std::vector<LpRow> next;
-        if (!eliminateVar(cur, j, n, rowCap, next)) return false;
-        cur = std::move(next);
-    }
-    for (const auto& r : cur) {  // no vars left: rows are 0 >= rhs
-        if (sgn(r.rhs) > 0) return false;
-    }
-    if (!witness) return true;
-
-    witness->assign(n, mpq_class(0));
-    for (int j = 0; j < n; ++j) {
-        bool hasLo = false, hasHi = false;
-        mpq_class lo, hi;
-        for (const auto& r : systems[j + 1]) {
-            const int s = sgn(r.coeff[j]);
-            if (s == 0) continue;
-            mpq_class rem = r.rhs;
-            for (int i = 0; i < j; ++i) rem -= r.coeff[i] * (*witness)[i];
-            const mpq_class bound = rem / r.coeff[j];  // a_j >= bound (s>0) / <= bound (s<0)
-            if (s > 0) { if (!hasLo || bound > lo) { lo = bound; hasLo = true; } }
-            else       { if (!hasHi || bound < hi) { hi = bound; hasHi = true; } }
-        }
-        if (hasLo && hasHi) (*witness)[j] = (lo + hi) / 2;
-        else if (hasLo)     (*witness)[j] = lo;
-        else if (hasHi)     (*witness)[j] = hi;
-        else                (*witness)[j] = 0;
-    }
-    return true;
-}
 
 // --- GF(2) linear system (reduced-row-echelon) -----------------------------
 struct Gf2System {
@@ -137,7 +62,10 @@ bool gf2Consistent(const std::vector<std::pair<std::vector<char>, char>>& eqs, i
 
 SubtropicalResult SubtropicalSatFinder::find(
     const std::vector<SubtropicalConstraint>& constraints,
-    const std::vector<VarId>& vars) const {
+    const std::vector<VarId>& vars, Statistics* statistics) const {
+    Statistics local;
+    auto& stats = statistics ? *statistics : local;
+    stats = {};
     SubtropicalResult res;
 
     const int n = static_cast<int>(vars.size());
@@ -178,52 +106,86 @@ SubtropicalResult SubtropicalSatFinder::find(
     }
     if (cons.empty()) { res.found = true; return res; }  // all constraints trivially true
 
-    // Backtracking frame search.
-    long nodes = 0;
-    std::vector<LpRow> lpRows;
+    // All frame choices share one exact linear context. Definitions are
+    // unconditional; only their >= 1 bounds belong to a choice level. Keeping
+    // the basis and assignments across siblings avoids rebuilding/eliminating
+    // the same prefix, without retaining a withdrawn branch bound.
+    GeneralSimplex simplex;
+    ++stats.contexts;
+    std::vector<int> columns;
+    for (int i = 0; i < n; ++i) columns.push_back(simplex.addVar("direction-" + std::to_string(i)));
+    using Row = std::vector<std::pair<int, mpq_class>>;
+    std::map<Row, int> definitions;
+    const BoundInfo lower(BoundValue(DeltaRational(1)), SatLit::positive(1)); // private
     std::vector<std::pair<std::vector<char>, char>> parityEqs;
     std::vector<mpq_class> witnessA;
 
     std::function<bool(size_t)> recurse = [&](size_t k) -> bool {
-        if (++nodes > cfg_.searchNodeCap) return false;
+        if (++stats.nodes > cfg_.searchNodeCap) { stats.exhausted = true; return false; }
         if (k == cons.size()) {
-            return fmSolve(lpRows, n, cfg_.fmRowCap, &witnessA);
+            const auto delta = simplex.computeSafeDelta();
+            for (const auto column : columns) {
+                const auto value = simplex.value(column);
+                witnessA.push_back(value.a + value.b * delta);
+            }
+            return true;
         }
         const Cons& cc = cons[k];
         for (size_t fi = 0; fi < cc.monos.size(); ++fi) {
+            ++stats.frames;
             const Mono& f = cc.monos[fi];
-
-            const size_t lpFrom = lpRows.size();
-            for (size_t gi = 0; gi < cc.monos.size(); ++gi) {
-                if (gi == fi) continue;
-                const Mono& g = cc.monos[gi];
-                LpRow r; r.coeff.assign(n, mpq_class(0)); r.rhs = 1;
-                for (int i = 0; i < n; ++i) r.coeff[i] = f.e[i] - g.e[i];
-                lpRows.push_back(std::move(r));
-            }
-            const bool lpOk = fmSolve(lpRows, n, cfg_.fmRowCap, nullptr);
-
-            bool parityPushed = false, parityOk = true;
-            if (lpOk && cc.rel != Relation::Neq) {
+            const size_t parityFrom = parityEqs.size();
+            if (cc.rel != Relation::Neq) {
                 const int reqSign = (cc.rel == Relation::Gt || cc.rel == Relation::Geq) ? 1 : -1;
-                // sign(c_f)*(-1)^{<e_f,sigma>} = reqSign  =>  parity bit b
                 const char b = (reqSign * f.csign > 0) ? 0 : 1;
                 std::vector<char> row(n, 0);
                 for (int i = 0; i < n; ++i) row[i] = static_cast<char>(f.e[i] & 1);
                 parityEqs.emplace_back(std::move(row), b);
-                parityPushed = true;
-                parityOk = gf2Consistent(parityEqs, n);
+                if (!gf2Consistent(parityEqs, n)) {
+                    ++stats.parityConflicts;
+                    parityEqs.resize(parityFrom);
+                    continue;
+                }
             }
-
-            if (lpOk && parityOk && recurse(k + 1)) return true;
-
-            lpRows.resize(lpFrom);
-            if (parityPushed) parityEqs.pop_back();
+            const int level = static_cast<int>(k) + 1;
+            bool feasible = true;
+            for (size_t gi = 0; gi < cc.monos.size(); ++gi) {
+                if (gi == fi) continue;
+                Row row;
+                for (int i = 0; i < n; ++i)
+                    if (const int coefficient = f.e[i] - cc.monos[gi].e[i])
+                        row.emplace_back(columns[i], coefficient);
+                if (row.empty()) { feasible = false; break; } // 0 >= 1
+                auto it = definitions.find(row);
+                if (it == definitions.end()) {
+                    if (static_cast<long>(definitions.size()) >= cfg_.linearRowCap) {
+                        stats.exhausted = true;
+                        feasible = false;
+                        break;
+                    }
+                    const int column = simplex.addConstraint(row, 0);
+                    if (column < 0) { feasible = false; break; }
+                    it = definitions.emplace(std::move(row), column).first;
+                    ++stats.definitions;
+                } else ++stats.reusedRows;
+                if (!simplex.assertLower(it->second, lower, level)) { feasible = false; break; }
+            }
+            if (feasible) {
+                ++stats.linearChecks;
+                const auto result = simplex.check();
+                feasible = result == GeneralSimplex::Result::Sat;
+                stats.exhausted |= result == GeneralSimplex::Result::Unknown;
+            }
+            if (feasible && recurse(k + 1)) return true;
+            simplex.backtrackToLevel(static_cast<int>(k), GeneralSimplex::AssignmentPolicy::Preserve);
+            ++stats.backtracks;
+            parityEqs.resize(parityFrom);
+            if (stats.exhausted) return false;
         }
         return false;
     };
 
-    if (!recurse(0)) return res;  // not found
+    if (!recurse(0)) return res; // no candidate, never an UNSAT verdict
 
     // Success: rational direction in witnessA, signs from the parity system.
     Gf2System gf2(n);
