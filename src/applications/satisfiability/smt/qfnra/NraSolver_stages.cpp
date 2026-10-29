@@ -169,7 +169,7 @@ std::optional<TheoryCheckResult> NraSolver::stageBoxRefute(TheoryLemmaStorage& /
 // strictly-positive monomials = 0 with all variables positive — the Sturm-MBO
 // family that CAD/CAC time out on).
 std::optional<TheoryCheckResult> NraSolver::stageSignRefute(TheoryLemmaStorage& /*lemmaDb*/,
-                                                            TheoryEffort /*effort*/) {
+                                                            TheoryEffort effort) {
     if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty())
         return std::nullopt;   // combination: interface (dis)eqs not in presolveConstraints_
 
@@ -182,6 +182,19 @@ std::optional<TheoryCheckResult> NraSolver::stageSignRefute(TheoryLemmaStorage& 
         cs.push_back({std::move(*rp), c.rel, c.reason});
     }
     auto conflict = refuteBySignDefiniteness(cs);
+    if (!conflict && effort == TheoryEffort::Full) {
+        QuadraticSignStatistics stats;
+        const auto started = std::chrono::steady_clock::now();
+        conflict = refuteByQuadraticSigns(cs, &stats);
+        const auto profile = config::read<config::ReadKind::ProfilePath>("ARITH_STAGE_PROF", "/tmp/xolver_stageprof.txt");
+        if (!profile.empty()) {
+            std::ofstream out(profile.string() + ".quadratic-sign.log", std::ios::app);
+            out << "attempts=" << stats.quadraticAttempts << " divisions=" << stats.factorDivisions
+                << " certified=" << stats.certified << " exhausted=" << stats.exhausted
+                << " us=" << std::chrono::duration_cast<std::chrono::microseconds>(
+                    std::chrono::steady_clock::now() - started).count() << '\n';
+        }
+    }
     if (!conflict) return std::nullopt;
 
     TheoryConflict tc;

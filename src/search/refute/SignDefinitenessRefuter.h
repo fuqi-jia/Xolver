@@ -5,6 +5,7 @@
 #include "ir/types.h"      // Relation, VarId
 
 #include <optional>
+#include <cstddef>
 #include <vector>
 
 namespace xolver {
@@ -43,5 +44,22 @@ struct SignRefuteConstraint {
 // nullopt otherwise.
 std::optional<std::vector<SatLit>>
 refuteBySignDefiniteness(const std::vector<SignRefuteConstraint>& constraints);
+
+// Bounded exact quadratic consequence search, shared by real and integer
+// clients. For p=a*x^2+b*x+c, a>=0, c>=0 and 4*a*c-b^2>=0 prove p>=0,
+// including a=0. Coefficient signs may follow from an exact identity
+// f=q*h+r and an active sign premise on q. Only constant-leading-coefficient
+// divisions are used; no inequality is divided by a possibly-zero expression.
+// Failure/exhaustion leaves the obligation open. Returned reasons include all
+// active sign/bound premises used by the identity and quadratic argument.
+struct QuadraticSignStatistics {
+    size_t quadraticAttempts = 0;
+    size_t factorDivisions = 0;
+    size_t certified = 0;
+    bool exhausted = false;
+};
+std::optional<std::vector<SatLit>>
+refuteByQuadraticSigns(const std::vector<SignRefuteConstraint>& constraints,
+                       QuadraticSignStatistics* statistics = nullptr);
 
 } // namespace xolver

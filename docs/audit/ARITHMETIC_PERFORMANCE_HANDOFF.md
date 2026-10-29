@@ -40,6 +40,11 @@ Older tables describe their own frozen versions and evidence boundaries.
 
 ## Current arithmetic and ASP continuation
 
+The latest qualified arithmetic stage is
+[explained quadratic sign refutation](#explained-quadratic-sign-refutation-r697r700r706):
+96/160, versus 116 verified / 125 raw same-round Z3 decisions. Earlier receipts
+below retain their original snapshot and evidence boundaries.
+
 [PR67](https://github.com/fuqi-jia/Xolver/pull/67) is merged as main
 `e7c7917c9a9c997a8649ad736c8548f4de186bca`, after its
 [PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/40899442555) passed.
@@ -1990,3 +1995,66 @@ query/model timings and limitations remain recorded. Nine other results (eight
 UNSAT and SAT122) remain unconfirmed and excluded. The remaining verified gap
 is **21**, and neither a protected-set result nor an end-to-end QCP speed win
 has been established. No extra current-main server archive is required.
+
+
+## Delivery confirmation and next quadratic candidate (2026-10-30)
+
+[PR69](https://github.com/fuqi-jia/Xolver/pull/69) merged as
+`58ba6386dc1170a42f3f886da267ce5e5b1573bc` after both
+[PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/40925328946) passed.
+Its fresh [main push CI](https://github.com/fuqi-jia/Xolver/actions/runs/40928254309)
+is fully green at that exact merge commit. The frozen R681/R689/R695 chain
+remains its source/binary/evidence binding; no extra server archive is required.
+
+The quadratic-sign implementation extends the shared refutation component
+and wires its real and integer clients. For `a*x^2+b*x+c`, it proves nonnegativity
+from explained `a>=0`, `c>=0` and `4*a*c-b^2>=0`; the constant-coefficient condition
+is retained when `a=0`. Exact identities `p=q*h+r` combine known polynomial signs.
+The prototype's zero-power quotient construction bug caused R696's reproduction
+to decline, with no incorrect verdict; its failed native attempt is retained.
+R697 fixes that construction, passes 1,780 tests / 877,774 assertions and all
+three new real/integer/degenerate regressions, and independently confirms its
+component UNSAT with Z3. Frozen CLI SHA-256:
+`97f5b897ab377b9c029821584ed798666035cea30b240b6ca9894dc8bf64dc8f`.
+
+Fresh R698's 16 development inputs gain input155: main returns `unknown` in
+54.256 seconds, candidate returns independently confirmed UNSAT in 0.367 seconds.
+There is no lost decision in that pilot. Matching diagnostics observe four
+quadratic attempts, 17 divisions and one explained refutation in 1.802 milliseconds.
+The complete fixed160 round and server acceptance are recorded below; this
+pilot alone does not establish a whole-suite gain.
+Neither protected set has been read.
+
+
+## Explained quadratic sign refutation (R697/R700/R706)
+
+The [qualified shared implementation](QUADRATIC_SIGN_REFUTATION_STAGE_20261030.json)
+completes the real/integer closure. R697 binds source `4785fb46`, the frozen CLI
+above, 1,780 unit cases / 877,774 assertions, 14 focused cases / 66 assertions,
+63 parser checks and the real/integer/zero-leading regressions. R701 passes all
+37 server acceptance groups, including QCP and independent model checks.
+
+R703 audits all 160 unique original inputs and frozen versions. Every timed
+row is valid, uses 60 seconds / one physical CPU / 16 GiB, and needs no retry.
+Original UNSAT115 retains its independently rechecked original-input certificate.
+
+| Frozen version | Verified | SAT raw | UNSAT raw | Unknown | Timeout | Verified PAR-2 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| PR69 main | 95 | 54 | 41 | 2 | 63 | 8143.809 |
+| Quadratic signs | 96 | 54 | 42 | 1 | 63 | 8024.461 |
+| Z3 | 116 | 67 | 58 | 0 | 35 | 5545.713 |
+
+The sole change is independently confirmed UNSAT155: 54.256-second `unknown`
+becomes 0.367-second UNSAT. No verified result is lost; no opposite verdict,
+invalid exported model, crash or protocol failure occurs. This closes one
+verified gap, leaving 20 in this same round, without establishing superiority.
+
+R704 freshly confirms the existing input94 SAT witness with CVC5 on the identical
+original hash. Input47 already has a valid standard replay from the pilot; an
+unnecessary auxiliary lookup used the remainder path and failed before running a
+solver. That failed lookup and the first rejected supplementary audit are
+preserved. R706 uses only the required successful input94 evidence, changes no
+timed observation, and excludes the remaining eight unconfirmed UNSATs and
+unconfirmed SAT122. No valid timed row is replaced or rerun. Neither protected
+set was read, and no end-to-end QCP speed win or extra current-main archive is
+claimed or required.
