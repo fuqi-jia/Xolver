@@ -17,17 +17,17 @@ std::optional<SolverAnswer> solveLinearArithmetic(const Problem &p) {
             integers.push_back(v.integer);
         bool unknown = false;
         for (const auto &branch : branches) {
-            optimization::LinearProgram lp;
+            ::xolver::optimization::LinearProgram lp;
             lp.variables = compiler.variables.size();
             std::vector<bool> strict;
             for (const auto &a : branch) {
                 lp.constraints.push_back({a.expression.coefficients, -a.expression.constant});
                 strict.push_back(a.strict);
             }
-            auto result = optimization::feasible(lp, strict, integers, budget);
-            if (result.status == optimization::Status::Infeasible)
+            auto result = ::xolver::optimization::feasible(lp, strict, integers, budget);
+            if (result.status == ::xolver::optimization::Status::Infeasible)
                 continue;
-            if (result.status == optimization::Status::Unknown) {
+            if (result.status == ::xolver::optimization::Status::Unknown) {
                 unknown = true;
                 continue;
             }

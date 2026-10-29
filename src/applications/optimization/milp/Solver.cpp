@@ -7,7 +7,7 @@ Answer Solver::solve(const Problem &problem) {
     Answer answer;
     WorkBudget budget(problem.workLimit);
     try {
-        optimization::LinearProgram lp;
+        ::xolver::optimization::LinearProgram lp;
         lp.variables = problem.variables.size();
         lp.objective = problem.objective;
         lp.offset = problem.objectiveOffset;
@@ -15,7 +15,7 @@ Answer Solver::solve(const Problem &problem) {
         std::vector<bool> integer;
         std::set<std::string> names;
         auto bound = [&](std::size_t variable, mpq_class value, bool lower) {
-            optimization::Row row{std::vector<mpq_class>(lp.variables), lower ? -value : value};
+            ::xolver::optimization::Row row{std::vector<mpq_class>(lp.variables), lower ? -value : value};
             row.coefficients[variable] = lower ? -1 : 1;
             lp.constraints.push_back(std::move(row));
         };
@@ -43,21 +43,21 @@ Answer Solver::solve(const Problem &problem) {
                 lp.constraints.push_back({std::move(row), -c.rhs});
             }
         }
-        auto result = optimization::solveMixedInteger(lp, integer, budget);
+        auto result = ::xolver::optimization::solveMixedInteger(lp, integer, budget);
         answer.assignment = std::move(result.point);
         answer.objectiveValue = std::move(result.value);
         switch (result.status) {
-        case optimization::Status::Optimal:
+        case ::xolver::optimization::Status::Optimal:
             answer.status = Status::Optimal;
             break;
-        case optimization::Status::Infeasible:
+        case ::xolver::optimization::Status::Infeasible:
             answer.status = Status::Infeasible;
             break;
-        case optimization::Status::Unbounded:
+        case ::xolver::optimization::Status::Unbounded:
             answer.status = Status::Unbounded;
             answer.objectiveValue.reset();
             break;
-        case optimization::Status::Unknown:
+        case ::xolver::optimization::Status::Unknown:
             answer.reason = "mixed-integer search budget exhausted";
             break;
         }

@@ -52,17 +52,17 @@ Answer solveLinear(const Problem &problem) {
             integers.push_back(v.integer);
         bool unknown = false;
         for (const auto &branch : branches) {
-            optimization::LinearProgram lp;
+            ::xolver::optimization::LinearProgram lp;
             lp.variables = compiler.variables.size();
             std::vector<bool> strict;
             for (const auto &a : branch) {
                 lp.constraints.push_back({a.expression.coefficients, -a.expression.constant});
                 strict.push_back(a.strict);
             }
-            auto witness = optimization::feasible(lp, strict, integers, budget);
-            if (witness.status == optimization::Status::Infeasible)
+            auto witness = ::xolver::optimization::feasible(lp, strict, integers, budget);
+            if (witness.status == ::xolver::optimization::Status::Infeasible)
                 continue;
-            if (witness.status == optimization::Status::Unknown) {
+            if (witness.status == ::xolver::optimization::Status::Unknown) {
                 unknown = true;
                 continue;
             }
@@ -81,20 +81,20 @@ Answer solveLinear(const Problem &problem) {
                 lp.objective = objectives[i].coefficients;
                 lp.offset = objectives[i].constant;
                 lp.maximize = problem.objectives[i].direction == Direction::Maximize;
-                auto result = optimization::solveMixedInteger(lp, integers, budget);
-                if (result.status == optimization::Status::Unknown) {
+                auto result = ::xolver::optimization::solveMixedInteger(lp, integers, budget);
+                if (result.status == ::xolver::optimization::Status::Unknown) {
                     unknown = true;
                     candidate.status = Status::Unknown;
                     break;
                 }
-                if (result.status == optimization::Status::Unbounded) {
+                if (result.status == ::xolver::optimization::Status::Unbounded) {
                     candidate.status = Status::Unbounded;
                     break;
                 }
-                if (result.status != optimization::Status::Optimal)
+                if (result.status != ::xolver::optimization::Status::Optimal)
                     throw std::logic_error("feasible optimization branch became infeasible");
                 candidate.objectiveValues.push_back(RealValue::fromMpq(*result.value));
-                optimization::Row fixed{lp.objective, *result.value - lp.offset};
+                ::xolver::optimization::Row fixed{lp.objective, *result.value - lp.offset};
                 lp.constraints.push_back(fixed);
                 strict.push_back(false);
                 for (auto &q : fixed.coefficients)
@@ -102,13 +102,13 @@ Answer solveLinear(const Problem &problem) {
                 fixed.rhs = -fixed.rhs;
                 lp.constraints.push_back(std::move(fixed));
                 strict.push_back(false);
-                auto attained = optimization::feasible(lp, strict, integers, budget);
-                if (attained.status == optimization::Status::Unknown) {
+                auto attained = ::xolver::optimization::feasible(lp, strict, integers, budget);
+                if (attained.status == ::xolver::optimization::Status::Unknown) {
                     unknown = true;
                     candidate.status = Status::Unknown;
                     break;
                 }
-                if (attained.status == optimization::Status::Infeasible) {
+                if (attained.status == ::xolver::optimization::Status::Infeasible) {
                     candidate.status = Status::InfimumNotAttained;
                     break;
                 }
