@@ -46,6 +46,22 @@ class ArchitectureTests(unittest.TestCase):
             "logic/first_order/Solver.h": '#include "applications/smt/Solver.h"',
             "applications/smt/Solver.h": "#pragma once"}))
 
+    def test_parallel_execution_is_independent_of_solver_applications(self):
+        self.assertEqual(self.inspect({
+            "parallel/Executor.h": "#pragma once",
+            "search/Worker.h": '#include "parallel/Executor.h"'}), [])
+        self.assertTrue(self.inspect({
+            "parallel/Executor.h": '#include "applications/maxsmt/Solver.h"',
+            "applications/maxsmt/Solver.h": "#pragma once"}))
+
+    def test_maxsmt_uses_injected_contracts_without_a_sibling_solver_dependency(self):
+        self.assertEqual(self.inspect({
+            "applications/maxsmt/Solver.h": '#include "contracts/DecisionOracle.h"',
+            "contracts/DecisionOracle.h": "#pragma once"}), [])
+        self.assertTrue(self.inspect({
+            "applications/maxsmt/Solver.h": '#include "applications/smt/Solver.h"',
+            "applications/smt/Solver.h": "#pragma once"}))
+
     def test_search_cannot_depend_on_application(self):
         self.assertTrue(self.inspect({
             "search/Test.h": '#include "applications/smt/Solver.h"',

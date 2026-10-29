@@ -9,6 +9,10 @@ set(XOLVER_BASE_SOURCES
     "base/Statistics.cpp"
 )
 
+set(XOLVER_PARALLEL_SOURCES
+    "parallel/ThreadPool.cpp"
+)
+
 set(XOLVER_IR_SOURCES
     "ir/NativeFeatures.cpp"
     "ir/NativeKind.cpp"
@@ -248,6 +252,7 @@ set(XOLVER_APPLICATIONS_SOURCES
     "applications/counting/Solver.cpp"
     "applications/cp/Solver.cpp"
     "applications/de/Solver.cpp"
+    "applications/maxsmt/Solver.cpp"
     "applications/milp/Solver.cpp"
     "applications/omt/Linear.cpp"
     "applications/omt/Optimize.cpp"

@@ -8,12 +8,18 @@ backend support does not restrict the shape of these contracts.
 | --- | --- | --- |
 | `smt` | Native assertions; sat/unsat/unknown and models | Arithmetic, UF, arrays, datatypes, finite BV combinations, FP predicates/concrete arithmetic and strings |
 | `omt` | Native objectives, priorities and exact objective values | Lexicographic Bool/BV and linear arithmetic optimization |
+| `maxsmt` | Hard formulas, rational weighted soft formulas, optimum/incumbent bounds | Exact bounded truth-pattern search with an injected theory backend |
 | `counting` | Native assertions and an explicit projected tuple | Exact Bool/BV and linear integer projection; infinite-domain detection |
 | `cp` | Native constraints, variable domains and global constraints | Domains, all-different, tables, element and cardinality constraints |
 | `milp` | Rational linear constraints, integer/continuous variables, bounds and objective | Exact rational simplex and integer branch and bound |
 | `sv/verification` | Conditions and transition systems | Symbolic reachable-region synthesis, candidate invariants, k-induction and certificate replay |
 | `sv/pa`, `sv/sl` | Presburger or explicit heap semantics | Integer elimination, heap entailments and simultaneous predicate induction |
 | `de/ode`, `de/pde` | Native equations, coordinates, parameters and derivative applications | Parametric polynomial solution search with exact substitution checks |
+
+The [MaxSMT API](maxsmt/README.md) uses the same injected decision contract without
+a dependency on the SMT or OMT application. The independent
+[parallel API](../parallel/README.md) supplies typed tasks and explicit worker
+widths; application clients can compose these interfaces.
 
 The CLI's SMT session supplies the stateful ground callback. The application
 headers also support direct C++ use; CP and verification-condition clients inject

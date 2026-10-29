@@ -13,16 +13,17 @@ ROOT = Path(__file__).resolve().parents[2]
 # they cannot leak into evidence checking, application orchestration or the IR.
 LAYERS = {
     "base": [],
+    "parallel": ["base"],
     "ir": ["base"],
     "contracts": ["base", "ir"],
     "algebra": ["base", "ir", "contracts"],
     "evidence": ["base", "ir", "contracts"],
     "frontend": ["base", "ir", "contracts", "algebra"],
-    "search": ["base", "ir", "contracts", "algebra", "evidence"],
-    "quantifiers": ["base", "ir", "contracts", "algebra", "search"],
-    "applications": ["base", "ir", "contracts", "algebra", "evidence", "search", "quantifiers"],
+    "search": ["base", "parallel", "ir", "contracts", "algebra", "evidence"],
+    "quantifiers": ["base", "parallel", "ir", "contracts", "algebra", "search"],
+    "applications": ["base", "parallel", "ir", "contracts", "algebra", "evidence", "search", "quantifiers"],
     "runtime": ["base", "ir", "contracts", "algebra", "evidence",
-                "frontend", "search", "quantifiers", "applications"],
+                "frontend", "parallel", "search", "quantifiers", "applications"],
 }
 INCLUDE = re.compile(r'^\s*#\s*include\s*[<"]([^">]+)[">]', re.M)
 
@@ -47,7 +48,7 @@ def inspect(root: Path = ROOT) -> tuple[dict, list[str]]:
             errors.append(f"PA still consumes the general compatibility vocabulary: {name}")
         if name.startswith("applications/"):
             parts = Path(name).parts
-            if len(parts) > 2 and parts[1] not in ("smt", "omt", "cp", "milp", "de", "sv", "counting"):
+            if len(parts) > 2 and parts[1] not in ("smt", "omt", "cp", "milp", "de", "sv", "counting", "maxsmt"):
                 errors.append(f"unowned application family: {name}")
         for include in INCLUDE.findall(text):
             if any(part in (".", "..") for part in include.split("/")):
