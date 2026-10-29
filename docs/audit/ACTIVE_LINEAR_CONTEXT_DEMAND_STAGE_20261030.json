@@ -1,0 +1,1144 @@
+{
+  "schema": "xolver-active-context-demand-stage/1",
+  "qualified_source": "037b3ab9be155b35f268ce921d944357d31cbc65",
+  "qualification": {
+    "source_head": "037b3ab9be155b35f268ce921d944357d31cbc65",
+    "source_manifest_sha256": "87ed2cfd5a6454e36bd1c39fc0515c51e4b13d8dc7bde0260fe1aa3a8b3a591d",
+    "checked_source_files": 506,
+    "submodule_pins": {
+      "third_party/SOMTParser": "b9063faeab2e89d87525432eaedb8f0a5b6eb1ea",
+      "third_party/cadical": "7b99c07f0bcab5824a5a3ce62c7066554017f641",
+      "third_party/libpoly": "3d5e6fbd98639cb0941b029e23ca17c0e3c4a80a"
+    },
+    "native": {
+      "lease": [
+        0
+      ],
+      "baseline_component_source_head": "766b8f9433ec0227f63facf3aae9a0085cafe50f",
+      "baseline_component_qualification_sha256": "144807a042f68692ce53b7464935f4f63bb32a770630b658b660a47fc556e2b7",
+      "probe_baseline_sha256": "2387ccff9f2d0d587c85ee4c30cfc9913c0cc325f6e643007dadc1523a2c4b4b",
+      "probe-baseline_rc": 0,
+      "overlay_rc": 0,
+      "configure_rc": 0,
+      "build_rc": 0,
+      "probe_candidate_sha256": "8e1fb597d340f4df33635bc309ddd427042764c638d501542521c786b570b5af",
+      "probe-candidate_rc": 0,
+      "fixed-values-unit_rc": 0,
+      "regression-nra_quadratic_known_factor_unsat_rc": 0,
+      "regression-nia_quadratic_known_factor_unsat_rc": 0,
+      "regression-nra_quadratic_zero_leading_sat_rc": 0,
+      "api-example_rc": 0,
+      "parallel-local_rc": 0,
+      "python-parallel_rc": 0,
+      "row-counters_rc": 0,
+      "targeted-unit_rc": 0,
+      "parser-tests_rc": 0,
+      "unit_rc": 0,
+      "checks_rc": 0
+    },
+    "binaries": {
+      "xolver": "7f30dc0c8b55f53135a0a9c7a422ded45339db807e8ab2bfc940935389427973",
+      "xolver-sv": "f32e7948cd2e603e1d05fa48fd397471464a5156e57f7d55215fbe6306ec581f"
+    },
+    "unit_binary_sha256": "e4dfdc074a33a30adc38331e1e00c79e6e439738eb681abbb993fc3fdba3afb8",
+    "logs": {
+      "build.log": "822abbd7b0f8a35ecbc3c6d8701d4f834c1d241618065575fce585e1454cce0c",
+      "targeted-unit.log": "e19607b0034e4c61e8061e82acb728ffa72cd1ab70ba41815cd903ec49fdbb02",
+      "parser-tests.log": "4bc0f695ccebcbe7c690b577d46359c97edf7b637002f0a1850d5aedf9a55350",
+      "unit.log": "afa1426aa402be4870ecd15be5bc5f0497894610bb68ca20bfd32f4e48c6f963",
+      "checks.log": "fb6f8da6c40fde94efe5d75ead97a556f173679848deee4f4ce1a2ce26fdb789",
+      "api-example.log": "369f5404dda928a96e17df08c4654d49eafb2621fdc13e8d8c4d3f0d484e24ce",
+      "parallel-local.log": "a31b6868ba36b0ca36324ae71c5716ab0a90679f09fe953788b2ed1f73767b06",
+      "python-parallel.log": "eb6adb284227451f84700f16d8d524f5b83929e529850d4c93fb4c9647730146",
+      "row-counters.log": "75d97e1719ed3e5282a14bac6c341c83c4c3b98c275296ff8ecc006d7dfd7ec4",
+      "fixed-values-unit.log": "e49becfa678203c4a91b4f95bb65cbe1ef3dffcce460acd40d92e5b7318d3374",
+      "probe-baseline.log": "7b48245df0515ea04bb1a2ca9ee590e9d1beb2c2840e5d63e558eee7d968d13f",
+      "probe-candidate.log": "5e62a9770f0a347889bbd35cbff619d6e9acfbf0bb35963adb4932ddfe88b456"
+    },
+    "protected_sets_used": false
+  },
+  "implementation": "Theories advertise whether they consume an active linear context through the existing internal interface; NIRA requests it. Checks without consumers avoid scanning/copying the registry. A consumer still receives one fresh shared snapshot per check, with current polarity and no persistent snapshot cache. Manual collection and public solver semantics are retained.",
+  "component": {
+    "reference": {
+      "seconds": 1.12996,
+      "checks": 256,
+      "atoms": 1024,
+      "queries": 262144
+    },
+    "candidate": {
+      "seconds": 7.8721e-05,
+      "checks": 256,
+      "atoms": 1024,
+      "queries": 0
+    },
+    "source_sha256": "eac4e3e118092c427a206edb7a28e342a760bb93b4c8e5e15e300e797406f541",
+    "reference_source": "766b8f9433ec0227f63facf3aae9a0085cafe50f",
+    "reference_module_matches_main": "d8768ce172aa4c3c0f215f29f4a88fd96ac30796",
+    "reference_theory_manager_sha256": "a773be5783ae7ef033fb20d2562bb490d7ef47e5b752968c6b570630861d3d52",
+    "boundary": "Passive component only; the whole-suite baseline is the frozen delivered main CLI in the formal record."
+  },
+  "acceptance": [
+    {
+      "name": "root-regressions",
+      "experiment": "24bbb6675094",
+      "run": "3b47f2bb99da",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "0"
+        ]
+      },
+      "commands_sha256": "4efcea040e86f248d678796252abb4bad468c3958de632edb01c0d3d10eaca2c",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "architecture",
+      "experiment": "24bbb6675094",
+      "run": "e5901e3f6fd5",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "1"
+        ]
+      },
+      "commands_sha256": "cb09a68823c0ca59d81979dc91ce2aca5a87c9f4664c69ac0d586dea4a537949",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "known-gaps",
+      "experiment": "24bbb6675094",
+      "run": "fe5559270c33",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "2"
+        ]
+      },
+      "commands_sha256": "0eb2f025e84840337c9037478df1ff6d1dbbd854ae8ca01844dfe31b9cd81987",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "affine",
+      "experiment": "24bbb6675094",
+      "run": "35a862a1f341",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "3"
+        ]
+      },
+      "commands_sha256": "4330c071d4dbc936336c7d025e1afabe9ab3b2418fdb6e9f824c21172ee0d4cd",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "linear",
+      "experiment": "24bbb6675094",
+      "run": "1d4154229474",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "4"
+        ]
+      },
+      "commands_sha256": "b0583929cf1a90b7d3aaa45061b85a191990f858add98a22be3e32838c7b3b13",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "partial",
+      "experiment": "24bbb6675094",
+      "run": "7cd2a3095c25",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "5"
+        ]
+      },
+      "commands_sha256": "576bcf0e8dd6d78e5ac24746d148ae5a6438333377658b3654a21e7adc4ea829",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "intervals",
+      "experiment": "24bbb6675094",
+      "run": "74c6029137ea",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "6"
+        ]
+      },
+      "commands_sha256": "18daafedbe59910f1eb739bb91be21ff626958dc075ec170f92a5774a5679b25",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "quick",
+      "experiment": "24bbb6675094",
+      "run": "15a77c869662",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "7"
+        ]
+      },
+      "commands_sha256": "77952ff2080f005fffef32b033ec8783112180b7b6044c46481d14e29bd2e68d",
+      "metrics": {
+        "checks": 3,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-alia",
+      "experiment": "24bbb6675094",
+      "run": "e29a2f1d3772",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "8"
+        ]
+      },
+      "commands_sha256": "1e79f16412a90f0db4f5eb90faeb7185b2c2e0b9d41f11d428501c47ac65b3ab",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-alra",
+      "experiment": "24bbb6675094",
+      "run": "df7c611dc6e6",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "9"
+        ]
+      },
+      "commands_sha256": "d14d98443cb708f4e6002e0c77f8b68bc1270b79b9cc443975244b5f30b3fa53",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-ania",
+      "experiment": "24bbb6675094",
+      "run": "c2e840584d27",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "10"
+        ]
+      },
+      "commands_sha256": "aa112c97b689e1432a68f046a9c62e6a90e32e5744487ee2fcc79a6769aa70f0",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-auflia",
+      "experiment": "24bbb6675094",
+      "run": "6d6ef301aebc",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "11"
+        ]
+      },
+      "commands_sha256": "dbc6a2aba0b8824262bee155b534c4db661d6eee3c06bf21b19c6f4d19dc7310",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-auflra",
+      "experiment": "24bbb6675094",
+      "run": "63efda23b492",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "12"
+        ]
+      },
+      "commands_sha256": "d723088769aa3e3b018839872310b178d50068e5c29ce1ab1403395fd31aa2cb",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-aufnia",
+      "experiment": "24bbb6675094",
+      "run": "a901b84b6718",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "13"
+        ]
+      },
+      "commands_sha256": "0ae90d2227f3923cc895297e8ff56ba86184540c5991986046f873bca67a9bb2",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-ax",
+      "experiment": "24bbb6675094",
+      "run": "49964b71b329",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "14"
+        ]
+      },
+      "commands_sha256": "33e4f4f57a60cba2936e2a04717d7c5d8ab0905c284ba6788f8a9724454b4bee",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-bool",
+      "experiment": "24bbb6675094",
+      "run": "d9992162b0e0",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "15"
+        ]
+      },
+      "commands_sha256": "c53745ef92233a086e13e7e019f229ad23a232015162bc0beefd8bff16b845d5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-dt",
+      "experiment": "24bbb6675094",
+      "run": "15ae15fcc12c",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "16"
+        ]
+      },
+      "commands_sha256": "19036ef6f5f73ed55eeecfbc7842495c1bfef46dbbe37d1e62c6268a3f28b791",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-euf",
+      "experiment": "24bbb6675094",
+      "run": "6e9c71672b2a",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "17"
+        ]
+      },
+      "commands_sha256": "e1480e3f0aea2020274c31da96ac0fd39b2273487a733e1153837662acd5afdd",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-idl",
+      "experiment": "ba933936fa0b",
+      "run": "d2866206e069",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "0"
+        ]
+      },
+      "commands_sha256": "f8b193515bd68aac82f24ebe14e3995c20a59bf4c1c166f9035f1d8f1241016e",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-lia",
+      "experiment": "ba933936fa0b",
+      "run": "bbe73ab97013",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "1"
+        ]
+      },
+      "commands_sha256": "c71afcffc6b1fe298b05f3d40ab48427de0cd02cf4db5b650f7b0ee5986833c8",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-lira",
+      "experiment": "ba933936fa0b",
+      "run": "e42fd9aab9a2",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "2"
+        ]
+      },
+      "commands_sha256": "5f70a32249fc2753af6fa2099f0a6bf794d869cad07ce3dfea7c2909af522bbd",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-lra",
+      "experiment": "ba933936fa0b",
+      "run": "29ac73dadc86",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "5"
+        ]
+      },
+      "commands_sha256": "9b7cd17ad9c8eaa132d35cd9a5d39158c0b374bc83d9a29985d85ab50e070bb8",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-nira",
+      "experiment": "ba933936fa0b",
+      "run": "8755c6480663",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "7"
+        ]
+      },
+      "commands_sha256": "1f83a5a33dfffee6241c8c3a3cd15cb3f101537975965e283810ed34e7b1d835",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-nra",
+      "experiment": "ba933936fa0b",
+      "run": "5f0d032417e5",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "8"
+        ]
+      },
+      "commands_sha256": "5e152d1a658d2883c84f09473e70cbca0f4561bf106c82b483574e6b07178583",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-quantifiers",
+      "experiment": "ba933936fa0b",
+      "run": "3092fe0b5c0d",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "9"
+        ]
+      },
+      "commands_sha256": "ad36a6d844173d21a7a11aa703daca47721b32a2bba2f626c3e6ce6c3dacb894",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-rdl",
+      "experiment": "ba933936fa0b",
+      "run": "5f9845534b13",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "10"
+        ]
+      },
+      "commands_sha256": "6f3ba1b5ad87332cde57416629283ac89da23d56959dbe0f11f60c1f9dc45724",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-sl",
+      "experiment": "ba933936fa0b",
+      "run": "b2f1aa2e2292",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "11"
+        ]
+      },
+      "commands_sha256": "dbb98367f3161eb48b67cc0c56bdbc310451c750fc57aa538b282fb8d4c4d79f",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-ufdtlia",
+      "experiment": "ba933936fa0b",
+      "run": "c66cf99b0a32",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "12"
+        ]
+      },
+      "commands_sha256": "893544f22e6dc75ed7d4bbb15438fe0cd656d34984d7ab7bed6e5dfccfeeef77",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-ufdtnia",
+      "experiment": "ba933936fa0b",
+      "run": "3bdf48f19397",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "13"
+        ]
+      },
+      "commands_sha256": "587ee06a3d2ed9232195d9de4be62dc02e1d8bf354429c673486e6e8ea859b04",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-uflia",
+      "experiment": "ba933936fa0b",
+      "run": "b67cef26b11c",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "14"
+        ]
+      },
+      "commands_sha256": "01022d8d689e89f9ac405deb6e299b597a041b3d04eb50f9322228c1195443e0",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-uflra",
+      "experiment": "ba933936fa0b",
+      "run": "741c3c45dcce",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "15"
+        ]
+      },
+      "commands_sha256": "f34e958e854f8851008a2b55f80eb9e8d7b6a7dcf17fcb16250eb230885a6a3e",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-ufnia",
+      "experiment": "ba933936fa0b",
+      "run": "9839bc3ded45",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "16"
+        ]
+      },
+      "commands_sha256": "1ca0b8c962906144c3699013869645033a774ba930c3726560d7575fe2d98f81",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-ufnra",
+      "experiment": "ba933936fa0b",
+      "run": "0fa6ba36b29d",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "17"
+        ]
+      },
+      "commands_sha256": "11f9c3229af10ca764035ee5b1f16ed9fbc26a3b3054d14c9949daa211b50e9b",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "theory-models",
+      "experiment": "ba933936fa0b",
+      "run": "dab8f0873e9f",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "18"
+        ]
+      },
+      "commands_sha256": "9f77e5b9c8fbc830de0b7064616de726ed7f98edea838a89069c1e11be122077",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-nia",
+      "experiment": "ba933936fa0b",
+      "run": "40bc20e8a724",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "19"
+        ]
+      },
+      "commands_sha256": "c66172e5199bae771aec18fae9ff12da7eb07dd241c34146ef0d222b0efdee9c",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "qcp",
+      "experiment": "ba933936fa0b",
+      "run": "81fa71007f6c",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "20"
+        ]
+      },
+      "commands_sha256": "6ce8ebc13fcbc80a117020a58126f60df8772bd6cdbcd7db14f85a3fb57f7de8",
+      "metrics": {
+        "checks": 3,
+        "failures": 0
+      }
+    },
+    {
+      "name": "certificate-115",
+      "experiment": "ba933936fa0b",
+      "run": "2716789e8db9",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "21"
+        ]
+      },
+      "commands_sha256": "21fbf990f52666c62db298f04bbbaaad6d757d7ea0c5545e4f7845d5eda99045",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    }
+  ],
+  "formal": {
+    "cases": 160,
+    "binaries": {
+      "baseline": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r697/xolver",
+        "sha256": "97f5b897ab377b9c029821584ed798666035cea30b240b6ca9894dc8bf64dc8f"
+      },
+      "candidate": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r717/xolver",
+        "sha256": "7f30dc0c8b55f53135a0a9c7a422ded45339db807e8ab2bfc940935389427973"
+      },
+      "z3": {
+        "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+        "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      }
+    },
+    "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+    "timeout": 60,
+    "memory_bytes": 17179869184,
+    "counts": {
+      "baseline": {
+        "unsat": 42,
+        "decided": 96,
+        "verified_decided": 96,
+        "verified_par2": 8021.0360495224595,
+        "raw_par2": 8021.0360495224595,
+        "timeout": 63,
+        "sat": 54,
+        "unknown": 1
+      },
+      "candidate": {
+        "unsat": 42,
+        "decided": 96,
+        "verified_decided": 96,
+        "verified_par2": 8013.761802541092,
+        "raw_par2": 8013.761802541092,
+        "timeout": 63,
+        "sat": 54,
+        "unknown": 1
+      },
+      "z3": {
+        "unsat": 58,
+        "decided": 125,
+        "verified_decided": 116,
+        "verified_par2": 5540.535536706448,
+        "raw_par2": 4561.472397699952,
+        "sat": 67,
+        "timeout": 35
+      }
+    },
+    "by_logic": {
+      "QF_LIA": {
+        "baseline": {
+          "unsat": 15,
+          "decided": 34,
+          "verified_decided": 34,
+          "verified_par2": 1886.7197038121521,
+          "raw_par2": 1886.7197038121521,
+          "timeout": 14,
+          "sat": 19
+        },
+        "candidate": {
+          "unsat": 15,
+          "decided": 34,
+          "verified_decided": 34,
+          "verified_par2": 1889.9629145432264,
+          "raw_par2": 1889.9629145432264,
+          "timeout": 14,
+          "sat": 19
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 39,
+          "verified_decided": 37,
+          "verified_par2": 1411.8959538154304,
+          "raw_par2": 1211.7304433770478,
+          "sat": 24,
+          "timeout": 9
+        }
+      },
+      "QF_NIA": {
+        "baseline": {
+          "timeout": 23,
+          "decided": 25,
+          "verified_decided": 25,
+          "verified_par2": 2813.698141813278,
+          "raw_par2": 2813.698141813278,
+          "unsat": 12,
+          "sat": 13
+        },
+        "candidate": {
+          "timeout": 23,
+          "decided": 25,
+          "verified_decided": 25,
+          "verified_par2": 2814.0123204030097,
+          "raw_par2": 2814.0123204030097,
+          "unsat": 12,
+          "sat": 13
+        },
+        "z3": {
+          "unsat": 22,
+          "decided": 34,
+          "verified_decided": 29,
+          "verified_par2": 2311.3960056770593,
+          "raw_par2": 1729.473136164248,
+          "sat": 12,
+          "timeout": 14
+        }
+      },
+      "QF_LRA": {
+        "baseline": {
+          "timeout": 16,
+          "decided": 16,
+          "verified_decided": 16,
+          "verified_par2": 1988.8070758599788,
+          "raw_par2": 1988.8070758599788,
+          "sat": 7,
+          "unsat": 9
+        },
+        "candidate": {
+          "timeout": 16,
+          "decided": 16,
+          "verified_decided": 16,
+          "verified_par2": 1977.9184686876833,
+          "raw_par2": 1977.9184686876833,
+          "sat": 7,
+          "unsat": 9
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 26,
+          "verified_decided": 25,
+          "verified_par2": 882.4914963282645,
+          "raw_par2": 805.2507911399007,
+          "sat": 11,
+          "timeout": 6
+        }
+      },
+      "QF_NRA": {
+        "baseline": {
+          "sat": 15,
+          "decided": 21,
+          "verified_decided": 21,
+          "verified_par2": 1331.8111280370504,
+          "raw_par2": 1331.8111280370504,
+          "unsat": 6,
+          "timeout": 10,
+          "unknown": 1
+        },
+        "candidate": {
+          "sat": 15,
+          "decided": 21,
+          "verified_decided": 21,
+          "verified_par2": 1331.8680989071727,
+          "raw_par2": 1331.8680989071727,
+          "unsat": 6,
+          "timeout": 10,
+          "unknown": 1
+        },
+        "z3": {
+          "sat": 20,
+          "decided": 26,
+          "verified_decided": 25,
+          "verified_par2": 934.7520808856934,
+          "raw_par2": 815.0180270187557,
+          "timeout": 6,
+          "unsat": 6
+        }
+      }
+    },
+    "changes": [],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "unverified": [
+      {
+        "index": 12,
+        "case": "QF_LIA/fft/Sz128_2823.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 24,
+        "case": "QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 27,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 42,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep2a.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 50,
+        "case": "QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_jain_5.i_2_4_3.bpl_7.smt2",
+        "results": {
+          "z3": "unsat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 80,
+        "case": "QF_LIA/cut_lemmas/20-vars/cut_lemma_03_004.smt2",
+        "results": {
+          "z3": "unsat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 114,
+        "case": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 122,
+        "case": "QF_NIA/20250331-elster/D_1.smt2",
+        "results": {
+          "z3": "sat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "model query did not return SAT"
+        }
+      },
+      {
+        "index": 159,
+        "case": "QF_NRA/20161105-Sturm-MGC/mgc_07.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      }
+    ],
+    "scoring": "Correct verdicts require a replayed model or an independent UNSAT decision on the identical input hash; unresolved results receive PAR-2 penalty.",
+    "supplementary_certificate": {
+      "index": 115,
+      "sha256": "48f5d0ca9b19679a48f3248ac1183c31d09e0c198bfda0a70b3b4272b6d1a5ba",
+      "check": {
+        "status": "checked-unsat",
+        "input_sha256": "02a58b11df8951543940a1090a140592e24de41dcaeb6470e7a50d42e804be64",
+        "assertion": 9,
+        "path": [
+          2
+        ],
+        "checked_residues": 12
+      },
+      "boundary": "Independent truth evidence only; timed observations unchanged."
+    },
+    "supplementary_sat_witnesses": [
+      {
+        "record_sha256": "90ba535b02f2e5b493f524f9563333d8046f3c87094c5e8903843bb20f534136",
+        "record": {
+          "index": 94,
+          "input_sha256": "a6b68604187a341c570d8bd76135552ece1bbf958a1d7e9d4ff7f3eae998fd8f",
+          "current_report_sha256": "1fcf2fd3c00172e16bc926adbaafb999c562a23d0cb99a608815f54b0c2849c9",
+          "model_origin": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r692/case-094/z3-model.stdout",
+          "model_sha256": "6236638ba899c1b28ca4caaf5c00c781e8bbe8ce9c8f48b6a68ac4800c308a21",
+          "model_report_sha256": "580023e20a17ae4176a1f1eb734e98cece1a7d677d7b836a95bb7bffcbaa0522",
+          "original_symbols": 47343,
+          "ignored_model_private_bindings": 247,
+          "selected_values": "Every original symbol is nullary Int/Bool with a checked ground literal; no selected value depends on ignored model-private syntax.",
+          "replay_sha256": "56e5f92326bbd1255c2aadb0f7ec36911c5ca421d20438cf8158c1da8f7bd49b",
+          "oracle_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+          "command": [
+            "prlimit",
+            "--as=17179869184",
+            "--cpu=62:63",
+            "--",
+            "/pub/data/jiafq/xolver/dependencies/oracles/cvc5",
+            "--lang=smt2",
+            "--tlimit=60000",
+            "/pub/data/jiafq/xolver/validation/arithmetic-r103/model-replay-r730/case-094/replay.smt2"
+          ],
+          "result": "sat",
+          "timing": {
+            "seconds": 2.9241275526583195,
+            "launch_seconds": 0.002943640574812889,
+            "wait_seconds": 2.9211839120835066,
+            "returncode": 0,
+            "timeout_notified_seconds": null,
+            "cleanup_seconds": null,
+            "timed_out": false,
+            "budget_overrun": false
+          },
+          "verified": true,
+          "boundary": "Supplementary truth on the same original input hash. All original assertions retained. Timed solver verdicts, get-model limitations, resource budgets and observations are unchanged."
+        }
+      }
+    ]
+  },
+  "timing_changes": [
+    {
+      "index": 18,
+      "result": "unsat",
+      "baseline_seconds": 48.89329503104091,
+      "candidate_seconds": 50.20225506275892
+    },
+    {
+      "index": 59,
+      "result": "sat",
+      "baseline_seconds": 51.23510529100895,
+      "candidate_seconds": 41.027876142412424
+    }
+  ],
+  "source_eligibility": {
+    "mode": "R717 native qualification checked every manifest member; all37 acceptance groups verified that complete snapshot under shared source locks before the R721 writer started. The current export is its separately qualified R721 descendant, without rebuilding or adding a current-main archive.",
+    "advanced_manifest_sha256": "2d6b2b80219815b0a769c35bd3bb6f54510aba600f7eaee71293d65959ff1f28",
+    "advanced_qualification_sha256": "0f32c009897a99542bb095d1207af96a4f1cf3fc59b94c6ed1c7c8b063bba976",
+    "advanced_source_head": "4edd86344fadd59c464bdaa4b4487ea94e4f5b4d",
+    "recorded_descendant_changes": [
+      "src/applications/satisfiability/smt/qfnia/NiaSolver_refute.cpp",
+      "src/applications/satisfiability/smt/qfnra/NraSolver_stages.cpp",
+      "src/sources.cmake"
+    ]
+  },
+  "excluded_invalid_timing": [
+    {
+      "run": {
+        "id": "7a9777671f1e",
+        "experiment_id": "fa1230f21dcc",
+        "trial_id": "0101c8c0db06",
+        "stage_id": "d0c53491c927",
+        "run_key": "aa110b15fca0",
+        "input": "58",
+        "seed": null,
+        "cmd": "taskset -c \"$EOS_CPU_IDS\" python3 tools/remote/compare_arithmetic_case.py --manifest validation/z3-gap-setup-r32-20261026/fixed160-60s.json --baseline /pub/data/jiafq/xolver/validation/arithmetic-r103/core-r697/xolver --candidate /pub/data/jiafq/xolver/validation/arithmetic-r103/core-r717/xolver --z3 /pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2 --cvc5 /pub/data/jiafq/xolver/dependencies/oracles/cvc5 --output validation/arithmetic-r103/fair-r722 --index 58 --validate-models && test -s \"$EOS_METRICS_FILE\"",
+        "status": "failed",
+        "host": "panda1",
+        "workdir": "/pub/data/jiafq/eos/runs/xolver-demanded-context-r722c-full-20261030/7a9777671f1e",
+        "pid": 1352148,
+        "exit_code": 1,
+        "attempt": 0,
+        "infra_attempt": 0,
+        "created_at": "2026-10-29T20:27:24+00:00",
+        "started_at": "2026-10-29T20:27:25+00:00",
+        "ended_at": "2026-10-29T20:31:15+00:00",
+        "duration_s": 230.364416,
+        "metrics_json": "{\"cases\": 1, \"wrong\": 0, \"errors\": 0, \"protocol_errors\": 3}",
+        "checks_json": "[{\"expr\": \"cases == 1\", \"passed\": true, \"detail\": \"\"}, {\"expr\": \"wrong == 0\", \"passed\": true, \"detail\": \"\"}, {\"expr\": \"errors == 0\", \"passed\": true, \"detail\": \"\"}, {\"expr\": \"protocol_errors == 0\", \"passed\": false, \"detail\": \"\u5b9e\u9645 protocol_errors=3\uff0c\u671f\u671b == 0\"}]",
+        "h_actual_json": "{\"hostname\": \"panda1.ios.ac.cn\", \"nproc\": 256, \"kernel\": \"7.0.0-15-generic\", \"started_at\": \"2026-10-30T04:27:25+08:00\", \"cwd\": \"/pub/data/jiafq/xolver\", \"run_dir\": \"/pub/data/jiafq/eos/runs/xolver-demanded-context-r722c-full-20261030/7a9777671f1e\", \"user\": \"jiafq\", \"cuda_visible_devices\": \"\", \"eos_cpu_ids\": \"7\", \"cpus_allowed_list\": \"0-255\"}",
+        "log_tail": "",
+        "error": "",
+        "input_meta_json": "{}",
+        "resources_json": "{\"cpu_slots\": 1, \"cpu_ids\": [\"7\"]}"
+      },
+      "report_sha256": "fd9fc12c4d3e827e3d18b02c08600d9fbf30bfd2794affc470138d99bf274ec4",
+      "protocol_errors": [
+        {
+          "label": "candidate",
+          "seconds": 66.85236007161438,
+          "launch_seconds": 0.002309223636984825,
+          "wait_seconds": 66.8500508479774,
+          "returncode": -9,
+          "timeout_notified_seconds": 66.84131316654384,
+          "cleanup_seconds": 0.01104690507054329,
+          "timed_out": true,
+          "budget_overrun": true
+        },
+        {
+          "label": "z3",
+          "seconds": 87.14192427881062,
+          "launch_seconds": 0.001825215294957161,
+          "wait_seconds": 87.14009906351566,
+          "returncode": -9,
+          "timeout_notified_seconds": 87.13088327087462,
+          "cleanup_seconds": 0.011041007936000824,
+          "timed_out": true,
+          "budget_overrun": true
+        },
+        {
+          "label": "baseline",
+          "seconds": 66.227239895612,
+          "launch_seconds": 0.001851733773946762,
+          "wait_seconds": 66.22538816183805,
+          "returncode": -9,
+          "timeout_notified_seconds": 66.21921813674271,
+          "cleanup_seconds": 0.008021758869290352,
+          "timed_out": true,
+          "budget_overrun": true
+        }
+      ]
+    }
+  ],
+  "retry_boundary": "Only the all-three-version budget-overrun input58 row is replaced by a complete fresh triad with identical frozen versions and budgets. Every valid original row is unchanged.",
+  "initial_fixture_failures": {
+    "records": {
+      "core-r711/metrics.json": {
+        "path": "core-r711/metrics.json",
+        "sha256": "dd8e20cc8cb62e82bac84311c9790799809393bc7fac663bfafc8347225b4ad9"
+      },
+      "diagnose-r714/record.json": {
+        "path": "diagnose-r714/record.json",
+        "sha256": "3bab53b3c9fc140b9e6997195ce1d5a08b72ea843d800ecf0d6742e8743dc809"
+      },
+      "diagnose-r716/record.json": {
+        "path": "diagnose-r716/record.json",
+        "sha256": "0784924fd05764ea5208704363b2fad0af3eb411a4154e6b38b2c582e340329a"
+      },
+      "diagnose-r716/consistent.stderr": {
+        "path": "diagnose-r716/consistent.stderr",
+        "sha256": "1642290403ffda6ce13934c0dd1bfef9534bdbc89056494f25852ff8992f080c"
+      }
+    },
+    "cause": "The standalone component and first unit fixture omitted the required SAT context for TheoryAtomRegistry, causing a null dereference before candidate overlay. An intermediate diagnostic also omitted LIBRARY_PATH. The corrected fixture and compiler flags qualify in R717; all failed attempts remain preserved."
+  },
+  "earlier_rejected_experiment": {
+    "path": "stage-r718.json",
+    "sha256": "e9cde153ccaaab030fad09a98f3a8e286f2ca7e186ab860bbb2a9afb6bb55a97",
+    "separate_from_this_implementation": true
+  },
+  "audit": {
+    "experiment": "1cc496dd87f2",
+    "path": "validation/arithmetic-r103/stage-r728.json",
+    "sha256": "797391ad86c1325ebda2abc47b6df6644347ddea79d2ee31ee05bcf01cb806cd"
+  },
+  "selected_for_delivery": true,
+  "above_z3": false,
+  "protected_sets_used": false,
+  "end_to_end_qcp_superiority": false,
+  "extra_current_main_server_archive_required": false
+}

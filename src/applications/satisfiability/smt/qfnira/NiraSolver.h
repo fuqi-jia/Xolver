@@ -31,6 +31,8 @@ public:
 
     TheoryCheckResult check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) override;
 
+    bool needsActiveLinearContext() const override { return true; }
+
     void setActiveLinearContext(const std::vector<ActiveLinearConstraint>* context) override {
         activeLinearContext_ = context;
     }

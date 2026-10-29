@@ -53,6 +53,11 @@ public:
     // -----------------------------------------------------------------------
     // Active linear context for nonlinear solvers (optional; default = no-op)
     // -----------------------------------------------------------------------
+    // Consumers request the current snapshot explicitly. The manager can skip
+    // scanning and copying every registered atom when nobody reads it. A solver
+    // that reads the context must override this query as well as the setter.
+    virtual bool needsActiveLinearContext() const { return false; }
+
     virtual void setActiveLinearContext(const std::vector<ActiveLinearConstraint>* context) {
         (void)context;
     }
