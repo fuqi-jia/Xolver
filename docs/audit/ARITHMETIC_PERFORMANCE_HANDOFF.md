@@ -41,11 +41,11 @@ Older tables describe their own frozen versions and evidence boundaries.
 ## Current arithmetic and ASP continuation
 
 The latest qualified arithmetic stage is
-[consumer-directed active context](#consumer-directed-active-linear-context-r717r719r722r728):
-96/160, versus 116 verified / 125 raw same-round Z3 decisions. Earlier receipts
+[shared polynomial sign closure](#shared-polynomial-sign-closure-r721r723r726r733):
+97/160, versus 117 verified / 125 raw same-round Z3 decisions. Earlier receipts
 below retain their original snapshot and evidence boundaries.
 
-[PR70](https://github.com/fuqi-jia/Xolver/pull/70) delivered this stage as main
+[PR70](https://github.com/fuqi-jia/Xolver/pull/70) delivered quadratic sign refutation as main
 `d8768ce172aa4c3c0f215f29f4a88fd96ac30796`. Both its
 [PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/40937654370) and fresh,
 exact-head [main push CI](https://github.com/fuqi-jia/Xolver/actions/runs/40941544646)
@@ -2117,3 +2117,71 @@ unchanged. Initial fixture/diagnostic failures and the successful source-chain
 audit R728 are preserved. The export has since advanced to the separately
 qualified sign-closure candidate; the frozen R717 binding needs no rebuild or
 additional current-main archive. Neither protected set has been evaluated.
+
+
+## Shared polynomial sign closure (R721/R723/R726/R733)
+
+The [stage record](POLYNOMIAL_SIGN_CLOSURE_STAGE_20261030.json) binds source
+`4edd86344fadd59c464bdaa4b4487ea94e4f5b4d`, the source-r721 overlay and every
+frozen executable, native log, acceptance group and formal input hash.
+The later merge of the context-demand documentation changes no qualified code.
+
+The generic `search/refute/PolynomialSignClosure` pass is shared by NIA and NRA.
+It propagates exact polynomial signs, derives common factors that must be
+nonzero for a strict sum, cancels factors only under explained nonzero guards,
+retains strict affine endpoints, substitutes exact fixed rationals and uses
+identities `p = divisor*quotient + remainder` with constant-leading affine
+divisors. A conflict includes its original SAT reason literals. All state is
+local to a bounded invocation; exhaustion leaves the obligation open. Integer
+and real clients use the same real-valid rules, preserving zero-factor cases.
+
+On original fixed160 input37, the old path spends most post-portfolio samples
+in CDCAC projection and subresultants. A nonzero-support chain now refutes all
+three Boolean branches. The component takes 3.3–6.1ms per branch; independent
+Z3 checks each returned reason subset as UNSAT. The actual original-file trace
+records four sign conflicts taking 3.7–5.9ms. Whole-query time remains about
+20.1s because the eager bounded SAT finder runs first; those diagnostic samples
+are excluded from performance scores.
+
+Panda1/ExperimentOS native qualification `ab83a5c7e2a0` passes **1,789 unit
+cases / 879,143 assertions**, including seven new cases / 1,338 assertions,
+96 generated exact rational SAT witnesses, six targeted SMT regressions,
+63 parser cases, architecture/evidence/harness checks and API/parallel checks.
+All **37** fresh whole-source acceptance groups in R727 pass. Compilation uses
+the unique serialized build directory; acceptance verifies every manifest file
+under a shared source lock.
+
+Fresh formal R723/R726 compares frozen context-demand baseline and candidate
+with the same Z3, rotating each case's versions on its one EOS physical CPU:
+**60 seconds, 16GiB per solver**. R733 independently audits all 160 original
+reports; there are no excluded timing rows or retries in this round.
+
+| Frozen version | Verified | SAT | UNSAT | Unknown | Timeout | Verified PAR-2 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Context-demand baseline | 96 | 54 | 42 | 1 | 63 | 8005.205803 |
+| Shared sign closure | **97** | 54 | 43 | 1 | 62 | **7902.244466** |
+| Same-round Z3 | 117 / 125 raw | 67 | 58 | 0 | 35 | 5438.703380 |
+
+The sole gained result is input37: baseline timeout, candidate **UNSAT20.124730s**,
+independent Z3 UNSAT0.167907s. There are **zero lost solutions, opposite
+verdicts, invalid exported models or protocol failures**. Input4 SAT moves
+32.69→34.64s; input18 UNSAT47.29→44.05s; input59 SAT37.15→34.55s. The PAR-2
+reduction is102.96s, principally the newly verified solution's removed penalty.
+
+Original input115 remains checked by the exact modular certificate. Input94's
+47,343 original ground integer/Boolean interpretations are freshly replayed in
+cvc5 with all original assertions; unused model-private syntax is excluded only
+after confirming selected values contain no such references. Same-round
+input122's ordinary exported-model replay now succeeds independently, raising
+Z3's verified score from the previous round's116 to117. The eight remaining
+unconfirmed UNSATs (**12,24,27,42,50,80,114,159**) are excluded from verified
+counts and receive the PAR-2 penalty. Timed observations are never replaced by
+supplementary truth checks.
+
+The frozen candidate CLI SHA-256 is
+`db4293e9a72e054cf13c4ffdbb1491c45d1ddbd4e239e6d3d229a8f86bbdd931`;
+baseline is`7f30dc0c8b55f53135a0a9c7a422ded45339db807e8ab2bfc940935389427973`.
+This closes one real gap and does **not** establish superiority over Z3 or
+whole-program QCP performance. Neither protected set has been inspected or run.
+Server qualification is complete; PR CI, merge and fresh main CI receipts
+remain pending. No extra current-main server archive is required.
