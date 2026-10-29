@@ -7,6 +7,20 @@ API contracts are described in [the architecture reference](../ARCHITECTURE.md),
 named source snapshots and binaries; they do not establish general completeness
 or performance superiority.
 
+Application API continuation: [PR66](https://github.com/fuqi-jia/Xolver/pull/66)
+groups SAT/SMT under `satisfiability`, MaxSAT/MaxSMT/CP/MILP/OMT under
+`optimization`, PA/SL/model checking under `verification`, projected counting
+under `counting`, and ODE/PDE under `dynamics`. Canonical includes and namespaces
+move together; retired application paths and transition-only APIs are deleted.
+See the PR for source bindings, server acceptance and CI receipts.
+
+Optional MPI, Spark, Dask, CUDA, HIP and OpenACC execution backends all default
+OFF. The runnable task protocol and worker APIs are described in
+[parallel execution](../../src/parallel/README.md). Device execution verification
+must distinguish OpenACC host execution from CUDA/HIP hardware execution.
+This API stage makes no fixed160, protected-set or end-to-end QCP superiority claim.
+The cancelled `validation/current-main.json` server archive remains unnecessary.
+
 Latest functional delivery: [complete GCD coverage](#complete-gcd-backend-coverage-r588r606)
 ([PR62](https://github.com/fuqi-jia/Xolver/pull/62)) and
 [exact linear phases with a decision interface](#exact-linear-phases-and-decision-interface-r596r608)
