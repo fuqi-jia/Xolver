@@ -669,5 +669,15 @@
   "above_z3": false,
   "protected_sets_used": false,
   "end_to_end_qcp_superiority": false,
-  "extra_current_main_server_archive_required": false
+  "extra_current_main_server_archive_required": false,
+  "delivery": {
+    "pr": 70,
+    "merge_sha": "d8768ce172aa4c3c0f215f29f4a88fd96ac30796",
+    "pr_ci": "https://github.com/fuqi-jia/Xolver/actions/runs/40937654370",
+    "main_ci": "https://github.com/fuqi-jia/Xolver/actions/runs/40941544646",
+    "pr_ci_both_jobs": "success",
+    "main_ci_both_jobs": "success",
+    "main_event": "push",
+    "extra_current_main_server_archive_required": false
+  }
 }

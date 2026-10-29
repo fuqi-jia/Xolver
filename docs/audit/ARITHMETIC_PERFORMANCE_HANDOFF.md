@@ -41,9 +41,16 @@ Older tables describe their own frozen versions and evidence boundaries.
 ## Current arithmetic and ASP continuation
 
 The latest qualified arithmetic stage is
-[explained quadratic sign refutation](#explained-quadratic-sign-refutation-r697r700r706):
+[consumer-directed active context](#consumer-directed-active-linear-context-r717r719r722r728):
 96/160, versus 116 verified / 125 raw same-round Z3 decisions. Earlier receipts
 below retain their original snapshot and evidence boundaries.
+
+[PR70](https://github.com/fuqi-jia/Xolver/pull/70) delivered this stage as main
+`d8768ce172aa4c3c0f215f29f4a88fd96ac30796`. Both its
+[PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/40937654370) and fresh,
+exact-head [main push CI](https://github.com/fuqi-jia/Xolver/actions/runs/40941544646)
+are fully green. The source, frozen binary and acceptance bindings below remain
+valid; no additional current-main server archive is required.
 
 [PR67](https://github.com/fuqi-jia/Xolver/pull/67) is merged as main
 `e7c7917c9a9c997a8649ad736c8548f4de186bca`, after its
@@ -2058,3 +2065,55 @@ timed observation, and excludes the remaining eight unconfirmed UNSATs and
 unconfirmed SAT122. No valid timed row is replaced or rerun. Neither protected
 set was read, and no end-to-end QCP speed win or extra current-main archive is
 claimed or required.
+
+
+## Rejected sparse tableau batching (R707/R709/R710/R718)
+
+The [closed experiment](SPARSE_TABLEAU_BATCHING_REJECTED_20261030.json) replaces
+per-coefficient pivot lookups with a reusable row-position index, with a direct
+lookup path when a wide row changes in only a few columns. R709 passes 1,783 unit
+cases / 1,315,472 assertions and 30 focused cases / 583,912 assertions. Three
+paired component runs show about 2–6% faster common shapes and about 3.5% slower
+wide sparse updates.
+
+The fresh frozen 16-input comparison verifies **5 results for each version**,
+with no gains, losses, opposite verdicts, invalid models or timing failures.
+Verified PAR-2 changes from 1394.423 to 1391.620 seconds; the main linear gaps
+remain timeouts. This does not justify expanding to another full160 round or
+merging the experiment. Its code remains unmerged. R718 preserves the complete
+timing, model, source and binary records; neither protected set was accessed.
+
+
+## Consumer-directed active linear context (R717/R719/R722/R728)
+
+The [qualified implementation](ACTIVE_LINEAR_CONTEXT_DEMAND_STAGE_20261030.json)
+declares context consumption through the internal theory interface. NIRA
+requests the current active linear constraints; checks without a consumer avoid
+scanning and copying the registry. Each consuming check still receives one fresh
+snapshot, including negated relations, with no snapshot retained across checks.
+The explicit collection API and LRA/LIA backtracking policies are preserved.
+
+R717 passes **1,782 unit cases / 877,805 assertions**, 63 parser tests and all
+structural/API checks. R724 passes all **37 server acceptance groups**, including
+QCP and independent model checks. In a 256-check passive component, SAT-assignment
+reads fall from 262,144 to zero; its timing is not a whole-solver speed claim.
+
+| Frozen version | Verified | SAT | UNSAT | Unknown | Timeout | Verified PAR-2 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| PR70 main | 96 | 54 | 42 | 1 | 63 | 8021.036 |
+| Context demand | 96 | 54 | 42 | 1 | 63 | 8013.762 |
+| Z3 | 116 | 67 raw | 58 raw | 0 | 35 | 5540.536 |
+
+The complete fresh round has no verified gains or losses. SAT59 improves from
+51.235 to 41.028 seconds with a checked model; the whole-suite PAR-2 change is
+small and does not establish superiority. Eight Z3 UNSATs and SAT122 remain
+unconfirmed and excluded. R730 freshly checks the existing input94 witness on
+the identical original hash; timed observations and model-query limits remain.
+
+Input58's first three timing observations overrun the budget and are retained
+but excluded. R731 repeats the complete triad with identical frozen binaries and
+60-second / one-physical-core / 16-GiB budgets; every valid original row remains
+unchanged. Initial fixture/diagnostic failures and the successful source-chain
+audit R728 are preserved. The export has since advanced to the separately
+qualified sign-closure candidate; the frozen R717 binding needs no rebuild or
+additional current-main archive. Neither protected set has been evaluated.
