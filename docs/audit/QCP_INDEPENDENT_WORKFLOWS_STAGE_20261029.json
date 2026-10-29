@@ -1,0 +1,134 @@
+{
+  "schema": 1,
+  "unique_programs": 1,
+  "independent_program_workflows": 2,
+  "program_contract": "Return is at least each of x,y,z with the original emp contract; no exact-maximum membership claim",
+  "source_sha256": "7ddaa9f590cd9c37d3dd644ea280ecd3fa6cee084441c82caf9c0e1afb6dde5d",
+  "queries": [
+    [
+      "max3_return_wit_1",
+      [
+        "f064627b550e597ad08e4589ced7c5160fc3a4f3d69973e9fe2674cf97ecd870",
+        "979b413fe8b47c8df5241b3c03795508dd2f6cc1896f170475b7af02ee13f0c3",
+        "fb066b36f2624b6eefb0dbb45dbd2259ae7929ef5c42cbac9d6bf6d1532d2b24"
+      ]
+    ],
+    [
+      "max3_return_wit_2",
+      [
+        "93d7925a5b0c7f698a88cffaf98d0c7046eda40a76e86d998b28d796fd9975e2",
+        "c53500da24ba2db86c31486e0c5259727aed35c4ba0cec9ac740c29610b29db9",
+        "c2957da837c52279eb135f557cee6221ea970c5001c1862337a6b15c9a4ca23f"
+      ]
+    ],
+    [
+      "max3_return_wit_3",
+      [
+        "c5de621088d14a211ebdd22747f796913604ca364cc9b09db7681825acd14e53",
+        "cdab1bff386de5b7136687c1b4f568bb000df43c60b1888e80acb2d4489cf24b",
+        "911672e46998c6f15b2e37d1909533762c059c5ab740d33f2a5d2c1a129002d0"
+      ]
+    ],
+    [
+      "max3_return_wit_4",
+      [
+        "3b546413f032353bb393509809a406b604edf7279274bb633b0d9bebc60672be",
+        "766c24cb56a1d76efa199d944c2fd8db21d0d1b95c6808d4c9ee97b638843b55",
+        "8fcdbb10cd0948f43ffcd749d48405bcc16cc5b3ba17efa5be7d4b9cbfe4400c"
+      ]
+    ]
+  ],
+  "records": {
+    "A": {
+      "backend": "xolver",
+      "run": "max3_pairA_r462-20261029015952",
+      "audit": {
+        "schema": 1,
+        "program_verified": true,
+        "backend_qualified": true,
+        "programs": 1,
+        "verification_conditions": 4,
+        "verified_vcs": 4,
+        "external_backend_queries": 12,
+        "external_unsat": 12,
+        "external_query_seconds": 0.4042081255465746,
+        "external_query_scope": "Supplied backend reports only; absent reports do not establish zero total calls",
+        "opaque_internal_qcp_queries": null,
+        "errors": [],
+        "backend_errors": [],
+        "hashes": {
+          "goal": "fbfdbcda4ce02d4e7c4ea5ee06b4912eb24b80c0702b1f800655ea029735c162",
+          "proofs": {
+            "/pub/data/jiafq/xolver/dependencies/qcp-08cc7a0f/Rocq/examples/QCP_demos_human/simple_arith/max3_pairA_r462_proof_auto.v": "aad8f2e026408ca5a1f0db9e414b98df7b28e000be06110cccde04b157caa52d",
+            "/pub/data/jiafq/xolver/dependencies/qcp-08cc7a0f/Rocq/examples/QCP_demos_human/simple_arith/max3_pairA_r462_proof_manual.v": "eb90cd318aba3d7eab9ef08607e6a1e263da86b6515d00d6286f5a1f2eda3bb4"
+          },
+          "final_check": "8e59344572f4d743c897ea8d0182ade94d453bf67d2b85f12bf5ecc789eac499",
+          "state": "ee393cff0c73daaafebbc855169d3cbed9b8299b61194634b46847be20cf9c6d",
+          "backend_reports": {
+            "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-pair-r462/A/backend/report.json": "7af8f5f5a25c2b94cb702d2cc2ae4df1dc6300e0200ca4c62a5b4b7ac6f29ec3"
+          }
+        },
+        "evidence_boundary": "Consumes an authenticated canonical controller final-check plus current proof coverage; does not replace Rocq. Pinned QCP frontend and libraries remain the common trusted base. This is qualification, not a timed program performance comparison."
+      },
+      "final_check": {
+        "job": "20261028184031-qcp-pair-r462-final-check-A-147aed",
+        "experiment": "a996a4b1829a",
+        "run": "fe66868c63b2",
+        "sha256": "8e59344572f4d743c897ea8d0182ade94d453bf67d2b85f12bf5ecc789eac499",
+        "seconds": 26.48603936471045,
+        "cpu": [
+          "0"
+        ]
+      },
+      "state_sha256": "ee393cff0c73daaafebbc855169d3cbed9b8299b61194634b46847be20cf9c6d",
+      "backend_report_sha256": "7af8f5f5a25c2b94cb702d2cc2ae4df1dc6300e0200ca4c62a5b4b7ac6f29ec3"
+    },
+    "B": {
+      "backend": "z3",
+      "run": "max3_pairB_r462-20261029015958",
+      "audit": {
+        "schema": 1,
+        "program_verified": true,
+        "backend_qualified": true,
+        "programs": 1,
+        "verification_conditions": 4,
+        "verified_vcs": 4,
+        "external_backend_queries": 12,
+        "external_unsat": 12,
+        "external_query_seconds": 0.40763123519718647,
+        "external_query_scope": "Supplied backend reports only; absent reports do not establish zero total calls",
+        "opaque_internal_qcp_queries": null,
+        "errors": [],
+        "backend_errors": [],
+        "hashes": {
+          "goal": "fbfdbcda4ce02d4e7c4ea5ee06b4912eb24b80c0702b1f800655ea029735c162",
+          "proofs": {
+            "/pub/data/jiafq/xolver/dependencies/qcp-08cc7a0f/Rocq/examples/QCP_demos_human/simple_arith/max3_pairB_r462_proof_auto.v": "eb6745cfd8fcb4c4c936b7adc83867b23549e2c0c159a73ecc31e3310fb20263",
+            "/pub/data/jiafq/xolver/dependencies/qcp-08cc7a0f/Rocq/examples/QCP_demos_human/simple_arith/max3_pairB_r462_proof_manual.v": "e744c6e475f526880264536bb7b9b1c27e7a468f2b3af4de8eef6bd798177c1a"
+          },
+          "final_check": "41947e14fdb36f505edc185545474636e03d021374459d196816ee8392526ca9",
+          "state": "38f51e167042dc409624f307765e08ed5c661bdc1718b5c4b195aa48e4df79eb",
+          "backend_reports": {
+            "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-pair-r462/B/backend/report.json": "545351dd1f630d72ef1e9169b8423e66ef19696510949b8b38818c593bf1141a"
+          }
+        },
+        "evidence_boundary": "Consumes an authenticated canonical controller final-check plus current proof coverage; does not replace Rocq. Pinned QCP frontend and libraries remain the common trusted base. This is qualification, not a timed program performance comparison."
+      },
+      "final_check": {
+        "job": "20261028184318-qcp-pair-r462-final-check-B-9cdc52",
+        "experiment": "5f4f0d8ed59f",
+        "run": "900591a530a5",
+        "sha256": "41947e14fdb36f505edc185545474636e03d021374459d196816ee8392526ca9",
+        "seconds": 25.124518405646086,
+        "cpu": [
+          "0"
+        ]
+      },
+      "state_sha256": "38f51e167042dc409624f307765e08ed5c661bdc1718b5c4b195aa48e4df79eb",
+      "backend_report_sha256": "545351dd1f630d72ef1e9169b8423e66ef19696510949b8b38818c593bf1141a"
+    }
+  },
+  "controller_sha256": "cd18bd64376e829592d6fcdd69774b4ac75415cdefaa2dc0b48a10ea60c13bf9",
+  "protected_sets_used": false,
+  "evidence_boundary": "Two separate interactive fresh C-to-VC, selected-backend, proof, canonical-final-check workflows. No fair automated end-to-end performance winner is inferred from query sums, native stage sums, or agent orchestration wall time. QCP internal SMT calls remain opaque. Repeated max3 does not add a new unique program."
+}
