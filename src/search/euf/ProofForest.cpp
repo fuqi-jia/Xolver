@@ -50,19 +50,15 @@ void ProofForest::makeRoot(EufTermId u) {
     }
 }
 
-void ProofForest::addEdge(EufTermId u, EufTermId v, const MergeReason& reason) {
+void ProofForest::addEdgeAtLevel(EufTermId u, EufTermId v, const MergeReason& reason, int level) {
+    const int saved = currentLevel_;
+    currentLevel_ = level;
     ensureNode(u);
     ensureNode(v);
-    size_t labelIdx = labels_.size();
+    const size_t labelIdx = labels_.size();
     labels_.push_back(reason);
-    makeRoot(u);                     // u becomes the root of its tree
-    setParent(u, v, labelIdx);       // attach u (and its reoriented tree) under v
-}
-
-void ProofForest::addEdgeAtLevel(EufTermId u, EufTermId v, const MergeReason& reason, int level) {
-    int saved = currentLevel_;
-    currentLevel_ = level;
-    addEdge(u, v, reason);
+    makeRoot(u);
+    setParent(u, v, labelIdx);
     currentLevel_ = saved;
 }
 
