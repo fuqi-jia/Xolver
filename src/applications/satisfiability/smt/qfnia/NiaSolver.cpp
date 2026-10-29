@@ -128,6 +128,7 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // and otherwise leaves the obligation to the remaining NIA stages.
     addFull("nia.linear-decide", &NiaSolver::stageLinearDecide);
     add("nia.presolve", &NiaSolver::stagePresolveFixpoint);
+    addFull("nia.sign-refute", &NiaSolver::stageSignRefute);
     // Full-effort shape cuts derived from explained single-variable bounds.
     addFull("nia.nla-cuts",   &NiaSolver::stageNlaCuts);
     add("nia.poly-conflict",  &NiaSolver::stagePolyConflict);

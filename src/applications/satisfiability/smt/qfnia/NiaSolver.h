@@ -210,6 +210,7 @@ private:
     // into finite-domain enumeration and stalls to unknown. Closes the
     // comparison-tautology class (Zohar AndOrXor/int_check). Runs before the
     // domain/finite-domain stages.
+    std::optional<TheoryCheckResult> stageSignRefute(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stagePolyConflict(TheoryLemmaStorage&, TheoryEffort);
     // Sound difference-logic negative-cycle conflict, generalizing poly-conflict
     // from same-poly (2-var) to multi-variable difference chains. Active

@@ -1,4 +1,5 @@
 #include "base/RuntimeConfig.h"
+#include "search/refute/SignDefinitenessRefuter.h"
 #include "applications/satisfiability/smt/qfnia/NiaSolver.h"
 #include <algorithm>
 #include "search/dl/DifferenceGraph.h"
@@ -44,6 +45,21 @@ namespace xolver {
 // It compiles into the same xolver_core target and shares the class's
 // private state via the declarations in the corresponding header.
 // Behavior is byte-identical to the pre-split definitions.
+
+std::optional<TheoryCheckResult> NiaSolver::stageSignRefute(TheoryLemmaStorage&, TheoryEffort) {
+    if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty()) return std::nullopt;
+    std::vector<SignRefuteConstraint> constraints;
+    constraints.reserve(active_.size());
+    for (const auto& source : active_) {
+        if (source.poly == NullPoly) continue;
+        auto polynomial = RationalPolynomial::fromPolyId(source.poly, *kernel_);
+        if (polynomial) constraints.push_back({std::move(*polynomial), source.rel, source.reason});
+    }
+    auto conflict = refuteBySignDefiniteness(constraints);
+    if (!conflict) conflict = refuteByQuadraticSigns(constraints);
+    if (!conflict) return std::nullopt;
+    return TheoryCheckResult::mkConflict(TheoryConflict{std::move(*conflict)});
+}
 
 std::optional<TheoryCheckResult> NiaSolver::stagePolyConflict(TheoryLemmaStorage&, TheoryEffort) {
     // Group active constraints by polynomial. Each is `P rel 0`, i.e. a sign
