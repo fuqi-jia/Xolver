@@ -55,6 +55,7 @@ int main(int argc, char** argv) {
     try {
         std::int64_t milliseconds = 60000;
         std::string path;
+        bool optimize = true;
         for (int i = 1; i < argc; ++i) {
             const std::string option = argv[i];
             if (option == "--timeout-ms") {
@@ -64,8 +65,9 @@ int main(int argc, char** argv) {
                 if (parsed.ec != std::errc{} || parsed.ptr != value.data()+value.size() || milliseconds < 0 ||
                     milliseconds > 86400000)
                     throw std::invalid_argument("timeout must be an integer in [0,86400000] milliseconds");
-            } else if (option == "--help") {
-                std::cout << "Usage: xolver-asp [--timeout-ms N] [input.aspif]\n"
+            } else if (option == "--opt-mode=ignore") optimize = false;
+            else if (option == "--help") {
+                std::cout << "Usage: xolver-asp [--timeout-ms N] [--opt-mode=ignore] [input.aspif]\n"
                              "Reads single-step ASPIF 1.0 and emits a Clingo-style JSON result.\n"
                              "N=0 removes the local deadline; source ASP requires a separate grounder.\n";
                 return 0;
@@ -89,6 +91,7 @@ int main(int argc, char** argv) {
             return 0;
         }
         Problem problem{std::move(parsed.program), {}};
+        problem.mode = optimize ? SolveMode::Optimize : SolveMode::Feasible;
         if (milliseconds) problem.limits.deadline = start + std::chrono::milliseconds(milliseconds);
         auto* protocol = std::cout.rdbuf();
         std::cout.rdbuf(std::cerr.rdbuf());

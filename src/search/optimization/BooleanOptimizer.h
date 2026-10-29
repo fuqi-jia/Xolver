@@ -22,13 +22,18 @@ struct BooleanOptimum {
 };
 
 // The feasibility callback can enforce additional semantics (for example ASP
-// stability) before returning Sat. ReadValue reads its retained valid witness,
-// including after an unsuccessful subsequent check. All clauses added here are
+// stability) before returning Sat. ReadValue reads the latest valid candidate;
+// Publish retains its witness after the entire cost vector is evaluated.
+// All clauses added here are
 // objective bounds; the caller owns the SAT instance and the witness lifetime.
 using BooleanCheck = std::function<SatSolver::SolveResult(const std::vector<SatLit>&)>;
 using BooleanValue = std::function<bool(SatLit)>;
+// Publish the candidate atomically. If it throws, the previous published
+// witness must remain unchanged. This runs only after complete cost evaluation.
+using BooleanPublish = std::function<void()>;
 BooleanOptimum minimizeBooleanLex(bitblast::BitBlastEncoder&, WorkBudget&,
     const std::vector<BooleanObjective>&, const BooleanCheck&, const BooleanValue&,
+    const BooleanPublish&,
     std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::time_point::max());
 
 } // namespace xolver::optimization

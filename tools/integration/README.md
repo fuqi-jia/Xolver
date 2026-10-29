@@ -166,32 +166,37 @@ authenticate the supplied controller record; this ledger does not replace Rocq.
 Missing backend reports leave external query counts unknown; they do not
 establish that no solver calls occurred.
 
-## Original Draco and ASP
+## Latest Draco 2 and ASP
 
-`draco_backend.DracoBackend` connects the original
-[uwdata/draco](https://github.com/uwdata/draco) query and result interfaces to
+`draco_backend.DracoBackend` connects the current
+[cmudig/draco2](https://github.com/cmudig/draco2) `Draco`/`Model` interfaces to
 `xolver-asp`. `SubprocessGrounder` forces `--mode=gringo --output=intermediate`;
-Xolver alone performs stable-model search and optimization. The source revision
-and rule/example hashes are in `draco-source.json`.
+Xolver alone performs stable-model search and optimization. The latest frozen
+source and rule/weight/example hashes are in `draco-source.json`.
 
 ```python
+import draco
 import importlib
 from pathlib import Path
 from draco_backend import DracoBackend, SubprocessGrounder
-original = importlib.import_module("draco.run")
-backend = DracoBackend(original, Path("build/bin/xolver-asp"),
-                       SubprocessGrounder(("clingo",)))
-with backend.attach():
-    result = original.run(["encoding(e0).", "fieldtype(x,number)."],
-                          constants={"max_extra_encs": "0"})
+backend = DracoBackend(importlib.import_module("draco.run"),
+                       Path("build/bin/xolver-asp"), SubprocessGrounder(("clingo",)))
+instance = backend.bind(draco.Draco())
+models = list(instance.complete_spec(query_facts, models=2))
 ```
+
+Bindings are instance-local; another Draco instance can keep its Clingo backend.
+The adapter has no result cache and records every real native invocation with
+backend identity, input hashes and separate grounding/solving timing. Top-K
+blocks all internal ASP atoms, preserving distinct stable models with identical
+shown values. Every emitted model is stable; every top-K cost has an independent
+optimality check in the validation script. Same-cost tie differences are valid.
 
 Run `check_asp_backend.py --solver ... --clingo ... --output ...` for generic
 ASPIF differential checks, or `check_draco_backend.py --draco ... --solver ...
---clingo ... --output ...` for the pinned original Draco API and rules. The latter
-retains grounding and solving separately, compares exact objective vectors with
-full Clingo, and pins the complete internal witness for independent ASP replay.
-Full Clingo is a development oracle in these checkers, never the production
-backend. A grounder warning that discards an objective tuple is unsupported.
-See the [ASP contract](../../src/applications/satisfiability/asp/README.md) for
-supported rules, budgets and evidence limits.
+--clingo ... --output ...` for the frozen latest Draco 2 methods, rules and
+examples. Complete witnesses are pinned for independent ASP replay. Full Clingo
+is a development oracle in these checkers; the production adapter only uses its
+ground-only mode and symbol parser. See the
+[ASP contract](../../src/applications/satisfiability/asp/README.md) for supported
+rules, budgets and evidence limits.

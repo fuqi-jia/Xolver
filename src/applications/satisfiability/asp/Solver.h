@@ -17,9 +17,11 @@ struct Limits {
     std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::time_point::max();
     std::stop_token stop;
 };
+enum class SolveMode { Feasible, Optimize };
 struct Problem {
     Program program;
     Limits limits;
+    SolveMode mode = SolveMode::Optimize;
 };
 enum class Status { Sat, Optimal, Unsat, Unknown, InvalidInput, Unsupported };
 struct Answer {

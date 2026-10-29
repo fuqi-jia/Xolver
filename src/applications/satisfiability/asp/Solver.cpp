@@ -26,7 +26,7 @@ class Context {
     std::unordered_map<SatVar, std::size_t> satIndices_;
     std::vector<SatLit> bodies_;
     std::vector<std::vector<std::pair<std::size_t, mpz_class>>> incidence_;
-    Boolean witness_;
+    Boolean candidate_, witness_;
     bool hasWitness_ = false;
 public:
     std::size_t satCalls = 0, cuts = 0;
@@ -203,8 +203,7 @@ public:
                 if (!truth(assumption, candidate)) throw std::runtime_error("ASP model violates an assumption");
             const auto least = leastReduct(candidate);
             if (least == candidate) {
-                witness_ = std::move(candidate);
-                hasWitness_ = true;
+                candidate_ = std::move(candidate);
                 return SatSolver::SolveResult::Sat;
             }
             Boolean unfounded(atoms_.size(), false);
@@ -236,6 +235,7 @@ public:
         Answer answer;
         std::vector<::xolver::optimization::BooleanObjective> objectives;
         for (const auto& original : problem_.program.objectives) {
+            if (problem_.mode != SolveMode::Optimize) break;
             ::xolver::optimization::BooleanObjective objective;
             objective.priority = original.priority;
             for (const auto& term : original.terms)
@@ -246,7 +246,11 @@ public:
             [&](const auto& assumptions) { return check(assumptions); },
             [&](SatLit literal) {
                 // Objective literals refer to program atoms, not Tseitin gates.
-                return witness_.at(satIndices_.at(literal.var)) == literal.sign;
+                return candidate_.at(satIndices_.at(literal.var)) == literal.sign;
+            }, [&] {
+                auto retained = candidate_;
+                witness_.swap(retained);
+                hasWitness_ = true;
             }, problem_.limits.deadline);
         answer.provedLevels = optimum.provedLevels;
         answer.reason = optimum.reason;

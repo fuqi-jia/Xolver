@@ -21,10 +21,11 @@ result requires the original rules and the reduct to validate. Every optimality
 claim additionally requires all higher-priority objectives to be fixed exactly.
 
 `search/optimization/BooleanOptimizer` supplies reusable lexicographic integer
-optimization through feasibility and retained-witness callbacks. It uses the
+optimization through feasibility and atomic incumbent-publication callbacks. It uses the
 shared bit-blast/PB encoders. Existing MaxSMT's exact rational-weight API remains
 separate; integer scaling is a caller's explicit responsibility.
 
+`SolveMode::Feasible` skips optimization; its costs evaluate the retained model.
 `Unknown` may carry a checked incumbent, never an optimum. Limits bound formula
 work, SAT calls, variables, deadline and cooperative cancellation. Disjunctive
 multi-atom heads, incremental ASPIF steps and unsupported semantic directives
@@ -45,23 +46,47 @@ exact integer costs and complete atom identities for independent witness replay.
 Projection directives preserve existence and optimization; this API returns one
 witness and does not enumerate projected answer sets.
 
-## Original Draco integration
+## Latest Draco 2 integration
 
-[DracoBackend](../../../../tools/integration/draco_backend.py) replaces the
-original `draco.run.run_clingo` seam while keeping Draco's `run`, `Result` and
-`is_valid` code. Source [uwdata/draco](https://github.com/uwdata/draco) is pinned to
-`607e9134b3749210fe13b33248bf139a22d7b787`; rules, weights and examples are hashed in
+[DracoBackend](../../../../tools/integration/draco_backend.py) injects an explicit
+runner into individual instances of the current `Draco` class. It reuses the
+original method code, defaults and closures with private runner bindings;
+module globals and other backend instances remain unchanged. It returns the
+current `Model(answer_set, cost, number)` objects and supports `check_spec`,
+`complete_spec`, `count_preferences`, `get_violations` and the raw runner.
+
+```python
+import draco
+import importlib
+from pathlib import Path
+from draco_backend import DracoBackend, SubprocessGrounder
+backend = DracoBackend(importlib.import_module("draco.run"),
+                       Path("build/bin/xolver-asp"), SubprocessGrounder(("clingo",)))
+instance = backend.bind(draco.Draco())
+models = list(instance.complete_spec(query_facts, models=2))
+```
+
+[cmudig/draco2](https://github.com/cmudig/draco2) main is frozen at
+`580047a9b5a41b153b24059275e8050b36c38658` (version 2.0.1, observed 2026-10-29).
+Rules, weights, API code and public examples are hashed in
 [the source manifest](../../../../tools/integration/draco-source.json).
+There is no result cache. Every native invocation records backend identity,
+source/ASPIF/binary hashes, arguments and separate grounding/solving timings.
 
-Grounding and solving have separate commands, roles, hashes and timing receipts.
+Top-K blocks complete internal ASP models and proves each remaining optimum;
+models at the same cost may differ from another solver's tie order. Non-top-K
+optimization emits one proven optimum without intermediate search incumbents.
+Without objectives, or when top-K with unlimited models explicitly ignores
+objectives, finite model generation continues until exhaustion or the budget.
+Non-top-K projection suppresses repeated shown models and honors `#project`.
+
 Source objective tuples are deduplicated by the grounder; ASPIF terms remain
-additive. Ignored/non-integer objective tuples, including `#inf`, are rejected
-explicitly. An incomplete Xolver result raises an exception so Draco cannot
-mistake it for `None`/UNSAT. The context manager changes module bindings; use
-separate processes for concurrent adapters.
+additive. Non-integer/ignored objective tuples such as `#inf` and unsupported
+foreign solver options raise explicit errors. Incomplete solves raise an
+exception rather than becoming an empty model generator. The production adapter
+never invokes `clingo.Control.solve`; Clingo symbols and ASTs serve as parsers.
 
-Independent tests compare reduct subset-minimality, exact signed objective
-vectors, full Clingo verdicts and complete internal-model replay. The development
-integration uses original ASP query facts and Draco's result parser. Draco 2 and
-the separate JavaScript Vega-Lite conversion are outside this initial adapter.
-No performance-superiority claim follows from these functional checks.
+Independent checks cover reduct subset-minimality, signed objective vectors,
+full internal-model replay, original Draco 2 methods and isolated concurrent
+backend instances. Visualization rendering and FastAPI routing are separate
+clients. These initial functional checks make no performance-superiority claim.

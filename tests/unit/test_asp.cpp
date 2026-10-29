@@ -107,6 +107,22 @@ TEST_CASE("asp: lexicographic signed objectives and output conditions remain exa
     CHECK(answer.provedLevels == 2);
 }
 
+TEST_CASE("asp: feasibility mode reports a checked model without an optimality claim") {
+    asp::Problem problem;
+    problem.mode = asp::SolveMode::Feasible;
+    problem.program.rules = {normal({1, 2}, {}, true)};
+    problem.program.objectives = {{0, {{1, -2}, {-2, 3}}}};
+    const auto answer = asp::Solver().solve(problem);
+    REQUIRE(answer.status == asp::Status::Sat);
+    REQUIRE(answer.model);
+    CHECK(answer.provedLevels == 0);
+    unsigned mask = 0;
+    for (const auto atom : *answer.model) mask |= 1u << (atom-1);
+    CHECK(reference(problem.program, mask));
+    REQUIRE(answer.costs.size() == 1);
+    CHECK(answer.costs[0] == (mask & 1 ? -2 : 0) + (mask & 2 ? 0 : 3));
+}
+
 TEST_CASE("asp: bounded or unsupported reasoning cannot claim an optimum") {
     asp::Problem problem;
     problem.program.rules = {normal({1}, {}, true)};

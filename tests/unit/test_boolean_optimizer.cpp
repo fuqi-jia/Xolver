@@ -22,15 +22,16 @@ TEST_CASE("BooleanOptimizer: signed lexicographic optima match independent enume
             costs[1] = (mask & 4 ? 0 : -7) + (mask & 1 ? 4 : 0);
             if (!expected || costs < *expected) expected = costs;
         }
-        std::unordered_map<SatVar, bool> witness;
+        std::unordered_map<SatVar, bool> candidate, witness;
         WorkBudget work;
         const auto answer = optimization::minimizeBooleanLex(encoder, work, objectives,
             [&](const auto& assumptions) {
                 const auto result = sat->solve(assumptions);
                 if (result == SatSolver::SolveResult::Sat)
-                    for (const auto variable : variables) witness[variable.var] = sat->value(variable.var);
+                    for (const auto variable : variables) candidate[variable.var] = sat->value(variable.var);
                 return result;
-            }, [&](SatLit literal) { return witness.at(literal.var) == literal.sign; });
+            }, [&](SatLit literal) { return candidate.at(literal.var) == literal.sign; },
+            [&] { auto retained = candidate; witness.swap(retained); });
         INFO(k, ": ", answer.reason);
         REQUIRE(answer.status == optimization::BooleanOptimum::Status::Optimal);
         REQUIRE(answer.hasIncumbent);
@@ -39,21 +40,48 @@ TEST_CASE("BooleanOptimizer: signed lexicographic optima match independent enume
     }
 }
 
-TEST_CASE("BooleanOptimizer: exhausted encoding retains a checked incumbent without optimality") {
+TEST_CASE("BooleanOptimizer: initial partial cost evaluation publishes no incumbent") {
     auto sat = createSatSolver();
     bitblast::BitBlastEncoder encoder(*sat);
-    const auto variable = encoder.mkVar(1).bits[0];
-    bool witness = false;
+    const auto a = encoder.mkVar(1).bits[0], b = encoder.mkVar(1).bits[0];
     WorkBudget work(1);
-    const auto answer = optimization::minimizeBooleanLex(encoder, work, {{0, {{variable, 1}}}},
-        [&](const auto& assumptions) {
-            const auto result = sat->solve(assumptions);
-            if (result == SatSolver::SolveResult::Sat) witness = sat->value(variable.var);
-            return result;
-        }, [&](SatLit literal) { return witness == literal.sign; });
+    bool published = false;
+    int reads = 0;
+    const auto answer = optimization::minimizeBooleanLex(encoder, work, {{0, {{a, 1}, {b, 1}}}},
+        [](const auto&) { return SatSolver::SolveResult::Sat; },
+        [&](SatLit) { ++reads; return true; }, [&] { published = true; });
+    CHECK(answer.status == optimization::BooleanOptimum::Status::Unknown);
+    CHECK_FALSE(answer.hasIncumbent);
+    CHECK(answer.costs.empty());
+    CHECK_FALSE(published);
+    CHECK(reads == 1);
+}
+
+TEST_CASE("BooleanOptimizer: later partial evaluation preserves matching published costs and witness") {
+    auto sat = createSatSolver();
+    bitblast::BitBlastEncoder encoder(*sat);
+    const auto a = encoder.mkVar(1).bits[0], b = encoder.mkVar(1).bits[0];
+    WorkBudget work(1000);
+    int calls = 0, reads = 0;
+    unsigned candidate = 0, published = 0;
+    const auto answer = optimization::minimizeBooleanLex(encoder, work, {{0, {{a, 1}, {b, 1}}}},
+        [&](const auto&) {
+            candidate = ++calls == 1 ? 3 : 0;
+            if (calls == 2) work.tick(1000-work.used()-1);
+            return SatSolver::SolveResult::Sat;
+        }, [&](SatLit lit) {
+            ++reads;
+            const bool chosen = candidate & (lit.var == a.var ? 1u : 2u);
+            return chosen == lit.sign;
+        }, [&] { published = candidate; });
+    CHECK(calls == 2);
+    CHECK(reads == 3);
+    CHECK(candidate == 0);
+    CHECK(published == 3);
     CHECK(answer.status == optimization::BooleanOptimum::Status::Unknown);
     REQUIRE(answer.hasIncumbent);
     REQUIRE(answer.costs.size() == 1);
-    CHECK(answer.costs[0] == (witness ? 1 : 0));
+    const int independentlyEvaluated = int(bool(published & 1)) + int(bool(published & 2));
+    CHECK(answer.costs[0] == independentlyEvaluated);
     CHECK(answer.provedLevels == 0);
 }

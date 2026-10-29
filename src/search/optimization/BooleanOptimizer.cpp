@@ -4,7 +4,8 @@ namespace xolver::optimization {
 
 BooleanOptimum minimizeBooleanLex(bitblast::BitBlastEncoder& encoder, WorkBudget& work,
     const std::vector<BooleanObjective>& objectives, const BooleanCheck& check,
-    const BooleanValue& value, std::chrono::steady_clock::time_point deadline) {
+    const BooleanValue& value, const BooleanPublish& publish,
+    std::chrono::steady_clock::time_point deadline) {
     BooleanOptimum answer;
     std::map<std::int64_t, std::vector<bitblast::WeightedLiteral>, std::greater<>> levels;
     for (const auto& objective : objectives)
@@ -12,15 +13,18 @@ BooleanOptimum minimizeBooleanLex(bitblast::BitBlastEncoder& encoder, WorkBudget
                                          objective.terms.begin(), objective.terms.end());
     for (const auto& [priority, terms] : levels) answer.priorities.push_back(priority);
     auto retain = [&] {
-        answer.costs.clear();
+        std::vector<mpz_class> costs;
+        costs.reserve(levels.size());
         for (const auto& [priority, terms] : levels) {
             mpz_class cost = 0;
             for (const auto& term : terms) {
                 work.tick();
                 if (value(term.literal)) cost += term.weight;
             }
-            answer.costs.push_back(std::move(cost));
+            costs.push_back(std::move(cost));
         }
+        publish();
+        answer.costs.swap(costs);
         answer.hasIncumbent = true;
     };
     try {
