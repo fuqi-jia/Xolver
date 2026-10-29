@@ -51,22 +51,25 @@ class ParallelTests(unittest.TestCase):
         self.assertEqual(json.loads(executor.submit(Task("unsat", "smt.solve", unsat)).result().get())["result"], "unsat")
         self.assertEqual(executor.map([]), [])
 
-    @unittest.skipUnless(WORKER, "native worker is not specified")
     def test_local(self):
+        if not WORKER:
+            self.skipTest("native worker is not specified")
         from xolver_parallel import LocalExecutor, Worker
         with LocalExecutor(Worker((WORKER,)), workers=2) as executor:
             self.exercise(executor)
 
-    @unittest.skipUnless("dask" in BACKENDS, "Dask not requested")
     def test_dask(self):
+        if "dask" not in BACKENDS:
+            self.skipTest("Dask not requested")
         from distributed import Client, LocalCluster
         from xolver_parallel import DaskExecutor, Worker
         with LocalCluster(n_workers=2, threads_per_worker=1, processes=True, dashboard_address=None,
                           memory_limit=0) as cluster, Client(cluster) as client:
             self.exercise(DaskExecutor(client, Worker((WORKER,))))
 
-    @unittest.skipUnless("spark" in BACKENDS, "Spark not requested")
     def test_spark(self):
+        if "spark" not in BACKENDS:
+            self.skipTest("Spark not requested")
         from pyspark import SparkConf, SparkContext
         from xolver_parallel import SparkExecutor, Worker
         config = SparkConf().set("spark.executorEnv.PYTHONPATH", os.environ.get("PYTHONPATH", "")).setMaster("local[1]").setAppName("xolver-parallel-test").set("spark.ui.enabled", "false")
@@ -84,8 +87,4 @@ if __name__ == "__main__":
     sys.path.insert(0, str(args.package))
     os.environ["PYTHONPATH"] = str(args.package.resolve()) + os.pathsep + os.environ.get("PYTHONPATH", "")
     WORKER, BACKENDS = str(Path(args.worker).resolve()), tuple(args.backends)
-    # Decorators were evaluated before CLI parsing.
-    ParallelTests.test_local.__unittest_skip__ = False
-    for name in BACKENDS:
-        getattr(ParallelTests, "test_" + name).__unittest_skip__ = False
     unittest.main(argv=[sys.argv[0]], verbosity=2)
