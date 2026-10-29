@@ -3,6 +3,7 @@
 #include "search/lra/DeltaRational.h"
 #include "contracts/SatSolver.h"
 #include "search/lra/GeneralSimplex.h"
+#include <cstddef>
 #include <vector>
 
 namespace xolver {
@@ -35,6 +36,13 @@ public:
     };
     // -------------------------------------------------------------------------
 
+    struct Statistics {
+        std::size_t rowVisits = 0;
+        std::size_t rowSnapshots = 0;
+        std::size_t snapshotHits = 0;
+        std::size_t termPairs = 0;
+    };
+
     LraPropagationEngine() = default;
 
     /** Derive all implied bounds reachable within budget.
@@ -42,7 +50,8 @@ public:
      */
     std::vector<ExplainedBound> propagateAll(
         const GeneralSimplex& gs,
-        const PropagationBudget& budget = {512, 2048, 12, 20});
+        const PropagationBudget& budget = {512, 2048, 12, 20},
+        Statistics* statistics = nullptr);
 
 };
 

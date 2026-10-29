@@ -409,3 +409,25 @@ TEST_CASE("LraPropagationEngine: backward with negative coefficient") {
     // lower(y) = (lower(x) - upper(s) - 1) / 2 = (5 - 0 - 1) / 2 = 2
     CHECK(hasBound(derived, y, true, mpq_class(2)));
 }
+
+TEST_CASE("LraPropagationEngine: paired row visits share unchanged input snapshots") {
+    GeneralSimplex gs;
+    const int x = gs.addVar("paired-x"), y = gs.addVar("paired-y");
+    const int sum = gs.addConstraint({{x, 1}, {y, 1}}, 0);
+    REQUIRE(gs.assertLower(x, mkBound(0, 1)));
+    REQUIRE(gs.assertUpper(x, mkBound(1, 2)));
+    REQUIRE(gs.assertLower(y, mkBound(0, 3)));
+    REQUIRE(gs.assertUpper(y, mkBound(1, 4)));
+    REQUIRE(gs.check() == GeneralSimplex::Result::Sat);
+    LraPropagationEngine engine;
+    LraPropagationEngine::Statistics statistics;
+    const auto derived = engine.propagateAll(gs, {64, 256, 12, 1000}, &statistics);
+    CHECK(hasBound(derived, sum, true, 0));
+    CHECK(hasBound(derived, sum, false, 2));
+    CHECK(statistics.rowVisits == 2);
+    CHECK(statistics.rowSnapshots == 1);
+    CHECK(statistics.snapshotHits == 1);
+    CHECK(statistics.termPairs == 2);
+    CHECK_FALSE(gs.varState(sum).lower.bound.isFinite());
+    CHECK_FALSE(gs.varState(sum).upper.bound.isFinite());
+}

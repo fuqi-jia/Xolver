@@ -71,7 +71,9 @@ struct RowAggregate {
 
 std::vector<LraPropagationEngine::ExplainedBound>
 LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
-                                  const PropagationBudget& budget) {
+                                  const PropagationBudget& budget,
+                                  Statistics* statistics) {
+    if (statistics) *statistics = {};
     std::vector<ExplainedBound> accepted;
     if (budget.maxDerivedBounds <= 0 || budget.maxIterations <= 0 ||
         budget.maxReasonSize < 0 || budget.maxTimeMs <= 0) return accepted;
@@ -113,6 +115,20 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
         if (basic >= 0) { enqueue(basic, true); enqueue(basic, false); }
     }
 
+    // The tableau is immutable during this call. Only updates to non-basic
+    // endpoints can change a row's input contributions; derived basic bounds
+    // are read separately when propagating backward. Keep just the most recent
+    // row, so adjacent lower/upper visits can share arithmetic and explanations.
+    // Every object here dies before a backtrack or the next theory check.
+    struct RowSnapshot {
+        int basic = -1;
+        std::size_t revision = 0;
+        std::vector<std::array<Contribution, 2>> contributions;
+        RowAggregate minimum, maximum;
+    };
+    std::optional<RowSnapshot> snapshot;
+    std::size_t inputRevision = 0;
+
     auto publish = [&](int var, bool lower, const DeltaRational& value,
                        const RowAggregate& aggregate, const Contribution* excluded,
                        const std::vector<SatLit>& required) {
@@ -123,6 +139,7 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
         // Materialize explanations only for a genuinely stronger bound.
         auto reasons = aggregate.explain(excluded, required, budget.maxReasonSize);
         if (!reasons) return false;
+        if (gs.basicRowOfVar(var) < 0) ++inputRevision;
         target.value = value;
         target.reasons = *reasons;
         target.explained = true;
@@ -140,20 +157,28 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
         if (rowIndex < 0) continue;
         const auto& row = gs.tableau().row(rowIndex);
 
-        // Snapshot each endpoint once. Publishing new facts below cannot
-        // change a contribution or its original-premise explanation mid-row.
-        std::vector<std::array<Contribution, 2>> contributions;
-        contributions.reserve(row.entries.size());
-        RowAggregate minimum, maximum;
-        for (const auto& entry : row.entries) {
-            if (exhausted()) return accepted;
-            const auto& variable = bounds[entry.col];
-            const size_t minSide = entry.coeff > 0 ? 0 : 1;
-            contributions.push_back({Contribution(variable[minSide], entry.coeff),
-                                     Contribution(variable[1 - minSide], entry.coeff)});
-            minimum.add(contributions.back()[0]);
-            maximum.add(contributions.back()[1]);
-        }
+        if (statistics) ++statistics->rowVisits;
+        if (!snapshot || snapshot->basic != item.basic || snapshot->revision != inputRevision) {
+            snapshot.emplace();
+            snapshot->basic = item.basic;
+            snapshot->revision = inputRevision;
+            auto& contributions = snapshot->contributions;
+            contributions.reserve(row.entries.size());
+            if (statistics) ++statistics->rowSnapshots;
+            for (const auto& entry : row.entries) {
+                if (exhausted()) return accepted;
+                const auto& variable = bounds[entry.col];
+                const size_t minSide = entry.coeff > 0 ? 0 : 1;
+                contributions.push_back({Contribution(variable[minSide], entry.coeff),
+                                         Contribution(variable[1 - minSide], entry.coeff)});
+                snapshot->minimum.add(contributions.back()[0]);
+                snapshot->maximum.add(contributions.back()[1]);
+                if (statistics) ++statistics->termPairs;
+            }
+        } else if (statistics) ++statistics->snapshotHits;
+        const auto& contributions = snapshot->contributions;
+        const auto& minimum = snapshot->minimum;
+        const auto& maximum = snapshot->maximum;
 
         const auto& forward = item.lower ? minimum : maximum;
         if (forward.missing == 0)
