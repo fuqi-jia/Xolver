@@ -183,7 +183,20 @@ std::optional<TheoryCheckResult> NraSolver::stageSignRefute(TheoryLemmaStorage& 
         cs.push_back({std::move(*rp), c.rel, c.reason});
     }
     auto conflict = refuteBySignDefiniteness(cs);
-    if (!conflict && effort == TheoryEffort::Full) conflict = refuteByPolynomialSignClosure(cs);
+    if (!conflict && effort == TheoryEffort::Full) {
+        PolynomialSignStatistics stats;
+        const auto started = std::chrono::steady_clock::now();
+        conflict = refuteByPolynomialSignClosure(cs, &stats);
+        const auto profile = config::read<config::ReadKind::ProfilePath>("ARITH_STAGE_PROF", "/tmp/xolver_stageprof.txt");
+        if (!profile.empty()) {
+            std::ofstream out(profile.string() + ".polynomial-sign.log", std::ios::app);
+            out << "rounds=" << stats.rounds << " facts=" << stats.inferredFacts
+                << " substitutions=" << stats.substitutions << " cancellations=" << stats.cancellations
+                << " divisions=" << stats.divisions << " conflict=" << bool(conflict)
+                << " exhausted=" << stats.exhausted << " us="
+                << std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started).count() << '\n';
+        }
+    }
     if (!conflict && effort == TheoryEffort::Full) {
         QuadraticSignStatistics stats;
         const auto started = std::chrono::steady_clock::now();

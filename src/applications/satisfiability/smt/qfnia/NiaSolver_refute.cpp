@@ -37,6 +37,7 @@
 #include "base/MpqUtils.h"
 #include <chrono>
 #include <iostream>
+#include <fstream>
 
 #include <unordered_set>
 #include <cstdlib>
@@ -57,7 +58,20 @@ std::optional<TheoryCheckResult> NiaSolver::stageSignRefute(TheoryLemmaStorage&,
         if (polynomial) constraints.push_back({std::move(*polynomial), source.rel, source.reason});
     }
     auto conflict = refuteBySignDefiniteness(constraints);
-    if (!conflict) conflict = refuteByPolynomialSignClosure(constraints);
+    if (!conflict) {
+        PolynomialSignStatistics stats;
+        const auto started = std::chrono::steady_clock::now();
+        conflict = refuteByPolynomialSignClosure(constraints, &stats);
+        const auto profile = config::read<config::ReadKind::ProfilePath>("ARITH_STAGE_PROF", "/tmp/xolver_stageprof.txt");
+        if (!profile.empty()) {
+            std::ofstream out(profile.string() + ".polynomial-sign.log", std::ios::app);
+            out << "rounds=" << stats.rounds << " facts=" << stats.inferredFacts
+                << " substitutions=" << stats.substitutions << " cancellations=" << stats.cancellations
+                << " divisions=" << stats.divisions << " conflict=" << bool(conflict)
+                << " exhausted=" << stats.exhausted << " us="
+                << std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started).count() << '\n';
+        }
+    }
     if (!conflict) conflict = refuteByQuadraticSigns(constraints);
     if (!conflict) return std::nullopt;
     return TheoryCheckResult::mkConflict(TheoryConflict{std::move(*conflict)});
