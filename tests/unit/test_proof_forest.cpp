@@ -32,16 +32,16 @@ std::vector<std::tuple<EufTermId, EufTermId, size_t>> edges(const ProofForest& p
 
 TEST_CASE("ProofForest N-O: rollback restores edges byte-identical across interleaved ops") {
     ProofForest pf;
-    pf.addEdge(0, 1, asserted(1));
-    pf.addEdge(1, 2, asserted(2));
+    pf.addEdgeAtLevel(0, 1, asserted(1), 0);
+    pf.addEdgeAtLevel(1, 2, asserted(2), 0);
 
     size_t snap = pf.snapshot();
     auto before = edges(pf);
 
     // Further merges, including one that forces a makeRoot path-reversal (0 is
-    // not a root of its tree, so addEdge(0,3,...) must re-root 0's tree).
-    pf.addEdge(2, 3, asserted(3));
-    pf.addEdge(0, 3, asserted(4));
+    // not a root of its tree, so adding edge (0,3) must re-root 0's tree).
+    pf.addEdgeAtLevel(2, 3, asserted(3), 0);
+    pf.addEdgeAtLevel(0, 3, asserted(4), 0);
 
     pf.rollback(snap);
     auto after = edges(pf);
@@ -51,14 +51,14 @@ TEST_CASE("ProofForest N-O: rollback restores edges byte-identical across interl
 
 TEST_CASE("ProofForest N-O: nested push/pop-style rollback to multiple snapshots") {
     ProofForest pf;
-    pf.addEdge(0, 1, asserted(1));
+    pf.addEdgeAtLevel(0, 1, asserted(1), 0);
     size_t s1 = pf.snapshot();
     auto e1 = edges(pf);
-    pf.addEdge(1, 2, asserted(2));
+    pf.addEdgeAtLevel(1, 2, asserted(2), 0);
     size_t s2 = pf.snapshot();
     auto e2 = edges(pf);
-    pf.addEdge(2, 3, asserted(3));
-    pf.addEdge(3, 0, asserted(4));  // reversal
+    pf.addEdgeAtLevel(2, 3, asserted(3), 0);
+    pf.addEdgeAtLevel(3, 0, asserted(4), 0);  // reversal
 
     pf.rollback(s2);
     CHECK(edges(pf) == e2);
@@ -68,9 +68,9 @@ TEST_CASE("ProofForest N-O: nested push/pop-style rollback to multiple snapshots
 
 TEST_CASE("ProofForest N-O: path between connected terms returns the connecting edges") {
     ProofForest pf;
-    pf.addEdge(0, 1, asserted(10));
-    pf.addEdge(1, 2, asserted(20));
-    pf.addEdge(3, 2, asserted(30));  // 3 attaches to 2's tree
+    pf.addEdgeAtLevel(0, 1, asserted(10), 0);
+    pf.addEdgeAtLevel(1, 2, asserted(20), 0);
+    pf.addEdgeAtLevel(3, 2, asserted(30), 0);  // 3 attaches to 2's tree
 
     // 0 and 3 are connected: 0-1-2-3. The path must traverse exactly the three
     // edges, and edgeReason on each returned id must be the merge that created it.
@@ -85,8 +85,8 @@ TEST_CASE("ProofForest N-O: path between connected terms returns the connecting 
 
 TEST_CASE("ProofForest N-O: path is empty for identical / unconnected terms") {
     ProofForest pf;
-    pf.addEdge(0, 1, asserted(1));
-    pf.addEdge(2, 3, asserted(2));  // separate tree
+    pf.addEdgeAtLevel(0, 1, asserted(1), 0);
+    pf.addEdgeAtLevel(2, 3, asserted(2), 0);  // separate tree
 
     CHECK(pf.path(0, 0).empty());
     CHECK(pf.path(0, 2).empty());  // different trees
