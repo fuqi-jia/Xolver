@@ -7,9 +7,11 @@ API contracts are described in [the architecture reference](../ARCHITECTURE.md),
 named source snapshots and binaries; they do not establish general completeness
 or performance superiority.
 
-Latest server-qualified arithmetic candidate: [complete polynomial supports and affine equality blocks](#complete-polynomial-supports-and-affine-equality-blocks-r486r514).
-Preceding delivered main: [eager affine domains, PR59](https://github.com/fuqi-jia/Xolver/pull/59),
-`0fa0f87bdbd6980e1266e34912daf6dbd1974c12`, with green main CI.
+Latest delivered arithmetic implementation: [complete polynomial supports and affine equality blocks](#complete-polynomial-supports-and-affine-equality-blocks-r486r514),
+[PR60](https://github.com/fuqi-jia/Xolver/pull/60), main
+`cb799c065bf7f13e0465a5622a560406a03871a8`, with green
+[PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/40820715961) and
+[fresh main CI](https://github.com/fuqi-jia/Xolver/actions/runs/40823193025).
 Latest supplementary verification: [original-input congruence certificate](#original-input-congruence-certificate-r284r285).
 Older result tables describe their own frozen rounds; use the latest table and
 its exact GitHub review/merge checks when continuing work.
@@ -1564,7 +1566,8 @@ among recorded tasks. This is not exclusive-host evidence. That stage applied
 `source-r442.tar.json`; the latest stage below gives the current export cursor. Source and
 binary qualification is sealed before subsequent documentation-only commits.
 
-The parent PR CI and merge receipt are pending. Parser PR65 requires a reviewer;
+The later R486/R514 section records this implementation's final qualification
+and delivery through PR60. Parser PR65 requires a reviewer;
 ordinary and automatic merging are blocked, and no admin bypass is authorized.
 Neither protected set was read or evaluated. This stage increases development
 coverage by two, remains below same-round Z3, and establishes no real QCP
@@ -1641,8 +1644,12 @@ Frozen CLI SHA-256:
 `95b00d142d0e616263230f165fd6322dd88ec3cbcffe1bde1b7eb0d64e901e33`;
 SV: `fed5b68160230b6bb372278e09c7e0088464e911ffce013dc91da080ceeadccf`.
 LRA/LIA backtracking policies and public API semantics remain intact.
-[PR60](https://github.com/fuqi-jia/Xolver/pull/60) needs CI on its updated
-head before merging, followed by fresh main CI. Parser PR65 still requires
+[PR60](https://github.com/fuqi-jia/Xolver/pull/60) merged as
+`cb799c065bf7f13e0465a5622a560406a03871a8` after both jobs passed in
+[PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/40820715961). Both jobs
+also pass in [fresh main CI](https://github.com/fuqi-jia/Xolver/actions/runs/40823193025).
+The merged tree exactly matches the qualified PR head, including the later
+documentation-only evidence commit. Parser PR65 still requires
 review; no admin bypass is authorized. The candidate remains below Z3 and
 does not establish QCP program-suite superiority.
 
