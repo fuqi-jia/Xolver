@@ -1,0 +1,32 @@
+{
+  "repository": "https://github.com/cmudig/draco2",
+  "default_branch": "main",
+  "revision": "580047a9b5a41b153b24059275e8050b36c38658",
+  "version": "2.0.1",
+  "observed_date": "2026-10-29",
+  "files": {
+    "pyproject.toml": "da81e27bfa62813eb3530b6c0a3c782a14045e7a46b18035654394a70554a13a",
+    "uv.lock": "b65831b834f8ee3b2a37e599603cd16ef80afa8561b20c0ed9fc44e842156e05",
+    "draco/run.py": "f78d033729a84c3b4b710f4aa238111c8ed41ff9a4ae71c677c3a98c788055cf",
+    "draco/draco.py": "bcfb3745847df2ca4a318580252f48a4ee122009847b07619a32f74d4a035aaf",
+    "draco/programs.py": "123f9c1ff1e2b8d311830aa61111aa3afc35db613516c6c9db7ffb65bdaf68c8",
+    "draco/weights.py": "365692cafd346fb88dd02ffa323cf5e348f379107572661aecc1149743350495",
+    "draco/asp_utils.py": "faaa38d6c369de7283b31e3f57a38d5333e00b0d716ab138d793ad6ce8881078",
+    "draco/fact_utils.py": "eec271ef9ad7aa60ac1e749c39e93d5fb96e460a3f6f22e8e920df4d16b6ea15",
+    "draco/__init__.py": "4217d3fca92ff0d182448086426fc5d5d9dfe7a12ba050b42646461b2efa11da",
+    "draco/types.py": "d1e9d52428695ecd8fd35ab07578528944cb1c620bd5771b8708dfef8b151470",
+    "draco/asp/define.lp": "42b86bb12916fe9191e8e40db236ae9970896641e818293ba8bf76df326616ca",
+    "draco/asp/constraints.lp": "7f83b0a41187dfae1552e297e9fa4db22f464ce8a8da59abef4c1f67a26a5c3b",
+    "draco/asp/helpers.lp": "bf05fdb0eb189ef4ab768bf07cdb8cb48d7aa6ca4dec0f0045f16f43f2fcd19a",
+    "draco/asp/generate.lp": "cf890c606e1a6b21474a90c5df2408e5d5d9636ba5fbb60dd622b15befe962a4",
+    "draco/asp/hard.lp": "04b9580eba6b6cc36c67fbe459cfe2e6ffaa15382e35c1d487f29a4d8673e3f8",
+    "draco/asp/soft.lp": "d1855425dee049db4705b5337171dcaad59c24362ff3d0ca1443d133a5365c75",
+    "draco/asp/weights.lp": "94e0338e494d9d6f3e5f5a24974cc948f912168ed00f05aa889f3885d2d4661e",
+    "draco/asp/optimize.lp": "e28dd0ff763e7be20b1f8863a07fe6bc478c4c31a8f806ce7c04c0bfed950b21",
+    "draco/asp/examples/scatter.lp": "ed52c743c0861c10a268aed060a39b95c01dea983e4589c71cd8f401398f2519",
+    "draco/asp/examples/histogram.lp": "483000bcddcf15718af6a2e2161bb806dec4cecdb6e1851608c126248d7fdeda",
+    "draco/asp/examples/binned_histogram.lp": "cf6734550f6a405e59ef1ff6e15253626e962660ad5333dbff083a4bbc8dfb37",
+    "draco/tests/test_draco.py": "a126aa1aea3169e4d64ae87b2daec8c381d05764e49b58d2c1bed29d26db2817",
+    "draco/tests/test_run.py": "f7631b22406ecf93e114a12e8a170876b5560984124acda5316fcfefddfd6cb2"
+  }
+}

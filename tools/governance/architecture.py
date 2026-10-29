@@ -27,7 +27,7 @@ LAYERS = {
 }
 INCLUDE = re.compile(r'^\s*#\s*include\s*[<"]([^">]+)[">]', re.M)
 APPLICATION_CATEGORIES = {
-    "satisfiability": {"sat", "smt", "common"},
+    "satisfiability": {"sat", "smt", "asp", "common"},
     "optimization": {"maxsat", "maxsmt", "cp", "milp", "omt", "common"},
     "counting": None,
     "verification": {"pa", "sl", "model_checking", "common"},

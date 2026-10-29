@@ -110,3 +110,10 @@ if(Python3_FOUND AND XOLVER_BUILD_TOOLS)
         --package ${CMAKE_BINARY_DIR}/python --worker $<TARGET_FILE:xolver-parallel-worker>)
     set_tests_properties(parallel-local parallel-worker PROPERTIES LABELS "parallel;api")
 endif()
+
+if(Python3_FOUND AND XOLVER_BUILD_TOOLS)
+    add_test(NAME asp-cli COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_SOURCE_DIR}/tools/integration/check_asp_backend.py
+        --solver $<TARGET_FILE:xolver-asp> --count 10)
+    set_tests_properties(asp-cli PROPERTIES LABELS "api;asp")
+endif()
