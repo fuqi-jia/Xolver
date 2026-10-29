@@ -1,0 +1,3198 @@
+{
+  "schema": "xolver-exact-phases-decision-interface/1",
+  "qualification": {
+    "source_head": "d4a2fe7aefcfbc4be23665aeee89ec35be51cc74",
+    "source_manifest_sha256": "22a69878405e14981f230bca70922a192db7ae4b8d8427ba28fd0e83f470993a",
+    "checked_source_files": 228,
+    "submodule_pins": {
+      "third_party/SOMTParser": "b9063faeab2e89d87525432eaedb8f0a5b6eb1ea",
+      "third_party/cadical": "7b99c07f0bcab5824a5a3ce62c7066554017f641",
+      "third_party/libpoly": "3d5e6fbd98639cb0941b029e23ca17c0e3c4a80a"
+    },
+    "native": {
+      "lease": [
+        0
+      ],
+      "overlay_rc": 0,
+      "configure_rc": 0,
+      "build_rc": 0,
+      "targeted-unit_rc": 0,
+      "parser-tests_rc": 0,
+      "unit_rc": 0,
+      "checks_rc": 0
+    },
+    "binaries": {
+      "xolver": "c919846a8c7b8880b28a43f7201499e0d761c27d74adf3615177b21b375f9284",
+      "xolver-sv": "fed5b68160230b6bb372278e09c7e0088464e911ffce013dc91da080ceeadccf"
+    },
+    "unit_binary_sha256": "48e49452684e8ba9d7c4fbbbd6fbbfabeb5ad445897407bea4540b9a553081c7",
+    "logs": {
+      "build.log": "62125b0209f93434d74a8ec43c6ee4ac080f50b3c49957082ce41504fa8ee167",
+      "targeted-unit.log": "93a50adcf55d861f773b2333acaf29f0b45665b123560a496472a88f075098d9",
+      "parser-tests.log": "29e548fd7f85322b2668b2710e0f3cc9e144b8443e56ba434919b2347bfe43e6",
+      "unit.log": "6fb5d3dd4369674dc2f81c50c66e93e709de57f7ecbf22aec42ce560b7fdfa43",
+      "checks.log": "833543732d585d6f797851f53212985f3c3b72293309eda7f9e9802d9ddde327"
+    },
+    "protected_sets_used": false
+  },
+  "acceptance": {
+    "experiment": "efa2273a1dbb",
+    "groups": [
+      {
+        "name": "root-regressions",
+        "run": "806f42fb8450",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "0"
+          ]
+        },
+        "record_sha256": "6cd670bca30fd73243e0e64ebc4ec5eb4cd6f2816b892d990f8b6c73fd7fe25d",
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        }
+      },
+      {
+        "name": "architecture",
+        "run": "a3cfb249e73e",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "2"
+          ]
+        },
+        "record_sha256": "796ee3e201d805e334df63f281b6cd7c7085c1297f38822fb636fc2f8814830c",
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        }
+      },
+      {
+        "name": "known-gaps",
+        "run": "81394cbc7cd0",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "4"
+          ]
+        },
+        "record_sha256": "25176a2e2f53142081bd77a0a8e78b308766c8d39c25b4e564534b7ba7e4ab96",
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        }
+      },
+      {
+        "name": "affine",
+        "run": "d63ebf2712db",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "7"
+          ]
+        },
+        "record_sha256": "50ec4e050f357630eef8a27387f03d70c3be59900ed41f66802553c907353efe",
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        }
+      },
+      {
+        "name": "linear",
+        "run": "2eab4d959688",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "12"
+          ]
+        },
+        "record_sha256": "123403f011e513de7c738a38529bb39c4726d50782add3e849a1cf725cb129dc",
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        }
+      },
+      {
+        "name": "partial",
+        "run": "c140ef14a86f",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "13"
+          ]
+        },
+        "record_sha256": "613422830c8f5c93b1d5cee6b023fd199f682c0e2eac5bce65b9b022fbe8a42f",
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        }
+      },
+      {
+        "name": "intervals",
+        "run": "7268065e4467",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "14"
+          ]
+        },
+        "record_sha256": "81e5881eb025db3a28160bc9e319260665aae111a5bcf7c2ad2aa5c06ccb3d78",
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        }
+      },
+      {
+        "name": "quick",
+        "run": "b2723306c54e",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "15"
+          ]
+        },
+        "record_sha256": "7b52d42229ac2baffc9f4f509c1092d45744a37d9fa5e3f5ce338e251caf09aa",
+        "metrics": {
+          "checks": 3,
+          "failures": 0
+        }
+      },
+      {
+        "name": "ite",
+        "run": "839a345bb168",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "16"
+          ]
+        },
+        "record_sha256": "0a64668cd6ead77fb96b0ba836404b2731c4af2c867500d42246117ad4a3bfbf",
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        }
+      },
+      {
+        "name": "ite-structure",
+        "run": "7191e410dc44",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "17"
+          ]
+        },
+        "record_sha256": "ca8ed2962f60e6d0dafc52948c232aed54f4b85d0436c57454706733eeee6e42",
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        }
+      },
+      {
+        "name": "regression-alia",
+        "run": "ea6230946c55",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "18"
+          ]
+        },
+        "record_sha256": "0f54c6dc98cff095bce3b9ca2a96fae2073cdb635b308426e0de34782e974d46",
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        }
+      },
+      {
+        "name": "regression-alra",
+        "run": "c505b1b8eb91",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "19"
+          ]
+        },
+        "record_sha256": "b613a4c8e1e6d975129f498cade6d80f58e05bb1a0fc320e36bc401f2929e042",
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        }
+      },
+      {
+        "name": "regression-ania",
+        "run": "13118323ea70",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "20"
+          ]
+        },
+        "record_sha256": "359afa7f825722ebd90e1fcef595bcf43dc12970caab8475ca84947fe162323a",
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        }
+      },
+      {
+        "name": "regression-auflia",
+        "run": "d0d7b9c7b621",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "22"
+          ]
+        },
+        "record_sha256": "0c7383ef14a355addc7d6eb7ce06b1c88993c8a79332ea6ed6b7026f2959623f",
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        }
+      },
+      {
+        "name": "regression-auflra",
+        "run": "0294950e047e",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "23"
+          ]
+        },
+        "record_sha256": "8c75e6c2fc5c18712930193ad49c5f0f24299ed1a355f785e88a402757af0ea6",
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        }
+      },
+      {
+        "name": "regression-aufnia",
+        "run": "cfa1647f3a57",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "24"
+          ]
+        },
+        "record_sha256": "0d537bc9b4a872e8168b01c2fe0b2fc26946189002678dffdfc49c25ea92eb94",
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        }
+      },
+      {
+        "name": "regression-ax",
+        "run": "9fb5d4cf5c92",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "25"
+          ]
+        },
+        "record_sha256": "e058691aa4fd19158c1dc3432ddcff5fd3ad12e649ed0e4764570b6575eefdd7",
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        }
+      },
+      {
+        "name": "regression-bool",
+        "run": "d2d32d19d210",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "26"
+          ]
+        },
+        "record_sha256": "e9e562c7b231afe43e259d874260dc254d59e39d4c4e9051549de67fcb6c5f32",
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        }
+      },
+      {
+        "name": "regression-dt",
+        "run": "4c18a3fc9bd3",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "27"
+          ]
+        },
+        "record_sha256": "2469a2e08317771e7dd7461bf6aae933342f7c8d307c8f6077960e52c5bbf750",
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        }
+      },
+      {
+        "name": "regression-euf",
+        "run": "3c8628eb0e50",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "28"
+          ]
+        },
+        "record_sha256": "29463ce9fd7574e9f350e844bf157a439fbc6e17c6fe3f3dabbd929fe632cfc4",
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        }
+      },
+      {
+        "name": "regression-idl",
+        "run": "2d4950ecac52",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "29"
+          ]
+        },
+        "record_sha256": "81a4ed3a66938d7fbfb88bd92a86d23206f27fcb511890485a916f24c6b8ec8a",
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        }
+      },
+      {
+        "name": "regression-lia",
+        "run": "6215f2fd8faa",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "30"
+          ]
+        },
+        "record_sha256": "b1aa905821a723b19b2ea1ba232930dbb40352eca6a88b950649307d254d017c",
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        }
+      },
+      {
+        "name": "regression-lira",
+        "run": "89746008edf8",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "31"
+          ]
+        },
+        "record_sha256": "8f64acd185eab32e77f9c19e8f1ca95b61931f45bd09534f408ff906f2c390cd",
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        }
+      },
+      {
+        "name": "regression-lra",
+        "run": "ccb230c89d79",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "32"
+          ]
+        },
+        "record_sha256": "1baff87dcd9b148c9eff39a68d2027542c8662e78f3306727ba107ef4ff0dec6",
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        }
+      },
+      {
+        "name": "regression-nira",
+        "run": "1a2396328a3c",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "41"
+          ]
+        },
+        "record_sha256": "a00d027c4c90cb96ef92f1f3fc2f5f3e8d889cc2943dc7da6d8329f46e9bd145",
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        }
+      },
+      {
+        "name": "regression-nra",
+        "run": "171f036a5d9c",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "42"
+          ]
+        },
+        "record_sha256": "df12886cfe29f4afd479cf5921c8ae5b8664e2baaa784eecd605a1ea0e475ef7",
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        }
+      },
+      {
+        "name": "regression-quantifiers",
+        "run": "ed2de736f888",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "43"
+          ]
+        },
+        "record_sha256": "7cab15d5285fe1f02c1850fdddae0a6dd367eef48bcd6965e65c8d4c68597ac5",
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        }
+      },
+      {
+        "name": "regression-rdl",
+        "run": "d71ae43b0682",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "44"
+          ]
+        },
+        "record_sha256": "8ba0ec9b17287cb3288132642c443e173dda0d2d65596d2df0fcfb98632fe69e",
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        }
+      },
+      {
+        "name": "regression-sl",
+        "run": "2988bccd2c76",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "45"
+          ]
+        },
+        "record_sha256": "04d2e4e092ab01ab0308d45c29abc334392183048c787a277f69de4cc0089bcb",
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        }
+      },
+      {
+        "name": "regression-ufdtlia",
+        "run": "d898d15aff36",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "46"
+          ]
+        },
+        "record_sha256": "be0caab2593585982662e78040c15b22da5d7d30c286a45214d611db33bd0795",
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        }
+      },
+      {
+        "name": "regression-ufdtnia",
+        "run": "d2dfe99899d0",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "47"
+          ]
+        },
+        "record_sha256": "38b42a7c8e22bef044f92c2c24054b6e32bcd36869c7d6cbd6a609885e6f2e9c",
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        }
+      },
+      {
+        "name": "regression-uflia",
+        "run": "c1f67bf58f1a",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "48"
+          ]
+        },
+        "record_sha256": "34441f463a645764d0912d7e05eeb39161aca5aaf1a010b44022429901ce0977",
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        }
+      },
+      {
+        "name": "regression-uflra",
+        "run": "5cfdbf9f2846",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "49"
+          ]
+        },
+        "record_sha256": "38d6a5623a06ca15282415e7c6ba2822735de8cef801929174bc45d8a93feff4",
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        }
+      },
+      {
+        "name": "regression-ufnia",
+        "run": "c35181f1b436",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "50"
+          ]
+        },
+        "record_sha256": "dc90113bde85e9515109d39e1e3e7788bbbb60f29da43cf222e3f4914f44c9b3",
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        }
+      },
+      {
+        "name": "regression-ufnra",
+        "run": "4cfec0cd94dd",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "52"
+          ]
+        },
+        "record_sha256": "1eba1f2036e089ce2ac16ab6c26ee04bf4ba1312ca0614e0ca09b9508c9a9cf5",
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        }
+      },
+      {
+        "name": "theory-models",
+        "run": "3eb454084b52",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "56"
+          ]
+        },
+        "record_sha256": "cc615e5b1bcd49a5e075d773c9c0c5cf15832436302a7f424680b6cbfd95de81",
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        }
+      },
+      {
+        "name": "regression-nia",
+        "run": "c602bffa5801",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "57"
+          ]
+        },
+        "record_sha256": "fc6b141fa81f95ada8438d96a2c6c1d009d6cf46effa9fdff7bf5a67ea7709e5",
+        "metrics": {
+          "checks": 1,
+          "failures": 0
+        }
+      },
+      {
+        "name": "qcp",
+        "run": "dbb13c11f4fe",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "58"
+          ]
+        },
+        "record_sha256": "d18b1ee3750aa51d05cb118ef77855049508f44cad17d120f56921b71706e02d",
+        "metrics": {
+          "checks": 3,
+          "failures": 0
+        }
+      }
+    ]
+  },
+  "formal": {
+    "cases": 160,
+    "binaries": {
+      "baseline": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r486/xolver",
+        "sha256": "95b00d142d0e616263230f165fd6322dd88ec3cbcffe1bde1b7eb0d64e901e33"
+      },
+      "candidate": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r596/xolver",
+        "sha256": "c919846a8c7b8880b28a43f7201499e0d761c27d74adf3615177b21b375f9284"
+      },
+      "z3": {
+        "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+        "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      }
+    },
+    "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+    "timeout": 60,
+    "memory_bytes": 17179869184,
+    "counts": {
+      "baseline": {
+        "unsat": 41,
+        "decided": 95,
+        "verified_decided": 95,
+        "verified_par2": 8105.845652781427,
+        "raw_par2": 8105.845652781427,
+        "timeout": 64,
+        "sat": 54,
+        "unknown": 1
+      },
+      "candidate": {
+        "unsat": 41,
+        "decided": 94,
+        "verified_decided": 94,
+        "verified_par2": 8223.935655031353,
+        "raw_par2": 8223.935655031353,
+        "timeout": 65,
+        "sat": 53,
+        "unknown": 1
+      },
+      "z3": {
+        "unsat": 58,
+        "decided": 124,
+        "verified_decided": 115,
+        "verified_par2": 5614.20681225881,
+        "raw_par2": 4657.874229254201,
+        "sat": 66,
+        "timeout": 36
+      }
+    },
+    "by_logic": {
+      "QF_LIA": {
+        "baseline": {
+          "unsat": 15,
+          "decided": 34,
+          "verified_decided": 34,
+          "verified_par2": 1891.8657731041312,
+          "raw_par2": 1891.8657731041312,
+          "timeout": 14,
+          "sat": 19
+        },
+        "candidate": {
+          "unsat": 15,
+          "decided": 34,
+          "verified_decided": 34,
+          "verified_par2": 1897.0145406071097,
+          "raw_par2": 1897.0145406071097,
+          "timeout": 14,
+          "sat": 19
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 38,
+          "verified_decided": 36,
+          "verified_par2": 1477.9403612371534,
+          "raw_par2": 1276.9208431504667,
+          "sat": 23,
+          "timeout": 10
+        }
+      },
+      "QF_NIA": {
+        "baseline": {
+          "timeout": 23,
+          "decided": 25,
+          "verified_decided": 25,
+          "verified_par2": 2814.283041609451,
+          "raw_par2": 2814.283041609451,
+          "unsat": 12,
+          "sat": 13
+        },
+        "candidate": {
+          "timeout": 23,
+          "decided": 25,
+          "verified_decided": 25,
+          "verified_par2": 2813.4654748551548,
+          "raw_par2": 2813.4654748551548,
+          "unsat": 12,
+          "sat": 13
+        },
+        "z3": {
+          "unsat": 22,
+          "decided": 34,
+          "verified_decided": 30,
+          "verified_par2": 2210.825672728941,
+          "raw_par2": 1731.489979552105,
+          "sat": 12,
+          "timeout": 14
+        }
+      },
+      "QF_LRA": {
+        "baseline": {
+          "timeout": 16,
+          "decided": 16,
+          "verified_decided": 16,
+          "verified_par2": 1948.0840832497925,
+          "raw_par2": 1948.0840832497925,
+          "sat": 7,
+          "unsat": 9
+        },
+        "candidate": {
+          "timeout": 17,
+          "decided": 15,
+          "verified_decided": 15,
+          "verified_par2": 2061.8496604617685,
+          "raw_par2": 2061.8496604617685,
+          "sat": 6,
+          "unsat": 9
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 26,
+          "verified_decided": 24,
+          "verified_par2": 985.0893824901432,
+          "raw_par2": 828.8461040183902,
+          "sat": 11,
+          "timeout": 6
+        }
+      },
+      "QF_NRA": {
+        "baseline": {
+          "sat": 15,
+          "decided": 20,
+          "verified_decided": 20,
+          "verified_par2": 1451.612754818052,
+          "raw_par2": 1451.612754818052,
+          "unsat": 5,
+          "timeout": 11,
+          "unknown": 1
+        },
+        "candidate": {
+          "sat": 15,
+          "decided": 20,
+          "verified_decided": 20,
+          "verified_par2": 1451.6059791073203,
+          "raw_par2": 1451.6059791073203,
+          "unsat": 5,
+          "timeout": 11,
+          "unknown": 1
+        },
+        "z3": {
+          "sat": 20,
+          "decided": 26,
+          "verified_decided": 25,
+          "verified_par2": 940.3513958025724,
+          "raw_par2": 820.6173025332391,
+          "timeout": 6,
+          "unsat": 6
+        }
+      }
+    },
+    "changes": [
+      {
+        "index": 59,
+        "case": "QF_LRA/tta_startup/simple_startup_10nodes.missing.induct.smt2",
+        "kind": "lost",
+        "truth": "sat",
+        "evidence": [
+          "z3-exported-model-replay",
+          "baseline-exported-model-replay"
+        ],
+        "observations": {
+          "z3": {
+            "result": "sat",
+            "seconds": 0.4168054945766926
+          },
+          "baseline": {
+            "result": "sat",
+            "seconds": 3.375777253881097
+          },
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.009623950347304
+          }
+        }
+      }
+    ],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "unverified": [
+      {
+        "index": 12,
+        "case": "QF_LIA/fft/Sz128_2823.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 24,
+        "case": "QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 27,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 42,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep2a.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 50,
+        "case": "QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_jain_5.i_2_4_3.bpl_7.smt2",
+        "results": {
+          "z3": "unsat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 58,
+        "case": "QF_LRA/uart/uart-26.base.cvc.smt2",
+        "results": {
+          "candidate": "timeout",
+          "z3": "unsat",
+          "baseline": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 80,
+        "case": "QF_LIA/cut_lemmas/20-vars/cut_lemma_03_004.smt2",
+        "results": {
+          "z3": "unsat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 114,
+        "case": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 159,
+        "case": "QF_NRA/20161105-Sturm-MGC/mgc_07.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      }
+    ],
+    "scoring": "Correct verdicts require a replayed model or an independent UNSAT decision on the identical input hash; unresolved results receive PAR-2 penalty.",
+    "supplementary_certificate": {
+      "index": 115,
+      "sha256": "48f5d0ca9b19679a48f3248ac1183c31d09e0c198bfda0a70b3b4272b6d1a5ba",
+      "check": {
+        "status": "checked-unsat",
+        "input_sha256": "02a58b11df8951543940a1090a140592e24de41dcaeb6470e7a50d42e804be64",
+        "assertion": 9,
+        "path": [
+          2
+        ],
+        "checked_residues": 12
+      }
+    }
+  },
+  "formal_runs": [
+    {
+      "experiment": "57c74c6b3786",
+      "run": "7ef0e2c01f66",
+      "index": 0,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "2"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602a/case-000/report.json",
+      "report_sha256": "913af236f193c2c1ee5b54e3941724afb56f7b41b4701f86dfcb86ae75d479d7"
+    },
+    {
+      "experiment": "57c74c6b3786",
+      "run": "8582a3f2d2f0",
+      "index": 1,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "4"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602a/case-001/report.json",
+      "report_sha256": "aee23d65524286e5714bc912487d80083d7fbb32b97dd8b490da5fb8942e7286"
+    },
+    {
+      "experiment": "57c74c6b3786",
+      "run": "d0c189a67e39",
+      "index": 2,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "7"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602a/case-002/report.json",
+      "report_sha256": "3eccd099c704b8304ef8cdc338f7bb47f606f9746d9058c4007a3ac0d850716c"
+    },
+    {
+      "experiment": "57c74c6b3786",
+      "run": "a3b0d2498e8f",
+      "index": 3,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "12"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602a/case-003/report.json",
+      "report_sha256": "d96c63b1365bdc9d931688f03659aa2f82831e88516f0b01fa61e2fd6f6a1d21"
+    },
+    {
+      "experiment": "57c74c6b3786",
+      "run": "f85799bbd30f",
+      "index": 4,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "13"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602a/case-004/report.json",
+      "report_sha256": "08ab7b0cfaf122587a42a40aedd43e1afcda73ee59086a86e309071fc2eda586"
+    },
+    {
+      "experiment": "57c74c6b3786",
+      "run": "bf6dd168db28",
+      "index": 5,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "15"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602a/case-005/report.json",
+      "report_sha256": "84889590d6212267edd048521beb146eadb87151b43914b68617172e17aa2d80"
+    },
+    {
+      "experiment": "57c74c6b3786",
+      "run": "30c9bede3b9f",
+      "index": 6,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "16"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602a/case-006/report.json",
+      "report_sha256": "c1bca1d7e75629b97a5d6dc69bac3fbce920fd1d98924e5bcde8d28dc90a91bf"
+    },
+    {
+      "experiment": "57c74c6b3786",
+      "run": "451725dc9e7e",
+      "index": 7,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "18"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602a/case-007/report.json",
+      "report_sha256": "8791de0c5bebe76512a02694cfc3d323111c7e98593e1378439f5869e7c0d9ef"
+    },
+    {
+      "experiment": "57c74c6b3786",
+      "run": "cfdd3bf9b881",
+      "index": 8,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "19"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602a/case-008/report.json",
+      "report_sha256": "11616a41a3597efdcbfeda390c4b3d88130a1215e59cd83025588c74b46bfaf6"
+    },
+    {
+      "experiment": "57c74c6b3786",
+      "run": "9404d775cd2c",
+      "index": 9,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "20"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602a/case-009/report.json",
+      "report_sha256": "0093f81773f434ce3384990ef3ef5d18b8cc9742f585de57d24809880bd2869f"
+    },
+    {
+      "experiment": "57c74c6b3786",
+      "run": "3a5fe538daf3",
+      "index": 10,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "22"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602a/case-010/report.json",
+      "report_sha256": "1eccc3d1a8b3b302a576a1581340e5f02d423c377e1a6795ebe64a97abe08a19"
+    },
+    {
+      "experiment": "57c74c6b3786",
+      "run": "35040b3444fd",
+      "index": 11,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "23"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602a/case-011/report.json",
+      "report_sha256": "81d1754e5c6c4e385a007616bca1d413a2dbde5f81ffc1dd1807c38a2d140d63"
+    },
+    {
+      "experiment": "57c74c6b3786",
+      "run": "a6b05c4090db",
+      "index": 12,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "24"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602a/case-012/report.json",
+      "report_sha256": "d4e37a1185b1bbaba6d0b35e0821f1b0b2678d8eadaabab9e7828468f762cabc"
+    },
+    {
+      "experiment": "57c74c6b3786",
+      "run": "0f8faad0426e",
+      "index": 13,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "25"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602a/case-013/report.json",
+      "report_sha256": "6722e0af4d224aa93b84d855fdfaa05b0a03e7326b50d9e196d9968d5196549a"
+    },
+    {
+      "experiment": "57c74c6b3786",
+      "run": "1e3ce5b95d5d",
+      "index": 14,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "26"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602a/case-014/report.json",
+      "report_sha256": "f2339346e49777aa929b766c25173e7927600b02e6412ad225723a3da5883ddc"
+    },
+    {
+      "experiment": "57c74c6b3786",
+      "run": "e7121bd1cc22",
+      "index": 15,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "27"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602a/case-015/report.json",
+      "report_sha256": "e079b10aaa2bf8b24712c5d3253e837c5fc434705798d2f46b853bac1387f0c0"
+    },
+    {
+      "experiment": "57c74c6b3786",
+      "run": "9e1537fef991",
+      "index": 16,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "28"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602a/case-016/report.json",
+      "report_sha256": "04ce8faff99525ede5a9004136dc8bc5803bd679ac73155ea6484fe926c5ffb4"
+    },
+    {
+      "experiment": "57c74c6b3786",
+      "run": "394fdb446d6b",
+      "index": 17,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "29"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602a/case-017/report.json",
+      "report_sha256": "df07b818a7c18f4c31f04cc8a8a9246a4ceff00504d6348cbef6c91ecb7e0e0e"
+    },
+    {
+      "experiment": "57c74c6b3786",
+      "run": "2d04e105f996",
+      "index": 18,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "30"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602a/case-018/report.json",
+      "report_sha256": "25ca544d6ad6126a892222ce005218227d9bd65d9bb83ddf7de97b524f6f34ee"
+    },
+    {
+      "experiment": "57c74c6b3786",
+      "run": "4965e0f21158",
+      "index": 19,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "31"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602a/case-019/report.json",
+      "report_sha256": "16a75a770474370527c53b24e835b0a8ed369d1b71d9b09cdf281d1d30e0ca62"
+    },
+    {
+      "experiment": "57c74c6b3786",
+      "run": "2c08642f416c",
+      "index": 20,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "32"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602a/case-020/report.json",
+      "report_sha256": "9e82b7030d8938c4f414370ec4bb2511b76c7776e26da0f17a1a0c6336f99cb1"
+    },
+    {
+      "experiment": "57c74c6b3786",
+      "run": "9b62dad78853",
+      "index": 21,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "41"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602a/case-021/report.json",
+      "report_sha256": "535f5b6dd600e0d9d84292c78670c710aed8ac99acd1e87c493d87f04a90b274"
+    },
+    {
+      "experiment": "57c74c6b3786",
+      "run": "bd5a1b1ed760",
+      "index": 22,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "43"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602a/case-022/report.json",
+      "report_sha256": "576a48cd9a1859397e203747b293bea0a82c7eb55cec333a30b193873ac3accd"
+    },
+    {
+      "experiment": "57c74c6b3786",
+      "run": "d20434ae7340",
+      "index": 23,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "44"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602a/case-023/report.json",
+      "report_sha256": "aac7f278edb77f00afc6a0252f3f9a8184e3c3cef1cec5ea440eb103eb47d6ba"
+    },
+    {
+      "experiment": "57c74c6b3786",
+      "run": "a05016cbf83b",
+      "index": 24,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "45"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602a/case-024/report.json",
+      "report_sha256": "f9d87f87a3f25237d6a175a3da8324defdf18a7bf78205588ba5dd4980b4706e"
+    },
+    {
+      "experiment": "57c74c6b3786",
+      "run": "be1d9ebe6afe",
+      "index": 25,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "46"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602a/case-025/report.json",
+      "report_sha256": "af682251106a2b95b0ead3811b6746283dea62427006058e4fe481ea671c4696"
+    },
+    {
+      "experiment": "57c74c6b3786",
+      "run": "e73d57f61521",
+      "index": 26,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "47"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602a/case-026/report.json",
+      "report_sha256": "fac885127fe9196b710175010f978867f8bfcd495f1ccad8188aa09482e7cecd"
+    },
+    {
+      "experiment": "57c74c6b3786",
+      "run": "3b3d8b42f94c",
+      "index": 27,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "48"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602a/case-027/report.json",
+      "report_sha256": "938fc236448af858c6c8c3425fdc6c81b8b5e9bca1cb52b17dc1929b07055e12"
+    },
+    {
+      "experiment": "57c74c6b3786",
+      "run": "8d3865c0731a",
+      "index": 28,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "49"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602a/case-028/report.json",
+      "report_sha256": "58c13a0c8240a8380dffc536a40cb53fde32b926af30cfbb53f19cb8c311d60c"
+    },
+    {
+      "experiment": "57c74c6b3786",
+      "run": "c8e70cde6a24",
+      "index": 29,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "50"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602a/case-029/report.json",
+      "report_sha256": "84d769b1959fccc086aa586485ca5125a523dfb35db6cd8d96cd6d8a1dc2ced8"
+    },
+    {
+      "experiment": "57c74c6b3786",
+      "run": "d62fd6fbaf99",
+      "index": 30,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "52"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602a/case-030/report.json",
+      "report_sha256": "30bd9ff10fb2752cdf0603eb32d20ed5083d9ab586f3310a82a7ba30bcefabc7"
+    },
+    {
+      "experiment": "57c74c6b3786",
+      "run": "5433519146e8",
+      "index": 31,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "57"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602a/case-031/report.json",
+      "report_sha256": "ca157616dbf721355840bc63119498b69bbf0ccfd622d2a8d7b8800c78e7e3ae"
+    },
+    {
+      "experiment": "3a96ba2e6e42",
+      "run": "13e5da3cb3e3",
+      "index": 32,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "0"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602b/case-032/report.json",
+      "report_sha256": "c295f04ae247b5b330d98d3324704a17f40b90a620a10ede76b802e3778685c1"
+    },
+    {
+      "experiment": "3a96ba2e6e42",
+      "run": "932ce84c80a3",
+      "index": 33,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "1"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602b/case-033/report.json",
+      "report_sha256": "9e4f7490041cbae18a7e832f3747bdfd4951d79e7a51b7435c1e56aba0d65ec6"
+    },
+    {
+      "experiment": "3a96ba2e6e42",
+      "run": "d2eeac6ebd19",
+      "index": 34,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "2"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602b/case-034/report.json",
+      "report_sha256": "c7d8acd0b0788b83fff1a4174130352a88896e156cd321dd20d4cf42fcefb897"
+    },
+    {
+      "experiment": "3a96ba2e6e42",
+      "run": "fb1cb059ecc2",
+      "index": 35,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "8"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602b/case-035/report.json",
+      "report_sha256": "15aaa73908dd28680a39b02870dbb29b0bc199ad4ad68b5d0db4e89819c0b738"
+    },
+    {
+      "experiment": "3a96ba2e6e42",
+      "run": "9785baff9214",
+      "index": 36,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "11"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602b/case-036/report.json",
+      "report_sha256": "39769b01564becf3419ba2a50ad6f5fc309d11395f8a47a34ec1edaa5647fac2"
+    },
+    {
+      "experiment": "3a96ba2e6e42",
+      "run": "ac5f319f6514",
+      "index": 37,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "12"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602b/case-037/report.json",
+      "report_sha256": "1f23fe27b5f712214bd41eb3b76dbf808838ce726718adf2188ec51bd9fc0822"
+    },
+    {
+      "experiment": "3a96ba2e6e42",
+      "run": "74c0379fe3e9",
+      "index": 38,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "14"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602b/case-038/report.json",
+      "report_sha256": "5228d4d12c17dec012ba5de693ededd447c455b91c60e5a43758a2fad6c2b99f"
+    },
+    {
+      "experiment": "3a96ba2e6e42",
+      "run": "5554e70aca7a",
+      "index": 39,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "15"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602b/case-039/report.json",
+      "report_sha256": "19632cb1a4819abc9df08f576e4da8c16cf6d2e3b050964560bdd00d52a59473"
+    },
+    {
+      "experiment": "3a96ba2e6e42",
+      "run": "0d896071454c",
+      "index": 40,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "16"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602b/case-040/report.json",
+      "report_sha256": "693014d08985f89e6488321be9a926222fb66b984b925303e905a724ba284b9b"
+    },
+    {
+      "experiment": "3a96ba2e6e42",
+      "run": "00775ebe4b2f",
+      "index": 41,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "17"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602b/case-041/report.json",
+      "report_sha256": "1341b5782e4f8f113b6c212d2598692f9ac2b49aff660bfae34fe1e6407ead84"
+    },
+    {
+      "experiment": "3a96ba2e6e42",
+      "run": "90b072a4b113",
+      "index": 42,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "18"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602b/case-042/report.json",
+      "report_sha256": "20d39accf998b210469fe374834776d52a0b245253660b6257c579f53be71173"
+    },
+    {
+      "experiment": "3a96ba2e6e42",
+      "run": "b6c826d631a8",
+      "index": 43,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "19"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602b/case-043/report.json",
+      "report_sha256": "bedc6418d8a45eb9a50625fb878e4c5710089dec65ae660f10acda82f038befb"
+    },
+    {
+      "experiment": "3a96ba2e6e42",
+      "run": "c2444e3218de",
+      "index": 44,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "20"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602b/case-044/report.json",
+      "report_sha256": "78f728b6ca95541df2016175553e74a76a67537e07b41902d8a72bcfeabe9e10"
+    },
+    {
+      "experiment": "3a96ba2e6e42",
+      "run": "ecb89de0fb5f",
+      "index": 45,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "23"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602b/case-045/report.json",
+      "report_sha256": "3781b64705bf4338d9e66f171881d68d7362eee9317a090d209740a88ea7152b"
+    },
+    {
+      "experiment": "3a96ba2e6e42",
+      "run": "d400e194711e",
+      "index": 46,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "27"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602b/case-046/report.json",
+      "report_sha256": "1db949f405d96ebd65782fddecbc95cfd30eebe569879525eb1ffb8cead7b884"
+    },
+    {
+      "experiment": "3a96ba2e6e42",
+      "run": "e73aae7fd0eb",
+      "index": 47,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "29"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602b/case-047/report.json",
+      "report_sha256": "36ae921e04d277a971ea1c7ae9f3313426ebb2a5754c4293857152f1b76b5039"
+    },
+    {
+      "experiment": "3a96ba2e6e42",
+      "run": "a17f3453bfbe",
+      "index": 48,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "31"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602b/case-048/report.json",
+      "report_sha256": "a92b4a2fddf14500c3fc38e2a765010c49e20290bdfddd5c52fb8ab346bd439e"
+    },
+    {
+      "experiment": "3a96ba2e6e42",
+      "run": "b967b2819740",
+      "index": 49,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "32"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602b/case-049/report.json",
+      "report_sha256": "ca416fbef7108440e2468da2df5baaf052ee4a8ca99b0c7049dc1d7ed88afc65"
+    },
+    {
+      "experiment": "3a96ba2e6e42",
+      "run": "71273e5459c0",
+      "index": 50,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "42"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602b/case-050/report.json",
+      "report_sha256": "7e76214621161a48063e880d37135aff9e74dec77a936a8c56c4690f944b90ea"
+    },
+    {
+      "experiment": "3a96ba2e6e42",
+      "run": "ab8209808d45",
+      "index": 51,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "43"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602b/case-051/report.json",
+      "report_sha256": "69cf27d73519e7682d3c8946af25a3f00e97787edbcfaf5a68396877408e5b13"
+    },
+    {
+      "experiment": "3a96ba2e6e42",
+      "run": "c6873dc4368e",
+      "index": 52,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "46"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602b/case-052/report.json",
+      "report_sha256": "f6d415128897f5661293e442ae4568d54aaa916f8a1bf43fea33346e0d95ca20"
+    },
+    {
+      "experiment": "3a96ba2e6e42",
+      "run": "c56d4582de92",
+      "index": 53,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "47"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602b/case-053/report.json",
+      "report_sha256": "0dfdd16c09b5cd2fc600481b6ffb1522105675c546c1c5c9daa959cfd9f2566a"
+    },
+    {
+      "experiment": "3a96ba2e6e42",
+      "run": "5d04dad204dc",
+      "index": 54,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "49"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602b/case-054/report.json",
+      "report_sha256": "4f474d05c7b56da8d28b5f54feb2d9e96795a358f70999739d095f23193a4a32"
+    },
+    {
+      "experiment": "3a96ba2e6e42",
+      "run": "8653da1611f6",
+      "index": 55,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "52"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602b/case-055/report.json",
+      "report_sha256": "5cb73ae2db6b0f81709ea92e7dc829136248860f5d1250d1ddbf89e10d5d62f6"
+    },
+    {
+      "experiment": "3a96ba2e6e42",
+      "run": "00406e165a3c",
+      "index": 56,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "58"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602b/case-056/report.json",
+      "report_sha256": "1f5c6522c690c17f80e08d025953f051d608875cc783ad0042349c135ae941de"
+    },
+    {
+      "experiment": "3a96ba2e6e42",
+      "run": "195865ae2c5d",
+      "index": 57,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "64"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602b/case-057/report.json",
+      "report_sha256": "e94fd1501b5b5a9d717e396e94e3b09f0b1d5c7e48bfb4005fb0566219fc078e"
+    },
+    {
+      "experiment": "3a96ba2e6e42",
+      "run": "7aaab8a62973",
+      "index": 58,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "65"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602b/case-058/report.json",
+      "report_sha256": "3d2998282d9d87bf0eb0fb3e657cdfb8e944d327ed56e3befee0587d07faa91d"
+    },
+    {
+      "experiment": "3a96ba2e6e42",
+      "run": "8d8d11b3d82f",
+      "index": 59,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "67"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602b/case-059/report.json",
+      "report_sha256": "3ee869f1075d6ec68af358950c8e5aeed7a83a482871f61fd4c0ff3dbd604145"
+    },
+    {
+      "experiment": "3a96ba2e6e42",
+      "run": "218599d651bc",
+      "index": 60,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "69"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602b/case-060/report.json",
+      "report_sha256": "b45e4bff8178cf33d6f7536be296677ef218d7ac2f21ade152ffad80988328b6"
+    },
+    {
+      "experiment": "3a96ba2e6e42",
+      "run": "51ebdd087b29",
+      "index": 61,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "70"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602b/case-061/report.json",
+      "report_sha256": "5a93498b6657cb00a5d0979118c52150257f000b1fd0f2bb5efa9d208e3803b7"
+    },
+    {
+      "experiment": "3a96ba2e6e42",
+      "run": "c793b8741f5f",
+      "index": 62,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "72"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602b/case-062/report.json",
+      "report_sha256": "29f81cf1a7869de7877f3f598aac75ba4427e5b2a79630b0d3924d4d1d8afa4f"
+    },
+    {
+      "experiment": "3a96ba2e6e42",
+      "run": "d90fde5c6207",
+      "index": 63,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "73"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602b/case-063/report.json",
+      "report_sha256": "be37a9014dd4dd189c81cf4d40d5b47c59bd5f0f37697c96fc2bbac0f4ea4b99"
+    },
+    {
+      "experiment": "c52906c5e323",
+      "run": "6002cffdc3c2",
+      "index": 64,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "2"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602c/case-064/report.json",
+      "report_sha256": "dd9dff5b75b6a24a7c9bed7bfe0fd8e11ea8fef7379ed4af95852b2ec461f8a8"
+    },
+    {
+      "experiment": "c52906c5e323",
+      "run": "805c90b71d26",
+      "index": 65,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "4"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602c/case-065/report.json",
+      "report_sha256": "e84784034ce180b2b4d737e2dfa9b38ae722fb272e4ef8ced6b53b91b0d4cef4"
+    },
+    {
+      "experiment": "c52906c5e323",
+      "run": "13c64db0a9a2",
+      "index": 66,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "7"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602c/case-066/report.json",
+      "report_sha256": "41f32595a8e366362b2b43c34f58a0335b239b66c0d3bb5874fbc17357dbe199"
+    },
+    {
+      "experiment": "c52906c5e323",
+      "run": "f75f43f1a860",
+      "index": 67,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "11"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602c/case-067/report.json",
+      "report_sha256": "f761c21666daab9deeae2617768881c4995a70ce586016a4f2ed839daf702b70"
+    },
+    {
+      "experiment": "c52906c5e323",
+      "run": "03c5f10ce36a",
+      "index": 68,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "12"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602c/case-068/report.json",
+      "report_sha256": "f375c54487164be0b0809bb99d72d9bf9b58ac76b145301dece3d3eabedfde1c"
+    },
+    {
+      "experiment": "c52906c5e323",
+      "run": "577734179488",
+      "index": 69,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "13"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602c/case-069/report.json",
+      "report_sha256": "d98039987a30e7839b7cd9031c98240be8ebf8c704bdac07d6131dc1c87ef5cb"
+    },
+    {
+      "experiment": "c52906c5e323",
+      "run": "6c6c792f7574",
+      "index": 70,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "15"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602c/case-070/report.json",
+      "report_sha256": "23981f64ce6a44980ede1d247f364365869e0fb8c1ec65c48878da602a08b84a"
+    },
+    {
+      "experiment": "c52906c5e323",
+      "run": "6e12f5561f5d",
+      "index": 71,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "16"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602c/case-071/report.json",
+      "report_sha256": "efd37b89d9bdc671c0754ffb815321998f8e09d293ccbdc381bf5f412bcd73a7"
+    },
+    {
+      "experiment": "c52906c5e323",
+      "run": "ea68e660cbc9",
+      "index": 72,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "17"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602c/case-072/report.json",
+      "report_sha256": "ec9d72a3bcc6313d7aedb58829f9a2f2d11a79a7cbd22189cb80868e9a2af0ce"
+    },
+    {
+      "experiment": "c52906c5e323",
+      "run": "02f2ca572589",
+      "index": 73,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "19"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602c/case-073/report.json",
+      "report_sha256": "c288978cfcbbbbfdcfe4ea7e8103e4a26d4ae4c9c4e8505af6c86e432c0c453e"
+    },
+    {
+      "experiment": "c52906c5e323",
+      "run": "fbf03f8c2eca",
+      "index": 74,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "20"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602c/case-074/report.json",
+      "report_sha256": "8aac8b28612b4fafb26452818b4054d243b8de31cef18c34c0b23dde263f6748"
+    },
+    {
+      "experiment": "c52906c5e323",
+      "run": "f905a7d43531",
+      "index": 75,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "22"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602c/case-075/report.json",
+      "report_sha256": "b6cf0f5ec451b971a0f28636547d2f076e0ad64ad68976178287dd1bb3d1433b"
+    },
+    {
+      "experiment": "c52906c5e323",
+      "run": "f2db3df3092c",
+      "index": 76,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "23"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602c/case-076/report.json",
+      "report_sha256": "157a925a10606ca96edf653d3c7f3b1f166436f3d31863f41c9f6e0ed16292b6"
+    },
+    {
+      "experiment": "c52906c5e323",
+      "run": "64e3f1f2fd3f",
+      "index": 77,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "25"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602c/case-077/report.json",
+      "report_sha256": "c4d762fc6532e89b8ce3f9ef8af8cd254cc87497e2269ac93cdd7f4071b54412"
+    },
+    {
+      "experiment": "c52906c5e323",
+      "run": "995169634fc5",
+      "index": 78,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "26"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602c/case-078/report.json",
+      "report_sha256": "452b328a4c626e26165a3345bfc67af0e69990b27f71f819c16df756589dbf62"
+    },
+    {
+      "experiment": "c52906c5e323",
+      "run": "4f51e6704c09",
+      "index": 79,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "27"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602c/case-079/report.json",
+      "report_sha256": "f9308b8091444bdee8c02b2b4065ad62b20fd39dd84830351c5a12684a2943dd"
+    },
+    {
+      "experiment": "c52906c5e323",
+      "run": "1ed8596b3532",
+      "index": 80,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "28"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602c/case-080/report.json",
+      "report_sha256": "1dc3d349a0387168049c5080a50f1c6e55c429dea9e5787c5d85299f2fe89bde"
+    },
+    {
+      "experiment": "c52906c5e323",
+      "run": "88f8dbdabbf4",
+      "index": 81,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "30"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602c/case-081/report.json",
+      "report_sha256": "a00a88f9b03232ee48bff027aa43734af23795644c23bf2f856ab80d36eddedd"
+    },
+    {
+      "experiment": "c52906c5e323",
+      "run": "93d7437a4819",
+      "index": 82,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "31"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602c/case-082/report.json",
+      "report_sha256": "fa4531c0c41e0879bb82c1ee534d4306272d779c04c4959d001b227fb8ec6084"
+    },
+    {
+      "experiment": "c52906c5e323",
+      "run": "279c69a4a033",
+      "index": 83,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "32"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602c/case-083/report.json",
+      "report_sha256": "93b59e0ed40c042973201f8d08bbaa32f917e313fd9a66b0899d8314782901b3"
+    },
+    {
+      "experiment": "c52906c5e323",
+      "run": "c0841ff1a5e4",
+      "index": 84,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "41"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602c/case-084/report.json",
+      "report_sha256": "ee7bcb705451b946d72bc6f9d6d7bdd6ad636180286841e4d6b0d15e31a465b2"
+    },
+    {
+      "experiment": "c52906c5e323",
+      "run": "393ecdf04dcf",
+      "index": 85,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "43"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602c/case-085/report.json",
+      "report_sha256": "9f7a12a0a79647d6a18e0fd65337dbc7bd96c18389b08f0c5f5f16c061f25f94"
+    },
+    {
+      "experiment": "c52906c5e323",
+      "run": "42d103f2135b",
+      "index": 86,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "44"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602c/case-086/report.json",
+      "report_sha256": "e79a8f728dd7460c4d3afd9bd5066fb71fd0ee6df0ad52fdc5dba8516b3e2bf7"
+    },
+    {
+      "experiment": "c52906c5e323",
+      "run": "99f1de0670be",
+      "index": 87,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "45"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602c/case-087/report.json",
+      "report_sha256": "ba50dbf4cc7cb3980e8c75ec6902aff42be478f6ac80cdbcf767bb3199cc5e54"
+    },
+    {
+      "experiment": "e41273a2c98a",
+      "run": "c563c2b93562",
+      "index": 96,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "0"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602d/case-096/report.json",
+      "report_sha256": "bae8318847c599a865f2611c840c653c318b162db9edfc7dcfb217d078a1b7dc"
+    },
+    {
+      "experiment": "e41273a2c98a",
+      "run": "4967bf9aadc1",
+      "index": 97,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "1"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602d/case-097/report.json",
+      "report_sha256": "11117122018ce0288e21ade9d43839d580b99ae2ece1e2daab936f2685d98fc0"
+    },
+    {
+      "experiment": "e41273a2c98a",
+      "run": "839b9dc27560",
+      "index": 98,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "2"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602d/case-098/report.json",
+      "report_sha256": "3d8e6cc73c811596543bd9cefba798290df9335fccd7880b05a55b2a3e01cd17"
+    },
+    {
+      "experiment": "e41273a2c98a",
+      "run": "d88aca341feb",
+      "index": 99,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "4"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602d/case-099/report.json",
+      "report_sha256": "cae724b6ec74671e26bbd6a8b538602ded142e353532e28a8e78c978fd1551c8"
+    },
+    {
+      "experiment": "e41273a2c98a",
+      "run": "f4e10fda98f1",
+      "index": 100,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "7"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602d/case-100/report.json",
+      "report_sha256": "cae27487b3fc6c9a34e6b505c5670cd073f40c6b10605ab56e75b67d3c6766b0"
+    },
+    {
+      "experiment": "e41273a2c98a",
+      "run": "134594b350d6",
+      "index": 101,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "8"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602d/case-101/report.json",
+      "report_sha256": "32a01e033744ec782e778d5d2e431aa098f2413fef31ba41b222b63e5ddce610"
+    },
+    {
+      "experiment": "e41273a2c98a",
+      "run": "7f4af6179926",
+      "index": 102,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "11"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602d/case-102/report.json",
+      "report_sha256": "5a210ba1e4639e3e2c0855c29dbf6f4d7d9d35bc545d966f840ac1484c586df6"
+    },
+    {
+      "experiment": "e41273a2c98a",
+      "run": "d0b56cce2cab",
+      "index": 103,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "12"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602d/case-103/report.json",
+      "report_sha256": "f5144875d716b9d6a6f0f783889bbf3077ec6f5d3ee741207aa8a2de18e008bb"
+    },
+    {
+      "experiment": "e41273a2c98a",
+      "run": "218e3fefdb22",
+      "index": 104,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "14"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602d/case-104/report.json",
+      "report_sha256": "424d03b235211932a62840d0e21249e2a4de2d92afa6410c5efd7c7e01b9e020"
+    },
+    {
+      "experiment": "e41273a2c98a",
+      "run": "2a4770b9f53e",
+      "index": 105,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "15"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602d/case-105/report.json",
+      "report_sha256": "5f3979a8b13e8c6bd65b64a2256ce776f044b273560ce6fb721b73b7013b29a2"
+    },
+    {
+      "experiment": "e41273a2c98a",
+      "run": "a61ccd915724",
+      "index": 106,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "16"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602d/case-106/report.json",
+      "report_sha256": "b94cf024de4a6eba626bbe9271903eb7c8d491373d743765469f5a29c6045b56"
+    },
+    {
+      "experiment": "e41273a2c98a",
+      "run": "705dbcaf0120",
+      "index": 107,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "18"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602d/case-107/report.json",
+      "report_sha256": "752120ba82b31d5030a118eaac67250f2f749b580675f775a273959a8ffb6f4e"
+    },
+    {
+      "experiment": "e41273a2c98a",
+      "run": "de340f5a2fc8",
+      "index": 108,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "19"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602d/case-108/report.json",
+      "report_sha256": "fa9559230a72026f356208be7944741f9f9a62b994e0e45819e1679f4979f4a0"
+    },
+    {
+      "experiment": "e41273a2c98a",
+      "run": "724243cea291",
+      "index": 109,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "20"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602d/case-109/report.json",
+      "report_sha256": "cc52ad533e9205ea65e4fcf6308b664ef1324d6b773f4af0e28b6eb32d0e5a4d"
+    },
+    {
+      "experiment": "e41273a2c98a",
+      "run": "1fc93558232f",
+      "index": 110,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "22"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602d/case-110/report.json",
+      "report_sha256": "6f74ab5b8f59f987fc089bc1afafec99a53805939e958a6685d71afbeac6792b"
+    },
+    {
+      "experiment": "e41273a2c98a",
+      "run": "8cf5b8119716",
+      "index": 111,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "23"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602d/case-111/report.json",
+      "report_sha256": "c52b5bfd2bbc8131d326d8571f6e9269eb2db50eaa577796482a91cb862ed695"
+    },
+    {
+      "experiment": "e41273a2c98a",
+      "run": "7e2bac72428c",
+      "index": 112,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "24"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602d/case-112/report.json",
+      "report_sha256": "bc0efe92e2939d8d3096c5cde6eb0546014d5f179e5ed946f89b74f3ae69ad1c"
+    },
+    {
+      "experiment": "e41273a2c98a",
+      "run": "264de2c91ddf",
+      "index": 113,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "27"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602d/case-113/report.json",
+      "report_sha256": "55ea68236a470e56099417396a2a153257497eccbd611706c9ae560b811c1e19"
+    },
+    {
+      "experiment": "e41273a2c98a",
+      "run": "db92b08ed973",
+      "index": 114,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "29"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602d/case-114/report.json",
+      "report_sha256": "a7249ff8d5ffc4b8935ac2a96e5c6df3afe85c64531b533861514dd078693718"
+    },
+    {
+      "experiment": "e41273a2c98a",
+      "run": "21c5cce61750",
+      "index": 115,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "30"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602d/case-115/report.json",
+      "report_sha256": "eda0e656fce31269d60d83380330839988d4fb9482a09fd59c08c1f67027cbe1"
+    },
+    {
+      "experiment": "e41273a2c98a",
+      "run": "6c0fe1e39f68",
+      "index": 116,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "31"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602d/case-116/report.json",
+      "report_sha256": "a3ef2ad6962db66c04bb1eaa11a8258de8fec1fc8e62cba92007e427f6dc649e"
+    },
+    {
+      "experiment": "e41273a2c98a",
+      "run": "bb85235b3eeb",
+      "index": 117,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "33"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602d/case-117/report.json",
+      "report_sha256": "ca47e26c4561f5676f14d33aea3764ca85cf37436dc3c2509ce538984a42de88"
+    },
+    {
+      "experiment": "e41273a2c98a",
+      "run": "5d4638de0aee",
+      "index": 118,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "34"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602d/case-118/report.json",
+      "report_sha256": "41859ebd75b80917ed06ff60f4c063a9a7426c8c769d601479230b858efc8458"
+    },
+    {
+      "experiment": "e41273a2c98a",
+      "run": "3559dbf8eaa0",
+      "index": 119,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "41"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602d/case-119/report.json",
+      "report_sha256": "a21822667155219136b433913e1c5280051d60ce233fb8e00a10eb5ec04fab5c"
+    },
+    {
+      "experiment": "e41273a2c98a",
+      "run": "a413a111338a",
+      "index": 120,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "42"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602d/case-120/report.json",
+      "report_sha256": "f581dd41540de99d0929cb53c9502d29e96785d1e8bd7dc7ace7745355a21a70"
+    },
+    {
+      "experiment": "e41273a2c98a",
+      "run": "3615db50f6fa",
+      "index": 121,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "43"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602d/case-121/report.json",
+      "report_sha256": "76cd8a5ea1f1e476c168252a00f5adcac180bbda6655015f75d11c4a721cde51"
+    },
+    {
+      "experiment": "e41273a2c98a",
+      "run": "c188919a0650",
+      "index": 122,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "45"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602d/case-122/report.json",
+      "report_sha256": "5f66fb3496425c7fa9e0599a04c23c5f7bf52285ac21d9ec4eabe1c181a2564a"
+    },
+    {
+      "experiment": "e41273a2c98a",
+      "run": "ab870a327f62",
+      "index": 123,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "46"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602d/case-123/report.json",
+      "report_sha256": "a6d182599d3a106b5da2bbce819feee500d2463fa9f1c4376839f8594d88f362"
+    },
+    {
+      "experiment": "e41273a2c98a",
+      "run": "887a6cc01af4",
+      "index": 124,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "47"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602d/case-124/report.json",
+      "report_sha256": "7f04fe7045f408743006b729de1f694dd56c5a0234ff7ea4d8e4fc328e6b3207"
+    },
+    {
+      "experiment": "e41273a2c98a",
+      "run": "08ea957288e3",
+      "index": 125,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "48"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602d/case-125/report.json",
+      "report_sha256": "cd56d08bf047631d9b4524db51f4d1db312c49116298db4cf4f42677be05459d"
+    },
+    {
+      "experiment": "e41273a2c98a",
+      "run": "7a0ebd741be0",
+      "index": 126,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "49"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602d/case-126/report.json",
+      "report_sha256": "eca4e87a68f9b2a58fd38a3826303981e270deb1dda1b671c380154c4b4992d3"
+    },
+    {
+      "experiment": "e41273a2c98a",
+      "run": "03410464f5b6",
+      "index": 127,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "50"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602d/case-127/report.json",
+      "report_sha256": "c9c932332740c0383e4cde6e9c5fdf75bf8c565b394b80e865a76a131e5b0dd4"
+    },
+    {
+      "experiment": "a7fa80715bd7",
+      "run": "88a45d99fabb",
+      "index": 128,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "0"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602e/case-128/report.json",
+      "report_sha256": "497df0cd3c27b34b5f3ec6703ee47944345f5d82a663aa2dc7413d3a2a8da954"
+    },
+    {
+      "experiment": "a7fa80715bd7",
+      "run": "85568964a462",
+      "index": 129,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "1"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602e/case-129/report.json",
+      "report_sha256": "7f8f08eeb0fdd8aaa6a09a4e62ddf87927915b6b4c1790821574ce1331ff8ea4"
+    },
+    {
+      "experiment": "a7fa80715bd7",
+      "run": "424ef2030333",
+      "index": 130,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "4"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602e/case-130/report.json",
+      "report_sha256": "f07a9e255ff41c807d084ae7d8e1d5b12e82a5d14399e6d8598d694148140eb8"
+    },
+    {
+      "experiment": "a7fa80715bd7",
+      "run": "5ecb8d1ea4dc",
+      "index": 131,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "6"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602e/case-131/report.json",
+      "report_sha256": "cb69fdfcb05a0d359c7c848bbcfd2096803b682d4717cd92540144affe77c3dd"
+    },
+    {
+      "experiment": "a7fa80715bd7",
+      "run": "5ef0c2781438",
+      "index": 132,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "8"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602e/case-132/report.json",
+      "report_sha256": "88fa29ebdad4c2fc1821d3c69cbea2228c1dc63b385aa0c97341cd4a02f5c86c"
+    },
+    {
+      "experiment": "a7fa80715bd7",
+      "run": "24ba5c0df9b6",
+      "index": 133,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "11"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602e/case-133/report.json",
+      "report_sha256": "2f1a5c66d8f96dd1280fd922a840540bb6e3bc867ea8b558b6268d3886475dbb"
+    },
+    {
+      "experiment": "a7fa80715bd7",
+      "run": "7e1c2ea52f3b",
+      "index": 134,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "12"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602e/case-134/report.json",
+      "report_sha256": "fcb97aedaa3e3ad7bccc81e43484d94d9e4198ca85d7458ae1f6fb51f73035e1"
+    },
+    {
+      "experiment": "a7fa80715bd7",
+      "run": "eac04f76098d",
+      "index": 135,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "14"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602e/case-135/report.json",
+      "report_sha256": "48a8c62b4344a17aa9cb797995e2e071512c01d0d86c2a72270ed6ec96409e2b"
+    },
+    {
+      "experiment": "a7fa80715bd7",
+      "run": "49d859a7f40f",
+      "index": 136,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "15"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602e/case-136/report.json",
+      "report_sha256": "3733057fa7e805578b807825b3713a86ce5e8bc32e670fb28facfba77a9c1de0"
+    },
+    {
+      "experiment": "a7fa80715bd7",
+      "run": "7b78a93f7ec0",
+      "index": 137,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "16"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602e/case-137/report.json",
+      "report_sha256": "0c2d9043f51820fbd3da45af058046315666f86ff2cff11557bfc6794820a83e"
+    },
+    {
+      "experiment": "a7fa80715bd7",
+      "run": "9a1f61e53fee",
+      "index": 138,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "17"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602e/case-138/report.json",
+      "report_sha256": "703691208446a0a3cec61d32c91697ce4e6f7665e1e0164d20371993e270a2f4"
+    },
+    {
+      "experiment": "a7fa80715bd7",
+      "run": "f2b4f33cc70d",
+      "index": 139,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "18"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602e/case-139/report.json",
+      "report_sha256": "009dc9d095a444c702cfa123f5142790ec125d55c7cdfe8894aaf2e1dfe411c2"
+    },
+    {
+      "experiment": "a7fa80715bd7",
+      "run": "da6dd77c91fe",
+      "index": 140,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "19"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602e/case-140/report.json",
+      "report_sha256": "4ab9d1f9525bca8553682c82cdc3c1e435607f0cea310a00e0709af09642c6fc"
+    },
+    {
+      "experiment": "a7fa80715bd7",
+      "run": "abadfefed52c",
+      "index": 141,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "20"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602e/case-141/report.json",
+      "report_sha256": "dc582280b2a67227489487243d31dfb0a2eea7535606edf138bf4577df9a5eb1"
+    },
+    {
+      "experiment": "a7fa80715bd7",
+      "run": "80c472b6f952",
+      "index": 142,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "22"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602e/case-142/report.json",
+      "report_sha256": "f943b85b7452fc16555a1f775cf64edf0d8e65dd7e7aae526226954aeea5f6f5"
+    },
+    {
+      "experiment": "a7fa80715bd7",
+      "run": "681896e7b723",
+      "index": 143,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "23"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602e/case-143/report.json",
+      "report_sha256": "d21a60135c20091cfd5a8751b47eb85fd8e9bfc1ebe4bae0a15cfc19f8415161"
+    },
+    {
+      "experiment": "a7fa80715bd7",
+      "run": "e0b732f6a531",
+      "index": 144,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "24"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602e/case-144/report.json",
+      "report_sha256": "b5196ced0bd6479cf76f698c816d088d4f4bc4c66fe3ee6526478ac7c124ef6f"
+    },
+    {
+      "experiment": "a7fa80715bd7",
+      "run": "753541df98ae",
+      "index": 145,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "25"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602e/case-145/report.json",
+      "report_sha256": "83f318710f1c03e76664e02824f9eae0db384b90f507941acf99475a1039cfdf"
+    },
+    {
+      "experiment": "a7fa80715bd7",
+      "run": "195e02708546",
+      "index": 146,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "26"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602e/case-146/report.json",
+      "report_sha256": "2818d4af2b51338ac1bd763a4e9571a20b0760b635c6eb9aaec967803a2914e6"
+    },
+    {
+      "experiment": "a7fa80715bd7",
+      "run": "5dae5d9797c3",
+      "index": 147,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "27"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602e/case-147/report.json",
+      "report_sha256": "79354157cd9bb6f9fddc45911b376ea19f9f767b1c6fd9056a5aa354b9f58ad1"
+    },
+    {
+      "experiment": "a7fa80715bd7",
+      "run": "2c19a6448ad9",
+      "index": 148,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "28"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602e/case-148/report.json",
+      "report_sha256": "f99eeac14dcad83e05ce971acc24087068420a63e9706653199fa5b181114551"
+    },
+    {
+      "experiment": "a7fa80715bd7",
+      "run": "b51937b657ae",
+      "index": 149,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "29"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602e/case-149/report.json",
+      "report_sha256": "ca10004adfef0e27f2129308f16ac08deabebcb080c80bd9f9cdec9a4cee6e7b"
+    },
+    {
+      "experiment": "a7fa80715bd7",
+      "run": "6d5853ca84c9",
+      "index": 150,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "30"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602e/case-150/report.json",
+      "report_sha256": "db26f725108a5436793f0617acdaf03faff3d293c5858fa5b594d9abe184aff7"
+    },
+    {
+      "experiment": "a7fa80715bd7",
+      "run": "4bb7b9f24d12",
+      "index": 151,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "31"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602e/case-151/report.json",
+      "report_sha256": "28a6fd09374f50433433540b9d78a68473832bcde19a29d77e2fa6ffa381a187"
+    },
+    {
+      "experiment": "a7fa80715bd7",
+      "run": "e5b04bb1d4ae",
+      "index": 152,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "32"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602e/case-152/report.json",
+      "report_sha256": "920a39d458219e67e21263ff61ed02575fbb58b85483f7d9f7c5e6d1bdb140b8"
+    },
+    {
+      "experiment": "a7fa80715bd7",
+      "run": "c7ce0d930894",
+      "index": 153,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "33"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602e/case-153/report.json",
+      "report_sha256": "2ba0be3dbbd79a9ac2ef7d60a639e4a073729d1128305227e9630069d9c4728c"
+    },
+    {
+      "experiment": "a7fa80715bd7",
+      "run": "b9df51643db2",
+      "index": 154,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "34"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602e/case-154/report.json",
+      "report_sha256": "9c8f43adeed28b3b753cb280ce4209bf90d5b1c68a079aa79c3a620a30516aae"
+    },
+    {
+      "experiment": "a7fa80715bd7",
+      "run": "bb8e800e29cf",
+      "index": 155,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "35"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602e/case-155/report.json",
+      "report_sha256": "22d6102932cb95fe42273a3efdae40b017168e2f185c200146005b455614bf4d"
+    },
+    {
+      "experiment": "a7fa80715bd7",
+      "run": "732bf7812fb8",
+      "index": 156,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "36"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602e/case-156/report.json",
+      "report_sha256": "d69f2ee08d62e1363d098ff66683f13fc0c668e1d2736e3c90d3d7ed1426b9be"
+    },
+    {
+      "experiment": "a7fa80715bd7",
+      "run": "3bea2f6eec4f",
+      "index": 157,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "39"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602e/case-157/report.json",
+      "report_sha256": "11bb16c2bf5cbbb49393eb2ffc826791431e120bb5f82ca8644ee04dd1aca109"
+    },
+    {
+      "experiment": "a7fa80715bd7",
+      "run": "cae02c79a5fb",
+      "index": 158,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "40"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602e/case-158/report.json",
+      "report_sha256": "37c263f45acfc70ed4598861d53194d21092f3e5ebcdd7f0709869414efd19d0"
+    },
+    {
+      "experiment": "a7fa80715bd7",
+      "run": "d8fb04748219",
+      "index": 159,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "41"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602e/case-159/report.json",
+      "report_sha256": "54316e344c8e93397c19a1de36020a2ebdda7c86eeceac2a0e68adc0c5f77af6"
+    },
+    {
+      "experiment": "887a11032fc6",
+      "run": "9500dbf72090",
+      "index": 88,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "0"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602f/case-088/report.json",
+      "report_sha256": "2ab2c328d38dbe3563f3a0b3555b8f9a5b80aeca7ff9cee6572ae35deb886b7f"
+    },
+    {
+      "experiment": "887a11032fc6",
+      "run": "774b13df0a0c",
+      "index": 89,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "2"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602f/case-089/report.json",
+      "report_sha256": "bd00d3f55b21f6e59a73f3355f6c81e61a36b80b848986d1fb6e32ac10cdc9e0"
+    },
+    {
+      "experiment": "887a11032fc6",
+      "run": "2604ff071bf7",
+      "index": 90,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "4"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602f/case-090/report.json",
+      "report_sha256": "0c1b4d6d51e1cbbcc2301739c63c4355b3387826867f8ac4f83f896056cdbe8e"
+    },
+    {
+      "experiment": "887a11032fc6",
+      "run": "95d4a7de3757",
+      "index": 91,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "6"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602f/case-091/report.json",
+      "report_sha256": "e9036934d4180af9eed68a05c17ce988ef8091dc6dcf717f1e898e330c3a9ec8"
+    },
+    {
+      "experiment": "887a11032fc6",
+      "run": "e570a332fd97",
+      "index": 92,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "8"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602f/case-092/report.json",
+      "report_sha256": "7eb4eae1c4fb7ca06bd3c05301f94a494d191b8a6d221925f08360a1b3d9a970"
+    },
+    {
+      "experiment": "887a11032fc6",
+      "run": "6fa2281b9050",
+      "index": 93,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "9"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602f/case-093/report.json",
+      "report_sha256": "665c73a58cd5d23947438635384b96ef76f0b02186b658f878a93c7629fedec7"
+    },
+    {
+      "experiment": "887a11032fc6",
+      "run": "55bbe1867f36",
+      "index": 94,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "10"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602f/case-094/report.json",
+      "report_sha256": "30752130168eb7a1cc8a001af360650bba5e3a8efa0d37c95f593d36463578d1"
+    },
+    {
+      "experiment": "887a11032fc6",
+      "run": "c1ed211fe885",
+      "index": 95,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "11"
+        ]
+      },
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r602f/case-095/report.json",
+      "report_sha256": "6d20fc0f6f03069cd1b3f98a401911db353f698ee94abec7e0878aaeef110a12"
+    }
+  ],
+  "timing_changes": [
+    {
+      "index": 4,
+      "result": "sat",
+      "baseline_seconds": 33.49168264120817,
+      "candidate_seconds": 36.01084051653743,
+      "delta": 2.519157875329256
+    },
+    {
+      "index": 18,
+      "result": "unsat",
+      "baseline_seconds": 48.5866620875895,
+      "candidate_seconds": 51.94607217796147,
+      "delta": 3.3594100903719664
+    },
+    {
+      "index": 52,
+      "result": "sat",
+      "baseline_seconds": 5.529117848724127,
+      "candidate_seconds": 6.784672716632485,
+      "delta": 1.2555548679083586
+    },
+    {
+      "index": 55,
+      "result": "sat",
+      "baseline_seconds": 3.023768989369273,
+      "candidate_seconds": 0.7674780730158091,
+      "delta": -2.256290916353464
+    },
+    {
+      "index": 96,
+      "result": "sat",
+      "baseline_seconds": 7.425950542092323,
+      "candidate_seconds": 6.028583312407136,
+      "delta": -1.3973672296851873
+    },
+    {
+      "index": 133,
+      "result": "unsat",
+      "baseline_seconds": 7.789746668189764,
+      "candidate_seconds": 5.629011288285255,
+      "delta": -2.1607353799045086
+    }
+  ],
+  "model_point_reproduction": {
+    "before": {
+      "observation": {
+        "rows": [
+          {
+            "large": 0,
+            "model_value": "1",
+            "hint": 0,
+            "expected": 1
+          },
+          {
+            "large": 1,
+            "model_value": "1606938044258990275541962092341162602522202993782792835301377",
+            "hint": 1,
+            "expected": 0
+          }
+        ],
+        "mismatches": 2
+      },
+      "lease": [
+        0
+      ],
+      "native_compile_flags": {
+        "CXX_DEFINES": [
+          "-DXOLVER_ENABLE_PROOFS",
+          "-DXOLVER_HAS_CADICAL",
+          "-DXOLVER_HAS_LIBPOLY",
+          "-DXOLVER_VERSION_MAJOR=0",
+          "-DXOLVER_VERSION_MINOR=1",
+          "-DXOLVER_VERSION_PATCH=0"
+        ],
+        "CXX_INCLUDES": [
+          "-I/pub/data/jiafq/xolver/include",
+          "-I/pub/data/jiafq/xolver/src",
+          "-I/pub/data/jiafq/xolver/third_party/libpoly/include",
+          "-I/pub/data/jiafq/xolver/third_party/SOMTParser/include",
+          "-isystem",
+          "/pub/data/jiafq/xolver/dependencies/native/include",
+          "-isystem",
+          "/pub/data/jiafq/xolver/dependencies/json/include",
+          "-isystem",
+          "/pub/data/jiafq/xolver/third_party/cadical/src"
+        ],
+        "CXX_FLAGS": [
+          "-O3",
+          "-DNDEBUG",
+          "-std=c++20",
+          "-fPIC",
+          "-Wall",
+          "-Wextra",
+          "-Wpedantic",
+          "-Wno-unused-parameter",
+          "-O3"
+        ]
+      },
+      "native_compile_flags_sha256": "2439c85349db8ec0d1bd0946c2f0cae37748289c1e0bd36e325485daa4d19f07",
+      "source_sha256": "a1e9d67ff1d39433a2f00bfce12e5f81e8275e335cc57029f72752375ffe8893",
+      "binary_sha256": "b33dabe916ac0c6766037d05b5a18e337710fa66e44c8f19cd7db6b86c2c4803",
+      "linked_core_sha256": "93b5f90c80aca01bb18ae3e1eb399136cd2cc040071fdf7b37d2d6289a925325",
+      "qualification_record_sha256": "943e5b3785c4cc351bc7c754161d232f4e24bfb3aa61770413ed6098e86a9d06",
+      "boundary": "Native model-phase capability reproduction on unchanged floating kernel; not an SMT verdict or performance score."
+    },
+    "after": {
+      "observation": {
+        "rows": [
+          {
+            "large": 0,
+            "model_value": "1",
+            "hint": 1,
+            "expected": 1
+          },
+          {
+            "large": 1,
+            "model_value": "1606938044258990275541962092341162602522202993782792835301377",
+            "hint": 0,
+            "expected": 0
+          }
+        ],
+        "mismatches": 0
+      },
+      "lease": [
+        0
+      ],
+      "native_compile_flags": {
+        "CXX_DEFINES": [
+          "-DXOLVER_ENABLE_PROOFS",
+          "-DXOLVER_HAS_CADICAL",
+          "-DXOLVER_HAS_LIBPOLY",
+          "-DXOLVER_VERSION_MAJOR=0",
+          "-DXOLVER_VERSION_MINOR=1",
+          "-DXOLVER_VERSION_PATCH=0"
+        ],
+        "CXX_INCLUDES": [
+          "-I/pub/data/jiafq/xolver/include",
+          "-I/pub/data/jiafq/xolver/src",
+          "-I/pub/data/jiafq/xolver/third_party/libpoly/include",
+          "-I/pub/data/jiafq/xolver/third_party/SOMTParser/include",
+          "-isystem",
+          "/pub/data/jiafq/xolver/dependencies/native/include",
+          "-isystem",
+          "/pub/data/jiafq/xolver/dependencies/json/include",
+          "-isystem",
+          "/pub/data/jiafq/xolver/third_party/cadical/src"
+        ],
+        "CXX_FLAGS": [
+          "-O3",
+          "-DNDEBUG",
+          "-std=c++20",
+          "-fPIC",
+          "-Wall",
+          "-Wextra",
+          "-Wpedantic",
+          "-Wno-unused-parameter",
+          "-O3"
+        ]
+      },
+      "native_compile_flags_sha256": "2439c85349db8ec0d1bd0946c2f0cae37748289c1e0bd36e325485daa4d19f07",
+      "source_sha256": "a1e9d67ff1d39433a2f00bfce12e5f81e8275e335cc57029f72752375ffe8893",
+      "binary_sha256": "bd5838f3faf0a9594fd8934ac997eb6da31151c057157fd7368df8ba654614bb",
+      "linked_core_sha256": "118bcfad83c24d3f363b7f351c074bca5685225ae14a8189787ad582368f54ab",
+      "qualification_record_sha256": "d9cbc96aef6c714be8b826b4c6b8f6968489384e7bc999bae192b15592c9765a",
+      "boundary": "Native same-source model-phase validation of the shared exact evaluator; not an SMT verdict or performance score."
+    }
+  },
+  "earlier_pilot": {
+    "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/stage-r586.json",
+    "sha256": "7ad8fbe2fba0cf03bc0185c380440b67331039aabc2d0ded82755af5f3d4e24e",
+    "scope": "Preserved negative performance pilot; adoption is now a correctness/API decision under explicit user direction."
+  },
+  "selected_for_functionality": true,
+  "selected_as_performance_improvement": false,
+  "interface": "Propagator::decisionSource(DecisionContext) chooses SatActivity or TheoryModel per request; explicit unassigned decide() picks retain priority; default TheoryModel selection and complete-model checks remain unchanged.",
+  "implementation": "LRA and LIA delegate exact model-point evaluation to LinearAtomManager; rational arithmetic and infinitesimals are preserved. No new default branching algorithm, feature gate or external runtime oracle.",
+  "above_z3": false,
+  "protected_sets_used": false,
+  "extra_current_main_server_archive_required": false
+}

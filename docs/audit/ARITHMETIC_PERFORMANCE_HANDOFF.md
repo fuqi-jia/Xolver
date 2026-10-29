@@ -7,14 +7,22 @@ API contracts are described in [the architecture reference](../ARCHITECTURE.md),
 named source snapshots and binaries; they do not establish general completeness
 or performance superiority.
 
-Latest delivered arithmetic implementation: [complete polynomial supports and affine equality blocks](#complete-polynomial-supports-and-affine-equality-blocks-r486r514),
-[PR60](https://github.com/fuqi-jia/Xolver/pull/60), main
-`cb799c065bf7f13e0465a5622a560406a03871a8`, with green
-[PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/40820715961) and
-[fresh main CI](https://github.com/fuqi-jia/Xolver/actions/runs/40823193025).
-Latest supplementary verification: [original-input congruence certificate](#original-input-congruence-certificate-r284r285).
-Older result tables describe their own frozen rounds; use the latest table and
-its exact GitHub review/merge checks when continuing work.
+Latest functional delivery: [complete GCD coverage](#complete-gcd-backend-coverage-r588r606)
+([PR62](https://github.com/fuqi-jia/Xolver/pull/62)) and
+[exact linear phases with a decision interface](#exact-linear-phases-and-decision-interface-r596r608)
+([PR63](https://github.com/fuqi-jia/Xolver/pull/63)), combined implementation main
+`db671329385edc343ada4a11a2787b9c3f903053`.
+Both PRs passed their [QCP CI](https://github.com/fuqi-jia/Xolver/actions/runs/40846103315)
+and [core/API CI](https://github.com/fuqi-jia/Xolver/actions/runs/40846412596).
+The combined [main CI](https://github.com/fuqi-jia/Xolver/actions/runs/40849495526)
+is the post-merge receipt. Documentation-only updates do not imply a new native binary.
+
+The fresh R602 fixed160 round verifies **94** results for this implementation,
+versus **95** for preceding delivered main and **115** for same-round Z3.
+Z3 has 124 raw decisions; nine remain unconfirmed and are excluded. The accuracy
+fix is retained under the user's explicit functionality-first instruction,
+including its known SAT59 timeout regression. No performance superiority is claimed.
+Older tables describe their own frozen versions and evidence boundaries.
 
 ## Delivery contract
 
@@ -1752,3 +1760,80 @@ source, profile the remaining propagation/search costs, and evaluate each change
 with fixed inputs and identical budgets. Do not revive unsafe refutation
 shortcuts, assume zero-divisor identities, cap propagation output based on the
 consumer's accepted count, or reuse stale explanations across context changes.
+
+## Complete GCD backend coverage (R588/R606)
+
+[PR62](https://github.com/fuqi-jia/Xolver/pull/62), merged as
+`e684332b932a14098d9df171b409535bcc423adb`, supports signed `Zgcd`/`Z.gcd`
+and named/composed VCs. A shared UF receives valid finite ground instances of
+nonnegativity, zero boundaries, symmetry and Euclidean remainder invariance;
+this is not bounded guessing of GCD values. Missing instances can prevent
+proof; SAT on the projection does not refute the C program. See
+[the integration guide](../QCP_INTEGRATION.md).
+
+Two fresh workflows preserve the original recursive GCD C body and exact
+`__return == Zgcd(x,y)` contract. Both reach controller `done`, after independent
+VC analysis, three proof groups, complete parent checking, publication and fresh
+canonical replay. Each backend discharges **9 top-level VCs**, **3 auxiliary split
+conditions**, and **34 actual external SMT calls**. Split conditions cannot
+substitute for primary coverage. Mathematical closers pass unchanged; five
+outer parent routes per backend are explicitly adapted to mandatory LLM/aggressive
+entry, preserving generated candidates and route-repair evidence.
+
+R598 passes 32 Python tests on Panda1. R604 independently checks all 50 sufficient
+queries from 14 original definitions with frozen final Xolver, Z3 and cvc5:
+150/150 UNSAT calls, 60 seconds/one leased physical CPU/16 GiB each.
+R606 (`7e20f6379512`) authenticates both complete workflows and reports;
+[the stage record](QCP_GCD_FUNCTION_STAGE_20261029.json) has SHA-256
+`e787ea6893d6139ae1bdf9bcf8c5f63550ff7a4e4137172541b56f0730719969`.
+
+GCD external-backend coverage is now complete. The development inventory remains
+three unique programs: branch, GCD and max3. Internal symbolic-executor SMT stays
+common and opaque. Interactive workflow/query sums do not establish an end-to-end
+speed win. Neither protection set has been read or evaluated.
+
+## Exact linear phases and decision interface (R596/R608)
+
+[PR63](https://github.com/fuqi-jia/Xolver/pull/63) merges as
+`db671329385edc343ada4a11a2787b9c3f903053`. LRA and LIA share exact model-point
+evaluation in `LinearAtomManager`. This fixes the discarded infinitesimal in
+`x > 0` at a positive-infinitesimal point and the rounded equality test between
+`2^200` and `2^200+1`. These are heuristic phase evaluations, not entailments or
+verdict certificates; no earlier wrong SAT/UNSAT result is asserted.
+
+`Propagator::decisionSource(DecisionContext)` exposes `SatActivity` and
+`TheoryModel` selection per request. Explicit unassigned `decide()` picks retain
+priority; the default remains the existing theory-model selection. Full-model
+checks and LRA/LIA backtracking policies are preserved. This is a research
+interface, with no new default branching algorithm; see
+[the interface guide](../DECISION_SELECTION.md).
+
+R596 (`2929bdc10f0e`) qualifies source
+`d4a2fe7aefcfbc4be23665aeee89ec35be51cc74`: 1,745 unit cases/876,668 assertions,
+147 targeted cases, 63 parser tests and three structural checks pass.
+R600 (`efa2273a1dbb`) passes all 38 server acceptance groups. Frozen CLI SHA-256:
+`c919846a8c7b8880b28a43f7201499e0d761c27d74adf3615177b21b375f9284`.
+The SV executable remains `fed5b68160230b6bb372278e09c7e0088464e911ffce013dc91da080ceeadccf`.
+
+R602 compares frozen versions freshly on every fixed160 input, with 60 seconds,
+one physical CPU and 16 GiB per solver. Original UNSAT115 retains its checked
+original-input modular certificate. SAT results require independent model replay.
+
+| Version | Verified | SAT | UNSAT | Unknown | Timeout | Verified PAR-2 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Previous main | 95 | 54 | 41 | 1 | 64 | 8105.846 |
+| Exact phases/API | 94 | 53 | 41 | 1 | 65 | 8223.936 |
+| Frozen Z3 | 115 | 66 raw | 58 raw | 0 | 36 | 5614.207 |
+
+Nine Z3 decisions lack confirmation and are excluded. The only loss is verified
+SAT59: previous main 3.376 seconds, candidate timeout 60.010 seconds. No new
+solves, wrong verdicts or invalid exported models occur. Earlier negative
+R582/R586 evidence remains immutable; the user explicitly retained the correct
+calculation despite this performance regression.
+
+R608 (`bdf65444c9e7`) authenticates the complete stage;
+[the stage record](LINEAR_MODEL_PHASE_API_STAGE_20261029.json) has SHA-256
+`5dfba3104f1954046d9715867180c1256e308e5f3d37653bc79d0646a22f59c0`.
+This is a functional accuracy/API delivery. It does not meet the goal of beating
+Z3, and no protection-set results are claimed. No extra current-main server
+archive is required after GitHub CI.
