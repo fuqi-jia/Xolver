@@ -143,6 +143,31 @@ Lemma proof_unsupported : unsupported. Proof. Abort.
         self.assertNotIn('split_pure_spatial', candidate)
         self.assertNotIn('cancel ', candidate)
 
+    def test_composed_gcd_candidates_reconstruct_original_goal_without_smt_axioms(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            goals = root/'goal.v'
+            goals.write_text('''Definition step := forall (a: Z) (b: Z) (r: Z)
+  (H: b <> 0) (Hr: r = Zgcd b (a % b)), r = Zgcd a b.
+Definition parent := step \\/ step.
+''')
+            manual = root/'manual.v'
+            manual.write_text('Lemma proof_parent : parent. Proof. Admitted.\n')
+            binary = root/'binary'; binary.write_bytes(b'frozen')
+            with patch('tools.integration.qcp_backend.leased_cpu', return_value=7), \
+                    patch('tools.integration.qcp_backend.invoke', return_value={'result': 'unsat'}):
+                report = discharge(goals, manual, ['parent'], 'xolver', binary, 60, root/'out')
+            row = report['rows'][0]
+            self.assertTrue(row['queries'][0]['integer_function_facts'])
+            candidate = Path(row['candidate']).read_text()
+            self.assertIn('Lemma proof_parent : parent.', candidate)
+            self.assertIn('  left.\n  unfold step.', candidate)
+            self.assertIn('Z.gcd_rem', candidate)
+            self.assertNotIn('Admitted', candidate)
+            self.assertNotIn('Axiom', candidate)
+            self.assertFalse(report['program_verified'])
+            self.assertFalse(row['kernel_checked'])
+
 
 if __name__ == '__main__':
     unittest.main()

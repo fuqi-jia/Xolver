@@ -25,6 +25,8 @@ class Unsupported(ValueError):
 class Term:
     smt: str
     sort: str
+    op: str = ''
+    args: tuple[Term, ...] = ()
 
 
 LIMITS = {
@@ -41,7 +43,59 @@ def integer(value: int) -> str:
 
 
 def apply(op: str, *args: Term, sort: str) -> Term:
-    return Term(f"({op} {' '.join(t.smt for t in args)})", sort)
+    return Term(f"({op} {' '.join(t.smt for t in args)})", sort, op, args)
+
+
+def absolute(a: Term) -> Term:
+    return apply('ite', apply('<', a, Term('0', 'Int'), sort='Prop'),
+                 apply('-', a, sort='Int'), a, sort='Int')
+
+
+def gcd(a: Term, b: Term) -> Term:
+    # Z.gcd is symmetric for all signed integers, including zero. Canonical
+    # argument order shares the UF application without introducing quantifiers.
+    a, b = sorted((a, b), key=lambda t: t.smt)
+    return apply('|qcp.gcd|', a, b, sort='Int')
+
+
+def integer_function_facts(terms: list[Term]) -> tuple[list[str], list[dict]]:
+    """Finite, valid ground instances; SAT remains an inconclusive projection.
+
+    No bounded approximation of gcd and no unrolling to a guessed answer. The
+    omitted gcd axioms weaken the query, so UNSAT still suffices. Rocq checks
+    the complete source statement independently of these SMT facts.
+    """
+    applications, remainders = {}, {}
+    pending = list(terms)
+    visited = set()
+    while pending:
+        term = pending.pop()
+        if term.smt in visited:
+            continue
+        visited.add(term.smt)
+        pending.extend(term.args)
+        if term.op == '|qcp.gcd|':
+            applications[term.smt] = term
+        elif term.op == 'Z.rem':
+            remainders[term.smt] = term
+    if not applications:
+        return [], []
+    facts = []
+    for remainder in remainders.values():
+        a, b = remainder.args
+        before, after = gcd(a, b), gcd(b, remainder)
+        applications[before.smt] = before
+        applications[after.smt] = after
+        facts.append(dict(lemma='Z.gcd_rem + Z.gcd_comm',
+            assertion=f'(=> (not (= {b.smt} 0)) (= {before.smt} {after.smt}))'))
+    for term in applications.values():
+        a, b = term.args
+        facts.extend([
+            dict(lemma='Z.gcd_nonneg', assertion=f'(>= {term.smt} 0)'),
+            dict(lemma='Z.gcd_0_l', assertion=f'(=> (= {a.smt} 0) (= {term.smt} {absolute(b).smt}))'),
+            dict(lemma='Z.gcd_0_r', assertion=f'(=> (= {b.smt} 0) (= {term.smt} {absolute(a).smt}))'),
+        ])
+    return ['(declare-fun |qcp.gcd| (Int Int) Int)'], facts
 
 
 def neg(a: Term) -> Term:
@@ -53,20 +107,20 @@ def quot(a: Term, b: Term) -> Term:
     x, y = a.smt, b.smt
     ax, ay = f"(ite (< {x} 0) (- {x}) {x})", f"(ite (< {y} 0) (- {y}) {y})"
     magnitude = f"(div {ax} {ay})"
-    return Term(f"(ite (= {y} 0) 0 (ite (xor (< {x} 0) (< {y} 0)) (- {magnitude}) {magnitude}))", "Int")
+    return Term(f"(ite (= {y} 0) 0 (ite (xor (< {x} 0) (< {y} 0)) (- {magnitude}) {magnitude}))", "Int", 'Z.quot', (a, b))
 
 
 def floor_div(a: Term, b: Term) -> Term:
     # Rocq Z.div rounds toward -infinity even for a negative divisor.
     x, y = a.smt, b.smt
-    return Term(f"(ite (= {y} 0) 0 (ite (> {y} 0) (div {x} {y}) (div (- {x}) (- {y}))))", "Int")
+    return Term(f"(ite (= {y} 0) 0 (ite (> {y} 0) (div {x} {y}) (div (- {x}) (- {y}))))", "Int", 'Z.div', (a, b))
 
 
 def rem(a: Term, b: Term) -> Term:
     """Total Rocq Z.rem, using a sign-preserving remainder normal form."""
     x, y = a.smt, b.smt
     magnitude = f"(mod (ite (< {x} 0) (- {x}) {x}) {y})"
-    return Term(f"(ite (= {y} 0) {x} (ite (< {x} 0) (- {magnitude}) {magnitude}))", "Int")
+    return Term(f"(ite (= {y} 0) {x} (ite (< {x} 0) (- {magnitude}) {magnitude}))", "Int", 'Z.rem', (a, b))
 
 
 class Parser:
@@ -125,13 +179,15 @@ class Parser:
             return Term(integer(LIMITS[token]), "Int")
         if token in ("True", "False", "true", "false"):
             return Term(token.lower(), "Prop" if token[0].isupper() else "Bool")
-        if token in ("Zabs", "Z.abs", "Z.opp", "Z.quot", "Z.rem", "Z.div", "Z.modulo"):
+        if token in ("Zabs", "Z.abs", "Z.opp", "Z.quot", "Z.rem", "Z.div", "Z.modulo", "Zgcd", "Z.gcd"):
             a = self.typed(self.atom(), "Int")
             if token in ("Zabs", "Z.abs"):
-                return Term(f"(ite (< {a.smt} 0) (- {a.smt}) {a.smt})", "Int")
+                return absolute(a)
             if token == "Z.opp":
                 return apply("-", a, sort="Int")
             b = self.typed(self.atom(), "Int")
+            if token in ('Zgcd', 'Z.gcd'):
+                return gcd(a, b)
             q = quot(a, b) if token in ("Z.quot", "Z.rem") else floor_div(a, b)
             if token == "Z.rem":
                 return rem(a, b)
@@ -252,7 +308,7 @@ def binders(body: str) -> tuple[dict[str, str], list[Term], str]:
         name, typ = (x.strip() for x in declaration.split(":", 1))
         if not re.fullmatch(r"[A-Za-z_][A-Za-z_0-9']*", name) or name in names:
             raise Unsupported("invalid or shadowed binder")
-        if name in LIMITS or name in {"True", "False", "true", "false", "Zabs", "not"}:
+        if name in LIMITS or name in {"True", "False", "true", "false", "Zabs", "Zgcd", "not"}:
             raise Unsupported("binder shadows a source-profile intrinsic")
         names.add(name)
         if typ in ("Z", "bool"):
@@ -368,6 +424,59 @@ def owned_int_ranges(assertion: str, symbols: dict[str, str]) -> list[dict]:
         return []
 
 
+def sufficient_leaves(body: str, definitions: dict[str, str], stack=()) -> list[dict]:
+    """Expand a sufficient proof tree without treating whole VCs as axioms.
+
+    Proving the left disjunct proves a disjunction; proving the consequent
+    proves an implication. These intentionally stronger obligations can fail
+    even when the source VC is valid. Conjunctions require both children.
+    """
+    if len(stack) > 100:
+        raise Unsupported('definition expansion budget exhausted')
+    body = assertion_unwrap(body)
+    if body.startswith('forall '):
+        return [dict(body=body, proof_path=[])]
+    if body in definitions:
+        if body in stack:
+            raise Unsupported('cyclic goal definition')
+        leaves = sufficient_leaves(definitions[body], definitions, (*stack, body))
+        return [{**leaf, 'proof_path': [dict(unfold=body), *leaf['proof_path']]} for leaf in leaves]
+    depth, quote, i, operators = 0, '', 0, []
+    while i < len(body):
+        char = body[i]
+        if quote:
+            if char == quote:
+                quote = ''
+        elif char in ('"', '“'):
+            quote = '”' if char == '“' else '"'
+        elif char == '(':
+            depth += 1
+        elif char == ')':
+            depth -= 1
+            if depth < 0:
+                raise Unsupported('unbalanced goal composition')
+        elif depth == 0 and body[i:i+2] in ('\\/', '/\\', '->'):
+            operators.append((body[i:i+2], i))
+            i += 1
+        i += 1
+    if depth or quote:
+        raise Unsupported('unterminated goal composition')
+    if operators:
+        # Rocq connects conjunction more tightly than disjunction, and both
+        # more tightly than implication. All three associate to the right.
+        op, i = min(operators, key=lambda item: ({'->': 0, '\\/': 1, '/\\': 2}[item[0]], item[1]))
+        left, right = body[:i], body[i+2:]
+        children = ([('left', left)] if op == '\\/' else
+                    [('consequent', right)] if op == '->' else
+                    [('conj-left', left), ('conj-right', right)])
+        result = []
+        for direction, child in children:
+            result.extend({**leaf, 'proof_path': [dict(direction=direction), *leaf['proof_path']]}
+                          for leaf in sufficient_leaves(child, definitions, (*stack, op)))
+        return result
+    raise Unsupported('expected a typed goal or supported goal composition')
+
+
 def export_goals(source: Path, output: Path) -> dict:
     raw_bytes = source.read_bytes()
     raw = raw_bytes.decode('utf-8')
@@ -377,6 +486,11 @@ def export_goals(source: Path, output: Path) -> dict:
     report: dict = {"source": str(source), "source_sha256": digest, "goals": [], "queries": [],
                     "semantics": "Rocq Z/bool; % is Z.rem; division by zero follows Rocq total functions",
                     "program_verified": False}
+    definitions = {}
+    for match in DEFINITION.finditer(text):
+        end = END.search(text, match.end())
+        if end:
+            definitions[match[1]] = text[match.end():end.start()]
     for match in DEFINITION.finditer(text):
         end = END.search(text, match.end())
         record = {"name": match[1], "line": text.count("\n", 0, match.start()) + 1}
@@ -384,47 +498,22 @@ def export_goals(source: Path, output: Path) -> dict:
         try:
             if not end:
                 raise Unsupported("definition terminator not found")
-            symbols, assumptions, body = binders(text[match.end():end.start()])
-            projection = "pure"
-            conclusions = []
-            if "|--" in body:
-                if body.count("|--") != 1:
-                    raise Unsupported("compound entailment requires an elaborated AST")
-                lhs, rhs = body.split("|--")
-                ranges = owned_int_ranges(lhs, symbols)
-                record['derived_assumptions'] = ranges
-                for fact in ranges:
-                    assumptions.extend(Term(fact[key], 'Prop') for key in ('lower', 'upper'))
-                projection = "pure-sufficient-condition"
-                rest = rhs.strip()
-                while rest.startswith("“"):
-                    last = rest.find("”")
-                    if last < 0:
-                        raise Unsupported("unterminated pure assertion")
-                    conclusions.append(rest[1:last])
-                    rest = rest[last+1:].strip()
-                    if not rest.startswith("&&"):
-                        break
-                    rest = rest[2:].strip()
-                if not conclusions:
-                    raise Unsupported("no leading pure RHS assertion")
-                record["residual_heap"] = bool(rest)
-            else:
-                conclusions = [body]
+            leaves = sufficient_leaves(text[match.end():end.start()], definitions, (match[1],))
             built = []
-            for i, expression in enumerate(conclusions):
-                term = parse(expression, symbols)
-                if term.sort != "Prop":
-                    raise Unsupported("conclusion must be a proposition")
-                script = ["(set-logic ALL)"]
-                script += [f"(declare-const |{name}| {sort})" for name, sort in symbols.items()]
-                script += [f"(assert {a.smt})" for a in assumptions]
-                script += [f"(assert (not {term.smt}))", "(check-sat)", "(exit)", ""]
-                filename = f"{match[1]}-{i}.smt2"
-                built.append((filename, "\n".join(script), expression))
-            for filename, script, expression in built:
+            for leaf_index, leaf in enumerate(leaves):
+                conditions, details = export_leaf(leaf['body'])
+                if len(leaves) == 1:
+                    record.update(details)
+                    record['proof_path'] = leaf['proof_path']
+                for script, expression, facts in conditions:
+                    i = len(built)
+                    filename = f"{match[1]}-{i}.smt2"
+                    built.append((filename, script, expression,
+                                  dict(**details, proof_path=leaf['proof_path'], leaf=leaf_index,
+                                       integer_function_facts=facts)))
+            for filename, script, expression, details in built:
                 (output / filename).write_bytes(script.encode('utf-8'))
-                report["queries"].append({**record, "file": filename, "kind": projection,
+                report["queries"].append({**record, **details, "file": filename,
                                           "conclusion": expression,
                                           "query_sha256": hashlib.sha256(script.encode()).hexdigest()})
             record["status"] = "exported"
@@ -434,6 +523,55 @@ def export_goals(source: Path, output: Path) -> dict:
             record["reason"] = str(exc)
     (output / "manifest.json").write_text(json.dumps(report, indent=2) + "\n")
     return report
+
+
+def export_leaf(body: str) -> tuple[list[tuple[str, str, list[dict]]], dict]:
+    symbols, assumptions, body = binders(body)
+    projection = "pure"
+    conclusions = []
+    if "|--" in body:
+        if body.count("|--") != 1:
+            raise Unsupported("compound entailment requires an elaborated AST")
+        lhs, rhs = body.split("|--")
+        ranges = owned_int_ranges(lhs, symbols)
+        for fact in ranges:
+            # Preserve function dependencies in values derived from heap cells.
+            value = parse(fact['value'], symbols)
+            assumptions.extend(Term(fact[key], 'Prop', 'owned-bound', (value,))
+                               for key in ('lower', 'upper'))
+        projection = "pure-sufficient-condition"
+        rest = rhs.strip()
+        while rest.startswith("“"):
+            last = rest.find("”")
+            if last < 0:
+                raise Unsupported("unterminated pure assertion")
+            conclusions.append(rest[1:last])
+            rest = rest[last+1:].strip()
+            if not rest.startswith("&&"):
+                break
+            rest = rest[2:].strip()
+        if not conclusions:
+            raise Unsupported("no leading pure RHS assertion")
+        residual_heap = bool(rest)
+    else:
+        conclusions = [body]
+    built = []
+    for expression in conclusions:
+        term = parse(expression, symbols)
+        if term.sort != "Prop":
+            raise Unsupported("conclusion must be a proposition")
+        script = ["(set-logic ALL)"]
+        declarations, facts = integer_function_facts([*assumptions, term])
+        script += declarations
+        script += [f"(declare-const |{name}| {sort})" for name, sort in symbols.items()]
+        script += [f"(assert {f['assertion']})" for f in facts]
+        script += [f"(assert {a.smt})" for a in assumptions]
+        script += [f"(assert (not {term.smt}))", "(check-sat)", "(exit)", ""]
+        built.append(("\n".join(script), expression, facts))
+    details = dict(kind=projection)
+    if projection != 'pure':
+        details.update(derived_assumptions=ranges, residual_heap=residual_heap)
+    return built, details
 
 
 def main():
