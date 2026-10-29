@@ -1,9 +1,9 @@
 #include <doctest/doctest.h>
-#include "applications/smt/Solver.h"
-#include "applications/smt/TheoryFactory.h"
-#include "applications/sv/pa/Presburger.h"
-#include "applications/sv/sl/Solver.h"
-#include "applications/omt/Optimize.h"
+#include "applications/satisfiability/smt/Solver.h"
+#include "applications/satisfiability/smt/TheoryFactory.h"
+#include "applications/verification/pa/Presburger.h"
+#include "applications/verification/sl/Solver.h"
+#include "applications/optimization/omt/Optimize.h"
 #include "quantifiers/FiniteFormula.h"
 #include <somtparser/frontend/parser.h>
 #include <type_traits>
@@ -12,7 +12,7 @@ using namespace xolver;
 
 TEST_CASE("application dispatch: quantified inputs never reach ground callbacks") {
     int calls = 0;
-    applications::smt::Solver solver([&](const applications::smt::Problem&) {
+    applications::satisfiability::smt::Solver solver([&](const applications::satisfiability::smt::Problem&) {
         ++calls;
         SolverAnswer answer;
         answer.result = Result::Sat;
@@ -38,7 +38,7 @@ TEST_CASE("application dispatch: memory encoded as arrays stays SMT") {
     REQUIRE(parser.parseStr("(set-logic ALL)(declare-const heap (Array Int Int))"
                             "(declare-const pointer Int)(assert (= (select heap pointer) 3))"));
     int calls = 0;
-    applications::smt::Solver solver([&](const applications::smt::Problem&) {
+    applications::satisfiability::smt::Solver solver([&](const applications::satisfiability::smt::Problem&) {
         ++calls;
         SolverAnswer answer;
         answer.result = Result::Sat;
@@ -71,10 +71,10 @@ TEST_CASE("application dispatch: QF factory rejects binders before constructing 
 }
 
 TEST_CASE("application dispatch: independent applications share the typed abstract base") {
-    static_assert(std::is_base_of_v<applications::Solver, applications::smt::Solver>);
+    static_assert(std::is_base_of_v<applications::Solver, applications::satisfiability::smt::Solver>);
     static_assert(std::is_base_of_v<applications::Solver, pa::Solver>);
     static_assert(std::is_base_of_v<applications::Solver, sl::Solver>);
-    static_assert(std::is_base_of_v<applications::Solver, applications::omt::Solver>);
+    static_assert(std::is_base_of_v<applications::Solver, applications::optimization::omt::Solver>);
     pa::Solver integer;
     applications::TypedSolver<pa::Problem, pa::Decision>& typed = integer;
     SOMTParser::Parser parser;

@@ -1,14 +1,14 @@
 #include "algebra/interval/IntervalOperations.h"
 #include "algebra/interval/IntervalQOps.h"
-#include "applications/smt/Solver.h"
-#include "applications/sv/verification/Range.h"
+#include "applications/satisfiability/smt/Solver.h"
+#include "applications/verification/model_checking/Range.h"
 #include "frontend/parser/NativeTheoryPolicy.h"
 #include "ir/NativeBuilder.h"
 #include <doctest/doctest.h>
 #include <somtparser/frontend/parser.h>
 
 using namespace xolver;
-namespace v = applications::sv::verification;
+namespace v = applications::verification::model_checking;
 TEST_CASE("SV ranges: interval power means the requested exponent") {
     for (int lo = -3; lo <= 3; ++lo)
         for (int hi = lo; hi <= 3; ++hi)
@@ -154,7 +154,7 @@ TEST_CASE("SV ranges: application composition preserves oracle results") {
     int calls = 0;
     DecisionOracle oracle = [&](const NativeAssertions &query) {
         ++calls;
-        return applications::smt::Solver().solve({query, {}, {}, {}});
+        return applications::satisfiability::smt::Solver().solve({query, {}, {}, {}});
     };
     v::Obligation o{"composition", {}, b.boolean(true)};
     auto answer = v::RangeAssistedSolver(oracle).solve(o);

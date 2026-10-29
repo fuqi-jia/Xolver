@@ -2,7 +2,7 @@
 #pragma once
 #include "ir/types.h"
 #include "algebra/poly/PolynomialKernel.h"
-#include "search/nra/core/CdcacTypes.h"      // CdcacCommon types (ConstraintId, ModelSeed, ...)
+#include "search/nra/core/CdcacResult.h"      // CdcacCommon types (ConstraintId, ModelSeed, ...)
 #include "search/nra/core/CdcacConstraint.h" // CdcacConstraint, Relation, SatLit
 #include <gmpxx.h>
 #include <vector>

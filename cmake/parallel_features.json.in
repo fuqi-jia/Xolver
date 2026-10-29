@@ -1,0 +1,1 @@
+{"mpi": @XOLVER_PY_MPI@, "spark": @XOLVER_PY_SPARK@, "dask": @XOLVER_PY_DASK@, "cuda": @XOLVER_PY_CUDA@, "hip": @XOLVER_PY_HIP@, "openacc": @XOLVER_PY_OPENACC@}

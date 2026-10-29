@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
 #include "search/nra/simplex/NraLinearExtractor.h"
-#include "search/nra/core/CdcacTypes.h"
+#include "search/nra/core/CdcacResult.h"
 #include "search/nra/core/CdcacConstraint.h"
 #include "algebra/poly/PolynomialKernel.h"
 #include <set>

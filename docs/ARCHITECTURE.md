@@ -27,18 +27,20 @@ flowchart TD
 
 `quantifiers` may use `search` and `algebra`. Lower layers cannot depend on
 quantifier algorithms or application headers. Applications cannot depend on
-other application families; SV/SL and SV/PA are also independent.
+other application categories; verification/SL, PA and model checking remain independent.
+Satisfiability contains SAT/SMT, optimization contains MaxSAT/MaxSMT/OMT/CP/MILP,
+and dynamics contains ODE/PDE. `Solver::category()` exposes this grouping.
 
 | Component | Owner |
 | --- | --- |
 | Abstract application identity and typed `solve` | `applications/Solver.h` |
 | Theory-independent task submission and bounded worker execution | `parallel` |
-| Rational weighted soft constraints over an injected decision oracle | `applications/maxsmt` |
-| SMT input classification and theory composition | `applications/smt` |
-| Shared SMT integer reasoning | `applications/smt/common/lia` |
-| SMT mixed linear feasibility | `applications/smt/qflira` |
-| Heap search, recursive semantics and pure-constraint translation | `applications/sv/sl` |
-| Transition frames, exact successor images, invariant inference and safety certificates | `applications/sv/verification` |
+| Rational weighted soft constraints over an injected decision oracle | `applications/optimization/maxsmt` |
+| SMT input classification and theory composition | `applications/satisfiability/smt` |
+| Shared SMT integer reasoning | `applications/satisfiability/smt/common/lia` |
+| SMT mixed linear feasibility | `applications/satisfiability/smt/qflira` |
+| Heap search, recursive semantics and pure-constraint translation | `applications/verification/sl` |
+| Transition frames, exact successor images, invariant inference and safety certificates | `applications/verification/model_checking` |
 | Native binder compilation and domain-specific elimination | `quantifiers` |
 | CRT, integer witnesses and polynomial operations | `algebra` |
 | SAT, simplex, ICP, root isolation and reusable search | `search` |
@@ -55,7 +57,7 @@ count or differential-equation solution cannot share an untyped result contract.
 `TheorySolver` is the CDCL(T) callback interface in the infrastructure layer.
 
 The `parallel` layer depends only on base infrastructure and the C++ standard
-library. It does not depend on applications or search engines. MaxSMT consumes
+library, JSON serialization and explicitly enabled backend SDKs. It does not depend on applications or search engines. MaxSMT consumes
 the common decision-oracle contract; its initial exact truth-pattern backend
 preserves unknown results and bounded-search incumbents.
 
@@ -161,7 +163,7 @@ parameters and fresh inputs per transition. Only checked inductive candidates
 strengthen safety proofs. The SL application owns heap entailments and
 least-fixed-point predicate induction; it uses the integer quantifier algorithms
 directly for pure arithmetic. Neither application delegates arbitrary formulas
-to the PA application. See [SV call flow and contracts](../src/applications/sv/README.md).
+to the PA application. See [SV call flow and contracts](../src/applications/verification/README.md).
 
 Exact image construction and invariant/certificate checking share verification's
 private transition helper. SL's induction, invariant and unfolding procedures

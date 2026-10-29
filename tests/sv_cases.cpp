@@ -1,6 +1,6 @@
-#include "applications/smt/Solver.h"
-#include "applications/sv/sl/Entailment.h"
-#include "applications/sv/verification/Reachability.h"
+#include "applications/satisfiability/smt/Solver.h"
+#include "applications/verification/sl/Entailment.h"
+#include "applications/verification/model_checking/Reachability.h"
 #include "ir/NativeSubstitution.h"
 #include <filesystem>
 #include <fstream>
@@ -8,7 +8,7 @@
 #include <somtparser/frontend/parser.h>
 
 using namespace xolver;
-namespace v = applications::sv::verification;
+namespace v = applications::verification::model_checking;
 namespace {
 void require(bool condition, const char *message) {
     if (!condition)
@@ -79,7 +79,7 @@ struct Export {
     }
 };
 DecisionOracle decide = [](const NativeAssertions &q) {
-    return applications::smt::Solver().solve({q, {}, {}, {}});
+    return applications::satisfiability::smt::Solver().solve({q, {}, {}, {}});
 };
 void safety(Export &out) {
     native::Nodes b({});

@@ -25,7 +25,7 @@ signatures: Boolean formulas (QBF), fixed-width bit-vectors (QBV), Presburger
 integer arithmetic (`LIA`), and polynomial real arithmetic (`LRA`, `NRA`).
 Ground bit-vector formulas and finite UF/array combinations use native encodings.
 FP predicates, concrete rounded arithmetic and Unicode string operations have native backends with explicit
-limits; see the [SMT entry contracts](src/applications/smt/README.md) and the
+limits; see the [SMT entry contracts](src/applications/satisfiability/smt/README.md) and the
 [operator and resource boundaries](src/quantifiers/README.md).
 
 ---
@@ -35,8 +35,8 @@ limits; see the [SMT entry contracts](src/applications/smt/README.md) and the
 ```mermaid
 flowchart TD
     Input[CLI / public API] --> Session[Runtime query session]
-    Session --> SMT[applications/smt]
-    Session -->|explicit SL request| SL[applications/sv/sl]
+    Session --> SMT[applications/satisfiability/smt]
+    Session -->|explicit SL request| SL[applications/verification/sl]
     SMT --> Quantifiers[quantifiers: integer / Boolean / bit-vector / real]
     SL -->|translated pure integer constraints| Quantifiers
     SMT -->|quantifier-free session| Search[search: CDCL-T / simplex / ICP / CAD]

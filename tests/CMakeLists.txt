@@ -102,3 +102,11 @@ if(Python3_FOUND)
             ENVIRONMENT "XOLVER_TEST_SOLVER=$<TARGET_FILE:xolver-cli>")
     endif()
 endif()
+
+if(Python3_FOUND AND XOLVER_BUILD_TOOLS)
+    add_test(NAME parallel-local COMMAND xolver-parallel-examples)
+    add_test(NAME parallel-worker COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_SOURCE_DIR}/tests/tools/test_parallel_backends.py
+        --package ${CMAKE_BINARY_DIR}/python --worker $<TARGET_FILE:xolver-parallel-worker>)
+    set_tests_properties(parallel-local parallel-worker PROPERTIES LABELS "parallel;api")
+endif()

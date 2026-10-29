@@ -1,11 +1,11 @@
 #include "applications/counting/Solver.h"
-#include "applications/cp/Solver.h"
-#include "applications/de/ode/Solver.h"
-#include "applications/de/pde/Solver.h"
-#include "applications/milp/Solver.h"
-#include "applications/omt/Optimize.h"
-#include "applications/smt/Solver.h"
-#include "applications/sv/verification/Solver.h"
+#include "applications/optimization/cp/Solver.h"
+#include "applications/dynamics/ode/Solver.h"
+#include "applications/dynamics/pde/Solver.h"
+#include "applications/optimization/milp/Solver.h"
+#include "applications/optimization/omt/Optimize.h"
+#include "applications/satisfiability/smt/Solver.h"
+#include "applications/verification/model_checking/Solver.h"
 #include "ir/NativeBuilder.h"
 #include "search/optimization/LinearProgram.h"
 #include <doctest/doctest.h>
@@ -20,7 +20,7 @@ SOMTParser::Node symbol(SOMTParser::Parser &p, const std::string &name) {
     throw std::runtime_error("missing variable");
 }
 DecisionOracle oracle = [](const NativeAssertions &q) {
-    return applications::smt::Solver().solve({q, {}, {}, {}});
+    return applications::satisfiability::smt::Solver().solve({q, {}, {}, {}});
 };
 } // namespace
 TEST_CASE("application foundations: exact LP feasibility, free variables and recession rays") {
@@ -43,7 +43,7 @@ TEST_CASE("application foundations: exact LP feasibility, free variables and rec
 }
 TEST_CASE(
     "application foundations: mixed optimization agrees with independent interval enumeration") {
-    using namespace applications::milp;
+    using namespace applications::optimization::milp;
     unsigned state = 431;
     auto random = [&]() {
         state = state * 1664525u + 1013904223u;
@@ -119,7 +119,7 @@ TEST_CASE(
 }
 TEST_CASE("application foundations: arithmetic OMT strict bounds, disjunctions and lexicographic "
           "values") {
-    using namespace applications::omt;
+    using namespace applications::optimization::omt;
     auto solve = [](const std::string &constraint, bool integer = false) {
         SOMTParser::Parser p;
         REQUIRE(p.parseStr("(set-logic ALL)(declare-const x " +
@@ -180,10 +180,10 @@ TEST_CASE("application foundations: mixed integer-real SMT and CP global constra
     native::Nodes b({});
     auto ints = SOMTParser::SortManager::getInt();
     auto x = b.make(ints, native::K::NT_VAR, {}, "x"), y = b.make(ints, native::K::NT_VAR, {}, "y");
-    applications::cp::Problem cp;
+    applications::optimization::cp::Problem cp;
     cp.tables = {{{x, y}, {{b.numeral(0), b.numeral(2)}, {b.numeral(1), b.numeral(3)}}, true}};
     cp.elements = {{x, y, {b.numeral(2), b.numeral(3)}, 0}};
-    auto decide = applications::cp::Solver(oracle);
+    auto decide = applications::optimization::cp::Solver(oracle);
     CHECK((decide.solve(cp).result == Result::Sat));
     cp.tables.push_back({{x}, {{b.numeral(0)}, {b.numeral(1)}}, false});
     CHECK((decide.solve(cp).result == Result::Unsat));
@@ -196,7 +196,7 @@ TEST_CASE("application foundations: mixed integer-real SMT and CP global constra
 }
 TEST_CASE(
     "application foundations: inductive invariants distinguish induction and safety failures") {
-    using namespace applications::sv::verification;
+    using namespace applications::verification::model_checking;
     native::Nodes b({});
     auto ints = SOMTParser::SortManager::getInt();
     auto x = b.make(ints, native::K::NT_VAR, {}, "x"),
@@ -222,7 +222,7 @@ TEST_CASE(
     CHECK(solver.solve(p).status == Status::InvalidInput);
 }
 TEST_CASE("application foundations: polynomial ODE solutions depend on declared parameters") {
-    using namespace applications::de;
+    using namespace applications::dynamics;
     native::Nodes b({});
     auto reals = SOMTParser::SortManager::getReal();
     auto var = [&](const char *name) { return b.make(reals, native::K::NT_VAR, {}, name); };
@@ -245,14 +245,14 @@ TEST_CASE("application foundations: integer division is not rational linear scal
     REQUIRE(p.parseStr(
         "(set-logic QF_LIA)(declare-const x Int)(assert (= x 3))(assert (= (div x 2) 1))"));
     CHECK((oracle(p.getAssertions()).result == Result::Sat));
-    applications::omt::Problem optimization{
+    applications::optimization::omt::Problem optimization{
         p.getAssertions(),
-        {{symbol(p, "x"), applications::omt::Direction::Minimize,
-          applications::omt::Order::Arithmetic}},
-        applications::omt::Priority::Lexicographic,
+        {{symbol(p, "x"), applications::optimization::omt::Direction::Minimize,
+          applications::optimization::omt::Order::Arithmetic}},
+        applications::optimization::omt::Priority::Lexicographic,
         {}};
-    CHECK(applications::omt::Solver().solve(optimization).status ==
-          applications::omt::Status::Unknown);
+    CHECK(applications::optimization::omt::Solver().solve(optimization).status ==
+          applications::optimization::omt::Status::Unknown);
 }
 
 TEST_CASE("application foundations: universal polynomial identities preserve quantifier order") {
@@ -276,7 +276,7 @@ TEST_CASE("application foundations: universal polynomial identities preserve qua
 }
 
 TEST_CASE("application foundations: parametric PDE coefficient equations") {
-    using namespace applications::de;
+    using namespace applications::dynamics;
     native::Nodes b({});
     auto real = SOMTParser::SortManager::getReal();
     auto var = [&](const char *name) { return b.make(real, native::K::NT_VAR, {}, name); };

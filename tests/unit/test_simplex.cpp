@@ -1,5 +1,5 @@
 #include <doctest/doctest.h>
-#include "applications/smt/qflra/LraSolver.h"
+#include "applications/satisfiability/smt/qflra/LraSolver.h"
 #include "search/lra/GeneralSimplex.h"
 #include "algebra/linear/LinearExpr.h"
 #include "search/coordination/TheoryLemmaDatabase.h"

@@ -1,4 +1,4 @@
-#include "applications/sv/sl/Entailment.h"
+#include "applications/verification/sl/Entailment.h"
 #include "ir/NativeBuilder.h"
 #include <doctest/doctest.h>
 #include <somtparser/frontend/parser.h>

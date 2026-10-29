@@ -47,3 +47,5 @@ endif()
 # scikit-build-core picks up install() rules; the pure-Python package alongside
 # it is declared in pyproject.toml (tool.scikit-build.wheel.packages).
 install(TARGETS _xolver LIBRARY DESTINATION xolver)
+install(FILES "${CMAKE_BINARY_DIR}/python/xolver_parallel/_build_features.json"
+    DESTINATION xolver_parallel)

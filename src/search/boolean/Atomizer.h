@@ -20,7 +20,7 @@ class SharedTermRegistry;
  * Stage A minimal version:
  * - Boolean variables -> SAT literals.
  * - And/Or/Not/Implies -> CNF via Tseitin or direct unit clauses.
- * - Theory atoms (arithmetic comparisons) -> SAT literal + TheoryAtom record.
+ * - Theory atoms (arithmetic comparisons) -> SAT literal + TheoryAtomRecord.
  */
 class Atomizer : public DynamicAtomRegistrar {
 public:

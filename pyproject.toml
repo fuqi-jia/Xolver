@@ -33,7 +33,7 @@ Source = "https://github.com/fuqi-jia/Xolver"
 [tool.scikit-build]
 # The wheel ships the pure-Python package; the compiled _xolver lands inside it
 # via the install() rule in python/CMakeLists.txt.
-wheel.packages = ["python/xolver"]
+wheel.packages = ["python/xolver", "python/xolver_parallel"]
 cmake.version = ">=3.16"
 # Reconfigure the project's one persistent build directory for the chosen
 # Python ABI. Serialize wheel and CMake writers; do not create a build per tag.

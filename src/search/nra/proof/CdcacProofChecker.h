@@ -1,7 +1,7 @@
 #pragma once
 
 #include "search/nra/proof/CdcacProof.h"
-#include "search/nra/core/CdcacTypes.h"
+#include "search/nra/core/CdcacResult.h"
 #include <string>
 
 namespace xolver {

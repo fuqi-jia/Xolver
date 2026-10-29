@@ -23,3 +23,10 @@ target_link_libraries(xolver-api-examples PRIVATE xolver_core gmpxx Threads::Thr
 set_target_properties(xolver-api-examples PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
+
+foreach(tool parallel-worker parallel-examples)
+    string(REPLACE "-" "_" source "${tool}")
+    add_executable(xolver-${tool} ${source}.cpp)
+    target_link_libraries(xolver-${tool} PRIVATE xolver_core Threads::Threads)
+    set_target_properties(xolver-${tool} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+endforeach()

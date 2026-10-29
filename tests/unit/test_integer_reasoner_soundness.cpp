@@ -2,8 +2,8 @@
 #include "search/linear/IntegerReasoner.h"
 #include "search/linear/BoundAxiomGenerator.h"
 #include "algebra/linear/LinearConstraintNormalizer.h"
-#include "applications/smt/common/lia/LiaSolver.h"
-#include "applications/smt/qflra/LraSolver.h"
+#include "applications/satisfiability/smt/common/lia/LiaSolver.h"
+#include "applications/satisfiability/smt/qflra/LraSolver.h"
 #include "search/coordination/TheoryLemmaDatabase.h"
 #include <algorithm>
 #include <stdexcept>

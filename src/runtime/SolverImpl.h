@@ -41,7 +41,7 @@
 #include "search/coordination/TheoryManager.h"
 #include "search/coordination/TheoryLemmaDatabase.h"
 #include "search/coordination/TheoryAtomRegistry.h"
-#include "applications/smt/TheoryFactory.h"
+#include "applications/satisfiability/smt/TheoryFactory.h"
 #include "contracts/LogicFeatureDetector.h"
 #include "search/bitblast/EagerBitBlastSolver.h"
 #ifdef XOLVER_ENABLE_CASESTATS

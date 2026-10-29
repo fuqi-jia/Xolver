@@ -1,4 +1,4 @@
-#include "applications/smt/Solver.h"
+#include "applications/satisfiability/smt/Solver.h"
 #include "frontend/parser/NativeTheoryPolicy.h"
 #include <doctest/doctest.h>
 #include <somtparser/frontend/parser.h>
@@ -10,7 +10,7 @@ SolverAnswer solve(const std::string &source) {
     preserveNativeTheories(*parser.getOptions());
     if (!parser.parseStr("(set-logic ALL)" + source))
         throw std::runtime_error("theory test parse error");
-    applications::smt::Solver solver;
+    applications::satisfiability::smt::Solver solver;
     return solver.solve({parser.getAssertions(), {}, {}, {}});
 }
 void check(const std::string &source, Result expected) {
@@ -91,7 +91,7 @@ TEST_CASE("theory applications: compound sorts cannot hide unsupported finite do
         preserveNativeTheories(*parser.getOptions());
         REQUIRE(parser.parseStr(std::string("(set-logic ALL)") + source));
         bool groundCalled = false;
-        applications::smt::Solver solver([&](const applications::smt::Problem &) {
+        applications::satisfiability::smt::Solver solver([&](const applications::satisfiability::smt::Problem &) {
             groundCalled = true;
             SolverAnswer result;
             result.result = Result::Sat;

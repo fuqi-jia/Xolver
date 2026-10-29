@@ -2,8 +2,8 @@
 #include "base/EnvParam.h"
 #include "runtime/SolverImpl.h"
 #include "ir/NativeFeatures.h"
-#include "applications/smt/Solver.h"
-#include "applications/sv/sl/Solver.h"
+#include "applications/satisfiability/smt/Solver.h"
+#include "applications/verification/sl/Solver.h"
 #include "search/array/ArrayModelCompletion.h"
 #include "search/linear/BoundAxiomGenerator.h"
 
@@ -79,7 +79,7 @@ Result Solver::Impl::checkSatInternal() {
         auto quantifiedRoots = originalAssertions_;
         quantifiedRoots.insert(quantifiedRoots.end(), assumptionRoots_.begin(), assumptionRoots_.end());
         const auto nativeRoots = ir->native(quantifiedRoots);
-        applications::smt::Problem problem{nativeRoots, {}, {.elimination = recordPA}};
+        applications::satisfiability::smt::Problem problem{nativeRoots, {}, {.elimination = recordPA}};
         const auto features = nativeFeatures(nativeRoots);
         if (recordPA || (features.quantified && features.integer && !features.real && !features.bitvector)) {
             const long work = config::read<config::ReadKind::Long>("XOLVER_PA_WORK", 2000000);
@@ -88,7 +88,7 @@ Result Solver::Impl::checkSatInternal() {
             if (residues >= 0) problem.integerLimits.residues = static_cast<size_t>(residues);
         }
         bool usedGround = false;
-        applications::smt::Solver application([&](const applications::smt::Problem&) {
+        applications::satisfiability::smt::Solver application([&](const applications::satisfiability::smt::Problem&) {
             usedGround = true;
             SolverAnswer answer;
             answer.result = checkSatGround();

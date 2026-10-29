@@ -4,12 +4,12 @@
 #include <doctest/doctest.h>
 #include <xolver/Result.h>
 #include <xolver/Solver.h>
-#include "applications/smt/SolverRegistry.h"
+#include "applications/satisfiability/smt/SolverRegistry.h"
 #include "search/coordination/TheoryManager.h"
-#include "applications/smt/qfnra/McsatSolver.h"
+#include "applications/satisfiability/smt/qfnra/McsatSolver.h"
 #include "search/nra/backend/LibpolyBackend.h"
 #include "search/nra/engine/NlsatEngine.h"
-#include "applications/smt/qflra/LraSolver.h"
+#include "applications/satisfiability/smt/qflra/LraSolver.h"
 
 #include <cstdio>
 #include <cstdlib>

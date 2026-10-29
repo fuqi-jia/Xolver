@@ -2,7 +2,8 @@
 #include <string_view>
 
 namespace xolver::applications {
-enum class Family { Smt, Omt, Cp, Milp, DifferentialEquations, SoftwareVerification, Counting, MaxSmt };
+enum class Family { Smt, Omt, Cp, Milp, DifferentialEquations, SoftwareVerification, Counting, MaxSmt, MaxSat, Sat };
+enum class Category { Satisfiability, Optimization, Counting, Verification, Dynamics };
 
 // Common lifetime and identity for application solvers. Theory callbacks,
 // simplex, quantifier projection and SAT search are implementation components,
@@ -12,6 +13,17 @@ public:
     virtual ~Solver() = default;
     virtual Family family() const noexcept = 0;
     virtual std::string_view name() const noexcept = 0;
+    Category category() const noexcept {
+        switch (family()) {
+            case Family::Sat: case Family::Smt: return Category::Satisfiability;
+            case Family::Omt: case Family::Cp: case Family::Milp:
+            case Family::MaxSmt: case Family::MaxSat: return Category::Optimization;
+            case Family::Counting: return Category::Counting;
+            case Family::SoftwareVerification: return Category::Verification;
+            case Family::DifferentialEquations: return Category::Dynamics;
+        }
+        return Category::Satisfiability;
+    }
 };
 
 // C++ cannot have virtual function templates. A typed abstract specialization

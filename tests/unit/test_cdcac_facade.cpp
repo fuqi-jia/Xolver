@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
 #include "search/nra/core/CdcacSolver.h"
-#include "search/nra/core/CdcacTypes.h"
+#include "search/nra/core/CdcacResult.h"
 #include "search/nra/engine/CoveringManager.h"
 #include "search/nra/engine/ReasonManager.h"
 #include "search/nra/backend/LibpolyBackend.h"
