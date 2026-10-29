@@ -2,7 +2,8 @@
 
 `Solver::solve(Problem)` accepts a finite ground program: normal rules,
 independent choice heads, nonnegative weighted rule bodies, assumptions, output
-conditions and signed integer objectives. Higher optimization priorities precede
+conditions and signed integer objectives. Weighted-rule dependence is retained even when
+the corresponding Boolean threshold simplifies classically. Higher optimization priorities precede
 lower ones. The default injected SAT factory uses Xolver's existing backend.
 
 ```cpp
@@ -28,12 +29,13 @@ separate; integer scaling is a caller's explicit responsibility.
 `SolveMode::Feasible` skips optimization; its costs evaluate the retained model.
 `Unknown` may carry a checked incumbent, never an optimum. Limits bound formula
 work, SAT calls, variables, deadline and cooperative cancellation. Disjunctive
-multi-atom heads, incremental ASPIF steps and unsupported semantic directives
+multi-atom heads, multiple ASPIF steps and unsupported semantic directives
 return `Unsupported`; they do not fall back to ordinary SAT.
 
 ## CLI and grounding
 
-Build target `xolver-asp` reads single-step ASPIF 1.0 and emits Clingo-style JSON:
+Build target `xolver-asp` reads one initial ASPIF 1.0 step, including streams
+with the standard `incremental` header marker, and emits Clingo-style JSON:
 
 ```sh
 clingo --mode=gringo --output=intermediate input.lp | build/bin/xolver-asp

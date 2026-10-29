@@ -44,7 +44,8 @@ struct ParseResult {
     Program program;
     std::string reason;
 };
-// Single-step ASPIF 1.0: normal/choice rules, monotone weighted bodies,
+// One initial ASPIF 1.0 step (including incremental-marked headers):
+// normal/choice rules, monotone weighted bodies,
 // minimization, output, projection and assumptions. Unsupported semantic
 // directives and disjunctive heads are rejected explicitly.
 ParseResult parseAspif(std::istream&, std::size_t maxBytes = 64 * 1024 * 1024);

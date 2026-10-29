@@ -107,6 +107,38 @@ TEST_CASE("asp: lexicographic signed objectives and output conditions remain exa
     CHECK(answer.provedLevels == 2);
 }
 
+TEST_CASE("asp: weighted dependencies agree at Program and ASPIF boundaries") {
+    // Independent Clingo 5.8.0 checks establish these expectations. A Boolean
+    // tautology is not a founded ASP fact: retain the original positive body
+    // occurrences for the reduct rather than cancelling complementary weights.
+    struct Example { bool choice; int lower; std::vector<asp::WeightedLiteral> terms; bool infeasible; };
+    const std::vector<Example> examples{
+        {false, 1, {{1, 1}, {-1, 1}}, true},
+        {true, 1, {{1, 1}, {-1, 1}}, false},
+        {false, 1, {{1, 1}, {1, 1}}, false},
+        {false, 2, {{1, 1}, {-1, 1}}, false}};
+    for (const auto& example : examples) {
+        asp::Program program;
+        program.rules.push_back({example.choice, {1}, true, example.lower, example.terms});
+        const auto direct = asp::Solver().solve({program, {}});
+        const auto expected = example.infeasible ? asp::Status::Unsat : asp::Status::Sat;
+        CHECK(direct.status == expected);
+        if (!example.infeasible) { REQUIRE(direct.model); CHECK(direct.model->empty()); }
+        std::ostringstream encoded;
+        encoded << "asp 1 0 0 incremental\n1 " << int(example.choice) << " 1 1 1 "
+                << example.lower << ' ' << example.terms.size();
+        for (const auto& term : example.terms)
+            encoded << ' ' << term.literal << ' ' << term.weight.get_str();
+        encoded << "\n0\n";
+        std::istringstream input(encoded.str());
+        const auto parsed = asp::parseAspif(input);
+        REQUIRE(parsed.status == asp::ParseResult::Status::Parsed);
+        const auto fromWire = asp::Solver().solve({parsed.program, {}});
+        CHECK(fromWire.status == expected);
+        if (!example.infeasible) { REQUIRE(fromWire.model); CHECK(fromWire.model->empty()); }
+    }
+}
+
 TEST_CASE("asp: feasibility mode reports a checked model without an optimality claim") {
     asp::Problem problem;
     problem.mode = asp::SolveMode::Feasible;
@@ -150,7 +182,7 @@ TEST_CASE("aspif: parse exact strings and fail closed on unsupported directives"
     CHECK(parsed.program.objectives.front().terms.front().weight == -3);
     CHECK(parsed.program.output.front().text == "hello");
     CHECK(parsed.program.assumptions == std::vector<asp::Literal>{-2});
-    for (const char* input : {"asp 1 0 0\n1 0 2 1 2 0 0\n0\n", "asp 1 0 0\n5 1 2\n0\n", "asp 1 0 0 incremental\n0\n"}) {
+    for (const char* input : {"asp 1 0 0\n1 0 2 1 2 0 0\n0\n", "asp 1 0 0\n5 1 2\n0\n", "asp 1 0 0 incremental\n0\n0\n"}) {
         std::istringstream stream(input);
         CHECK(asp::parseAspif(stream).status == asp::ParseResult::Status::Unsupported);
     }

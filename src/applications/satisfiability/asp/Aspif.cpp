@@ -92,7 +92,10 @@ ParseResult parseAspif(std::istream& input, std::size_t maxBytes) {
             throw std::invalid_argument("invalid ASPIF header");
         if (major != 1 || minor != 0 || revision != 0)
             throw Unsupported("unsupported ASPIF version");
-        if (header >> extra) throw Unsupported("incremental ASPIF is not supported");
+        if (header >> extra) {
+            if (extra != "incremental") throw std::invalid_argument("invalid ASPIF header flag");
+            if (header >> extra) throw std::invalid_argument("extra ASPIF header fields");
+        }
         bool terminated = false;
         while (line()) {
             if (text.find_first_not_of(" \t\r") == std::string::npos) continue;
