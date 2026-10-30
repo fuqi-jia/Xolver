@@ -3234,3 +3234,42 @@ PR82's exact-merge main CI41136383267 has passed both jobs and every step.
 Neither protected set was read or run. The current full160 reference remains
 R986's100 verified Xolver versus118 verified/125 raw same-round Z3. No new
 whole-program QCP result belongs to these kernels.
+
+
+### Candidate scheduling pilot and projected-point follow-up
+
+R1012's private prefix reuse passes99 cases/287 assertions. R1013 confirms
+exact prefix hits (e.g.2391 retained sources and1217 domain variables on69),
+but box calls remain about150ms and all three10s diagnostics time out. This
+isolated state-reuse prototype is not promoted; no production thread-local
+state was added. The next scheduling experiment returns to the qualified sparse
+parent, without either private interval-cache prototype.
+
+R1014 moves whole-input presolve/box stages to the existing CandidateModel
+schedule and passes165 cases/9065 assertions. R1015 public69 reaches a full
+candidate after441 linear-relaxation calls; its boundary search exhausts20ms
+in preparation (1217 variables,252 retained equality unknowns,0 contexts/checks/
+models). Other public profiles still reach square-cascade and time out. R1016's
+eight fresh formal triads verify2 for both Xolver arms and7 for Z3, no gains,
+losses, errors or unconfirmed verdicts. R1017b seals this and the prefix experiment
+(SHA-256`7d77b3bfd8b0e7626352c028d4bed4f1f92208acdfb9f800c3a2fc0ac756577c`).
+The original R1017 audit fails only because it expected a source-manifest field
+absent from the private qualification schema; the repair verifies the exact
+original-source hash/transformation, native outputs and parent manifest. No
+successful solver/test/timing run is repeated. See the
+[scheduling receipt](NRA_CANDIDATE_SCHEDULING_PILOT_20261031.json).
+
+The new core follow-up projects the existing monomial-relaxation assignment
+onto original variables, preserving exact infinitesimals and completing
+variables without degree-one columns with zero. The shared projection API
+explicitly returns an untrusted point. NRA tries it only at full effort, outside
+interface-combination mode, and accepts it only after checking every original
+polynomial/interface constraint exactly. Projection can therefore reuse a point
+after an inconclusive relaxation without inferring SAT from relaxation
+feasibility. Other stages remain available on rejection. Tests cover a2^-256
+open interval, current-source withdrawal, exhausted work and a feasible
+relaxation whose projection violates x²=2. Two new NRA regressions cover exact
+open bounds and rejection of a non-original model. The stage schedule is an
+unqualified dependency of this new combined candidate; none of these changes
+has a new verified fixed160 gain or whole-program QCP claim yet. Next: native
+source qualification, constructed-model replay, full acceptance and fresh pilot.

@@ -11,6 +11,35 @@ void PolynomialLinearRefuter::reset() {
     rows_.clear();
 }
 
+std::optional<std::unordered_map<VarId, mpq_class>> PolynomialLinearRefuter::projectCandidate(
+    const std::vector<SignRefuteConstraint>& constraints, WorkBudget& work) const {
+    try {
+        work.tick();
+        const auto delta = simplex_.computeSafeDelta();
+        std::unordered_map<VarId, mpq_class> point;
+        for (const auto& constraint : constraints) {
+            work.tick();
+            for (const auto& [monomial, coefficient] : constraint.poly.terms()) {
+                (void)coefficient;
+                for (const auto& [variable, exponent] : monomial) {
+                    work.tick();
+                    (void)exponent;
+                    if (point.contains(variable)) continue;
+                    const auto column = variables_.find(MonomialKey{{variable, 1}});
+                    if (column == variables_.end()) point.emplace(variable, 0);
+                    else {
+                        const auto value = simplex_.value(column->second);
+                        point.emplace(variable, mpq_class(value.a + value.b * delta));
+                    }
+                }
+            }
+        }
+        return point;
+    } catch (const ResourceExhausted&) {
+        return std::nullopt;
+    }
+}
+
 std::optional<std::vector<SatLit>> PolynomialLinearRefuter::check(
     const std::vector<SignRefuteConstraint>& constraints,
     std::chrono::steady_clock::time_point deadline,

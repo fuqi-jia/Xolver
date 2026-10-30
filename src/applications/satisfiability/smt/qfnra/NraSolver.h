@@ -71,7 +71,8 @@ private:
     // Reasoner pipeline stages (Phase 2). nullopt = continue.
     std::optional<TheoryCheckResult> stagePresolve(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
     // Refute the affine relaxation over independent monomial values before
-    // algebraic search. A feasible relaxation never establishes NRA SAT.
+    // algebraic search. A projected full candidate requires exact original-
+    // constraint validation; feasible relaxation alone never establishes SAT.
     std::optional<TheoryCheckResult> stageLinearRelaxation(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
     // Positive-orthant sign-definiteness
     // refuter. From single-variable bounds, fix each var's sign; if some

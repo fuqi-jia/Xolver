@@ -32,6 +32,49 @@ TEST_CASE("Polynomial linear refutation: coupled inequalities explain a nonlinea
     CHECK_FALSE(stats.exhausted);
 }
 
+TEST_CASE("Polynomial relaxation projection preserves exact infinitesimals and current variables") {
+    const auto x = variable(0), y = variable(1);
+    const mpq_class width(1, mpz_class(1) << 256);
+    const mpq_class upper = 1 + width;
+    std::vector<SignRefuteConstraint> constraints{
+        {x - constant(1), Relation::Gt, SatLit::positive(1)},
+        {x - constant(upper), Relation::Lt, SatLit::positive(2)},
+        {x * x - constant(1), Relation::Gt, SatLit::positive(3)}};
+    PolynomialLinearRefuter refuter;
+    REQUIRE_FALSE(refuter.check(constraints, deadline()));
+    WorkBudget work(10000);
+    const auto projected = refuter.projectCandidate(constraints, work);
+    REQUIRE(projected);
+    REQUIRE(projected->size() == 1);
+    CHECK(projected->at(0) > 1);
+    CHECK(projected->at(0) < upper);
+    CHECK((x * x - constant(1)).evaluateRational(*projected) > 0);
+
+    constraints = {{y - constant(3), Relation::Geq, SatLit::positive(4)}};
+    REQUIRE_FALSE(refuter.check(constraints, deadline()));
+    WorkBudget next(10000);
+    const auto current = refuter.projectCandidate(constraints, next);
+    REQUIRE(current);
+    REQUIRE(current->size() == 1);
+    CHECK_FALSE(current->contains(0));
+    CHECK(current->at(1) >= 3);
+    WorkBudget exhausted(1);
+    CHECK_FALSE(refuter.projectCandidate(constraints, exhausted));
+}
+
+TEST_CASE("Polynomial relaxation projection is not a nonlinear or integer satisfiability claim") {
+    const auto x = variable(0);
+    const std::vector<SignRefuteConstraint> constraints{
+        {x * x - constant(2), Relation::Eq, SatLit::positive(1)}};
+    PolynomialLinearRefuter refuter;
+    REQUIRE_FALSE(refuter.check(constraints, deadline()));
+    WorkBudget work(10000);
+    const auto point = refuter.projectCandidate(constraints, work);
+    REQUIRE(point);
+    CHECK(point->at(0) == 0);
+    CHECK(constraints[0].poly.evaluateRational(*point) != 0);
+}
+
 TEST_CASE("Polynomial linear refutation: strict rational bounds remain exact and open relaxations are not SAT") {
     const auto x = variable(0), y = variable(1);
     const mpz_class numerator = (mpz_class(1) << 130) + 7;

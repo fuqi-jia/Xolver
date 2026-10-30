@@ -2,6 +2,7 @@
 
 #include "search/refute/SignDefinitenessRefuter.h"
 #include "search/lra/GeneralSimplex.h"
+#include "base/WorkBudget.h"
 #include <chrono>
 #include <map>
 #include <unordered_map>
@@ -33,6 +34,12 @@ public:
         std::chrono::steady_clock::time_point deadline,
         PolynomialLinearStatistics* = nullptr);
     void reset();
+    // Project the current relaxation point onto original variables, completing
+    // variables without degree-one columns with zero. This is an UNTRUSTED
+    // candidate, even after a feasible relaxation: the caller must check every
+    // original constraint, integrality and interface condition before accepting it.
+    std::optional<std::unordered_map<VarId, mpq_class>> projectCandidate(
+        const std::vector<SignRefuteConstraint>&, WorkBudget&) const;
 
 private:
     struct Row { RationalPolynomial polynomial; int variable; };

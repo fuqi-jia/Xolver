@@ -115,10 +115,11 @@ std::optional<TheoryCheckResult> NraSolver::stagePresolve(TheoryLemmaStorage& /*
 
 // Each original model assigns a value to every monomial. Allowing these values
 // to vary independently weakens the constraints, so a contradiction here is
-// valid for the original polynomials. Unknown and feasible relaxations simply
-// continue to the remaining stages; neither establishes nonlinear SAT.
+// valid for the original polynomials. At full effort, project an untrusted
+// original-variable point and check every original constraint before accepting
+// it. A feasible relaxation alone never establishes nonlinear SAT.
 std::optional<TheoryCheckResult> NraSolver::stageLinearRelaxation(
-    TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort /*effort*/) {
+    TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort effort) {
     if (presolveConstraints_.empty()) return std::nullopt;
 
     // Skip unsupported placeholders; omitting a premise weakens the relaxation.
@@ -142,7 +143,27 @@ std::optional<TheoryCheckResult> NraSolver::stageLinearRelaxation(
             << " new_rows=" << statistics.newRows << " reused_rows=" << statistics.reusedRows
             << " retained_rows=" << statistics.retainedRows << " exhausted=" << statistics.exhausted << '\n';
     }
-    if (!reasons) return std::nullopt;
+    if (!reasons) {
+        if (effort == TheoryEffort::Full && interfaceEqualities_.empty() &&
+            interfaceDisequalities_.empty()) {
+            const auto started = std::chrono::steady_clock::now();
+            WorkBudget work(100000);
+            auto candidate = linearRefuter_->projectCandidate(cs, work);
+            const bool accepted = candidate && validateRationalCandidate(*candidate);
+            if (!profile.empty()) {
+                std::ofstream out(profile.string() + ".relaxation-candidate.log", std::ios::app);
+                out << "variables=" << (candidate ? candidate->size() : 0)
+                    << " accepted=" << accepted << " us="
+                    << std::chrono::duration_cast<std::chrono::microseconds>(
+                           std::chrono::steady_clock::now() - started).count() << '\n';
+            }
+            if (accepted) {
+                satFastModel_ = std::move(*candidate);
+                return TheoryCheckResult::consistent();
+            }
+        }
+        return std::nullopt;
+    }
 
     // Return active premises; TheoryManager negates them into the SAT clause.
     TheoryConflict conflict;
