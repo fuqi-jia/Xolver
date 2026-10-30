@@ -32,6 +32,82 @@ static int countBounds(const std::vector<LraPropagationEngine::ExplainedBound>& 
     return c;
 }
 
+TEST_CASE("LraPropagationEngine: a full consumer stops before unused rows") {
+    GeneralSimplex gs;
+    for (int row = 0; row < 8; ++row) {
+        const int x = gs.addVar("consumer-x" + std::to_string(row));
+        const int s = gs.addConstraint({{x, 1}}, 0);
+        REQUIRE(gs.assertLower(s, mkBound(-20 + row, 2 * row + 1)));
+        REQUIRE(gs.assertUpper(s, mkBound(20 + row, 2 * row + 2)));
+    }
+    REQUIRE(gs.check() == GeneralSimplex::Result::Sat);
+    const PropagationBudget budget{64, 256, 12, 1000};
+    LraPropagationEngine batch, streaming;
+    LraPropagationEngine::Statistics completeWork, stoppedWork;
+    const auto complete = batch.propagateAll(gs, budget, &completeWork);
+    REQUIRE(complete.size() == 16);
+    std::vector<LraPropagationEngine::ExplainedBound> consumed;
+    const auto prefix = streaming.propagateAll(gs, budget, &stoppedWork,
+        [&](const auto& bound) {
+            consumed.push_back(bound);
+            return consumed.size() < 3;
+        });
+    REQUIRE(prefix.size() == 3);
+    REQUIRE(consumed.size() == prefix.size());
+    for (std::size_t i = 0; i < prefix.size(); ++i) {
+        CHECK(prefix[i].var == complete[i].var);
+        CHECK(prefix[i].isLower == complete[i].isLower);
+        CHECK(prefix[i].value == complete[i].value);
+        CHECK(prefix[i].reasons == complete[i].reasons);
+        CHECK(consumed[i].var == prefix[i].var);
+        CHECK(consumed[i].value == prefix[i].value);
+        CHECK(consumed[i].reasons == prefix[i].reasons);
+    }
+    CHECK(stoppedWork.rowVisits < completeWork.rowVisits);
+    CHECK(stoppedWork.termPairs < completeWork.termPairs);
+    // Stopping is local to the invocation; it does not latch the engine off.
+    const auto resumed = streaming.propagateAll(gs, budget);
+    REQUIRE_FALSE(resumed.empty());
+    CHECK(resumed.front().var == complete[3].var);
+    CHECK(resumed.front().isLower == complete[3].isLower);
+}
+
+TEST_CASE("LraPropagationEngine: consumer stop keeps exact bounds local across rollback") {
+    GeneralSimplex gs;
+    const int x = gs.addVar("consumer-rollback-x");
+    const int s = gs.addConstraint({{x, -2}}, 0);
+    REQUIRE(gs.assertLower(s, mkBound(-6, 101)));
+    REQUIRE(gs.assertUpper(s, mkBound(6, 102)));
+    LraPropagationEngine engine;
+    auto checkCurrent = [&](bool child) {
+        std::vector<bool> sides(2, false);
+        for (int call = 0; call < 2; ++call) {
+            int deliveries = 0;
+            const auto derived = engine.propagateAll(gs, {64, 256, 12, 1000}, nullptr,
+                [&](const auto&) { ++deliveries; return false; });
+            REQUIRE(derived.size() == 1);
+            CHECK(deliveries == 1);
+            const auto& bound = derived.front();
+            CHECK(bound.var == x);
+            CHECK(bound.value == (bound.isLower ? DeltaRational(-3) :
+                child ? DeltaRational(mpq_class(1, 2), mpq_class(-1, 2)) : DeltaRational(3)));
+            REQUIRE(bound.reasons.size() == 1);
+            CHECK(bound.reasons.front() == SatLit::positive(bound.isLower ? 102 : child ? 103 : 101));
+            sides[bound.isLower ? 0 : 1] = true;
+        }
+        CHECK(sides[0]);
+        CHECK(sides[1]);
+        CHECK_FALSE(gs.varState(x).lower.bound.isFinite());
+        CHECK_FALSE(gs.varState(x).upper.bound.isFinite());
+    };
+    checkCurrent(false);
+    gs.push();
+    REQUIRE(gs.assertLower(s, BoundInfo(BoundValue(DeltaRational(-1, 1)), SatLit::positive(103)), 1));
+    checkCurrent(true);
+    gs.pop();
+    checkCurrent(false);
+}
+
 TEST_CASE("LraPropagationEngine: bounded repeated checks reach every row direction") {
     for (bool boundLimited : {false, true}) {
         CAPTURE(boundLimited);

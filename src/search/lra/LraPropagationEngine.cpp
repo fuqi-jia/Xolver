@@ -72,14 +72,16 @@ struct RowAggregate {
 std::vector<LraPropagationEngine::ExplainedBound>
 LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
                                   const PropagationBudget& budget,
-                                  Statistics* statistics) {
+                                  Statistics* statistics,
+                                  const BoundConsumer& consume) {
     if (statistics) *statistics = {};
     std::vector<ExplainedBound> accepted;
     if (budget.maxDerivedBounds <= 0 || budget.maxIterations <= 0 ||
         budget.maxReasonSize < 0 || budget.maxTimeMs <= 0) return accepted;
     const auto started = std::chrono::steady_clock::now();
+    bool consumerStopped = false;
     auto exhausted = [&] {
-        return static_cast<int>(accepted.size()) >= budget.maxDerivedBounds ||
+        return consumerStopped || static_cast<int>(accepted.size()) >= budget.maxDerivedBounds ||
             std::chrono::steady_clock::now() - started >=
                 std::chrono::milliseconds(budget.maxTimeMs);
     };
@@ -149,6 +151,7 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
         target.reasons = *reasons;
         target.explained = true;
         accepted.push_back({var, lower, value, std::move(*reasons)});
+        if (consume && !consume(accepted.back())) consumerStopped = true;
         return true;
     };
 

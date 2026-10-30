@@ -319,21 +319,19 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
         return TheoryCheckResult::unknown();
     }
 
-    // Lift explained row bounds to SAT as entailment clauses.
-    auto derived = propagationEngine_.propagateAll(gs_);
-    if (!derived.empty()) {
-        SatVar maximumVariable = 0;
-        for (const auto& entry : theoryTrail_) maximumVariable = std::max(maximumVariable, entry.lit.var);
-        std::vector<int8_t> activeValues(static_cast<size_t>(maximumVariable) + 1, 0);
-        for (const auto& entry : theoryTrail_) activeValues[entry.lit.var] = entry.lit.sign ? 1 : -1;
-        const int kMaxProps = 64;
-        for (const auto& eb : derived) {
-            if (static_cast<int>(entailmentProps_.size()) >= kMaxProps) break;
-            if (auto lem = buildEntailmentLemma(eb, activeValues)) {
-                entailmentProps_.push_back(std::move(*lem));
-            }
-        }
-    }
+    // Lift explained row bounds as they arrive. Stop the producer when the
+    // SAT output budget is full instead of finishing hundreds of unused facts.
+    SatVar maximumVariable = 0;
+    for (const auto& entry : theoryTrail_) maximumVariable = std::max(maximumVariable, entry.lit.var);
+    std::vector<int8_t> activeValues(static_cast<size_t>(maximumVariable) + 1, 0);
+    for (const auto& entry : theoryTrail_) activeValues[entry.lit.var] = entry.lit.sign ? 1 : -1;
+    constexpr std::size_t kMaxProps = 64;
+    propagationEngine_.propagateAll(gs_, {}, nullptr,
+        [&](const LraPropagationEngine::ExplainedBound& bound) {
+            if (auto lemma = buildEntailmentLemma(bound, activeValues))
+                entailmentProps_.push_back(std::move(*lemma));
+            return entailmentProps_.size() < kMaxProps;
+        });
     // Interface disequality vs. an entailed equality: if an asserted 2-var
     // equality atom or two complementary inequalities pin (x - y) to 0, then
     // x = y is entailed and an interface disequality x != y is a hard conflict

@@ -2689,3 +2689,33 @@ R890 also rejects an all-assigned propagation shortcut: none of the measured
 48/51/131 calls has every linear predicate assigned. No-output propagation costs
 only about0.61/4.55/1.23s in those private runs, so that observation does not
 justify a large general speedup. These diagnostics remain outside formal scores.
+
+## Consumer-bounded linear propagation (R899–R900, candidate)
+
+The uniform first-model round R894/R895 completes all160 valid frozen triads
+without opposite verdicts, invalid exported models or protocol errors. The
+rotating candidate gains original51 (60.019s timeout to36.639s SAT, with its
+actual initial model positively replayed in Z3), but loses original59
+(43.132s SAT to60.011s timeout). Both versions make100 raw decisions. Inline
+independent evidence confirms99 each; original115 still needs its separately
+checked modular certificate attached to this round. Inline verified PAR-2 is
+7656.188 versus7655.901, effectively unchanged. This candidate has no net gain
+and must not be merged on the pilot result alone. Z3 has124 raw decisions;
+unconfirmed results and supplementary truth remain explicit rather than silently
+counted. Original valid timings are immutable.
+
+R899 links an observational LRA translation unit against the unchanged R882
+core. R900 finishes three60s diagnostics with no opposite verdict. Its final
+periodic sample for59 has484,804 derived bounds but only228,638 consumed before
+the64-clause output limit;909 of1,169 calls hit that limit. For48 the counts
+are1,995,473 derived/907,770 consumed. Instrumentation changes scheduling, so
+neither these timings nor the diagnostic59 SAT is a formal improvement.
+
+The new core streams explained bounds through the existing propagation entry.
+The consumer can stop the scan when its output budget is full, avoiding the
+unused suffix. The same exact local overlay, signed premises, mathematical
+bound limit and circular scheduling remain; no callback or derived fact survives
+the invocation. Batch collection remains a real use of the same API. Tests
+check the exact batch prefix, reduced row arithmetic, subsequent resumption,
+strict negative division and rollback. Native qualification and a fresh frozen
+comparison are pending; no new solved count is claimed.
