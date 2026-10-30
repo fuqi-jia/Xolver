@@ -110,9 +110,14 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
         queued[basic][side] = true;
         work.push_back({basic, lower});
     };
-    for (int row = 0; row < gs.tableau().numRows(); ++row) {
-        const int basic = gs.tableau().row(row).basicVar;
-        if (basic >= 0) { enqueue(basic, true); enqueue(basic, false); }
+    const auto seedCount = 2 * static_cast<std::size_t>(gs.tableau().numRows());
+    if (seedCount != 0) {
+        auto seed = nextSeed_ % seedCount;
+        for (std::size_t count = 0; count < seedCount; ++count) {
+            const int basic = gs.tableau().row(static_cast<int>(seed / 2)).basicVar;
+            if (basic >= 0) enqueue(basic, seed % 2 == 0);
+            if (++seed == seedCount) seed = 0;
+        }
     }
 
     // The tableau is immutable during this call. Only updates to non-basic
@@ -155,6 +160,11 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
         ++iterations;
         const int rowIndex = gs.basicRowOfVar(item.basic);
         if (rowIndex < 0) continue;
+        // Advance before processing: all budget exits, including a bound-count
+        // limit reached mid-row, give the next direction an opportunity on the
+        // following check. The current call still uses its own local overlay.
+        nextSeed_ = 2 * static_cast<std::size_t>(rowIndex) + (item.lower ? 1 : 2);
+        if (nextSeed_ == seedCount) nextSeed_ = 0;
         const auto& row = gs.tableau().row(rowIndex);
 
         if (statistics) ++statistics->rowVisits;

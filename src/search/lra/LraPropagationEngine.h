@@ -53,6 +53,11 @@ public:
         const PropagationBudget& budget = {512, 2048, 12, 20},
         Statistics* statistics = nullptr);
 
+private:
+    // Scheduling hint only: no bounds, explanations or tableau identities
+    // survive a call. A bounded check resumes the circular row/side scan so
+    // that a large tableau's prefix cannot permanently starve its suffix.
+    std::size_t nextSeed_ = 0;
 };
 
 } // namespace xolver

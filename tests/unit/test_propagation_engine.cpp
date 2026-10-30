@@ -32,6 +32,80 @@ static int countBounds(const std::vector<LraPropagationEngine::ExplainedBound>& 
     return c;
 }
 
+TEST_CASE("LraPropagationEngine: bounded repeated checks reach every row direction") {
+    for (bool boundLimited : {false, true}) {
+        CAPTURE(boundLimited);
+        GeneralSimplex gs;
+        std::vector<int> variables;
+        for (int row = 0; row < 13; ++row) {
+            const int x = gs.addVar("fair-x" + std::to_string(row));
+            variables.push_back(x);
+            const int s = gs.addConstraint({{x, 1}}, 0);
+            REQUIRE(gs.assertLower(s, mkBound(-20 + row, 2 * row + 1)));
+            REQUIRE(gs.assertUpper(s, mkBound(20 + row, 2 * row + 2)));
+        }
+        REQUIRE(gs.check() == GeneralSimplex::Result::Sat);
+        LraPropagationEngine engine;
+        std::vector<bool> reached(26, false);
+        const PropagationBudget budget{boundLimited ? 1 : 64, boundLimited ? 2 : 1, 12, 1000};
+        for (int call = 0; call < 52; ++call) {
+            LraPropagationEngine::Statistics statistics;
+            const auto derived = engine.propagateAll(gs, budget, &statistics);
+            CHECK(statistics.rowVisits <= static_cast<std::size_t>(budget.maxIterations));
+            CHECK(derived.size() <= static_cast<std::size_t>(budget.maxDerivedBounds));
+            for (const auto& bound : derived) {
+                const auto found = std::find(variables.begin(), variables.end(), bound.var);
+                REQUIRE(found != variables.end());
+                const auto row = static_cast<int>(found - variables.begin());
+                CHECK(bound.value == DeltaRational((bound.isLower ? -20 : 20) + row));
+                REQUIRE(bound.reasons.size() == 1);
+                CHECK(bound.reasons.front() == SatLit::positive(2 * row + (bound.isLower ? 1 : 2)));
+                reached[2 * row + (bound.isLower ? 0 : 1)] = true;
+            }
+        }
+        CHECK(std::all_of(reached.begin(), reached.end(), [](bool value) { return value; }));
+        for (int x : variables) {
+            CHECK_FALSE(gs.varState(x).lower.bound.isFinite());
+            CHECK_FALSE(gs.varState(x).upper.bound.isFinite());
+        }
+    }
+}
+
+TEST_CASE("LraPropagationEngine: circular scheduling retains no facts across tableaux or rollback") {
+    LraPropagationEngine engine;
+    GeneralSimplex previous;
+    for (int row = 0; row < 5; ++row) previous.addConstraint({}, -row);
+    for (int call = 0; call < 7; ++call) engine.propagateAll(previous, {1, 1, 12, 1000});
+
+    GeneralSimplex gs;
+    const int x = gs.addVar("fresh-x");
+    const int s = gs.addConstraint({{x, 1}}, 0);
+    REQUIRE(gs.assertLower(s, mkBound(-3, 101)));
+    REQUIRE(gs.assertUpper(s, mkBound(3, 102)));
+    auto checkCurrent = [&](bool child) {
+        bool lower = false, upper = false;
+        for (int call = 0; call < 2; ++call) {
+            const auto derived = engine.propagateAll(gs, {1, 1, 12, 1000});
+            REQUIRE(derived.size() == 1);
+            const auto& bound = derived.front();
+            CHECK(bound.var == x);
+            CHECK(bound.value == (bound.isLower ? DeltaRational(-3) :
+                child ? DeltaRational(mpq_class(1, 2), -1) : DeltaRational(3)));
+            REQUIRE(bound.reasons.size() == 1);
+            CHECK(bound.reasons.front() == SatLit::positive(bound.isLower ? 101 : child ? 103 : 102));
+            (bound.isLower ? lower : upper) = true;
+        }
+        CHECK(lower);
+        CHECK(upper);
+    };
+    checkCurrent(false);
+    gs.push();
+    REQUIRE(gs.assertUpper(s, BoundInfo(BoundValue(DeltaRational(mpq_class(1, 2), -1)), SatLit::positive(103)), 1));
+    checkCurrent(true);
+    gs.pop();
+    checkCurrent(false);
+}
+
 TEST_CASE("LraPropagationEngine: negative target uses the correct extremum of other terms") {
     for (const bool basicLower : {true, false}) {
         CAPTURE(basicLower);

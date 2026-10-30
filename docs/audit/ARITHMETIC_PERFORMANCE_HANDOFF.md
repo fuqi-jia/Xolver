@@ -2591,9 +2591,9 @@ The [stage receipt](POLYNOMIAL_LINEAR_REFUTATION_STAGE_20261030.json) records
 full results. Receipt-only changes after the qualified core do not create a
 new native solver version. PR78 is merged as`ecf1e7c6`; both final-head PR CI`41050990683`
 and fresh main CI`41055517535` are fully green. Both protected sets remain unused.
-The complete new-core original GCD workflow is starting separately; no new
-whole-program QCP result or overall superiority is claimed here. No additional
-current-main server archive is required.
+The original GCD workflow below now completes with this frozen core. A matched
+Z3 whole-program result and overall superiority remain unestablished. No
+additional current-main server archive is required.
 
 
 ## Existing numeric predicate projection (R868–R873, candidate)
@@ -2618,13 +2618,46 @@ retains its distinct registration/introspection contract. New checks compare
 rational half-line implication against all truth regions, including130-bit
 endpoints, and exercise original-column propagation and backtracking. Exact
 infinitesimal reconstruction and the existing LIA/LRA policies are unchanged.
-This candidate has no qualified binary or new score until its own build,
-independent checks and full frozen comparison finish.
+R873 now qualifies frozen CLI SHA-256
+`e151a159f220860e3579043ead7e8b121e9c497b652144316e87aff06df7ca9a`.
+It passes36 targeted cases/79,402 assertions, all1,820 unit cases/883,125
+assertions, LRA/LIA regressions,202 independent linear cases/102 models,
+69 tool/parser tests and the QCP regression group. R874/R880 freshly compare all
+ten remaining QF_LRA development gaps: both delivered main and candidate time
+out on all ten. No wrong verdict or formal-budget violation occurs. This
+standalone performance experiment has no added solve and is not merged; these
+ten cases do not establish a full160 score or exclude regressions elsewhere.
 
 The new-core original GCD workflow`native_gcd_xolver_r864-20261030194758` uses
 frozen791960... throughout actual native calls. Annotation and independent VC
-checking are accepted; three owners have completed9 top-level VC proofs and
-assigned splits, with group acceptance/parent/final-check still pending.
-The70 distinct native inputs match prior independently checked truth. GCD return
-identities use checked Rocq mathematics and are not counted as direct Xolver SMT
-proofs. There is no new matched whole-program timing or coverage claim yet.
+checking, all three groups, complete parent verification, final publication and
+fresh final-check pass. EOS`a5c27eaaecde` returns `passed/done`; the entire
+original C and frozen contracts remain unchanged. The independent R879 audit
+authenticates1 program/9 complete original VCs and888 actual native calls across
+generation/acceptance/final refresh:522 SAT/366 UNSAT over70 distinct formulas.
+All formulas match prior independently checked truth. Failed intermediate Rocq
+development checks remain recorded; they have no native SMT session and do not
+replace the successful canonical checks. GCD identities use checked Rocq
+mathematics, with0 post-generation external SMT discharge queries. The generic
+audit's stricter external-discharge qualification remains false. See
+[the functional receipt](GCD_NATIVE_PROGRAM_QUALIFICATION_20261030.json).
+The matched Z3 run has only accepted annotation so far; no matched whole-program
+coverage or timing advantage is claimed. Both protected sets remain untouched.
+
+
+## Bounded linear propagation scheduling (R881–R882, candidate)
+
+`LraSolver::stageCore -> LraPropagationEngine::propagateAll` previously seeded
+every check from row0. The2,048-direction limit can inspect at most the first
+1,024 rows before pending seeds, even on a tableau such as original51 with5,854
+rows. R870 measures2,962,632 row visits across1,479 calls, near that limit.
+Recomputing new states does not give the remaining rows a scheduling opportunity.
+
+The unchanged R873 library reproduces starvation in R881:13 independent rows
+have26 explained bound directions, but52 bounded calls discover only1. The
+new candidate rotates the row/side seed across calls. Only the scheduling
+position survives; values, explanations, snapshots and incident-row work remain
+local, and every original budget is unchanged. New tests cover both iteration
+and derived-bound limits, a different smaller tableau, strict rational bounds
+and rollback. Native qualification and fair performance checks are still pending;
+neither this reproduction nor the new tests create a new formal score.
