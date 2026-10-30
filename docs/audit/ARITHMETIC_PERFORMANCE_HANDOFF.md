@@ -2391,3 +2391,45 @@ UNSAT, and `1` when neither is refuted. The corpus correlation above is not a
 universal ABI interpretation. The generic `ContextSolver` remains a separate
 feasibility/implication API. Native replacement targets the lower single-formula
 SAT entry, preserving QCP's own classifier and preprocessing.
+
+## Selected native QCP SAT backend (R813–R820)
+
+[PR75](https://github.com/fuqi-jia/Xolver/pull/75) implements actual native backend
+selection, qualified code `9f36803e`; the source/binary hashes, EOS runs and
+evidence boundaries are in the [stage receipt](NATIVE_QCP_BACKEND_STAGE_20261030.json).
+Server acceptance is complete; PR CI, merge and exact-head main CI remain pending.
+
+The pinned Linux QCP executable has no exported backend switch. The adapter
+checks its full executable hash, native entry/call-site bytes and executable
+device/inode, then replaces the lower SAT entry in memory. It serializes each
+actual formula through QCP's FILE printer and runs only the selected frozen
+Xolver or Z3. QCP retains preprocessing, branch classification and VC generation.
+The original native solver is never a fallback. Unknown, timeout, unsupported
+syntax and protocol errors stop the native invocation explicitly. The original
+on-disk executable and C/specification hashes remain unchanged.
+
+R815 runs the three original public development inputs through each selected
+backend: **780 calls /402 branch diagnostics per backend**, 1,560 calls total.
+All formulas, results and branch diagnostics match the live-original R813/R792
+controls. Generated goal, auto and manual VC files are byte-identical.
+Native mode0 does not occur on these inputs; separate native TT/FF tests cover
+both modes with both backends. R818, EOS`1727e0789665`, qualifies final code,
+49 QCP Python tests, architecture and the full regression harness, non-target
+executable safety, explicit unknown handling and cancellation without a surviving
+detached selected solver. Failure records are persisted before replies and
+updated atomically so immediate native-parent exit cannot truncate them.
+
+The 1,560 occurrences contain **174 distinct formulas:84 SAT /90 UNSAT**.
+R817 uses up to64 independent EOS physical CPUs, one per task, with60s/16GiB
+per solver invocation. All90 UNSAT formulas are independently UNSAT in cvc5.
+For every SAT formula, both frozen Xolver and Z3 export raw models; all168 models
+preserve the original assertions and replay SAT in both Z3 and cvc5:336 positive
+replays, no model completions. R820, EOS`9f8370812cb1`, audits the exact queries,
+raw witnesses, reconstructed replay assertions, positive checker outputs and
+source-bound qualification. No opposite verdict or invalid model is observed.
+
+This closes the native selection interface gap. It does not finish the full
+C→VC→selected SMT→Rocq program comparison. Those canonical controller runs still
+need complete original-VC proofs, final-check and witness audits. Xolver's core
+binary is unchanged from R802; this stage establishes no new fixed160 score or
+performance advantage. Neither protected set has been inspected or run.
