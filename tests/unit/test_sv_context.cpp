@@ -4,6 +4,7 @@
 #include "ir/NativeBuilder.h"
 #include <doctest/doctest.h>
 #include <somtparser/frontend/parser.h>
+#include <sstream>
 
 using namespace xolver;
 namespace context_v = applications::verification::model_checking;
@@ -195,4 +196,40 @@ TEST_CASE("API: native snapshots are transactional and isolate previous scopes")
     CHECK((solver.decide({b.boolean(false)}).result == Result::Unsat));
     CHECK((solver.decide({}).result == Result::Sat));
     CHECK((solver.decide(task.assumptions).result == Result::Sat));
+}
+
+TEST_CASE("API: native snapshots export original scalar array and function models") {
+    for (const auto &source : {
+             "(declare-const x Int) (assert (= x 5))",
+             "(declare-const x Real) (assert (= x (/ 1 2)))",
+             "(declare-const x Bool) (assert x)",
+             "(declare-const x (_ BitVec 8)) (assert (= x #x02))",
+             "(declare-const x (Array Int Int)) (assert (= (select x 0) 7))",
+             "(declare-const x Int) (declare-fun f (Int) Int)"
+             "(assert (= x 5)) (assert (= (f x) 7))"}) {
+        INFO(std::string(source));
+        auto task = obligation(std::string("(set-logic ALL) ") + source + "(assert true)");
+        Solver solver;
+        auto answer = solver.decide(task.assumptions);
+        REQUIRE((answer.result == Result::Sat));
+        std::ostringstream model;
+        solver.dumpModel(model);
+        CHECK(model.str().find("(define-fun x ()") != std::string::npos);
+        CHECK(model.str().find("(error ") == std::string::npos);
+        if (std::string(source).find("declare-fun f") != std::string::npos)
+            CHECK(model.str().find("(define-fun f (") != std::string::npos);
+        CHECK((solver.validateModel() != Solver::ModelValidation::Violated));
+    }
+}
+
+TEST_CASE("API: construction exports constrained and unconstrained original symbols") {
+    Solver solver;
+    auto b = solver.mkConst(solver.boolSort(), "b");
+    solver.mkConst(solver.intSort(), "unused");
+    solver.assertFormula(b);
+    REQUIRE((solver.checkSat() == Result::Sat));
+    std::ostringstream model;
+    solver.dumpModel(model);
+    CHECK(model.str().find("(define-fun b () Bool true)") != std::string::npos);
+    CHECK(model.str().find("(define-fun unused () Int 0)") != std::string::npos);
 }

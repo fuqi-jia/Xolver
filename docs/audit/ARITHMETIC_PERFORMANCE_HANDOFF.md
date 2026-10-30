@@ -55,8 +55,12 @@ The retained branches are `main`, `feat/qcp-foundations` (QCP and solver
 foundations), and `feat/draco-asp`. Historical branch tips are archived in
 `validation/arithmetic-r103/branch-archive-20261030/history.bundle`, SHA-256
 `e318c3063355737900a6c0318a2bc6e356cbf30413b927908c7eabfe28f91971`;
-the adjacent manifest maps original refs. Historical worktrees are detached
-and retained. Do not create an experimental branch for each subsequent change.
+the adjacent manifest maps original refs. All27 historical worktrees were
+verified clean and removed at the user's request. The current repository and
+Draco worktree remain. Unique `Xolver-next/validation` evidence is preserved under
+the archive's `worktree-artifacts/Xolver-next/validation`; the cleanup inventory
+and result record bind original paths and commits. Do not create an experimental
+branch for each subsequent change.
 
 [PR72](https://github.com/fuqi-jia/Xolver/pull/72) is delivered as main
 `6802c5e4d5ddea0ef8a86614521d96bf3605c424`. Both its
@@ -2321,6 +2325,19 @@ and implication validity need separate checks. The generic SV `ContextSolver`
 and `xolver-sv context` operation expose both, without changing ordinary
 implication checking or assuming a QCP-specific flag ABI. Native qualification
 of this API is required before delivery.
+
+`Solver::decide` now connects a native assertion snapshot to the complete runtime
+dispatcher. Standalone application fallback alone cannot dispatch all supported
+array/UF combinations. Native import retains original DAG identity, rejects
+ambiguous free-symbol names transactionally, replaces old query scopes, and
+retains options and budgets. `dumpModel` enumerates original symbols for parsed,
+native and programmatically constructed queries, including unconstrained symbols
+known to the construction API; solver-introduced auxiliaries are excluded.
+R798 passes1,804 unit cases /879,409 assertions, all67 parser/governance/evidence
+checks and43 QCP Python tests. Its final CLI qualification incorrectly combines
+stderr diagnostics with stdout JSON; that harness failure is preserved and does
+not qualify the stage. Model export and corrected stream capture require fresh
+native qualification and independent witness replay.
 
 Capture and standalone replay do not replace QCP's opaque internal SMT backend,
 establish complete native-call coverage, or verify a whole C program. A true

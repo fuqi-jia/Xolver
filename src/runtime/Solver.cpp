@@ -1836,6 +1836,24 @@ void Solver::dumpModel(std::ostream& os) const {
         return;
     }
 
+    // Parsed declarations retain their source order. Native snapshots and the
+    // construction API instead retain their original free symbols by handle;
+    // do not export fresh variables introduced by solving/preprocessing.
+    std::vector<SOMTParser::Node> variables;
+    if (pImpl->parser) {
+        variables = pImpl->parser->getDeclaredVariables();
+    } else if (pImpl->ir) {
+        std::vector<ExprId> ids;
+        ids.reserve(pImpl->symbolTerms_.size());
+        for (const auto &[name, id] : pImpl->symbolTerms_) {
+            (void)name;
+            ids.push_back(id);
+        }
+        std::sort(ids.begin(), ids.end());
+        for (auto id : ids)
+            variables.push_back(pImpl->ir->native(id));
+    }
+
     // -----------------------------------------------------------------------
     // Array model token resolution (QF_AX + combination array logics).
     //
@@ -1942,8 +1960,8 @@ void Solver::dumpModel(std::ostream& os) const {
     // every declared array variable, and pre-scan tokens for numeric collisions.
     struct ArrSorts { std::string idxSmt, elemSmt; };
     std::map<std::string, ArrSorts> arrSorts;
-    if (pImpl->parser) {
-        for (const auto& var : pImpl->parser->getDeclaredVariables()) {
+    if (!variables.empty()) {
+        for (const auto& var : variables) {
             if (!var || !var->isArray()) continue;
             auto s = var->getSort();
             if (!s) continue;
@@ -2023,8 +2041,8 @@ void Solver::dumpModel(std::ostream& os) const {
     // model (e.g. an array eliminated by read-over-write simplification, which
     // is then unconstrained → any const array is a valid witness).
     std::ostringstream arrayBuf;
-    if (pImpl->parser) {
-        for (const auto& var : pImpl->parser->getDeclaredVariables()) {
+    if (!variables.empty()) {
+        for (const auto& var : variables) {
             if (!var || !var->isArray()) continue;
             std::string name = var->getName();
             auto sortsIt = arrSorts.find(name);
@@ -2050,8 +2068,8 @@ void Solver::dumpModel(std::ostream& os) const {
 
     // Scalar variables (Int/Real/Bool AND uninterpreted index/element vars).
     std::ostringstream scalarBuf;
-    if (pImpl->parser) {
-        for (const auto& var : pImpl->parser->getDeclaredVariables()) {
+    if (!variables.empty()) {
+        for (const auto& var : variables) {
             if (!var) continue;
             if (var->isArray()) continue;  // handled above
             std::string name = var->getName();
