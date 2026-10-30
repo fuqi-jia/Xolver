@@ -36,7 +36,7 @@ TEST_CASE("SV context: infeasibility and implication are distinct across theorie
         auto task = obligation(std::string("(set-logic ALL) ") + source);
         auto answer = context_v::ContextSolver(contextDecision).solve(task);
         INFO(answer.implication.reason);
-        CHECK(answer.context.result == Result::Unsat);
+        CHECK((answer.context.result == Result::Unsat));
         CHECK(answer.implication.status == context_v::Status::Valid);
         CHECK(answer.queries == 1);
         CHECK_FALSE(answer.implication.counterexample);
@@ -55,14 +55,14 @@ TEST_CASE("SV context: feasible goals retain models and do not mutate assumption
         auto task = obligation(std::string("(set-logic ALL) ") + source);
         const auto original = task.assumptions;
         auto answer = context_v::ContextSolver(contextDecision).solve(task);
-        CHECK(answer.context.result == Result::Sat);
+        CHECK((answer.context.result == Result::Sat));
         CHECK(answer.implication.status == context_v::Status::Valid);
         CHECK(answer.queries == 2);
         CHECK(task.assumptions == original);
         native::Nodes b({});
         task.conclusion = b.boolean(false);
         answer = context_v::ContextSolver(contextDecision).solve(task);
-        REQUIRE(answer.context.result == Result::Sat);
+        REQUIRE((answer.context.result == Result::Sat));
         REQUIRE(answer.implication.status == context_v::Status::Invalid);
         CHECK(answer.implication.counterexample.has_value());
         CHECK(answer.queries == 2);
@@ -93,7 +93,7 @@ TEST_CASE("SV context: an undecided context never becomes an infeasible path") {
             return answer;
         };
         auto answer = context_v::ContextSolver(oracle).solve(task);
-        CHECK(answer.context.result == Result::Unknown);
+        CHECK((answer.context.result == Result::Unknown));
         CHECK(answer.context.reason == "context budget exhausted");
         CHECK(answer.queries == 2);
         CHECK(calls == 2);
@@ -120,7 +120,7 @@ TEST_CASE("SV context: invalid inputs and oracle failures preserve uncertainty")
         task.assumptions = {bad};
         auto answer = solver.solve(task);
         CHECK(answer.implication.status == context_v::Status::InvalidInput);
-        CHECK(answer.context.result == Result::Unknown);
+        CHECK((answer.context.result == Result::Unknown));
         CHECK(answer.queries == 0);
         task.assumptions.clear();
         task.conclusion = bad;
@@ -129,7 +129,7 @@ TEST_CASE("SV context: invalid inputs and oracle failures preserve uncertainty")
     }
     CHECK(calls == 0);
     auto answer = solver.solve(task);
-    CHECK(answer.context.result == Result::Unknown);
+    CHECK((answer.context.result == Result::Unknown));
     CHECK(answer.implication.status == context_v::Status::Unknown);
     CHECK(answer.implication.reason == "oracle cancelled");
     CHECK(answer.queries == 1);
@@ -152,7 +152,7 @@ TEST_CASE("SV context: a failed implication keeps the completed feasibility verd
         return answer;
     });
     auto answer = solver.solve({"failure", {}, b.boolean(true)});
-    CHECK(answer.context.result == Result::Sat);
+    CHECK((answer.context.result == Result::Sat));
     CHECK(answer.context.model.has_value());
     CHECK(answer.implication.status == context_v::Status::Unknown);
     CHECK(answer.implication.reason == "refutation cancelled");
