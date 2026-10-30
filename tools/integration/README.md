@@ -166,6 +166,57 @@ authenticate the supplied controller record; this ledger does not replace Rocq.
 Missing backend reports leave external query counts unknown; they do not
 establish that no solver calls occurred.
 
+## Native QCP SAT backend
+
+`qcp_native_backend.py` selects Xolver or Z3 at the pinned Linux x86-64 QCP
+binary's actual single-formula SAT entry. The distributed executable has no
+source or exported backend switch. This adapter replaces that entry in memory;
+QCP retains preprocessing, implication classification, symbolic execution and
+VC generation. It never calls the original solver after replacement. The
+launcher checks the complete QCP executable SHA-256, and the library checks its
+entry/call-site bytes. Only that executable's device/inode is instrumented;
+controller, Python and Rocq processes can inherit the environment safely.
+The on-disk executable and C specifications remain unchanged.
+
+Build the two standalone integration helpers inside the existing `build/`
+under its writer lock on Panda1 through ExperimentOS:
+
+```bash
+cc -std=c11 -O2 -Wall -Wextra -shared -fPIC \
+  tools/integration/qcp_native_backend.c -ldl -o build/qcp-native-backend.so
+cc -std=c11 -O2 -Wall -Wextra tools/integration/qcp_backend_exec.c \
+  -o build/qcp-backend-exec
+```
+
+From a one-physical-CPU ExperimentOS task, pass the original native invocation
+or canonical controller command unchanged after `--`:
+
+```bash
+python3 tools/integration/qcp_native_backend.py \
+  --qcp-binary /path/to/pinned/QCP/linux-binary/symexec \
+  --library build/qcp-native-backend.so --exec-guard build/qcp-backend-exec \
+  --backend xolver --solver /path/to/frozen/xolver --output validation/native-run \
+  -- /path/to/pinned/QCP/linux-binary/symexec ORIGINAL_ARGUMENTS
+```
+
+Use `--backend z3 --solver /path/to/frozen/z3` with identical inputs/settings.
+A persistent worker serializes each actual argument with QCP's own printer,
+then runs only the selected backend with a shared 60-second callback budget and
+16 GiB address-space limit. Each occurrence, query, native mode, caller,
+stdout/stderr and executable hashes are recorded. Printed integer functions
+remain uninterpreted; no arithmetic meaning is inferred from their names.
+Unknown, timeout, unsupported syntax and protocol errors stop the native
+invocation explicitly: the pinned ABI has no established unknown return code.
+Parent-death guards terminate workers and detached solver children on
+cancellation. These helpers are independent of the normal Xolver build.
+
+`complete` in these records means the instrumented command/protocol completed.
+It does not certify a C program or a proof. Full program verification still
+requires the original complete VCs, checked Rocq reconstruction, the canonical
+controller's final-check and the witness audit described above. The external
+`qcp_backend.py` interface remains the separate post-generation proof-candidate
+stage; using it alone does not replace native QCP's internal solver.
+
 ## Latest Draco 2 and ASP
 
 `draco_backend.DracoBackend` connects the current

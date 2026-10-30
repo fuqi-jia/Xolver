@@ -41,11 +41,22 @@
     "captured_occurrences": 402,
     "distinct_source_target_pairs": 95,
     "source_and_refutation_formulas": 190,
-    "implementations": ["Xolver CLI", "Xolver native API", "Z3", "cvc5"],
+    "implementations": [
+      "Xolver CLI",
+      "Xolver native API",
+      "Z3",
+      "cvc5"
+    ],
     "solver_observations": 760,
     "per_implementation": {
-      "source": {"sat": 83, "unsat": 12},
-      "source_and_not_target": {"sat": 5, "unsat": 90},
+      "source": {
+        "sat": 83,
+        "unsat": 12
+      },
+      "source_and_not_target": {
+        "sat": 5,
+        "unsat": 90
+      },
       "verified": 190,
       "unknown": 0,
       "timeout": 0
@@ -62,10 +73,20 @@
   },
   "cross_theory_models": {
     "experimentos_run": "0f1b736e8818",
-    "theories": ["Int", "Real", "Bool", "BV", "Array Int Int", "UF over Int"],
+    "theories": [
+      "Int",
+      "Real",
+      "Bool",
+      "BV",
+      "Array Int Int",
+      "UF over Int"
+    ],
     "models": 6,
     "independent_replays": 12,
-    "checkers": ["Z3", "cvc5 --arrays-exp"],
+    "checkers": [
+      "Z3",
+      "cvc5 --arrays-exp"
+    ],
     "record": "validation/arithmetic-r103/native-models-r810/report.json",
     "sha256": "a2d4401ab0476656dead808b652189e027091289230a7363e4411439f280297b"
   },
@@ -83,7 +104,11 @@
     "pr": "https://github.com/fuqi-jia/Xolver/pull/74",
     "qualified_code_ci": "https://github.com/fuqi-jia/Xolver/actions/runs/41013084797",
     "qualified_code_ci_conclusion": "success",
-    "receipt_head_ci_and_merge": "pending"
+    "receipt_head_ci": "https://github.com/fuqi-jia/Xolver/actions/runs/41017751362",
+    "receipt_head_ci_conclusion": "success",
+    "merge_commit": "f1b7a194bad6db9402ee0f660a3078deeb9b3987",
+    "main_ci": "https://github.com/fuqi-jia/Xolver/actions/runs/41021331208",
+    "main_ci_conclusion": "success"
   },
   "boundaries": [
     "Native printed Omod and Zgcd applications remain uninterpreted; their mathematical meanings are not invented.",

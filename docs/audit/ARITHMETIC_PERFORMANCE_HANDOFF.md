@@ -2311,10 +2311,12 @@ server archive is a delivery prerequisite.
 The [source-bound native context stage](NATIVE_CONTEXT_SMT_STAGE_20261030.json)
 binds qualified code `2364cd99`, native source manifest and binary hashes,
 independent model witnesses and the original immutable observations.
-[PR74](https://github.com/fuqi-jia/Xolver/pull/74) awaits receipt-head CI and merge;
-its qualified code [CI](https://github.com/fuqi-jia/Xolver/actions/runs/41013084797)
-is fully green. Receipt-only documentation changes do not change the qualified
-implementation.
+[PR74](https://github.com/fuqi-jia/Xolver/pull/74) is delivered as main
+`f1b7a194bad6db9402ee0f660a3078deeb9b3987`. Its qualified code
+[CI](https://github.com/fuqi-jia/Xolver/actions/runs/41013084797), receipt-head
+[CI](https://github.com/fuqi-jia/Xolver/actions/runs/41017751362) and fresh exact-head
+[main CI](https://github.com/fuqi-jia/Xolver/actions/runs/41021331208) are fully green.
+Receipt-only documentation changes do not change the qualified implementation.
 
 The pinned native QCP binary exposes `QCP_DEBUG_SMT=1` diagnostics containing
 printed Source/Target pairs and a result flag. The three unchanged public
@@ -2379,3 +2381,13 @@ establish complete native-call coverage, or verify a whole C program. A true
 whole-program selected-backend comparison remains outstanding. Neither
 protected set has been inspected or run. These binaries have no new fixed160
 timing comparison; the preceding98/160 result belongs to its own frozen round.
+
+
+The subsequent native ABI investigation establishes a different contract from
+context feasibility: QCP's implication classifier first tests `S AND P`, then
+`NOT (S IMPLIES P)`. It returns `-1` when the first is UNSAT, including a feasible
+source with an always-false target; otherwise it returns `0` when the second is
+UNSAT, and `1` when neither is refuted. The corpus correlation above is not a
+universal ABI interpretation. The generic `ContextSolver` remains a separate
+feasibility/implication API. Native replacement targets the lower single-formula
+SAT entry, preserving QCP's own classifier and preprocessing.

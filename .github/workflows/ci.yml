@@ -116,6 +116,14 @@ jobs:
         if: ${{ !cancelled() && steps.test_build.outcome == 'success' }}
         run: ctest --test-dir build --output-on-failure -R '^(architecture|standalone-evidence|regression-harness|parallel-local|parallel-worker|asp-cli)$'
 
+      - name: Compile native QCP backend adapter
+        if: ${{ !cancelled() && steps.test_build.outcome == 'success' }}
+        run: |
+          cc -std=c11 -O2 -Wall -Wextra -Werror -shared -fPIC \
+            tools/integration/qcp_native_backend.c -ldl -o build/qcp-native-backend.so
+          cc -std=c11 -O2 -Wall -Wextra -Werror \
+            tools/integration/qcp_backend_exec.c -o build/qcp-backend-exec
+
       # Each regression has its own deadline; a timeout remains a failure.
       # Keep the longer allowance for the MetiTarski polynomial instances.
       - name: Regression suite (xolver vs embedded :status)
