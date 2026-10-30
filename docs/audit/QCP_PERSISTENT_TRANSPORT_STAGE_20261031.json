@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "status": "transport_qualified_whole_program_validation_in_progress",
+  "status": "transport_and_original_max3_qualified_ci_pending",
   "source_base_commit": "76a1e0951b3ab5130c669fb871c61a34f7f9fd30",
   "source_manifest_sha256": "b0dec019f0d7297e138f91d673f5239598cf5021b63c292a482d820c0ec40e53",
   "source_overlay_sha256": "0a362ffefc03ea7538c555aca03847f2f906790bd5fcb18115803b37d9e49c4a",
@@ -66,9 +66,9 @@
     "startup_included": true
   },
   "formal_smt_score_changed": false,
-  "whole_program_verification_pending": true,
+  "whole_program_verification_pending": false,
   "protected_sets_used": false,
-  "boundary": "The CLI and SV executable bytes are identical to qualified R926, so this stage does not rerun or replace the 160-case timings. Both selected processes solve every diagnostic occurrence with fresh context; all decisions match independently checked identical inputs. Xolver remains slower than Z3 in these per-occurrence diagnostics. This does not establish whole-C-program coverage, end-to-end performance superiority, or protected-set performance. New canonical max3 runs are in progress. The source manifest records a working-tree overlay based on source_base_commit; it is not a claim that the overlay was already committed at that SHA.",
+  "boundary": "The CLI and SV executable bytes are identical to qualified R926, so this stage does not rerun or replace the 160-case timings. Both selected processes solve every diagnostic occurrence with fresh context; all decisions match independently checked identical inputs. Xolver remains slower than Z3 in these per-occurrence diagnostics. This does not establish whole-C-program coverage, end-to-end performance superiority, or protected-set performance. Fresh original max3 verification now passes for both backends with all four original VCs and all 296 actual native calls independently confirmed. This establishes functional integration for that frozen worker; it does not establish an overall QCP speedup or qualify a later arithmetic kernel. The source manifest records a working-tree overlay based on source_base_commit; it is not a claim that the overlay was already committed at that SHA.",
   "shutdown_qualification": {
     "experiment": "108071cbef8b",
     "run": "b315628c4c18",
@@ -81,5 +81,27 @@
     "normal_shutdown": "input EOF, zero exit status, no unsolicited reply bytes",
     "failure_shutdown": "kill and reap process group; never reuse unread responses",
     "diagnostic_timing_boundary": "R935 timings belong to R934 before the shutdown qualification; no newer timing is substituted."
+  },
+  "original_max3": {
+    "source_commit": "f2041b7d4982119cb5586786889f309b9ee66e5a",
+    "original_c_sha256": "7ddaa9f590cd9c37d3dd644ea280ecd3fa6cee084441c82caf9c0e1afb6dde5d",
+    "programs_per_backend": 1,
+    "original_vcs_per_backend": 4,
+    "native_queries_per_backend": 296,
+    "unique_queries_per_backend": 60,
+    "independently_confirmed_queries_per_backend": 296,
+    "native_results_per_backend": {
+      "sat": 148,
+      "unsat": 148
+    },
+    "selected_processes_per_backend": 1,
+    "final_eos_run": "eaf7046e2fcf",
+    "audit_experiment": "2cf555a671bf",
+    "audit_sha256": "17beaf60c3b7567196b0c16ac5b584893d6200c201816a41744a7b75d1495d98",
+    "matched_original_goal_tokens": true,
+    "proof_scripts_identical": false,
+    "xolver_seconds": 28.689698062837124,
+    "z3_seconds": 29.5356092043221,
+    "boundary": "Fresh canonical final-check per backend, sequentially on the same physical CPU with identical query/controller budgets. One unchanged original C program, all four VCs and every actual native query are authenticated. Rocq closers differ syntactically: lia versus lia || int_auto. One program and one order do not establish an overall QCP performance win. Earlier generations are not added to this final-check call census. The qualification uses frozen worker 578144c1 and the delivered f095 arithmetic core; it does not qualify a subsequent arithmetic candidate."
   }
 }
