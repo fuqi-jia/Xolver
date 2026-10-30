@@ -1,0 +1,423 @@
+{
+  "schema": "xolver-boolean-theory-refutation-stage/1",
+  "implementation": {
+    "qualified_head": "6e46e157fd439f2ccce6170bba4aae693ec71fa7",
+    "implementation_manifest": "validation/arithmetic-r103/source-r825.tar.json",
+    "implementation_manifest_sha256": "83b72c9004db15b49c300fac06d626f7364574f26b44a8225f378f412785fc37",
+    "final_test_manifest": "validation/arithmetic-r103/source-r830.tar.json",
+    "final_test_manifest_sha256": "9dcb7e5a3e800dedebd27ba762a284134ada5508e510b3dd1d593388f36bc51a",
+    "candidate_binary_sha256": "ce2c642efdb7a9b4e0f946ad6099a2f2f82f3a7b724f5e70caa4d1c59593f852",
+    "unit_binary_sha256": "e73675f2ef89c9b5b6f2bb3cb2b71a881a9685ba89aaa4b2bde53d9ad34234b6",
+    "final_test_delta": "Only two unit-test files changed after CLI qualification; frozen CLI hashes are identical."
+  },
+  "algorithm": {
+    "shared_boolean_driver": "Learn clauses only from validated membership of exact theory premise explanations. An open theory assignment is never SAT.",
+    "arithmetic_client": "Keep complete true and false polynomial atom assignments; shared sign-definiteness and polynomial closure rules apply to both real and integer arithmetic.",
+    "placement": "Before the SAT-only whole-formula nonlinear bit-blast search. Open or exhausted refutation preserves the existing SAT search allocation.",
+    "limits": {
+      "boolean_models": 8,
+      "sat_conflicts_per_solve": 1000,
+      "local_wall_ms": 50,
+      "conversion_work": 100000,
+      "existing_sign_closure_wall_ms": 10,
+      "existing_sign_closure_work": 100000,
+      "existing_sign_closure_rounds": 32
+    },
+    "conversion_contract_fix": "Reject a complete product if any factor is unsupported; never return a converted prefix. Reject exponents outside int monomial representation and bound optional expansion work.",
+    "initial_experiment": "R823 minimal Boolean-support selection closed only three of four visited assignments and did not improve20s. It was not promoted. R825 complete assignments close five models in the original127 diagnostic without sign exhaustion."
+  },
+  "validation": {
+    "unit_cases": 1813,
+    "unit_assertions": 879499,
+    "full_unit_eos_run": "0bfd4ccf28e8",
+    "acceptance_groups": 39,
+    "acceptance_boundary": "38 source-bound regression/tool/model groups plus the final full unit suite. The initial unit run is retained as failed; its two obsolete backend-route assertions were replaced by a parsed SAT/theory driver requiring actual MCSAT checks.",
+    "targeted_mcsat_runtime_cases": 10,
+    "targeted_assertions": 72,
+    "independent_boolean_polynomial_cases": 56,
+    "early_refutations_independently_agreed": 28,
+    "exported_sat_models": 28,
+    "positive_z3_cvc5_replays": 56,
+    "source_binary_eos_audit": "ec5d85ad119b",
+    "final_witness_audit": "0732c961bbde",
+    "audit_record": "validation/arithmetic-r103/stage-r835.json",
+    "audit_record_sha256": "826a8e3b5e122093cc65a3d5a3147d756b9a28c3617e3e66d4686b178f0324d9"
+  },
+  "formal_fixed160": {
+    "cases": 160,
+    "seconds_per_solver_case": 60,
+    "physical_cpus_per_solver_case": 1,
+    "memory_bytes": 17179869184,
+    "frozen_binaries": {
+      "baseline": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/context-r802/xolver",
+        "sha256": "813e55a199b6bc75cee75436f12236f11e2a9886d9023dea22c1efa2d4b60daf"
+      },
+      "candidate": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/boolean-refute-r825/xolver",
+        "sha256": "ce2c642efdb7a9b4e0f946ad6099a2f2f82f3a7b724f5e70caa4d1c59593f852"
+      },
+      "z3": {
+        "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+        "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      }
+    },
+    "counts": {
+      "baseline": {
+        "unsat": 44,
+        "decided": 98,
+        "verified_decided": 98,
+        "verified_par2": 7822.034222643822,
+        "raw_par2": 7822.034222643822,
+        "timeout": 61,
+        "sat": 54,
+        "unknown": 1
+      },
+      "candidate": {
+        "unsat": 44,
+        "decided": 98,
+        "verified_decided": 98,
+        "verified_par2": 7777.250859159976,
+        "raw_par2": 7777.250859159976,
+        "timeout": 61,
+        "sat": 54,
+        "unknown": 1
+      },
+      "z3": {
+        "unsat": 58,
+        "decided": 124,
+        "verified_decided": 117,
+        "verified_par2": 5440.728079658002,
+        "raw_par2": 4641.753217997029,
+        "sat": 66,
+        "timeout": 36
+      }
+    },
+    "by_logic": {
+      "QF_LIA": {
+        "baseline": {
+          "unsat": 15,
+          "decided": 34,
+          "verified_decided": 34,
+          "verified_par2": 1893.8378761410713,
+          "raw_par2": 1893.8378761410713,
+          "timeout": 14,
+          "sat": 19
+        },
+        "candidate": {
+          "unsat": 15,
+          "decided": 34,
+          "verified_decided": 34,
+          "verified_par2": 1891.661579247564,
+          "raw_par2": 1891.661579247564,
+          "timeout": 14,
+          "sat": 19
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 38,
+          "verified_decided": 36,
+          "verified_par2": 1478.3819229379296,
+          "raw_par2": 1278.4259066488594,
+          "sat": 23,
+          "timeout": 10
+        }
+      },
+      "QF_NIA": {
+        "baseline": {
+          "timeout": 21,
+          "decided": 27,
+          "verified_decided": 27,
+          "verified_par2": 2614.773093935102,
+          "raw_par2": 2614.773093935102,
+          "unsat": 14,
+          "sat": 13
+        },
+        "candidate": {
+          "timeout": 21,
+          "decided": 27,
+          "verified_decided": 27,
+          "verified_par2": 2574.420032935217,
+          "raw_par2": 2574.420032935217,
+          "unsat": 14,
+          "sat": 13
+        },
+        "z3": {
+          "unsat": 22,
+          "decided": 34,
+          "verified_decided": 30,
+          "verified_par2": 2209.6578004211187,
+          "raw_par2": 1730.322669049725,
+          "sat": 12,
+          "timeout": 14
+        }
+      },
+      "QF_LRA": {
+        "baseline": {
+          "timeout": 16,
+          "decided": 16,
+          "verified_decided": 16,
+          "verified_par2": 1980.6931919641793,
+          "raw_par2": 1980.6931919641793,
+          "sat": 7,
+          "unsat": 9
+        },
+        "candidate": {
+          "timeout": 16,
+          "decided": 16,
+          "verified_decided": 16,
+          "verified_par2": 1978.0964580047876,
+          "raw_par2": 1978.0964580047876,
+          "sat": 7,
+          "unsat": 9
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 26,
+          "verified_decided": 26,
+          "verified_par2": 816.6622953154147,
+          "raw_par2": 816.6622953154147,
+          "sat": 11,
+          "timeout": 6
+        }
+      },
+      "QF_NRA": {
+        "baseline": {
+          "sat": 15,
+          "decided": 21,
+          "verified_decided": 21,
+          "verified_par2": 1332.7300606034696,
+          "raw_par2": 1332.7300606034696,
+          "unsat": 6,
+          "timeout": 10,
+          "unknown": 1
+        },
+        "candidate": {
+          "sat": 15,
+          "decided": 21,
+          "verified_decided": 21,
+          "verified_par2": 1333.0727889724076,
+          "raw_par2": 1333.0727889724076,
+          "unsat": 6,
+          "timeout": 10,
+          "unknown": 1
+        },
+        "z3": {
+          "sat": 20,
+          "decided": 26,
+          "verified_decided": 25,
+          "verified_par2": 936.0260609835386,
+          "raw_par2": 816.3423469830304,
+          "timeout": 6,
+          "unsat": 6
+        }
+      }
+    },
+    "gained_solves": 0,
+    "lost_solves": 0,
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "representative_same_round_timings": [
+      {
+        "index": 37,
+        "result": "unsat",
+        "baseline_seconds": 20.316978987306356,
+        "candidate_seconds": 0.06657160818576813
+      },
+      {
+        "index": 127,
+        "result": "unsat",
+        "baseline_seconds": 20.06688086874783,
+        "candidate_seconds": 0.06713019125163555
+      }
+    ],
+    "other_changes_over_one_second": [
+      {
+        "index": 4,
+        "result": "sat",
+        "baseline_seconds": 36.20775908418,
+        "candidate_seconds": 33.187181539833546
+      },
+      {
+        "index": 18,
+        "result": "unsat",
+        "baseline_seconds": 48.01944461092353,
+        "candidate_seconds": 50.289723467081785
+      },
+      {
+        "index": 59,
+        "result": "sat",
+        "baseline_seconds": 41.78159253671765,
+        "candidate_seconds": 38.805790688842535
+      }
+    ],
+    "unconfirmed_indices": [
+      12,
+      24,
+      27,
+      42,
+      80,
+      114,
+      159
+    ],
+    "verification_boundary": "Only independently checked verdicts count. Same original hashes reuse checked ground witness94, modular certificate115 and offline independent UNSAT50. R834 freshly replays an existing raw122 model in both Z3 and cvc5; no timed observation is replaced. The seven remaining unconfirmed UNSAT verdicts are excluded.",
+    "invalid_initial_triads": [
+      {
+        "index": 81,
+        "run": "a45643414fb2",
+        "reason": "Z3 wall-budget notification/cleanup overrun; original processes ended before identical-budget full-triad retry."
+      },
+      {
+        "index": 104,
+        "run": "c142ec278a91",
+        "reason": "Z3 wall-budget notification/cleanup overrun; original processes ended before identical-budget full-triad retry."
+      }
+    ],
+    "retry_runs": [
+      "8a25fd1d7e46",
+      "d0dc1b96527e"
+    ],
+    "retry_boundary": "Only invalid triads81/104 were repeated with all three frozen versions; the other158 original valid triads are unchanged."
+  },
+  "remaining_gap_groups": [
+    {
+      "logic": "QF_LIA",
+      "family": "2019-cmodelsdiff",
+      "count": 1
+    },
+    {
+      "logic": "QF_LIA",
+      "family": "RWS",
+      "count": 1
+    },
+    {
+      "logic": "QF_LIA",
+      "family": "convert",
+      "count": 1
+    },
+    {
+      "logic": "QF_LIA",
+      "family": "cut_lemmas",
+      "count": 1
+    },
+    {
+      "logic": "QF_LIA",
+      "family": "fft",
+      "count": 1
+    },
+    {
+      "logic": "QF_LIA",
+      "family": "tropical-matrix",
+      "count": 1
+    },
+    {
+      "logic": "QF_LRA",
+      "family": "2017-Heizmann-UltimateInvariantSynthesis",
+      "count": 1
+    },
+    {
+      "logic": "QF_LRA",
+      "family": "2019-ezsmt",
+      "count": 1
+    },
+    {
+      "logic": "QF_LRA",
+      "family": "LassoRanker",
+      "count": 2
+    },
+    {
+      "logic": "QF_LRA",
+      "family": "TM",
+      "count": 1
+    },
+    {
+      "logic": "QF_LRA",
+      "family": "miplib",
+      "count": 1
+    },
+    {
+      "logic": "QF_LRA",
+      "family": "sal",
+      "count": 1
+    },
+    {
+      "logic": "QF_LRA",
+      "family": "sc",
+      "count": 1
+    },
+    {
+      "logic": "QF_LRA",
+      "family": "uart",
+      "count": 2
+    },
+    {
+      "logic": "QF_NIA",
+      "family": "20170427-VeryMax",
+      "count": 1
+    },
+    {
+      "logic": "QF_NIA",
+      "family": "20210219-Dartagnan",
+      "count": 2
+    },
+    {
+      "logic": "QF_NIA",
+      "family": "20230328-sqrtmodinv-hoenicke",
+      "count": 2
+    },
+    {
+      "logic": "QF_NIA",
+      "family": "20250331-elster",
+      "count": 3
+    },
+    {
+      "logic": "QF_NIA",
+      "family": "AProVE",
+      "count": 1
+    },
+    {
+      "logic": "QF_NIA",
+      "family": "LassoRanker",
+      "count": 3
+    },
+    {
+      "logic": "QF_NIA",
+      "family": "UltimateLassoRanker",
+      "count": 1
+    },
+    {
+      "logic": "QF_NRA",
+      "family": "20161105-Sturm-MGC",
+      "count": 1
+    },
+    {
+      "logic": "QF_NRA",
+      "family": "2019-ezsmt",
+      "count": 2
+    },
+    {
+      "logic": "QF_NRA",
+      "family": "LassoRanker",
+      "count": 2
+    },
+    {
+      "logic": "QF_NRA",
+      "family": "UltimateAutomizer",
+      "count": 2
+    }
+  ],
+  "delivery": {
+    "pr": "https://github.com/fuqi-jia/Xolver/pull/76",
+    "server_acceptance": "success",
+    "ci_policy": "Require both exact-head PR CI jobs before merging; verify the resulting main CI afterward. No additional current-main server archive is required."
+  },
+  "boundaries": [
+    "Verified solves remain98/160; same-round Z3 has117 verified/124 raw. This stage does not meet the requested overall superiority objective.",
+    "PAR-2 improves from7822.034222643822 to7777.250859159976 with no gained/lost solves. Two nonlinear UNSAT cases avoid about20s of SAT-only search.",
+    "The matched complete QCP development program qualification remains the separate frozen R802 integration-stage result. No full-program speed advantage is attributed to this new arithmetic core.",
+    "Neither independent SMT or program protected set has been inspected or run."
+  ],
+  "protected_sets_used": false,
+  "above_z3_claim": false,
+  "extra_current_main_server_archive_required": false
+}

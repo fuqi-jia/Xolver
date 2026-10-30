@@ -2458,3 +2458,50 @@ formal-module namespace normalization. The pair record SHA-256 is
 This is one unique program verified by each backend. The approximately33.8s final
 controller timings are diagnostic, without matched CPU/order repetitions, and do
 not establish a whole-program speed win.
+
+
+## Shared explained Boolean/theory refutation (R823–R835)
+
+[PR76](https://github.com/fuqi-jia/Xolver/pull/76) adds a theory-independent
+Boolean refutation driver and a shared integer/real polynomial client. Exact
+explained conflicts learn clauses before whole-formula SAT-only bit blasting.
+An open or exhausted assignment preserves the original search allocation; it
+never proves SAT. The conversion layer also rejects unsupported whole products
+instead of accepting a converted prefix, bounds optional expansion work, and
+rejects exponents outside the monomial representation.
+
+The first minimal Boolean-support experiment R823 did not improve timing and
+was not promoted. Complete true/false atom assignments in R825 close the
+previously open branch. The fixed160 fresh round observes original37
+(AProVE) **20.317s→0.0666s** and original127 (LassoRanker)
+**20.067s→0.0671s**, with independent same-round Z3 UNSAT agreement.
+The generic refutation stays bounded to8 Boolean models /1000 SAT conflicts
+per solve /50ms; existing sign closure stays10ms /100k work /32 rounds.
+
+Final Panda1/ExperimentOS validation passes **1,813 unit cases /879,499
+assertions**, with38 additional source-bound regression/tool/model acceptance
+groups. The MCSAT tests now directly connect parsed formulas, atomization and
+real SAT/theory callbacks and require a positive backend check count; early
+runtime proofs no longer make those backend tests vacuous. New API checks cover
+assumption cores, SAT model validation and push/pop isolation. Independent signed
+Boolean/polynomial checks cover56 integer/real cases:28 early refutations agree
+with Z3 and cvc5, and28 SAT models pass56 positive independent replays.
+
+The full fresh frozen160 comparison is **98 verified solutions before and after**
+(54 SAT /44 UNSAT /1 unknown /61 timeouts), no gained or lost solves and no
+opposite verdict or invalid exported model. Verified PAR-2 improves
+**7822.034→7777.251**. Same-round Z3 is **117 verified /124 raw**, with seven
+unconfirmed UNSAT results `[12,24,27,42,80,114,159]` excluded. R834 freshly
+replays a prior raw122 SAT model in both independent checkers on the identical
+original input hash; this supplements eligibility without replacing a timed
+solve. Initial81/104 Z3 budget overruns are excluded; both original jobs and
+children ended before all three versions were repeated at the unchanged budget.
+The other158 valid original triads are immutable.
+
+Qualified implementation/test head is`6e46e157`; frozen CLI SHA-256 is
+`ce2c642efdb7a9b4e0f946ad6099a2f2f82f3a7b724f5e70caa4d1c59593f852`.
+Final audit EOS`0732c961bbde` binds all sources, binaries, leases, acceptance and
+witnesses in the [stage receipt](BOOLEAN_THEORY_REFUTATION_STAGE_20261030.json).
+This is a verified latency improvement, not overall superiority over Z3. Both
+protected sets remain untouched. Require the exact-head PR CI and resulting main
+CI for delivery; no extra current-main server archive is required.
