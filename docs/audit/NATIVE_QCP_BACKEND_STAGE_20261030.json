@@ -102,7 +102,7 @@
     "pr_ci_conclusion": "success",
     "merge_commit": "b5a2fe6bd8895bec68af362fdf525410c26a1ddb",
     "main_ci": "https://github.com/fuqi-jia/Xolver/actions/runs/41030001591",
-    "main_ci_conclusion": "in_progress"
+    "main_ci_conclusion": "success"
   },
   "boundaries": [
     "This replaces the native SAT entry, unlike standalone trace replay or post-generation proof-candidate discharge.",

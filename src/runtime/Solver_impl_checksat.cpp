@@ -848,6 +848,7 @@ Result Solver::Impl::checkSatGround() {
                 out << "atoms=" << stats.convertedAtoms << " assignments=" << stats.boolean.assignments
                     << " conflicts=" << stats.boolean.conflicts << " theory_calls=" << stats.theoryCalls
                     << " largest_context=" << stats.largestContext << " theory_us=" << stats.theoryMicroseconds
+                    << " sign_exhaustions=" << stats.signExhaustions
                     << " exhausted=" << stats.exhausted << " refuted=" << refuted << " us="
                     << std::chrono::duration_cast<std::chrono::microseconds>(
                         std::chrono::steady_clock::now() - started).count() << '\n';

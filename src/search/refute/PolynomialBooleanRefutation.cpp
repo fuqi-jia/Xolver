@@ -5,7 +5,6 @@
 #include "base/WorkBudget.h"
 #include <algorithm>
 #include <unordered_map>
-#include <unordered_set>
 
 namespace xolver {
 namespace {
@@ -57,8 +56,8 @@ bool refutePolynomialBoolean(const NativeTerms& terms, const std::vector<ExprId>
         for (auto root : roots) { tick(); sat->addClause({atomizer.atomize(root, terms)}); }
         auto kernel = createPolynomialKernel();
         PolynomialConverter converter(*kernel, &work, limits.deadline);
-        std::unordered_map<ExprId, SatLit> literals;
         std::unordered_map<SatVar, SignRefuteConstraint> polynomials;
+        std::vector<SatVar> atomOrder;
         for (const auto& atom : atomizer.atoms()) {
             tick();
             const auto node = terms.get(atom.expr);
@@ -73,43 +72,19 @@ bool refutePolynomialBoolean(const NativeTerms& terms, const std::vector<ExprId>
                 auto polynomial = RationalPolynomial::fromPolyId(converted.diff, *kernel);
                 if (!polynomial) continue;
                 polynomials.emplace(atom.var, SignRefuteConstraint{std::move(*polynomial), rel, {}});
-                literals.emplace(atom.expr, SatLit::positive(atom.var));
+                atomOrder.push_back(atom.var);
             }
         }
         stats.convertedAtoms = polynomials.size();
-        auto value = [&](ExprId expression, const SatSolver& model) {
-            const auto literal = atomizer.atomize(expression, terms);
-            return model.value(literal.var) == literal.sign;
-        };
         auto select = [&](const SatSolver& model) {
             std::vector<SatLit> selected;
-            std::vector<ExprId> pending(roots);
-            std::unordered_set<ExprId> visited;
-            while (!pending.empty()) {
+            selected.reserve(atomOrder.size());
+            // Keep both true and false arithmetic atoms. A Boolean support
+            // may omit useful disequalities on alternative branches; their
+            // actual model values are valid premises for explained learning.
+            for (auto variable : atomOrder) {
                 tick();
-                const auto expression = pending.back(); pending.pop_back();
-                if (!visited.insert(expression).second) continue;
-                if (auto found = literals.find(expression); found != literals.end()) {
-                    const auto literal = found->second;
-                    selected.push_back(SatLit(literal.var, model.value(literal.var)));
-                    continue;
-                }
-                const auto node = terms.get(expression);
-                if (node.kind == Kind::Not) pending.push_back(node.children[0]);
-                else if (node.kind == Kind::And || node.kind == Kind::Or) {
-                    const bool all = value(expression, model) == (node.kind == Kind::And);
-                    for (auto child : node.children)
-                        if (all || value(child, model) == (node.kind == Kind::Or)) {
-                            pending.push_back(child);
-                            if (!all) break;
-                        }
-                } else if (node.kind == Kind::Implies && node.children.size() == 2) {
-                    if (!value(expression, model)) pending.insert(pending.end(), node.children.begin(), node.children.end());
-                    else pending.push_back(!value(node.children[0], model) ? node.children[0] : node.children[1]);
-                } else if (node.kind == Kind::Xor || node.kind == Kind::Eq || node.kind == Kind::Distinct) {
-                    for (auto child : node.children)
-                        if (terms.get(child).sort == terms.boolSortId()) pending.push_back(child);
-                }
+                selected.emplace_back(variable, model.value(variable));
             }
             return selected;
         };
@@ -127,7 +102,11 @@ bool refutePolynomialBoolean(const NativeTerms& terms, const std::vector<ExprId>
             ++stats.theoryCalls;
             const auto started = std::chrono::steady_clock::now();
             auto conflict = refuteBySignDefiniteness(constraints);
-            if (!conflict) conflict = refuteByPolynomialSignClosure(constraints);
+            if (!conflict) {
+                PolynomialSignStatistics sign;
+                conflict = refuteByPolynomialSignClosure(constraints, &sign);
+                stats.signExhaustions += sign.exhausted;
+            }
             stats.theoryMicroseconds += std::chrono::duration_cast<std::chrono::microseconds>(
                 std::chrono::steady_clock::now() - started).count();
             return conflict;

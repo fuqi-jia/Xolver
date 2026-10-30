@@ -2399,7 +2399,8 @@ selection, qualified code `9f36803e`; the source/binary hashes, EOS runs and
 evidence boundaries are in the [stage receipt](NATIVE_QCP_BACKEND_STAGE_20261030.json).
 Server acceptance and both exact-head [PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/41026885983)
 passed. The PR is merged as main`b5a2fe6bd8895bec68af362fdf525410c26a1ddb`;
-fresh [main CI](https://github.com/fuqi-jia/Xolver/actions/runs/41030001591) is running.
+fresh exact-head [main CI](https://github.com/fuqi-jia/Xolver/actions/runs/41030001591)
+is fully green. No extra server archive is a delivery prerequisite.
 
 The pinned Linux QCP executable has no exported backend switch. The adapter
 checks its full executable hash, native entry/call-site bytes and executable

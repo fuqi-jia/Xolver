@@ -9,6 +9,7 @@ struct PolynomialBooleanStatistics {
     size_t convertedAtoms = 0;
     size_t theoryCalls = 0;
     size_t largestContext = 0;
+    size_t signExhaustions = 0;
     long long theoryMicroseconds = 0;
     bool exhausted = false;
 };
