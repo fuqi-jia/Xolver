@@ -2967,3 +2967,31 @@ The earlier delivered round already reached100; no historical coverage increase
 or superiority over Z3 is claimed. Neither protected set was used. The original
 max3 qualification above belongs to the preceding frozen worker, not this
 candidate's full-program performance. See the ITE receipt for delivery status.
+
+
+### Deferred row explanation merging rejected (R957–R963)
+
+Existing stack samples placed11/25 frames for public LRA gap131 in propagation
+and10/25 in simplex pivots. Private counters counted1,957,664 premise-map updates
+for226,069 improving candidates in a ten-second diagnostic. Prototype642a4f9e
+therefore deferred each immutable row snapshot's explanation union until a
+numeric endpoint improved. It passed50 targeted cases/34846 assertions, including
+shared excluded premises and unchanged-bound rows.
+
+The fresh six-case pilot rejected the change: baseline3 verified versus
+candidate2, PAR-2 426.113→516.275, no gains and one loss at51 (30.384s SAT with
+its original exported model checked, versus candidate60s timeout). Every triad
+has a valid lease/budget, no opposite verdict and no invalid model. R963 seals
+all records (SHA-256
+`61e90552e23caea3e65df0da0f853373bfb15e0f2c2aea351a6ac6a8731ca540`).
+The implementation, added counters and prototype tests are removed; no full160
+expansion or valid-trial rerun is justified. No protected input was used.
+
+R960 separately exposed a Python test observation race: init reaped a killed
+orphan between `/proc` existence checking and reading. Commitcaeea3b7 reads its
+state once per observation and accepts an already reaped child. R962 passes all
+50 native targeted cases, seven transport tests, seven QCP adapter tests and
+three architecture/parallel CTests, with every native byte unchanged from R960.
+This test-only fix remains in PR80; its new exact-head CI is41121158561. The
+prior failed run and the completed requalification remain visible. See the
+[closed experiment receipt](DEFERRED_ROW_EXPLANATIONS_REJECTED_20261031.json).

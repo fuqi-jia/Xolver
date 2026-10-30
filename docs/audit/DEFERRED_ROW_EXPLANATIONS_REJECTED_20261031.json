@@ -1,0 +1,70 @@
+{
+  "schema": 1,
+  "status": "closed_without_merge",
+  "implementation_commit": "642a4f9e44f60a8b81ae9da07c6fbee632899b3f",
+  "source_manifest_sha256": "517fd824afc28b4e17cdff40269efb410b6b3d64c987ccbcbb059d2934fb92f5",
+  "candidate_binary_sha256": "c97a2844b93cb455ef5efc73e03669c5f13aec3160ce9f376f13b0a41bc8b5ed",
+  "native_targeted_cases": 50,
+  "native_targeted_assertions": 34846,
+  "formal_cases": 6,
+  "formal_counts": {
+    "baseline": {
+      "sat": 3,
+      "decided": 3,
+      "verified_decided": 3,
+      "verified_par2": 426.1129733286798,
+      "raw_par2": 426.1129733286798,
+      "timeout": 3
+    },
+    "candidate": {
+      "sat": 2,
+      "decided": 2,
+      "verified_decided": 2,
+      "verified_par2": 516.2748880404979,
+      "raw_par2": 516.2748880404979,
+      "timeout": 4
+    },
+    "z3": {
+      "sat": 5,
+      "decided": 6,
+      "verified_decided": 6,
+      "verified_par2": 2.7017172537744045,
+      "raw_par2": 2.7017172537744045,
+      "unsat": 1
+    }
+  },
+  "changes": [
+    {
+      "index": 51,
+      "case": "QF_LRA/LassoRanker/CooperatingT2/ludcmp.c.i.ludcmp.pl.t2.fixed.t2.c_Iteration8_Loop_7-phaseTemplate.smt2",
+      "kind": "lost",
+      "truth": "sat",
+      "evidence": [
+        "baseline-exported-model-replay",
+        "z3-exported-model-replay"
+      ],
+      "observations": {
+        "baseline": {
+          "result": "sat",
+          "seconds": 30.384451547637582
+        },
+        "candidate": {
+          "result": "timeout",
+          "seconds": 60.01905624382198
+        },
+        "z3": {
+          "result": "sat",
+          "seconds": 0.6174265556037426
+        }
+      }
+    }
+  ],
+  "wrong_verdicts": [],
+  "invalid_models": [],
+  "audit_experiment": "57c2302b2055",
+  "audit_run": "892b9e1eefb0",
+  "audit_sha256": "61e90552e23caea3e65df0da0f853373bfb15e0f2c2aea351a6ac6a8731ca540",
+  "test_race_fix_commit": "caeea3b72877d68240592c039ecb18eceef7cea5",
+  "protected_sets_used": false,
+  "decision": "Remove the deferred explanation merge implementation and its extra statistics/tests. No gains, one validated SAT loss at 51. Do not expand to full160 or repeat valid comparisons. Retain the independent descendant-observation race fix in PR80."
+}
