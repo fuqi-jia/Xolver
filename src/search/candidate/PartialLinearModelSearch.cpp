@@ -1,5 +1,6 @@
 #include "search/candidate/PartialLinearModelSearch.h"
 #include "search/candidate/BoundaryCandidates.h"
+#include "search/candidate/WeightedGreedyCover.h"
 #include "search/lra/GeneralSimplex.h"
 #include "base/WorkBudget.h"
 #include <algorithm>
@@ -58,8 +59,7 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
         std::vector<Terms> atoms;
         using Powers = std::vector<std::pair<VarId, int>>;
         std::vector<Powers> monomials;
-        std::set<VarId> variables, pinned;
-        std::vector<VarId> parameters;
+        std::set<VarId> variables;
         std::map<VarId, Interval> intervals;
         std::map<VarId, size_t> equalityOccurrences, otherOccurrences;
         for (const auto& c : constraints) {
@@ -158,24 +158,9 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
 
         // A deterministic greedy cover leaves at most one degree-one variable
         // in every monomial. Its complement can then be completed by simplex.
-        for (;;) {
-            std::map<VarId, size_t> scores;
-            for (const auto& monomial : monomials) {
-                tick();
-                size_t degree = 0;
-                for (const auto& [var, exponent] : monomial)
-                    if (!pinned.contains(var)) degree += exponent;
-                if (degree <= 1) continue;
-                for (const auto& [var, exponent] : monomial)
-                    if (!pinned.contains(var) && !retained.contains(var)) scores[var] += exponent;
-            }
-            if (scores.empty()) break;
-            auto best = scores.begin();
-            for (auto it = scores.begin(); it != scores.end(); ++it)
-                if (it->second > best->second) best = it;
-            pinned.insert(best->first);
-            parameters.push_back(best->first);
-        }
+        auto cover = greedyWeightedCover(monomials, retained, tick);
+        if (!cover) return std::nullopt;
+        const auto& parameters = *cover;
         stats.parameters = parameters.size();
 
         // Convert endpoints to the client's domain. Open real endpoints are
@@ -260,6 +245,11 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
         std::vector<bool> active(atoms.size(), false);
         std::vector<std::vector<size_t>> introduced(parameters.size() + 1);
         std::vector<std::vector<size_t>> affected(parameters.size());
+        std::map<VarId, size_t> parameterDepth;
+        for (size_t depth = 0; depth < parameters.size(); ++depth) {
+            tick();
+            parameterDepth.emplace(parameters[depth], depth);
+        }
         std::vector<size_t> all;
         for (size_t index = 0; index < atoms.size(); ++index) {
             tick();
@@ -271,9 +261,10 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
                     (void)exponent;
                     support.insert(var);
                 }
-            for (size_t depth = 0; depth < parameters.size(); ++depth) {
+            for (const auto var : support) {
                 tick();
-                if (support.contains(parameters[depth])) affected[depth].push_back(index);
+                if (const auto it = parameterDepth.find(var); it != parameterDepth.end())
+                    affected[it->second].push_back(index);
             }
         }
         auto activate = [&](const std::vector<size_t>& indices, int level) {
