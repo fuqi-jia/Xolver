@@ -169,6 +169,10 @@ TEST_CASE("API: native snapshots are transactional and isolate previous scopes")
     solver.assertFormula(solver.mkBool(false));
     CHECK_THROWS_AS(solver.decide({b.numeral(1)}), std::invalid_argument);
     CHECK_THROWS_AS(solver.decide({{}}), std::invalid_argument);
+    auto first = b.make(SOMTParser::SortManager::getInt(), native::K::NT_VAR, {}, "alias");
+    auto second = b.make(SOMTParser::SortManager::getInt(), native::K::NT_VAR, {}, "alias");
+    CHECK_THROWS_AS(solver.decide({b.equal(first, b.numeral(1)),
+                                  b.equal(second, b.numeral(2))}), std::invalid_argument);
     CHECK((solver.checkSat() == Result::Unsat));
     solver.pop();
     CHECK((solver.checkSat() == Result::Sat));

@@ -93,6 +93,7 @@ public:
     // Successful import invalidates previous Term/Sort handles, like parseFile.
     // Invalid roots throw before replacing the current context. No heap
     // signature is inferred: spatial applications supply their explicit API.
+    // Distinct free-symbol nodes must have distinct names for model export.
     SolverAnswer decide(const std::vector<std::shared_ptr<SOMTParser::DAGNode>> &assertions);
 
     // Assertions

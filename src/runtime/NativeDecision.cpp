@@ -1,4 +1,5 @@
 #include "runtime/SolverImpl.h"
+#include "contracts/DecisionOracle.h"
 
 namespace xolver {
 SolverAnswer Solver::decide(const NativeAssertions &assertions) {
@@ -15,7 +16,8 @@ SolverAnswer Solver::decide(const NativeAssertions &assertions) {
         const auto expression = terms->get(id);
         if (expression.kind == Kind::Variable)
             if (const auto *name = std::get_if<std::string>(&expression.payload.value))
-                symbols.emplace(*name, id);
+                if (!symbols.emplace(*name, id).second)
+                    throw std::invalid_argument("native free symbols must have unique names");
     }
     pImpl->reset();
     pImpl->logic = "ALL";
