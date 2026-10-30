@@ -14,7 +14,10 @@
 #include <string_view>
 #include <vector>
 
+namespace SOMTParser { class DAGNode; }
+
 namespace xolver {
+struct SolverAnswer;
 
 /**
  * Value type for solver options.
@@ -83,6 +86,15 @@ public:
     // Parsing
     /// Load the final query snapshot; the CLI replays every query in source order.
     bool parseFile(std::string_view filename);
+
+    // Replace the context with a native Boolean-assertion snapshot and solve
+    // through the full runtime dispatcher. Node identities and native sorts
+    // are retained; logic is inferred. Options/runtime budgets are preserved.
+    // Successful import invalidates previous Term/Sort handles, like parseFile.
+    // Invalid roots throw before replacing the current context. No heap
+    // signature is inferred: spatial applications supply their explicit API.
+    // Distinct free-symbol nodes must have distinct names for model export.
+    SolverAnswer decide(const std::vector<std::shared_ptr<SOMTParser::DAGNode>> &assertions);
 
     // Assertions
     void assertFormula(Term f);

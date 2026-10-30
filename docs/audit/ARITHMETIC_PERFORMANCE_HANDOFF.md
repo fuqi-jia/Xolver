@@ -43,9 +43,24 @@ Older tables describe their own frozen versions and evidence boundaries.
 The latest qualified arithmetic stage is
 [explained affine factor proofs](#explained-affine-factor-proofs-r782r784r785r789):
 **98/160**, versus **117 verified /125 raw** same-round Z3 decisions.
-The preceding delivered main verifies97 in this fresh round. This candidate
-passes server acceptance and awaits PR CI and merge. Previous rounds and
-supplementary truth records below retain their own evidence boundaries.
+The preceding delivered main verifies97 in this fresh round.
+[PR73](https://github.com/fuqi-jia/Xolver/pull/73) is delivered as main
+`efaf8997bc6bca94398c6f312b7a4aa48593d74b`. Both its
+[PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/41001993376) and fresh,
+exact-head [main CI](https://github.com/fuqi-jia/Xolver/actions/runs/41007150900)
+are fully green. Previous rounds and supplementary truth records below retain
+their own evidence boundaries.
+
+The retained branches are `main`, `feat/qcp-foundations` (QCP and solver
+foundations), and `feat/draco-asp`. Historical branch tips are archived in
+`validation/arithmetic-r103/branch-archive-20261030/history.bundle`, SHA-256
+`e318c3063355737900a6c0318a2bc6e356cbf30413b927908c7eabfe28f91971`;
+the adjacent manifest maps original refs. All27 historical worktrees were
+verified clean and removed at the user's request. The current repository and
+Draco worktree remain. Unique `Xolver-next/validation` evidence is preserved under
+the archive's `worktree-artifacts/Xolver-next/validation`; the cleanup inventory
+and result record bind original paths and commits. Do not create an experimental
+branch for each subsequent change.
 
 [PR72](https://github.com/fuqi-jia/Xolver/pull/72) is delivered as main
 `6802c5e4d5ddea0ef8a86614521d96bf3605c424`. Both its
@@ -2287,5 +2302,80 @@ question, not another implementation or formal gain in this stage.
 
 This closes one additional real gap and does **not** establish superiority over
 Z3 or whole-program QCP performance. Neither protected set is inspected or run.
-PR CI, merge and fresh main CI are still required; no extra current-main server
-archive is a delivery prerequisite.
+Server acceptance, PR CI, merge and fresh main CI are complete; the current
+continuation section links the exact delivery receipts. No extra current-main
+server archive is a delivery prerequisite.
+
+## Native QCP trace capture and context feasibility (R792–R810)
+
+The [source-bound native context stage](NATIVE_CONTEXT_SMT_STAGE_20261030.json)
+binds qualified code `2364cd99`, native source manifest and binary hashes,
+independent model witnesses and the original immutable observations.
+[PR74](https://github.com/fuqi-jia/Xolver/pull/74) awaits receipt-head CI and merge;
+its qualified code [CI](https://github.com/fuqi-jia/Xolver/actions/runs/41013084797)
+is fully green. Receipt-only documentation changes do not change the qualified
+implementation.
+
+The pinned native QCP binary exposes `QCP_DEBUG_SMT=1` diagnostics containing
+printed Source/Target pairs and a result flag. The three unchanged public
+development programs produce402 captured checks: branch106, GCD148, max3148.
+The residual-only `--dump-smt-vc-file` output is not a complete query census.
+R792 captures raw output, original C and binary hashes; R793, native EOS
+`74498f9e716d`, exports all402 occurrences with no unsupported checks and passes
+43 QCP Python tests plus architecture/regression-harness checks. The SMT CLI
+remains byte-identical to qualified R782. `qcp_native.py` preserves applications
+such as `Omod` and `Zgcd` as typed uninterpreted functions, without adding
+unestablished arithmetic axioms. Native flags are observations, not evidence.
+
+One observed `flag=-1` has a source containing `x<x` and target `True`.
+Therefore that flag must not be labeled a refuted target: source infeasibility
+and implication validity need separate checks. The generic SV `ContextSolver`
+and `xolver-sv context` operation expose both, without changing ordinary
+implication checking or assuming a QCP-specific flag ABI.
+
+`Solver::decide` now connects a native assertion snapshot to the complete runtime
+dispatcher. Standalone application fallback alone cannot dispatch all supported
+array/UF combinations. Native import retains original DAG identity, rejects
+ambiguous free-symbol names transactionally, replaces old query scopes, and
+retains options and budgets. `dumpModel` enumerates original symbols for parsed,
+native and programmatically constructed queries, including unconstrained symbols
+known to the construction API; solver-introduced auxiliaries are excluded.
+R802 native EOS`207d0d46fb15` passes **1,806 unit cases /879,437 assertions**,
+including8 targeted cases /159 assertions, all67 parser/governance/evidence
+checks and43 QCP Python tests. R806 freshly repeats the313-query existing QCP
+corpus:291 UNSAT /22 SAT agree across CLI, SV and Z3, including203 replayed
+interval certificates. R810 independently replays six native Int/Real/Bool/BV/
+array/UF models through both Z3 and cvc5; cvc5 requires`--arrays-exp` for constant
+array witnesses. Earlier compiler, harness and checker-configuration failures
+remain recorded and are not substituted for these successful qualifications.
+
+The402 captured occurrences contain95 distinct Source/Target pairs. R795 runs
+their190 context/refutation formulas on the frozen native API, CLI, Z3 and cvc5,
+on EOS physical CPUs with60s/16GiB per query. All760 observations agree: each
+implementation has83 SAT /12 UNSAT contexts and5 SAT /90 UNSAT refutations.
+There are no unknowns, timeouts, opposite verdicts or invalid models. R807/R808
+audit352 SAT witnesses and408 independently agreed UNSAT observations. Eight raw
+model records (four contexts through two Xolver entrypoints) omit unused UF
+definitions. Only missing Int-valued functions absent from every assertion are
+completed with the constant zero function; all original model bindings and
+assertions remain unchanged, and **both** Z3 and cvc5 accept every completed
+witness. Raw timed observations remain unchanged. Do not describe those eight
+raw models as complete without this supplementary evidence.
+
+The observed native flags correlate with344 feasible valid implications,
+32 infeasible contexts and26 feasible non-entailments of the printed abstraction.
+The last category does not refute a C program: printed functions remain
+uninterpreted. Native flags are not used as correctness evidence.
+
+R805 ABI control redirects four statically referenced calls to the actual
+native implication checker **in process memory**, prints actual arguments with
+the native FILE-based printer, and calls the unchanged live original checker.
+All402 formulas and flags match R792 exactly; original binary and C/specification
+hashes remain unchanged. This is a qualified interface prototype in local
+validation evidence, not a shipped selected-backend replacement.
+
+Capture and standalone replay do not replace QCP's opaque internal SMT backend,
+establish complete native-call coverage, or verify a whole C program. A true
+whole-program selected-backend comparison remains outstanding. Neither
+protected set has been inspected or run. These binaries have no new fixed160
+timing comparison; the preceding98/160 result belongs to its own frozen round.

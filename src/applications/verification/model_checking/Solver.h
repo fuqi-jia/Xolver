@@ -28,6 +28,25 @@ struct Answer {
     std::optional<TheoryModel> counterexample;
     std::string reason;
 };
+struct ContextAnswer {
+    // The independent verdict for the assumptions, including any model/proof.
+    // Unknown does not prevent proving the implication in a second query.
+    SolverAnswer context;
+    Answer implication;
+    std::size_t queries = 0;
+};
+// Distinguishes an infeasible context from a reachable, valid obligation.
+// An UNSAT context makes the implication vacuously valid and needs one query;
+// otherwise the second snapshot refutes assumptions AND NOT conclusion.
+class ContextSolver final : public TypedSolver<Obligation, ContextAnswer> {
+    DecisionOracle decide_;
+
+  public:
+    explicit ContextSolver(DecisionOracle decide) : decide_(std::move(decide)) {}
+    Family family() const noexcept override { return Family::SoftwareVerification; }
+    std::string_view name() const noexcept override { return "context-verification"; }
+    ContextAnswer solve(const Obligation &) override;
+};
 // Program frontends supply state, memory and arithmetic semantics explicitly.
 class Solver final : public TypedSolver<Problem, Answer> {
     DecisionOracle decide_;

@@ -1,0 +1,95 @@
+{
+  "schema": "xolver-native-context-stage/1",
+  "qualified_source": "2364cd994bc4ec006d83cf2f2fc4eda2b5b18094",
+  "source_manifest": "validation/arithmetic-r103/source-r802.tar.json",
+  "source_manifest_sha256": "dd95651649721c347fb3c907d8fc935e146d8965d6b067c9a8aef7a8ce666c06",
+  "checked_source_files": 525,
+  "submodules": {
+    "third_party/SOMTParser": "b9063faeab2e89d87525432eaedb8f0a5b6eb1ea",
+    "third_party/cadical": "7b99c07f0bcab5824a5a3ce62c7066554017f641",
+    "third_party/libpoly": "3d5e6fbd98639cb0941b029e23ca17c0e3c4a80a"
+  },
+  "binaries": {
+    "xolver": "813e55a199b6bc75cee75436f12236f11e2a9886d9023dea22c1efa2d4b60daf",
+    "xolver-sv": "d2750049ec2f5af07e3264f0b2d3cdb79518764a510398d2c9b5fcf392789d11",
+    "native_api_probe": "9fb132bcdca1ec47028e8c66dbb9115db087a191871f83e66bf2eeacb3db55dc"
+  },
+  "native_qualification": {
+    "host": "Panda1",
+    "experimentos_run": "207d0d46fb15",
+    "record": "validation/arithmetic-r103/context-r802/qualification.json",
+    "sha256": "7d5d1eb0c00fee6fd223e086a778e9fd94303977aa566a88dc3c740fba67b6d1",
+    "unit_cases": 1806,
+    "unit_assertions": 879437,
+    "targeted_cases": 8,
+    "targeted_assertions": 159,
+    "parser_governance_evidence_checks": 67,
+    "qcp_python_tests": 43
+  },
+  "existing_qcp_regression": {
+    "experimentos_run": "69583bac8a60",
+    "record": "validation/arithmetic-r103/native-driver-r806/qualification.json",
+    "sha256": "1f134b82599cc47d10d229365afc578c10d7b18338ee65ce7c14b3179e0648ab",
+    "queries": 313,
+    "unsat": 291,
+    "sat": 22,
+    "disagreements": 0,
+    "interval_certificates": 203
+  },
+  "native_context_queries": {
+    "public_development_programs_sampled": 3,
+    "captured_occurrences": 402,
+    "distinct_source_target_pairs": 95,
+    "source_and_refutation_formulas": 190,
+    "implementations": ["Xolver CLI", "Xolver native API", "Z3", "cvc5"],
+    "solver_observations": 760,
+    "per_implementation": {
+      "source": {"sat": 83, "unsat": 12},
+      "source_and_not_target": {"sat": 5, "unsat": 90},
+      "verified": 190,
+      "unknown": 0,
+      "timeout": 0
+    },
+    "wrong_verdicts": 0,
+    "invalid_models": 0,
+    "raw_model_replays": 344,
+    "supplementary_model_completions": 8,
+    "completion_boundary": "Four source contexts, through each of two Xolver entrypoints, omit definitions for functions unused by every assertion. Only those missing Int-valued functions are completed with the constant zero function. Original bindings and assertions remain unchanged; both Z3 and cvc5 accept each completed witness. Raw observations are retained unchanged.",
+    "audit": "validation/arithmetic-r103/native-context-audit-r807/report.json",
+    "audit_sha256": "e59b2564c2e4da5e97b292bad48381a1f2e4dfb33dfeba50b97896f85433c347",
+    "positive_witness_audit": "validation/arithmetic-r103/native-evidence-r808/report.json",
+    "positive_witness_audit_sha256": "3558c0dc8006189114a984a72f6df728eb8140be7bc92a4ef6a67d4f39d8cfe0"
+  },
+  "cross_theory_models": {
+    "experimentos_run": "0f1b736e8818",
+    "theories": ["Int", "Real", "Bool", "BV", "Array Int Int", "UF over Int"],
+    "models": 6,
+    "independent_replays": 12,
+    "checkers": ["Z3", "cvc5 --arrays-exp"],
+    "record": "validation/arithmetic-r103/native-models-r810/report.json",
+    "sha256": "a2d4401ab0476656dead808b652189e027091289230a7363e4411439f280297b"
+  },
+  "qcp_abi_control": {
+    "experimentos_run": "6b2475f3c36b",
+    "record": "validation/arithmetic-r103/qcp-abi-r805/qualification.json",
+    "sha256": "f59aade1834f0f6a6d3baec186e6cd8dfe750a38475fde499b7a38d022fbf0ff",
+    "original_binary_sha256": "0e74c446cebca8c804ff9b838f07c67f23e31a093630675bc720b25c986e1032",
+    "native_calls_captured": 402,
+    "exact_diagnostic_matches": 402,
+    "on_disk_binary_or_c_source_modified": false,
+    "boundary": "Qualification prototype only. Four native call sites are redirected in process memory to capture actual arguments through the native FILE printer, then call the unchanged live original checker. This is not a selected-backend replacement or C-program proof."
+  },
+  "delivery": {
+    "pr": "https://github.com/fuqi-jia/Xolver/pull/74",
+    "qualified_code_ci": "https://github.com/fuqi-jia/Xolver/actions/runs/41013084797",
+    "qualified_code_ci_conclusion": "success",
+    "receipt_head_ci_and_merge": "pending"
+  },
+  "boundaries": [
+    "Native printed Omod and Zgcd applications remain uninterpreted; their mathematical meanings are not invented.",
+    "SV implication invalidity is not a C-program counterexample. Native context infeasibility is reported separately.",
+    "This stage does not replace QCP's internal SMT backend or establish whole-program verification coverage or speed.",
+    "There is no fresh fixed160 comparison for these binaries. The preceding 98/160 arithmetic result belongs to its own frozen binary and round.",
+    "Neither protected set was inspected or run. No solver-superiority claim is made."
+  ]
+}
