@@ -146,22 +146,38 @@ def _nonlinear(term: Term) -> bool:
     return False
 
 
-def query(check: NativeCheck) -> tuple[str, dict]:
-    symbols, functions = {}, {}
-    source = NativeParser(check.source, symbols, functions).parse()
-    target = NativeParser(check.target, symbols, functions).parse()
-    if source.sort != 'Prop' or target.sort != 'Prop':
-        raise Unsupported('native source and target must be propositions')
-    nonlinear = _nonlinear(source) or _nonlinear(target)
+def _script(assertions: list[Term], symbols: dict, functions: dict) -> tuple[str, dict]:
+    if any(term.sort != 'Prop' for term in assertions):
+        raise Unsupported('native assertions must be propositions')
+    nonlinear = any(_nonlinear(term) for term in assertions)
     logic = 'QF_' + ('UF' if functions else '') + ('NIA' if nonlinear else 'LIA')
     lines = ['(set-logic ' + logic + ')']
     lines += [f'(declare-const |{name}| Int)' for name in sorted(symbols)]
     lines += [f"(declare-fun |{name}| ({' '.join(['Int'] * arity)}) Int)"
               for name, arity in sorted(functions.items())]
-    lines += [f'(assert {source.smt})', f'(assert (not {target.smt}))', '(check-sat)', '(exit)', '']
+    lines += [f'(assert {term.smt})' for term in assertions]
+    lines += ['(check-sat)', '(exit)', '']
     return '\n'.join(lines), dict(logic=logic, variables=sorted(symbols),
         functions={name: dict(arguments=['Int'] * arity, result='Int', semantics='uninterpreted')
                    for name, arity in sorted(functions.items())})
+
+
+def formula_query(formula: str) -> tuple[str, dict]:
+    """Serialize the actual single formula supplied to QCP's SAT engine."""
+    if len(formula.encode('utf-8')) > 16 * 1024**2:
+        raise Unsupported('native formula byte budget exhausted')
+    symbols, functions = {}, {}
+    term = NativeParser(formula, symbols, functions).parse()
+    return _script([term], symbols, functions)
+
+
+def query(check: NativeCheck) -> tuple[str, dict]:
+    symbols, functions = {}, {}
+    source = NativeParser(check.source, symbols, functions).parse()
+    target = NativeParser(check.target, symbols, functions).parse()
+    if target.sort != 'Prop':
+        raise Unsupported('native target must be a proposition')
+    return _script([source, apply('not', target, sort='Prop')], symbols, functions)
 
 
 def export_trace(trace: Path, output: Path) -> dict:

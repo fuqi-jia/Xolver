@@ -1,0 +1,72 @@
+{
+  "schema": "xolver-native-qcp-backend-stage/1",
+  "qualified_source": "9f36803e5712bd7c8b8d439cd87c5e68fb8155cc",
+  "source_manifest": "validation/arithmetic-r103/source-r818.tar.json",
+  "source_manifest_sha256": "c9b149646dc37f4c06f40d47e4938a2488feaa8041dce02dcb2e558e016bebee",
+  "artifacts": {
+    "qcp_symexec": "0e74c446cebca8c804ff9b838f07c67f23e31a093630675bc720b25c986e1032",
+    "xolver": "813e55a199b6bc75cee75436f12236f11e2a9886d9023dea22c1efa2d4b60daf",
+    "z3": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+    "qcp_native_backend_so": "6458a4368cf43a16c696ac9355a001a2feacdaab95dc29cd74939b83edd54686",
+    "qcp_backend_exec": "cb03a83b0c8c59b22825322ab51d8394178ed3e7bed490804c4d56b73278d883"
+  },
+  "native_interface": {
+    "platform": "Linux x86-64, qualified QCP executable only",
+    "sat_entry": "0x1199ee0",
+    "native_file_printer": "0x1198ed0",
+    "on_disk_binary_or_c_spec_modified": false,
+    "original_solver_fallback": false,
+    "uninterpreted_function_names_remain_uninterpreted": true,
+    "nondefinite_result": "Record unknown/timeout/unsupported/error separately and stop the native invocation; no guessed SAT/UNSAT return.",
+    "native_branch_classifier": "Preserved. It tests S AND P and NOT(S IMPLIES P); -1 does not universally mean source infeasibility."
+  },
+  "resources": {"host": "Panda1", "scheduler": "ExperimentOS", "physical_cpus_per_task": 1, "wall_seconds_per_smt_call": 60, "memory_gib": 16, "maximum_independent_witness_tasks_in_a_batch": 64},
+  "qualification": {
+    "compile_run": "ca52c467ac6f",
+    "compile_record": "validation/arithmetic-r103/native-backend-r814/qualification.json",
+    "compile_record_sha256": "80a356b9fe9522a911163ae51b51c1dc85d6c14dcd305eb04743ee03e762d2b5",
+    "qcp_python_tests": 49,
+    "final_source_bound_run": "1727e0789665",
+    "final_source_bound_record": "validation/arithmetic-r103/native-edges-r818/report.json",
+    "final_source_bound_record_sha256": "35e9a3a108156d98f98733f890a2ad97186134bf081b4da2f78ad46f80b1eb54",
+    "checks": ["architecture", "full regression-harness", "49 QCP Python tests", "mode 0/1 native TT/FF through both selected backends", "non-target executable unchanged", "unknown stops without native fallback", "detached selected solver terminates after cancellation"]
+  },
+  "actual_native_regression": {
+    "experiment": "76c5a8da7ee6",
+    "record_directory": "validation/arithmetic-r103/native-backend-r815",
+    "original_development_programs": 3,
+    "frontend_runs": 6,
+    "per_backend": {
+      "branch": {"calls": 188, "sat": 74, "unsat": 114, "branch_diagnostics": 106},
+      "gcd": {"calls": 296, "sat": 174, "unsat": 122, "branch_diagnostics": 148},
+      "max3": {"calls": 296, "sat": 148, "unsat": 148, "branch_diagnostics": 148}
+    },
+    "total_actual_selected_calls": 1560,
+    "unique_formulas": 174,
+    "formulas_verdicts_and_branch_diagnostics_match_live_original": true,
+    "generated_goal_auto_manual_files_byte_identical": true,
+    "unknown_timeout_error_or_disagreement": 0,
+    "mode_0_boundary": "No mode0 calls occurred in these three frontend runs; mode0 is qualified on native TT/FF separately."
+  },
+  "independent_validation": {
+    "witness_experiments": ["16c55d9bb22e", "dacb283de377", "b9d9a512e6fb"],
+    "audit_run": "9f8370812cb1",
+    "audit_record": "validation/arithmetic-r103/native-audit-r820/report.json",
+    "audit_record_sha256": "f24f42a692c7b2c8ec98f7c1c7b7f1abce72ad622187444bea65b1e94983fbe9",
+    "inventory_sha256": "72b85f28bd1666112c3a69e79a21d8486639881274fb744e258f5b0655c2c31f",
+    "unique_sat": 84,
+    "unique_unsat": 90,
+    "raw_models": 168,
+    "positive_model_replays_in_z3_and_cvc5": 336,
+    "model_completions": 0,
+    "all_unsat_independently_confirmed_by_cvc5": true
+  },
+  "delivery": {"pr": "https://github.com/fuqi-jia/Xolver/pull/75", "server_acceptance": "success", "pr_ci_merge_and_main_ci": "pending"},
+  "boundaries": [
+    "This replaces the native SAT entry, unlike standalone trace replay or post-generation proof-candidate discharge.",
+    "These are frontend/backend integration runs, not complete C proofs or a fair whole-program timing comparison.",
+    "Native and printed integer functions retain only their established uninterpreted signatures.",
+    "The Xolver core executable is the unchanged R802 binary. There is no fresh fixed160 result or new arithmetic performance gain in this integration stage.",
+    "Neither protected set has been inspected or run. No superiority over Z3 is claimed."
+  ]
+}
