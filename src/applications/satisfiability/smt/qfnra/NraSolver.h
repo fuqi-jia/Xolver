@@ -18,6 +18,7 @@ namespace xolver {
 
 class TheoryAtomRegistry;
 class LibpolyBackend;  // Algebra backend for cylindrical coverings.
+class PolynomialLinearRefuter;
 
 /**
  * NRA (Nonlinear Real Arithmetic) theory solver.
@@ -113,6 +114,7 @@ private:
     std::unique_ptr<PolynomialKernel> kernel_;
     std::unique_ptr<PolynomialConverter> converter_;
     CdcacSolver engine_;
+    std::unique_ptr<PolynomialLinearRefuter> linearRefuter_;
     // libpoly hardening: decline the CDCAC path (→ unknown, sound) on inputs above
     // these thresholds, preventing libpoly blowup/OOM on pathological systems.
     // 0 = disabled (default ⇒ no corpus impact); tuned on the benchmark set.

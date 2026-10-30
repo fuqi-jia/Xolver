@@ -22,6 +22,7 @@
 #include "search/nra/core/CdcacCommon.h"                 // #63 relationHolds() for rational-fallback
 #include "search/refute/SignDefinitenessRefuter.h"       // sign-definiteness refutation
 #include "search/refute/PolynomialSignClosure.h"
+#include "search/refute/PolynomialLinearRefutation.h"
 #include "search/nra/core/CdcacCore.h"
 #include "search/nra/core/CdcacConstraint.h"
 #include "search/nra/engine/ReasonManager.h"
@@ -121,30 +122,31 @@ std::optional<TheoryCheckResult> NraSolver::stageLinearRelaxation(
     if (presolveConstraints_.empty()) return std::nullopt;
 
     // Skip unsupported placeholders; omitting a premise weakens the relaxation.
-    std::vector<CdcacConstraint> cs;
+    std::vector<SignRefuteConstraint> cs;
     cs.reserve(presolveConstraints_.size());
     for (const auto& c : presolveConstraints_) {
         if (c.poly == NullPoly) continue;
-        CdcacConstraint cc;
-        cc.poly = c.poly;
-        cc.rel = c.rel;
-        cc.reason = c.reason;
-        cs.push_back(std::move(cc));
+        auto polynomial = RationalPolynomial::fromPolyId(c.poly, *kernel_);
+        if (!polynomial) continue;
+        cs.push_back({std::move(*polynomial), c.rel, c.reason});
     }
     if (cs.empty()) return std::nullopt;
 
-    auto relaxation = linearizeMonomials(*kernel_, cs);
-    if (relaxation.empty()) return std::nullopt;
-
-    auto facts = computeSimplexTableauFacts(relaxation);
-    if (!facts.linearSubsetUnsat()) return std::nullopt;
+    PolynomialLinearStatistics statistics;
+    auto reasons = linearRefuter_->check(cs,
+        std::chrono::steady_clock::time_point::max(), &statistics);
+    const auto profile = config::read<config::ReadKind::ProfilePath>("ARITH_STAGE_PROF", "/tmp/xolver_stageprof.txt");
+    if (!profile.empty()) {
+        std::ofstream out(profile.string() + ".linear-relaxation.log", std::ios::app);
+        out << "constraints=" << statistics.constraints << " variables=" << statistics.variables
+            << " new_rows=" << statistics.newRows << " reused_rows=" << statistics.reusedRows
+            << " retained_rows=" << statistics.retainedRows << " exhausted=" << statistics.exhausted << '\n';
+    }
+    if (!reasons) return std::nullopt;
 
     // Return active premises; TheoryManager negates them into the SAT clause.
     TheoryConflict conflict;
-    conflict.clause = facts.conflictReasons();
-    if (conflict.clause.empty())
-        for (const auto& la : relaxation) conflict.clause.push_back(la.reason);
-    if (conflict.clause.empty()) return std::nullopt;
+    conflict.clause = std::move(*reasons);
     return TheoryCheckResult::mkConflict(std::move(conflict));
 }
 

@@ -1,12 +1,17 @@
 #include "search/refute/PolynomialLinearRefutation.h"
-#include "search/lra/GeneralSimplex.h"
 #include "base/WorkBudget.h"
 #include <algorithm>
-#include <map>
+#include <unordered_set>
 
 namespace xolver {
 
-std::optional<std::vector<SatLit>> refutePolynomialLinearRelaxation(
+void PolynomialLinearRefuter::reset() {
+    simplex_.reset();
+    variables_.clear();
+    rows_.clear();
+}
+
+std::optional<std::vector<SatLit>> PolynomialLinearRefuter::check(
     const std::vector<SignRefuteConstraint>& constraints,
     std::chrono::steady_clock::time_point deadline,
     PolynomialLinearStatistics* statistics) {
@@ -14,61 +19,77 @@ std::optional<std::vector<SatLit>> refutePolynomialLinearRelaxation(
     auto& stats = statistics ? *statistics : local;
     stats = {};
     try {
-        WorkBudget work(100000);
+        WorkBudget work(workLimit_);
+        if (wall::hasDeadline())
+            deadline = std::min(deadline, std::chrono::steady_clock::now() +
+                std::chrono::milliseconds(wall::remainingMs()));
         auto tick = [&](size_t amount = 1) {
             work.tick(amount);
             if (std::chrono::steady_clock::now() >= deadline)
                 throw ResourceExhausted("polynomial linear relaxation allocation exhausted");
         };
         tick();
-        GeneralSimplex simplex;
-        std::map<MonomialKey, int> variables;
+        std::vector<GeneralSimplex::ActiveBound> bounds;
+        bounds.reserve(2 * constraints.size());
+        std::unordered_set<uint64_t> activeReasons;
+        auto reasonKey = [](SatLit literal) {
+            return (static_cast<uint64_t>(literal.var) << 1) | literal.sign;
+        };
         for (const auto& constraint : constraints) {
             tick();
             if (constraint.rel == Relation::Neq) continue;
-            for (const auto& [monomial, coefficient] : constraint.poly.terms()) {
-                tick(1 + monomial.size() + mpz_sizeinbase(coefficient.get_num_mpz_t(), 2) +
-                     mpz_sizeinbase(coefficient.get_den_mpz_t(), 2));
-            }
-            mpq_class constant = 0;
-            std::vector<std::pair<int, mpq_class>> terms;
-            for (const auto& [monomial, coefficient] : constraint.poly.terms()) {
-                tick();
-                if (monomial.empty()) { constant += coefficient; continue; }
-                // Canonical monomials share one unconstrained real column
-                // across all rows. Every polynomial model induces such a
-                // linear model; the converse is deliberately not assumed.
-                auto it = variables.find(monomial);
-                if (it == variables.end()) {
-                    it = variables.emplace(monomial,
-                        simplex.addVar("m" + std::to_string(variables.size()))).first;
-                    ++stats.variables;
+            auto found = rows_.find(constraint.reason.var);
+            int row;
+            if (found != rows_.end() &&
+                found->second.polynomial.terms() == constraint.poly.terms()) {
+                row = found->second.variable;
+                ++stats.reusedRows;
+            } else {
+                mpq_class constant = 0;
+                std::vector<std::pair<int, mpq_class>> terms;
+                for (const auto& [monomial, coefficient] : constraint.poly.terms()) {
+                    tick(1 + monomial.size() + mpz_sizeinbase(coefficient.get_num_mpz_t(), 2) +
+                         mpz_sizeinbase(coefficient.get_den_mpz_t(), 2));
+                    if (coefficient == 0) continue;
+                    if (monomial.empty()) { constant += coefficient; continue; }
+                    // The columns are independent monomial values. Retained
+                    // definitions impose neither product identities nor integrality.
+                    auto variable = variables_.find(monomial);
+                    if (variable == variables_.end())
+                        variable = variables_.emplace(monomial,
+                            simplex_.addVar("m" + std::to_string(variables_.size()))).first;
+                    terms.emplace_back(variable->second, coefficient);
                 }
-                terms.emplace_back(it->second, coefficient);
+                row = simplex_.addConstraint(terms, -constant);
+                if (row < 0) return std::nullopt;
+                rows_.insert_or_assign(constraint.reason.var, Row{constraint.poly, row});
+                ++stats.newRows;
             }
-            // addConstraint creates s=sum(terms)-rhs. Setting rhs=-constant
-            // makes s the original polynomial, including its exact offset.
-            const auto row = simplex.addConstraint(terms, -constant);
-            if (row < 0) return std::nullopt;
             ++stats.constraints;
+            activeReasons.insert(reasonKey(constraint.reason));
             const auto rel = constraint.rel;
-            if (rel == Relation::Eq || rel == Relation::Geq || rel == Relation::Gt) {
-                const BoundInfo bound(BoundValue(DeltaRational(0, rel == Relation::Gt ? 1 : 0)), constraint.reason);
-                simplex.assertLower(row, bound);
-            }
-            if (rel == Relation::Eq || rel == Relation::Leq || rel == Relation::Lt) {
-                const BoundInfo bound(BoundValue(DeltaRational(0, rel == Relation::Lt ? -1 : 0)), constraint.reason);
-                simplex.assertUpper(row, bound);
-            }
-            if (simplex.hasImmediateConflict()) break;
+            if (rel == Relation::Eq || rel == Relation::Geq || rel == Relation::Gt)
+                bounds.push_back({row, true, BoundInfo(
+                    BoundValue(DeltaRational(0, rel == Relation::Gt ? 1 : 0)), constraint.reason)});
+            if (rel == Relation::Eq || rel == Relation::Leq || rel == Relation::Lt)
+                bounds.push_back({row, false, BoundInfo(
+                    BoundValue(DeltaRational(0, rel == Relation::Lt ? -1 : 0)), constraint.reason)});
         }
-        const auto result = simplex.checkUntil(deadline);
+        stats.variables = variables_.size();
+        stats.retainedRows = simplex_.numRows();
+        tick();
+        // Replace the complete premise base. An inactive cached row is an
+        // unbounded definition, not a surviving assertion or explanation.
+        simplex_.replaceActiveBounds(bounds, GeneralSimplex::AssignmentPolicy::Preserve);
+        const auto result = simplex_.checkUntil(deadline);
         if (result == GeneralSimplex::Result::Unknown) stats.exhausted = true;
         if (result != GeneralSimplex::Result::Unsat) return std::nullopt;
         std::vector<SatLit> reasons;
-        for (const auto& bound : simplex.getConflict())
+        for (const auto& bound : simplex_.getConflict()) {
+            if (!activeReasons.count(reasonKey(bound.reason))) return std::nullopt;
             if (std::find(reasons.begin(), reasons.end(), bound.reason) == reasons.end())
                 reasons.push_back(bound.reason);
+        }
         if (!reasons.empty()) return reasons;
     } catch (const ResourceExhausted&) {
         stats.exhausted = true;

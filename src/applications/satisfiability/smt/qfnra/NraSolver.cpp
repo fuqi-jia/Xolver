@@ -4,6 +4,7 @@
 #include "base/SolveClock.h"
 #include <chrono>
 #include "search/arith/Reasoner.h"
+#include "search/refute/PolynomialLinearRefutation.h"
 #include "algebra/linear/LinearExpr.h"
 #include "search/presolve/Presolve.h"
 #include "base/RealValue.h"                                // validated rational witness model
@@ -38,7 +39,8 @@ namespace xolver {
 NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     : kernel_(std::move(kernel)),
       converter_(std::make_unique<PolynomialConverter>(*kernel_)),
-      engine_(kernel_.get()) {
+      engine_(kernel_.get()),
+      linearRefuter_(std::make_unique<PolynomialLinearRefuter>(0)) {
     cdcacMaxVars_ = xolver::config::read<xolver::config::ReadKind::Int>("XOLVER_NRA_CDCAC_MAX_VARS", 0);
     cdcacMaxDeg_  = xolver::config::read<xolver::config::ReadKind::Int>("XOLVER_NRA_CDCAC_MAX_DEGREE", 0);
     // Phase 2 reasoner pipeline: presolve fixpoint, then CDCAC.
@@ -186,6 +188,7 @@ void NraSolver::onPop(uint32_t n) {
 }
 
 void NraSolver::onReset() {
+    linearRefuter_->reset();
     engine_.reset();
     activeLits_.clear();
     trail_.clear();

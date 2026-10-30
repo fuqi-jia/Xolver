@@ -89,6 +89,7 @@ bool refutePolynomialBoolean(const NativeTerms& terms, const std::vector<ExprId>
             }
             return selected;
         };
+        PolynomialLinearRefuter linearRefuter;
         auto oracle = [&](std::span<const SatLit> selected) -> std::optional<std::vector<SatLit>> {
             tick();
             stats.largestContext = std::max(stats.largestContext, selected.size());
@@ -109,7 +110,7 @@ bool refutePolynomialBoolean(const NativeTerms& terms, const std::vector<ExprId>
             if (!conflict) {
                 const auto linearStarted = std::chrono::steady_clock::now();
                 PolynomialLinearStatistics linear;
-                conflict = refutePolynomialLinearRelaxation(constraints,
+                conflict = linearRefuter.check(constraints,
                     std::min(limits.deadline, linearStarted + std::chrono::milliseconds(2)), &linear);
                 ++stats.linearCalls;
                 stats.linearConstraints += linear.constraints;
