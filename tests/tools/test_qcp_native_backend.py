@@ -5,16 +5,13 @@ import sys
 import tempfile
 import time
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from tools.integration import qcp_native_backend as bridge
 from tools.integration.qcp import Unsupported
 from tools.integration.qcp_native import formula_query
 
-
-def timing(returncode=0, timed_out=False):
-    return dict(returncode=returncode, timed_out=timed_out, budget_overrun=False, seconds=0.001)
 
 
 class NativeBackendTests(unittest.TestCase):
@@ -27,48 +24,79 @@ class NativeBackendTests(unittest.TestCase):
             with self.subTest(formula=formula), self.assertRaises(Unsupported):
                 formula_query(formula)
 
-    def test_only_a_strict_definite_label_can_be_returned_to_the_host(self):
-        samples = [(b'sat\n', 0, False, 'sat'), (b'unsat\n', 0, False, 'unsat'),
-                   (b'unknown\n', 0, False, 'unknown'), (b'sat\nextra', 0, False, 'error'),
-                   (b'unsat\n', 1, False, 'error'), (b'unsat\n', 0, True, 'timeout')]
-        with tempfile.TemporaryDirectory() as name:
-            for number, (stdout, code, expired, expected) in enumerate(samples):
-                output = Path(name) / str(number)
-                with self.subTest(expected=expected), patch.object(bridge, 'run_with_budget',
-                        return_value=(stdout, b'', timing(code, expired))) as invoke:
-                    row = bridge.decide('TT', 'xolver', Path('/solver'), Path('/guard'),
-                                        output, time.monotonic_ns())
-                    self.assertEqual(row['result'], expected)
-                    self.assertEqual(invoke.call_count, 1)
+    def test_typed_results_and_smtlib_boundaries_are_checked(self):
+        for backend in ('xolver', 'z3'):
+            for label in ('sat', 'unsat', 'unknown', 'sat extra'):
+                with self.subTest(backend=backend, label=label), tempfile.TemporaryDirectory() as name:
+                    session = bridge.BackendSession(backend, Path('/solver'), Path('/guard'))
+                    channel = MagicMock(max_bytes=64 * 1024**2)
+                    channel.process.pid = 123
+                    channel.remaining.return_value = 1
+                    channel.diagnostics.return_value = (b'', 0)
+                    channel.argv = session.channel.argv
+                    session.channel = channel
+                    if backend == 'xolver':
+                        value = json.dumps(dict(result=label)).encode()
+                        response = json.dumps(dict(version=1, results=[dict(
+                            id='0', ok=True, payload=list(value), error='')])).encode()
+                        channel.read_exact.side_effect = [bridge.HEADER.pack(len(response)), response]
+                    else:
+                        channel.read_line.side_effect = [(label + '\n').encode(), b'qcp-query-0-done\n']
+                    output = Path(name) / 'query'
+                    row = bridge.decide('TT', session, output, time.monotonic_ns())
+                    self.assertEqual(row['result'], label if label != 'sat extra' else 'error')
                     self.assertFalse(row['program_verified'])
                     self.assertEqual(json.loads((output / 'record.json').read_text()), row)
+                    if label == 'sat extra':
+                        channel.close.assert_called_once()
+                    else:
+                        self.assertEqual(row['process_pid'], 123)
+                        self.assertEqual(session.ordinal, 1)
 
     def test_unsupported_and_expired_queries_never_invoke_a_solver(self):
-        with tempfile.TemporaryDirectory() as name, patch.object(bridge, 'run_with_budget') as invoke:
+        session = bridge.BackendSession('xolver', Path('/solver'), Path('/guard'))
+        with tempfile.TemporaryDirectory() as name, patch.object(session, 'solve') as invoke:
             for index, (formula, started, expected) in enumerate([
                     ('mystery = 1', time.monotonic_ns(), 'unsupported'),
                     ('TT', time.monotonic_ns() - bridge.WALL_NS, 'timeout')]):
-                row = bridge.decide(formula, 'xolver', Path('/solver'), Path('/guard'),
-                                    Path(name) / str(index), started)
+                row = bridge.decide(formula, session, Path(name) / str(index), started)
                 self.assertEqual(row['result'], expected)
             invoke.assert_not_called()
+            self.assertIsNone(session.channel.process)
 
-    def test_both_selected_backends_receive_the_same_formula_and_caps(self):
-        with tempfile.TemporaryDirectory() as name, patch.object(bridge, 'run_with_budget',
-                return_value=(b'unsat\n', b'', timing())) as invoke:
-            rows = [bridge.decide('x_0 < x_0', backend, Path('/' + backend), Path('/guard'),
-                                  Path(name) / backend, time.monotonic_ns())
-                    for backend in ('xolver', 'z3')]
-            self.assertEqual(rows[0]['query_sha256'], rows[1]['query_sha256'])
-            for call in invoke.call_args_list:
-                command, budget, environment = call.args
-                self.assertEqual(command[:4], ['/guard', 'prlimit', '--as=17179869184', '--cpu=62:63'])
-                self.assertGreater(budget, 0)
-                self.assertLessEqual(budget, 60)
-                self.assertNotIn('LD_PRELOAD', environment)
-                self.assertFalse(any(k.startswith('XOLVER_QCP_') for k in environment))
-            self.assertIn('solve', invoke.call_args_list[0].args[0])
-            self.assertIn('-T:60', invoke.call_args_list[1].args[0])
+    def test_both_backends_receive_identical_formulas_and_reusable_process_caps(self):
+        rows = []
+        with tempfile.TemporaryDirectory() as name:
+            for backend in ('xolver', 'z3'):
+                session = bridge.BackendSession(backend, Path('/' + backend), Path('/guard'))
+                with patch.object(session, 'solve', return_value=dict(result='unsat')) as invoke:
+                    row = bridge.decide('x_0 < x_0', session, Path(name) / backend,
+                                        time.monotonic_ns())
+                    rows.append(row)
+                    self.assertEqual(invoke.call_args.args[0],
+                                     formula_query('x_0 < x_0')[0])
+                self.assertEqual(session.channel.argv[:4],
+                                 ('/guard', 'prlimit', '--as=17179869184', '--'))
+                self.assertFalse(any(arg.startswith('--cpu') for arg in session.channel.argv))
+                if backend == 'z3':
+                    self.assertEqual(session.channel.argv[-1], '-in')
+        self.assertEqual(rows[0]['query_sha256'], rows[1]['query_sha256'])
+
+    def test_wrong_boundary_and_expired_exchange_close_the_session(self):
+        with tempfile.TemporaryDirectory() as name:
+            session = bridge.BackendSession('z3', Path('/solver'), Path('/guard'))
+            with patch.object(session.channel, 'write'), patch.object(session.channel,
+                    'read_line', side_effect=[b'sat\n', b'stale-boundary\n']), \
+                    patch.object(session.channel, 'close') as close:
+                row = bridge.decide('TT', session, Path(name) / 'boundary', time.monotonic_ns())
+                self.assertEqual(row['result'], 'error')
+                close.assert_called_once()
+            session = bridge.BackendSession('z3', Path('/solver'), Path('/guard'))
+            with patch.object(session, 'solve', side_effect=TimeoutError('deadline')), \
+                    patch.object(session.channel, 'close') as close:
+                row = bridge.decide('TT', session, Path(name) / 'timeout', time.monotonic_ns())
+                self.assertEqual(row['result'], 'timeout')
+                close.assert_called_once()
 
     def test_socket_frames_cannot_turn_truncation_into_an_empty_formula(self):
         left, right = socket.socketpair()

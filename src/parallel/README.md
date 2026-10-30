@@ -75,11 +75,18 @@ result = executor.submit(Task("demo", "echo", b"hello")).result().get()
 have the executable, libraries and configured Python package deployed. Framework
 retries can execute a task again: distributed handlers must be idempotent.
 
-The CLI worker reads one JSON version-1 batch on stdin and writes ordered
-results on stdout; diagnostics use stderr. Built-in handlers are `echo`,
+The CLI worker accepts successive length-framed JSON version-1 batches and writes
+one ordered result frame per batch; diagnostics use stderr. Each frame is an
+8-byte unsigned big-endian length followed by 1 byte to 64 MiB of JSON. EOF is valid
+only between frames. `WorkerSession(worker)` keeps a POSIX worker process open
+across calls to `run(tasks)`; use it as a context manager. Calls serialize and
+share a wall deadline covering encoding, startup and transport. Timeout or a
+protocol error closes the process group. Spark reuses a session per partition.
+Built-in handlers are `echo`,
 `backends`, and `smt.solve`. The latter accepts JSON bytes containing `smt2`,
 `timeout_ms` (default 60000) and `model` (default false), and solves the public
-API's final query snapshot. A requested model includes its validation status;
+API's final query snapshot with a fresh solver for each task, including repeated
+tasks. A requested model includes its validation status;
 `indeterminate` is not a verified witness. Custom applications register their own
 handlers. Task errors remain separate from solver `unknown` results.
 

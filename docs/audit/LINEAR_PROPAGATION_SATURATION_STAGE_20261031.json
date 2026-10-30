@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "status": "server_qualified_ci_pending",
+  "status": "merged_main_ci_passed",
   "native_core_source_head": "f095b3b24e7e4ed6aaa20983fa4de205e7d3a3ed",
   "source_manifest_sha256": "cdc41b0f26e18f79d024de1c17b37b9fbd55b6f9c4d0c1cd4f78a757405316bd",
   "binaries": {
@@ -537,5 +537,14 @@
     }
   ],
   "protected_sets_used": false,
-  "boundary": "Every Xolver SAT model from the actual timed solve is positively replayed. Correct UNSAT decisions have independent judgments or the checked original115 certificate. Both Xolver versions verify100 results; no solve is gained or lost. Verified PAR-2 improves by about0.47 percent; original59 improves39.692s to2.823s. Same-round Z3 has116 verified/123 raw, with seven unconfirmed UNSATs excluded. Two current duplicated Z3 SAT models are independently replayed; two other Z3 model replays retain explicit error boundaries while their SAT decisions are confirmed by checked Xolver witnesses. This does not establish superiority over Z3, new QCP end-to-end coverage, or protected-set performance."
+  "boundary": "Every Xolver SAT model from the actual timed solve is positively replayed. Correct UNSAT decisions have independent judgments or the checked original115 certificate. Both Xolver versions verify100 results; no solve is gained or lost. Verified PAR-2 improves by about0.47 percent; original59 improves39.692s to2.823s. Same-round Z3 has116 verified/123 raw, with seven unconfirmed UNSATs excluded. Two current duplicated Z3 SAT models are independently replayed; two other Z3 model replays retain explicit error boundaries while their SAT decisions are confirmed by checked Xolver witnesses. This does not establish superiority over Z3, new QCP end-to-end coverage, or protected-set performance.",
+  "delivery": {
+    "pr": "https://github.com/fuqi-jia/Xolver/pull/79",
+    "pr_head": "76a1e0951b3ab5130c669fb871c61a34f7f9fd30",
+    "pr_ci": "https://github.com/fuqi-jia/Xolver/actions/runs/41099839678",
+    "merge_commit": "51c0e641488f966384cb82b05091e75c64132cd0",
+    "main_ci": "https://github.com/fuqi-jia/Xolver/actions/runs/41103752206",
+    "all_checks_passed": true,
+    "additional_current_main_archive_required": false
+  }
 }

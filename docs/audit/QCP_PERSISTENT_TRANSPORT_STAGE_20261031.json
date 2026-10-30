@@ -1,0 +1,85 @@
+{
+  "schema": 1,
+  "status": "transport_qualified_whole_program_validation_in_progress",
+  "source_base_commit": "76a1e0951b3ab5130c669fb871c61a34f7f9fd30",
+  "source_manifest_sha256": "b0dec019f0d7297e138f91d673f5239598cf5021b63c292a482d820c0ec40e53",
+  "source_overlay_sha256": "0a362ffefc03ea7538c555aca03847f2f906790bd5fcb18115803b37d9e49c4a",
+  "binaries": {
+    "xolver": "a5719bd76d2b443abe58de3e8bd80b8904c834cef1050f4574a087f11068555b",
+    "xolver_sv": "fea5248af24d6e6f4194f56f96fdb718f6d441adc1255f0f0ed2c9d6ab8c8044",
+    "xolver_parallel_worker": "578144c1e1293fec36a13448439e1df0d076bdd575f816d8b51b66c8e1cdc4f2"
+  },
+  "build": {
+    "experiment": "f49a35388203",
+    "run": "b6c36fd0782f",
+    "targeted_cpp_cases": 9,
+    "targeted_cpp_assertions": 62,
+    "transport_python_cases": 5,
+    "qcp_adapter_python_cases": 7
+  },
+  "acceptance": {
+    "experiment": "285c310c1170",
+    "runs": {
+      "unit": "4248b0a71a42",
+      "tools": "0ff773cae49d",
+      "qcp": "3a4db8ce9e99"
+    },
+    "unit_cases": 1831,
+    "unit_assertions": 897880,
+    "tool_ctest_targets": 69,
+    "qcp_arithmetic_equations": 684,
+    "failures": 0
+  },
+  "query_diagnostic": {
+    "experiment": "04e6f49a2e7f",
+    "distinct_input_hashes": 70,
+    "occurrences_per_arm": 296,
+    "decisions_per_arm": {
+      "sat": 174,
+      "unsat": 122
+    },
+    "orders": [
+      {
+        "name": "xfirst",
+        "run": "d0827eed4cfe",
+        "report_sha256": "aa376145810b83bda54b643a7d7cd88633ed54774361f63f1462a98a42e86301",
+        "xolver_seconds": 3.4491029623895884,
+        "z3_seconds": 2.901695266366005
+      },
+      {
+        "name": "zfirst",
+        "run": "f1d2eee8229a",
+        "report_sha256": "9e56982412239d0c494b86de92f5bee18e3d37b1f6fd4ed88fbac46427324a2a",
+        "xolver_seconds": 3.28964969702065,
+        "z3_seconds": 3.0619424749165773
+      }
+    ],
+    "processes_per_arm": 1,
+    "repeated_answers_cached": false,
+    "independent_truth_inventory_sha256": "72b85f28bd1666112c3a69e79a21d8486639881274fb744e258f5b0655c2c31f",
+    "independent_truth_audit_sha256": "f24f42a692c7b2c8ec98f7c1c7b7f1abce72ad622187444bea65b1e94983fbe9"
+  },
+  "budget": {
+    "wall_seconds_per_query": 60,
+    "physical_cpus": 1,
+    "memory_gib": 16,
+    "startup_included": true
+  },
+  "formal_smt_score_changed": false,
+  "whole_program_verification_pending": true,
+  "protected_sets_used": false,
+  "boundary": "The CLI and SV executable bytes are identical to qualified R926, so this stage does not rerun or replace the 160-case timings. Both selected processes solve every diagnostic occurrence with fresh context; all decisions match independently checked identical inputs. Xolver remains slower than Z3 in these per-occurrence diagnostics. This does not establish whole-C-program coverage, end-to-end performance superiority, or protected-set performance. New canonical max3 runs are in progress. The source manifest records a working-tree overlay based on source_base_commit; it is not a claim that the overlay was already committed at that SHA.",
+  "shutdown_qualification": {
+    "experiment": "108071cbef8b",
+    "run": "b315628c4c18",
+    "source_manifest_sha256": "19c47826a935f171ec386b0407e9eeb8c06da89159de129bba0148f0d3312276",
+    "transport_python_cases": 7,
+    "qcp_adapter_python_cases": 7,
+    "tool_ctest_targets": 69,
+    "native_binaries_unchanged": true,
+    "unit_binary_unchanged": true,
+    "normal_shutdown": "input EOF, zero exit status, no unsolicited reply bytes",
+    "failure_shutdown": "kill and reap process group; never reuse unread responses",
+    "diagnostic_timing_boundary": "R935 timings belong to R934 before the shutdown qualification; no newer timing is substituted."
+  }
+}

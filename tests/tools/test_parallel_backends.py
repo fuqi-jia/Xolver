@@ -58,6 +58,30 @@ class ParallelTests(unittest.TestCase):
         with LocalExecutor(Worker((WORKER,)), workers=2) as executor:
             self.exercise(executor)
 
+    def test_persistent_solver_tasks_isolate_declarations_and_failures(self):
+        if not WORKER:
+            self.skipTest("native worker is not specified")
+        from xolver_parallel import Task, Worker, WorkerSession
+        with WorkerSession(Worker((WORKER,))) as session:
+            pid = None
+            # Same name, different sorts/assertions: no state may cross tasks.
+            for index, (body, expected) in enumerate([
+                    ('(declare-const x Int)(assert (> x 2))', 'sat'),
+                    ('(declare-const x Bool)(assert x)(assert (not x))', 'unsat'),
+                    ('(declare-const x Int)(assert (= x 0))', 'sat')]):
+                task = Task(str(index), 'smt.solve', json.dumps(dict(
+                    smt2='(set-logic ALL)' + body + '(check-sat)')).encode())
+                result = session.run([task])[0]
+                self.assertEqual(json.loads(result.get())['result'], expected)
+                current = session.channel.process.pid
+                if pid is not None:
+                    self.assertEqual(current, pid)
+                pid = current
+                with self.assertRaises(RuntimeError):
+                    session.run([Task('missing', 'missing-handler')])[0].get()
+            self.assertEqual(session.run([]), [])
+        self.assertEqual(session.channel.process.returncode, 0)
+
     def test_dask(self):
         if "dask" not in BACKENDS:
             self.skipTest("Dask not requested")

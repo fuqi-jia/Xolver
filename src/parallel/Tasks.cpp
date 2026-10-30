@@ -1,6 +1,10 @@
 #include "parallel/Tasks.h"
 #include <nlohmann/json.hpp>
+#include <array>
+#include <istream>
+#include <limits>
 #include <mutex>
+#include <ostream>
 #include <stdexcept>
 
 namespace xolver::parallel {
@@ -101,6 +105,41 @@ std::vector<TaskResult> decodeResults(std::string_view input, std::size_t maximu
         results.push_back({result.at("id").get<std::string>(), result.at("ok").get<bool>(),
                            bytes(result.at("payload")), result.at("error").get<std::string>()});
     return results;
+}
+
+bool readFrame(std::istream& input, std::string& message, std::size_t maximum) {
+    message.clear();
+    std::array<unsigned char, 8> header{};
+    input.read(reinterpret_cast<char*>(header.data()), header.size());
+    if (input.gcount() == 0 && input.eof() && !input.bad()) return false;
+    if (input.gcount() != static_cast<std::streamsize>(header.size()) || !input)
+        throw std::runtime_error("truncated task frame header");
+    std::uint64_t length = 0;
+    for (auto byte : header) length = (length << 8) | byte;
+    if (length == 0 || length > maximum ||
+        length > static_cast<std::uint64_t>(std::numeric_limits<std::streamsize>::max()))
+        throw std::length_error("task frame exceeds wire budget or is empty");
+    message.resize(static_cast<std::size_t>(length));
+    input.read(message.data(), static_cast<std::streamsize>(length));
+    if (input.gcount() != static_cast<std::streamsize>(length) || !input)
+        throw std::runtime_error("truncated task frame payload");
+    return true;
+}
+
+void writeFrame(std::ostream& output, std::string_view message, std::size_t maximum) {
+    if (message.empty() || message.size() > maximum ||
+        message.size() > static_cast<std::size_t>(std::numeric_limits<std::streamsize>::max()))
+        throw std::length_error("task frame exceeds wire budget or is empty");
+    std::array<unsigned char, 8> header{};
+    auto length = static_cast<std::uint64_t>(message.size());
+    for (auto it = header.rbegin(); it != header.rend(); ++it) {
+        *it = static_cast<unsigned char>(length & 255);
+        length >>= 8;
+    }
+    output.write(reinterpret_cast<const char*>(header.data()), header.size());
+    output.write(message.data(), static_cast<std::streamsize>(message.size()));
+    output.flush();
+    if (!output) throw std::runtime_error("cannot write task frame");
 }
 
 bool compiled(Backend backend) noexcept {

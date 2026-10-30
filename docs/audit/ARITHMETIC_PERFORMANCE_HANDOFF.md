@@ -41,14 +41,18 @@ Older tables describe their own frozen versions and evidence boundaries.
 ## Current arithmetic and ASP continuation
 
 The latest delivered arithmetic stage is
-[shared polynomial linear relaxation](#shared-polynomial-linear-relaxation-r857r865):
-**100/160**, versus **118 verified /125 raw** same-round Z3 decisions.
-[PR78](https://github.com/fuqi-jia/Xolver/pull/78) is merged as main
-`ecf1e7c6fa8e074158a38d22e4eb255aeafc4007`. Both exact-head
-[PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/41050990683) and fresh
-[main CI](https://github.com/fuqi-jia/Xolver/actions/runs/41055517535) are fully green.
-The preceding delivered main verifies99 in this fresh round. Earlier rounds
-retain their own frozen versions and evidence boundaries.
+[distinct explained linear consequences](#qualified-saturation-of-linear-consequences-r926r933):
+**100/160**, versus **116 verified /123 raw** same-round Z3 decisions.
+[PR79](https://github.com/fuqi-jia/Xolver/pull/79) is merged as main
+`51c0e641488f966384cb82b05091e75c64132cd0`. Both exact-head
+[PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/41099839678) and fresh
+[main CI](https://github.com/fuqi-jia/Xolver/actions/runs/41103752206) are fully green.
+Verified solves remain100→100 with no gained/lost result; PAR-2 improves
+7534.598→7498.860 (about0.47%). Case59 improves39.692s→2.823s with its actual
+SAT model checked. Seven unconfirmed Z3 UNSATs remain excluded. This is not an
+overall solver-superiority result. Earlier rounds retain their own frozen
+versions, timings and evidence boundaries. No extra current-main archive is
+required after green CI.
 
 The retained branches are `main`, `feat/qcp-foundations` (QCP and solver
 foundations), and `feat/draco-asp`. Historical branch tips are archived in
@@ -2830,7 +2834,8 @@ boundaries; checked Xolver witnesses independently confirm those SAT decisions.
 EOS`ea2b81d2d3b5` seals source/binaries, all160 leases and model/certificate
 eligibility. See [the final stage receipt](LINEAR_PROPAGATION_SATURATION_STAGE_20261031.json).
 CLI SHA-256 is`a5719bd76d2b443abe58de3e8bd80b8904c834cef1050f4574a087f11068555b`.
-The stage is awaiting PR CI; main remains PR78. Neither protected set was used.
+The stage is delivered through PR79 as main`51c0e641`; PR CI41099839678 and
+fresh main CI41103752206 are fully green. Neither protected set was used.
 This is a local propagation improvement, not overall superiority over Z3.
 
 QCP R930 attributes20.477s of the historical GCD Xolver final-check to296
@@ -2842,3 +2847,43 @@ reset batches0.516/0.567s. All decisions agree. Child CPU/system times confirm
 startup cost. These are query diagnostics, not a C-program comparison. The next
 QCP stage should connect a reusable task channel for both backends and repeat
 canonical whole-program checking with matched proof routes and budgets.
+
+
+## Persistent native task transport (R934–R937, program checks pending)
+
+The canonical parallel worker now exchanges length-framed batches over one open
+POSIX process channel. `WorkerSession` provides deadline-driven bounded I/O,
+serialized requests, and process-group cleanup on timeout/protocol failure.
+Spark reuses a session per partition. The old EOF-delimited worker transport is
+removed; every client uses the same framing. Each SMT task still constructs a
+fresh solver, so declarations and assertions cannot leak between tasks.
+
+Native QCP uses this worker for Xolver and a persistent `z3 -in` process with
+`reset` and checked response boundaries for Z3. Both execute every occurrence;
+there is no answer cache. First startup, encoding and transport share each
+60-second, one-physical-CPU,16-GiB query budget. Actual request/reply bytes,
+process identity, query ordinals and process/query counts remain auditable.
+
+Panda1/ExperimentOS passes1,831 unit cases/897,880 assertions,69 tool CTest
+targets and the QCP regressions (including684 arithmetic equations). Focused
+checks cover binary fragmentation, truncation/length errors, declaration/sort
+isolation, task-error recovery, deadlines and descendant cleanup. CLI and SV
+hashes are byte-identical to R926; the existing160-case score is retained rather
+than replaced by another baseline run.
+
+R935 replays all296 original GCD callback occurrences (70 independently checked
+input hashes), including repeats. Every arm uses exactly one selected process
+and returns174 SAT/122 UNSAT. In opposite execution orders, Xolver takes3.449/
+3.290s and Z3 2.902/3.062s. Xolver remains slower in this diagnostic; it is not
+an end-to-end C-program comparison. Canonical frozen-spec max3 runs have begun
+for both backends, with owner/controller proof checking still in progress.
+See [the transport receipt](QCP_PERSISTENT_TRANSPORT_STAGE_20261031.json).
+
+R939 closes input on normal completion and requires exit0 with no unsolicited
+reply bytes, so a failure after the last reply cannot be hidden by cancellation.
+Timeout/error paths still kill and reap the process group. Seven transport
+checks (including post-reply exit7 and trailing-output failures), seven QCP
+adapter checks and all69 tool CTest targets pass again. All native/unit binary
+hashes remain unchanged; the1831-case native result is retained. R935 timings
+precede this shutdown fix and remain explicitly diagnostic. Subsequent whole-
+program actions use the R939 source manifest, with the same frozen worker.

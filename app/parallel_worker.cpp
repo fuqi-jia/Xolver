@@ -1,7 +1,6 @@
 #include "parallel/Tasks.h"
 #include "xolver/Solver.h"
 #include <nlohmann/json.hpp>
-#include <array>
 #include <atomic>
 #include <chrono>
 #include <cstdio>
@@ -73,14 +72,6 @@ Bytes solve(std::span<const std::uint8_t> payload) {
 int main() {
     try {
         constexpr std::size_t maximum = 64 * 1024 * 1024;
-        std::string input;
-        std::array<char, 8192> buffer;
-        while (std::cin.read(buffer.data(), buffer.size()) || std::cin.gcount()) {
-            if (input.size() + static_cast<std::size_t>(std::cin.gcount()) > maximum)
-                throw std::length_error("worker request exceeds wire budget");
-            input.append(buffer.data(), static_cast<std::size_t>(std::cin.gcount()));
-        }
-        const auto tasks = decodeTasks(input, maximum);
         TaskRegistry registry;
         registry.add("echo", [](auto payload) { return Bytes(payload.begin(), payload.end()); });
         registry.add("smt.solve", solve);
@@ -88,15 +79,17 @@ int main() {
             const auto text = Json(compiledBackends()).dump();
             return Bytes(text.begin(), text.end());
         });
-        std::vector<TaskResult> results;
         // Library diagnostics belong on stderr; stdout is exclusively the wire
         // protocol. The worker executes snapshots sequentially in this process.
         std::ostream output(std::cout.rdbuf());
         std::cout.rdbuf(std::cerr.rdbuf());
-        for (const auto& task : tasks) results.push_back(registry.execute(task));
-        const auto encoded = encodeResults(results);
-        if (encoded.size() > maximum) throw std::length_error("worker response exceeds wire budget");
-        output << encoded << '\n';
+        std::string input;
+        while (readFrame(std::cin, input, maximum)) {
+            const auto tasks = decodeTasks(input, maximum);
+            std::vector<TaskResult> results;
+            for (const auto& task : tasks) results.push_back(registry.execute(task));
+            writeFrame(output, encodeResults(results), maximum);
+        }
         return 0;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
