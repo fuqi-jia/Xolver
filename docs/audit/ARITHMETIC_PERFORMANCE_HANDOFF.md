@@ -2502,6 +2502,9 @@ Qualified implementation/test head is`6e46e157`; frozen CLI SHA-256 is
 `ce2c642efdb7a9b4e0f946ad6099a2f2f82f3a7b724f5e70caa4d1c59593f852`.
 Final audit EOS`0732c961bbde` binds all sources, binaries, leases, acceptance and
 witnesses in the [stage receipt](BOOLEAN_THEORY_REFUTATION_STAGE_20261030.json).
-This is a verified latency improvement, not overall superiority over Z3. Both
-protected sets remain untouched. Require the exact-head PR CI and resulting main
-CI for delivery; no extra current-main server archive is required.
+Both exact-head [PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/41038648758)
+passed; PR76 is merged as`980969d35453c6138e5bfc351c90567859a7fd29`.
+Fresh [main CI](https://github.com/fuqi-jia/Xolver/actions/runs/41041660875) is
+running. This is a verified latency improvement, not overall superiority over Z3.
+Both protected sets remain untouched. No extra current-main server archive is
+required.

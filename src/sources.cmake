@@ -237,6 +237,7 @@ set(XOLVER_SEARCH_SOURCES
     "search/presolve/PresolveEngine.cpp"
     "search/presolve/PresolveSupport.cpp"
     "search/presolve/UnivariatePolySignAnalyzer.cpp"
+    "search/refute/LinearFragmentRefutation.cpp"
     "search/refute/PolynomialBooleanRefutation.cpp"
     "search/refute/PolynomialSignClosure.cpp"
     "search/refute/SignDefinitenessRefuter.cpp"

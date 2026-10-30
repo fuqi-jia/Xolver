@@ -1,6 +1,7 @@
 #include "search/refute/PolynomialBooleanRefutation.h"
 #include "search/boolean/Atomizer.h"
 #include "search/refute/PolynomialSignClosure.h"
+#include "search/refute/LinearFragmentRefutation.h"
 #include "algebra/poly/PolynomialConverter.h"
 #include "base/WorkBudget.h"
 #include <algorithm>
@@ -51,8 +52,8 @@ bool refutePolynomialBoolean(const NativeTerms& terms, const std::vector<ExprId>
         auto sat = createSatSolver();
         Atomizer atomizer(*sat);
         atomizer.setBoolSortId(terms.boolSortId());
-        // Full defining equivalences make model-based support selection valid
-        // in both polarities, independently of the main solver's PG encoding.
+        // Full defining equivalences retain both atom polarities independently
+        // of the main solver's PG encoding.
         for (auto root : roots) { tick(); sat->addClause({atomizer.atomize(root, terms)}); }
         auto kernel = createPolynomialKernel();
         PolynomialConverter converter(*kernel, &work, limits.deadline);
@@ -101,7 +102,15 @@ bool refutePolynomialBoolean(const NativeTerms& terms, const std::vector<ExprId>
             }
             ++stats.theoryCalls;
             const auto started = std::chrono::steady_clock::now();
-            auto conflict = refuteBySignDefiniteness(constraints);
+            LinearFragmentStatistics linear;
+            auto conflict = refuteLinearFragment(constraints,
+                std::min(limits.deadline, started + std::chrono::milliseconds(2)), &linear);
+            ++stats.linearCalls;
+            stats.linearConstraints += linear.constraints;
+            stats.linearExhaustions += linear.exhausted;
+            stats.linearMicroseconds += std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - started).count();
+            if (!conflict) conflict = refuteBySignDefiniteness(constraints);
             if (!conflict) {
                 PolynomialSignStatistics sign;
                 conflict = refuteByPolynomialSignClosure(constraints, &sign);

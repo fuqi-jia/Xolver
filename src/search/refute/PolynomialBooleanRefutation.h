@@ -10,6 +10,10 @@ struct PolynomialBooleanStatistics {
     size_t theoryCalls = 0;
     size_t largestContext = 0;
     size_t signExhaustions = 0;
+    size_t linearCalls = 0;
+    size_t linearConstraints = 0;
+    size_t linearExhaustions = 0;
+    long long linearMicroseconds = 0;
     long long theoryMicroseconds = 0;
     bool exhausted = false;
 };

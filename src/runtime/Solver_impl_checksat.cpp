@@ -849,6 +849,8 @@ Result Solver::Impl::checkSatGround() {
                     << " conflicts=" << stats.boolean.conflicts << " theory_calls=" << stats.theoryCalls
                     << " largest_context=" << stats.largestContext << " theory_us=" << stats.theoryMicroseconds
                     << " sign_exhaustions=" << stats.signExhaustions
+                    << " linear_calls=" << stats.linearCalls << " linear_rows=" << stats.linearConstraints
+                    << " linear_exhaustions=" << stats.linearExhaustions << " linear_us=" << stats.linearMicroseconds
                     << " exhausted=" << stats.exhausted << " refuted=" << refuted << " us="
                     << std::chrono::duration_cast<std::chrono::microseconds>(
                         std::chrono::steady_clock::now() - started).count() << '\n';
