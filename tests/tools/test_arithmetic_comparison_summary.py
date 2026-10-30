@@ -71,6 +71,12 @@ class ArithmeticComparisonSummary(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'wall budget overrun'):
             self.report([row])
 
+    def test_different_model_capture_protocols_cannot_be_combined(self):
+        first, second = self.row(), self.row(1)
+        second['model_capture'] = 'initial-solve'
+        with self.assertRaisesRegex(ValueError, 'mixed protocol.*model_capture'):
+            self.report([first, second])
+
     def test_invalid_exported_model_is_not_hidden_by_an_agreeing_verdict(self):
         row = self.row()
         row['observations']['candidate']['replay'] = dict(result='unsat')

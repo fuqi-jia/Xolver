@@ -1,0 +1,111 @@
+{
+  "schema": 1,
+  "status": "functional_qualification_passed",
+  "case": "original public GCD",
+  "programs": 1,
+  "complete_original_vcs": 9,
+  "original_c_sha256": "255cd902a923b5044acdbe6372652e0b422af3a5a723cc37355040e613a8b3a3",
+  "solver_sha256": "791960fb64631fe959933860938f9cfe101479098f5ccd40675ae290f784d69a",
+  "delivered_main": "ecf1e7c6fa8e074158a38d22e4eb255aeafc4007",
+  "canonical_final_check": {
+    "eos_run": "a5c27eaaecde",
+    "result": "passed",
+    "phase": "done",
+    "sha256": "24bf481db99bc55a770423f5ea8af0dbc31d60cf656188f237dd8df366070543"
+  },
+  "native_backend": {
+    "qualified": true,
+    "calls_across_generation_acceptance_final_refresh": 888,
+    "verdicts": {
+      "sat": 522,
+      "unsat": 366
+    },
+    "distinct_formulas": 70,
+    "independent_inventory_sha256": "72b85f28bd1666112c3a69e79a21d8486639881274fb744e258f5b0655c2c31f",
+    "independent_model_audit_sha256": "f24f42a692c7b2c8ec98f7c1c7b7f1abce72ad622187444bea65b1e94983fbe9"
+  },
+  "post_generation_external_smt_queries": 0,
+  "external_smt_discharged_vcs": 0,
+  "external_discharge_audit_qualified": false,
+  "qualification_audit_sha256": "21cdfa80b50dda59018ed2a074e06661d4a8ca04830baae3f7f03b0da82bba12",
+  "intermediate_development_failures_preserved": [
+    {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-native-r867/owner-entry-check-v3/native/launch.json",
+      "sha256": "32b74e062f7492cf5f27fbc9d9c3bca6fc39ee86a3c4d6549b76b21e008534c4",
+      "calls": 0,
+      "complete": false,
+      "returncode": 1
+    },
+    {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-native-r867/owner-entry-debug-v1/native/launch.json",
+      "sha256": "25fafbc0c3421c9f88725b69ec15e201406670f8ac116668a59147472417095c",
+      "calls": 0,
+      "complete": false,
+      "returncode": 1
+    },
+    {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-native-r867/owner-entry-development-v1/native/launch.json",
+      "sha256": "474dfae06fded7d684deae572b5447b2ff64afd98899b7bf9f97ff1feb5fcc88",
+      "calls": 0,
+      "complete": false,
+      "returncode": 1
+    },
+    {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-native-r867/owner-entry-development-v2/native/launch.json",
+      "sha256": "23579a487c20ed629a44240b53fcae2ff4da2cf6d3acfe8de24fe8c0b685e0be",
+      "calls": 0,
+      "complete": false,
+      "returncode": 1
+    },
+    {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-native-r867/owner-safety-check-initial/native/launch.json",
+      "sha256": "25f39140df04c41b8371874180b5c5e779bbd05b1bcfec3d8ee788bd3b7285e0",
+      "calls": 0,
+      "complete": false,
+      "returncode": 1
+    },
+    {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-native-r867/owner-safety-debug-initial/native/launch.json",
+      "sha256": "a8f43188fb27938b4a5d5fd4253b06fc2365ede2d681262d3a674de8217b1561",
+      "calls": 0,
+      "complete": false,
+      "returncode": 1
+    },
+    {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-native-r867/owner-safety-debug-state/native/launch.json",
+      "sha256": "31d07d65743c65f8f55b860d941f51911e1704ca0bdef675f4f51df7fdf94a8e",
+      "calls": 0,
+      "complete": false,
+      "returncode": 1
+    }
+  ],
+  "matched_z3_program_completed": true,
+  "fair_program_performance_comparison": false,
+  "protected_sets_used": false,
+  "boundary": "Both unchanged original GCD programs pass canonical final-check with 9 original VCs and 888 authenticated native calls per backend. Proof scripts and development schedules differ; diagnostic final-check timings do not establish a fair performance advantage. Number-theoretic VCs use checked Rocq proofs, not SMT discharge.",
+  "matched_original_goal_tokens": true,
+  "paired_qualification_audit_sha256": "193455a6425b492e230d4876689998ec09edb69b1267f68833771fc921736082",
+  "paired_qualification_eos_run": "cfaeadde7496",
+  "matched_z3": {
+    "solver_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+    "programs": 1,
+    "complete_original_vcs": 9,
+    "canonical_final_check": {
+      "eos_run": "e903903352b9",
+      "result": "passed",
+      "phase": "done",
+      "sha256": "ee8a883cd0720d112109dee19df2db8680efe7d0138b84aca81d93155e07ade6"
+    },
+    "native_backend": {
+      "qualified": true,
+      "calls_across_generation_acceptance_final_refresh": 888,
+      "verdicts": {
+        "sat": 522,
+        "unsat": 366
+      },
+      "distinct_formulas": 70
+    },
+    "post_generation_external_smt_queries": 0,
+    "external_smt_discharged_vcs": 0
+  }
+}

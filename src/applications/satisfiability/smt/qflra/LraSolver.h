@@ -155,17 +155,19 @@ private:
     // -------------------------------------------------------------------------
     LraPropagationEngine propagationEngine_;
 
-    struct AuxFormInfo {
+    struct ColumnForm {
         LinearFormKey lhs;
         mpq_class rhs;
     };
-    std::unordered_map<int, AuxFormInfo> auxFormInfo_;
+    std::unordered_map<int, ColumnForm> columnForms_;
 
     // Build a SOUND propagation clause (¬reason₁ ∨ ... ∨ impliedBound) carrying
     // the Farkas reasons, tagged Entailment. Safe to give the SAT solver during
     // search; the propagator verifies it is unit/falsified.
     std::optional<TheoryLemma> buildEntailmentLemma(
-        const LraPropagationEngine::ExplainedBound& eb) const;
+        const LraPropagationEngine::ExplainedBound& eb,
+        const std::vector<int8_t>& activeValues,
+        const std::unordered_set<uint64_t>& queuedConclusions);
 
     // Buffer of this check's entailment propagations.
     std::vector<TheoryLemma> entailmentProps_;

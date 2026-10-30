@@ -4,6 +4,7 @@
 #include "contracts/SatSolver.h"
 #include "search/lra/GeneralSimplex.h"
 #include <cstddef>
+#include <functional>
 #include <vector>
 
 namespace xolver {
@@ -41,18 +42,31 @@ public:
         std::size_t rowSnapshots = 0;
         std::size_t snapshotHits = 0;
         std::size_t termPairs = 0;
+        std::size_t unproductiveSnapshots = 0;
     };
+
+    // Return false when the consumer has enough conclusions. Consumer time is
+    // separate from the row arithmetic budget, as with post-scan processing.
+    // The bound is already included in the result; references are valid during the
+    // callback. Consumers must not mutate the simplex while it is scanned.
+    using BoundConsumer = std::function<bool(const ExplainedBound&)>;
 
     LraPropagationEngine() = default;
 
-    /** Derive all implied bounds reachable within budget.
+    /** Derive implied bounds until the budget or consumer stops the scan.
      *  Returns vector of newly-derived bounds (not yet asserted).
      */
     std::vector<ExplainedBound> propagateAll(
         const GeneralSimplex& gs,
         const PropagationBudget& budget = {512, 2048, 12, 20},
-        Statistics* statistics = nullptr);
+        Statistics* statistics = nullptr,
+        const BoundConsumer& consume = {});
 
+private:
+    // Scheduling hint only: no bounds, explanations or tableau identities
+    // survive a call. A bounded check resumes the circular row/side scan so
+    // that a large tableau's prefix cannot permanently starve its suffix.
+    std::size_t nextSeed_ = 0;
 };
 
 } // namespace xolver

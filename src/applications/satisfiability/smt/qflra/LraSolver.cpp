@@ -98,7 +98,7 @@ void LraSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
     // LRA bounds are rational; an algebraic RHS never arises from inputs.
     const mpq_class& rhs = payload.rhs.asRational();
     int auxVar = manager_.getOrCreateAuxVar(gs_, payload.lhs, rhs);
-    auxFormInfo_[auxVar] = {payload.lhs, rhs};
+    columnForms_[auxVar] = {payload.lhs, rhs};
     Relation effectiveRel = value ? payload.rel : negateRelation(payload.rel);
     bool isDiseq = (effectiveRel == Relation::Neq);
 
@@ -319,15 +319,32 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
         return TheoryCheckResult::unknown();
     }
 
-    // Lift explained row bounds to SAT as entailment clauses.
-    auto derived = propagationEngine_.propagateAll(gs_);
-    const int kMaxProps = 64;
-    for (const auto& eb : derived) {
-        if (static_cast<int>(entailmentProps_.size()) >= kMaxProps) break;
-        if (auto lem = buildEntailmentLemma(eb)) {
-            entailmentProps_.push_back(std::move(*lem));
-        }
-    }
+    // Lift explained row bounds as they arrive. Stop the producer when the
+    // SAT output budget is full instead of finishing hundreds of unused facts.
+    SatVar maximumVariable = 0;
+    for (const auto& entry : theoryTrail_) maximumVariable = std::max(maximumVariable, entry.lit.var);
+    std::vector<int8_t> activeValues(static_cast<size_t>(maximumVariable) + 1, 0);
+    for (const auto& entry : theoryTrail_) activeValues[entry.lit.var] = entry.lit.sign ? 1 : -1;
+    constexpr std::size_t kMaxProps = 64;
+    // Several stronger row endpoints may imply the same registered predicate.
+    // Count distinct signed conclusions against the output limit, without
+    // confusing a queued fact with an actual SAT assignment. This set is local
+    // to the check; the LIA pin scanner retains its own backtrack-epoch policy.
+    std::unordered_set<uint64_t> queuedConclusions;
+    queuedConclusions.reserve(kMaxProps);
+    propagationEngine_.propagateAll(gs_, {}, nullptr,
+        [&](const LraPropagationEngine::ExplainedBound& bound) {
+            // One interval endpoint can force several registered predicates,
+            // even when no later row produces another endpoint for this form.
+            while (entailmentProps_.size() < kMaxProps) {
+                auto lemma = buildEntailmentLemma(bound, activeValues, queuedConclusions);
+                if (!lemma) break;
+                const auto conclusion = lemma->lits.back();
+                queuedConclusions.insert((static_cast<uint64_t>(conclusion.var) << 1) | conclusion.sign);
+                entailmentProps_.push_back(std::move(*lemma));
+            }
+            return entailmentProps_.size() < kMaxProps;
+        });
     // Interface disequality vs. an entailed equality: if an asserted 2-var
     // equality atom or two complementary inequalities pin (x - y) to 0, then
     // x = y is entailed and an interface disequality x != y is a hard conflict
@@ -748,12 +765,21 @@ std::vector<SatLit> LraSolver::allActiveReasons() const {
 }
 
 std::optional<TheoryLemma> LraSolver::buildEntailmentLemma(
-    const LraPropagationEngine::ExplainedBound& eb) const {
+    const LraPropagationEngine::ExplainedBound& eb,
+    const std::vector<int8_t>& activeValues,
+    const std::unordered_set<uint64_t>& queuedConclusions) {
     if (!registry_ || eb.reasons.empty()) return std::nullopt;
-    auto it = auxFormInfo_.find(eb.var);
-    if (it == auxFormInfo_.end()) return std::nullopt;
+    auto it = columnForms_.find(eb.var);
+    if (it == columnForms_.end()) {
+        // Original columns have a single-variable form even when no active
+        // predicate has introduced an auxiliary row for that variable. Intern
+        // this immutable view once for the lifetime of the simplex column.
+        const auto name = manager_.getVarName(eb.var);
+        if (name.empty()) return std::nullopt;
+        it = columnForms_.emplace(eb.var, ColumnForm{LinearFormKey{{{name, 1}}}, 0}).first;
+    }
     const auto& info = it->second;
-    mpq_class boundRhs = info.rhs + eb.value.a;
+    const mpq_class boundRhs = info.rhs + eb.value.a;
 
     // Sound rational reconstruction of a delta-rational bound s ~ a + bδ
     // (δ a positive infinitesimal), translated to formValue = s + rhs:
@@ -778,9 +804,15 @@ std::optional<TheoryLemma> LraSolver::buildEntailmentLemma(
     // registered SAT vocabulary. Creating an atom for every intermediate
     // rational endpoint feeds fresh atoms back into propagation indefinitely.
     // Cut/split algorithms use the explicit registration interface separately.
-    const auto implied = registry_->findLinearLiteral(info.lhs, rel, boundRhs);
-    if (!implied || std::find(eb.reasons.begin(), eb.reasons.end(), *implied) != eb.reasons.end())
-        return std::nullopt;
+    const auto implied = registry_->findImpliedLinearLiteral(info.lhs, rel, boundRhs,
+        [&](SatLit literal) {
+            if (literal.var < activeValues.size() &&
+                activeValues[literal.var] == (literal.sign ? 1 : -1)) return false;
+            if (queuedConclusions.contains((static_cast<uint64_t>(literal.var) << 1) | literal.sign))
+                return false;
+            return std::find(eb.reasons.begin(), eb.reasons.end(), literal) == eb.reasons.end();
+        });
+    if (!implied) return std::nullopt;
 
     // Clause (¬reason₁ ∨ ... ∨ ¬reasonₖ ∨ implied): a theory tautology, since
     // the reasons Farkas-entail `implied`. Reasons are asserted-true literals,

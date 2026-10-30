@@ -72,15 +72,18 @@ struct RowAggregate {
 std::vector<LraPropagationEngine::ExplainedBound>
 LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
                                   const PropagationBudget& budget,
-                                  Statistics* statistics) {
+                                  Statistics* statistics,
+                                  const BoundConsumer& consume) {
     if (statistics) *statistics = {};
     std::vector<ExplainedBound> accepted;
     if (budget.maxDerivedBounds <= 0 || budget.maxIterations <= 0 ||
         budget.maxReasonSize < 0 || budget.maxTimeMs <= 0) return accepted;
     const auto started = std::chrono::steady_clock::now();
+    auto consumerTime = std::chrono::steady_clock::duration::zero();
+    bool consumerStopped = false;
     auto exhausted = [&] {
-        return static_cast<int>(accepted.size()) >= budget.maxDerivedBounds ||
-            std::chrono::steady_clock::now() - started >=
+        return consumerStopped || static_cast<int>(accepted.size()) >= budget.maxDerivedBounds ||
+            std::chrono::steady_clock::now() - started - consumerTime >=
                 std::chrono::milliseconds(budget.maxTimeMs);
     };
 
@@ -110,9 +113,14 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
         queued[basic][side] = true;
         work.push_back({basic, lower});
     };
-    for (int row = 0; row < gs.tableau().numRows(); ++row) {
-        const int basic = gs.tableau().row(row).basicVar;
-        if (basic >= 0) { enqueue(basic, true); enqueue(basic, false); }
+    const auto seedCount = 2 * static_cast<std::size_t>(gs.tableau().numRows());
+    if (seedCount != 0) {
+        auto seed = nextSeed_ % seedCount;
+        for (std::size_t count = 0; count < seedCount; ++count) {
+            const int basic = gs.tableau().row(static_cast<int>(seed / 2)).basicVar;
+            if (basic >= 0) enqueue(basic, seed % 2 == 0);
+            if (++seed == seedCount) seed = 0;
+        }
     }
 
     // The tableau is immutable during this call. Only updates to non-basic
@@ -123,6 +131,7 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
     struct RowSnapshot {
         int basic = -1;
         std::size_t revision = 0;
+        bool insufficientBounds = false;
         std::vector<std::array<Contribution, 2>> contributions;
         RowAggregate minimum, maximum;
     };
@@ -144,6 +153,11 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
         target.reasons = *reasons;
         target.explained = true;
         accepted.push_back({var, lower, value, std::move(*reasons)});
+        if (consume) {
+            const auto beforeConsumer = std::chrono::steady_clock::now();
+            consumerStopped = !consume(accepted.back());
+            consumerTime += std::chrono::steady_clock::now() - beforeConsumer;
+        }
         return true;
     };
 
@@ -155,6 +169,11 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
         ++iterations;
         const int rowIndex = gs.basicRowOfVar(item.basic);
         if (rowIndex < 0) continue;
+        // Advance before processing: all budget exits, including a bound-count
+        // limit reached mid-row, give the next direction an opportunity on the
+        // following check. The current call still uses its own local overlay.
+        nextSeed_ = 2 * static_cast<std::size_t>(rowIndex) + (item.lower ? 1 : 2);
+        if (nextSeed_ == seedCount) nextSeed_ = 0;
         const auto& row = gs.tableau().row(rowIndex);
 
         if (statistics) ++statistics->rowVisits;
@@ -163,19 +182,42 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
             snapshot->basic = item.basic;
             snapshot->revision = inputRevision;
             auto& contributions = snapshot->contributions;
-            contributions.reserve(row.entries.size());
             if (statistics) ++statistics->rowSnapshots;
+            // A forward bound needs every contribution; a backward bound can
+            // omit only its target. Two unavailable endpoints in EACH extremum
+            // rule out both directions, regardless of the basic variable's
+            // bounds. Detect that before doing rational arithmetic or building
+            // explanations. A new non-basic bound changes inputRevision and
+            // requeues incident rows, so this cannot hide a later deduction.
+            int missingMinimum = 0, missingMaximum = 0;
             for (const auto& entry : row.entries) {
                 if (exhausted()) return accepted;
+                if (entry.coeff == 0) continue;
                 const auto& variable = bounds[entry.col];
                 const size_t minSide = entry.coeff > 0 ? 0 : 1;
-                contributions.push_back({Contribution(variable[minSide], entry.coeff),
-                                         Contribution(variable[1 - minSide], entry.coeff)});
-                snapshot->minimum.add(contributions.back()[0]);
-                snapshot->maximum.add(contributions.back()[1]);
-                if (statistics) ++statistics->termPairs;
+                missingMinimum += !variable[minSide].usable();
+                missingMaximum += !variable[1 - minSide].usable();
+                if (missingMinimum > 1 && missingMaximum > 1) {
+                    snapshot->insufficientBounds = true;
+                    if (statistics) ++statistics->unproductiveSnapshots;
+                    break;
+                }
+            }
+            if (!snapshot->insufficientBounds) {
+                contributions.reserve(row.entries.size());
+                for (const auto& entry : row.entries) {
+                    if (exhausted()) return accepted;
+                    const auto& variable = bounds[entry.col];
+                    const size_t minSide = entry.coeff > 0 ? 0 : 1;
+                    contributions.push_back({Contribution(variable[minSide], entry.coeff),
+                                             Contribution(variable[1 - minSide], entry.coeff)});
+                    snapshot->minimum.add(contributions.back()[0]);
+                    snapshot->maximum.add(contributions.back()[1]);
+                    if (statistics) ++statistics->termPairs;
+                }
             }
         } else if (statistics) ++statistics->snapshotHits;
+        if (snapshot->insufficientBounds) continue;
         const auto& contributions = snapshot->contributions;
         const auto& minimum = snapshot->minimum;
         const auto& maximum = snapshot->maximum;

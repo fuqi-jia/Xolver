@@ -1,0 +1,541 @@
+{
+  "schema": 1,
+  "status": "server_qualified_ci_pending",
+  "native_core_source_head": "f095b3b24e7e4ed6aaa20983fa4de205e7d3a3ed",
+  "source_manifest_sha256": "cdc41b0f26e18f79d024de1c17b37b9fbd55b6f9c4d0c1cd4f78a757405316bd",
+  "binaries": {
+    "xolver": "a5719bd76d2b443abe58de3e8bd80b8904c834cef1050f4574a087f11068555b",
+    "xolver-sv": "fea5248af24d6e6f4194f56f96fdb718f6d441adc1255f0f0ed2c9d6ab8c8044"
+  },
+  "unit_cases": 1829,
+  "unit_assertions": 897855,
+  "targeted_cases": 45,
+  "targeted_assertions": 94132,
+  "acceptance_groups": 39,
+  "formal_cases": 160,
+  "timeout_seconds": 60,
+  "physical_cpus_per_case": 1,
+  "memory_gib": 16,
+  "model_capture": "initial-solve",
+  "counts": {
+    "baseline": {
+      "unsat": 46,
+      "decided": 100,
+      "verified_decided": 100,
+      "verified_par2": 7534.597547806799,
+      "raw_par2": 7534.597547806799,
+      "timeout": 59,
+      "sat": 54,
+      "unknown": 1
+    },
+    "candidate": {
+      "unsat": 46,
+      "decided": 100,
+      "verified_decided": 100,
+      "verified_par2": 7498.8595475405455,
+      "raw_par2": 7498.8595475405455,
+      "timeout": 59,
+      "sat": 54,
+      "unknown": 1
+    },
+    "z3": {
+      "unsat": 58,
+      "decided": 123,
+      "verified_decided": 116,
+      "verified_par2": 5550.552614955232,
+      "raw_par2": 4750.363510521129,
+      "sat": 65,
+      "timeout": 37
+    }
+  },
+  "changes": [],
+  "timing_changes": [
+    {
+      "index": 18,
+      "result": "unsat",
+      "baseline_seconds": 47.27410449460149,
+      "candidate_seconds": 48.49770603701472
+    },
+    {
+      "index": 59,
+      "result": "sat",
+      "baseline_seconds": 39.69211431965232,
+      "candidate_seconds": 2.82338759675622
+    },
+    {
+      "index": 100,
+      "result": "sat",
+      "baseline_seconds": 6.380901660770178,
+      "candidate_seconds": 8.0115079972893
+    },
+    {
+      "index": 133,
+      "result": "unsat",
+      "baseline_seconds": 3.574001517146826,
+      "candidate_seconds": 2.5215022787451744
+    }
+  ],
+  "unconfirmed_indices": [
+    12,
+    24,
+    27,
+    42,
+    80,
+    114,
+    159
+  ],
+  "model_evidence_boundaries": [
+    {
+      "index": 47,
+      "solver": "z3",
+      "result": "sat",
+      "replay": null,
+      "error": "expected SAT followed by exactly one model",
+      "input_sha256": "2c37069c8324458e8f3ad46cc6dbe0cc3a6c2f31012ed504123e660bfdf7aba4"
+    },
+    {
+      "index": 75,
+      "solver": "z3",
+      "result": "sat",
+      "replay": "error",
+      "error": null,
+      "input_sha256": "e27d26cd1b9a1f348a64b8f8c7bdb6f2a35f0bff0a003f449901e806bec17e37"
+    },
+    {
+      "index": 108,
+      "solver": "z3",
+      "result": "sat",
+      "replay": null,
+      "error": "expected SAT followed by exactly one model",
+      "input_sha256": "26d6012f717dec2f43e57be63e8638d1a13b6bc9cb5fcc963c08476793385786"
+    },
+    {
+      "index": 148,
+      "solver": "z3",
+      "result": "sat",
+      "replay": "error",
+      "error": null,
+      "input_sha256": "4f9ef64958113d079eca3adc2023c206c8bc2a42b7f02e6acb0f11ce0a2af4be"
+    }
+  ],
+  "model_setup_attempts": [
+    {
+      "index": 122,
+      "run": "2ae220e65d5f",
+      "record_sha256": "a930528f806ee173ee256c768cb1b8c447822c2f0bf160a483a0be461c8c7ae5",
+      "reason": "No SAT/model in this original timed Z3 observation; no checker was invoked and no solve is repeated."
+    }
+  ],
+  "audit_eos_run": "ea2b81d2d3b5",
+  "audit_sha256": "0a23a8de94503a1bd4773a4d09639850c0e924eaed7dbd47e55f9e9c8f3ead51",
+  "supplementary_truth": [
+    {
+      "index": 115,
+      "truth": "unsat",
+      "input_sha256": "02a58b11df8951543940a1090a140592e24de41dcaeb6470e7a50d42e804be64",
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r928/certificate-115/0.log",
+      "sha256": "823672e87696cac914fac33d8d0027db15a21b566e700a65300cdca704cf910e",
+      "boundary": "Fresh original-input checked modular certificate."
+    },
+    {
+      "index": 47,
+      "truth": "sat",
+      "input_sha256": "2c37069c8324458e8f3ad46cc6dbe0cc3a6c2f31012ed504123e660bfdf7aba4",
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/current-model-replay-r933/47/record.json",
+      "sha256": "1edd7d9d4b300bd426c257a5f0e110d8c70c3eb4e2a16f2b4ca4ef2473c71689",
+      "boundary": "Two identical models from original timed R927 output, positively replayed by both checkers; eligibility only, no timing replacement."
+    },
+    {
+      "index": 108,
+      "truth": "sat",
+      "input_sha256": "26d6012f717dec2f43e57be63e8638d1a13b6bc9cb5fcc963c08476793385786",
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/current-model-replay-r933/108/record.json",
+      "sha256": "e99e5db3ddb3136d2bac79c8ee374c87ed1c3032833e08ab6e2dba985e82bb99",
+      "boundary": "Two identical models from original timed R927 output, positively replayed by both checkers; eligibility only, no timing replacement."
+    },
+    {
+      "index": 50,
+      "truth": "unsat",
+      "input_sha256": "7e71a151d917978f1b5afc2791abf589e30c8ff97e930979df6ef82ad72dcdc0",
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/independent-truth-r761/case-050/record.json",
+      "sha256": "13a20b8e90bb8a8fff028fd665ee4ef661ae88e851766af64ed9b83ee255175c",
+      "boundary": "Existing independently checked 300s offline UNSAT; eligibility only, all original timed budgets stay 60s."
+    },
+    {
+      "index": 94,
+      "truth": "sat",
+      "input_sha256": "a6b68604187a341c570d8bd76135552ece1bbf958a1d7e9d4ff7f3eae998fd8f",
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/model-replay-r732/case-094/record.json",
+      "sha256": "251f695441367d616c3ee7b69b8f5bccce1df0b9322a47138f2804e032301a0a",
+      "boundary": "Existing independently checked ground witness; eligibility only, no old timing substitution."
+    }
+  ],
+  "invalid_original_triads": [],
+  "remaining_gaps": [
+    {
+      "index": 1,
+      "logic": "QF_LIA",
+      "family": "convert",
+      "input_sha256": "df42f9cdbe66be22d8b5f55d904ae308677681d21cf6ba13801a6c1bcc7d712b",
+      "member": "QF_LIA/convert/convert-jpg2gif-query-1470.smt2",
+      "xolver": "timeout",
+      "z3": "sat",
+      "z3_seconds": 0.7174139749258757,
+      "unconfirmed": false
+    },
+    {
+      "index": 12,
+      "logic": "QF_LIA",
+      "family": "fft",
+      "input_sha256": "e62aa48a7ec4ae656514927d79b4f34f7b05e187e4bf8eb43cb1eda0cdbc6a54",
+      "member": "QF_LIA/fft/Sz128_2823.smt2",
+      "xolver": "timeout",
+      "z3": "unsat",
+      "z3_seconds": 38.66294767521322,
+      "unconfirmed": true
+    },
+    {
+      "index": 13,
+      "logic": "QF_LIA",
+      "family": "tropical-matrix",
+      "input_sha256": "d9c546291b74c1b0021e19bff6aa4e9fbbb220fdcd253de67479375572f913f6",
+      "member": "QF_LIA/tropical-matrix/constraint-517804.smt2",
+      "xolver": "timeout",
+      "z3": "sat",
+      "z3_seconds": 0.8183946553617716,
+      "unconfirmed": false
+    },
+    {
+      "index": 24,
+      "logic": "QF_NIA",
+      "family": "LassoRanker",
+      "input_sha256": "68798a8ba5809648e09994276b2bc1fed413b743b8fce6d21d9de3a4865aa057",
+      "member": "QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+      "xolver": "timeout",
+      "z3": "unsat",
+      "z3_seconds": 0.46705247089266777,
+      "unconfirmed": true
+    },
+    {
+      "index": 27,
+      "logic": "QF_NIA",
+      "family": "20230328-sqrtmodinv-hoenicke",
+      "input_sha256": "4be4382761af8ae34ba468d292dedbbce60a1adbce104d03ebecaf9217d020d8",
+      "member": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+      "xolver": "timeout",
+      "z3": "unsat",
+      "z3_seconds": 0.06575251556932926,
+      "unconfirmed": true
+    },
+    {
+      "index": 29,
+      "logic": "QF_NIA",
+      "family": "UltimateLassoRanker",
+      "input_sha256": "0d5e3d04305e393bfd392b8652ba33f37220c4ff420054acffb70d61df5c89e7",
+      "member": "QF_NIA/UltimateLassoRanker/CookSeeZuleger-2013TACAS-Fig7a-alloca_true-termination.c.i_Iteration8_Lasso+nonterminationTemplate.smt2",
+      "xolver": "timeout",
+      "z3": "unsat",
+      "z3_seconds": 0.26687239669263363,
+      "unconfirmed": false
+    },
+    {
+      "index": 34,
+      "logic": "QF_NIA",
+      "family": "20210219-Dartagnan",
+      "input_sha256": "ecf140bb267be14f595da4be5a54940f0a71fc7e4348aaa027bff1d7166f1ec3",
+      "member": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/ps6-ll_valuebound5-O0.smt2",
+      "xolver": "timeout",
+      "z3": "unsat",
+      "z3_seconds": 0.9689454156905413,
+      "unconfirmed": false
+    },
+    {
+      "index": 42,
+      "logic": "QF_NIA",
+      "family": "20230328-sqrtmodinv-hoenicke",
+      "input_sha256": "a6848324353b5f5c15ba7135e0aad06acb838ac38e020c5e0cced695ece5e33a",
+      "member": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep2a.smt2",
+      "xolver": "timeout",
+      "z3": "unsat",
+      "z3_seconds": 0.06580581702291965,
+      "unconfirmed": true
+    },
+    {
+      "index": 47,
+      "logic": "QF_NIA",
+      "family": "20250331-elster",
+      "input_sha256": "2c37069c8324458e8f3ad46cc6dbe0cc3a6c2f31012ed504123e660bfdf7aba4",
+      "member": "QF_NIA/20250331-elster/D_2.smt2",
+      "xolver": "timeout",
+      "z3": "sat",
+      "z3_seconds": 17.20871545933187,
+      "unconfirmed": false
+    },
+    {
+      "index": 48,
+      "logic": "QF_LRA",
+      "family": "sal",
+      "input_sha256": "1db0853aaa0f355969a8b7e17778b10137081d30ee7f98e6ff8d94039a55b85b",
+      "member": "QF_LRA/sal/pursuit/pursuit-safety-20.smt2",
+      "xolver": "timeout",
+      "z3": "unsat",
+      "z3_seconds": 0.1159187275916338,
+      "unconfirmed": false
+    },
+    {
+      "index": 49,
+      "logic": "QF_LRA",
+      "family": "2019-ezsmt",
+      "input_sha256": "d4baea957f7fe792713edbaf3edc6769274ab0aafe5e86182d023e858037d615",
+      "member": "QF_LRA/2019-ezsmt/travellingSalesperson/rand_80_340_1159656267_16.lp.smt2",
+      "xolver": "timeout",
+      "z3": "sat",
+      "z3_seconds": 2.8748490288853645,
+      "unconfirmed": false
+    },
+    {
+      "index": 50,
+      "logic": "QF_LRA",
+      "family": "2017-Heizmann-UltimateInvariantSynthesis",
+      "input_sha256": "7e71a151d917978f1b5afc2791abf589e30c8ff97e930979df6ef82ad72dcdc0",
+      "member": "QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_jain_5.i_2_4_3.bpl_7.smt2",
+      "xolver": "timeout",
+      "z3": "unsat",
+      "z3_seconds": 56.81989844702184,
+      "unconfirmed": false
+    },
+    {
+      "index": 51,
+      "logic": "QF_LRA",
+      "family": "LassoRanker",
+      "input_sha256": "8fb5c2cfe016233a2f76c3d3b103066448f0f1d3faa1c9d9493c55c304d877cb",
+      "member": "QF_LRA/LassoRanker/CooperatingT2/ludcmp.c.i.ludcmp.pl.t2.fixed.t2.c_Iteration8_Loop_7-phaseTemplate.smt2",
+      "xolver": "timeout",
+      "z3": "sat",
+      "z3_seconds": 0.6676492765545845,
+      "unconfirmed": false
+    },
+    {
+      "index": 56,
+      "logic": "QF_LRA",
+      "family": "miplib",
+      "input_sha256": "49761967d8071fc4d32d82165bcd7ef4fcdfe436b7634da8d42a9be673087218",
+      "member": "QF_LRA/miplib/pp08a-3000.smt2",
+      "xolver": "timeout",
+      "z3": "unsat",
+      "z3_seconds": 4.375015737488866,
+      "unconfirmed": false
+    },
+    {
+      "index": 58,
+      "logic": "QF_LRA",
+      "family": "uart",
+      "input_sha256": "64f223bcde0c40ca731ab7443a27e55abf89d82d240cb58aed03a32ff50b15e8",
+      "member": "QF_LRA/uart/uart-26.base.cvc.smt2",
+      "xolver": "timeout",
+      "z3": "unsat",
+      "z3_seconds": 19.863928254693747,
+      "unconfirmed": false
+    },
+    {
+      "index": 69,
+      "logic": "QF_NRA",
+      "family": "LassoRanker",
+      "input_sha256": "72e580ee3a690b54865e129f44529a71d81112f35193cbc93775236ea62a0f13",
+      "member": "QF_NRA/LassoRanker/CooperatingT2/byron-2.t2.c_Iteration3_Loop_4-pieceTemplate.smt2",
+      "xolver": "timeout",
+      "z3": "sat",
+      "z3_seconds": 0.6170599926263094,
+      "unconfirmed": false
+    },
+    {
+      "index": 72,
+      "logic": "QF_NRA",
+      "family": "2019-ezsmt",
+      "input_sha256": "cc66abe5f5716404298fd97cb383e65487d9277ea2611ee41add8e324e7eb2c4",
+      "member": "QF_NRA/2019-ezsmt/reverseFolding/39-reverse_folding-0-0.smt2",
+      "xolver": "timeout",
+      "z3": "sat",
+      "z3_seconds": 10.84271801263094,
+      "unconfirmed": false
+    },
+    {
+      "index": 77,
+      "logic": "QF_NRA",
+      "family": "UltimateAutomizer",
+      "input_sha256": "7511fd4d07cdce648daf4ac76fc32c90af91cf9d9576d4e955a51d0dbd4534b7",
+      "member": "QF_NRA/UltimateAutomizer/InVarSynth_InvariantSynthesis_Disjunctive02.bpl_Iteration1_0.smt2",
+      "xolver": "timeout",
+      "z3": "sat",
+      "z3_seconds": 0.3665353413671255,
+      "unconfirmed": false
+    },
+    {
+      "index": 80,
+      "logic": "QF_LIA",
+      "family": "cut_lemmas",
+      "input_sha256": "1bcb3b052ef1f9ebe04cf76147f19dc54fb0678342d72b829a38a936c56959fe",
+      "member": "QF_LIA/cut_lemmas/20-vars/cut_lemma_03_004.smt2",
+      "xolver": "timeout",
+      "z3": "unsat",
+      "z3_seconds": 0.1666928566992283,
+      "unconfirmed": true
+    },
+    {
+      "index": 89,
+      "logic": "QF_LIA",
+      "family": "RWS",
+      "input_sha256": "5b983ea0194c5b7fcdee4a87c0de44da99828561d82d288a89fd99da128f4c5f",
+      "member": "QF_LIA/RWS/Example_16.txt.smt2",
+      "xolver": "timeout",
+      "z3": "sat",
+      "z3_seconds": 0.7679793573915958,
+      "unconfirmed": false
+    },
+    {
+      "index": 98,
+      "logic": "QF_LIA",
+      "family": "2019-cmodelsdiff",
+      "input_sha256": "41b0d2ff3be911992bc3a0d8996bb79b2daedd9e66d0b274081fcadeb9ecf27d",
+      "member": "QF_LIA/2019-cmodelsdiff/labyrinth/0003-labyrinth-11-0.smt2",
+      "xolver": "timeout",
+      "z3": "sat",
+      "z3_seconds": 6.13112879358232,
+      "unconfirmed": false
+    },
+    {
+      "index": 106,
+      "logic": "QF_NIA",
+      "family": "20170427-VeryMax",
+      "input_sha256": "c96b35bb3cae604115b99477562c4059c6e78ad16658f50d9dbb9ed8abad0a25",
+      "member": "QF_NIA/20170427-VeryMax/ITS/From_AProVE_2014__juLinkedListCreateAddAllAt.jar-obl-17__p9090_safety_0.smt2",
+      "xolver": "timeout",
+      "z3": "sat",
+      "z3_seconds": 0.7683183047920465,
+      "unconfirmed": false
+    },
+    {
+      "index": 108,
+      "logic": "QF_NIA",
+      "family": "20250331-elster",
+      "input_sha256": "26d6012f717dec2f43e57be63e8638d1a13b6bc9cb5fcc963c08476793385786",
+      "member": "QF_NIA/20250331-elster/B_2.smt2",
+      "xolver": "timeout",
+      "z3": "sat",
+      "z3_seconds": 4.879719700664282,
+      "unconfirmed": false
+    },
+    {
+      "index": 114,
+      "logic": "QF_NIA",
+      "family": "20210219-Dartagnan",
+      "input_sha256": "1aea29b746e949da62b784ed14b262444d87c36051a63e0aa197d313fd3f8d99",
+      "member": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+      "xolver": "timeout",
+      "z3": "unsat",
+      "z3_seconds": 0.06586611270904541,
+      "unconfirmed": true
+    },
+    {
+      "index": 116,
+      "logic": "QF_NIA",
+      "family": "AProVE",
+      "input_sha256": "f6e90d9f987771e1dd41731a7fedef9cb83d38cd6c3e8131ac254e47e5c57cdc",
+      "member": "QF_NIA/AProVE/aproveSMT5381466618694630101.smt2",
+      "xolver": "timeout",
+      "z3": "unsat",
+      "z3_seconds": 1.671663949266076,
+      "unconfirmed": false
+    },
+    {
+      "index": 128,
+      "logic": "QF_LRA",
+      "family": "uart",
+      "input_sha256": "718a1e36294547bf1605cbbbcc01dc2bbf4ae1682c8d30fc7f246f6f031d3bdf",
+      "member": "QF_LRA/uart/uart-19.base.cvc.smt2",
+      "xolver": "timeout",
+      "z3": "unsat",
+      "z3_seconds": 4.276671444997191,
+      "unconfirmed": false
+    },
+    {
+      "index": 129,
+      "logic": "QF_LRA",
+      "family": "LassoRanker",
+      "input_sha256": "a7dc84671c8b4907afe99c6e0156f36462f3a89a666b25926d92511f963fe476",
+      "member": "QF_LRA/LassoRanker/CooperatingT2/polyrank4.t2.c_Iteration8_Loop_4-pieceTemplate.smt2",
+      "xolver": "timeout",
+      "z3": "unsat",
+      "z3_seconds": 5.4781292248517275,
+      "unconfirmed": false
+    },
+    {
+      "index": 130,
+      "logic": "QF_LRA",
+      "family": "TM",
+      "input_sha256": "2606855399c6a9008140acb6c981d3f41d03194cab8075b68f2b198a20b2935a",
+      "member": "QF_LRA/TM/p-3-bucket_s10.smt2",
+      "xolver": "timeout",
+      "z3": "sat",
+      "z3_seconds": 5.1802260391414165,
+      "unconfirmed": false
+    },
+    {
+      "index": 131,
+      "logic": "QF_LRA",
+      "family": "sc",
+      "input_sha256": "8b660dc1debe27fe09a0eb3ca9e4e3833f075f89a66e71b90dfe102e250bc962",
+      "member": "QF_LRA/sc/sc-37.induction2.cvc.smt2",
+      "xolver": "timeout",
+      "z3": "sat",
+      "z3_seconds": 0.5171778295189142,
+      "unconfirmed": false
+    },
+    {
+      "index": 144,
+      "logic": "QF_NRA",
+      "family": "2019-ezsmt",
+      "input_sha256": "d26dd3ac7eb05e598a7b54fe02cb785ae7a85da7ceb1e5fcc95f2e4f8c852c1c",
+      "member": "QF_NRA/2019-ezsmt/reverseFolding/31-reverse_folding-0-0.smt2",
+      "xolver": "timeout",
+      "z3": "sat",
+      "z3_seconds": 7.683286625891924,
+      "unconfirmed": false
+    },
+    {
+      "index": 146,
+      "logic": "QF_NRA",
+      "family": "LassoRanker",
+      "input_sha256": "2e27203a3ec975510dab64d149ae5f2bd8de47c8128725d04985555880240dc1",
+      "member": "QF_NRA/LassoRanker/CooperatingT2/consts1.t2.c_Iteration1_Lasso_4-pieceTemplate.smt2",
+      "xolver": "timeout",
+      "z3": "sat",
+      "z3_seconds": 21.21701375581324,
+      "unconfirmed": false
+    },
+    {
+      "index": 149,
+      "logic": "QF_NRA",
+      "family": "UltimateAutomizer",
+      "input_sha256": "fa38407f1095afff71b84b3c7be9da57614d7cbdb6800672ef7d85a6dfc2412d",
+      "member": "QF_NRA/UltimateAutomizer/InVarSynth_agroce_minmax.c_Iteration2_0.smt2",
+      "xolver": "timeout",
+      "z3": "sat",
+      "z3_seconds": 0.1671401932835579,
+      "unconfirmed": false
+    },
+    {
+      "index": 159,
+      "logic": "QF_NRA",
+      "family": "20161105-Sturm-MGC",
+      "input_sha256": "3b3f35580e39c21659d09f507edd67f5c0d5271a2957125d9e99cca86db44033",
+      "member": "QF_NRA/20161105-Sturm-MGC/mgc_07.smt2",
+      "xolver": "timeout",
+      "z3": "unsat",
+      "z3_seconds": 0.3167781177908182,
+      "unconfirmed": true
+    }
+  ],
+  "protected_sets_used": false,
+  "boundary": "Every Xolver SAT model from the actual timed solve is positively replayed. Correct UNSAT decisions have independent judgments or the checked original115 certificate. Both Xolver versions verify100 results; no solve is gained or lost. Verified PAR-2 improves by about0.47 percent; original59 improves39.692s to2.823s. Same-round Z3 has116 verified/123 raw, with seven unconfirmed UNSATs excluded. Two current duplicated Z3 SAT models are independently replayed; two other Z3 model replays retain explicit error boundaries while their SAT decisions are confirmed by checked Xolver witnesses. This does not establish superiority over Z3, new QCP end-to-end coverage, or protected-set performance."
+}

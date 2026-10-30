@@ -1,0 +1,597 @@
+{
+  "schema": 1,
+  "status": "candidate_not_merged",
+  "source_head": "4492eef1b62728068c23f0729abbac1b13281737",
+  "source_manifest_sha256": "b621b67cba79956ac4d71380efb9604ca6588b485d21af617391ed3a59dab38e",
+  "binary_sha256": "913ba042967083b4e0af427dfbe87f8d62fa6ea5df96bf31ab422cb088297e39",
+  "unit_cases": 1824,
+  "unit_assertions": 883993,
+  "acceptance_groups": 39,
+  "formal_cases": 160,
+  "timeout_seconds": 60,
+  "physical_cpus_per_case": 1,
+  "memory_gib": 16,
+  "model_capture": "initial-solve",
+  "counts": {
+    "baseline": {
+      "unsat": 46,
+      "decided": 100,
+      "verified_decided": 100,
+      "verified_par2": 7539.6977802067995,
+      "raw_par2": 7539.6977802067995,
+      "timeout": 59,
+      "sat": 54,
+      "unknown": 1
+    },
+    "candidate": {
+      "unsat": 46,
+      "decided": 100,
+      "verified_decided": 100,
+      "verified_par2": 7521.056140106171,
+      "raw_par2": 7521.056140106171,
+      "timeout": 59,
+      "sat": 54,
+      "unknown": 1
+    },
+    "z3": {
+      "unsat": 58,
+      "decided": 124,
+      "verified_decided": 117,
+      "verified_par2": 5444.200508020818,
+      "raw_par2": 4645.464672354981,
+      "sat": 66,
+      "timeout": 36
+    }
+  },
+  "changes": [],
+  "timing_changes": [
+    {
+      "index": 4,
+      "result": "sat",
+      "baseline_seconds": 34.00070778094232,
+      "candidate_seconds": 35.90208197571337
+    },
+    {
+      "index": 7,
+      "result": "unsat",
+      "baseline_seconds": 18.96799959987402,
+      "candidate_seconds": 20.07172266021371
+    },
+    {
+      "index": 18,
+      "result": "unsat",
+      "baseline_seconds": 47.98499117232859,
+      "candidate_seconds": 50.05200549401343
+    },
+    {
+      "index": 52,
+      "result": "sat",
+      "baseline_seconds": 5.885290764272213,
+      "candidate_seconds": 4.476318810135126
+    },
+    {
+      "index": 59,
+      "result": "sat",
+      "baseline_seconds": 40.81248257122934,
+      "candidate_seconds": 18.31067486293614
+    },
+    {
+      "index": 97,
+      "result": "sat",
+      "baseline_seconds": 33.59406520240009,
+      "candidate_seconds": 35.60273747332394
+    }
+  ],
+  "unconfirmed_indices": [
+    12,
+    24,
+    27,
+    42,
+    80,
+    114,
+    159
+  ],
+  "invalid_original_triads": [
+    {
+      "index": 130,
+      "run": "bfa8a5506e93",
+      "report_sha256": "fba1002e7a67bbba4261a17e1e148896f77ed237d92581a32ef9ef37f346138d",
+      "protocol_errors": [
+        {
+          "label": "candidate",
+          "seconds": 614.5468947663903,
+          "launch_seconds": 0.0027861930429935455,
+          "wait_seconds": 614.5441085733473,
+          "returncode": -9,
+          "timeout_notified_seconds": 614.5251749623567,
+          "cleanup_seconds": 0.021719804033637047,
+          "timed_out": true,
+          "budget_overrun": true
+        }
+      ],
+      "terminal_status": "failed",
+      "ended_at": "2026-10-30T15:52:57+00:00"
+    },
+    {
+      "index": 131,
+      "run": "9df6e4b4bf51",
+      "report_sha256": "1fb1976c3f70b40914dcec9728a38e9b3ab6fcbe23605a656c94daab1768e0c1",
+      "protocol_errors": [
+        {
+          "label": "baseline",
+          "seconds": 613.8083253465593,
+          "launch_seconds": 0.002409687265753746,
+          "wait_seconds": 613.8059156592935,
+          "returncode": -9,
+          "timeout_notified_seconds": 613.8001103494316,
+          "cleanup_seconds": 0.008214997127652168,
+          "timed_out": true,
+          "budget_overrun": true
+        }
+      ],
+      "terminal_status": "failed",
+      "ended_at": "2026-10-30T15:52:57+00:00"
+    },
+    {
+      "index": 154,
+      "run": "bd3c51c236a1",
+      "report_sha256": "8a42a683383b26e9b351f508d24dc5310fa1c8115c40ad95c6bad2d91f6d2cfc",
+      "protocol_errors": [
+        {
+          "label": "candidate",
+          "seconds": 129.73299282602966,
+          "launch_seconds": 0.0029505304992198944,
+          "wait_seconds": 129.73004229553044,
+          "returncode": -9,
+          "timeout_notified_seconds": 129.72094378620386,
+          "cleanup_seconds": 0.012049039825797081,
+          "timed_out": true,
+          "budget_overrun": true
+        },
+        {
+          "label": "baseline",
+          "seconds": 70.32332802563906,
+          "launch_seconds": 0.0017078295350074768,
+          "wait_seconds": 70.32162019610405,
+          "returncode": -9,
+          "timeout_notified_seconds": 70.3132958188653,
+          "cleanup_seconds": 0.010032206773757935,
+          "timed_out": true,
+          "budget_overrun": true
+        }
+      ],
+      "terminal_status": "failed",
+      "ended_at": "2026-10-30T15:47:07+00:00"
+    }
+  ],
+  "audit_eos_run": "04b93b5dc224",
+  "audit_sha256": "92f3226f230622301e1462a51e619568af4eef71170b3e3b1dc45ec1cf7f75c5",
+  "supplementary_truth": [
+    {
+      "index": 115,
+      "truth": "unsat",
+      "input_sha256": "02a58b11df8951543940a1090a140592e24de41dcaeb6470e7a50d42e804be64",
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r904/certificate-115/0.log",
+      "sha256": "823672e87696cac914fac33d8d0027db15a21b566e700a65300cdca704cf910e",
+      "boundary": "Fresh original-input checked modular certificate."
+    },
+    {
+      "index": 47,
+      "truth": "sat",
+      "input_sha256": "2c37069c8324458e8f3ad46cc6dbe0cc3a6c2f31012ed504123e660bfdf7aba4",
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/initial-model-replay-r905/47/record.json",
+      "sha256": "7202d32594512557d85fcf1633baae5cf694ac00925b992f216b4f5ce3da5933",
+      "boundary": "Two identical models from original timed R894 output, positively replayed by both checkers; eligibility only, no timing replacement."
+    },
+    {
+      "index": 108,
+      "truth": "sat",
+      "input_sha256": "26d6012f717dec2f43e57be63e8638d1a13b6bc9cb5fcc963c08476793385786",
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/initial-model-replay-r905/108/record.json",
+      "sha256": "ad710a400b27bda716eb72f70c08fe850849a682f20b483ff7924cb54209fb0b",
+      "boundary": "Two identical models from original timed R894 output, positively replayed by both checkers; eligibility only, no timing replacement."
+    },
+    {
+      "index": 122,
+      "truth": "sat",
+      "input_sha256": "c88289f0453a6bbe098b4c5f092dfc50cd9e0ac21d799c6ccfc0a61b5a974389",
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/initial-model-replay-r905/122/record.json",
+      "sha256": "b19617c3cb1d53e6ec56ea91db523f855d377f8a798fe366c88ab5c165343f87",
+      "boundary": "Two identical models from original timed R894 output, positively replayed by both checkers; eligibility only, no timing replacement."
+    },
+    {
+      "index": 50,
+      "truth": "unsat",
+      "input_sha256": "7e71a151d917978f1b5afc2791abf589e30c8ff97e930979df6ef82ad72dcdc0",
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/independent-truth-r761/case-050/record.json",
+      "sha256": "13a20b8e90bb8a8fff028fd665ee4ef661ae88e851766af64ed9b83ee255175c",
+      "boundary": "Existing independently checked 300s offline UNSAT; eligibility only, all original timed budgets stay 60s."
+    },
+    {
+      "index": 94,
+      "truth": "sat",
+      "input_sha256": "a6b68604187a341c570d8bd76135552ece1bbf958a1d7e9d4ff7f3eae998fd8f",
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/model-replay-r732/case-094/record.json",
+      "sha256": "251f695441367d616c3ee7b69b8f5bccce1df0b9322a47138f2804e032301a0a",
+      "boundary": "Existing independently checked ground witness; eligibility only, no old timing substitution."
+    }
+  ],
+  "remaining_gaps": [
+    {
+      "index": 1,
+      "logic": "QF_LIA",
+      "family": "convert",
+      "input_sha256": "df42f9cdbe66be22d8b5f55d904ae308677681d21cf6ba13801a6c1bcc7d712b",
+      "member": "QF_LIA/convert/convert-jpg2gif-query-1470.smt2",
+      "xolver": "timeout",
+      "z3": "sat",
+      "z3_seconds": 0.7173666805028915,
+      "unconfirmed": false
+    },
+    {
+      "index": 12,
+      "logic": "QF_LIA",
+      "family": "fft",
+      "input_sha256": "e62aa48a7ec4ae656514927d79b4f34f7b05e187e4bf8eb43cb1eda0cdbc6a54",
+      "member": "QF_LIA/fft/Sz128_2823.smt2",
+      "xolver": "timeout",
+      "z3": "unsat",
+      "z3_seconds": 39.91293512284756,
+      "unconfirmed": true
+    },
+    {
+      "index": 13,
+      "logic": "QF_LIA",
+      "family": "tropical-matrix",
+      "input_sha256": "d9c546291b74c1b0021e19bff6aa4e9fbbb220fdcd253de67479375572f913f6",
+      "member": "QF_LIA/tropical-matrix/constraint-517804.smt2",
+      "xolver": "timeout",
+      "z3": "sat",
+      "z3_seconds": 0.7676341626793146,
+      "unconfirmed": false
+    },
+    {
+      "index": 24,
+      "logic": "QF_NIA",
+      "family": "LassoRanker",
+      "input_sha256": "68798a8ba5809648e09994276b2bc1fed413b743b8fce6d21d9de3a4865aa057",
+      "member": "QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+      "xolver": "timeout",
+      "z3": "unsat",
+      "z3_seconds": 0.46715153753757477,
+      "unconfirmed": true
+    },
+    {
+      "index": 27,
+      "logic": "QF_NIA",
+      "family": "20230328-sqrtmodinv-hoenicke",
+      "input_sha256": "4be4382761af8ae34ba468d292dedbbce60a1adbce104d03ebecaf9217d020d8",
+      "member": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+      "xolver": "timeout",
+      "z3": "unsat",
+      "z3_seconds": 0.06631315499544144,
+      "unconfirmed": true
+    },
+    {
+      "index": 29,
+      "logic": "QF_NIA",
+      "family": "UltimateLassoRanker",
+      "input_sha256": "0d5e3d04305e393bfd392b8652ba33f37220c4ff420054acffb70d61df5c89e7",
+      "member": "QF_NIA/UltimateLassoRanker/CookSeeZuleger-2013TACAS-Fig7a-alloca_true-termination.c.i_Iteration8_Lasso+nonterminationTemplate.smt2",
+      "xolver": "timeout",
+      "z3": "unsat",
+      "z3_seconds": 0.26671343483030796,
+      "unconfirmed": false
+    },
+    {
+      "index": 34,
+      "logic": "QF_NIA",
+      "family": "20210219-Dartagnan",
+      "input_sha256": "ecf140bb267be14f595da4be5a54940f0a71fc7e4348aaa027bff1d7166f1ec3",
+      "member": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/ps6-ll_valuebound5-O0.smt2",
+      "xolver": "timeout",
+      "z3": "unsat",
+      "z3_seconds": 0.968328570947051,
+      "unconfirmed": false
+    },
+    {
+      "index": 42,
+      "logic": "QF_NIA",
+      "family": "20230328-sqrtmodinv-hoenicke",
+      "input_sha256": "a6848324353b5f5c15ba7135e0aad06acb838ac38e020c5e0cced695ece5e33a",
+      "member": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep2a.smt2",
+      "xolver": "timeout",
+      "z3": "unsat",
+      "z3_seconds": 0.06575215235352516,
+      "unconfirmed": true
+    },
+    {
+      "index": 47,
+      "logic": "QF_NIA",
+      "family": "20250331-elster",
+      "input_sha256": "2c37069c8324458e8f3ad46cc6dbe0cc3a6c2f31012ed504123e660bfdf7aba4",
+      "member": "QF_NIA/20250331-elster/D_2.smt2",
+      "xolver": "timeout",
+      "z3": "sat",
+      "z3_seconds": 16.315104003995657,
+      "unconfirmed": false
+    },
+    {
+      "index": 48,
+      "logic": "QF_LRA",
+      "family": "sal",
+      "input_sha256": "1db0853aaa0f355969a8b7e17778b10137081d30ee7f98e6ff8d94039a55b85b",
+      "member": "QF_LRA/sal/pursuit/pursuit-safety-20.smt2",
+      "xolver": "timeout",
+      "z3": "unsat",
+      "z3_seconds": 0.11595897935330868,
+      "unconfirmed": false
+    },
+    {
+      "index": 49,
+      "logic": "QF_LRA",
+      "family": "2019-ezsmt",
+      "input_sha256": "d4baea957f7fe792713edbaf3edc6769274ab0aafe5e86182d023e858037d615",
+      "member": "QF_LRA/2019-ezsmt/travellingSalesperson/rand_80_340_1159656267_16.lp.smt2",
+      "xolver": "timeout",
+      "z3": "sat",
+      "z3_seconds": 1.6699831951409578,
+      "unconfirmed": false
+    },
+    {
+      "index": 50,
+      "logic": "QF_LRA",
+      "family": "2017-Heizmann-UltimateInvariantSynthesis",
+      "input_sha256": "7e71a151d917978f1b5afc2791abf589e30c8ff97e930979df6ef82ad72dcdc0",
+      "member": "QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_jain_5.i_2_4_3.bpl_7.smt2",
+      "xolver": "timeout",
+      "z3": "unsat",
+      "z3_seconds": 53.56378669291735,
+      "unconfirmed": false
+    },
+    {
+      "index": 51,
+      "logic": "QF_LRA",
+      "family": "LassoRanker",
+      "input_sha256": "8fb5c2cfe016233a2f76c3d3b103066448f0f1d3faa1c9d9493c55c304d877cb",
+      "member": "QF_LRA/LassoRanker/CooperatingT2/ludcmp.c.i.ludcmp.pl.t2.fixed.t2.c_Iteration8_Loop_7-phaseTemplate.smt2",
+      "xolver": "timeout",
+      "z3": "sat",
+      "z3_seconds": 0.6676597855985165,
+      "unconfirmed": false
+    },
+    {
+      "index": 56,
+      "logic": "QF_LRA",
+      "family": "miplib",
+      "input_sha256": "49761967d8071fc4d32d82165bcd7ef4fcdfe436b7634da8d42a9be673087218",
+      "member": "QF_LRA/miplib/pp08a-3000.smt2",
+      "xolver": "timeout",
+      "z3": "unsat",
+      "z3_seconds": 4.228418678045273,
+      "unconfirmed": false
+    },
+    {
+      "index": 58,
+      "logic": "QF_LRA",
+      "family": "uart",
+      "input_sha256": "64f223bcde0c40ca731ab7443a27e55abf89d82d240cb58aed03a32ff50b15e8",
+      "member": "QF_LRA/uart/uart-26.base.cvc.smt2",
+      "xolver": "timeout",
+      "z3": "unsat",
+      "z3_seconds": 20.466877890750766,
+      "unconfirmed": false
+    },
+    {
+      "index": 69,
+      "logic": "QF_NRA",
+      "family": "LassoRanker",
+      "input_sha256": "72e580ee3a690b54865e129f44529a71d81112f35193cbc93775236ea62a0f13",
+      "member": "QF_NRA/LassoRanker/CooperatingT2/byron-2.t2.c_Iteration3_Loop_4-pieceTemplate.smt2",
+      "xolver": "timeout",
+      "z3": "sat",
+      "z3_seconds": 0.6676891893148422,
+      "unconfirmed": false
+    },
+    {
+      "index": 72,
+      "logic": "QF_NRA",
+      "family": "2019-ezsmt",
+      "input_sha256": "cc66abe5f5716404298fd97cb383e65487d9277ea2611ee41add8e324e7eb2c4",
+      "member": "QF_NRA/2019-ezsmt/reverseFolding/39-reverse_folding-0-0.smt2",
+      "xolver": "timeout",
+      "z3": "sat",
+      "z3_seconds": 9.590298308059573,
+      "unconfirmed": false
+    },
+    {
+      "index": 77,
+      "logic": "QF_NRA",
+      "family": "UltimateAutomizer",
+      "input_sha256": "7511fd4d07cdce648daf4ac76fc32c90af91cf9d9576d4e955a51d0dbd4534b7",
+      "member": "QF_NRA/UltimateAutomizer/InVarSynth_InvariantSynthesis_Disjunctive02.bpl_Iteration1_0.smt2",
+      "xolver": "timeout",
+      "z3": "sat",
+      "z3_seconds": 0.3667803518474102,
+      "unconfirmed": false
+    },
+    {
+      "index": 80,
+      "logic": "QF_LIA",
+      "family": "cut_lemmas",
+      "input_sha256": "1bcb3b052ef1f9ebe04cf76147f19dc54fb0678342d72b829a38a936c56959fe",
+      "member": "QF_LIA/cut_lemmas/20-vars/cut_lemma_03_004.smt2",
+      "xolver": "timeout",
+      "z3": "unsat",
+      "z3_seconds": 0.1668309085071087,
+      "unconfirmed": true
+    },
+    {
+      "index": 89,
+      "logic": "QF_LIA",
+      "family": "RWS",
+      "input_sha256": "5b983ea0194c5b7fcdee4a87c0de44da99828561d82d288a89fd99da128f4c5f",
+      "member": "QF_LIA/RWS/Example_16.txt.smt2",
+      "xolver": "timeout",
+      "z3": "sat",
+      "z3_seconds": 0.8180409725755453,
+      "unconfirmed": false
+    },
+    {
+      "index": 98,
+      "logic": "QF_LIA",
+      "family": "2019-cmodelsdiff",
+      "input_sha256": "41b0d2ff3be911992bc3a0d8996bb79b2daedd9e66d0b274081fcadeb9ecf27d",
+      "member": "QF_LIA/2019-cmodelsdiff/labyrinth/0003-labyrinth-11-0.smt2",
+      "xolver": "timeout",
+      "z3": "sat",
+      "z3_seconds": 6.532544199377298,
+      "unconfirmed": false
+    },
+    {
+      "index": 106,
+      "logic": "QF_NIA",
+      "family": "20170427-VeryMax",
+      "input_sha256": "c96b35bb3cae604115b99477562c4059c6e78ad16658f50d9dbb9ed8abad0a25",
+      "member": "QF_NIA/20170427-VeryMax/ITS/From_AProVE_2014__juLinkedListCreateAddAllAt.jar-obl-17__p9090_safety_0.smt2",
+      "xolver": "timeout",
+      "z3": "sat",
+      "z3_seconds": 0.7180042676627636,
+      "unconfirmed": false
+    },
+    {
+      "index": 108,
+      "logic": "QF_NIA",
+      "family": "20250331-elster",
+      "input_sha256": "26d6012f717dec2f43e57be63e8638d1a13b6bc9cb5fcc963c08476793385786",
+      "member": "QF_NIA/20250331-elster/B_2.smt2",
+      "xolver": "timeout",
+      "z3": "sat",
+      "z3_seconds": 4.526220243424177,
+      "unconfirmed": false
+    },
+    {
+      "index": 114,
+      "logic": "QF_NIA",
+      "family": "20210219-Dartagnan",
+      "input_sha256": "1aea29b746e949da62b784ed14b262444d87c36051a63e0aa197d313fd3f8d99",
+      "member": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+      "xolver": "timeout",
+      "z3": "unsat",
+      "z3_seconds": 0.06653003208339214,
+      "unconfirmed": true
+    },
+    {
+      "index": 116,
+      "logic": "QF_NIA",
+      "family": "AProVE",
+      "input_sha256": "f6e90d9f987771e1dd41731a7fedef9cb83d38cd6c3e8131ac254e47e5c57cdc",
+      "member": "QF_NIA/AProVE/aproveSMT5381466618694630101.smt2",
+      "xolver": "timeout",
+      "z3": "unsat",
+      "z3_seconds": 1.7854290511459112,
+      "unconfirmed": false
+    },
+    {
+      "index": 122,
+      "logic": "QF_NIA",
+      "family": "20250331-elster",
+      "input_sha256": "c88289f0453a6bbe098b4c5f092dfc50cd9e0ac21d799c6ccfc0a61b5a974389",
+      "member": "QF_NIA/20250331-elster/D_1.smt2",
+      "xolver": "timeout",
+      "z3": "sat",
+      "z3_seconds": 18.078435000032187,
+      "unconfirmed": false
+    },
+    {
+      "index": 128,
+      "logic": "QF_LRA",
+      "family": "uart",
+      "input_sha256": "718a1e36294547bf1605cbbbcc01dc2bbf4ae1682c8d30fc7f246f6f031d3bdf",
+      "member": "QF_LRA/uart/uart-19.base.cvc.smt2",
+      "xolver": "timeout",
+      "z3": "unsat",
+      "z3_seconds": 4.37610393203795,
+      "unconfirmed": false
+    },
+    {
+      "index": 129,
+      "logic": "QF_LRA",
+      "family": "LassoRanker",
+      "input_sha256": "a7dc84671c8b4907afe99c6e0156f36462f3a89a666b25926d92511f963fe476",
+      "member": "QF_LRA/LassoRanker/CooperatingT2/polyrank4.t2.c_Iteration8_Loop_4-pieceTemplate.smt2",
+      "xolver": "timeout",
+      "z3": "unsat",
+      "z3_seconds": 5.42505794391036,
+      "unconfirmed": false
+    },
+    {
+      "index": 130,
+      "logic": "QF_LRA",
+      "family": "TM",
+      "input_sha256": "2606855399c6a9008140acb6c981d3f41d03194cab8075b68f2b198a20b2935a",
+      "member": "QF_LRA/TM/p-3-bucket_s10.smt2",
+      "xolver": "timeout",
+      "z3": "sat",
+      "z3_seconds": 5.23106237873435,
+      "unconfirmed": false
+    },
+    {
+      "index": 131,
+      "logic": "QF_LRA",
+      "family": "sc",
+      "input_sha256": "8b660dc1debe27fe09a0eb3ca9e4e3833f075f89a66e71b90dfe102e250bc962",
+      "member": "QF_LRA/sc/sc-37.induction2.cvc.smt2",
+      "xolver": "timeout",
+      "z3": "sat",
+      "z3_seconds": 0.4671105891466141,
+      "unconfirmed": false
+    },
+    {
+      "index": 144,
+      "logic": "QF_NRA",
+      "family": "2019-ezsmt",
+      "input_sha256": "d26dd3ac7eb05e598a7b54fe02cb785ae7a85da7ceb1e5fcc95f2e4f8c852c1c",
+      "member": "QF_NRA/2019-ezsmt/reverseFolding/31-reverse_folding-0-0.smt2",
+      "xolver": "timeout",
+      "z3": "sat",
+      "z3_seconds": 8.085053311660886,
+      "unconfirmed": false
+    },
+    {
+      "index": 146,
+      "logic": "QF_NRA",
+      "family": "LassoRanker",
+      "input_sha256": "2e27203a3ec975510dab64d149ae5f2bd8de47c8128725d04985555880240dc1",
+      "member": "QF_NRA/LassoRanker/CooperatingT2/consts1.t2.c_Iteration1_Lasso_4-pieceTemplate.smt2",
+      "xolver": "timeout",
+      "z3": "sat",
+      "z3_seconds": 21.488925617188215,
+      "unconfirmed": false
+    },
+    {
+      "index": 149,
+      "logic": "QF_NRA",
+      "family": "UltimateAutomizer",
+      "input_sha256": "fa38407f1095afff71b84b3c7be9da57614d7cbdb6800672ef7d85a6dfc2412d",
+      "member": "QF_NRA/UltimateAutomizer/InVarSynth_agroce_minmax.c_Iteration2_0.smt2",
+      "xolver": "timeout",
+      "z3": "sat",
+      "z3_seconds": 0.1666092798113823,
+      "unconfirmed": false
+    },
+    {
+      "index": 159,
+      "logic": "QF_NRA",
+      "family": "20161105-Sturm-MGC",
+      "input_sha256": "3b3f35580e39c21659d09f507edd67f5c0d5271a2957125d9e99cca86db44033",
+      "member": "QF_NRA/20161105-Sturm-MGC/mgc_07.smt2",
+      "xolver": "timeout",
+      "z3": "unsat",
+      "z3_seconds": 0.5186514258384705,
+      "unconfirmed": true
+    }
+  ],
+  "protected_sets_used": false,
+  "boundary": "The streamed projection candidate verifies 100 results, matching delivered main; verified PAR-2 improves by about 0.25 percent in this round. This does not materially close the solved-count gap or establish superiority over Z3. Later producer-accounting and unavailable-extrema candidates are distinct native versions."
+}

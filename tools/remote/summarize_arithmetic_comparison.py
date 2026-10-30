@@ -19,6 +19,8 @@ def summarize(directory, expected_cases):
         for key in ('binaries', 'manifest_sha256', 'timeout', 'memory_bytes'):
             if row[key] != first[key]:
                 raise ValueError('mixed protocol or frozen versions: ' + key)
+        if row.get('model_capture') != first.get('model_capture'):
+            raise ValueError('mixed protocol or frozen versions: model_capture')
         if len({o['cpu'] for o in row['observations'].values()}) != 1:
             raise ValueError('versions did not share one CPU: ' + str(row['index']))
         if row.get('protocol_errors'):
@@ -81,7 +83,8 @@ def summarize(directory, expected_cases):
                               for name, o in observations.items()}))
     return dict(cases=len(reports), binaries=first['binaries'],
                 manifest_sha256=first['manifest_sha256'], timeout=first['timeout'],
-                memory_bytes=first['memory_bytes'], counts=counts, by_logic=by_logic,
+                memory_bytes=first['memory_bytes'], model_capture=first.get('model_capture'),
+                counts=counts, by_logic=by_logic,
                 changes=comparisons, wrong_verdicts=sorted(set(wrong)),
                 invalid_exported_models=invalid_models, unverified=unverified,
                 scoring='Correct verdicts require a replayed model or an independent UNSAT decision on the identical input hash; unresolved results receive PAR-2 penalty.')

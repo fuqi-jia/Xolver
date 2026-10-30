@@ -40,15 +40,15 @@ Older tables describe their own frozen versions and evidence boundaries.
 
 ## Current arithmetic and ASP continuation
 
-The latest arithmetic candidate is
+The latest delivered arithmetic stage is
 [shared polynomial linear relaxation](#shared-polynomial-linear-relaxation-r857r865):
 **100/160**, versus **118 verified /125 raw** same-round Z3 decisions.
-[PR78](https://github.com/fuqi-jia/Xolver/pull/78) has passed full Panda1 acceptance
-and the frozen comparison; final exact-head PR CI remains required before merging.
-Delivered main is PR77`0f4acd1c`, qualified at99 in its own fresh round; both
-[PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/41043796717) and fresh
-[main CI](https://github.com/fuqi-jia/Xolver/actions/runs/41047671267) are fully green.
-Earlier rounds retain their own frozen versions and evidence boundaries.
+[PR78](https://github.com/fuqi-jia/Xolver/pull/78) is merged as main
+`ecf1e7c6fa8e074158a38d22e4eb255aeafc4007`. Both exact-head
+[PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/41050990683) and fresh
+[main CI](https://github.com/fuqi-jia/Xolver/actions/runs/41055517535) are fully green.
+The preceding delivered main verifies99 in this fresh round. Earlier rounds
+retain their own frozen versions and evidence boundaries.
 
 The retained branches are `main`, `feat/qcp-foundations` (QCP and solver
 foundations), and `feat/draco-asp`. Historical branch tips are archived in
@@ -2589,8 +2589,256 @@ Audit EOS`75b6e7ad28a3` binds sources, native targets, original failures, all
 160 timed triads, physical leases and unchanged-input supplementary truth.
 The [stage receipt](POLYNOMIAL_LINEAR_REFUTATION_STAGE_20261030.json) records
 full results. Receipt-only changes after the qualified core do not create a
-new native solver version. PR78 remains unmerged until final-head PR CI passes;
-its resulting main CI must then be checked. Both protected sets remain unused.
-The complete new-core original GCD workflow is starting separately; no new
-whole-program QCP result or overall superiority is claimed here. No additional
-current-main server archive is required.
+new native solver version. PR78 is merged as`ecf1e7c6`; both final-head PR CI`41050990683`
+and fresh main CI`41055517535` are fully green. Both protected sets remain unused.
+The original GCD workflow below completes with this frozen core, and the
+matched Z3 workflow also passes. Overall superiority remains unestablished. No
+additional current-main server archive is required.
+
+
+## Existing numeric predicate projection (R868–R873, candidate)
+
+R870 diagnostic counters reject an unchanged-state propagation cache: original
+48/51/131 complete4,344/1,479/2,505 propagation calls with0/0/1 repeated analysis
+states. Propagation consumes about32.4/12.6/41.3s in these instrumented60s runs.
+The first R869 observation omitted verbose output and collected no counters; it
+is inconclusive and is not a benchmark result. No propagation result cache is introduced.
+
+R872 identifies a different loss of information. Of1,877,665/233,327/427,474
+attempted bound projections, only186,932/12,714/50,231 find an existing literal.
+Original columns lack auxiliary-form metadata, and exact endpoint lookup drops
+stronger facts such as`x<=2` when only`x<=3` is registered. These diagnostic
+timings and counts are excluded from formal scores.
+
+The candidate adds shared ordered projection onto existing linear predicates,
+including both inequality polarities and equality points excluded by a proved
+interval. LRA also maps original columns to single-variable forms and skips
+already asserted conclusions. Queries never create atoms. Exact identity lookup
+retains its distinct registration/introspection contract. New checks compare
+rational half-line implication against all truth regions, including130-bit
+endpoints, and exercise original-column propagation and backtracking. Exact
+infinitesimal reconstruction and the existing LIA/LRA policies are unchanged.
+R873 now qualifies frozen CLI SHA-256
+`e151a159f220860e3579043ead7e8b121e9c497b652144316e87aff06df7ca9a`.
+It passes36 targeted cases/79,402 assertions, all1,820 unit cases/883,125
+assertions, LRA/LIA regressions,202 independent linear cases/102 models,
+69 tool/parser tests and the QCP regression group. R874/R880 freshly compare all
+ten remaining QF_LRA development gaps: both delivered main and candidate time
+out on all ten. No wrong verdict or formal-budget violation occurs. This
+standalone performance experiment has no added solve and is not merged; these
+ten cases do not establish a full160 score or exclude regressions elsewhere.
+
+The new-core original GCD workflow`native_gcd_xolver_r864-20261030194758` uses
+frozen791960... throughout actual native calls. Annotation and independent VC
+checking, all three groups, complete parent verification, final publication and
+fresh final-check pass. EOS`a5c27eaaecde` returns `passed/done`; the entire
+original C and frozen contracts remain unchanged. The independent R879 audit
+authenticates1 program/9 complete original VCs and888 actual native calls across
+generation/acceptance/final refresh:522 SAT/366 UNSAT over70 distinct formulas.
+All formulas match prior independently checked truth. Failed intermediate Rocq
+development checks remain recorded; they have no native SMT session and do not
+replace the successful canonical checks. GCD identities use checked Rocq
+mathematics, with0 post-generation external SMT discharge queries. The generic
+audit's stricter external-discharge qualification remains false. See
+[the functional receipt](GCD_NATIVE_PROGRAM_QUALIFICATION_20261030.json).
+The matched Z3 run now also passes all groups, parent checking, publication and
+fresh final-check (EOS`e903903352b9`, passed/done). R902 independently
+authenticates both final checks, identical original goal token streams and all
+888 native calls per backend, including each actual solver command and output
+hash. Both backends verify1 original program/9 original VCs. Proof scripts and
+development schedules differ, so final-check diagnostics are not a fair timing
+comparison. No coverage or timing advantage is claimed. Both protected sets
+remain untouched.
+
+
+## Bounded linear propagation scheduling (R881–R882, candidate)
+
+`LraSolver::stageCore -> LraPropagationEngine::propagateAll` previously seeded
+every check from row0. The2,048-direction limit can inspect at most the first
+1,024 rows before pending seeds, even on a tableau such as original51 with5,854
+rows. R870 measures2,962,632 row visits across1,479 calls, near that limit.
+Recomputing new states does not give the remaining rows a scheduling opportunity.
+
+The unchanged R873 library reproduces starvation in R881:13 independent rows
+have26 explained bound directions, but52 bounded calls discover only1. The
+new candidate rotates the row/side seed across calls. Only the scheduling
+position survives; values, explanations, snapshots and incident-row work remain
+local, and every original budget is unchanged. New tests cover both iteration
+and derived-bound limits, a different smaller tableau, strict rational bounds
+and rollback. R882 qualifies core`b1a8c185`, CLI SHA-256
+`4267fa39c09ea30e8e2402f32413f8e92e123645c2e29dde32c0927958037467`.
+It passes38 targeted cases/80,173 assertions, all1,822 unit cases/883,896
+assertions and the six initial regression/tool/model/QCP groups. R884/R887
+cover the same ten LRA gaps. Original51 changes from timeout to42.952s SAT;
+the other nine remain timeouts. Xolver's subsequent model attempts time out,
+including the unchanged-input CLI model attempt R886, and remain recorded.
+
+The unchanged aggregate verifier confirms the51 SAT decision with Z3's exported
+model positively replayed in cvc5 on the identical input hash. This is1 correctly
+decided pilot gain, not a checked Xolver model or a new full160 score. A per-solver
+`verified=false` records missing local evidence; it must not be conflated with
+absence of independently checked truth. An exported invalid model still fails
+even if another solver establishes SAT.
+
+R891 independently checks the existing native output flags for both Xolver
+versions and Z3 on SAT/UNSAT fixtures, with positive independent SAT model replays.
+The comparison harness now captures the model from the actual initial timed
+decision for every solver. It no longer repeats a successful SAT search on a
+rewritten model query. Model output remains within the common60s/16GiB budget;
+independent replays remain separate checks. The aggregate rejects mixed model
+capture protocols. A fresh full comparison must use the new protocol uniformly;
+the old pilot timings are not substituted into that round.
+
+R890 also rejects an all-assigned propagation shortcut: none of the measured
+48/51/131 calls has every linear predicate assigned. No-output propagation costs
+only about0.61/4.55/1.23s in those private runs, so that observation does not
+justify a large general speedup. These diagnostics remain outside formal scores.
+
+## Consumer-bounded linear propagation (R899–R900, candidate)
+
+The uniform first-model round R894/R895 completes all160 valid frozen triads
+without opposite verdicts, invalid exported models or protocol errors. The
+rotating candidate gains original51 (60.019s timeout to36.639s SAT, with its
+actual initial model positively replayed in Z3), but loses original59
+(43.132s SAT to60.011s timeout). Both versions make100 raw decisions. Inline
+independent evidence confirms99 each; original115 still needs its separately
+checked modular certificate attached to this round. Inline verified PAR-2 is
+7656.188 versus7655.901, effectively unchanged. This candidate has no net gain
+and must not be merged on the pilot result alone. Z3 has124 raw decisions;
+unconfirmed results and supplementary truth remain explicit rather than silently
+counted. Original valid timings are immutable.
+
+R899 links an observational LRA translation unit against the unchanged R882
+core. R900 finishes three60s diagnostics with no opposite verdict. Its final
+periodic sample for59 has484,804 derived bounds but only228,638 consumed before
+the64-clause output limit;909 of1,169 calls hit that limit. For48 the counts
+are1,995,473 derived/907,770 consumed. Instrumentation changes scheduling, so
+neither these timings nor the diagnostic59 SAT is a formal improvement.
+
+The new core streams explained bounds through the existing propagation entry.
+The consumer can stop the scan when its output budget is full, avoiding the
+unused suffix. The same exact local overlay, signed premises, mathematical
+bound limit and circular scheduling remain; no callback or derived fact survives
+the invocation. Batch collection remains a real use of the same API. Tests
+check the exact batch prefix, reduced row arithmetic, subsequent resumption,
+strict negative division and rollback. Native qualification and a fresh frozen
+comparison are pending; no new solved count is claimed.
+
+The first streaming build R901 passes40 targeted cases/80,270 assertions, all
+1,824 unit cases/883,993 assertions and38 other acceptance groups. Its fresh
+pilot restores59 (40.812s to18.311s SAT, both initial models positively replayed),
+but51 times out. The complete160 round is still running; no net score is claimed.
+Review also finds that streaming charged consumer latency against the existing
+20ms producer budget, unlike the previous post-scan projection. The next change
+accounts for consumer time separately while retaining the mathematical budget;
+a slow-consumer regression checks that distinction. Qualification is pending.
+
+R907 now qualifies that accounting fix:41 targeted cases/80,277 assertions,
+all1,825 unit cases/884,000 assertions and38 other acceptance groups pass.
+Its fresh pilot keeps59 solved (35.052s to17.558s SAT with positive initial-model
+replays), but51 still times out. Full R909/R916 comparison is pending. The
+preceding R903/R906 round has three invalid triads,130/131/154, with recorded
+wall-budget overruns. They are excluded and repeated in full as R912; the157
+valid triads remain immutable. A first stop audit opened the wrong EOS database
+because its job working directory differed; it failed before finding or changing
+a run. The corrected R915 audit asserts the canonical database and finds both
+remaining jobs already terminal:0 jobs cancelled. No cancellation is invented.
+
+## Unavailable linear extrema (R913–R914, candidate)
+
+R913 observes the unchanged R907 propagation engine. In final periodic R914
+samples, original51 builds1,469,082 row snapshots;1,162,211 have at least two
+unavailable contributions for EACH extremum. Those snapshots consume8.146 of
+10.456s snapshot arithmetic. Original131 spends24.484 of32.135s on such rows;
+48 spends5.026 of13.562s. These instrumented diagnostics are excluded from
+formal comparisons and show an additional cause beyond discarded output.
+
+A forward bound needs every term; backward propagation can exclude only one
+target term. Two unavailable terms in both extrema therefore preclude every
+finite explained bound from that row. The candidate checks endpoint availability
+before rational multiplication, addition and premise aggregation. The negative
+snapshot is local and uses the existing input revision: newly derived non-basic
+bounds requeue incident rows and invalidate it. No numerical fact survives a
+call or rollback, and no arithmetic budget or solver gate changes. Tests cover
+skipping all row arithmetic, strict negative division when just one extremum
+becomes usable, rollback and a skipped row becoming productive during the same
+local closure. Native qualification and frozen comparison remain pending.
+
+The R908 completed audit now seals the preceding streaming core R901:
+**100→100 verified**, no gained/lost result, PAR-2 **7539.698→7521.056**
+(about0.25% better). Same-round Z3 has117 verified/124 raw decisions. The seven
+unconfirmed UNSATs12/24/27/42/80/114/159 remain excluded. R905 confirms the
+three duplicated initial Z3 models47/108/122: explicit`get-model` plus`-model`
+printed identical model ASTs, positively replayed by both independent checkers.
+Only truth eligibility is supplemented; no old solve timing is substituted.
+See [the stage receipt](LINEAR_PROPAGATION_STAGE_20261031.json). The three
+budget-invalid original triads are retained beside their valid full R912 retries.
+
+R917 qualifies the unavailable-extrema implementation with43 targeted cases/
+80,305 assertions. Its pilot is negative:48/51/131 remain timeouts, and59
+regresses from39.109s SAT to timeout. No opposite verdict is observed. Saved
+arithmetic changes the conclusions reached within the time allocation and the
+subsequent search; the snapshot counters do not establish a solver improvement.
+This candidate must not be merged on diagnostic arithmetic savings.
+
+The next change addresses R900's observed duplicate conclusions:22,639 of
+65,435 emitted59 clauses repeat a signed target, consuming the64-clause budget.
+LRA now uses the existing predicate-acceptance filter to skip targets already
+queued during this check, allowing another implied registered predicate to use
+the slot. Original SAT assignments and signed premise explanations stay separate.
+The set is local to the check; LIA's existing backtrack-epoch deduplication
+policy is unchanged. A regression exercises two stronger row endpoints, two
+weaker signed targets, exact clause replay over rational points, and renewed
+emission after rollback. Qualification and a fresh comparison are pending.
+
+Initial R921 qualification fails that new regression: after rollback the changed
+row order can produce only one strongest endpoint, and the implementation still
+extracts only one implied predicate from it. The two-target requirement remains
+unchanged. Production now drains distinct existing targets from each endpoint
+until none remains or the64-output budget is full. Exact original premises and
+both signed targets are retained. The failed build is recorded; no binary was
+frozen or benchmark score claimed for it. Requalification is pending.
+
+
+## Qualified saturation of linear consequences (R926–R933)
+
+The final core`f095b3b2` drains distinct existing predicates from each explained
+endpoint, so one strongest endpoint can still propagate every applicable target
+within64 slots. It retains exact rational/infinitesimal handling,512 derived
+bounds,2,048 direction visits,20ms producer arithmetic and the existing LIA/LRA
+state policies. No new atoms, solver gate, filename rule or external runtime
+oracle is introduced. R921's failed two-target regression remains recorded;
+production was fixed without weakening that requirement. A separate100-target
+case checks the64-distinct-output cap.
+
+Panda1/ExperimentOS passes**1,829 unit cases/897,855 assertions**,38 other
+regression/tool/model groups and45 targeted cases/94,132 assertions. All54
+Xolver SAT models from the actual timed solves positively replay. The fresh
+full160 round verifies**100→100**,54 SAT/46 UNSAT/1 unknown/59 timeouts,
+no gained/lost solve. Verified PAR-2 improves**7534.598→7498.860** (about0.47%).
+Original59 improves**39.692s→2.823s SAT**, with its actual model checked; original
+51/131 remain timeouts. No wrong verdict, invalid Xolver model, budget-invalid
+triad or solver retry occurs in this round. Same-round Z3 is**116 verified/123
+raw**, not the older125 raw reference; the target of at least126 verified
+results is unchanged. Seven unconfirmed UNSATs12/24/27/42/80/114/159 are excluded.
+
+R933 positively checks both duplicated current Z3 models47/108 with both
+oracles. Its122 setup attempt fails before invoking a checker because all three
+original timed solves return timeout; that valid timing is retained and no
+original solve is repeated. Z3 model replays75/148 retain explicit error
+boundaries; checked Xolver witnesses independently confirm those SAT decisions.
+EOS`ea2b81d2d3b5` seals source/binaries, all160 leases and model/certificate
+eligibility. See [the final stage receipt](LINEAR_PROPAGATION_SATURATION_STAGE_20261031.json).
+CLI SHA-256 is`a5719bd76d2b443abe58de3e8bd80b8904c834cef1050f4574a087f11068555b`.
+The stage is awaiting PR CI; main remains PR78. Neither protected set was used.
+This is a local propagation improvement, not overall superiority over Z3.
+
+QCP R930 attributes20.477s of the historical GCD Xolver final-check to296
+callbacks, versus12.605s for Z3; each has70 distinct inputs. Proof scripts and
+schedules differ, so those totals are diagnostic. R931 runs all70 unchanged,
+independently checked queries with both process orders: Xolver CLI starts total
+2.357/2.531s, existing native worker batches0.421/0.422s; Z3 CLI2.725/2.752s,
+reset batches0.516/0.567s. All decisions agree. Child CPU/system times confirm
+startup cost. These are query diagnostics, not a C-program comparison. The next
+QCP stage should connect a reusable task channel for both backends and repeat
+canonical whole-program checking with matched proof routes and budgets.

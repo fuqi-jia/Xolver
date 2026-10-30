@@ -5,6 +5,7 @@
 #include "contracts/TheoryPropagatorCallbacks.h"
 #include <unordered_map>
 #include <unordered_set>
+#include <functional>
 
 namespace xolver {
 
@@ -52,6 +53,15 @@ public:
     // literal for its logical complement. Never registers or observes atoms.
     std::optional<SatLit> findLinearLiteral(
         const LinearFormKey& lhs, Relation rel, const mpq_class& rhs) const;
+
+    // Project a proved inequality onto the existing SAT vocabulary, including
+    // weaker endpoints, negated inequalities and excluded equality points.
+    // No atoms are created.
+    // The optional filter selects useful literals and must not mutate this
+    // registry. Equality/disequality sources are not interval bounds.
+    std::optional<SatLit> findImpliedLinearLiteral(
+        const LinearFormKey& lhs, Relation rel, const mpq_class& rhs,
+        const std::function<bool(SatLit)>& accept = {}) const;
 
     SatLit getOrCreatePolynomialAtom(
         PolyId poly,
@@ -126,6 +136,11 @@ private:
         }
     };
     std::unordered_map<LinearLookupKey, size_t, LinearLookupKeyHash> linearLookup_;
+    // Record indices sorted by rational endpoint within each linear form.
+    // Inequalities contribute both polarities; equality points contribute only
+    // the disequality literal when a proved interval excludes the point.
+    std::unordered_map<LinearFormKey, std::vector<size_t>, LinearFormKeyHash> linearBoundFamilies_;
+    void indexLinearBound(size_t record);
 
     struct PolyLookupKey {
         PolyId poly;
