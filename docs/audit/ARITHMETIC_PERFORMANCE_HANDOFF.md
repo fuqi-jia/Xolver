@@ -41,15 +41,23 @@ Older tables describe their own frozen versions and evidence boundaries.
 ## Current arithmetic and ASP continuation
 
 The latest qualified arithmetic stage is
-[shared polynomial sign closure](#shared-polynomial-sign-closure-r721r723r726r733):
-97/160, versus 117 verified / 125 raw same-round Z3 decisions. Earlier receipts
-below retain their original snapshot and evidence boundaries.
+[explained affine factor proofs](#explained-affine-factor-proofs-r782r784r785r789):
+**98/160**, versus **117 verified /125 raw** same-round Z3 decisions.
+The preceding delivered main verifies97 in this fresh round. This candidate
+passes server acceptance and awaits PR CI and merge. Previous rounds and
+supplementary truth records below retain their own evidence boundaries.
+
+[PR72](https://github.com/fuqi-jia/Xolver/pull/72) is delivered as main
+`6802c5e4d5ddea0ef8a86614521d96bf3605c424`. Both its
+[PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/40959877474) and fresh,
+exact-head [main CI](https://github.com/fuqi-jia/Xolver/actions/runs/40963240045)
+are fully green. PR71's fresh main CI below is also fully green.
 
 [PR71](https://github.com/fuqi-jia/Xolver/pull/71) merged consumer-directed
 active context as main`61ea31ee44cf48b839e285ad888ba57d58c23bc2`, after both
 [PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/40956284799) jobs passed.
 Its fresh exact-head [main CI](https://github.com/fuqi-jia/Xolver/actions/runs/40959749179)
-is running; it must turn fully green before the next stage is merged.
+is fully green.
 
 [PR70](https://github.com/fuqi-jia/Xolver/pull/70) delivered quadratic sign refutation as main
 `d8768ce172aa4c3c0f215f29f4a88fd96ac30796`. Both its
@@ -2189,5 +2197,95 @@ The frozen candidate CLI SHA-256 is
 baseline is`7f30dc0c8b55f53135a0a9c7a422ded45339db807e8ab2bfc940935389427973`.
 This closes one real gap and does **not** establish superiority over Z3 or
 whole-program QCP performance. Neither protected set has been inspected or run.
-Server qualification is complete; PR CI, merge and fresh main CI receipts
-remain pending. No extra current-main server archive is required.
+Server qualification, PR CI, merge and fresh main CI are complete; the current
+continuation section links the exact delivery receipts. No extra current-main
+server archive is required.
+
+### Supplementary independent truth (R761/R770)
+
+The [source-bound supplemental record](SUPPLEMENTARY_INDEPENDENT_TRUTH_20261030.json)
+binds unchanged original input50
+`7e71a151d917978f1b5afc2791abf589e30c8ff97e930979df6ef82ad72dcdc0`.
+Independent cvc5 returns UNSAT in141.087235s with a300s offline verification
+budget, one physical CPU and16GiB. This confirms Z3's original49.448217s timed
+UNSAT; formal solver budgets remain60s and no timed row is replaced.
+Z3's supplemented verified score is118/125raw, verified PAR-2 is5368.151597;
+Xolver remains97 and7902.244466. The original R733 table remains unchanged.
+
+Inputs12,24,27,80,114,159 time out in independent verification. Input42 hits
+the separate ExperimentOS outer timeout without a completed checker record.
+All seven remain unconfirmed and excluded. No opposite verdict is observed.
+The initial audit used the wrong checker-output filename; its failure is
+preserved and R770 rechecks the immutable evidence without rerunning solvers.
+Neither protected set is used.
+
+
+## Explained affine factor proofs (R782/R784/R785/R789)
+
+The [frozen-stage record](EXPLAINED_AFFINE_FACTOR_STAGE_20261030.json) binds
+qualified source `cb0ae6b51ef894365a8dc67dc57a726cd274c4e3`, its complete
+cumulative overlay manifest, binary hashes and original timed reports.
+Later receipt-only documentation changes do not change the qualified code.
+
+On original public input127, real relaxations of all three active branches are
+independently UNSAT, but the former closure exhausts its allocation on the last
+branch. Backward sign propagation derives missing variable signs. Linear
+resultants alone and variable indexing alone each give5→5 in their16-case
+pilots. The final shared NIA/NRA implementation additionally proves strict signs
+through nested exact affine decompositions of pending eliminants, rather than
+materializing many irrelevant consequences first. Original SAT reason literals
+support every consequence. Repeated zero factors are normalized using
+`x^k*q=0 iff x*q=0` for`k>=1`, preserving zero roots. Each constant-leading pivot
+is considered, fixed substitutions are reused locally and independent
+consequences receive fair scheduling. All rules hold over reals and integers;
+there is no input-name rule, runtime oracle, new gate or persistent branch cache.
+The allocation remains10ms/100k-work/32rounds.
+
+Panda1/ExperimentOS native `9574474e9823` passes **1,798 unit cases /
+879,278 assertions**, including16 sign-closure cases /1,473 assertions,
+96 generated exact rational SAT witnesses, eight targeted SMT regressions,
+63 parser cases and the architecture, evidence, API and parallel checks.
+All37 whole-source acceptance groups pass, including QCP regressions.
+Eighteen original-premise unit conflict subsets are independently UNSAT in
+both Z3 and cvc5. The actual last branch now closes in6.947ms and its selected
+original premises are independently UNSAT in Z3. Component and profiler times
+are excluded from formal scores.
+
+Fresh R784/R785/R790 runs rotate all versions on each case's one EOS physical
+CPU, with60s and16GiB per solver. R789 audit `bc3d081ca8eb` verifies all160
+original hashes and observations. Initial triads10/78 hit the outer execution
+limit; triad140 violates the wall-budget tolerance. They are retained as
+invalid evidence, and only those three complete triads are freshly repeated
+at identical budgets. All other157 valid original rows remain unchanged.
+
+| Frozen version | Verified | SAT | UNSAT | Unknown | Timeout | Verified PAR-2 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Delivered main | 97 | 54 | 43 | 1 | 62 | 7935.750565 |
+| Affine factor proofs | 98 | 54 | 44 | 1 | 61 | 7828.545163 |
+| Same-round Z3 | 117 /125 raw | 67 | 58 | 0 | 35 | 5440.140412 |
+
+The sole gain is original127: main timeout, candidate **UNSAT20.063328s**,
+independent Z3 UNSAT0.331705s. There are **zero lost solutions, opposite
+verdicts or invalid exported models**. Verified PAR-2 improves107.205403s.
+Unknown remains1. The exact modular certificate115, independently replayed
+original ground witness94 and supplementary300s independent UNSAT check50
+establish truth only on identical input hashes; no timed row is replaced.
+
+Seven UNSATs12,24,27,42,80,114,159 remain unconfirmed. This round additionally
+leaves Z3 SAT32 unconfirmed because its model-producing query times out; no
+previous replayed model was found. All eight receive the verified PAR-2 penalty.
+Earlier118-verified Z3 figures belong to their own frozen rounds and must not
+be substituted for this same-round score.
+
+Frozen candidate CLI SHA-256 is
+`9dfe72f19f1828fb44d03f46dcfe53800d6eeb25d7da8df2084ed7e2326b7baf`;
+baseline is`db4293e9a72e054cf13c4ffdbb1491c45d1ddbd4e239e6d3d229a8f86bbdd931`.
+The frozen diagnostic profile takes20.147s: all49 samples include the front
+`EagerBitBlastSolver::solve`; four later polynomial sign conflicts take
+2.525/2.995/7.088/2.961ms. This identifies a subsequent portfolio-scheduling
+question, not another implementation or formal gain in this stage.
+
+This closes one additional real gap and does **not** establish superiority over
+Z3 or whole-program QCP performance. Neither protected set is inspected or run.
+PR CI, merge and fresh main CI are still required; no extra current-main server
+archive is a delivery prerequisite.

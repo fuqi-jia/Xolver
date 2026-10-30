@@ -157,3 +157,168 @@ TEST_CASE("Polynomial sign closure: known rational models survive generated sign
         CHECK_FALSE(refuteByPolynomialSignClosure(constraints));
     }
 }
+
+TEST_CASE("Polynomial sign closure: linear resultants retain zero leading coefficients") {
+    const auto a = variable(0), b = variable(1), lambda = variable(2);
+    std::vector<SignRefuteConstraint> constraints;
+    constraint(constraints, a * lambda - a, Relation::Eq);
+    constraint(constraints, b * lambda - b - a, Relation::Eq);
+    constraint(constraints, a, Relation::Neq);
+    PolynomialSignStatistics statistics;
+    const auto conflict = refuteByPolynomialSignClosure(constraints, &statistics);
+    REQUIRE(conflict);
+    CHECK_FALSE(statistics.exhausted);
+    checkReasons(constraints, *conflict);
+    // a=0,b=2,lambda=1 satisfies both equalities: neither leading
+    // coefficient may be cancelled unless nonzeroness is explained.
+    constraints.pop_back();
+    const std::unordered_map<VarId, mpq_class> point{{0, 0}, {1, 2}, {2, 1}};
+    for (const auto& c : constraints) REQUIRE(holds(c, point));
+    CHECK_FALSE(refuteByPolynomialSignClosure(constraints));
+}
+
+TEST_CASE("Polynomial sign closure: explained elimination propagates through coupled equalities") {
+    std::vector<SignRefuteConstraint> constraints;
+    Polynomial sum;
+    for (VarId level = 0; level < 3; ++level) {
+        const auto a = variable(level), b = variable(3 + level), lambda = variable(6 + level);
+        auto left = a * lambda - a;
+        auto right = b * lambda - b - a;
+        if (level < 2) {
+            const auto nu = variable(9 + level);
+            left += variable(level + 1) * nu;
+        }
+        constraint(constraints, std::move(left), Relation::Eq);
+        constraint(constraints, std::move(right), Relation::Eq);
+        sum += a;
+    }
+    constraint(constraints, sum - constant(1), Relation::Eq);
+    PolynomialSignStatistics statistics;
+    const auto conflict = refuteByPolynomialSignClosure(constraints, &statistics);
+    CAPTURE(statistics.rounds);
+    CAPTURE(statistics.inferredFacts);
+    CAPTURE(statistics.eliminations);
+    CAPTURE(statistics.exhausted);
+    REQUIRE(conflict);
+    CHECK_FALSE(statistics.exhausted);
+    checkReasons(constraints, *conflict);
+}
+
+TEST_CASE("Polynomial sign closure: impossible variable signs propagate backward through equalities") {
+    const auto a = variable(0), b = variable(1), c = variable(2);
+    for (int orientation : {-1, 1}) {
+        std::vector<SignRefuteConstraint> constraints;
+        constraint(constraints, a * a - a * b, Relation::Eq);
+        constraint(constraints, b, orientation > 0 ? Relation::Leq : Relation::Geq);
+        constraint(constraints, a + c - constant(orientation), Relation::Eq);
+        constraint(constraints, c, orientation > 0 ? Relation::Leq : Relation::Geq);
+        const auto conflict = refuteByPolynomialSignClosure(constraints);
+        REQUIRE(conflict);
+        checkReasons(constraints, *conflict);
+        // Removing the last bound admits a nonzero a with the same sign as b;
+        // propagation must preserve that branch as well as the root a=0.
+        constraints.pop_back();
+        for (int root : {0, -2 * orientation}) {
+            const std::unordered_map<VarId, mpq_class> point{
+                {0, root}, {1, -2 * orientation}, {2, orientation - root}};
+            for (const auto& constraint : constraints) REQUIRE(holds(constraint, point));
+            CHECK_FALSE(refuteByPolynomialSignClosure(constraints));
+        }
+    }
+}
+
+TEST_CASE("Polynomial sign closure: affine forms constrain products without fixing their variables") {
+    const auto x = variable(0), y = variable(1), a = variable(2), z = variable(3);
+    std::vector<SignRefuteConstraint> constraints;
+    constraint(constraints, x - y, Relation::Geq);
+    constraint(constraints, a, Relation::Geq);
+    constraint(constraints, a * (x - y) + z, Relation::Eq);
+    constraint(constraints, z, Relation::Gt);
+    const auto conflict = refuteByPolynomialSignClosure(constraints);
+    REQUIRE(conflict);
+    checkReasons(constraints, *conflict);
+    constraints.back().rel = Relation::Geq;
+    const std::unordered_map<VarId, mpq_class> point{{0, 2}, {1, 1}, {2, 0}, {3, 0}};
+    for (const auto& constraint : constraints) REQUIRE(holds(constraint, point));
+    CHECK_FALSE(refuteByPolynomialSignClosure(constraints));
+}
+
+TEST_CASE("Polynomial sign closure: unit-leading equalities rewrite inequalities exactly") {
+    const auto u = variable(0), v = variable(1), w = variable(2), z = variable(3);
+    std::vector<SignRefuteConstraint> constraints;
+    constraint(constraints, u - v - w, Relation::Eq);
+    constraint(constraints, v * w - z, Relation::Geq);
+    constraint(constraints, u * v - v * v - z, Relation::Lt);
+    const auto conflict = refuteByPolynomialSignClosure(constraints);
+    REQUIRE(conflict);
+    checkReasons(constraints, *conflict);
+}
+
+TEST_CASE("Polynomial sign closure: inverse product signs preserve a possibly zero divisor") {
+    const auto x = variable(0), y = variable(1), z = variable(2);
+    for (int orientation : {-1, 1}) {
+        std::vector<SignRefuteConstraint> constraints;
+        constraint(constraints, x, orientation > 0 ? Relation::Gt : Relation::Lt);
+        constraint(constraints, x * (y - constant(1)) + z, Relation::Eq);
+        constraint(constraints, z, Relation::Leq);
+        constraint(constraints, y - constant(1), orientation > 0 ? Relation::Lt : Relation::Gt);
+        const auto conflict = refuteByPolynomialSignClosure(constraints);
+        REQUIRE(conflict);
+        checkReasons(constraints, *conflict);
+        constraints[0].rel = orientation > 0 ? Relation::Geq : Relation::Leq;
+        const std::unordered_map<VarId, mpq_class> point{{0, 0}, {1, orientation > 0 ? 0 : 2}, {2, 0}};
+        for (const auto& constraint : constraints) REQUIRE(holds(constraint, point));
+        CHECK_FALSE(refuteByPolynomialSignClosure(constraints));
+    }
+}
+
+TEST_CASE("Polynomial sign closure: each affine pivot retains the useful factor orientation") {
+    const auto x = variable(0), y = variable(1), z = variable(2);
+    std::vector<SignRefuteConstraint> constraints;
+    constraint(constraints, x, Relation::Gt);
+    constraint(constraints, y, Relation::Leq);
+    constraint(constraints, x - z, Relation::Geq);
+    constraint(constraints, x * x - x * y + y * z, Relation::Eq);
+    const auto conflict = refuteByPolynomialSignClosure(constraints);
+    REQUIRE(conflict);
+    checkReasons(constraints, *conflict);
+    constraints[0].rel = Relation::Geq;
+    const std::unordered_map<VarId, mpq_class> point{{0, 0}, {1, 0}, {2, 0}};
+    for (const auto& constraint : constraints) REQUIRE(holds(constraint, point));
+    CHECK_FALSE(refuteByPolynomialSignClosure(constraints));
+}
+
+TEST_CASE("Polynomial sign closure: repeated zero factors preserve every root") {
+    const auto x = variable(0), y = variable(1);
+    for (int exponent : {2, 3, 8}) {
+        std::vector<SignRefuteConstraint> constraints;
+        constraint(constraints, Polynomial::fromVar(0, exponent, 1) * (y - constant(1)), Relation::Eq);
+        constraint(constraints, x, Relation::Neq);
+        constraint(constraints, y - constant(1), Relation::Neq);
+        const auto conflict = refuteByPolynomialSignClosure(constraints);
+        REQUIRE(conflict);
+        checkReasons(constraints, *conflict);
+        constraints.erase(constraints.begin() + 1);
+        const std::unordered_map<VarId, mpq_class> point{{0, 0}, {1, 2}};
+        for (const auto& constraint : constraints) REQUIRE(holds(constraint, point));
+        CHECK_FALSE(refuteByPolynomialSignClosure(constraints));
+    }
+}
+
+TEST_CASE("Polynomial sign closure: coupled affine factors admit an explained strict sign proof") {
+    const auto a = variable(0), b = variable(1), c = variable(2), d = variable(3), lambda = variable(4);
+    std::vector<SignRefuteConstraint> constraints;
+    constraint(constraints, a * (lambda - constant(1)) + b, Relation::Eq);
+    constraint(constraints, c * (lambda - constant(1)) + d - a, Relation::Eq);
+    constraint(constraints, a, Relation::Gt);
+    constraint(constraints, b, Relation::Leq);
+    constraint(constraints, b - d, Relation::Geq);
+    constraint(constraints, a - c, Relation::Geq);
+    const auto conflict = refuteByPolynomialSignClosure(constraints);
+    REQUIRE(conflict);
+    checkReasons(constraints, *conflict);
+    constraints[2].rel = Relation::Geq;
+    const std::unordered_map<VarId, mpq_class> point{{0, 0}, {1, 0}, {2, 0}, {3, 0}, {4, 0}};
+    for (const auto& constraint : constraints) REQUIRE(holds(constraint, point));
+    CHECK_FALSE(refuteByPolynomialSignClosure(constraints));
+}

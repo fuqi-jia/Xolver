@@ -1,0 +1,5187 @@
+{
+  "schema": "xolver-explained-polynomial-factor-proof-stage/1",
+  "qualification": {
+    "source_head": "cb0ae6b51ef894365a8dc67dc57a726cd274c4e3",
+    "source_manifest_sha256": "8b3a918b9a6d246b428dd52a5ea212efe375b7174fe672a6961aa159f3857904",
+    "checked_source_files": 518,
+    "submodule_pins": {
+      "third_party/SOMTParser": "b9063faeab2e89d87525432eaedb8f0a5b6eb1ea",
+      "third_party/cadical": "7b99c07f0bcab5824a5a3ce62c7066554017f641",
+      "third_party/libpoly": "3d5e6fbd98639cb0941b029e23ca17c0e3c4a80a"
+    },
+    "native": {
+      "lease": [
+        0
+      ],
+      "previous_qualified_source_head": "f86b3bd29c8c3d2ae89aec7045c7378372deccba",
+      "previous_qualification_sha256": "779e03f0b931f7afa94aebc06ce2453224fcf331f1cd6e66d85a8858be874802",
+      "previous_exported_source_head": "61b5180ab9b1440215b358d091fe1e5a28fdeaa2",
+      "overlay_rc": 0,
+      "configure_rc": 0,
+      "build_rc": 0,
+      "component_candidate_library_sha256": "3b96805445b4aae6927eb32b71810b42095c020175ebc882d6b2dafa7fd9bb4f",
+      "probe-candidate_rc": 0,
+      "component_candidate": {
+        "micros": "1238",
+        "conflict": "1",
+        "rounds": "9",
+        "facts": "15",
+        "eliminations": "2",
+        "substitutions": "7",
+        "exhausted": "0",
+        "reasons": "2,7,5,6,4,3,1,"
+      },
+      "probe-candidate-replay_rc": 0,
+      "fixed-values-unit_rc": 0,
+      "regression-nra_quadratic_known_factor_unsat_rc": 0,
+      "regression-nia_quadratic_known_factor_unsat_rc": 0,
+      "regression-nra_quadratic_zero_leading_sat_rc": 0,
+      "regression-nra_positive_factor_chain_unsat_rc": 0,
+      "regression-nia_positive_factor_chain_unsat_rc": 0,
+      "regression-nra_zero_factor_inequality_sat_rc": 0,
+      "regression-nra_affine_product_chain_unsat_rc": 0,
+      "regression-nia_affine_product_chain_unsat_rc": 0,
+      "api-example_rc": 0,
+      "parallel-local_rc": 0,
+      "python-parallel_rc": 0,
+      "row-counters_rc": 0,
+      "targeted-unit_rc": 0,
+      "parser-tests_rc": 0,
+      "unit_rc": 0,
+      "checks_rc": 0
+    },
+    "binaries": {
+      "xolver": "9dfe72f19f1828fb44d03f46dcfe53800d6eeb25d7da8df2084ed7e2326b7baf",
+      "xolver-sv": "f32e7948cd2e603e1d05fa48fd397471464a5156e57f7d55215fbe6306ec581f"
+    },
+    "unit_binary_sha256": "dba65aa81c3822e604f43f96319e94205a90d1c6bde0bb45fd75c68d3cd5a641",
+    "logs": {
+      "build.log": "36254bf579891869a33cc4afd0121e1e9021903a038e6179f07d26844705f7c5",
+      "targeted-unit.log": "7f1a134ac8f57f1816f94ec044114c0670e76fd28dc5e8e087b1f4386a7a68b8",
+      "parser-tests.log": "9dd67d357bc5edd59c7face775ad8d1efc4336f40ad0c2c0892792dc641678ad",
+      "unit.log": "2040cb0e2df84b1678d9c1fb7e9da1dab27389e3013a668487a062a0e4ee7062",
+      "checks.log": "80e9aaa87c5bd6458e34997c54a7b89eeb8b2d2f6e505d6921ac918455a71792",
+      "api-example.log": "369f5404dda928a96e17df08c4654d49eafb2621fdc13e8d8c4d3f0d484e24ce",
+      "parallel-local.log": "a31b6868ba36b0ca36324ae71c5716ab0a90679f09fe953788b2ed1f73767b06",
+      "python-parallel.log": "eb6adb284227451f84700f16d8d524f5b83929e529850d4c93fb4c9647730146",
+      "row-counters.log": "4482d7c3fbc96ea8c8f326dc837e0159c36e5c223a37af01e86adfa9441ddbb9",
+      "fixed-values-unit.log": "72f51dd07d912ba2e697e975a1b4c78ac423710c6833f4cff87af7ab91caa47b",
+      "probe-candidate.log": "c896987e50213462c8758bba05871eaaba14d3487da9802e104557eeeff6eea1",
+      "probe-candidate-replay.log": "5c17dfcc2a8f1f30d9e96df6a9825a5030ade046d560332c19de74d93d591a18"
+    },
+    "protected_sets_used": false
+  },
+  "acceptance": [
+    {
+      "name": "root-regressions",
+      "experiment": "30e139b8dd97",
+      "run": "0974724a5114",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "8"
+        ]
+      },
+      "commands_sha256": "423958378cbaa74784bd7762056ad1942fa3a0f1df48d8abd02e46eb42f67294",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "architecture",
+      "experiment": "30e139b8dd97",
+      "run": "d159de16c71d",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "13"
+        ]
+      },
+      "commands_sha256": "99a8a87506664320733c107c4e462c549f95e14ed2f392dc629b5bfc07d6fb54",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "known-gaps",
+      "experiment": "30e139b8dd97",
+      "run": "b5ca2b02aadf",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "14"
+        ]
+      },
+      "commands_sha256": "648f94ae8c3d61c5d5ec2267be5a09acc954a57697b482dd0c2707625ea9ade4",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "affine",
+      "experiment": "30e139b8dd97",
+      "run": "d95fc3beda5b",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "18"
+        ]
+      },
+      "commands_sha256": "17fbc2f91973b0d60f5510c05c46b7fb43cce56c8d41503cddb2939ee5adb5c7",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "linear",
+      "experiment": "30e139b8dd97",
+      "run": "788f4a06b87d",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "20"
+        ]
+      },
+      "commands_sha256": "90976573a333766336139f33efc4008e7cc9f56dc9d8929c80a6d8eb96fb9e15",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "partial",
+      "experiment": "30e139b8dd97",
+      "run": "ac38decc22b1",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "21"
+        ]
+      },
+      "commands_sha256": "1661a47877b3226bb78a78043084030840d1dea2835400342a864521b81aaced",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "intervals",
+      "experiment": "30e139b8dd97",
+      "run": "019ab48df37f",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "23"
+        ]
+      },
+      "commands_sha256": "97507e2f90bcc3c154e2ca93e64cb6d8f602d65f7bbf7f9c4e96249776d2c6bb",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "quick",
+      "experiment": "30e139b8dd97",
+      "run": "9726f6db6a60",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "24"
+        ]
+      },
+      "commands_sha256": "2e41ccd7d85034bb8f711d54b3eb7f494fc7ada1ade142b523565d6637e89286",
+      "metrics": {
+        "checks": 3,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-alia",
+      "experiment": "30e139b8dd97",
+      "run": "01aff36600e3",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "25"
+        ]
+      },
+      "commands_sha256": "0ec9d859c231a86312edfac973637369f6f2dc03be062998f1501a0ef437a291",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-alra",
+      "experiment": "30e139b8dd97",
+      "run": "6553c604c094",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "26"
+        ]
+      },
+      "commands_sha256": "5e9d8486ff6b0ba8bd2393102b2a22f70163c8d43192c7ff6c104ab8d077645e",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-ania",
+      "experiment": "30e139b8dd97",
+      "run": "c6577bbb53dd",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "27"
+        ]
+      },
+      "commands_sha256": "560017d29b634303885f09ae3bafcd225a83c3c68f4f2f783a88a80d9689fb49",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-auflia",
+      "experiment": "30e139b8dd97",
+      "run": "6cfe026a332a",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "28"
+        ]
+      },
+      "commands_sha256": "97cdc2baa5fa4aec46115cbebab6ad0d2ef5ba13ae456c02f95892ab2c3e8c0d",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-auflra",
+      "experiment": "30e139b8dd97",
+      "run": "434effabf978",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "29"
+        ]
+      },
+      "commands_sha256": "16439e999632a7e3a4217d087c163a06c688167d9f28f485f2d2aeac89e00c3f",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-aufnia",
+      "experiment": "30e139b8dd97",
+      "run": "4ade9ed24549",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "30"
+        ]
+      },
+      "commands_sha256": "39941664cc848701a7e758640080d4125c62008ae61e4275ef47383183ab24ce",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-ax",
+      "experiment": "30e139b8dd97",
+      "run": "0b797bfdd570",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "31"
+        ]
+      },
+      "commands_sha256": "390962cb6ce81057a415e333e9cd5b8e13deae841ed30f4f89a6ba04558aeb5f",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-bool",
+      "experiment": "30e139b8dd97",
+      "run": "9a3f34d14409",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "32"
+        ]
+      },
+      "commands_sha256": "064c64ed0eb3b3f718cdc5e97391179d534327438504a7af2f57d36570f147f5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-dt",
+      "experiment": "30e139b8dd97",
+      "run": "ccfb5a85c44b",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "33"
+        ]
+      },
+      "commands_sha256": "0e8ef4c16a81c3f5ffc85cc21086d3586bcb9875a41663aef0040defa2542209",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-euf",
+      "experiment": "30e139b8dd97",
+      "run": "5ed24d2cc56d",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "34"
+        ]
+      },
+      "commands_sha256": "824012199ab855bcc13b41b106c934ced6e443e172fc9cb7c632cff08e043acd",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-idl",
+      "experiment": "fadc718bf9ce",
+      "run": "d6cb7f429fae",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "0"
+        ]
+      },
+      "commands_sha256": "afe173553caf4da24f821eec52b77d1df4dbfcbbcdcda209b16bca128d5289e2",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-lia",
+      "experiment": "fadc718bf9ce",
+      "run": "3ce563614b77",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "8"
+        ]
+      },
+      "commands_sha256": "266065fd10e326817c38b7e210aaf07e22c5e7e92c84a154058bbbe683ab12e1",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-lira",
+      "experiment": "fadc718bf9ce",
+      "run": "8448484da6ef",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "13"
+        ]
+      },
+      "commands_sha256": "6a527c04b243970c3df81f673f7536d27aa17f981f19dc968e79d77ba69b2fcc",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-lra",
+      "experiment": "fadc718bf9ce",
+      "run": "3b20bf58d56e",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "14"
+        ]
+      },
+      "commands_sha256": "b2fb640195d296d2ca385359ac4c860dba894fb9203a321279928edc1ec0ddbb",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-nira",
+      "experiment": "fadc718bf9ce",
+      "run": "9667f42af6fe",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "21"
+        ]
+      },
+      "commands_sha256": "94fac75c4e3551fafa29c4589130f1003a1674a20deac385811b45d9a62cfb1e",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-nra",
+      "experiment": "fadc718bf9ce",
+      "run": "8e34fbea96dc",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "24"
+        ]
+      },
+      "commands_sha256": "bee58975b61bb99f4ee31fca10fb711275e9b4b59c0a61ed12ccba2c6f3891a0",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-quantifiers",
+      "experiment": "fadc718bf9ce",
+      "run": "d8ac63ef2539",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "25"
+        ]
+      },
+      "commands_sha256": "048b24161168124a2734f79fd2152255db8d2033cf167dbd595833a2a2c90076",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-rdl",
+      "experiment": "fadc718bf9ce",
+      "run": "729dac4e3834",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "26"
+        ]
+      },
+      "commands_sha256": "c01fbfedeb31866f443cd543b1b41e261a6b4ddab19fa0f6e8b29f9e3089f90f",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-sl",
+      "experiment": "fadc718bf9ce",
+      "run": "392bb4474084",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "27"
+        ]
+      },
+      "commands_sha256": "5d066dd7730e660d32e2a7164909f341788296d9084b3ef1c8ff69c8be7d5d9d",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-ufdtlia",
+      "experiment": "fadc718bf9ce",
+      "run": "70b77d56d7ee",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "28"
+        ]
+      },
+      "commands_sha256": "17963f6811db157d74d2efbd1cabd9fee7373f54506c0163637b61ac249ccbc5",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-ufdtnia",
+      "experiment": "fadc718bf9ce",
+      "run": "6049c50c6a7f",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "29"
+        ]
+      },
+      "commands_sha256": "75ec641d6f0787748d06cc6eb96e40be79abbfb03fcf32dcdb003cea907fecaf",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-uflia",
+      "experiment": "fadc718bf9ce",
+      "run": "fda8f1375707",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "30"
+        ]
+      },
+      "commands_sha256": "3bcf8224988a3c5b3f793a4767142b4a53d201661393156ae610acf2c53ea44a",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-uflra",
+      "experiment": "fadc718bf9ce",
+      "run": "facc11b706e9",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "31"
+        ]
+      },
+      "commands_sha256": "919a3deb528aa73891a0ec42df7dd3e9483930dd81c14487209ccaf0aec9eb41",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-ufnia",
+      "experiment": "fadc718bf9ce",
+      "run": "61c31659b47a",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "32"
+        ]
+      },
+      "commands_sha256": "78d79b20934225540b3ff1b22342e4da31ecef6361c0bb9af203f34d4155afeb",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-ufnra",
+      "experiment": "fadc718bf9ce",
+      "run": "c2e6b8a1f085",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "33"
+        ]
+      },
+      "commands_sha256": "55f282f335b3bc8e378a9dcb78f66616d5eda58b4ea8ef0682e1c1dfdd2d5d5e",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "theory-models",
+      "experiment": "fadc718bf9ce",
+      "run": "210ecabed7f7",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "34"
+        ]
+      },
+      "commands_sha256": "6e2e226d457e745dfa5471c2f463a3b790316443495d25d7b843931ed0da51f9",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "regression-nia",
+      "experiment": "fadc718bf9ce",
+      "run": "7baac4e5f36d",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "35"
+        ]
+      },
+      "commands_sha256": "226f6746b14410ab6c69ca83abcede0b6ee72079e592cc84bc039ff74a19de84",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    },
+    {
+      "name": "qcp",
+      "experiment": "fadc718bf9ce",
+      "run": "8169c6541e2e",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "36"
+        ]
+      },
+      "commands_sha256": "daadd1b470e682c3d9bc764b9a876be379a0d447c629363db2e42868673764de",
+      "metrics": {
+        "checks": 3,
+        "failures": 0
+      }
+    },
+    {
+      "name": "certificate-115",
+      "experiment": "fadc718bf9ce",
+      "run": "231b37ce9e37",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "37"
+        ]
+      },
+      "commands_sha256": "6cdc02047202772bdb5ce8ac4e1a76f5ba0f5cdc5eb6a77620d0e918fb65abfd",
+      "metrics": {
+        "checks": 1,
+        "failures": 0
+      }
+    }
+  ],
+  "formal": {
+    "cases": 160,
+    "binaries": {
+      "baseline": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r721/xolver",
+        "sha256": "db4293e9a72e054cf13c4ffdbb1491c45d1ddbd4e239e6d3d229a8f86bbdd931"
+      },
+      "candidate": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r782/xolver",
+        "sha256": "9dfe72f19f1828fb44d03f46dcfe53800d6eeb25d7da8df2084ed7e2326b7baf"
+      },
+      "z3": {
+        "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+        "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      }
+    },
+    "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+    "timeout": 60,
+    "memory_bytes": 17179869184,
+    "counts": {
+      "baseline": {
+        "unsat": 43,
+        "decided": 97,
+        "verified_decided": 97,
+        "verified_par2": 7935.750565377995,
+        "raw_par2": 7935.750565377995,
+        "timeout": 62,
+        "sat": 54,
+        "unknown": 1
+      },
+      "candidate": {
+        "unsat": 44,
+        "decided": 98,
+        "verified_decided": 98,
+        "verified_par2": 7828.545162802562,
+        "raw_par2": 7828.545162802562,
+        "timeout": 61,
+        "sat": 54,
+        "unknown": 1
+      },
+      "z3": {
+        "unsat": 58,
+        "decided": 125,
+        "verified_decided": 117,
+        "verified_par2": 5440.140412364155,
+        "raw_par2": 4552.541385803372,
+        "sat": 67,
+        "timeout": 35
+      }
+    },
+    "by_logic": {
+      "QF_LIA": {
+        "baseline": {
+          "unsat": 15,
+          "decided": 34,
+          "verified_decided": 34,
+          "verified_par2": 1894.8904689364135,
+          "raw_par2": 1894.8904689364135,
+          "timeout": 14,
+          "sat": 19
+        },
+        "candidate": {
+          "unsat": 15,
+          "decided": 34,
+          "verified_decided": 34,
+          "verified_par2": 1899.5079575311393,
+          "raw_par2": 1899.5079575311393,
+          "timeout": 14,
+          "sat": 19
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 38,
+          "verified_decided": 36,
+          "verified_par2": 1477.8674739152193,
+          "raw_par2": 1277.269446613267,
+          "sat": 23,
+          "timeout": 10
+        }
+      },
+      "QF_NIA": {
+        "baseline": {
+          "timeout": 22,
+          "decided": 26,
+          "verified_decided": 26,
+          "verified_par2": 2715.373402517289,
+          "raw_par2": 2715.373402517289,
+          "unsat": 13,
+          "sat": 13
+        },
+        "candidate": {
+          "timeout": 21,
+          "decided": 27,
+          "verified_decided": 27,
+          "verified_par2": 2615.617843763903,
+          "raw_par2": 2615.617843763903,
+          "unsat": 14,
+          "sat": 13
+        },
+        "z3": {
+          "unsat": 22,
+          "decided": 35,
+          "verified_decided": 30,
+          "verified_par2": 2210.786821594462,
+          "raw_par2": 1643.4689886178821,
+          "sat": 13,
+          "timeout": 13
+        }
+      },
+      "QF_LRA": {
+        "baseline": {
+          "timeout": 16,
+          "decided": 16,
+          "verified_decided": 16,
+          "verified_par2": 1992.814600225538,
+          "raw_par2": 1992.814600225538,
+          "sat": 7,
+          "unsat": 9
+        },
+        "candidate": {
+          "timeout": 16,
+          "decided": 16,
+          "verified_decided": 16,
+          "verified_par2": 1981.0905587598681,
+          "raw_par2": 1981.0905587598681,
+          "sat": 7,
+          "unsat": 9
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 26,
+          "verified_decided": 26,
+          "verified_par2": 815.5834745429456,
+          "raw_par2": 815.5834745429456,
+          "sat": 11,
+          "timeout": 6
+        }
+      },
+      "QF_NRA": {
+        "baseline": {
+          "sat": 15,
+          "decided": 21,
+          "verified_decided": 21,
+          "verified_par2": 1332.672093698755,
+          "raw_par2": 1332.672093698755,
+          "unsat": 6,
+          "timeout": 10,
+          "unknown": 1
+        },
+        "candidate": {
+          "sat": 15,
+          "decided": 21,
+          "verified_decided": 21,
+          "verified_par2": 1332.328802747652,
+          "raw_par2": 1332.328802747652,
+          "unsat": 6,
+          "timeout": 10,
+          "unknown": 1
+        },
+        "z3": {
+          "sat": 20,
+          "decided": 26,
+          "verified_decided": 25,
+          "verified_par2": 935.9026423115283,
+          "raw_par2": 816.2194760292768,
+          "timeout": 6,
+          "unsat": 6
+        }
+      }
+    },
+    "changes": [
+      {
+        "index": 127,
+        "case": "QF_NIA/LassoRanker/Et1_true_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+        "kind": "gained",
+        "truth": "unsat",
+        "evidence": [
+          "independent-z3-xolver-agreement"
+        ],
+        "observations": {
+          "candidate": {
+            "result": "unsat",
+            "seconds": 20.063327629119158
+          },
+          "z3": {
+            "result": "unsat",
+            "seconds": 0.3317050449550152
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.435559226199985
+          }
+        }
+      }
+    ],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "unverified": [
+      {
+        "index": 12,
+        "case": "QF_LIA/fft/Sz128_2823.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 24,
+        "case": "QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 27,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 32,
+        "case": "QF_NIA/20250331-elster/C_2.smt2",
+        "results": {
+          "z3": "sat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "model query did not return SAT"
+        }
+      },
+      {
+        "index": 42,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep2a.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 80,
+        "case": "QF_LIA/cut_lemmas/20-vars/cut_lemma_03_004.smt2",
+        "results": {
+          "z3": "unsat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 114,
+        "case": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 159,
+        "case": "QF_NRA/20161105-Sturm-MGC/mgc_07.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      }
+    ],
+    "scoring": "Correct verdicts require a replayed model or an independent UNSAT decision on the identical input hash; unresolved results receive PAR-2 penalty.",
+    "supplementary_certificate": {
+      "index": 115,
+      "sha256": "48f5d0ca9b19679a48f3248ac1183c31d09e0c198bfda0a70b3b4272b6d1a5ba",
+      "check": {
+        "status": "checked-unsat",
+        "input_sha256": "02a58b11df8951543940a1090a140592e24de41dcaeb6470e7a50d42e804be64",
+        "assertion": 9,
+        "path": [
+          2
+        ],
+        "checked_residues": 12
+      },
+      "boundary": "Independent truth evidence only; timed observations unchanged."
+    },
+    "supplementary_sat_witnesses": [
+      {
+        "record_sha256": "251f695441367d616c3ee7b69b8f5bccce1df0b9322a47138f2804e032301a0a",
+        "record": {
+          "index": 94,
+          "input_sha256": "a6b68604187a341c570d8bd76135552ece1bbf958a1d7e9d4ff7f3eae998fd8f",
+          "current_report_sha256": "e16b032364a9d57b2376f0f405c972ccb1be0846c8e07528be8f4d68762132a7",
+          "model_origin": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r692/case-094/z3-model.stdout",
+          "model_sha256": "6236638ba899c1b28ca4caaf5c00c781e8bbe8ce9c8f48b6a68ac4800c308a21",
+          "model_report_sha256": "580023e20a17ae4176a1f1eb734e98cece1a7d677d7b836a95bb7bffcbaa0522",
+          "original_symbols": 47343,
+          "ignored_model_private_bindings": 247,
+          "selected_values": "Every original symbol is nullary Int/Bool with a checked ground literal; no selected value depends on ignored model-private syntax.",
+          "replay_sha256": "56e5f92326bbd1255c2aadb0f7ec36911c5ca421d20438cf8158c1da8f7bd49b",
+          "oracle_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+          "command": [
+            "prlimit",
+            "--as=17179869184",
+            "--cpu=62:63",
+            "--",
+            "/pub/data/jiafq/xolver/dependencies/oracles/cvc5",
+            "--lang=smt2",
+            "--tlimit=60000",
+            "/pub/data/jiafq/xolver/validation/arithmetic-r103/model-replay-r732/case-094/replay.smt2"
+          ],
+          "result": "sat",
+          "timing": {
+            "seconds": 2.722507094964385,
+            "launch_seconds": 0.0029956847429275513,
+            "wait_seconds": 2.7195114102214575,
+            "returncode": 0,
+            "timeout_notified_seconds": null,
+            "cleanup_seconds": null,
+            "timed_out": false,
+            "budget_overrun": false
+          },
+          "verified": true,
+          "boundary": "Supplementary truth on the same original input hash. All original assertions retained. Timed solver verdicts, get-model limitations, resource budgets and observations are unchanged."
+        },
+        "boundary": "Existing independently replayed exact ground witness on the identical original input hash. New timed rows remain immutable; no prior timed solve is substituted."
+      }
+    ],
+    "supplementary_offline_truth": {
+      "index": 50,
+      "record_sha256": "13a20b8e90bb8a8fff028fd665ee4ef661ae88e851766af64ed9b83ee255175c",
+      "record": {
+        "index": 50,
+        "case": {
+          "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_jain_5.i_2_4_3.bpl_7.smt2",
+          "member": "QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_jain_5.i_2_4_3.bpl_7.smt2",
+          "logic": "QF_LRA",
+          "family": "2017-Heizmann-UltimateInvariantSynthesis",
+          "bytes": 580508,
+          "sha256": "7e71a151d917978f1b5afc2791abf589e30c8ff97e930979df6ef82ad72dcdc0",
+          "expected": "unsat",
+          "shared_archive_member": "non-incremental/QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_jain_5.i_2_4_3.bpl_7.smt2",
+          "shared_archive_sha256": "c594f41da343112c66598ffb4cbf9bd8f8aa8c4c1283cef09d4c79b06fb4504c",
+          "archive_matches_server": true,
+          "archive_member_found": true,
+          "repetitions": 1
+        },
+        "oracle_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+        "command": [
+          "prlimit",
+          "--as=17179869184",
+          "--cpu=302:303",
+          "--",
+          "/pub/data/jiafq/xolver/dependencies/oracles/cvc5",
+          "--lang=smt2",
+          "--tlimit=300000",
+          "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_jain_5.i_2_4_3.bpl_7.smt2"
+        ],
+        "result": "unsat",
+        "timing": {
+          "seconds": 141.08723516203463,
+          "launch_seconds": 0.002185344696044922,
+          "wait_seconds": 141.0850498173386,
+          "returncode": 0,
+          "timeout_notified_seconds": null,
+          "cleanup_seconds": null,
+          "timed_out": false,
+          "budget_overrun": false
+        },
+        "verified_unsat": true,
+        "opposite_to_timed_z3": false,
+        "boundary": "OFFLINE supplementary truth on an unchanged original public fixed160 input hash, with300s verification budget/one physical CPU/16GiB. Formal Xolver/Z3 observations remain exactly60s and are neither rerun nor replaced. Verification is not a timed solution or an Xolver runtime oracle. SAT requires model replay before acceptance. No protected input."
+      },
+      "boundary": "300s independent offline verification on the identical input hash. New timed solver observations remain60s and unchanged; only eligibility is supplemented."
+    }
+  },
+  "runs": [
+    {
+      "experiment": "3c2b3c322b66",
+      "run": "cce1525fbfa8",
+      "index": 37,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "1"
+        ]
+      },
+      "report_sha256": "b4f4a68e35e5e38254052c4bdc041342b7e39e0471929448ef9dd136560d6b9a"
+    },
+    {
+      "experiment": "3c2b3c322b66",
+      "run": "37e7d914f90b",
+      "index": 116,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "2"
+        ]
+      },
+      "report_sha256": "5741866046683d896439ee434dcc091e373702276b117e7f097ba7fe7a79f32e"
+    },
+    {
+      "experiment": "3c2b3c322b66",
+      "run": "1bcd81c64e18",
+      "index": 39,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "3"
+        ]
+      },
+      "report_sha256": "8e7587abc3861841a7b069bcc42ba87442dbe46fa147712f9f47c35f03e23ac3"
+    },
+    {
+      "experiment": "3c2b3c322b66",
+      "run": "085f5fc409f5",
+      "index": 127,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "4"
+        ]
+      },
+      "report_sha256": "195565a28e2b077bd07464fc7f10507971c77d3c2b54b147dc52364d5373d65d"
+    },
+    {
+      "experiment": "3c2b3c322b66",
+      "run": "5a78479eaf52",
+      "index": 29,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "5"
+        ]
+      },
+      "report_sha256": "bfcea8795f5dcbd88bc31c18e3412134a7a5a8646d7d9d43751517067ad8f95e"
+    },
+    {
+      "experiment": "3c2b3c322b66",
+      "run": "8a8f3e733eba",
+      "index": 34,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "6"
+        ]
+      },
+      "report_sha256": "b41d6d5427804d52027a5f4f183323923df9a0fee3805598e52d517dc55edf20"
+    },
+    {
+      "experiment": "3c2b3c322b66",
+      "run": "b5b88fa94e46",
+      "index": 113,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "7"
+        ]
+      },
+      "report_sha256": "ef7f23d397892c069ff2d2c7e76064560738647fb9a1836e8e0e75765d4caf3b"
+    },
+    {
+      "experiment": "3c2b3c322b66",
+      "run": "844440fe8129",
+      "index": 155,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "8"
+        ]
+      },
+      "report_sha256": "ace1fa14eb109e5e0728459175945e9654085906b9a293eae6dc8e2d44eeb4f1"
+    },
+    {
+      "experiment": "3c2b3c322b66",
+      "run": "a4d488184dfc",
+      "index": 77,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "10"
+        ]
+      },
+      "report_sha256": "f9305d6f1a35850aa5066dff30aee47753fb2c50a976a94751dd5f061f72784b"
+    },
+    {
+      "experiment": "3c2b3c322b66",
+      "run": "03070a3c1787",
+      "index": 149,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "11"
+        ]
+      },
+      "report_sha256": "bddca3d0af4af090fd546b16e49d486f94c68431f5960128e419a578a597cd0a"
+    },
+    {
+      "experiment": "3c2b3c322b66",
+      "run": "7aaeb8c3d04c",
+      "index": 59,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "12"
+        ]
+      },
+      "report_sha256": "f609e949a7f825df0c14609800bf4187ee58395a864e0bb8fa05e16767ef7717"
+    },
+    {
+      "experiment": "3c2b3c322b66",
+      "run": "628501682d01",
+      "index": 150,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "13"
+        ]
+      },
+      "report_sha256": "2a9524c0b88dd1604f515721a8eee0bfd47a2b32a0f2c4c7901b4d5f0c657a79"
+    },
+    {
+      "experiment": "3c2b3c322b66",
+      "run": "c2462f22f5a8",
+      "index": 158,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "14"
+        ]
+      },
+      "report_sha256": "f872ec8d185fca48b2efc9f490d899573ce48b47ca7a42034ddcbcd560b852f4"
+    },
+    {
+      "experiment": "3c2b3c322b66",
+      "run": "39c7d41bf5df",
+      "index": 69,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "15"
+        ]
+      },
+      "report_sha256": "7f8e2b93d41fb3cf43b3ad41c218475f2344f479a7c76646ac8a036fdee577eb"
+    },
+    {
+      "experiment": "3c2b3c322b66",
+      "run": "2f05effdac30",
+      "index": 72,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "16"
+        ]
+      },
+      "report_sha256": "51cfbfbd439ff16dec87d3cb3f2bbb7847111dfbfc2c2a3fe3fd873b16b0ff89"
+    },
+    {
+      "experiment": "3c2b3c322b66",
+      "run": "bedf3966d617",
+      "index": 146,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "17"
+        ]
+      },
+      "report_sha256": "97f994c3abec5c1a30518ce48c328d774a82880608570a4eb21136c66c112f5c"
+    },
+    {
+      "experiment": "6c98d7455296",
+      "run": "adc72c33d18d",
+      "index": 0,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "0"
+        ]
+      },
+      "report_sha256": "b8b3212361ce6a6850c36922c558ba9672d7f5c82efad0047d0ca4c71d7fe7b1"
+    },
+    {
+      "experiment": "6c98d7455296",
+      "run": "bb71c808d449",
+      "index": 1,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "1"
+        ]
+      },
+      "report_sha256": "fa306520b56992d24c93b4dec9cc3928916fc7a563aa2165e5d4c9b3b02362ff"
+    },
+    {
+      "experiment": "6c98d7455296",
+      "run": "63e2fc79046c",
+      "index": 2,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "4"
+        ]
+      },
+      "report_sha256": "9f88217796966d2d2b73be1e352541cad433447e5deb458266835ca8ee0c0f37"
+    },
+    {
+      "experiment": "6c98d7455296",
+      "run": "65bf338a4dab",
+      "index": 3,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "5"
+        ]
+      },
+      "report_sha256": "36d3551fb943dc80599d1cb8569190bcbc57c83f1c66b4d4fee1bfb67d893766"
+    },
+    {
+      "experiment": "6c98d7455296",
+      "run": "d478ca06c125",
+      "index": 4,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "7"
+        ]
+      },
+      "report_sha256": "72380e4c2059cf5477c5ca1755437e3945c1bf57e260b282f2bdc3a5c5000efe"
+    },
+    {
+      "experiment": "6c98d7455296",
+      "run": "d746bce7cdba",
+      "index": 5,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "8"
+        ]
+      },
+      "report_sha256": "951aee52fed8c3609e442989183f0c8a109100f7721b0e1d698c13db2175dd50"
+    },
+    {
+      "experiment": "6c98d7455296",
+      "run": "897e3f0d5a03",
+      "index": 6,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "9"
+        ]
+      },
+      "report_sha256": "1697a50125c0715dfc62a47a565a7b048ab1f1d8598cabf3614e83c1995fb8d7"
+    },
+    {
+      "experiment": "6c98d7455296",
+      "run": "2334dfa4897b",
+      "index": 7,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "10"
+        ]
+      },
+      "report_sha256": "c9281b9d3bb07779d29807a60493cbcad7aa60875e0f0dc294cd519ac2d08065"
+    },
+    {
+      "experiment": "6c98d7455296",
+      "run": "5acb86840068",
+      "index": 8,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "11"
+        ]
+      },
+      "report_sha256": "ba81c9a13ca5bcf04a3032610ae5541f5834b03dda1cbb0f2a958ad4cee1cd01"
+    },
+    {
+      "experiment": "6c98d7455296",
+      "run": "1e57fb8e4ae7",
+      "index": 9,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "12"
+        ]
+      },
+      "report_sha256": "25fe60bb382d4963bfcf240d3d626e29608d5ba75596ac8bd2a3f2758ac3efa5"
+    },
+    {
+      "experiment": "6c98d7455296",
+      "run": "93530f575cd8",
+      "index": 11,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "14"
+        ]
+      },
+      "report_sha256": "bb0c2231b21697e815a5847aea356049ef28f191c87947de0c95e24825466f78"
+    },
+    {
+      "experiment": "6c98d7455296",
+      "run": "c4e4b93e4fd5",
+      "index": 12,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "18"
+        ]
+      },
+      "report_sha256": "428c45b61d9b72b5065bd20e9b88aadf0ead7a95b3df72fa97310e395a76775f"
+    },
+    {
+      "experiment": "6c98d7455296",
+      "run": "f0830bc50857",
+      "index": 13,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "20"
+        ]
+      },
+      "report_sha256": "4f94387dac05a28e9584951c594aea11ce2f39ef5732f4a033773600740a131f"
+    },
+    {
+      "experiment": "6c98d7455296",
+      "run": "51b1471ad18a",
+      "index": 14,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "21"
+        ]
+      },
+      "report_sha256": "5e5bf042cc96ae2901fa7d5c04ebaac84c443b1ddd63ee518f4b909bdecd5901"
+    },
+    {
+      "experiment": "6c98d7455296",
+      "run": "de0f58f3613e",
+      "index": 15,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "22"
+        ]
+      },
+      "report_sha256": "e0f818b787b772fb2534aab0bd4ba21b72445fe529f134811e7aa859aff44466"
+    },
+    {
+      "experiment": "6c98d7455296",
+      "run": "29fa2a1a0c57",
+      "index": 16,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "23"
+        ]
+      },
+      "report_sha256": "eca0caa2714fb4870d45ca9a7cf5f496f011b12dceee8e7b360e31b965812b4d"
+    },
+    {
+      "experiment": "6c98d7455296",
+      "run": "9209fbac6a53",
+      "index": 17,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "28"
+        ]
+      },
+      "report_sha256": "c74022da379ded32bdcee3e958bbf4991cff8e67f276fad671475a559c1a089b"
+    },
+    {
+      "experiment": "6c98d7455296",
+      "run": "68bdbadd1517",
+      "index": 18,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "30"
+        ]
+      },
+      "report_sha256": "4cdfa77c4f964152ee4cc4174f254ae456790bf10875e375608801c17a24de9c"
+    },
+    {
+      "experiment": "6c98d7455296",
+      "run": "d5d94689b501",
+      "index": 19,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "31"
+        ]
+      },
+      "report_sha256": "32b67c971652f5bc941addabf3ce843e652d29cdcba6da9de8c6d6fee2294121"
+    },
+    {
+      "experiment": "6c98d7455296",
+      "run": "d047f859f252",
+      "index": 20,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "32"
+        ]
+      },
+      "report_sha256": "658ca94970893dd8e778c6bbd64dc3b9d047e49ae26e76e6a16649b97152af48"
+    },
+    {
+      "experiment": "6c98d7455296",
+      "run": "3a996be2c538",
+      "index": 21,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "33"
+        ]
+      },
+      "report_sha256": "d3a82306ea1c1dae556050f9f35a11965ba7542f801daf844d82c80e3797c0a5"
+    },
+    {
+      "experiment": "6c98d7455296",
+      "run": "12284e28ecc9",
+      "index": 22,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "34"
+        ]
+      },
+      "report_sha256": "e2fba7901398002c012e0db1c429bc3ff23f1d6fe1816576fc9478bbdef291ed"
+    },
+    {
+      "experiment": "6c98d7455296",
+      "run": "9eaf77f99b09",
+      "index": 23,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "35"
+        ]
+      },
+      "report_sha256": "25fdd8bce8d35f78c05ff7308ddc1e1b3c07ffa1291d5b21c86230e68269d13f"
+    },
+    {
+      "experiment": "926623348c59",
+      "run": "577fdf8b25ee",
+      "index": 24,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "0"
+        ]
+      },
+      "report_sha256": "b4cf3e5b058e6d3fcc47eadea34227a18cab076ae6c4024abafddaf4c888b6cb"
+    },
+    {
+      "experiment": "926623348c59",
+      "run": "15a879df81ae",
+      "index": 25,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "5"
+        ]
+      },
+      "report_sha256": "63b452ac8c96b4973fa4c6a2e6914824a8e8840938776a5fb372ba48c63312b4"
+    },
+    {
+      "experiment": "926623348c59",
+      "run": "046defda4cbd",
+      "index": 26,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "9"
+        ]
+      },
+      "report_sha256": "f24b2fe8c2084929b580effb8abdbd05cb7d00b91fa9de4b80b967189b5c6cb3"
+    },
+    {
+      "experiment": "926623348c59",
+      "run": "0ff452a2e427",
+      "index": 27,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "11"
+        ]
+      },
+      "report_sha256": "431fc4acd91c193184c0053519cda1d59811e87b072865505143ec3030e78187"
+    },
+    {
+      "experiment": "926623348c59",
+      "run": "078a2f990792",
+      "index": 28,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "12"
+        ]
+      },
+      "report_sha256": "7c53067749be3a772693aa49ba0a8958854f62fbc80be9b681ede25bae12706b"
+    },
+    {
+      "experiment": "926623348c59",
+      "run": "f4c60f25f61d",
+      "index": 30,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "22"
+        ]
+      },
+      "report_sha256": "146b7442c6dc86ed6e4e091524509ca5d6b764418bb3c3f81f67c1459a34ab3d"
+    },
+    {
+      "experiment": "926623348c59",
+      "run": "abbb2f5dd62b",
+      "index": 31,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "28"
+        ]
+      },
+      "report_sha256": "654d2190f4d9f857295f5ab7b46b177d69c1bf415a9c1d135f308282c8ef8dcc"
+    },
+    {
+      "experiment": "926623348c59",
+      "run": "4d4be73e8c02",
+      "index": 32,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "31"
+        ]
+      },
+      "report_sha256": "eb192354a42bd8656f5e064062eaf36d9809b4c5b55a6cd4b1aa008ebe5b72d0"
+    },
+    {
+      "experiment": "926623348c59",
+      "run": "2044d9cf12db",
+      "index": 33,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "32"
+        ]
+      },
+      "report_sha256": "885dd5616a305fddacd8405b4b790202e27ec2baf0eea476e8819c3461d2091e"
+    },
+    {
+      "experiment": "926623348c59",
+      "run": "54189099b69b",
+      "index": 35,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "34"
+        ]
+      },
+      "report_sha256": "02f54d2ba36ccaa88cafc4181a2ee7ab6e9b23bbda44e29f9750f0f075cd34cb"
+    },
+    {
+      "experiment": "926623348c59",
+      "run": "f6b2abf08f8e",
+      "index": 36,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "37"
+        ]
+      },
+      "report_sha256": "6f4882817d3bc2e58a18dadea44cedcf267337e288b5ffe15537fefcb897d9b6"
+    },
+    {
+      "experiment": "926623348c59",
+      "run": "aeb3f52f8dee",
+      "index": 38,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "39"
+        ]
+      },
+      "report_sha256": "5a6617da7a90601edefd72887fe2e6acee85affdc8d183dc11c1287199b7e1ea"
+    },
+    {
+      "experiment": "926623348c59",
+      "run": "b249ad41e482",
+      "index": 40,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "40"
+        ]
+      },
+      "report_sha256": "6e4e91aaff46adc47b28dd1ce83941da80ea6ebba054acee42577f3b06e99ab9"
+    },
+    {
+      "experiment": "926623348c59",
+      "run": "077c8dd3117f",
+      "index": 41,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "44"
+        ]
+      },
+      "report_sha256": "e69223c24f741a04f6be45f63bf921cf28d9488c1bf83721501ece24a79f6c9c"
+    },
+    {
+      "experiment": "926623348c59",
+      "run": "7c9efb870a29",
+      "index": 42,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "45"
+        ]
+      },
+      "report_sha256": "248d0fdf952be6e641fd4a6890eef9f6a9f7c6e4a0aab2c4b2f77c4542c8970f"
+    },
+    {
+      "experiment": "926623348c59",
+      "run": "3ef71907e7e1",
+      "index": 43,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "46"
+        ]
+      },
+      "report_sha256": "473af74fee56f98fd2e9f96834574cd84216b183a0cc11f4e9edfd37697e2e83"
+    },
+    {
+      "experiment": "926623348c59",
+      "run": "a2621123dc25",
+      "index": 44,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "47"
+        ]
+      },
+      "report_sha256": "c6c98312b0f7db0fe56654257b62811c23a50b0aa29f3b82c1a93014adae2021"
+    },
+    {
+      "experiment": "926623348c59",
+      "run": "332fd9f26fc5",
+      "index": 45,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "50"
+        ]
+      },
+      "report_sha256": "7c454321d0102d9926e75c6dbd60c1ed8b5b8af6bdbf74889655208b55642496"
+    },
+    {
+      "experiment": "926623348c59",
+      "run": "ad55f1459f0a",
+      "index": 46,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "51"
+        ]
+      },
+      "report_sha256": "170e1ea2a81b9f6497d27efd0d6c38ce5376bed5844f09d060fa87bbae305239"
+    },
+    {
+      "experiment": "926623348c59",
+      "run": "59b8f2fdbebb",
+      "index": 47,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "52"
+        ]
+      },
+      "report_sha256": "88aa849b59a45e2f5ee438bc18adab81e547a42e4a2f842d8e83521447b28f4a"
+    },
+    {
+      "experiment": "926623348c59",
+      "run": "2697de91d0b1",
+      "index": 48,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "53"
+        ]
+      },
+      "report_sha256": "f7805ce5ecbbef4ded88f94b4b8481240cbbc5988345da79e1d8584286a59f8e"
+    },
+    {
+      "experiment": "926623348c59",
+      "run": "b017d6c87a1d",
+      "index": 49,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "54"
+        ]
+      },
+      "report_sha256": "5a4fc7eeb61dedcacdc762fcb1820597900272232ed03bb313e073139352ba26"
+    },
+    {
+      "experiment": "926623348c59",
+      "run": "83695437a2f7",
+      "index": 50,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "55"
+        ]
+      },
+      "report_sha256": "476bad0f65dbf3a9ff8b1b8d0063131dd472bb15e6feedf235c4f6d1916d02b0"
+    },
+    {
+      "experiment": "926623348c59",
+      "run": "df75ed5767a5",
+      "index": 51,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "56"
+        ]
+      },
+      "report_sha256": "4cccbb0b864354aaa19d9ae2131a5f0cb7bb6038e73d3cf0b0c46c43fb8489cc"
+    },
+    {
+      "experiment": "601fd8d73e64",
+      "run": "bfbaba346a7f",
+      "index": 52,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "5"
+        ]
+      },
+      "report_sha256": "4ecb4e08d062222937ce20e1d039730064bf4b813663e341542c4c45d6a5ede3"
+    },
+    {
+      "experiment": "601fd8d73e64",
+      "run": "7950a9be761e",
+      "index": 53,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "8"
+        ]
+      },
+      "report_sha256": "6e08c2ccd7bd36f756372ef522d8a7b95b9591ce4052b1e8ba0b71049f325a2e"
+    },
+    {
+      "experiment": "601fd8d73e64",
+      "run": "6c56957e2a45",
+      "index": 54,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "9"
+        ]
+      },
+      "report_sha256": "e7c9a854bdebf6ca299f752e12b3b1387fd70f5f5809ff921fb92defa7db11ec"
+    },
+    {
+      "experiment": "601fd8d73e64",
+      "run": "50580f8cc4a1",
+      "index": 55,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "10"
+        ]
+      },
+      "report_sha256": "c1a23bc0fadc822652cde65d979bfda8deee97547fc40f84f6bae89addfdd5f6"
+    },
+    {
+      "experiment": "601fd8d73e64",
+      "run": "a481215ae4b7",
+      "index": 56,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "12"
+        ]
+      },
+      "report_sha256": "abc983a88edebce4d6686c7e268ce20845735ee8c75351d4ab4f473470ef9489"
+    },
+    {
+      "experiment": "601fd8d73e64",
+      "run": "060ed81983cf",
+      "index": 57,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "14"
+        ]
+      },
+      "report_sha256": "71e26fac8af22ca48179482055e2d96636517181dfa73c0841b966ee1e6ea1e6"
+    },
+    {
+      "experiment": "601fd8d73e64",
+      "run": "25da651bd695",
+      "index": 58,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "22"
+        ]
+      },
+      "report_sha256": "09adb7d62578096299a9f7815740e49144f678033da330506aa9e44c42fb683b"
+    },
+    {
+      "experiment": "601fd8d73e64",
+      "run": "ca5343ee7f20",
+      "index": 60,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "37"
+        ]
+      },
+      "report_sha256": "dda2b80036ab894bd3442ed0996f6148d47e16b22cc33dd39cc186c3a241a295"
+    },
+    {
+      "experiment": "601fd8d73e64",
+      "run": "872149eda43c",
+      "index": 61,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "40"
+        ]
+      },
+      "report_sha256": "de2f01f01ee659f2b4ed6b09072788423be0bfa77743763a10d5b2ed7d681aa2"
+    },
+    {
+      "experiment": "601fd8d73e64",
+      "run": "06588c92a3de",
+      "index": 62,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "44"
+        ]
+      },
+      "report_sha256": "791b3a9d0bf9067353b97bf7be9f8ff5149d40a74b4d47e900be7f9f4d297d75"
+    },
+    {
+      "experiment": "601fd8d73e64",
+      "run": "bc3361816d4a",
+      "index": 63,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "46"
+        ]
+      },
+      "report_sha256": "85e6655d4ea7d82137b1f019edca60b530c4457ec4e297787ca382f214ddf267"
+    },
+    {
+      "experiment": "601fd8d73e64",
+      "run": "2f71bbda900a",
+      "index": 64,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "51"
+        ]
+      },
+      "report_sha256": "810306d5eb63d6eb6435dfbb9d278ef4b444baf081ac884976101d9bd7fc8c99"
+    },
+    {
+      "experiment": "601fd8d73e64",
+      "run": "1b8220e9526d",
+      "index": 65,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "57"
+        ]
+      },
+      "report_sha256": "379d43e574a0eac87ed1dbfdaed30fd1968ae52bd1dd4b112425761a6275d8e8"
+    },
+    {
+      "experiment": "601fd8d73e64",
+      "run": "3e7e248f1374",
+      "index": 66,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "58"
+        ]
+      },
+      "report_sha256": "253a524efcdfad4b40fe73403517929f304079380a6bee37b26e00dabd47383f"
+    },
+    {
+      "experiment": "601fd8d73e64",
+      "run": "026531c14496",
+      "index": 67,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "59"
+        ]
+      },
+      "report_sha256": "b8b738e00fd89b767a116015e1f30791315db77446a7f6c24e06c328891137df"
+    },
+    {
+      "experiment": "601fd8d73e64",
+      "run": "20c56421b655",
+      "index": 68,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "62"
+        ]
+      },
+      "report_sha256": "519e5e9a47d181e9c7f8e8bc91cd7353754558cdf49d3d14d16d67ff75bff8fd"
+    },
+    {
+      "experiment": "601fd8d73e64",
+      "run": "32cc9e25adb3",
+      "index": 70,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "63"
+        ]
+      },
+      "report_sha256": "a931d4e38b7a4c893ec6d92c8752a5ae0e513e6c655afdf972528a43638dd131"
+    },
+    {
+      "experiment": "601fd8d73e64",
+      "run": "84ddc6426174",
+      "index": 71,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "64"
+        ]
+      },
+      "report_sha256": "5fc514f3af0367a083f4f737623b1ae976bcf9531411083881b8bb57f35533b0"
+    },
+    {
+      "experiment": "601fd8d73e64",
+      "run": "659656468c5a",
+      "index": 73,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "69"
+        ]
+      },
+      "report_sha256": "8bfbfd0f6868fb63b52a4114c1cf16ee053994e7780d134f66c83cb5a2ef04c0"
+    },
+    {
+      "experiment": "601fd8d73e64",
+      "run": "9409de41037e",
+      "index": 74,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "73"
+        ]
+      },
+      "report_sha256": "905faa1bdc888777eec282003803eec541242a171e85bc8cc89b658f26363b13"
+    },
+    {
+      "experiment": "601fd8d73e64",
+      "run": "18995d8c3ede",
+      "index": 75,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "74"
+        ]
+      },
+      "report_sha256": "a619663ecbd926335ae1db14764bc06f1c6a5c620fc0bc3bf8b3dc373c2719bb"
+    },
+    {
+      "experiment": "601fd8d73e64",
+      "run": "be3271a5c366",
+      "index": 76,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "75"
+        ]
+      },
+      "report_sha256": "9f87f7bd130ce564e37a0faf78b39155aefd1507c999ddbd2d262bd29552448e"
+    },
+    {
+      "experiment": "601fd8d73e64",
+      "run": "bf43e2771795",
+      "index": 79,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "79"
+        ]
+      },
+      "report_sha256": "51872ad51dc2f9dfba206d5ca0448cfae4992534dba0e25efecfa748edc45dd5"
+    },
+    {
+      "experiment": "cb325f067d26",
+      "run": "0831bcc1b6a1",
+      "index": 80,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "1"
+        ]
+      },
+      "report_sha256": "5e0ad780976f04f209364644b8a882857feabbc8affdb2086d01de90dc05b50e"
+    },
+    {
+      "experiment": "cb325f067d26",
+      "run": "e4caff26875b",
+      "index": 81,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "3"
+        ]
+      },
+      "report_sha256": "5c5eaa7504fbd33cb7be83751a63f8dcdcd756d3add10667926790368c5777c3"
+    },
+    {
+      "experiment": "cb325f067d26",
+      "run": "4088556cb843",
+      "index": 82,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "5"
+        ]
+      },
+      "report_sha256": "8b8848a069259ae8e3d4fcdb09ef4015b417a0cba650b0fa9ff467bdac3c98de"
+    },
+    {
+      "experiment": "cb325f067d26",
+      "run": "124e5b3162f5",
+      "index": 83,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "7"
+        ]
+      },
+      "report_sha256": "9a1e1d51b24f1e69f51a34ed55264a37f056428b87aad84f00fa594d93416da2"
+    },
+    {
+      "experiment": "cb325f067d26",
+      "run": "ea99d6abf8d2",
+      "index": 84,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "8"
+        ]
+      },
+      "report_sha256": "88b6313bda637865a91d0cb69075b96986a7073cbbddd2ba472409e7ea877635"
+    },
+    {
+      "experiment": "cb325f067d26",
+      "run": "ebb4149f3d35",
+      "index": 85,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "10"
+        ]
+      },
+      "report_sha256": "6af776b4ff047df1ffbb5c55e41bc50371b5784b9c32620c33f49f29e3497315"
+    },
+    {
+      "experiment": "cb325f067d26",
+      "run": "e5c4ec728c1e",
+      "index": 86,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "17"
+        ]
+      },
+      "report_sha256": "9934fb294ec40fa7fb7b80a4d4328a88b769bddf959ad92d36d21300272e5ec3"
+    },
+    {
+      "experiment": "cb325f067d26",
+      "run": "840eb5f619f6",
+      "index": 87,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "20"
+        ]
+      },
+      "report_sha256": "ce9b270d2e90e9ea3c0258253e527a80afaeb1c61eae4de86b34d267b40a1d67"
+    },
+    {
+      "experiment": "cb325f067d26",
+      "run": "a6f51b8af8b8",
+      "index": 88,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "28"
+        ]
+      },
+      "report_sha256": "bf5979021adf8f8dc742ac3825d4e2b528265688a9403403f68725511c57ec30"
+    },
+    {
+      "experiment": "cb325f067d26",
+      "run": "daa0b92d9510",
+      "index": 89,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "29"
+        ]
+      },
+      "report_sha256": "3239196e9f2eb73e0008856fd395fde1919c9792662ff9fdee73536d8b881102"
+    },
+    {
+      "experiment": "cb325f067d26",
+      "run": "e053b150621a",
+      "index": 90,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "30"
+        ]
+      },
+      "report_sha256": "0e5e59a885a39c5fccd8c4a7fe5d1cadc765565874eabedc95822fd0045da27a"
+    },
+    {
+      "experiment": "cb325f067d26",
+      "run": "32aae47c7f7a",
+      "index": 91,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "35"
+        ]
+      },
+      "report_sha256": "f6e1289dae0519387015d81f1983372b9e5b9af0148588ecafeb763ede3429d1"
+    },
+    {
+      "experiment": "cb325f067d26",
+      "run": "302558972a19",
+      "index": 92,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "37"
+        ]
+      },
+      "report_sha256": "37d5352d64928df2bb826aff43e28fb0bf0374409a904d6c0a6de2a2ea828d19"
+    },
+    {
+      "experiment": "cb325f067d26",
+      "run": "71c1cf3ca187",
+      "index": 93,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "38"
+        ]
+      },
+      "report_sha256": "dec0a33c810a31c44d3cebbaf7595f08916286212952cd14b2ac2d9c965038ca"
+    },
+    {
+      "experiment": "cb325f067d26",
+      "run": "93761fecba65",
+      "index": 94,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "40"
+        ]
+      },
+      "report_sha256": "823e8c805abcb0b48cd936929ad9e769a5ccf8a0e92af1eae66556832cb17bc9"
+    },
+    {
+      "experiment": "cb325f067d26",
+      "run": "f5ff3c332c2c",
+      "index": 95,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "42"
+        ]
+      },
+      "report_sha256": "a214dfe87af343ea7b5bb0fd871840a0b4d802b8e5e7667b11dc9c1a9cedccdc"
+    },
+    {
+      "experiment": "cb325f067d26",
+      "run": "748bc3aa0fdb",
+      "index": 96,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "46"
+        ]
+      },
+      "report_sha256": "c3772b29129ab81a34e22b453157da5fb74fb0e09ec9560a7a9d825073698f8c"
+    },
+    {
+      "experiment": "cb325f067d26",
+      "run": "0742d82969ac",
+      "index": 97,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "47"
+        ]
+      },
+      "report_sha256": "f1e1e74d72f3dc7809644795e9f1a43579105d91f7ce86ee727d9f9fd12cf256"
+    },
+    {
+      "experiment": "cb325f067d26",
+      "run": "4043e3f621a5",
+      "index": 98,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "50"
+        ]
+      },
+      "report_sha256": "f16429996c2ab8c0ef3c56efffacfd192b5f3a81ad77f95141895af6f48f5cbd"
+    },
+    {
+      "experiment": "cb325f067d26",
+      "run": "1e15d8a6c1fa",
+      "index": 99,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "51"
+        ]
+      },
+      "report_sha256": "5eb27b01efa3cc454878a9ef2832eb144f70e72b1a29208719130535684bb27f"
+    },
+    {
+      "experiment": "cb325f067d26",
+      "run": "e753262db893",
+      "index": 100,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "53"
+        ]
+      },
+      "report_sha256": "508c0f3dc0273aabba1417d58bac399971f22e022312611dc698cf583ac41eef"
+    },
+    {
+      "experiment": "cb325f067d26",
+      "run": "340ec3936a5d",
+      "index": 101,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "54"
+        ]
+      },
+      "report_sha256": "811d7d54b3bb220cc2e3de902a02135141e090dc1005f2c20930e7a3b3815d26"
+    },
+    {
+      "experiment": "cb325f067d26",
+      "run": "670c9d9ea161",
+      "index": 102,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "56"
+        ]
+      },
+      "report_sha256": "492fd2de6d1cb45f3426847046058ac3a5ecaa8dc048df38dbd059d39cfd14ba"
+    },
+    {
+      "experiment": "cb325f067d26",
+      "run": "2b1fc86fc991",
+      "index": 103,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "57"
+        ]
+      },
+      "report_sha256": "bb0fefa01b07a82407ea452e28d8d47d56a09cd9424b570ff469e829599e5b8c"
+    },
+    {
+      "experiment": "da1ff228f136",
+      "run": "4f0187dc08e2",
+      "index": 104,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "0"
+        ]
+      },
+      "report_sha256": "b4b066db1d6d78a666609afe62f5a52f61fc59403d0fa3a0827e5d44ae5f31c3"
+    },
+    {
+      "experiment": "da1ff228f136",
+      "run": "254b892005e0",
+      "index": 105,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "3"
+        ]
+      },
+      "report_sha256": "3f54b8f65f997de80194adb299136acb28e58a420c2dcdfc314dba793447d9d7"
+    },
+    {
+      "experiment": "da1ff228f136",
+      "run": "5be3fa720ff7",
+      "index": 106,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "4"
+        ]
+      },
+      "report_sha256": "e82aed000cb9c39805078962a86d2b6d32968483e1d269796cd0a0507079fd62"
+    },
+    {
+      "experiment": "da1ff228f136",
+      "run": "3e20e5ce1f8b",
+      "index": 107,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "5"
+        ]
+      },
+      "report_sha256": "0020cb0c201a1cc97afcdaa9dadc2e968334f73e089de1826b6218869192c6b5"
+    },
+    {
+      "experiment": "da1ff228f136",
+      "run": "d9698f45d8db",
+      "index": 108,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "8"
+        ]
+      },
+      "report_sha256": "6a9bb738506df93a539e9670d83f49091003f44534ed95ea1aff555521dc46e9"
+    },
+    {
+      "experiment": "da1ff228f136",
+      "run": "98fc65e71d02",
+      "index": 109,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "10"
+        ]
+      },
+      "report_sha256": "3cf5a8c00e4951d7f72caa704cb8a4c895fbc2cda6c06189dc3f6c538069943b"
+    },
+    {
+      "experiment": "da1ff228f136",
+      "run": "01d67b3192eb",
+      "index": 110,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "11"
+        ]
+      },
+      "report_sha256": "c4b9b90b6ab536f1250e6517f0f502c57fa8d75113723da9bdf06d33f5f1b3e0"
+    },
+    {
+      "experiment": "da1ff228f136",
+      "run": "c9b40d862451",
+      "index": 111,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "12"
+        ]
+      },
+      "report_sha256": "d02e05e7bfc145c524bf8ce927f8437564739b1ae8a44745d49785e18ee09ac5"
+    },
+    {
+      "experiment": "da1ff228f136",
+      "run": "eb2bc4688380",
+      "index": 112,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "14"
+        ]
+      },
+      "report_sha256": "d2a806723cf80908f82716337c779d04830c8d656438abad9ce9314df431dc41"
+    },
+    {
+      "experiment": "da1ff228f136",
+      "run": "efc3430969e6",
+      "index": 114,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "18"
+        ]
+      },
+      "report_sha256": "db78500cc002a13a157e50a6252d3be8d4cbb6fc3f93b0af5ba665fc399e9ade"
+    },
+    {
+      "experiment": "da1ff228f136",
+      "run": "a2d561b14b5a",
+      "index": 115,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "20"
+        ]
+      },
+      "report_sha256": "c0070f30a424d2f3eb69004507d75a47053d3404bdc89352d4213e2d485fa82a"
+    },
+    {
+      "experiment": "da1ff228f136",
+      "run": "14e5977c46c1",
+      "index": 117,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "21"
+        ]
+      },
+      "report_sha256": "6609dc4c8c4a0e8cbee46dc0704ba3acf4002222e19b90f8b92c749a38202dc8"
+    },
+    {
+      "experiment": "da1ff228f136",
+      "run": "095018b3cc2e",
+      "index": 118,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "22"
+        ]
+      },
+      "report_sha256": "852f4a51cd8346b42a5cd25f26db7e8738a0619fba3d22ddc1c45e7b228a5d22"
+    },
+    {
+      "experiment": "da1ff228f136",
+      "run": "5874f15cff57",
+      "index": 119,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "28"
+        ]
+      },
+      "report_sha256": "c569c150f5c69386becab4d5ff07b01be8ea6816573d729e4d82e81c759054fd"
+    },
+    {
+      "experiment": "da1ff228f136",
+      "run": "ff7b7e1c3450",
+      "index": 120,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "30"
+        ]
+      },
+      "report_sha256": "8c630fcad26046dcfc6b333d0cec4d88b04a0331d6c8a9ab5d0d679066caab58"
+    },
+    {
+      "experiment": "da1ff228f136",
+      "run": "2eb9eb6fcf9b",
+      "index": 121,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "31"
+        ]
+      },
+      "report_sha256": "c5645ed71587cffa9d76af958c6f306e5ff4dfb6305650b6ad8c4a87423a0627"
+    },
+    {
+      "experiment": "da1ff228f136",
+      "run": "e5b7c040c9cd",
+      "index": 122,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "32"
+        ]
+      },
+      "report_sha256": "eaf01d42a4ea7980bcc0314361070f58d9b8e00a3abe96b2e1d48aa261ccf4f7"
+    },
+    {
+      "experiment": "da1ff228f136",
+      "run": "154e9e4211ab",
+      "index": 123,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "33"
+        ]
+      },
+      "report_sha256": "3390ac3b0dc4a24f22bb51d5429edaa56b6c2a99cc5084797c35339668e6b6ea"
+    },
+    {
+      "experiment": "da1ff228f136",
+      "run": "9b58863d23ee",
+      "index": 124,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "34"
+        ]
+      },
+      "report_sha256": "da393322a861e76d1cd92294fd89bd5199b71f2fff7d96ee11af548334285cb8"
+    },
+    {
+      "experiment": "da1ff228f136",
+      "run": "f3f9a88de073",
+      "index": 125,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "35"
+        ]
+      },
+      "report_sha256": "702256e819fcbe1658b0cfb3f9e6b03b0a80ecb2c01aa765ffc466a9d8732a76"
+    },
+    {
+      "experiment": "da1ff228f136",
+      "run": "4517759119ca",
+      "index": 126,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "37"
+        ]
+      },
+      "report_sha256": "7e075036d47a2a8cec2e205109ebb27380cbdea30af3074a3f6c8c46642007bc"
+    },
+    {
+      "experiment": "da1ff228f136",
+      "run": "af00df4c15a6",
+      "index": 128,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "39"
+        ]
+      },
+      "report_sha256": "a7ea31e3ee59d441c4dc2557319147ec91ee892b4a55053b146d4cf70c1910eb"
+    },
+    {
+      "experiment": "da1ff228f136",
+      "run": "05e3600867c6",
+      "index": 129,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "42"
+        ]
+      },
+      "report_sha256": "ee1612001489ead3824c53efd87ada83f853ac35d38c74a6eb7ee8e89d69811c"
+    },
+    {
+      "experiment": "da1ff228f136",
+      "run": "b81751672018",
+      "index": 130,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "44"
+        ]
+      },
+      "report_sha256": "c2785ca3823ba1d987b1c2162bcb568848da9bde17ed5d0ceab8d922a1864165"
+    },
+    {
+      "experiment": "a054164de83e",
+      "run": "254fbc4ee3c3",
+      "index": 131,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "10"
+        ]
+      },
+      "report_sha256": "6ebd179882acb77e7ea0ebfc7e377aed148b457a1d0e1b86aef55d6662305d61"
+    },
+    {
+      "experiment": "a054164de83e",
+      "run": "04f35fa2cdde",
+      "index": 132,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "11"
+        ]
+      },
+      "report_sha256": "2bea73621ffb086ac0109f83878fc97e15ad10df93a9875d5ba3c89fdb61950f"
+    },
+    {
+      "experiment": "a054164de83e",
+      "run": "d374abf363b6",
+      "index": 133,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "12"
+        ]
+      },
+      "report_sha256": "e252c7cca264df48f09f8b9c69ea57578d66292a31d0f3d5fa1e07aa2beca754"
+    },
+    {
+      "experiment": "a054164de83e",
+      "run": "b18e4dd18c43",
+      "index": 134,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "14"
+        ]
+      },
+      "report_sha256": "ec1569d63faa48a42be399f524e74b533ffecfc3d01eaee388547a9023104b1b"
+    },
+    {
+      "experiment": "a054164de83e",
+      "run": "b626b11d5e44",
+      "index": 135,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "21"
+        ]
+      },
+      "report_sha256": "d7c25ffba26997e1ebbad2895ac61131d618020ff85d2f2397236a4a276f9343"
+    },
+    {
+      "experiment": "a054164de83e",
+      "run": "c264a6504b77",
+      "index": 136,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "33"
+        ]
+      },
+      "report_sha256": "f703750f3f2de2aaa6e1571fc997a070e48cbcf5803bcef98ff0286f65c510b1"
+    },
+    {
+      "experiment": "a054164de83e",
+      "run": "c165d1c8c05a",
+      "index": 137,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "34"
+        ]
+      },
+      "report_sha256": "1f94058dd0e72646d4ed1e8854979149d77820f4a800e0b8f24e3e7008c916b8"
+    },
+    {
+      "experiment": "a054164de83e",
+      "run": "f64db0b048db",
+      "index": 138,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "35"
+        ]
+      },
+      "report_sha256": "c644495353b24df5d79fcc6c468db930109df045182ec67fc2ab866bd6e2816d"
+    },
+    {
+      "experiment": "a054164de83e",
+      "run": "60c937dc017a",
+      "index": 139,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "37"
+        ]
+      },
+      "report_sha256": "aa00060c02833ce0b2b250e96dbae4e028ee78a2e3fdfb64d2c95b4c1ca3803c"
+    },
+    {
+      "experiment": "a054164de83e",
+      "run": "a8ee7566deb0",
+      "index": 141,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "46"
+        ]
+      },
+      "report_sha256": "596afd0fed2a9c0dfb397af68b6d07c0d479a82078a96150b6e28e9aeef040c5"
+    },
+    {
+      "experiment": "a054164de83e",
+      "run": "31d4253af118",
+      "index": 142,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "51"
+        ]
+      },
+      "report_sha256": "d927e8a5c4fcac7ba1a2b3efaa5c07afd2cbea412385790b5c8396a9e4ffac79"
+    },
+    {
+      "experiment": "a054164de83e",
+      "run": "db2f3f1b1eac",
+      "index": 143,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "52"
+        ]
+      },
+      "report_sha256": "a1190f6462c2fefa804e64be4b772ae6d334a747323226c44544aa1ee6488677"
+    },
+    {
+      "experiment": "a054164de83e",
+      "run": "ad0bcfe69db5",
+      "index": 144,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "53"
+        ]
+      },
+      "report_sha256": "538af5b006e6b436c0010c33a1569abc369e7b8903cc64658401de91ac4a468c"
+    },
+    {
+      "experiment": "a054164de83e",
+      "run": "39b349ced44d",
+      "index": 145,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "54"
+        ]
+      },
+      "report_sha256": "88f93a12f3610f832e6c481e5332bbf1474d89535eeaa9f4524a36883db2e3d7"
+    },
+    {
+      "experiment": "a054164de83e",
+      "run": "9ad95328a79d",
+      "index": 147,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "55"
+        ]
+      },
+      "report_sha256": "68f47135281c9243790bfa8140b1808e526383c885ab4e8ff8ed925aa922a1e6"
+    },
+    {
+      "experiment": "a054164de83e",
+      "run": "8b4232f0e32c",
+      "index": 148,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "56"
+        ]
+      },
+      "report_sha256": "6521d8f980a2be6f07564f4701a8ae84479e21060e63f158bc541ddffc9f3363"
+    },
+    {
+      "experiment": "a054164de83e",
+      "run": "da4433b2186b",
+      "index": 151,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "57"
+        ]
+      },
+      "report_sha256": "ffb727910efff0a39a4a7c9e1da0fc100f54f0ee1b0f81ad0a4036974b120b90"
+    },
+    {
+      "experiment": "a054164de83e",
+      "run": "313be90fe2f9",
+      "index": 152,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "58"
+        ]
+      },
+      "report_sha256": "3f6b0b725f4a505092b470e5add96da4d9df5db8f97d2344a27536277430ff85"
+    },
+    {
+      "experiment": "a054164de83e",
+      "run": "7056cecf955a",
+      "index": 153,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "59"
+        ]
+      },
+      "report_sha256": "6cb4372eb8b617d5d0a2cbd08309cf42922caa3196f095ec43e8f70ce814a206"
+    },
+    {
+      "experiment": "a054164de83e",
+      "run": "7f0d00289fdb",
+      "index": 154,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "63"
+        ]
+      },
+      "report_sha256": "440a8ad3c915ad7b13a6eb16f943e19c320f6b8ef2335086f7d2dd9ca8905085"
+    },
+    {
+      "experiment": "a054164de83e",
+      "run": "3894f050b8ce",
+      "index": 156,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "64"
+        ]
+      },
+      "report_sha256": "854fe566d3bff4278c0eb8f69bf4e5993f07742150cb07aa71d678552e540014"
+    },
+    {
+      "experiment": "a054164de83e",
+      "run": "8b4f4c0be184",
+      "index": 157,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "66"
+        ]
+      },
+      "report_sha256": "cc5e56c66f28a3ce8c7f39e1fba94357837627b334cd29955c7abbb541a8b1e7"
+    },
+    {
+      "experiment": "a054164de83e",
+      "run": "73885d08d3eb",
+      "index": 159,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "67"
+        ]
+      },
+      "report_sha256": "9c578f35bb79d901ce4040ca1498c04926fbd0744f293de94d7eca874a3d3d9a"
+    },
+    {
+      "experiment": "75e3761eb67c",
+      "run": "acf68cf89b75",
+      "index": 10,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "0"
+        ]
+      },
+      "report_sha256": "22b30bd8f37bcfef8c2a843aebdbb45ae2d8e248ead9ff912734eb9c30ad828d"
+    },
+    {
+      "experiment": "75e3761eb67c",
+      "run": "9039e93e8f22",
+      "index": 78,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "1"
+        ]
+      },
+      "report_sha256": "13627e292e924fc2ae7536706e91ef14c48f4df8d82992aa76d179c8b92536ed"
+    },
+    {
+      "experiment": "75e3761eb67c",
+      "run": "59f1c22c7b8c",
+      "index": 140,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "2"
+        ]
+      },
+      "report_sha256": "5b29a6b02f65dfba764748bd9a3e64ed3e38a2febbd5c38c49fbde1f74bfde99"
+    }
+  ],
+  "timing_changes": [
+    {
+      "index": 18,
+      "result": "unsat",
+      "baseline_seconds": 49.63331551477313,
+      "candidate_seconds": 52.14973779581487
+    },
+    {
+      "index": 59,
+      "result": "sat",
+      "baseline_seconds": 45.27487688884139,
+      "candidate_seconds": 41.74568413570523
+    },
+    {
+      "index": 63,
+      "result": "sat",
+      "baseline_seconds": 15.860092554241419,
+      "candidate_seconds": 7.241696748882532
+    },
+    {
+      "index": 97,
+      "result": "sat",
+      "baseline_seconds": 34.30470866151154,
+      "candidate_seconds": 35.45427490584552
+    }
+  ],
+  "diagnostic": {
+    "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/profile-r787/127/report.json",
+    "sha256": "deda370c20b77f0e17529123f00415860a5c3418476316e254ecd6b3ec270761",
+    "report": {
+      "index": 127,
+      "case": {
+        "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NIA/LassoRanker/Et1_true_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+        "member": "QF_NIA/LassoRanker/Et1_true_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+        "logic": "QF_NIA",
+        "family": "LassoRanker",
+        "bytes": 6044,
+        "sha256": "e252bef1ea7e7fe3f1964728b358dcfe7a944bf3f736c584c8447c5195bae27e",
+        "expected": "unsat",
+        "shared_archive_member": "non-incremental/QF_NIA/LassoRanker/Et1_true_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+        "shared_archive_sha256": "0ec220292ed6c506b6c5dd9241e27ca7c74d8bda10a3db42249dc3f23c6d6078",
+        "archive_matches_server": true,
+        "repetitions": 1
+      },
+      "binary_sha256": "9dfe72f19f1828fb44d03f46dcfe53800d6eeb25d7da8df2084ed7e2326b7baf",
+      "lease": [
+        0
+      ],
+      "command": [
+        "prlimit",
+        "--as=17179869184",
+        "--cpu=62:63",
+        "--",
+        "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r782/xolver",
+        "solve",
+        "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NIA/LassoRanker/Et1_true_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+        "--timeout",
+        "60",
+        "--verbose"
+      ],
+      "rc": 0,
+      "seconds": 20.14700181595981,
+      "samples": 49,
+      "inclusive_frames": [
+        [
+          "std::_Function_handler<xolver::SolverAnswer (xolver::applications::satisfiability::smt::Problem const&), xolver::Solver::Impl::checkSatInternal()::{lambda(xolver::applications::satisfiability::smt::Problem const&)#1}>::_M_invoke(std::_Any_data const&, xolver::applications::satisfiability::smt::Problem const&)",
+          49
+        ],
+        [
+          "xolver::bitblast::EagerBitBlastSolver::solve(xolver::NativeTerms const&, std::vector<unsigned int, std::allocator<unsigned int> > const&)",
+          49
+        ],
+        [
+          "largeStackTrampoline",
+          49
+        ],
+        [
+          "xolver::applications::satisfiability::smt::Solver::solve(xolver::applications::satisfiability::smt::Problem const&)",
+          49
+        ],
+        [
+          "xolverSelfprofHandler(int)",
+          49
+        ],
+        [
+          "xolver::Solver::checkSat()",
+          49
+        ],
+        [
+          "xolver::Solver::Impl::checkSatGround()",
+          49
+        ],
+        [
+          "xolver::Solver::Impl::checkSatInternal()",
+          49
+        ],
+        [
+          "cmdSolve(int, char**, bool)::{lambda()#2}::operator()() const",
+          49
+        ],
+        [
+          "CaDiCaL::Internal::solve(bool)",
+          48
+        ],
+        [
+          "CaDiCaL::External::solve(bool)",
+          48
+        ],
+        [
+          "xolver::CadicalBackend::solve()",
+          48
+        ],
+        [
+          "CaDiCaL::Solver::call_external_solve_and_check_results(bool)",
+          48
+        ],
+        [
+          "CaDiCaL::Solver::solve()",
+          48
+        ],
+        [
+          "CaDiCaL::Internal::cdcl_loop_with_inprocessing()",
+          43
+        ],
+        [
+          "CaDiCaL::Internal::propagate()",
+          20
+        ],
+        [
+          "CaDiCaL::Internal::inprobe(bool)",
+          15
+        ],
+        [
+          "CaDiCaL::Internal::extract_gates(bool)",
+          6
+        ],
+        [
+          "CaDiCaL::Closure::extract_gates()",
+          6
+        ],
+        [
+          "CaDiCaL::Internal::analyze()",
+          5
+        ],
+        [
+          "CaDiCaL::Internal::sweep()",
+          5
+        ],
+        [
+          "CaDiCaL::Internal::sweep_variable(CaDiCaL::Sweeper&, int)",
+          5
+        ],
+        [
+          "CaDiCaL::Internal::preprocess(bool)",
+          4
+        ],
+        [
+          "CaDiCaL::Internal::preprocess_quickly(bool)",
+          4
+        ],
+        [
+          "CaDiCaL::Watch& std::vector<CaDiCaL::Watch, std::allocator<CaDiCaL::Watch> >::emplace_back<CaDiCaL::Watch>(CaDiCaL::Watch&&)",
+          3
+        ],
+        [
+          "CaDiCaL::Internal::search_assign(int, CaDiCaL::Clause*)",
+          3
+        ],
+        [
+          "CaDiCaL::Internal::factor()",
+          3
+        ],
+        [
+          "CaDiCaL::Internal::sweep_equivalence_candidates(CaDiCaL::Sweeper&, int, int)",
+          3
+        ],
+        [
+          "CaDiCaL::Closure::extract_xor_gates_with_base_clause(CaDiCaL::Clause*)",
+          3
+        ],
+        [
+          "CaDiCaL::Closure::extract_xor_gates()",
+          3
+        ],
+        [
+          "CaDiCaL::Closure::new_xor_gate(std::vector<CaDiCaL::LitClausePair, std::allocator<CaDiCaL::LitClausePair> > const&, int)",
+          3
+        ],
+        [
+          "CaDiCaL::Internal::elim(bool)",
+          3
+        ],
+        [
+          "CaDiCaL::Internal::new_driving_clause(int, int&)",
+          2
+        ],
+        [
+          "CaDiCaL::Internal::run_factorization(long)",
+          2
+        ],
+        [
+          "kitten_solve",
+          2
+        ],
+        [
+          "propagate",
+          2
+        ],
+        [
+          "CaDiCaL::Internal::sweep_solve()",
+          2
+        ],
+        [
+          "CaDiCaL::Closure::extract_ite_gates()",
+          2
+        ],
+        [
+          "CaDiCaL::Internal::try_to_eliminate_variable(CaDiCaL::Eliminator&, int, bool&)",
+          2
+        ],
+        [
+          "CaDiCaL::Internal::elim_round(bool&, bool&)",
+          2
+        ],
+        [
+          "CaDiCaL::Internal::decompose()",
+          2
+        ],
+        [
+          "CaDiCaL::Internal::flush_watches(int, std::vector<CaDiCaL::Watch, std::allocator<CaDiCaL::Watch> >&)",
+          2
+        ],
+        [
+          "CaDiCaL::Internal::flush_all_occs_and_watches()",
+          2
+        ],
+        [
+          "CaDiCaL::Internal::decompose_round()",
+          2
+        ],
+        [
+          "void std::__insertion_sort<__gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > >, __gnu_cxx::__ops::_Iter_comp_iter<CaDiCaL::analyze_trail_larger> >(__gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > >, __gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > >, __gnu_cxx::__ops::_Iter_comp_iter<CaDiCaL::analyze_trail_larger>)",
+          1
+        ],
+        [
+          "void std::__unguarded_linear_insert<__gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > >, __gnu_cxx::__ops::_Val_comp_iter<CaDiCaL::analyze_trail_larger> >(__gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > >, __gnu_cxx::__ops::_Val_comp_iter<CaDiCaL::analyze_trail_larger>)",
+          1
+        ],
+        [
+          "CaDiCaL::Internal::next_factor(CaDiCaL::Factoring&, unsigned int*)",
+          1
+        ],
+        [
+          "CaDiCaL::Internal::build_chain_for_units(int, CaDiCaL::Clause*, bool)",
+          1
+        ],
+        [
+          "CaDiCaL::Closure::connect_goccs(CaDiCaL::Gate*, int)",
+          1
+        ],
+        [
+          "CaDiCaL::Internal::subsume()",
+          1
+        ],
+        [
+          "CaDiCaL::Internal::strengthen_clause(CaDiCaL::Clause*, int)",
+          1
+        ],
+        [
+          "CaDiCaL::Internal::try_to_subsume_clause(CaDiCaL::Clause*, std::vector<CaDiCaL::Clause*, std::allocator<CaDiCaL::Clause*> >&)",
+          1
+        ],
+        [
+          "CaDiCaL::Internal::subsume_round()",
+          1
+        ],
+        [
+          "CaDiCaL::Closure::extract_ite_gates_of_variable(int)",
+          1
+        ],
+        [
+          "void std::__insertion_sort<__gnu_cxx::__normal_iterator<CaDiCaL::lit_equivalence*, std::vector<CaDiCaL::lit_equivalence, std::allocator<CaDiCaL::lit_equivalence> > >, __gnu_cxx::__ops::_Iter_comp_iter<CaDiCaL::litequivalence_smaller> >(__gnu_cxx::__normal_iterator<CaDiCaL::lit_equivalence*, std::vector<CaDiCaL::lit_equivalence, std::allocator<CaDiCaL::lit_equivalence> > >, __gnu_cxx::__normal_iterator<CaDiCaL::lit_equivalence*, std::vector<CaDiCaL::lit_equivalence, std::allocator<CaDiCaL::lit_equivalence> > >, __gnu_cxx::__ops::_Iter_comp_iter<CaDiCaL::litequivalence_smaller>)",
+          1
+        ],
+        [
+          "CaDiCaL::Closure::extract_ite_gates_of_literal(int)",
+          1
+        ],
+        [
+          "void std::__unguarded_linear_insert<__gnu_cxx::__normal_iterator<CaDiCaL::lit_equivalence*, std::vector<CaDiCaL::lit_equivalence, std::allocator<CaDiCaL::lit_equivalence> > >, __gnu_cxx::__ops::_Val_comp_iter<CaDiCaL::litequivalence_smaller> >(__gnu_cxx::__normal_iterator<CaDiCaL::lit_equivalence*, std::vector<CaDiCaL::lit_equivalence, std::allocator<CaDiCaL::lit_equivalence> > >, __gnu_cxx::__ops::_Val_comp_iter<CaDiCaL::litequivalence_smaller>)",
+          1
+        ],
+        [
+          "CaDiCaL::Closure::find_conditional_equivalences(int, std::vector<CaDiCaL::lit_implication, std::allocator<CaDiCaL::lit_implication> >&, std::vector<CaDiCaL::lit_equivalence, std::allocator<CaDiCaL::lit_equivalence> >&)",
+          1
+        ],
+        [
+          "CaDiCaL::Internal::flip_backbone_literals(CaDiCaL::Sweeper&)",
+          1
+        ],
+        [
+          "CaDiCaL::Internal::find_xor_gate(CaDiCaL::Eliminator&, int)",
+          1
+        ],
+        [
+          "CaDiCaL::Internal::find_gate_clauses(CaDiCaL::Eliminator&, int)",
+          1
+        ],
+        [
+          "void CaDiCaL::enlarge_zero<unsigned int>(std::vector<unsigned int, std::allocator<unsigned int> >&, unsigned long)",
+          1
+        ],
+        [
+          "std::vector<unsigned int, std::allocator<unsigned int> >::_M_fill_append(unsigned long, unsigned int const&)",
+          1
+        ],
+        [
+          "CaDiCaL::Internal::factor_mode()",
+          1
+        ],
+        [
+          "CaDiCaL::Internal::factorize_next(CaDiCaL::Factoring&, int, unsigned int)",
+          1
+        ],
+        [
+          "void std::__introsort_loop<__gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > >, long, __gnu_cxx::__ops::_Iter_comp_iter<CaDiCaL::analyze_trail_larger> >(__gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > >, __gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > >, long, __gnu_cxx::__ops::_Iter_comp_iter<CaDiCaL::analyze_trail_larger>)",
+          1
+        ],
+        [
+          "std::vector<std::vector<CaDiCaL::Watch, std::allocator<CaDiCaL::Watch> >, std::allocator<std::vector<CaDiCaL::Watch, std::allocator<CaDiCaL::Watch> > > >::_M_fill_append(unsigned long, std::vector<CaDiCaL::Watch, std::allocator<CaDiCaL::Watch> > const&)",
+          1
+        ],
+        [
+          "CaDiCaL::Internal::init_watches()",
+          1
+        ],
+        [
+          "CaDiCaL::Internal::ternary()",
+          1
+        ],
+        [
+          "std::vector<CaDiCaL::Watch, std::allocator<CaDiCaL::Watch> >* std::__do_uninit_fill_n<std::vector<CaDiCaL::Watch, std::allocator<CaDiCaL::Watch> >*, unsigned long, std::vector<CaDiCaL::Watch, std::allocator<CaDiCaL::Watch> > >(std::vector<CaDiCaL::Watch, std::allocator<CaDiCaL::Watch> >*, unsigned long, std::vector<CaDiCaL::Watch, std::allocator<CaDiCaL::Watch> > const&)",
+          1
+        ],
+        [
+          "CaDiCaL::Internal::rephase_walk()",
+          1
+        ],
+        [
+          "CaDiCaL::Internal::walk()",
+          1
+        ],
+        [
+          "CaDiCaL::Internal::decide_phase(int, bool)",
+          1
+        ],
+        [
+          "CaDiCaL::Internal::rephase()",
+          1
+        ],
+        [
+          "CaDiCaL::Internal::walk_round(long, bool)",
+          1
+        ],
+        [
+          "CaDiCaL::Internal::recompute_glue(CaDiCaL::Clause*)",
+          1
+        ],
+        [
+          "CaDiCaL::Internal::analyze_reason(int, CaDiCaL::Clause*, int&, int&, int&)",
+          1
+        ],
+        [
+          "xolver::CadicalBackend::WallClockTerminator::terminate()",
+          1
+        ],
+        [
+          "xolver::wall::elapsedMs()",
+          1
+        ],
+        [
+          "xolver::wall::remainingMs()",
+          1
+        ],
+        [
+          "citten_terminate",
+          1
+        ],
+        [
+          "CaDiCaL::Internal::eagerly_subsume_recently_learned_clauses(CaDiCaL::Clause*)",
+          1
+        ],
+        [
+          "CaDiCaL::Closure::extract_and_gates()",
+          1
+        ],
+        [
+          "CaDiCaL::Internal::backbone_propagate2(long&)",
+          1
+        ],
+        [
+          "CaDiCaL::Internal::binary_clauses_backbone()",
+          1
+        ],
+        [
+          "CaDiCaL::Internal::compute_backbone()",
+          1
+        ],
+        [
+          "CaDiCaL::Internal::compute_backbone_round(std::vector<int, std::allocator<int> >&, std::vector<int, std::allocator<int> >&, long, long&, unsigned int)",
+          1
+        ],
+        [
+          "CaDiCaL::Internal::elimfast_round(bool&, bool&)",
+          1
+        ],
+        [
+          "CaDiCaL::elim_more::operator()(unsigned int, unsigned int)",
+          1
+        ],
+        [
+          "CaDiCaL::Internal::elimfast()",
+          1
+        ],
+        [
+          "CaDiCaL::Internal::forward_false_satisfiable()",
+          1
+        ],
+        [
+          "CaDiCaL::Internal::lucky_phases()",
+          1
+        ],
+        [
+          "CaDiCaL::Internal::flush_occs(int)",
+          1
+        ],
+        [
+          "std::_Hashtable<CaDiCaL::Gate*, CaDiCaL::Gate*, std::allocator<CaDiCaL::Gate*>, std::__detail::_Identity, CaDiCaL::GateEqualTo, CaDiCaL::Hash, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<true, true, true> >::_M_find_before_node(unsigned long, CaDiCaL::Gate* const&, unsigned long) const",
+          1
+        ],
+        [
+          "CaDiCaL::Closure::find_gate_lits(std::vector<int, std::allocator<int> >&, CaDiCaL::Gate_Type, CaDiCaL::Gate*)",
+          1
+        ],
+        [
+          "CaDiCaL::Closure::find_xor_lits(std::vector<int, std::allocator<int> >&)",
+          1
+        ],
+        [
+          "std::_Hashtable<CaDiCaL::Gate*, CaDiCaL::Gate*, std::allocator<CaDiCaL::Gate*>, std::__detail::_Identity, CaDiCaL::GateEqualTo, CaDiCaL::Hash, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<true, true, true> >::find(CaDiCaL::Gate* const&)",
+          1
+        ],
+        [
+          "CaDiCaL::Internal::shrink_and_minimize_clause()",
+          1
+        ],
+        [
+          "CaDiCaL::Internal::minimize_and_shrink_block(std::reverse_iterator<__gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > > >&, unsigned int&, unsigned int&, int)",
+          1
+        ],
+        [
+          "CaDiCaL::Internal::shrink_block(std::reverse_iterator<__gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > > >&, std::reverse_iterator<__gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > > >&, int, unsigned int&, unsigned int&, int, unsigned int)",
+          1
+        ],
+        [
+          "CaDiCaL::Internal::sweep_refine_partition(CaDiCaL::Sweeper&)",
+          1
+        ],
+        [
+          "CaDiCaL::Internal::sweep_backbone_candidate(CaDiCaL::Sweeper&, int)",
+          1
+        ],
+        [
+          "kitten_signed_value",
+          1
+        ],
+        [
+          "CaDiCaL::Internal::sweep_refine(CaDiCaL::Sweeper&)",
+          1
+        ],
+        [
+          "CaDiCaL::Closure::init_ite_gate_extraction(std::vector<CaDiCaL::ClauseSize, std::allocator<CaDiCaL::ClauseSize> >&)",
+          1
+        ],
+        [
+          "void std::vector<CaDiCaL::Watch, std::allocator<CaDiCaL::Watch> >::_M_realloc_append<CaDiCaL::Watch>(CaDiCaL::Watch&&)",
+          1
+        ]
+      ],
+      "symbols": {
+        "0x22fc4b": "xolverSelfprofHandler(int)",
+        "0x234f5c": "cmdSolve(int, char**, bool)::{lambda()#2}::operator()() const",
+        "0x237692": "largeStackTrampoline",
+        "0x2676a8": "xolver::Solver::checkSat()",
+        "0x27f6a6": "xolver::Solver::Impl::checkSatInternal()",
+        "0x28b0a8": "xolver::Solver::Impl::checkSatGround()",
+        "0x28b8e2": "std::_Function_handler<xolver::SolverAnswer (xolver::applications::satisfiability::smt::Problem const&), xolver::Solver::Impl::checkSatInternal()::{lambda(xolver::applications::satisfiability::smt::Problem const&)#1}>::_M_invoke(std::_Any_data const&, xolver::applications::satisfiability::smt::Problem const&)",
+        "0x2b312a": "xolver::wall::elapsedMs()",
+        "0x2b3186": "xolver::wall::remainingMs()",
+        "0x2fcac8": "xolver::applications::satisfiability::smt::Solver::solve(xolver::applications::satisfiability::smt::Problem const&)",
+        "0x533b4b": "xolver::bitblast::EagerBitBlastSolver::solve(xolver::NativeTerms const&, std::vector<unsigned int, std::allocator<unsigned int> > const&)",
+        "0x5352c1": "xolver::bitblast::EagerBitBlastSolver::solve(xolver::NativeTerms const&, std::vector<unsigned int, std::allocator<unsigned int> > const&)",
+        "0x7b05fe": "xolver::CadicalBackend::WallClockTerminator::terminate()",
+        "0x7b318e": "xolver::CadicalBackend::solve()",
+        "0xae94b2": "CaDiCaL::Solver::call_external_solve_and_check_results(bool)",
+        "0xaee2bc": "CaDiCaL::Solver::solve()",
+        "0xb044c2": "std::vector<unsigned int, std::allocator<unsigned int> >::_M_fill_append(unsigned long, unsigned int const&)",
+        "0xb073e4": "CaDiCaL::External::solve(bool)",
+        "0xb108ac": "CaDiCaL::Internal::cdcl_loop_with_inprocessing()",
+        "0xb108cb": "CaDiCaL::Internal::cdcl_loop_with_inprocessing()",
+        "0xb109f2": "CaDiCaL::Internal::cdcl_loop_with_inprocessing()",
+        "0xb10ab0": "CaDiCaL::Internal::cdcl_loop_with_inprocessing()",
+        "0xb10ace": "CaDiCaL::Internal::cdcl_loop_with_inprocessing()",
+        "0xb11095": "CaDiCaL::Internal::preprocess_quickly(bool)",
+        "0xb110a5": "CaDiCaL::Internal::preprocess_quickly(bool)",
+        "0xb11194": "CaDiCaL::Internal::preprocess_quickly(bool)",
+        "0xb111a1": "CaDiCaL::Internal::preprocess_quickly(bool)",
+        "0xb1121f": "CaDiCaL::Internal::preprocess(bool)",
+        "0xb13da1": "CaDiCaL::Internal::solve(bool)",
+        "0xb13dda": "CaDiCaL::Internal::solve(bool)",
+        "0xb13e04": "CaDiCaL::Internal::solve(bool)",
+        "0xb1535c": "std::vector<CaDiCaL::Watch, std::allocator<CaDiCaL::Watch> >* std::__do_uninit_fill_n<std::vector<CaDiCaL::Watch, std::allocator<CaDiCaL::Watch> >*, unsigned long, std::vector<CaDiCaL::Watch, std::allocator<CaDiCaL::Watch> > >(std::vector<CaDiCaL::Watch, std::allocator<CaDiCaL::Watch> >*, unsigned long, std::vector<CaDiCaL::Watch, std::allocator<CaDiCaL::Watch> > const&)",
+        "0xb15518": "std::vector<std::vector<CaDiCaL::Watch, std::allocator<CaDiCaL::Watch> >, std::allocator<std::vector<CaDiCaL::Watch, std::allocator<CaDiCaL::Watch> > > >::_M_fill_append(unsigned long, std::vector<CaDiCaL::Watch, std::allocator<CaDiCaL::Watch> > const&)",
+        "0xb19044": "CaDiCaL::Internal::forward_false_satisfiable()",
+        "0xb1a1b2": "CaDiCaL::Internal::lucky_phases()",
+        "0xb3dfbb": "CaDiCaL::Internal::inprobe(bool)",
+        "0xb3dfc3": "CaDiCaL::Internal::inprobe(bool)",
+        "0xb3dfe7": "CaDiCaL::Internal::inprobe(bool)",
+        "0xb3e007": "CaDiCaL::Internal::inprobe(bool)",
+        "0xb3e02f": "CaDiCaL::Internal::inprobe(bool)",
+        "0xb3e182": "CaDiCaL::Internal::inprobe(bool)",
+        "0xb44070": "CaDiCaL::Internal::build_chain_for_units(int, CaDiCaL::Clause*, bool)",
+        "0xb4450a": "CaDiCaL::Internal::propagate()",
+        "0xb445d2": "CaDiCaL::Internal::propagate()",
+        "0xb44612": "CaDiCaL::Internal::propagate()",
+        "0xb44621": "CaDiCaL::Internal::propagate()",
+        "0xb4474e": "CaDiCaL::Internal::propagate()",
+        "0xb4479e": "CaDiCaL::Internal::propagate()",
+        "0xb447a8": "CaDiCaL::Internal::propagate()",
+        "0xb447b8": "CaDiCaL::Internal::propagate()",
+        "0xb447bf": "CaDiCaL::Internal::propagate()",
+        "0xb447c7": "CaDiCaL::Internal::propagate()",
+        "0xb447d0": "CaDiCaL::Internal::propagate()",
+        "0xb447d8": "CaDiCaL::Internal::propagate()",
+        "0xb447ef": "CaDiCaL::Internal::propagate()",
+        "0xb44a6b": "CaDiCaL::Internal::propagate()",
+        "0xb44aaf": "CaDiCaL::Internal::propagate()",
+        "0xb44bba": "CaDiCaL::Internal::search_assign(int, CaDiCaL::Clause*)",
+        "0xb44bc4": "CaDiCaL::Internal::search_assign(int, CaDiCaL::Clause*)",
+        "0xb44c94": "CaDiCaL::Internal::search_assign(int, CaDiCaL::Clause*)",
+        "0xb44dad": "void std::vector<CaDiCaL::Watch, std::allocator<CaDiCaL::Watch> >::_M_realloc_append<CaDiCaL::Watch>(CaDiCaL::Watch&&)",
+        "0xb44e4a": "CaDiCaL::Watch& std::vector<CaDiCaL::Watch, std::allocator<CaDiCaL::Watch> >::emplace_back<CaDiCaL::Watch>(CaDiCaL::Watch&&)",
+        "0xb44e72": "CaDiCaL::Watch& std::vector<CaDiCaL::Watch, std::allocator<CaDiCaL::Watch> >::emplace_back<CaDiCaL::Watch>(CaDiCaL::Watch&&)",
+        "0xb476c9": "CaDiCaL::Internal::rephase_walk()",
+        "0xb47cd3": "CaDiCaL::Internal::rephase()",
+        "0xb4b4a8": "citten_terminate",
+        "0xb4b744": "CaDiCaL::Internal::sweep_solve()",
+        "0xb4e896": "CaDiCaL::Internal::flip_backbone_literals(CaDiCaL::Sweeper&)",
+        "0xb4ee06": "CaDiCaL::Internal::sweep_refine_partition(CaDiCaL::Sweeper&)",
+        "0xb4f163": "CaDiCaL::Internal::sweep_refine(CaDiCaL::Sweeper&)",
+        "0xb4f23c": "CaDiCaL::Internal::sweep_backbone_candidate(CaDiCaL::Sweeper&, int)",
+        "0xb4f2ff": "CaDiCaL::Internal::sweep_equivalence_candidates(CaDiCaL::Sweeper&, int, int)",
+        "0xb4f648": "CaDiCaL::Internal::sweep_equivalence_candidates(CaDiCaL::Sweeper&, int, int)",
+        "0xb4f76d": "CaDiCaL::Internal::sweep_equivalence_candidates(CaDiCaL::Sweeper&, int, int)",
+        "0xb50949": "CaDiCaL::Internal::sweep_variable(CaDiCaL::Sweeper&, int)",
+        "0xb50b1f": "CaDiCaL::Internal::sweep_variable(CaDiCaL::Sweeper&, int)",
+        "0xb50ebf": "CaDiCaL::Internal::sweep_variable(CaDiCaL::Sweeper&, int)",
+        "0xb52871": "CaDiCaL::Internal::sweep()",
+        "0xb54f85": "CaDiCaL::Internal::ternary()",
+        "0xb63c1d": "CaDiCaL::Internal::walk_round(long, bool)",
+        "0xb64a78": "CaDiCaL::Internal::walk()",
+        "0xb6927e": "CaDiCaL::Internal::init_watches()",
+        "0xb6b30f": "propagate",
+        "0xb6b49c": "propagate",
+        "0xb6cb9b": "kitten_solve",
+        "0xb6e6b3": "kitten_signed_value",
+        "0xb6fea2": "CaDiCaL::Internal::recompute_glue(CaDiCaL::Clause*)",
+        "0xb701a3": "CaDiCaL::Internal::eagerly_subsume_recently_learned_clauses(CaDiCaL::Clause*)",
+        "0xb70f3e": "CaDiCaL::Internal::new_driving_clause(int, int&)",
+        "0xb70f56": "CaDiCaL::Internal::new_driving_clause(int, int&)",
+        "0xb71ca4": "CaDiCaL::Internal::analyze()",
+        "0xb71d27": "CaDiCaL::Internal::analyze()",
+        "0xb71f67": "CaDiCaL::Internal::analyze()",
+        "0xb7215c": "CaDiCaL::Internal::analyze()",
+        "0xb73160": "CaDiCaL::Internal::analyze_reason(int, CaDiCaL::Clause*, int&, int&, int&)",
+        "0xb74524": "void std::__unguarded_linear_insert<__gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > >, __gnu_cxx::__ops::_Val_comp_iter<CaDiCaL::analyze_trail_larger> >(__gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > >, __gnu_cxx::__ops::_Val_comp_iter<CaDiCaL::analyze_trail_larger>)",
+        "0xb745fe": "void std::__insertion_sort<__gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > >, __gnu_cxx::__ops::_Iter_comp_iter<CaDiCaL::analyze_trail_larger> >(__gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > >, __gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > >, __gnu_cxx::__ops::_Iter_comp_iter<CaDiCaL::analyze_trail_larger>)",
+        "0xb74cec": "void std::__introsort_loop<__gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > >, long, __gnu_cxx::__ops::_Iter_comp_iter<CaDiCaL::analyze_trail_larger> >(__gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > >, __gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > >, long, __gnu_cxx::__ops::_Iter_comp_iter<CaDiCaL::analyze_trail_larger>)",
+        "0xb75b05": "CaDiCaL::Internal::compute_backbone_round(std::vector<int, std::allocator<int> >&, std::vector<int, std::allocator<int> >&, long, long&, unsigned int)",
+        "0xb76078": "CaDiCaL::Internal::compute_backbone()",
+        "0xb76726": "CaDiCaL::Internal::binary_clauses_backbone()",
+        "0xb77416": "CaDiCaL::Internal::backbone_propagate2(long&)",
+        "0xb7bf2d": "CaDiCaL::Internal::flush_occs(int)",
+        "0xb7c0c0": "CaDiCaL::Internal::flush_all_occs_and_watches()",
+        "0xb7d3f3": "CaDiCaL::Internal::flush_watches(int, std::vector<CaDiCaL::Watch, std::allocator<CaDiCaL::Watch> >&)",
+        "0xb7d41c": "CaDiCaL::Internal::flush_watches(int, std::vector<CaDiCaL::Watch, std::allocator<CaDiCaL::Watch> >&)",
+        "0xb86a8f": "CaDiCaL::Closure::connect_goccs(CaDiCaL::Gate*, int)",
+        "0xb8d000": "CaDiCaL::Closure::init_ite_gate_extraction(std::vector<CaDiCaL::ClauseSize, std::allocator<CaDiCaL::ClauseSize> >&)",
+        "0xb8e544": "CaDiCaL::Closure::find_gate_lits(std::vector<int, std::allocator<int> >&, CaDiCaL::Gate_Type, CaDiCaL::Gate*)",
+        "0xb8e653": "CaDiCaL::Closure::find_xor_lits(std::vector<int, std::allocator<int> >&)",
+        "0xb99fb8": "CaDiCaL::Closure::new_xor_gate(std::vector<CaDiCaL::LitClausePair, std::allocator<CaDiCaL::LitClausePair> > const&, int)",
+        "0xb9a0c9": "CaDiCaL::Closure::new_xor_gate(std::vector<CaDiCaL::LitClausePair, std::allocator<CaDiCaL::LitClausePair> > const&, int)",
+        "0xb9a1e5": "CaDiCaL::Closure::new_xor_gate(std::vector<CaDiCaL::LitClausePair, std::allocator<CaDiCaL::LitClausePair> > const&, int)",
+        "0xb9a5bc": "CaDiCaL::Closure::extract_xor_gates_with_base_clause(CaDiCaL::Clause*)",
+        "0xb9a704": "CaDiCaL::Closure::extract_xor_gates()",
+        "0xb9ae86": "CaDiCaL::Closure::extract_and_gates()",
+        "0xb9b0fa": "CaDiCaL::Closure::find_conditional_equivalences(int, std::vector<CaDiCaL::lit_implication, std::allocator<CaDiCaL::lit_implication> >&, std::vector<CaDiCaL::lit_equivalence, std::allocator<CaDiCaL::lit_equivalence> >&)",
+        "0xb9b17d": "CaDiCaL::Closure::extract_ite_gates_of_literal(int)",
+        "0xb9b3ad": "CaDiCaL::Closure::extract_ite_gates_of_variable(int)",
+        "0xb9b4f5": "CaDiCaL::Closure::extract_ite_gates()",
+        "0xb9b5b8": "CaDiCaL::Closure::extract_ite_gates()",
+        "0xb9b6c5": "CaDiCaL::Closure::extract_gates()",
+        "0xb9b7e3": "CaDiCaL::Closure::extract_gates()",
+        "0xb9b8f3": "CaDiCaL::Closure::extract_gates()",
+        "0xb9bc17": "CaDiCaL::Internal::extract_gates(bool)",
+        "0xba0602": "std::_Hashtable<CaDiCaL::Gate*, CaDiCaL::Gate*, std::allocator<CaDiCaL::Gate*>, std::__detail::_Identity, CaDiCaL::GateEqualTo, CaDiCaL::Hash, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<true, true, true> >::_M_find_before_node(unsigned long, CaDiCaL::Gate* const&, unsigned long) const",
+        "0xba081c": "std::_Hashtable<CaDiCaL::Gate*, CaDiCaL::Gate*, std::allocator<CaDiCaL::Gate*>, std::__detail::_Identity, CaDiCaL::GateEqualTo, CaDiCaL::Hash, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<true, true, true> >::find(CaDiCaL::Gate* const&)",
+        "0xba260f": "void std::__unguarded_linear_insert<__gnu_cxx::__normal_iterator<CaDiCaL::lit_equivalence*, std::vector<CaDiCaL::lit_equivalence, std::allocator<CaDiCaL::lit_equivalence> > >, __gnu_cxx::__ops::_Val_comp_iter<CaDiCaL::litequivalence_smaller> >(__gnu_cxx::__normal_iterator<CaDiCaL::lit_equivalence*, std::vector<CaDiCaL::lit_equivalence, std::allocator<CaDiCaL::lit_equivalence> > >, __gnu_cxx::__ops::_Val_comp_iter<CaDiCaL::litequivalence_smaller>)",
+        "0xba273d": "void std::__insertion_sort<__gnu_cxx::__normal_iterator<CaDiCaL::lit_equivalence*, std::vector<CaDiCaL::lit_equivalence, std::allocator<CaDiCaL::lit_equivalence> > >, __gnu_cxx::__ops::_Iter_comp_iter<CaDiCaL::litequivalence_smaller> >(__gnu_cxx::__normal_iterator<CaDiCaL::lit_equivalence*, std::vector<CaDiCaL::lit_equivalence, std::allocator<CaDiCaL::lit_equivalence> > >, __gnu_cxx::__normal_iterator<CaDiCaL::lit_equivalence*, std::vector<CaDiCaL::lit_equivalence, std::allocator<CaDiCaL::lit_equivalence> > >, __gnu_cxx::__ops::_Iter_comp_iter<CaDiCaL::litequivalence_smaller>)",
+        "0xba4958": "CaDiCaL::Internal::decide_phase(int, bool)",
+        "0xba8006": "CaDiCaL::Internal::decompose_round()",
+        "0xba85af": "CaDiCaL::Internal::decompose()",
+        "0xbab2d6": "CaDiCaL::elim_more::operator()(unsigned int, unsigned int)",
+        "0xbac9c8": "CaDiCaL::Internal::try_to_eliminate_variable(CaDiCaL::Eliminator&, int, bool&)",
+        "0xbacbe9": "CaDiCaL::Internal::try_to_eliminate_variable(CaDiCaL::Eliminator&, int, bool&)",
+        "0xbad73c": "CaDiCaL::Internal::elim_round(bool&, bool&)",
+        "0xbade44": "CaDiCaL::Internal::elim(bool)",
+        "0xbadf6e": "CaDiCaL::Internal::elim(bool)",
+        "0xbb0299": "CaDiCaL::Internal::elimfast_round(bool&, bool&)",
+        "0xbb0c97": "CaDiCaL::Internal::elimfast()",
+        "0xbb1d11": "CaDiCaL::Internal::next_factor(CaDiCaL::Factoring&, unsigned int*)",
+        "0xbb2101": "CaDiCaL::Internal::factorize_next(CaDiCaL::Factoring&, int, unsigned int)",
+        "0xbb2e0b": "void CaDiCaL::enlarge_zero<unsigned int>(std::vector<unsigned int, std::allocator<unsigned int> >&, unsigned long)",
+        "0xbb349f": "CaDiCaL::Internal::factor_mode()",
+        "0xbb3fa4": "CaDiCaL::Internal::run_factorization(long)",
+        "0xbb3fc0": "CaDiCaL::Internal::run_factorization(long)",
+        "0xbb4488": "CaDiCaL::Internal::factor()",
+        "0xbb4493": "CaDiCaL::Internal::factor()",
+        "0xbb80cf": "CaDiCaL::Internal::find_xor_gate(CaDiCaL::Eliminator&, int)",
+        "0xbb8bcf": "CaDiCaL::Internal::find_gate_clauses(CaDiCaL::Eliminator&, int)",
+        "0xbc6e8d": "CaDiCaL::Internal::shrink_block(std::reverse_iterator<__gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > > >&, std::reverse_iterator<__gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > > >&, int, unsigned int&, unsigned int&, int, unsigned int)",
+        "0xbc735f": "CaDiCaL::Internal::minimize_and_shrink_block(std::reverse_iterator<__gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > > >&, unsigned int&, unsigned int&, int)",
+        "0xbc766b": "CaDiCaL::Internal::shrink_and_minimize_clause()",
+        "0xbc8680": "CaDiCaL::Internal::strengthen_clause(CaDiCaL::Clause*, int)",
+        "0xbc90e2": "CaDiCaL::Internal::subsume_round()",
+        "0xbc9b62": "CaDiCaL::Internal::subsume()",
+        "0xbc9f48": "CaDiCaL::Internal::try_to_subsume_clause(CaDiCaL::Clause*, std::vector<CaDiCaL::Clause*, std::allocator<CaDiCaL::Clause*> >&)"
+      },
+      "boundary": "Instrumented diagnostic, excluded from formal performance scores"
+    },
+    "polynomial_trace": "rounds=10 facts=21 substitutions=11 cancellations=1 divisions=39 eliminations=2 var_queries=924 var_hits=333 var_facts=10 conflict=1 exhausted=0 us=2525\nrounds=12 facts=24 substitutions=14 cancellations=1 divisions=70 eliminations=2 var_queries=1163 var_hits=409 var_facts=10 conflict=1 exhausted=0 us=2995\nrounds=13 facts=20 substitutions=8 cancellations=0 divisions=308 eliminations=2 var_queries=3002 var_hits=1284 var_facts=11 conflict=1 exhausted=0 us=7088\nrounds=11 facts=24 substitutions=14 cancellations=1 divisions=73 eliminations=2 var_queries=1109 var_hits=410 var_facts=10 conflict=1 exhausted=0 us=2961\n",
+    "boundary": "Instrumented diagnostic, excluded from formal scores."
+  },
+  "excluded_initial_timing_records": [
+    {
+      "index": 10,
+      "experiment": "6c98d7455296",
+      "run": "0f6354f8c930",
+      "status": "timeout",
+      "exit_code": 124,
+      "duration_s": 722.096382,
+      "progress_sha256": "d871ea1c2aba526b9d8f83fe7ab657b3a96a865834a5942acf6b1903cf03f293",
+      "progress": {
+        "index": 10,
+        "case": {
+          "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LIA/20220307-SMPT/RwMutex-PT-r0010w2000/RC-12.smt2",
+          "member": "QF_LIA/20220307-SMPT/RwMutex-PT-r0010w2000/RC-12.smt2",
+          "logic": "QF_LIA",
+          "family": "20220307-SMPT",
+          "bytes": 2104499,
+          "sha256": "fac0ee809f0b4b16dd1e2b53c658b29b399c36ff2044e219bd7d7b02bff5112c",
+          "expected": "unsat",
+          "shared_archive_member": "non-incremental/QF_LIA/20220307-SMPT/RwMutex-PT-r0010w2000/RC-12.smt2",
+          "shared_archive_sha256": "47f34fff3323f52e04ee33e611b80fd31b8f7f0177b7a9891b2499b259da69cf",
+          "archive_matches_server": true,
+          "archive_member_found": true,
+          "repetitions": 1
+        },
+        "binaries": {
+          "baseline": {
+            "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r721/xolver",
+            "sha256": "db4293e9a72e054cf13c4ffdbb1491c45d1ddbd4e239e6d3d229a8f86bbdd931"
+          },
+          "candidate": {
+            "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r782/xolver",
+            "sha256": "9dfe72f19f1828fb44d03f46dcfe53800d6eeb25d7da8df2084ed7e2326b7baf"
+          },
+          "z3": {
+            "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+            "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+          }
+        },
+        "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+        "timeout": 60,
+        "memory_bytes": 17179869184,
+        "observations": {
+          "candidate": {
+            "result": "timeout",
+            "seconds": 612.5974548328668,
+            "launch_seconds": 0.002611374482512474,
+            "wait_seconds": 612.5948434583843,
+            "returncode": -9,
+            "timeout_notified_seconds": 612.5760507658124,
+            "cleanup_seconds": 0.021404067054390907,
+            "timed_out": true,
+            "budget_overrun": true,
+            "command": [
+              "prlimit",
+              "--as=17179869184",
+              "--cpu=62:63",
+              "--",
+              "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r782/xolver",
+              "solve",
+              "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LIA/20220307-SMPT/RwMutex-PT-r0010w2000/RC-12.smt2",
+              "--timeout",
+              "60"
+            ],
+            "cpu": 13
+          },
+          "z3": {
+            "result": "timeout",
+            "seconds": 60.01332531683147,
+            "launch_seconds": 0.0018937960267066956,
+            "wait_seconds": 60.01143152080476,
+            "returncode": -9,
+            "timeout_notified_seconds": 60.00009477697313,
+            "cleanup_seconds": 0.013230539858341217,
+            "timed_out": true,
+            "budget_overrun": false,
+            "command": [
+              "prlimit",
+              "--as=17179869184",
+              "--cpu=62:63",
+              "--",
+              "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+              "-T:60",
+              "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LIA/20220307-SMPT/RwMutex-PT-r0010w2000/RC-12.smt2"
+            ],
+            "cpu": 13
+          }
+        }
+      }
+    },
+    {
+      "index": 78,
+      "experiment": "601fd8d73e64",
+      "run": "9fd03bc3256c",
+      "status": "timeout",
+      "exit_code": 124,
+      "duration_s": 729.047841,
+      "progress_sha256": "bd61645aa1e22c3b07d4dff54965a0c740b82fe2b75e6af677766cd2aba6fa2e",
+      "progress": {
+        "index": 78,
+        "case": {
+          "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NRA/zankl/matrix-5-all-18.smt2",
+          "member": "QF_NRA/zankl/matrix-5-all-18.smt2",
+          "logic": "QF_NRA",
+          "family": "zankl",
+          "bytes": 21679,
+          "sha256": "9023df798ff52be6eba5a8aa2485d541f30461e2e2d1301687c1d23c88e5ee11",
+          "expected": "unknown",
+          "shared_archive_member": "non-incremental/QF_NRA/zankl/matrix-5-all-18.smt2",
+          "shared_archive_sha256": "fd4a0d330192dc622d1746daef26649f52803dcd197923e4a26c5596e226546c",
+          "archive_matches_server": true,
+          "archive_member_found": true,
+          "repetitions": 1
+        },
+        "binaries": {
+          "baseline": {
+            "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r721/xolver",
+            "sha256": "db4293e9a72e054cf13c4ffdbb1491c45d1ddbd4e239e6d3d229a8f86bbdd931"
+          },
+          "candidate": {
+            "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r782/xolver",
+            "sha256": "9dfe72f19f1828fb44d03f46dcfe53800d6eeb25d7da8df2084ed7e2326b7baf"
+          },
+          "z3": {
+            "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+            "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+          }
+        },
+        "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+        "timeout": 60,
+        "memory_bytes": 17179869184,
+        "observations": {
+          "baseline": {
+            "result": "timeout",
+            "seconds": 600.8569768331945,
+            "launch_seconds": 0.0029156245291233063,
+            "wait_seconds": 600.8540612086654,
+            "returncode": -9,
+            "timeout_notified_seconds": 600.8456448446959,
+            "cleanup_seconds": 0.011331988498568535,
+            "timed_out": true,
+            "budget_overrun": true,
+            "command": [
+              "prlimit",
+              "--as=17179869184",
+              "--cpu=62:63",
+              "--",
+              "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r721/xolver",
+              "solve",
+              "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NRA/zankl/matrix-5-all-18.smt2",
+              "--timeout",
+              "60"
+            ],
+            "cpu": 78
+          },
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.03073018230498,
+            "launch_seconds": 0.00195370614528656,
+            "wait_seconds": 60.02877647615969,
+            "returncode": -9,
+            "timeout_notified_seconds": 60.0000707320869,
+            "cleanup_seconds": 0.030659450218081474,
+            "timed_out": true,
+            "budget_overrun": false,
+            "command": [
+              "prlimit",
+              "--as=17179869184",
+              "--cpu=62:63",
+              "--",
+              "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r782/xolver",
+              "solve",
+              "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NRA/zankl/matrix-5-all-18.smt2",
+              "--timeout",
+              "60"
+            ],
+            "cpu": 78
+          }
+        }
+      }
+    },
+    {
+      "index": 140,
+      "experiment": "a054164de83e",
+      "run": "287f7816c4c6",
+      "status": "failed",
+      "exit_code": 1,
+      "duration_s": 191.511887,
+      "report_sha256": "7ebe3db2dbb6a74a17ade303357f83492803dc7ead81c4597481864b18a5fa0b",
+      "report": {
+        "index": 140,
+        "case": {
+          "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_count_by_k.i_3_3_2.bpl_11.smt2",
+          "member": "QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_count_by_k.i_3_3_2.bpl_11.smt2",
+          "logic": "QF_LRA",
+          "family": "2017-Heizmann-UltimateInvariantSynthesis",
+          "bytes": 172434,
+          "sha256": "25c2f83d7472d18a6da057a5a6de8f34db140369d987a7f63d4fa578a30875dc",
+          "expected": "unsat",
+          "shared_archive_member": "non-incremental/QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_count_by_k.i_3_3_2.bpl_11.smt2",
+          "shared_archive_sha256": "c594f41da343112c66598ffb4cbf9bd8f8aa8c4c1283cef09d4c79b06fb4504c",
+          "archive_matches_server": true,
+          "repetitions": 1
+        },
+        "binaries": {
+          "baseline": {
+            "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r721/xolver",
+            "sha256": "db4293e9a72e054cf13c4ffdbb1491c45d1ddbd4e239e6d3d229a8f86bbdd931"
+          },
+          "candidate": {
+            "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r782/xolver",
+            "sha256": "9dfe72f19f1828fb44d03f46dcfe53800d6eeb25d7da8df2084ed7e2326b7baf"
+          },
+          "z3": {
+            "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+            "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+          }
+        },
+        "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+        "timeout": 60,
+        "memory_bytes": 17179869184,
+        "observations": {
+          "z3": {
+            "result": "timeout",
+            "seconds": 60.03808483667672,
+            "launch_seconds": 0.002996044233441353,
+            "wait_seconds": 60.035088792443275,
+            "returncode": 0,
+            "timeout_notified_seconds": 60.03796275705099,
+            "cleanup_seconds": 0.00012207962572574615,
+            "timed_out": true,
+            "budget_overrun": false,
+            "command": [
+              "prlimit",
+              "--as=17179869184",
+              "--cpu=62:63",
+              "--",
+              "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+              "-T:60",
+              "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_count_by_k.i_3_3_2.bpl_11.smt2"
+            ],
+            "cpu": 45,
+            "verified": false
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 65.44109483622015,
+            "launch_seconds": 0.006978139281272888,
+            "wait_seconds": 65.43411669693887,
+            "returncode": -9,
+            "timeout_notified_seconds": 65.43696772679687,
+            "cleanup_seconds": 0.004127109423279762,
+            "timed_out": true,
+            "budget_overrun": true,
+            "command": [
+              "prlimit",
+              "--as=17179869184",
+              "--cpu=62:63",
+              "--",
+              "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r721/xolver",
+              "solve",
+              "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_count_by_k.i_3_3_2.bpl_11.smt2",
+              "--timeout",
+              "60"
+            ],
+            "cpu": 45,
+            "verified": false
+          },
+          "candidate": {
+            "result": "timeout",
+            "seconds": 61.58397783525288,
+            "launch_seconds": 0.0017573684453964233,
+            "wait_seconds": 61.582220466807485,
+            "returncode": -9,
+            "timeout_notified_seconds": 61.57720481231809,
+            "cleanup_seconds": 0.006773022934794426,
+            "timed_out": true,
+            "budget_overrun": true,
+            "command": [
+              "prlimit",
+              "--as=17179869184",
+              "--cpu=62:63",
+              "--",
+              "/pub/data/jiafq/xolver/validation/arithmetic-r103/core-r782/xolver",
+              "solve",
+              "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_count_by_k.i_3_3_2.bpl_11.smt2",
+              "--timeout",
+              "60"
+            ],
+            "cpu": 45,
+            "verified": false
+          }
+        },
+        "wrong_verdict": false,
+        "protocol_errors": [
+          {
+            "label": "baseline",
+            "seconds": 65.44109483622015,
+            "launch_seconds": 0.006978139281272888,
+            "wait_seconds": 65.43411669693887,
+            "returncode": -9,
+            "timeout_notified_seconds": 65.43696772679687,
+            "cleanup_seconds": 0.004127109423279762,
+            "timed_out": true,
+            "budget_overrun": true
+          },
+          {
+            "label": "candidate",
+            "seconds": 61.58397783525288,
+            "launch_seconds": 0.0017573684453964233,
+            "wait_seconds": 61.582220466807485,
+            "returncode": -9,
+            "timeout_notified_seconds": 61.57720481231809,
+            "cleanup_seconds": 0.006773022934794426,
+            "timed_out": true,
+            "budget_overrun": true
+          }
+        ]
+      }
+    }
+  ],
+  "retry_boundary": "Only the two outer-timeout incomplete triads10/78 and protocol-overrun triad140 are excluded. R790 repeats all three solvers at identical60s/one physical CPU/16GiB; all other157 valid original rows remain immutable.",
+  "formal_pilot_record_sha256": "f8eb25278ef9fade9ac3bdd6dedaef624b88bcf347a8b5cfef612f1a537a0014",
+  "actual_prefix_component": {
+    "sha256": "d42770a32585872b61357d9d649d4e3a7bff40fcfcc26efeade321776e82b135",
+    "record": {
+      "parent_source": "61b5180ab9b1440215b358d091fe1e5a28fdeaa2",
+      "candidate_cpp_sha256": "7a54f30d2a2f3dae02e91aa0b4a53af5e6bb7200226b598b4b4dc6aa5678afe0",
+      "candidate_tests_sha256": "e1c284a6a412ddf9c3dda5787fd263289099de645c5223f9b6f19b86a0029a25",
+      "unit_sha256": "8bff2f93375cf0348fad8ba87e43bcb0c91994effc5eee42810977fa96ccbfa9",
+      "replay_sha256": "a57e9b603359bb8bb250ca2a175baac005d2867ae2a0e0b56a7ef3cdda7226eb",
+      "prefixes": [
+        {
+          "ordinal": 1,
+          "input_sha256": "c351d2397edfe4c1075df31ba7dc57f56fdddc283c22bd3b17454b66b7a6366e",
+          "standard": {
+            "conflict": 1,
+            "micros": 1961,
+            "rounds": 10,
+            "facts": 20,
+            "substitutions": 10,
+            "eliminations": 2,
+            "queries": 366,
+            "hits": 159,
+            "exhausted": 0,
+            "reasons": [
+              [
+                14,
+                1
+              ],
+              [
+                19,
+                1
+              ],
+              [
+                5,
+                1
+              ],
+              [
+                15,
+                1
+              ],
+              [
+                23,
+                1
+              ],
+              [
+                20,
+                1
+              ],
+              [
+                28,
+                1
+              ],
+              [
+                25,
+                1
+              ],
+              [
+                26,
+                1
+              ],
+              [
+                12,
+                1
+              ],
+              [
+                24,
+                1
+              ],
+              [
+                17,
+                1
+              ],
+              [
+                29,
+                1
+              ],
+              [
+                2,
+                1
+              ],
+              [
+                16,
+                1
+              ],
+              [
+                18,
+                1
+              ]
+            ],
+            "trace": "",
+            "explanation_check": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.0333859920501709,
+                "launch_seconds": 0.001989319920539856,
+                "wait_seconds": 0.03139667212963104,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "oracle_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+              "proof_sha256": "1f51940dbf19c686a12cce1772984d5ac0cdf30cf4de6ee288a9ff769efd587b"
+            }
+          },
+          "candidate": {
+            "conflict": 1,
+            "micros": 2118,
+            "rounds": 10,
+            "facts": 21,
+            "substitutions": 11,
+            "eliminations": 2,
+            "queries": 924,
+            "hits": 333,
+            "exhausted": 0,
+            "reasons": [
+              [
+                14,
+                1
+              ],
+              [
+                19,
+                1
+              ],
+              [
+                5,
+                1
+              ],
+              [
+                15,
+                1
+              ],
+              [
+                23,
+                1
+              ],
+              [
+                20,
+                1
+              ],
+              [
+                28,
+                1
+              ],
+              [
+                25,
+                1
+              ],
+              [
+                26,
+                1
+              ],
+              [
+                12,
+                1
+              ],
+              [
+                24,
+                1
+              ],
+              [
+                17,
+                1
+              ],
+              [
+                29,
+                1
+              ],
+              [
+                2,
+                1
+              ],
+              [
+                16,
+                1
+              ],
+              [
+                18,
+                1
+              ]
+            ],
+            "trace": "",
+            "explanation_check": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.03333082050085068,
+                "launch_seconds": 0.001933615654706955,
+                "wait_seconds": 0.03139720484614372,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "oracle_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+              "proof_sha256": "1f51940dbf19c686a12cce1772984d5ac0cdf30cf4de6ee288a9ff769efd587b"
+            }
+          }
+        },
+        {
+          "ordinal": 2,
+          "input_sha256": "11d91ea446e30435eb3964d2ce72a18f57eb58b45bee74206ebea7be67cfe9ce",
+          "standard": {
+            "conflict": 1,
+            "micros": 2438,
+            "rounds": 12,
+            "facts": 24,
+            "substitutions": 15,
+            "eliminations": 2,
+            "queries": 427,
+            "hits": 207,
+            "exhausted": 0,
+            "reasons": [
+              [
+                17,
+                1
+              ],
+              [
+                29,
+                1
+              ],
+              [
+                1,
+                1
+              ],
+              [
+                16,
+                1
+              ],
+              [
+                18,
+                1
+              ],
+              [
+                15,
+                1
+              ],
+              [
+                23,
+                1
+              ],
+              [
+                5,
+                1
+              ],
+              [
+                14,
+                1
+              ],
+              [
+                19,
+                1
+              ],
+              [
+                20,
+                1
+              ],
+              [
+                28,
+                1
+              ],
+              [
+                25,
+                1
+              ],
+              [
+                26,
+                1
+              ],
+              [
+                12,
+                1
+              ],
+              [
+                24,
+                1
+              ],
+              [
+                10,
+                1
+              ]
+            ],
+            "trace": "",
+            "explanation_check": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.03360707499086857,
+                "launch_seconds": 0.0022039953619241714,
+                "wait_seconds": 0.0314030796289444,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "oracle_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+              "proof_sha256": "04201fbab6081de1e89a87a09bc87b89e20bb660e47f8f0bf56858c2dc3d4e01"
+            }
+          },
+          "candidate": {
+            "conflict": 1,
+            "micros": 2797,
+            "rounds": 12,
+            "facts": 24,
+            "substitutions": 14,
+            "eliminations": 2,
+            "queries": 1163,
+            "hits": 409,
+            "exhausted": 0,
+            "reasons": [
+              [
+                17,
+                1
+              ],
+              [
+                29,
+                1
+              ],
+              [
+                1,
+                1
+              ],
+              [
+                20,
+                1
+              ],
+              [
+                28,
+                1
+              ],
+              [
+                25,
+                1
+              ],
+              [
+                26,
+                1
+              ],
+              [
+                12,
+                1
+              ],
+              [
+                24,
+                1
+              ],
+              [
+                15,
+                1
+              ],
+              [
+                23,
+                1
+              ],
+              [
+                5,
+                1
+              ],
+              [
+                14,
+                1
+              ],
+              [
+                19,
+                1
+              ],
+              [
+                16,
+                1
+              ],
+              [
+                18,
+                1
+              ],
+              [
+                10,
+                1
+              ]
+            ],
+            "trace": "",
+            "explanation_check": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.033279260620474815,
+                "launch_seconds": 0.0018704161047935486,
+                "wait_seconds": 0.03140884451568127,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "oracle_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+              "proof_sha256": "04201fbab6081de1e89a87a09bc87b89e20bb660e47f8f0bf56858c2dc3d4e01"
+            }
+          }
+        },
+        {
+          "ordinal": 3,
+          "input_sha256": "449876228001c647dcaf2cfe2201178a5111462b0225299e6f973584d361bf79",
+          "standard": {
+            "conflict": 0,
+            "micros": 10123,
+            "rounds": 19,
+            "facts": 25,
+            "substitutions": 8,
+            "eliminations": 13,
+            "queries": 1198,
+            "hits": 703,
+            "exhausted": 1,
+            "reasons": [],
+            "trace": ""
+          },
+          "candidate": {
+            "conflict": 1,
+            "micros": 6947,
+            "rounds": 13,
+            "facts": 20,
+            "substitutions": 8,
+            "eliminations": 2,
+            "queries": 3002,
+            "hits": 1284,
+            "exhausted": 0,
+            "reasons": [
+              [
+                17,
+                1
+              ],
+              [
+                29,
+                1
+              ],
+              [
+                1,
+                1
+              ],
+              [
+                16,
+                1
+              ],
+              [
+                18,
+                1
+              ],
+              [
+                14,
+                1
+              ],
+              [
+                19,
+                1
+              ],
+              [
+                4,
+                1
+              ],
+              [
+                15,
+                1
+              ],
+              [
+                23,
+                1
+              ],
+              [
+                25,
+                1
+              ],
+              [
+                26,
+                1
+              ],
+              [
+                12,
+                1
+              ],
+              [
+                24,
+                1
+              ],
+              [
+                21,
+                1
+              ],
+              [
+                9,
+                1
+              ],
+              [
+                10,
+                1
+              ],
+              [
+                20,
+                1
+              ],
+              [
+                28,
+                1
+              ],
+              [
+                11,
+                1
+              ]
+            ],
+            "trace": "refine v5:7->3\nrefine v6:7->3\nrefine v7:5->4\n",
+            "explanation_check": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.03318304382264614,
+                "launch_seconds": 0.001729687675833702,
+                "wait_seconds": 0.03145335614681244,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "oracle_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+              "proof_sha256": "3a978e25a893ba776d2f71ba7937f82a20e81165f5f177d1c2393124ae839ea9"
+            }
+          }
+        }
+      ],
+      "boundary": "Component development only. Both implementations keep the standard10ms/100k-work/32round allocation. Inputs and original SAT reasons exactly replay R764/R766. Candidate is not yet a whole-solver binary; no fixed-suite score, protected input or runtime oracle."
+    }
+  },
+  "independent_unit_explanations": {
+    "sha256": "853a404d4826d14144372527a1574de4f194a73a08d56fddc59950a2187788ac",
+    "record": {
+      "qualified_library_sha256": "3b96805445b4aae6927eb32b71810b42095c020175ebc882d6b2dafa7fd9bb4f",
+      "unit_sha256": "59b353aef9289e05b3aefc6a47163febfecc23b09d490cfc4239db080e013a70",
+      "harness_sha256": "db01ab105399b8345150dfa8a994d433834063019f4149eaba02e966242c8596",
+      "checked": [
+        {
+          "path": "explanation-1.smt2",
+          "sha256": "fc33fb86037938a77d96bb9fa3abed372183350752408ac5951abd598d0d9033",
+          "oracles": {
+            "z3-5.3.2": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.034067921340465546,
+                "launch_seconds": 0.0026639290153980255,
+                "wait_seconds": 0.03140399232506752,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+            },
+            "cvc5": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.009522130712866783,
+                "launch_seconds": 0.0022415872663259506,
+                "wait_seconds": 0.0072805434465408325,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102"
+            }
+          }
+        },
+        {
+          "path": "explanation-10.smt2",
+          "sha256": "3a5a71eaf01df208691075faeacb291d6244103199e3d8c047728f47ca41a3e5",
+          "oracles": {
+            "z3-5.3.2": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.03462126478552818,
+                "launch_seconds": 0.003222143277525902,
+                "wait_seconds": 0.03139912150800228,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+            },
+            "cvc5": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.03353796526789665,
+                "launch_seconds": 0.0019114241003990173,
+                "wait_seconds": 0.031626541167497635,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102"
+            }
+          }
+        },
+        {
+          "path": "explanation-11.smt2",
+          "sha256": "ad06696b3d8658e6ce647303bc8ed6316068d0125883a905eac1bb205c15a561",
+          "oracles": {
+            "z3-5.3.2": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.03371278755366802,
+                "launch_seconds": 0.002226307988166809,
+                "wait_seconds": 0.03148647956550121,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+            },
+            "cvc5": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.018173525109887123,
+                "launch_seconds": 0.0023158714175224304,
+                "wait_seconds": 0.015857653692364693,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102"
+            }
+          }
+        },
+        {
+          "path": "explanation-12.smt2",
+          "sha256": "19a22ac4541e1f6685719fd476ab5d0a4529d56ce7c70a8342a9a2bef069eeaa",
+          "oracles": {
+            "z3-5.3.2": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.033611904829740524,
+                "launch_seconds": 0.0021184906363487244,
+                "wait_seconds": 0.0314934141933918,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+            },
+            "cvc5": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.018386326730251312,
+                "launch_seconds": 0.0027752071619033813,
+                "wait_seconds": 0.015611119568347931,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102"
+            }
+          }
+        },
+        {
+          "path": "explanation-13.smt2",
+          "sha256": "0426cde91141d085febc3b884bcff3a57def9c01d1cb60cbe5a1833f93af5474",
+          "oracles": {
+            "z3-5.3.2": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.03424109145998955,
+                "launch_seconds": 0.0028242263942956924,
+                "wait_seconds": 0.031416865065693855,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+            },
+            "cvc5": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.017768507823348045,
+                "launch_seconds": 0.0024148058146238327,
+                "wait_seconds": 0.015353702008724213,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102"
+            }
+          }
+        },
+        {
+          "path": "explanation-14.smt2",
+          "sha256": "06d2469a364e2514f4ef8afaaa18d04e1589de868dce6f93386a6e3758c29b82",
+          "oracles": {
+            "z3-5.3.2": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.03413064032793045,
+                "launch_seconds": 0.002716919407248497,
+                "wait_seconds": 0.03141372092068195,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+            },
+            "cvc5": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.06562641449272633,
+                "launch_seconds": 0.0018758643418550491,
+                "wait_seconds": 0.06375055015087128,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102"
+            }
+          }
+        },
+        {
+          "path": "explanation-15.smt2",
+          "sha256": "c802ac3425d59e225f775999bc2fde5d28413c90e8cb81b61484349c2159020b",
+          "oracles": {
+            "z3-5.3.2": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.03372695483267307,
+                "launch_seconds": 0.0019240472465753555,
+                "wait_seconds": 0.03180290758609772,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+            },
+            "cvc5": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.01753905974328518,
+                "launch_seconds": 0.0021883994340896606,
+                "wait_seconds": 0.015350660309195518,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102"
+            }
+          }
+        },
+        {
+          "path": "explanation-16.smt2",
+          "sha256": "9318c6c754fa4b2553c2e659dfd77d89739ca192f65face6f32933fe2daa910c",
+          "oracles": {
+            "z3-5.3.2": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.033680809661746025,
+                "launch_seconds": 0.0020006131380796432,
+                "wait_seconds": 0.03168019652366638,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+            },
+            "cvc5": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.01752203144133091,
+                "launch_seconds": 0.0019053015857934952,
+                "wait_seconds": 0.015616729855537415,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102"
+            }
+          }
+        },
+        {
+          "path": "explanation-17.smt2",
+          "sha256": "7f5903b39192c9ea8a1219d576d98104cc8e809ec892ab886f63c5924a37346d",
+          "oracles": {
+            "z3-5.3.2": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.03421449847519398,
+                "launch_seconds": 0.002788351848721504,
+                "wait_seconds": 0.03142614662647247,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+            },
+            "cvc5": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.01745057851076126,
+                "launch_seconds": 0.0021061021834611893,
+                "wait_seconds": 0.015344476327300072,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102"
+            }
+          }
+        },
+        {
+          "path": "explanation-18.smt2",
+          "sha256": "9ca8c94e191fe00b429c57999099a165e4da4c7f2768243e51f77541b241722a",
+          "oracles": {
+            "z3-5.3.2": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.033812759444117546,
+                "launch_seconds": 0.002380434423685074,
+                "wait_seconds": 0.03143232502043247,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+            },
+            "cvc5": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.0656445287168026,
+                "launch_seconds": 0.00197594054043293,
+                "wait_seconds": 0.06366858817636967,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102"
+            }
+          }
+        },
+        {
+          "path": "explanation-2.smt2",
+          "sha256": "ad7ac93c17fd3d6e35ab0fd6eb94b2662e558734c470ec6a474a211079544ab9",
+          "oracles": {
+            "z3-5.3.2": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.034011235460639,
+                "launch_seconds": 0.0025790464133024216,
+                "wait_seconds": 0.03143218904733658,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+            },
+            "cvc5": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.017567727714776993,
+                "launch_seconds": 0.0019294917583465576,
+                "wait_seconds": 0.015638235956430435,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102"
+            }
+          }
+        },
+        {
+          "path": "explanation-3.smt2",
+          "sha256": "7dc3edacef3d8eb00c6cf5144e4a36f1a76134262c4566e01a8abe1a90069c08",
+          "oracles": {
+            "z3-5.3.2": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.03379138000309467,
+                "launch_seconds": 0.0022658929228782654,
+                "wait_seconds": 0.03152548708021641,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+            },
+            "cvc5": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.01807434670627117,
+                "launch_seconds": 0.002702683210372925,
+                "wait_seconds": 0.015371663495898247,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102"
+            }
+          }
+        },
+        {
+          "path": "explanation-4.smt2",
+          "sha256": "a9edd55e435df1358a51ab0463ea14e5fa17f16fba362527553f621b7dc13da7",
+          "oracles": {
+            "z3-5.3.2": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.033563282340765,
+                "launch_seconds": 0.001994449645280838,
+                "wait_seconds": 0.03156883269548416,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+            },
+            "cvc5": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.018033640459179878,
+                "launch_seconds": 0.0026625003665685654,
+                "wait_seconds": 0.015371140092611313,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102"
+            }
+          }
+        },
+        {
+          "path": "explanation-5.smt2",
+          "sha256": "9135541dd69b26c52891a54f24487b89ce64acd2b7f0049bed2510a98a3992df",
+          "oracles": {
+            "z3-5.3.2": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.06591669097542763,
+                "launch_seconds": 0.0018528960645198822,
+                "wait_seconds": 0.06406379491090775,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+            },
+            "cvc5": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.21653121337294579,
+                "launch_seconds": 0.002659296616911888,
+                "wait_seconds": 0.2138719167560339,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102"
+            }
+          }
+        },
+        {
+          "path": "explanation-6.smt2",
+          "sha256": "4f7bf5353a3be7329f667cc1608817f72c7beef44062c76ec9b9658125492782",
+          "oracles": {
+            "z3-5.3.2": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.034257909283041954,
+                "launch_seconds": 0.0027969684451818466,
+                "wait_seconds": 0.03146094083786011,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+            },
+            "cvc5": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.03348257951438427,
+                "launch_seconds": 0.0019503049552440643,
+                "wait_seconds": 0.031532274559140205,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102"
+            }
+          }
+        },
+        {
+          "path": "explanation-7.smt2",
+          "sha256": "50fbaf8467612da1038d0525f176b484ee7eff7ec0e418f0061de6201606d94b",
+          "oracles": {
+            "z3-5.3.2": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.06636975146830082,
+                "launch_seconds": 0.0022250916808843613,
+                "wait_seconds": 0.06414465978741646,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+            },
+            "cvc5": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 1.4689407087862492,
+                "launch_seconds": 0.002185160294175148,
+                "wait_seconds": 1.466755548492074,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102"
+            }
+          }
+        },
+        {
+          "path": "explanation-8.smt2",
+          "sha256": "f9b50df75b311a9b98fcc1a5fb08f2f0e83d4325f29ab31744d74c4e0d2a6c3e",
+          "oracles": {
+            "z3-5.3.2": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.06709293089807034,
+                "launch_seconds": 0.002100510522723198,
+                "wait_seconds": 0.06499242037534714,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+            },
+            "cvc5": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.01808456890285015,
+                "launch_seconds": 0.0025485120713710785,
+                "wait_seconds": 0.015536056831479073,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102"
+            }
+          }
+        },
+        {
+          "path": "explanation-9.smt2",
+          "sha256": "dd7489a3fa9498cc325947c6a1ccdb96bbc99bb3952e42ff3f6386d362dbc795",
+          "oracles": {
+            "z3-5.3.2": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.06631371192634106,
+                "launch_seconds": 0.0027032941579818726,
+                "wait_seconds": 0.06361041776835918,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+            },
+            "cvc5": {
+              "result": "unsat",
+              "timing": {
+                "seconds": 0.01800374872982502,
+                "launch_seconds": 0.002449752762913704,
+                "wait_seconds": 0.015553995966911316,
+                "returncode": 0,
+                "timeout_notified_seconds": null,
+                "cleanup_seconds": null,
+                "timed_out": false,
+                "budget_overrun": false
+              },
+              "sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102"
+            }
+          }
+        }
+      ],
+      "initial_trial": "R777 explanation export emitted unary product, rejected by cvc5; corrected export repeats the entire explanation group with the latest component, without altering original failed logs.",
+      "boundary": "Independent offline checks of the original premises selected by new unit-test conflict explanations; no solver runtime oracle, timed-suite observation or protected input."
+    }
+  },
+  "predecessor_pilots": {
+    "resultants": {
+      "stage_sha256": "7af94f0521860d579b8a3ba90844b0211e7c77d53ad34ca3ec47e4d2c9c719d4",
+      "counts": {
+        "baseline": {
+          "timeout": 11,
+          "decided": 5,
+          "verified_decided": 5,
+          "verified_par2": 1388.1080111823976,
+          "raw_par2": 1388.1080111823976,
+          "unsat": 2,
+          "sat": 3
+        },
+        "candidate": {
+          "timeout": 11,
+          "decided": 5,
+          "verified_decided": 5,
+          "verified_par2": 1387.3180198259652,
+          "raw_par2": 1387.3180198259652,
+          "unsat": 2,
+          "sat": 3
+        },
+        "z3": {
+          "unsat": 8,
+          "decided": 16,
+          "verified_decided": 16,
+          "verified_par2": 36.60869308374822,
+          "raw_par2": 36.60869308374822,
+          "sat": 8
+        }
+      },
+      "changes": []
+    },
+    "variable_index": {
+      "counts": {
+        "baseline": {
+          "timeout": 11,
+          "decided": 5,
+          "verified_decided": 5,
+          "verified_par2": 1384.455281889066,
+          "raw_par2": 1384.455281889066,
+          "unsat": 2,
+          "sat": 3
+        },
+        "candidate": {
+          "timeout": 11,
+          "decided": 5,
+          "verified_decided": 5,
+          "verified_par2": 1384.3323688339442,
+          "raw_par2": 1384.3323688339442,
+          "unsat": 2,
+          "sat": 3
+        },
+        "z3": {
+          "unsat": 8,
+          "decided": 16,
+          "verified_decided": 16,
+          "verified_par2": 36.14191234111786,
+          "raw_par2": 36.14191234111786,
+          "sat": 8
+        }
+      },
+      "changes": []
+    }
+  },
+  "implementation": "Shared NIA/NRA exact polynomial closure uses original SAT reasons for linear resultants, backward orthant exclusion, every constant-leading affine pivot, nested factor sign proofs, radical normalization of repeated zero factors, and local fixed-substitution/index reuse. The pass stays10ms/100k-work/32rounds, no persistent backtrack state, external runtime oracle, feature gate or input-name rule.",
+  "above_z3": false,
+  "protected_sets_used": false,
+  "extra_current_main_server_archive_required": false,
+  "boundary": "Fresh fixed160 timed round; every valid original timing row is retained. Supplementary exact modular certificate, ground SAT witness and300s offline UNSAT decision bind identical input hashes and do not replace timed results. Full37-group source acceptance and1798 native tests pass. Neither protected set or QCP whole-program performance is used."
+}
