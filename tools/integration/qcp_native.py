@@ -117,6 +117,8 @@ def extract_checks(text: str) -> list[NativeCheck]:
             target = text[target_span[0]:target_span[1]].strip()
             if not source or not target:
                 raise Unsupported('native source or target is empty')
+            if len(checks) >= 10000:
+                raise Unsupported('native check allocation exhausted')
             checks.append(NativeCheck(source, target, flag, source_span, target_span))
             source_start = target_start = source_span = None
     if source_start is not None or target_start is not None:
@@ -126,13 +128,22 @@ def extract_checks(text: str) -> list[NativeCheck]:
     return checks
 
 
-def _constant(term: Term) -> bool:
-    return term.smt.isdecimal() or term.op in ('+', '-', '*') and all(_constant(a) for a in term.args)
-
-
 def _nonlinear(term: Term) -> bool:
-    return (term.op == '*' and sum(not _constant(a) for a in term.args) > 1
-            or any(_nonlinear(a) for a in term.args))
+    constants = {}
+    pending = [(term, False)]
+    while pending:
+        node, visited = pending.pop()
+        if id(node) in constants:
+            continue
+        if not visited:
+            pending.append((node, True))
+            pending.extend((child, False) for child in node.args)
+            continue
+        if node.op == '*' and sum(not constants[id(a)] for a in node.args) > 1:
+            return True
+        constants[id(node)] = node.smt.isdecimal() or (
+            node.op in ('+', '-', '*') and all(constants[id(a)] for a in node.args))
+    return False
 
 
 def query(check: NativeCheck) -> tuple[str, dict]:
@@ -145,7 +156,7 @@ def query(check: NativeCheck) -> tuple[str, dict]:
     logic = 'QF_' + ('UF' if functions else '') + ('NIA' if nonlinear else 'LIA')
     lines = ['(set-logic ' + logic + ')']
     lines += [f'(declare-const |{name}| Int)' for name in sorted(symbols)]
-    lines += [f'(declare-fun |{name}| (CoreTypes) Int)'.replace('CoreTypes', ' '.join(['Int'] * arity))
+    lines += [f"(declare-fun |{name}| ({' '.join(['Int'] * arity)}) Int)"
               for name, arity in sorted(functions.items())]
     lines += [f'(assert {source.smt})', f'(assert (not {target.smt}))', '(check-sat)', '(exit)', '']
     return '\n'.join(lines), dict(logic=logic, variables=sorted(symbols),
@@ -157,7 +168,10 @@ def export_trace(trace: Path, output: Path) -> dict:
     raw = trace.read_bytes()
     if len(raw) > 16 * 1024**2:
         raise Unsupported('native trace byte budget exhausted')
-    text = raw.decode('utf-8')
+    try:
+        text = raw.decode('utf-8')
+    except UnicodeDecodeError as error:
+        raise Unsupported('native trace is not UTF-8') from error
     checks = extract_checks(text)
     output.mkdir(parents=True, exist_ok=False)
     report = dict(schema='qcp-native-smt-trace/1', trace_sha256=hashlib.sha256(raw).hexdigest(),
@@ -172,7 +186,7 @@ def export_trace(trace: Path, output: Path) -> dict:
     for ordinal, check in enumerate(checks):
         row = dict(ordinal=ordinal, native_flag=check.native_flag,
                    source=check.source, target=check.target,
-                   source_span=check.source_span, target_span=check.target_span)
+                   source_span=list(check.source_span), target_span=list(check.target_span))
         try:
             script, details = query(check)
             name = f'query-{ordinal:05d}.smt2'

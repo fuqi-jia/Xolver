@@ -59,6 +59,13 @@ class NativeQcpTests(unittest.TestCase):
                               ('f(x_0*x_1) > 0', 'QF_UFNIA')]:
             _, details = query(NativeCheck('TT', target, 0, (0, 0), (0, 0)))
             self.assertEqual(details['logic'], logic)
+        _, details = query(NativeCheck('TT', '+'.join(['x_0'] + ['1'] * 600) + '> 0', 0, (0, 0), (0, 0)))
+        self.assertEqual(details['logic'], 'QF_LIA')
+
+    def test_function_names_and_nullary_applications_are_preserved(self):
+        script, _ = query(NativeCheck('TT', 'CoreTypes(x_0) = f()', 0, (0, 0), (0, 0)))
+        self.assertIn('(declare-fun |CoreTypes| (Int) Int)', script)
+        self.assertIn('(declare-fun |f| () Int)', script)
 
     def test_duplicate_calls_and_all_native_flags_are_retained(self):
         text = 'unrelated diagnostics\n' + trace('TT', 'x_0 = x_0', -1) * 2 + trace('TT', 'FF', 1)
