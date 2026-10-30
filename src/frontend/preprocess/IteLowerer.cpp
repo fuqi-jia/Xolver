@@ -385,34 +385,38 @@ ExprId IteLowerer::lowerAssertion(ExprId assertion) {
         for (ExprId e : boolWork) allExprs.insert(e);
         for (const auto& key : termWork) allExprs.insert(key.expr);
 
-        std::vector<ExprId> stack;
+        // get() materializes a node by value. Keep its children in the active
+        // frame, together with the cursor, so neither decoding a wide node nor
+        // scanning its earlier children repeats when a descendant completes.
+        struct Frame {
+            ExprId expression;
+            SmallVector<ExprId, 4> children;
+            size_t nextChild = 0;
+        };
+        std::vector<Frame> stack;
         std::unordered_set<ExprId> visited;
         stack.reserve(1024);
         visited.reserve(1024);
+        auto pushFrame = [&](ExprId expression) {
+            auto node = ir_.get(expression);
+            stack.push_back({expression, std::move(node.children)});
+        };
 
         for (ExprId root : allExprs) {
             if (!visited.insert(root).second) continue;
-            stack.push_back(root);
+            pushFrame(root);
 
             while (!stack.empty()) {
-                ExprId e = stack.back();
-                const auto& node = ir_.get(e);
-
-                bool allChildrenVisited = true;
-                for (ExprId child : node.children) {
-                    if (allExprs.count(child)) {
-                        if (visited.insert(child).second) {
-                            stack.push_back(child);
-                            allChildrenVisited = false;
-                            break;
-                        }
-                    }
-                }
-
-                if (allChildrenVisited) {
+                auto& frame = stack.back();
+                ExprId e = frame.expression;
+                if (frame.nextChild == frame.children.size()) {
                     postOrder.push_back(e);
                     stack.pop_back();
+                    continue;
                 }
+                ExprId child = frame.children[frame.nextChild++];
+                if (allExprs.count(child) && visited.insert(child).second)
+                    pushFrame(child);
             }
         }
     }

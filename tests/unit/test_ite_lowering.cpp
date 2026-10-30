@@ -30,6 +30,54 @@ static size_t countVariables(const NativeTerms& ir, ExprId eid) {
     return countKind(ir, eid, Kind::Variable);
 }
 
+TEST_CASE("IteLowerer: wide shared DAG preserves nested Boolean and arithmetic choices") {
+    for (const auto kind : {SortKind::Int, SortKind::Real}) {
+        NativeTerms ir;
+        const auto boolean = ir.allocateSortId();
+        const auto arithmetic = ir.allocateSortId();
+        ir.registerSort(boolean, SortKind::Bool);
+        ir.registerSort(arithmetic, kind);
+        ir.setBoolSortId(boolean);
+        if (kind == SortKind::Int) ir.setIntSortId(arithmetic);
+        else ir.setRealSortId(arithmetic);
+        auto variable = [&](SortId sort, const std::string& name) {
+            return ir.add(TermExpr{Kind::Variable, sort, {}, Payload(name)});
+        };
+        const auto flag = variable(boolean, "flag");
+        const auto p = variable(boolean, "p"), q = variable(boolean, "q");
+        const auto condition = ir.add(TermExpr{Kind::Ite, boolean, {flag, p, q}, Payload{}});
+        const auto x = variable(arithmetic, "x"), y = variable(arithmetic, "y");
+        const auto choice = ir.add(TermExpr{Kind::Ite, arithmetic, {condition, x, y}, Payload{}});
+        TermExpr conjunction{Kind::And, boolean, {}, Payload{}};
+        std::vector<ExprId> originalVariables;
+        for (size_t i = 0; i < 4096; ++i) {
+            const auto z = variable(arithmetic, "z" + std::to_string(i));
+            originalVariables.push_back(z);
+            conjunction.children.push_back(ir.add(TermExpr{Kind::Eq, boolean, {z, choice}, Payload{}}));
+        }
+        const auto root = ir.add(std::move(conjunction));
+        IteLowerer lowerer(ir);
+        const auto lowered = lowerer.lowerAssertion(root);
+        CHECK_FALSE(containsIte(ir, lowered));
+        REQUIRE(ir.get(lowered).children.size() == originalVariables.size());
+        REQUIRE(lowerer.generatedAssertions().size() == 6);
+        const auto replacement = ir.get(ir.get(lowered).children[0]).children[1];
+        CHECK(ir.get(replacement).sort == arithmetic);
+        for (size_t i = 0; i < originalVariables.size(); ++i) {
+            const auto& equality = ir.get(ir.get(lowered).children[i]);
+            REQUIRE(equality.kind == Kind::Eq);
+            CHECK(equality.children[0] == originalVariables[i]);
+            CHECK(equality.children[1] == replacement);
+        }
+        // A second root reuses the same nested choices and their definitions.
+        const auto other = ir.add(TermExpr{Kind::Or, boolean, {root, condition}, Payload{}});
+        const auto loweredOther = lowerer.lowerAssertion(other);
+        CHECK_FALSE(containsIte(ir, loweredOther));
+        CHECK(ir.get(loweredOther).children[0] == lowered);
+        CHECK(lowerer.generatedAssertions().size() == 6);
+    }
+}
+
 TEST_CASE("IteLowerer: lowerBoolIte produces 1 fresh var + 4 guarded assertions") {
     NativeTerms ir;
     SortId boolSort = ir.allocateSortId();
