@@ -68,6 +68,50 @@ TEST_CASE("LraPropagationEngine: unavailable extrema skip arithmetic until bound
     checkUnavailable();
 }
 
+TEST_CASE("LraPropagationEngine: tight row bounds need no explanation merge") {
+    GeneralSimplex gs;
+    std::vector<std::pair<int, mpq_class>> terms;
+    for (int i = 0; i < 64; ++i) {
+        const int x = gs.addVar("tight-x" + std::to_string(i));
+        terms.push_back({x, 1});
+        REQUIRE(gs.assertLower(x, mkBound(0, 2 * i + 1)));
+        REQUIRE(gs.assertUpper(x, mkBound(1, 2 * i + 2)));
+    }
+    const int sum = gs.addConstraint(terms, 0);
+    REQUIRE(gs.assertLower(sum, mkBound(0, 129)));
+    REQUIRE(gs.assertUpper(sum, mkBound(64, 130)));
+    REQUIRE(gs.check() == GeneralSimplex::Result::Sat);
+    LraPropagationEngine engine;
+    LraPropagationEngine::Statistics statistics;
+    CHECK(engine.propagateAll(gs, {64, 256, 128, 1000}, &statistics).empty());
+    CHECK(statistics.termPairs == 64);
+    CHECK(statistics.explanationBuilds == 0);
+    CHECK(statistics.explanationReasonAdds == 0);
+}
+
+TEST_CASE("LraPropagationEngine: deferred explanations retain shared excluded premises") {
+    GeneralSimplex gs;
+    const int x = gs.addVar("deferred-x"), y = gs.addVar("deferred-y");
+    const int sum = gs.addConstraint({{x, 1}, {y, 1}}, 0);
+    REQUIRE(gs.assertLower(x, mkBound(0, 3)));
+    REQUIRE(gs.assertLower(y, mkBound(0, 3)));
+    REQUIRE(gs.assertUpper(x, mkBound(5, 1)));
+    REQUIRE(gs.assertUpper(y, mkBound(5, 1)));
+    REQUIRE(gs.assertLower(sum, mkBound(6, 2)));
+    REQUIRE(gs.assertUpper(sum, mkBound(10, 4)));
+    LraPropagationEngine engine;
+    const auto derived = engine.propagateAll(gs, {64, 256, 12, 1000});
+    for (const int variable : {x, y}) {
+        const auto found = std::find_if(derived.begin(), derived.end(), [variable](const auto& bound) {
+            return bound.var == variable && bound.isLower && bound.value == DeltaRational(1);
+        });
+        REQUIRE(found != derived.end());
+        CHECK((found->reasons == std::vector<SatLit>{SatLit::positive(1), SatLit::positive(2)}));
+    }
+    CHECK(gs.varState(x).lower.bound.value == DeltaRational(0));
+    CHECK(gs.varState(y).lower.bound.value == DeltaRational(0));
+}
+
 TEST_CASE("LraPropagationEngine: skipped rows are revisited by local closure") {
     GeneralSimplex gs;
     const int x = gs.addVar("availability-chain-x"), y = gs.addVar("availability-chain-y"), z = gs.addVar("availability-chain-z");

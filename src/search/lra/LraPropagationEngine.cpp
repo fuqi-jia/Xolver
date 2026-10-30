@@ -40,19 +40,36 @@ struct Contribution {
 struct RowAggregate {
     DeltaRational sum;
     size_t missing = 0;
-    std::map<SatLit, size_t, LiteralLess> reasonCounts;
+    mutable std::map<SatLit, size_t, LiteralLess> reasonCounts;
+    mutable bool reasonsReady = false;
 
     void add(const Contribution& contribution) {
         if (!contribution.available) { ++missing; return; }
         sum += contribution.value;
-        for (const auto reason : contribution.reasons) ++reasonCounts[reason];
     }
 
     std::optional<std::vector<SatLit>> explain(
         const Contribution* excluded, const std::vector<SatLit>& required,
-        int maxReasons) const {
+        int maxReasons, const std::vector<std::array<Contribution, 2>>& contributions,
+        size_t side, LraPropagationEngine::Statistics* statistics) const {
         std::vector<SatLit> result = required; // sorted and unique
         if (static_cast<int>(result.size()) > maxReasons) return std::nullopt;
+        // Numeric extrema are useful even when they improve no endpoint.
+        // Merge their explanations only when a stronger bound needs one.
+        // Contributions own their premise snapshots: later overlay updates
+        // cannot change the reasons supporting the values summed above.
+        if (!reasonsReady) {
+            for (const auto& pair : contributions) {
+                const auto& contribution = pair[side];
+                if (!contribution.available) continue;
+                for (const auto reason : contribution.reasons) {
+                    ++reasonCounts[reason];
+                    if (statistics) ++statistics->explanationReasonAdds;
+                }
+            }
+            reasonsReady = true;
+            if (statistics) ++statistics->explanationBuilds;
+        }
         for (const auto& [reason, count] : reasonCounts) {
             const bool removed = excluded && excluded->available &&
                 std::binary_search(excluded->reasons.begin(), excluded->reasons.end(),
@@ -140,13 +157,14 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
 
     auto publish = [&](int var, bool lower, const DeltaRational& value,
                        const RowAggregate& aggregate, const Contribution* excluded,
-                       const std::vector<SatLit>& required) {
+                       const std::vector<SatLit>& required, size_t side) {
         if (exhausted()) return false;
         auto& target = bounds[var][lower ? 0 : 1];
         if (target.value && (lower ? value <= *target.value : value >= *target.value))
             return false;
         // Materialize explanations only for a genuinely stronger bound.
-        auto reasons = aggregate.explain(excluded, required, budget.maxReasonSize);
+        auto reasons = aggregate.explain(excluded, required, budget.maxReasonSize,
+                                         snapshot->contributions, side, statistics);
         if (!reasons) return false;
         if (gs.basicRowOfVar(var) < 0) ++inputRevision;
         target.value = value;
@@ -225,7 +243,7 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
         const auto& forward = item.lower ? minimum : maximum;
         if (forward.missing == 0)
             publish(item.basic, item.lower, DeltaRational(row.rhs) + forward.sum,
-                    forward, nullptr, {});
+                    forward, nullptr, {}, item.lower ? 0 : 1);
 
         const auto basic = bounds[item.basic][item.lower ? 0 : 1];
         if (!basic.usable()) continue;
@@ -243,7 +261,8 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
             if (excluded.available) others -= excluded.value;
             const auto value = (*basic.value - DeltaRational(row.rhs) - others) / entry.coeff;
             const bool lower = item.lower ? entry.coeff > 0 : entry.coeff < 0;
-            if (!publish(entry.col, lower, value, backward, &excluded, basic.reasons)) continue;
+            if (!publish(entry.col, lower, value, backward, &excluded, basic.reasons,
+                         contributionSide)) continue;
             // Only rows incident to the changed non-basic variable can learn
             // something new. Pending visits coalesce, so the queue is bounded
             // by two entries per tableau row.
