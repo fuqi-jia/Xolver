@@ -79,8 +79,33 @@
       "returncode": 1
     }
   ],
-  "matched_z3_program_completed": false,
+  "matched_z3_program_completed": true,
   "fair_program_performance_comparison": false,
   "protected_sets_used": false,
-  "boundary": "One unchanged original GCD C program and all 9 original VCs passed canonical final-check and complete Rocq proofs. All 888 native selected-backend calls across generation, acceptance and final refresh match independently checked formulas. GCD identities use Rocq mathematics, not external arithmetic SMT discharge. This is functional qualification, not a matched whole-program performance comparison or evidence of superiority over Z3."
+  "boundary": "Both unchanged original GCD programs pass canonical final-check with 9 original VCs and 888 authenticated native calls per backend. Proof scripts and development schedules differ; diagnostic final-check timings do not establish a fair performance advantage. Number-theoretic VCs use checked Rocq proofs, not SMT discharge.",
+  "matched_original_goal_tokens": true,
+  "paired_qualification_audit_sha256": "193455a6425b492e230d4876689998ec09edb69b1267f68833771fc921736082",
+  "paired_qualification_eos_run": "cfaeadde7496",
+  "matched_z3": {
+    "solver_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+    "programs": 1,
+    "complete_original_vcs": 9,
+    "canonical_final_check": {
+      "eos_run": "e903903352b9",
+      "result": "passed",
+      "phase": "done",
+      "sha256": "ee8a883cd0720d112109dee19df2db8680efe7d0138b84aca81d93155e07ade6"
+    },
+    "native_backend": {
+      "qualified": true,
+      "calls_across_generation_acceptance_final_refresh": 888,
+      "verdicts": {
+        "sat": 522,
+        "unsat": 366
+      },
+      "distinct_formulas": 70
+    },
+    "post_generation_external_smt_queries": 0,
+    "external_smt_discharged_vcs": 0
+  }
 }

@@ -79,10 +79,11 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
     if (budget.maxDerivedBounds <= 0 || budget.maxIterations <= 0 ||
         budget.maxReasonSize < 0 || budget.maxTimeMs <= 0) return accepted;
     const auto started = std::chrono::steady_clock::now();
+    auto consumerTime = std::chrono::steady_clock::duration::zero();
     bool consumerStopped = false;
     auto exhausted = [&] {
         return consumerStopped || static_cast<int>(accepted.size()) >= budget.maxDerivedBounds ||
-            std::chrono::steady_clock::now() - started >=
+            std::chrono::steady_clock::now() - started - consumerTime >=
                 std::chrono::milliseconds(budget.maxTimeMs);
     };
 
@@ -151,7 +152,11 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
         target.reasons = *reasons;
         target.explained = true;
         accepted.push_back({var, lower, value, std::move(*reasons)});
-        if (consume && !consume(accepted.back())) consumerStopped = true;
+        if (consume) {
+            const auto beforeConsumer = std::chrono::steady_clock::now();
+            consumerStopped = !consume(accepted.back());
+            consumerTime += std::chrono::steady_clock::now() - beforeConsumer;
+        }
         return true;
     };
 

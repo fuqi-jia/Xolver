@@ -44,8 +44,9 @@ public:
         std::size_t termPairs = 0;
     };
 
-    // Return false when the consumer has enough conclusions. The bound is
-    // already included in the result; references are valid only during the
+    // Return false when the consumer has enough conclusions. Consumer time is
+    // separate from the row arithmetic budget, as with post-scan processing.
+    // The bound is already included in the result; references are valid during the
     // callback. Consumers must not mutate the simplex while it is scanned.
     using BoundConsumer = std::function<bool(const ExplainedBound&)>;
 

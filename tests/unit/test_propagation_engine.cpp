@@ -2,6 +2,8 @@
 #include "search/lra/LraPropagationEngine.h"
 #include "search/lra/GeneralSimplex.h"
 #include <algorithm>
+#include <chrono>
+#include <thread>
 
 using namespace xolver;
 
@@ -106,6 +108,27 @@ TEST_CASE("LraPropagationEngine: consumer stop keeps exact bounds local across r
     checkCurrent(true);
     gs.pop();
     checkCurrent(false);
+}
+
+TEST_CASE("LraPropagationEngine: consumer latency does not spend the arithmetic budget") {
+    GeneralSimplex gs;
+    const int x = gs.addVar("consumer-budget-x");
+    const int s = gs.addConstraint({{x, 1}}, 0);
+    REQUIRE(gs.assertLower(s, mkBound(-3, 1)));
+    REQUIRE(gs.assertUpper(s, mkBound(3, 2)));
+    LraPropagationEngine engine;
+    int deliveries = 0;
+    const auto derived = engine.propagateAll(gs, {2, 16, 12, 100}, nullptr,
+        [&](const auto&) {
+            ++deliveries;
+            std::this_thread::sleep_for(std::chrono::milliseconds(120));
+            return true;
+        });
+    CHECK(deliveries == 2);
+    CHECK(hasBound(derived, x, true, -3));
+    CHECK(hasBound(derived, x, false, 3));
+    CHECK_FALSE(gs.varState(x).lower.bound.isFinite());
+    CHECK_FALSE(gs.varState(x).upper.bound.isFinite());
 }
 
 TEST_CASE("LraPropagationEngine: bounded repeated checks reach every row direction") {

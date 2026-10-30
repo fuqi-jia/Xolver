@@ -2591,8 +2591,8 @@ The [stage receipt](POLYNOMIAL_LINEAR_REFUTATION_STAGE_20261030.json) records
 full results. Receipt-only changes after the qualified core do not create a
 new native solver version. PR78 is merged as`ecf1e7c6`; both final-head PR CI`41050990683`
 and fresh main CI`41055517535` are fully green. Both protected sets remain unused.
-The original GCD workflow below now completes with this frozen core. A matched
-Z3 whole-program result and overall superiority remain unestablished. No
+The original GCD workflow below completes with this frozen core, and the
+matched Z3 workflow also passes. Overall superiority remains unestablished. No
 additional current-main server archive is required.
 
 
@@ -2641,10 +2641,14 @@ replace the successful canonical checks. GCD identities use checked Rocq
 mathematics, with0 post-generation external SMT discharge queries. The generic
 audit's stricter external-discharge qualification remains false. See
 [the functional receipt](GCD_NATIVE_PROGRAM_QUALIFICATION_20261030.json).
-The matched Z3 run has accepted annotation and independent VC checking, and its
-three proof owners have completed and stopped. Group acceptance, parent checking
-and final refresh are still pending; no matched whole-program coverage or timing
-advantage is claimed. Both protected sets remain untouched.
+The matched Z3 run now also passes all groups, parent checking, publication and
+fresh final-check (EOS`e903903352b9`, passed/done). R902 independently
+authenticates both final checks, identical original goal token streams and all
+888 native calls per backend, including each actual solver command and output
+hash. Both backends verify1 original program/9 original VCs. Proof scripts and
+development schedules differ, so final-check diagnostics are not a fair timing
+comparison. No coverage or timing advantage is claimed. Both protected sets
+remain untouched.
 
 
 ## Bounded linear propagation scheduling (R881–R882, candidate)
@@ -2719,3 +2723,12 @@ the invocation. Batch collection remains a real use of the same API. Tests
 check the exact batch prefix, reduced row arithmetic, subsequent resumption,
 strict negative division and rollback. Native qualification and a fresh frozen
 comparison are pending; no new solved count is claimed.
+
+The first streaming build R901 passes40 targeted cases/80,270 assertions, all
+1,824 unit cases/883,993 assertions and38 other acceptance groups. Its fresh
+pilot restores59 (40.812s to18.311s SAT, both initial models positively replayed),
+but51 times out. The complete160 round is still running; no net score is claimed.
+Review also finds that streaming charged consumer latency against the existing
+20ms producer budget, unlike the previous post-scan projection. The next change
+accounts for consumer time separately while retaining the mathematical budget;
+a slow-consumer regression checks that distinction. Qualification is pending.
