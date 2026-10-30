@@ -29,8 +29,8 @@ public:
 
     // Model read-off from the Bellman-Ford potentials of the last consistent
     // check. A difference-logic model is determined up to a constant, so each
-    // variable is anchored relative to the special __ZERO__ node:
-    //   value(v) = dist[v] - dist[__ZERO__].
+    // variable is anchored relative to the constant vertex:
+    //   value(v) = dist[v] - dist[graph.zeroNode()].
     // The potentials are feasible by construction, so this satisfies every
     // difference constraint. Without it the model builder defaults all IDL
     // variables to 0, which breaks the constraints (model-extraction
@@ -43,8 +43,8 @@ protected:
 
 private:
     struct DiseqInfo {
-        std::string x;
-        std::string y;
+        std::optional<std::string> x; // nullopt denotes the constant zero
+        std::optional<std::string> y;
         mpz_class rhs;  // x - y != rhs
         SatLit lit;
     };

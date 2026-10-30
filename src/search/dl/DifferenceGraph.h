@@ -32,9 +32,8 @@ template <typename Weight>
 class DifferenceGraph {
 public:
     DifferenceGraph() {
-        // Node 0 is ZERO
-        nodeToName_.push_back("__ZERO__");
-        nameToNode_["__ZERO__"] = 0;
+        // The constant vertex has an identity, not a reserved user name.
+        nodeToName_.emplace_back();
     }
 
     int getOrCreateNode(const std::string& name) {

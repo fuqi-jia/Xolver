@@ -1,0 +1,5 @@
+(set-logic QF_RDL)
+(set-info :status sat)
+(declare-fun __ZERO__ () Real)
+(assert (or (= __ZERO__ 1) (= __ZERO__ 2)))
+(check-sat)

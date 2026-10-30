@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 #include "search/linear/IntegerReasoner.h"
 #include "search/linear/BoundAxiomGenerator.h"
+#include "search/linear/DiffLogicDiseqSplitter.h"
 #include "algebra/linear/LinearConstraintNormalizer.h"
 #include "applications/satisfiability/smt/common/lia/LiaSolver.h"
 #include "applications/satisfiability/smt/qflra/LraSolver.h"
@@ -100,6 +101,39 @@ TEST_CASE("Linear predicate projection: weaker signed endpoints reuse existing a
     const auto after = f.registry.numAtomVars();
     CHECK_FALSE(f.registry.findImpliedLinearLiteral(x, Relation::Geq, 2, [](SatLit) { return false; }));
     CHECK(f.registry.numAtomVars() == after);
+}
+
+TEST_CASE("Difference logic splits preserve named endpoints and omit the constant vertex") {
+    for (const auto theory : {TheoryId::IDL, TheoryId::RDL}) {
+        for (const std::string name : {"__ZERO__", "__user"}) {
+            for (const bool zeroOnRight : {false, true}) {
+                Fixture fixture;
+                const auto variable = fixture.allocator.newVar();
+                const LinearFormKey form{{{name, zeroOnRight ? 1 : -1}}};
+                fixture.registry.registerParsedTheoryAtom(variable, NullExpr, theory,
+                    LinearAtomPayload{form, Relation::Neq, RealValue::fromMpq(0)});
+                const auto endpoint = std::optional<std::string>(name);
+                const auto relation = theory == TheoryId::IDL ? Relation::Leq : Relation::Lt;
+                const mpq_class rhs = theory == TheoryId::IDL ? -1 : 0;
+                const auto lemma = buildDiffLogicDiseqSplitLemma(
+                    zeroOnRight ? endpoint : std::nullopt, zeroOnRight ? std::nullopt : endpoint,
+                    SatLit::positive(variable), relation, relation, rhs, rhs, theory, &fixture.registry);
+                REQUIRE(lemma.lits.size() == 3);
+                for (size_t i = 1; i < lemma.lits.size(); ++i) {
+                    const auto* atom = fixture.registry.findBySatVar(lemma.lits[i].var);
+                    REQUIRE(atom != nullptr);
+                    const auto& payload = std::get<LinearAtomPayload>(atom->payload);
+                    REQUIRE(payload.lhs.terms.size() == 1);
+                    CHECK(payload.lhs.terms.front().first == name);
+                }
+                for (int n = -4; n <= 4; ++n) {
+                    mpq_class value(n, theory == TheoryId::IDL ? 1 : 2);
+                    value.canonicalize();
+                    CHECK(fixture.holds(lemma, {{name, value}}));
+                }
+            }
+        }
+    }
 }
 
 TEST_CASE("Linear predicate projection: exact rational half-lines match semantic counterexamples") {

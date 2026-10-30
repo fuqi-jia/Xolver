@@ -37,8 +37,8 @@ template <typename Weight>
 class IncrementalDiffGraph {
 public:
     IncrementalDiffGraph() {
-        nodeToName_.push_back("__ZERO__");
-        nameToNode_["__ZERO__"] = 0;
+        // Keep the constant vertex outside the user-symbol map.
+        nodeToName_.emplace_back();
         pot_.emplace_back();  // ZERO potential = 0
     }
 

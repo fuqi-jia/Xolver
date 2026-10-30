@@ -96,3 +96,35 @@ TEST_CASE("RDL getModel: read-off satisfies real difference constraints (strict)
     CHECK(v("a") >= 0);
     CHECK(v("c") <= 10);
 }
+
+TEST_CASE_TEMPLATE("Difference logic models preserve user names across backtracking",
+                   SolverType, IdlSolver, RdlSolver) {
+    for (const std::string name : {"__ZERO__", "__user", "ordinary"}) {
+        for (const bool negative : {false, true}) {
+            SolverType solver;
+            solver.push();
+            TheoryLemmaDatabase database;
+            solver.assertLit(mkDiffAtom(1, solver.id(), negative ? "" : name,
+                negative ? name : "", negative ? Relation::Leq : Relation::Geq,
+                negative ? -1 : 1), true, 0, SatLit::positive(1));
+            solver.assertLit(mkDiffAtom(2, solver.id(), name, "", Relation::Leq, 2),
+                             true, 0, SatLit::positive(2));
+            auto checkModel = [&] {
+                REQUIRE(solver.check(database).kind == TheoryCheckResult::Kind::Consistent);
+                const auto model = solver.getModel();
+                REQUIRE(model.has_value());
+                REQUIRE(model->assignments.count(name) == 1);
+                const mpq_class value(model->assignments.at(name));
+                CHECK(value >= 1);
+                CHECK(value <= 2);
+            };
+            checkModel();
+            solver.assertLit(mkDiffAtom(3, solver.id(), name, "", Relation::Leq, 0),
+                             true, 1, SatLit::positive(3));
+            CHECK(solver.check(database).kind == TheoryCheckResult::Kind::Conflict);
+            CHECK_FALSE(solver.getModel().has_value());
+            solver.backtrackToLevel(0);
+            checkModel();
+        }
+    }
+}

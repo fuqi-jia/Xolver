@@ -50,8 +50,6 @@ std::optional<RdlSolver::TheoryModel> RdlSolver::getModel() const {
     if (!haveModel_) return std::nullopt;
     TheoryModel model;
     for (const auto& [name, val] : lastModel_) {
-        if (name.empty()) continue;
-        if (name.size() >= 2 && name[0] == '_' && name[1] == '_') continue;  // __ZERO__ / internal
         model.assignments[name] = val.get_str();
         model.numericAssignments.insert({name, RealValue::fromMpq(val)});
     }
@@ -75,15 +73,15 @@ RdlSolver::NormalizeResult RdlSolver::normalizeAndAdd(const ActiveAssignment& a)
     // plusVar and the negative as minusVar absorbs the sign, so the relation is
     // never flipped. Real domain: exact rational division, no rounding. All
     // arithmetic is exact mpq_class.
-    std::string plusVar, minusVar;
+    std::optional<std::string> plusVar, minusVar;
     mpq_class plusCoeff(0), minusCoeff(0);
     for (const auto& [name, coeff] : terms) {
         if (coeff == 0) continue;
         if (coeff > 0) {
-            if (!plusVar.empty()) return NormalizeResult::Unsupported;  // >1 positive var
+            if (plusVar) return NormalizeResult::Unsupported;  // >1 positive var
             plusVar = name; plusCoeff = coeff;
         } else {
-            if (!minusVar.empty()) return NormalizeResult::Unsupported; // >1 negative var
+            if (minusVar) return NormalizeResult::Unsupported; // >1 negative var
             minusVar = name; minusCoeff = coeff;
         }
     }
@@ -94,7 +92,7 @@ RdlSolver::NormalizeResult RdlSolver::normalizeAndAdd(const ActiveAssignment& a)
     // encodings emit many (- x x) (rel) c atoms, and ONE unsupported atom
     // otherwise sinks the entire RDL solve (#81). Sound: pure constant rational
     // arithmetic, no node/edge ever created.
-    if (plusVar.empty() && minusVar.empty()) {
+    if (!plusVar && !minusVar) {
         bool holds = false;
         switch (rel) {
             case Relation::Leq: holds = (rhs >= 0); break;  // 0 <= rhs
@@ -109,25 +107,23 @@ RdlSolver::NormalizeResult RdlSolver::normalizeAndAdd(const ActiveAssignment& a)
     }
 
     mpq_class mag;
-    if (!plusVar.empty() && !minusVar.empty()) {
+    if (plusVar && minusVar) {
         // Two vars: require the antisymmetric form a*p - a*q (exact comparison).
         if (plusCoeff + minusCoeff != 0) return NormalizeResult::Unsupported;
         mag = plusCoeff;            // > 0
-    } else if (!plusVar.empty()) {
+    } else if (plusVar) {
         // Single positive var a*p: plus = p, minus = ZERO.
         mag = plusCoeff;            // > 0
-        minusVar = "__ZERO__";
     } else {
         // Single negative var -a*q: plus = ZERO, minus = q.
         mag = -minusCoeff;          // > 0
-        plusVar = "__ZERO__";
     }
 
     // Divide through by the positive magnitude; relation stays as-is.
     rhs /= mag;
 
-    int plusNode = graph_.getOrCreateNode(plusVar);
-    int minusNode = graph_.getOrCreateNode(minusVar);
+    int plusNode = plusVar ? graph_.getOrCreateNode(*plusVar) : graph_.zeroNode();
+    int minusNode = minusVar ? graph_.getOrCreateNode(*minusVar) : graph_.zeroNode();
 
     switch (rel) {
         case Relation::Leq: {
@@ -246,10 +242,18 @@ TheoryCheckResult RdlSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
 
     // Disequality split
     for (const auto& d : disequalities_) {
-        auto itX = modelOpt->find(d.x);
-        auto itY = modelOpt->find(d.y);
-        if (itX == modelOpt->end() || itY == modelOpt->end()) continue;
-        if (itX->second - itY->second == d.rhs) {
+        mpq_class x = 0, y = 0;
+        if (d.x) {
+            const auto found = modelOpt->find(*d.x);
+            if (found == modelOpt->end()) return TheoryCheckResult::unknown();
+            x = found->second;
+        }
+        if (d.y) {
+            const auto found = modelOpt->find(*d.y);
+            if (found == modelOpt->end()) return TheoryCheckResult::unknown();
+            y = found->second;
+        }
+        if (x - y == d.rhs) {
             auto lemma = buildDiseqSplitLemma(d, lemmaDb);
             if (!lemma.lits.empty()) {
                 return TheoryCheckResult::mkLemma(lemma);

@@ -1,0 +1,7 @@
+(set-logic QF_RDL)
+(set-info :status sat)
+(declare-fun __user () Real)
+(assert (>= __user 0))
+(assert (<= __user 1))
+(assert (distinct __user 0))
+(check-sat)

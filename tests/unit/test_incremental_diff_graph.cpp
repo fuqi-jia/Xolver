@@ -29,6 +29,43 @@ bool fullFeasibleIdl(int nNodes, const std::vector<E>& edges) {
 
 } // namespace
 
+TEST_CASE_TEMPLATE("Difference graphs keep the constant vertex outside the symbol map",
+                   Weight, IdlWeight, RdlWeight) {
+    DifferenceGraph<Weight> graph;
+    const int namedZero = graph.getOrCreateNode("__ZERO__");
+    const int emptyName = graph.getOrCreateNode("");
+    REQUIRE(namedZero != graph.zeroNode());
+    REQUIRE(emptyName != graph.zeroNode());
+    REQUIRE(emptyName != namedZero);
+    CHECK(graph.nodeByName("__ZERO__") == namedZero);
+    graph.addEdge(namedZero, graph.zeroNode(), Weight(-1), SatLit::positive(1));
+    graph.addEdge(graph.zeroNode(), namedZero, Weight(2), SatLit::positive(2));
+    BellmanFord<Weight> bellmanFord;
+    const auto result = bellmanFord.runFull(graph);
+    REQUIRE_FALSE(result.negativeCycle);
+    const auto value = result.dist[namedZero] - result.dist[graph.zeroNode()];
+    CHECK((Weight(1) <= value));
+    CHECK((value <= Weight(2)));
+    graph.clear();
+    CHECK(graph.getOrCreateNode("__ZERO__") == namedZero);
+
+    IncrementalDiffGraph<Weight> incremental;
+    const int variable = incremental.getOrCreateNode("__ZERO__");
+    REQUIRE(variable != incremental.zeroNode());
+    REQUIRE(incremental.enableEdge(variable, incremental.zeroNode(), Weight(-1),
+                                   SatLit::positive(1), 0));
+    REQUIRE(incremental.enableEdge(incremental.zeroNode(), variable, Weight(2),
+                                   SatLit::positive(2), 0));
+    CHECK_FALSE(incremental.enableEdge(incremental.zeroNode(), variable, Weight(0),
+                                       SatLit::positive(3), 1));
+    incremental.backtrack(0);
+    CHECK(incremental.enableEdge(incremental.zeroNode(), variable, Weight(2),
+                                 SatLit::positive(4), 1));
+    const auto restored = incremental.potential(variable) - incremental.potential(incremental.zeroNode());
+    CHECK((Weight(1) <= restored));
+    CHECK((restored <= Weight(2)));
+}
+
 TEST_CASE("IncrementalDiffGraph: verdict matches full Bellman-Ford (IDL, random)") {
     std::mt19937 rng(12345);
     const int K = 7;                 // nodes 0..K-1 (0 = ZERO)

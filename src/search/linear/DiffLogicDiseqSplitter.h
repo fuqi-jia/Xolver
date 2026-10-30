@@ -4,6 +4,7 @@
 #include "search/coordination/TheoryAtomRegistry.h"
 #include "algebra/linear/LinearExpr.h"
 #include <algorithm>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -18,7 +19,7 @@ namespace xolver {
 // and creates theory atoms via the registry.
 //
 // Parameters:
-//   - x, y              : variable names
+//   - x, y              : variable names, or nullopt for the constant zero
 //   - lit               : original SAT literal for the disequality
 //   - splitLo, splitHi  : Relation for lhs1 / lhs2  (e.g. Lt, Leq)
 //   - rhsLo, rhsHi      : RHS constants for lhs1 / lhs2
@@ -26,8 +27,8 @@ namespace xolver {
 //   - registry          : TheoryAtomRegistry (must be non-null)
 // ============================================================================
 inline TheoryLemma buildDiffLogicDiseqSplitLemma(
-    const std::string& x,
-    const std::string& y,
+    const std::optional<std::string>& x,
+    const std::optional<std::string>& y,
     SatLit lit,
     Relation splitLo,
     Relation splitHi,
@@ -37,14 +38,14 @@ inline TheoryLemma buildDiffLogicDiseqSplitLemma(
     TheoryAtomRegistry* registry)
 {
     LinearFormKey lhs1;
-    lhs1.terms.push_back({x, mpq_class(1)});
-    lhs1.terms.push_back({y, mpq_class(-1)});
+    if (x) lhs1.terms.push_back({*x, mpq_class(1)});
+    if (y) lhs1.terms.push_back({*y, mpq_class(-1)});
     std::sort(lhs1.terms.begin(), lhs1.terms.end(),
               [](auto& a, auto& b) { return a.first < b.first; });
 
     LinearFormKey lhs2;
-    lhs2.terms.push_back({y, mpq_class(1)});
-    lhs2.terms.push_back({x, mpq_class(-1)});
+    if (y) lhs2.terms.push_back({*y, mpq_class(1)});
+    if (x) lhs2.terms.push_back({*x, mpq_class(-1)});
     std::sort(lhs2.terms.begin(), lhs2.terms.end(),
               [](auto& a, auto& b) { return a.first < b.first; });
 
