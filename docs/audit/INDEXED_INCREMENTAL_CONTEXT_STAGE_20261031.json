@@ -1,0 +1,268 @@
+{
+  "schema": 1,
+  "status": "server_qualified_pr_ci_pending",
+  "implementation_commit": "2d3d1de90f1faddc5f67e6e029176a42cb9e0e62",
+  "source_manifest_sha256": "03920335ad30631eb68f709948dcc3213c5171a5c1f5954c08f4c68373f47f46",
+  "binaries": {
+    "xolver": "4d459fa5acfcf9c95d31bc7117d14701156f411439139904b1d58e00ffd1aec3",
+    "xolver-sv": "b428d0dda5a6f7662820f824b68da6d49b2dd9374c3913cbf079f00a309d6334",
+    "xolver-parallel-worker": "47f18f753da840b14cb48ca9e9e61be6a4943a48741435ddb0ec6b4fc3208fc8"
+  },
+  "problem": "Every LRA assignment searched all retained sources to determine whether to replace or append. The common arithmetic base repeated the same scan; LIA maintained a separate manual index.",
+  "implementation": "Add a reusable lazily indexed incremental context keyed by a stateless source projection. Own index maintenance across replacement, prefix truncation, filtered backtracking, reset and snapshots. Resolve duplicate keys to the first retained source. Use it in LRA, LIA and the common arithmetic base; remove the manual LIA index. Append-only clients do not construct an index.",
+  "preserved_policies": "LRA retains its suffix withdrawal and preserved simplex assignments; LIA retains filtered withdrawal, source order, explicit snapshots and its established simplex assignment policy. Key lookup does not change source admission, literal polarity or candidate validation.",
+  "root_cause_diagnostics": {
+    "build_experiment": "1858942ac123",
+    "build_run": "859c9d867a4e",
+    "profile_experiment": "ed396c8416c5",
+    "records": [
+      {
+        "input": "48",
+        "run": "b7ac6f8f437f",
+        "record_sha256": "b0eda2915f3cc88789a5bba43f8f51062cdca644addc0a029047a1281c4f1b13",
+        "input_sha256": "1db0853aaa0f355969a8b7e17778b10137081d30ee7f98e6ff8d94039a55b85b",
+        "counters": {
+          "calls": 313568,
+          "comparisons": 169855546,
+          "replacements": 0,
+          "appends": 313568,
+          "maximum_trail": 1302,
+          "scan_ns": 127762850,
+          "method_ns": 672129566
+        }
+      },
+      {
+        "input": "51",
+        "run": "f093372a9264",
+        "record_sha256": "4500e35f61ee82800c289139b1b07af3b0ae8e03afe3d598d663a633a13822f8",
+        "input_sha256": "8fb5c2cfe016233a2f76c3d3b103066448f0f1d3faa1c9d9493c55c304d877cb",
+        "counters": {
+          "calls": 276782,
+          "comparisons": 1115918214,
+          "replacements": 0,
+          "appends": 276782,
+          "maximum_trail": 8445,
+          "scan_ns": 739682185,
+          "method_ns": 2127845458
+        }
+      },
+      {
+        "input": "131",
+        "run": "40aa473dd02d",
+        "record_sha256": "dcbc0ab03381eb0da1364106e3d865f78df25050fb8a98af8b09ffaa2d7a3a3e",
+        "input_sha256": "8b660dc1debe27fe09a0eb3ca9e4e3833f075f89a66e71b90dfe102e250bc962",
+        "counters": {
+          "calls": 115977,
+          "comparisons": 86632324,
+          "replacements": 0,
+          "appends": 115977,
+          "maximum_trail": 1630,
+          "scan_ns": 66322102,
+          "method_ns": 374319562
+        }
+      }
+    ],
+    "boundary": "Private observation-only counters on three public development inputs; last periodic snapshots within each ten-second window. Counts and instrumented costs never enter formal timings. All observed assignment lookups appended, rather than replaced, after scanning the retained trail."
+  },
+  "targeted": {
+    "experiment": "8a1a01974186",
+    "run": "7d73dc985aa3",
+    "unit_cases": 196,
+    "unit_assertions": 369578,
+    "logics": [
+      "LIA",
+      "LRA",
+      "IDL",
+      "RDL"
+    ]
+  },
+  "full_acceptance": {
+    "experiments": [
+      "2ce49d77f10c",
+      "15e2934b0c0a"
+    ],
+    "groups": 39,
+    "unit_cases": 1840,
+    "unit_assertions": 969357,
+    "failures": 0
+  },
+  "formal": {
+    "cases": 160,
+    "pilot_cases": 16,
+    "remaining_disjoint_cases": 144,
+    "wall_seconds": 60,
+    "physical_cpus_per_case": 1,
+    "memory_gib": 16,
+    "model_capture": "initial-solve",
+    "counts": {
+      "baseline": {
+        "unsat": 46,
+        "decided": 100,
+        "verified_decided": 100,
+        "verified_par2": 7519.626153342426,
+        "raw_par2": 7519.626153342426,
+        "timeout": 59,
+        "sat": 54,
+        "unknown": 1
+      },
+      "candidate": {
+        "unsat": 46,
+        "decided": 100,
+        "verified_decided": 100,
+        "verified_par2": 7516.225391369313,
+        "raw_par2": 7516.225391369313,
+        "timeout": 59,
+        "sat": 54,
+        "unknown": 1
+      },
+      "z3": {
+        "unsat": 58,
+        "decided": 125,
+        "verified_decided": 118,
+        "verified_par2": 5382.660995028913,
+        "raw_par2": 4584.381656464189,
+        "sat": 67,
+        "timeout": 35
+      }
+    },
+    "changes": [],
+    "unconfirmed": [
+      12,
+      24,
+      27,
+      42,
+      80,
+      114,
+      159
+    ],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "invalid_original_triads": [],
+    "timing_changes_over_one_second": [
+      {
+        "index": 7,
+        "result": "unsat",
+        "baseline_seconds": 19.863674219697714,
+        "candidate_seconds": 18.813438957557082
+      },
+      {
+        "index": 18,
+        "result": "unsat",
+        "baseline_seconds": 56.949380887672305,
+        "candidate_seconds": 53.845319744199514
+      }
+    ],
+    "supplementary_truth": [
+      {
+        "index": 115,
+        "truth": "unsat",
+        "input_sha256": "02a58b11df8951543940a1090a140592e24de41dcaeb6470e7a50d42e804be64",
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r982/certificate-115/0.log",
+        "sha256": "823672e87696cac914fac33d8d0027db15a21b566e700a65300cdca704cf910e",
+        "boundary": "Fresh original-input checked modular certificate."
+      },
+      {
+        "index": 47,
+        "truth": "sat",
+        "input_sha256": "2c37069c8324458e8f3ad46cc6dbe0cc3a6c2f31012ed504123e660bfdf7aba4",
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/current-model-replay-r987/47/record.json",
+        "sha256": "741a5249d249da684d846a246416effb959916fb3b9bbc9b1e9eb26f09ee0f8a",
+        "boundary": "Two identical models from original timed R979/R984 output, positively replayed by both checkers; eligibility only, no timing replacement."
+      },
+      {
+        "index": 108,
+        "truth": "sat",
+        "input_sha256": "26d6012f717dec2f43e57be63e8638d1a13b6bc9cb5fcc963c08476793385786",
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/current-model-replay-r987/108/record.json",
+        "sha256": "190d4c4610a8c396c25d0c5aba8d805462a73df9ddc670c76d98aedf377a7e25",
+        "boundary": "Two identical models from original timed R979/R984 output, positively replayed by both checkers; eligibility only, no timing replacement."
+      },
+      {
+        "index": 122,
+        "truth": "sat",
+        "input_sha256": "c88289f0453a6bbe098b4c5f092dfc50cd9e0ac21d799c6ccfc0a61b5a974389",
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/current-model-replay-r987/122/record.json",
+        "sha256": "779071d3754df2e97738af4e96d5f9947db26175d647c37e8daac15695265003",
+        "boundary": "Two identical models from original timed R979/R984 output, positively replayed by both checkers; eligibility only, no timing replacement."
+      },
+      {
+        "index": 50,
+        "truth": "unsat",
+        "input_sha256": "7e71a151d917978f1b5afc2791abf589e30c8ff97e930979df6ef82ad72dcdc0",
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/independent-truth-r761/case-050/record.json",
+        "sha256": "13a20b8e90bb8a8fff028fd665ee4ef661ae88e851766af64ed9b83ee255175c",
+        "boundary": "Existing independently checked 300s offline UNSAT; eligibility only, all original timed budgets stay 60s."
+      },
+      {
+        "index": 94,
+        "truth": "sat",
+        "input_sha256": "a6b68604187a341c570d8bd76135552ece1bbf958a1d7e9d4ff7f3eae998fd8f",
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/model-replay-r732/case-094/record.json",
+        "sha256": "251f695441367d616c3ee7b69b8f5bccce1df0b9322a47138f2804e032301a0a",
+        "boundary": "Existing independently checked ground witness; eligibility only, no old timing substitution."
+      }
+    ],
+    "model_evidence_boundaries": [
+      {
+        "index": 47,
+        "solver": "z3",
+        "result": "sat",
+        "replay": null,
+        "error": "expected SAT followed by exactly one model",
+        "input_sha256": "2c37069c8324458e8f3ad46cc6dbe0cc3a6c2f31012ed504123e660bfdf7aba4"
+      },
+      {
+        "index": 75,
+        "solver": "z3",
+        "result": "sat",
+        "replay": "error",
+        "error": null,
+        "input_sha256": "e27d26cd1b9a1f348a64b8f8c7bdb6f2a35f0bff0a003f449901e806bec17e37"
+      },
+      {
+        "index": 94,
+        "solver": "z3",
+        "result": "sat",
+        "replay": null,
+        "error": "unsupported model binding",
+        "input_sha256": "a6b68604187a341c570d8bd76135552ece1bbf958a1d7e9d4ff7f3eae998fd8f"
+      },
+      {
+        "index": 108,
+        "solver": "z3",
+        "result": "sat",
+        "replay": null,
+        "error": "expected SAT followed by exactly one model",
+        "input_sha256": "26d6012f717dec2f43e57be63e8638d1a13b6bc9cb5fcc963c08476793385786"
+      },
+      {
+        "index": 122,
+        "solver": "z3",
+        "result": "sat",
+        "replay": null,
+        "error": "expected SAT followed by exactly one model",
+        "input_sha256": "c88289f0453a6bbe098b4c5f092dfc50cd9e0ac21d799c6ccfc0a61b5a974389"
+      },
+      {
+        "index": 148,
+        "solver": "z3",
+        "result": "sat",
+        "replay": "error",
+        "error": null,
+        "input_sha256": "4f9ef64958113d079eca3adc2023c206c8bc2a42b7f02e6acb0f11ce0a2af4be"
+      }
+    ],
+    "boundary": "Both Xolver versions verify 100/160, with no gains or losses. Verified PAR-2 decreases by 3.401 seconds (about 0.045%); this small difference does not establish a material or statistically significant overall speedup. Same-round Z3 verifies 118/125 raw; seven unconfirmed UNSATs remain excluded. Instrumented lookup costs are not formal solver timings."
+  },
+  "audit": {
+    "experiment": "1e943039d780",
+    "run": "32dd0d104077",
+    "sha256": "0e8d7ad96e7807a8c6e360f8a322c339581cf5681036ee36102b17bde7d759c7",
+    "current_model_replay_experiment": "1a8096e25b29",
+    "pilot_assessment_experiment": "650a92c20dfb",
+    "pilot_assessment_run": "7f665b741116"
+  },
+  "protected_sets_used": false,
+  "qcp_boundary": "QCP arithmetic, fixtures, generated conditions and transport tests pass. Original max3 whole-program qualification belongs to the earlier worker; this kernel has no fresh full-program performance claim.",
+  "delivery_boundary": "Native source, binaries, all 39 acceptance groups and every fresh timing/model/lease record are sealed. This stage still needs its own PR CI and post-merge main CI. No current-main server archive is required."
+}

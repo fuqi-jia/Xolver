@@ -3045,5 +3045,76 @@ The persistent transport stage is merged by PR80 as main
 [PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/41121158561) passed.
 Its fresh [main CI](https://github.com/fuqi-jia/Xolver/actions/runs/41124740311)
 has completed successfully. The CLI/SV bytes of that transport-only
-stage are unchanged from R926; the new arithmetic kernel above is separate and
-has not yet been merged.
+stage are unchanged from R926. PR81 subsequently merged the owned-child ITE
+traversal and difference-logic identity repair as main `795fb15a1d81514c61f9369f438d5c3914593a18`,
+after every step of exact-head [PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/41129059624)
+passed. Its fresh [main CI](https://github.com/fuqi-jia/Xolver/actions/runs/41132389466)
+is currently running. The subsequent indexed-context kernel below remains separate.
+
+
+### Shared source-indexed incremental context (R976–R987)
+
+Private counters on three public LRA inputs found repeated linear lookups of
+already retained SAT sources. The final periodic snapshot for51 within a ten-
+second diagnostic has276782 calls/1115918214 comparisons, zero replacements,
+and739682185ns in the instrumented scan. Inputs48 and131 likewise have zero
+replacements after169855546 and86632324 comparisons. These instrumented costs
+are diagnostic evidence, not formal solver timings.
+
+Commit `2d3d1de90f1faddc5f67e6e029176a42cb9e0e62` adds a reusable indexed
+incremental context, adopts it in LRA/LIA/the common arithmetic base, and removes
+the separate manual LIA index. The key projection is independent of SAT or theory.
+The index follows replacement, duplicate first-source lookup, prefix withdrawal,
+filtered backtracking, snapshots and reset. Append-only clients build no index.
+LRA keeps suffix withdrawal/preserved assignments; LIA keeps filtered withdrawal,
+source order, snapshots and its established assignment policy.
+
+R978 freezes source manifest SHA-256
+`03920335ad30631eb68f709948dcc3213c5171a5c1f5954c08f4c68373f47f46`,
+CLI `4d459fa5acfcf9c95d31bc7117d14701156f411439139904b1d58e00ffd1aec3`,
+SV `b428d0dda5a6f7662820f824b68da6d49b2dd9374c3913cbf079f00a309d6334`,
+and worker `47f18f753da840b14cb48ca9e9e61be6a4943a48741435ddb0ec6b4fc3208fc8`.
+196 targeted cases/369578 assertions and all39 full acceptance groups pass,
+including1840 unit cases/969357 assertions and independent arithmetic/model/QCP
+regressions. Random source operations check replacements, duplicates, filtering,
+snapshots and prefix withdrawal against an independent vector reference.
+
+The pilot verifies10/16 in each Xolver arm, PAR-2 902.921→900.530, with no gain
+or loss. R983 authenticates it before the144 disjoint R984 inputs run once.
+The full fresh round keeps60s/one physical CPU/16GiB and initial-model capture:
+baseline9d11 verifies100, candidate4d459 verifies100, PAR-2 7519.626→7516.225.
+There are no gained/lost solves, opposite verdicts, invalid models, protocol
+errors or retried originals. The small3.401s (about0.045%) PAR-2 difference does
+not establish a material/statistically significant overall speedup. Same-round
+Z3 verifies118/125 raw; the seven unconfirmed UNSATs remain excluded. R987 checks
+the actual timed duplicate models47/108/122 through both independent checkers.
+R986 seals source, all binaries/logs,39 acceptance groups,160 original timing/
+lease/model records and the private lookup profiles (SHA-256
+`0e8d7ad96e7807a8c6e360f8a322c339581cf5681036ee36102b17bde7d759c7`).
+Neither protected set was used. No new whole-program QCP claim is made. See the
+[indexed-context receipt](INDEXED_INCREMENTAL_CONTEXT_STAGE_20261031.json).
+
+### Bounded exploratory diagnostics after the indexed stage
+
+R970/R975 change only the declared header on public gaps13/131: existing IDL/RDL
+returns unknown. Their actual lowered constraints include ternary sums, so pure
+fragment dispatch is not justified. A read-only structural scan finds413 distinct
+non-DL forms in131 covered by four numeric parameters. R980 exhausts the16
+0/1 assignments on restricted derived-header subproblems:15 UNSAT and one10s
+timeout, no verified witness. Restricted UNSATs do not refute the original input;
+no production dispatch or fixed160 gain follows.
+
+R985 profiles three public NRA gaps with the frozen indexed CLI,10s each.
+Input69 calls linear relaxation175 times for6729.1ms; stack samples place14/24
+in computeSimplexTableauFacts and6/24 in GeneralSimplex::addConstraint. The
+current call path reconstructs monomial columns and the tableau at every check.
+A persistent exact relaxation shared across polynomial clients is the next
+candidate; no implementation or gain is claimed yet.
+
+For77/149,23/24 samples lie in square-cascade substitution; the implementation
+rebuilds coefficients even when a substituted variable is absent. R988 compiles
+a private prototype using existing RationalPolynomial::substitute and skipping
+absent variables, without changing production source/library/CLI/unit bytes.
+R989 still times out after10s on both inputs;77 reaches the next stage after
+6.801s in square-cascade,149 does not. There is no verified new witness or formal
+score change. This exploratory prototype is not promoted on that evidence.
