@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "status": "full_server_acceptance_passed_formal_round_in_progress",
+  "status": "server_qualified_pr_ci_pending",
   "implementation_commit": "d5a3d306176e39b74f1ac6035e992a6879c9d6f2",
   "source_manifest_sha256": "5632802701cb5789dc8f16dedeb66b7a2924b4faa85979fb9ab61ae67fd021b2",
   "binaries": {
@@ -54,8 +54,144 @@
     "wall_seconds": 60,
     "memory_gib": 16,
     "physical_cpus_per_case": 1,
-    "status": "in_progress"
+    "status": "complete",
+    "counts": {
+      "baseline": {
+        "unsat": 46,
+        "decided": 100,
+        "verified_decided": 100,
+        "verified_par2": 7506.071269614622,
+        "raw_par2": 7506.071269614622,
+        "timeout": 59,
+        "sat": 54,
+        "unknown": 1
+      },
+      "candidate": {
+        "unsat": 46,
+        "decided": 100,
+        "verified_decided": 100,
+        "verified_par2": 7513.403572719544,
+        "raw_par2": 7513.403572719544,
+        "timeout": 59,
+        "sat": 54,
+        "unknown": 1
+      },
+      "z3": {
+        "unsat": 57,
+        "decided": 124,
+        "verified_decided": 117,
+        "verified_par2": 5444.159846223891,
+        "raw_par2": 4645.882100660354,
+        "sat": 67,
+        "timeout": 36
+      }
+    },
+    "changes": [],
+    "unconfirmed": [
+      12,
+      24,
+      27,
+      42,
+      80,
+      114,
+      159
+    ],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "timing_changes_over_one_second": [
+      {
+        "index": 2,
+        "result": "sat",
+        "baseline_seconds": 36.40836449339986,
+        "candidate_seconds": 34.85320396721363
+      },
+      {
+        "index": 4,
+        "result": "sat",
+        "baseline_seconds": 33.23875782452524,
+        "candidate_seconds": 34.59207311831415
+      },
+      {
+        "index": 18,
+        "result": "unsat",
+        "baseline_seconds": 51.544035606086254,
+        "candidate_seconds": 53.699360836297274
+      },
+      {
+        "index": 84,
+        "result": "unsat",
+        "baseline_seconds": 5.980894761160016,
+        "candidate_seconds": 9.993647180497646
+      },
+      {
+        "index": 97,
+        "result": "sat",
+        "baseline_seconds": 33.0030391830951,
+        "candidate_seconds": 34.396844424307346
+      }
+    ],
+    "supplementary_truth": [
+      {
+        "index": 115,
+        "truth": "unsat",
+        "input_sha256": "02a58b11df8951543940a1090a140592e24de41dcaeb6470e7a50d42e804be64",
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r968/certificate-115/0.log",
+        "sha256": "823672e87696cac914fac33d8d0027db15a21b566e700a65300cdca704cf910e",
+        "boundary": "Fresh original-input checked modular certificate."
+      },
+      {
+        "index": 47,
+        "truth": "sat",
+        "input_sha256": "2c37069c8324458e8f3ad46cc6dbe0cc3a6c2f31012ed504123e660bfdf7aba4",
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/current-model-replay-r972/47/record.json",
+        "sha256": "9427f6d56539a9d4b13a15a403b56bf8c17898210ab304cb7903d62f206c1c09",
+        "boundary": "Two identical models from original timed R969/R971 output, positively replayed by both checkers; eligibility only, no timing replacement."
+      },
+      {
+        "index": 108,
+        "truth": "sat",
+        "input_sha256": "26d6012f717dec2f43e57be63e8638d1a13b6bc9cb5fcc963c08476793385786",
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/current-model-replay-r972/108/record.json",
+        "sha256": "cd873ef252ca7f31c5eb844d424c42eea28743a590f308bc340a3309d04b13ca",
+        "boundary": "Two identical models from original timed R969/R971 output, positively replayed by both checkers; eligibility only, no timing replacement."
+      },
+      {
+        "index": 122,
+        "truth": "sat",
+        "input_sha256": "c88289f0453a6bbe098b4c5f092dfc50cd9e0ac21d799c6ccfc0a61b5a974389",
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/current-model-replay-r972/122/record.json",
+        "sha256": "6d7f42681541b8a493e1f7a8050477ad2767bd69d440bef2edd7a62090339641",
+        "boundary": "Two identical models from original timed R969/R971 output, positively replayed by both checkers; eligibility only, no timing replacement."
+      },
+      {
+        "index": 50,
+        "truth": "unsat",
+        "input_sha256": "7e71a151d917978f1b5afc2791abf589e30c8ff97e930979df6ef82ad72dcdc0",
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/independent-truth-r761/case-050/record.json",
+        "sha256": "13a20b8e90bb8a8fff028fd665ee4ef661ae88e851766af64ed9b83ee255175c",
+        "boundary": "Existing independently checked 300s offline UNSAT; eligibility only, all original timed budgets stay 60s."
+      },
+      {
+        "index": 94,
+        "truth": "sat",
+        "input_sha256": "a6b68604187a341c570d8bd76135552ece1bbf958a1d7e9d4ff7f3eae998fd8f",
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/model-replay-r732/case-094/record.json",
+        "sha256": "251f695441367d616c3ee7b69b8f5bccce1df0b9322a47138f2804e032301a0a",
+        "boundary": "Existing independently checked ground witness; eligibility only, no old timing substitution."
+      }
+    ],
+    "invalid_original_triads": []
   },
   "protected_sets_used": false,
-  "boundary": "The six constructed name-identity/model diagnostics are separate from fixed160 and do not increase its score. Both independent oracles decide every original diagnostic input SAT, and both replay each actual fixed-version model. R964 stopped on an unavailable-model parser error and is retained; R965 completes the original diagnostic. The arithmetic baseline remains explicitly frozen; the new fair round is not yet scored. Full-program max3 qualification belongs to the earlier worker, not to this new kernel."
+  "boundary": "The six constructed name-identity/model diagnostics are separate from fixed160 and do not increase its score. Both independent oracles decide each diagnostic SAT and replay every actual fixed-version model. The fresh original-input round verifies 100 for each Xolver arm versus 117 for same-round Z3 (124 raw); seven unconfirmed Z3 UNSAT results stay excluded. There are no gained or lost solves, opposite verdicts, invalid models or protocol errors. Candidate verified PAR-2 is 7513.404 versus baseline 7506.071; no overall performance gain is claimed. The correctness fix is retained. Current timed Z3 duplicate models for 47/108/122 are independently replayed; existing model-format boundaries remain recorded. Full-program max3 qualification belongs to the earlier worker, not this kernel. No protected set was used.",
+  "audit": {
+    "experiment": "8072542b6259",
+    "run": "e1949255aedb",
+    "sha256": "c7812033037fed492e7e70cdc88b9606bed08b5b2296699c1d16d69ff3e9a667",
+    "model_replay_experiment": "5adeb46b44d8",
+    "prior_failed_audit": {
+      "run": "c7a48ca74ac9",
+      "reason": "The audit misclassified the old diagnostic label model_replay as Xolver instead of Z3. Inspecting its actual command proves the expected Z3 binary; no native test, input, timing or solver was repeated."
+    }
+  }
 }

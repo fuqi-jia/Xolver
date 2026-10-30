@@ -2997,7 +2997,7 @@ prior failed run and the completed requalification remain visible. See the
 [closed experiment receipt](DEFERRED_ROW_EXPLANATIONS_REJECTED_20261031.json).
 
 
-### Difference-logic constant identity and model repair (R964–R969)
+### Difference-logic constant identity and model repair (R964–R974)
 
 A user variable named`__ZERO__` collided with graph node0, while getModel
 silently omitted any user name beginning`__`. Fresh constructed IDL/RDL inputs
@@ -3023,14 +3023,27 @@ exported model through both Z3 and cvc5 (report SHA-256
 These are correctness/capability regressions, not additional fixed160 solves.
 
 All39 R968 acceptance groups pass, including1837 unit cases/922772 assertions.
-The fresh R969/R971 fixed160 round is running at60s/one physical CPU/16GiB with
-initial model capture; it has no final score yet. No protected set was used.
+The completed fresh R969/R971 fixed160 round keeps60s/one physical CPU/16GiB
+and initial model capture. Both Xolver arms verify100 (54 SAT/46 UNSAT), with
+59 timeouts and one unknown; there are no gains or losses. Verified PAR-2 is
+7506.071 baseline versus7513.404 candidate. Same-round Z3 verifies117/124 raw;
+seven unconfirmed UNSAT inputs12/24/27/42/80/114/159 remain excluded. There
+are no protocol errors, opposite verdicts or invalid exported models. R972
+positively replays the actual timed duplicate models47/108/122 through both
+independent checkers. R974 seals source/binaries, all39 acceptance groups,
+all160 original timing/lease/model records and the six distinct correctness
+diagnostics (SHA-256 `c7812033037fed492e7e70cdc88b9606bed08b5b2296699c1d16d69ff3e9a667`).
+R973 failed only because its audit misclassified the old diagnostic label
+`model_replay` as Xolver rather than Z3; its original command proves the Z3
+checker. That failed audit remains retained, and no solver run was repeated.
+The correctness repair is retained; no overall speedup is claimed. No protected
+set was used.
 See the [symbol identity receipt](DIFFERENCE_LOGIC_SYMBOL_IDENTITY_STAGE_20261031.json).
 
 The persistent transport stage is merged by PR80 as main
 `ec1912f519cba5455155725adb6ab829d0a357eb`, after exact-head
 [PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/41121158561) passed.
 Its fresh [main CI](https://github.com/fuqi-jia/Xolver/actions/runs/41124740311)
-is still in progress at this receipt. The CLI/SV bytes of that transport-only
+has completed successfully. The CLI/SV bytes of that transport-only
 stage are unchanged from R926; the new arithmetic kernel above is separate and
 has not yet been merged.
