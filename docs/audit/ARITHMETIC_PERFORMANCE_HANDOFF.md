@@ -2732,3 +2732,34 @@ Review also finds that streaming charged consumer latency against the existing
 20ms producer budget, unlike the previous post-scan projection. The next change
 accounts for consumer time separately while retaining the mathematical budget;
 a slow-consumer regression checks that distinction. Qualification is pending.
+
+R907 now qualifies that accounting fix:41 targeted cases/80,277 assertions,
+all1,825 unit cases/884,000 assertions and38 other acceptance groups pass.
+Its fresh pilot keeps59 solved (35.052s to17.558s SAT with positive initial-model
+replays), but51 still times out. Full R909/R916 comparison is pending. The
+preceding R903/R906 round has three invalid triads,130/131/154, with recorded
+wall-budget overruns. They are excluded and repeated in full as R912; the157
+valid triads remain immutable. A first stop audit opened the wrong EOS database
+because its job working directory differed; it failed before finding or changing
+a run. The corrected R915 audit asserts the canonical database and finds both
+remaining jobs already terminal:0 jobs cancelled. No cancellation is invented.
+
+## Unavailable linear extrema (R913–R914, candidate)
+
+R913 observes the unchanged R907 propagation engine. In final periodic R914
+samples, original51 builds1,469,082 row snapshots;1,162,211 have at least two
+unavailable contributions for EACH extremum. Those snapshots consume8.146 of
+10.456s snapshot arithmetic. Original131 spends24.484 of32.135s on such rows;
+48 spends5.026 of13.562s. These instrumented diagnostics are excluded from
+formal comparisons and show an additional cause beyond discarded output.
+
+A forward bound needs every term; backward propagation can exclude only one
+target term. Two unavailable terms in both extrema therefore preclude every
+finite explained bound from that row. The candidate checks endpoint availability
+before rational multiplication, addition and premise aggregation. The negative
+snapshot is local and uses the existing input revision: newly derived non-basic
+bounds requeue incident rows and invalidate it. No numerical fact survives a
+call or rollback, and no arithmetic budget or solver gate changes. Tests cover
+skipping all row arithmetic, strict negative division when just one extremum
+becomes usable, rollback and a skipped row becoming productive during the same
+local closure. Native qualification and frozen comparison remain pending.

@@ -34,6 +34,63 @@ static int countBounds(const std::vector<LraPropagationEngine::ExplainedBound>& 
     return c;
 }
 
+TEST_CASE("LraPropagationEngine: unavailable extrema skip arithmetic until bounds arrive") {
+    GeneralSimplex gs;
+    const int x = gs.addVar("availability-x"), y = gs.addVar("availability-y"), z = gs.addVar("availability-z");
+    const int s = gs.addConstraint({{x, 1}, {y, -2}, {z, 3}}, 0);
+    REQUIRE(gs.assertLower(s, mkBound(0, 1)));
+    REQUIRE(gs.assertUpper(s, mkBound(0, 2)));
+    LraPropagationEngine engine;
+    auto checkUnavailable = [&] {
+        LraPropagationEngine::Statistics statistics;
+        CHECK(engine.propagateAll(gs, {64, 256, 12, 1000}, &statistics).empty());
+        CHECK(statistics.rowVisits == 2);
+        CHECK(statistics.rowSnapshots == 1);
+        CHECK(statistics.snapshotHits == 1);
+        CHECK(statistics.unproductiveSnapshots == 1);
+        CHECK(statistics.termPairs == 0);
+    };
+    checkUnavailable();
+    gs.push();
+    REQUIRE(gs.assertUpper(x, BoundInfo(BoundValue(DeltaRational(4, -1)), SatLit::positive(3)), 1));
+    REQUIRE(gs.assertUpper(z, mkBound(2, 4), 1));
+    // Only the maximum is now available after excluding y. The unavailable
+    // minimum must not suppress 0 <= x-2y+3z => y < 5.
+    const auto derived = engine.propagateAll(gs, {64, 256, 12, 1000});
+    const auto found = std::find_if(derived.begin(), derived.end(), [y](const auto& bound) {
+        return bound.var == y && !bound.isLower &&
+            bound.value == DeltaRational(5, mpq_class(-1, 2));
+    });
+    REQUIRE(found != derived.end());
+    CHECK((found->reasons == std::vector<SatLit>{SatLit::positive(1), SatLit::positive(3), SatLit::positive(4)}));
+    CHECK_FALSE(gs.varState(y).upper.bound.isFinite());
+    gs.pop();
+    checkUnavailable();
+}
+
+TEST_CASE("LraPropagationEngine: skipped rows are revisited by local closure") {
+    GeneralSimplex gs;
+    const int x = gs.addVar("availability-chain-x"), y = gs.addVar("availability-chain-y"), z = gs.addVar("availability-chain-z");
+    const int target = gs.addConstraint({{x, 1}, {y, 1}, {z, 1}}, 0);
+    const int first = gs.addConstraint({{x, 1}}, 0);
+    const int second = gs.addConstraint({{y, 1}}, 0);
+    REQUIRE(gs.assertUpper(target, mkBound(6, 1)));
+    REQUIRE(gs.assertLower(first, mkBound(1, 2)));
+    REQUIRE(gs.assertLower(second, mkBound(2, 3)));
+    LraPropagationEngine engine;
+    LraPropagationEngine::Statistics statistics;
+    const auto derived = engine.propagateAll(gs, {64, 256, 12, 1000}, &statistics);
+    CHECK(statistics.unproductiveSnapshots > 0);
+    const auto found = std::find_if(derived.begin(), derived.end(), [z](const auto& bound) {
+        return bound.var == z && !bound.isLower && bound.value == DeltaRational(3);
+    });
+    REQUIRE(found != derived.end());
+    CHECK((found->reasons == std::vector<SatLit>{SatLit::positive(1), SatLit::positive(2), SatLit::positive(3)}));
+    CHECK_FALSE(gs.varState(x).lower.bound.isFinite());
+    CHECK_FALSE(gs.varState(y).lower.bound.isFinite());
+    CHECK_FALSE(gs.varState(z).upper.bound.isFinite());
+}
+
 TEST_CASE("LraPropagationEngine: a full consumer stops before unused rows") {
     GeneralSimplex gs;
     for (int row = 0; row < 8; ++row) {

@@ -131,6 +131,7 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
     struct RowSnapshot {
         int basic = -1;
         std::size_t revision = 0;
+        bool insufficientBounds = false;
         std::vector<std::array<Contribution, 2>> contributions;
         RowAggregate minimum, maximum;
     };
@@ -181,19 +182,42 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
             snapshot->basic = item.basic;
             snapshot->revision = inputRevision;
             auto& contributions = snapshot->contributions;
-            contributions.reserve(row.entries.size());
             if (statistics) ++statistics->rowSnapshots;
+            // A forward bound needs every contribution; a backward bound can
+            // omit only its target. Two unavailable endpoints in EACH extremum
+            // rule out both directions, regardless of the basic variable's
+            // bounds. Detect that before doing rational arithmetic or building
+            // explanations. A new non-basic bound changes inputRevision and
+            // requeues incident rows, so this cannot hide a later deduction.
+            int missingMinimum = 0, missingMaximum = 0;
             for (const auto& entry : row.entries) {
                 if (exhausted()) return accepted;
+                if (entry.coeff == 0) continue;
                 const auto& variable = bounds[entry.col];
                 const size_t minSide = entry.coeff > 0 ? 0 : 1;
-                contributions.push_back({Contribution(variable[minSide], entry.coeff),
-                                         Contribution(variable[1 - minSide], entry.coeff)});
-                snapshot->minimum.add(contributions.back()[0]);
-                snapshot->maximum.add(contributions.back()[1]);
-                if (statistics) ++statistics->termPairs;
+                missingMinimum += !variable[minSide].usable();
+                missingMaximum += !variable[1 - minSide].usable();
+                if (missingMinimum > 1 && missingMaximum > 1) {
+                    snapshot->insufficientBounds = true;
+                    if (statistics) ++statistics->unproductiveSnapshots;
+                    break;
+                }
+            }
+            if (!snapshot->insufficientBounds) {
+                contributions.reserve(row.entries.size());
+                for (const auto& entry : row.entries) {
+                    if (exhausted()) return accepted;
+                    const auto& variable = bounds[entry.col];
+                    const size_t minSide = entry.coeff > 0 ? 0 : 1;
+                    contributions.push_back({Contribution(variable[minSide], entry.coeff),
+                                             Contribution(variable[1 - minSide], entry.coeff)});
+                    snapshot->minimum.add(contributions.back()[0]);
+                    snapshot->maximum.add(contributions.back()[1]);
+                    if (statistics) ++statistics->termPairs;
+                }
             }
         } else if (statistics) ++statistics->snapshotHits;
+        if (snapshot->insufficientBounds) continue;
         const auto& contributions = snapshot->contributions;
         const auto& minimum = snapshot->minimum;
         const auto& maximum = snapshot->maximum;

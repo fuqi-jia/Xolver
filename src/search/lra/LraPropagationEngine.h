@@ -42,6 +42,7 @@ public:
         std::size_t rowSnapshots = 0;
         std::size_t snapshotHits = 0;
         std::size_t termPairs = 0;
+        std::size_t unproductiveSnapshots = 0;
     };
 
     // Return false when the consumer has enough conclusions. Consumer time is
