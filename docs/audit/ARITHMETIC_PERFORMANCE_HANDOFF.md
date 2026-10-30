@@ -2641,8 +2641,10 @@ replace the successful canonical checks. GCD identities use checked Rocq
 mathematics, with0 post-generation external SMT discharge queries. The generic
 audit's stricter external-discharge qualification remains false. See
 [the functional receipt](GCD_NATIVE_PROGRAM_QUALIFICATION_20261030.json).
-The matched Z3 run has only accepted annotation so far; no matched whole-program
-coverage or timing advantage is claimed. Both protected sets remain untouched.
+The matched Z3 run has accepted annotation and independent VC checking, and its
+three proof owners have completed and stopped. Group acceptance, parent checking
+and final refresh are still pending; no matched whole-program coverage or timing
+advantage is claimed. Both protected sets remain untouched.
 
 
 ## Bounded linear propagation scheduling (R881–R882, candidate)
@@ -2659,5 +2661,31 @@ new candidate rotates the row/side seed across calls. Only the scheduling
 position survives; values, explanations, snapshots and incident-row work remain
 local, and every original budget is unchanged. New tests cover both iteration
 and derived-bound limits, a different smaller tableau, strict rational bounds
-and rollback. Native qualification and fair performance checks are still pending;
-neither this reproduction nor the new tests create a new formal score.
+and rollback. R882 qualifies core`b1a8c185`, CLI SHA-256
+`4267fa39c09ea30e8e2402f32413f8e92e123645c2e29dde32c0927958037467`.
+It passes38 targeted cases/80,173 assertions, all1,822 unit cases/883,896
+assertions and the six initial regression/tool/model/QCP groups. R884/R887
+cover the same ten LRA gaps. Original51 changes from timeout to42.952s SAT;
+the other nine remain timeouts. Xolver's subsequent model attempts time out,
+including the unchanged-input CLI model attempt R886, and remain recorded.
+
+The unchanged aggregate verifier confirms the51 SAT decision with Z3's exported
+model positively replayed in cvc5 on the identical input hash. This is1 correctly
+decided pilot gain, not a checked Xolver model or a new full160 score. A per-solver
+`verified=false` records missing local evidence; it must not be conflated with
+absence of independently checked truth. An exported invalid model still fails
+even if another solver establishes SAT.
+
+R891 independently checks the existing native output flags for both Xolver
+versions and Z3 on SAT/UNSAT fixtures, with positive independent SAT model replays.
+The comparison harness now captures the model from the actual initial timed
+decision for every solver. It no longer repeats a successful SAT search on a
+rewritten model query. Model output remains within the common60s/16GiB budget;
+independent replays remain separate checks. The aggregate rejects mixed model
+capture protocols. A fresh full comparison must use the new protocol uniformly;
+the old pilot timings are not substituted into that round.
+
+R890 also rejects an all-assigned propagation shortcut: none of the measured
+48/51/131 calls has every linear predicate assigned. No-output propagation costs
+only about0.61/4.55/1.23s in those private runs, so that observation does not
+justify a large general speedup. These diagnostics remain outside formal scores.

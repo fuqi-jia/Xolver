@@ -70,14 +70,19 @@ def main():
     binaries = {name: dict(path=cmd[0], sha256=digest(cmd[0])) for name, cmd in commands.items()}
     report = dict(index=args.index, case=case, binaries=binaries,
                   manifest_sha256=digest(args.manifest), timeout=args.timeout,
-                  memory_bytes=args.memory_gib * 1024**3, observations={})
+                  memory_bytes=args.memory_gib * 1024**3, observations={},
+                  model_capture='initial-solve' if args.validate_models else None)
     # Rotate version/oracle order on the same physical CPU. Historical oracle
     # rows never substitute for a fresh timed invocation.
     order = list(commands)
     offset = args.index % len(order)
     for name in order[offset:] + order[:offset]:
         tail = ('--timeout', str(args.timeout)) if name != 'z3' else ()
+        if args.validate_models and name != 'z3':
+            tail += ('--produce-models',)
         cmd = commands[name] + (['-T:' + str(args.timeout)] if name == 'z3' else [])
+        if args.validate_models and name == 'z3':
+            cmd.append('-model')
         report['observations'][name] = invoke(name, cmd, case['path'], tail)
         (out / 'progress.json').write_text(json.dumps(report, indent=2) + '\n')
     verdicts = {o['result'] for o in report['observations'].values() if o['result'] in ('sat', 'unsat')}
@@ -107,23 +112,19 @@ def main():
                         report['wrong_verdict'] = True
                 observation['verified'] = not wrong and independent
             elif observation['result'] == 'sat':
-                model_source = out / (name + '-model.smt2')
-                model_source.write_text('(set-option :produce-models true)\n' + prefix + '\n(check-sat)\n(get-model)\n')
-                cmd = commands[name] + (['-T:' + str(args.timeout)] if name == 'z3' else [])
-                tail = ('--timeout', str(args.timeout)) if name != 'z3' else ()
-                model = invoke(name + '-model', cmd, model_source, tail)
-                observation['model'] = model
                 try:
-                    if model['result'] != 'sat':
-                        raise ValueError('model query did not return SAT')
                     pinned = out / (name + '-replay.smt2')
-                    pinned.write_text(replay(prefix, (out / (name + '-model.stdout')).read_text()))
+                    # Validate the witness from the actual timed decision;
+                    # another search need not reproduce that decision in budget.
+                    pinned.write_text(replay(prefix, (out / (name + '.stdout')).read_text()))
                     checker = [str(args.cvc5), '--lang=smt2', '--tlimit=' + str(args.timeout * 1000)] if name == 'z3' and args.cvc5 else commands['z3'] + ['-T:' + str(args.timeout)]
                     if name == 'z3' and not args.cvc5:
                         raise ValueError('independent model checker required for Z3')
                     checked = invoke(name + '-replay', checker, pinned)
                     observation['replay'] = checked
                     observation['verified'] = not wrong and checked['result'] == 'sat'
+                    if checked['result'] == 'unsat':
+                        observation['model_error'] = 'exported model violates the original input'
                 except ValueError as error:
                     observation['model_error'] = str(error)
     for name, spec in binaries.items():
@@ -131,7 +132,8 @@ def main():
             raise ValueError('solver changed during comparison: ' + name)
     (out / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
     metrics = dict(cases=1, wrong=int(wrong),
-                   errors=sum(o['result'] == 'error' for o in report['observations'].values()),
+                   errors=sum(o['result'] == 'error' or o.get('replay', {}).get('result') == 'unsat'
+                              for o in report['observations'].values()),
                    protocol_errors=len(protocol_errors))
     (out / 'metrics.json').write_text(json.dumps(metrics) + '\n')
     Path(os.environ['EOS_METRICS_FILE']).write_text(json.dumps(metrics) + '\n')
