@@ -3185,3 +3185,52 @@ Tests compare resulting consequence spans and reason-restricted membership with
 an independent dense solver on80 satisfiable integer/real rational-coefficient
 systems, plus expired/resumed work and a256-affine-premise control. This next
 source candidate still requires native qualification and a fresh fair pilot.
+
+
+### Sparse cancellation and interval projection pilots: no solve gain
+
+R1002 qualifies commitc921c75c as CLI9648db59, SV3af543ac and workeraca97b72.
+Targeted56 cases/4494 assertions, NRA231/NIA134/LIA80/LRA61 and all39 R1005
+acceptance groups pass, including1849 unit cases/972935 assertions. R1003's16
+fresh original triads still verify7 for each Xolver arm; no gained/lost solves,
+opposite verdicts, invalid models or protocol errors. PAR-2 is1081.720 versus
+1081.774; Z3 verifies12/14 raw, unconfirmed UNSAT24/27 excluded. R1006 seals the
+source, binaries, complete acceptance and timing/model/lease records (SHA-256
+`0a58168460fa14f9b975ae41dc614621847804c6c2dcfb99b3b517b5892667c5`).
+The standalone sparse stage is not promoted or expanded to full160; see the
+[sparse pilot receipt](SPARSE_POLYNOMIAL_ELIMINATION_PILOT_20261031.json).
+
+R1004 public69 records presolve at59–61ms/call, versus about1.1s after the cut
+index alone; pipeline snapshots increase from11 to56 calls in the10s window.
+The remaining box contraction costs about290ms/call. R1007 privately caches
+immutable degree-one/two projections only for incident unassigned variables,
+retaining original constraint/variable/round order and the noContract proof
+path. The initial unit link fails solely because the experimental script omits
+LIBRARY_PATH for native GMP. R1009 completes that link and99 component cases/
+287 assertions, reusing the already compiled object and CLI without rerunning
+successful work; original source/CLI/archive/unit bytes are unchanged.
+R1008 lowers69's observed box calls to130–140ms, but all three10s diagnostics
+still time out. R1010 tests eight fresh original-input triads (22/65/69/72/77/
+144/146/149),60s/one physical CPU/16GiB: both Xolver arms verify2 and time out6;
+Z3 verifies7, with no unconfirmed result. There are no gains, losses or errors.
+R1011 seals these records (SHA-256
+`1aeebefa1a034b290c0aa605343fd098e712a5e4690740a335210189f98ac002`).
+This private projection-cache experiment is not promoted; its99 checks do not
+stand in for a full production acceptance. See the
+[projection-cache receipt](BOX_PROJECTION_CACHE_PILOT_20261031.json).
+
+R1012 is a new private bounded-state experiment: two owned source-and-domain
+frames, reused only after exact full polynomial/relation/reason prefix checks.
+A retained ancestor box is valid under still-active premises; changed prefixes
+start fresh. It records source-prefix hits. Private thread-local ownership is
+not a production API: promotion requires solver-instance ownership, reset and
+withdrawal tests. No result or score is yet claimed for that experiment.
+The existing IcpEngineQ has a watcher worklist but its ReasonedBoxQ/IntervalQ
+contract requires finite initial domains; do not invent finite bounds or wire
+an empty box as the whole real line. These components are not currently called
+from production solving despite retained includes.
+
+PR82's exact-merge main CI41136383267 has passed both jobs and every step.
+Neither protected set was read or run. The current full160 reference remains
+R986's100 verified Xolver versus118 verified/125 raw same-round Z3. No new
+whole-program QCP result belongs to these kernels.
