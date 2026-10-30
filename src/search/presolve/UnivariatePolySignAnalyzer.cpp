@@ -3,6 +3,7 @@
 #include "search/nra/core/CdcacValue.h"
 
 #include <algorithm>
+#include <optional>
 
 namespace xolver {
 
@@ -61,6 +62,30 @@ bool UnivariatePolySignAnalyzer::run(PresolveState& st) {
     if (!backend_) backend_ = std::make_unique<LibpolyBackend>(st.kernel);
     const auto dom = st.integerDomain ? IntervalSet::Domain::Int : IntervalSet::Domain::Real;
 
+    // Rational roots already have exact endpoints. Only algebraic roots need
+    // separating from rational cuts. Build their variable index lazily, once
+    // per sweep, rather than scanning every atom for each univariate atom.
+    // Cuts are refinement hints, not premises of the derived intervals.
+    std::optional<std::unordered_map<VarId, std::vector<mpq_class>>> linearCuts;
+    const auto cutsFor = [&](VarId variable) -> const std::vector<mpq_class>& {
+        if (!linearCuts) {
+            linearCuts.emplace();
+            for (const auto& atom : st.atoms) {
+                if (!atom.live) continue;
+                const auto variables = atom.poly.variables();
+                if (variables.size() != 1) continue;
+                const auto v = *variables.begin();
+                if (atom.poly.degree(v) != 1) continue;
+                const auto coefficients = atom.poly.coefficients(v);
+                if (coefficients.size() == 2 && coefficients[0].isConstant() &&
+                    coefficients[1].isConstant() && coefficients[1].constantValue() != 0)
+                    (*linearCuts)[v].push_back(-coefficients[0].constantValue() /
+                                               coefficients[1].constantValue());
+            }
+        }
+        return (*linearCuts)[variable];
+    };
+
     bool made = false;
     for (size_t i = 0; i < st.atoms.size(); ++i) {
         PresolveAtom& A = st.atoms[i];
@@ -106,25 +131,21 @@ bool UnivariatePolySignAnalyzer::run(PresolveState& st) {
         // forever (e.g. sqrt(2) in [1,2] versus x <= 7/5). Separate the roots
         // from the input's rational cut points before that widening. This
         // changes no root or premise; unsuccessful refinement stays coarse.
-        std::vector<mpq_class> cuts;
-        for (const auto& atom : st.atoms) {
-            if (!atom.live || atom.poly.variables() != vars || atom.poly.degree(x) != 1) continue;
-            const auto co = atom.poly.coefficients(x);
-            if (co.size() == 2 && co[0].isConstant() && co[1].isConstant() &&
-                co[1].constantValue() != 0)
-                cuts.push_back(-co[0].constantValue() / co[1].constantValue());
-        }
-        if (auto bound = st.bounds.find(x); bound != st.bounds.end()) {
-            for (const auto& interval : bound->second.set.intervals) {
-                if (interval.lower.isRational()) cuts.push_back(interval.lower.rationalValue);
-                if (interval.upper.isRational()) cuts.push_back(interval.upper.rationalValue);
+        if (std::any_of(roots.begin(), roots.end(),
+                        [](const RealAlg& root) { return root.isAlgebraic(); })) {
+            auto cuts = cutsFor(x);
+            if (auto bound = st.bounds.find(x); bound != st.bounds.end()) {
+                for (const auto& interval : bound->second.set.intervals) {
+                    if (interval.lower.isRational()) cuts.push_back(interval.lower.rationalValue);
+                    if (interval.upper.isRational()) cuts.push_back(interval.upper.rationalValue);
+                }
             }
-        }
-        for (auto& root : roots) {
-            for (const auto& cut : cuts) {
-                while (root.isAlgebraic() && root.root.lower <= cut && cut <= root.root.upper) {
-                    if (std::chrono::steady_clock::now() >= st.deadline ||
-                        !backend_->refineRootInterval(root.root)) break;
+            for (auto& root : roots) {
+                for (const auto& cut : cuts) {
+                    while (root.isAlgebraic() && root.root.lower <= cut && cut <= root.root.upper) {
+                        if (std::chrono::steady_clock::now() >= st.deadline ||
+                            !backend_->refineRootInterval(root.root)) break;
+                    }
                 }
             }
         }

@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "status": "merged_main_ci_pending",
+  "status": "merged_main_ci_passed",
   "implementation_commit": "d5a3d306176e39b74f1ac6035e992a6879c9d6f2",
   "source_manifest_sha256": "5632802701cb5789dc8f16dedeb66b7a2924b4faa85979fb9ab61ae67fd021b2",
   "binaries": {
@@ -201,6 +201,6 @@
     "pr_ci": 41129059624,
     "pr_ci_conclusion": "success",
     "main_ci": 41132389466,
-    "main_ci_conclusion": "in_progress"
+    "main_ci_conclusion": "success"
   }
 }

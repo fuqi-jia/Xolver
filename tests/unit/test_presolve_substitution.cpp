@@ -60,6 +60,52 @@ TEST_CASE("native presolve separates algebraic roots from rational bounds") {
     }
 }
 
+TEST_CASE("native presolve separates mixed roots using cuts of their own variable") {
+    for (const mpq_class upper : {mpq_class(7, 5), mpq_class(3, 2)}) {
+        auto kernel = createPolynomialKernel();
+        const auto xId = kernel->getOrCreateVar("x");
+        const auto yId = kernel->getOrCreateVar("y");
+        const auto x = RationalPolynomial::fromVar(xId, 1, 1);
+        const auto y = RationalPolynomial::fromVar(yId, 1, 1);
+        const auto constant = RationalPolynomial::fromConstant;
+        PresolveState state;
+        state.kernel = kernel.get();
+        // The x polynomial has a rational root and two irrational roots.
+        // Bounds for y must not replace x's cuts in the lazily built index.
+        state.atoms = {{(x * x - constant(2)) * (x - constant(1)), Relation::Eq, reason(1)},
+                       {y * y - constant(3), Relation::Eq, reason(2)},
+                       {y - constant(1), Relation::Geq, reason(3)},
+                       {y - constant(2), Relation::Leq, reason(4)},
+                       {x - constant(1), Relation::Gt, reason(5)},
+                       {x - constant(upper), Relation::Leq, reason(6)}};
+        UnivariatePolySignAnalyzer analyzer;
+        analyzer.run(state);
+        CHECK(state.hasConflict == (upper == mpq_class(7, 5)));
+        if (state.hasConflict)
+            CHECK(support(state.conflict.clause) == std::set<SatVar>{1, 5, 6});
+    }
+}
+
+TEST_CASE("native presolve retains exact rational-root endpoints in either domain") {
+    for (const bool integerDomain : {false, true}) {
+        auto kernel = createPolynomialKernel();
+        const auto id = kernel->getOrCreateVar("x");
+        const auto x = RationalPolynomial::fromVar(id, 1, 1);
+        const auto one = RationalPolynomial::fromConstant(1);
+        const auto two = RationalPolynomial::fromConstant(2);
+        PresolveState state;
+        state.kernel = kernel.get();
+        state.integerDomain = integerDomain;
+        state.atoms = {{(x - one) * (x - two), Relation::Eq, reason(1)},
+                       {x - one, Relation::Gt, reason(2)},
+                       {x - two, Relation::Lt, reason(3)}};
+        UnivariatePolySignAnalyzer analyzer;
+        analyzer.run(state);
+        REQUIRE(state.hasConflict);
+        CHECK(support(state.conflict.clause) == std::set<SatVar>{1, 2, 3});
+    }
+}
+
 TEST_CASE("native presolve composed substitutions retain every source premise") {
     PresolveState state;
     auto y = RationalPolynomial::fromVar(1, 1, 1);

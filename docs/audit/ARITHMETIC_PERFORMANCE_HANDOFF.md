@@ -3118,3 +3118,41 @@ absent variables, without changing production source/library/CLI/unit bytes.
 R989 still times out after10s on both inputs;77 reaches the next stage after
 6.801s in square-cascade,149 does not. There is no verified new witness or formal
 score change. This exploratory prototype is not promoted on that evidence.
+
+
+### Incremental monomial relaxation: qualified, no pilot gain
+
+Commits85a6e063/f97e63bd replace repeated relaxation reconstruction with a
+persistent PolynomialLinearRefuter shared by NRA and polynomial Boolean
+refutation. Reused auxiliary rows retain no asserted bounds; every check
+replaces the complete current explained bound set and validates conflict
+premise membership. Cache identity compares full polynomial contents. Reset,
+withdrawal, polarity changes, changed polynomials and constant disequalities
+are covered, including160 branch contexts against a fresh independent tableau.
+R990 freezes CLI1bd8aa16 and matching SV/worker; R993 passes all39 server groups,
+including1844 unit cases/969857 assertions. R991 runs16 fresh original-input
+triads at60s/one leased physical CPU/16GiB: both Xolver arms verify7, with no
+new or lost solves and PAR-2 difference below1ms. Z3 verifies12/14 raw;
+unconfirmed UNSAT24/27 stay excluded. R994 seals all source/binary/acceptance/
+model/lease evidence (SHA-25610d72b7be8a64fff2340c2ffc72b61d7498ec220f78f0cccb6a0c5bc2f82141e).
+This standalone version is not promoted; no full160 expansion, protected-set
+run or whole-program QCP claim follows. See the
+[bounded pilot receipt](INCREMENTAL_MONOMIAL_RELAXATION_PILOT_20261031.json).
+
+R995 privately observes exact stage inputs and univariate operation counts,
+without modifying production source or binaries; R996 profiles public69/77/149
+for10s each. None of the observed presolve/box inputs equals its predecessor.
+On69, one UnivariatePolySignAnalyzer run visits1163 univariate atoms, performs
+2773755 full-input cut scans and takes377982us. The atom count is2385; later
+runs grow with the assignment. Rational roots do not consume those cuts at all.
+The next core candidate builds a variable-indexed rational-cut table lazily,
+once per sweep, only when an algebraic root actually needs refinement. This
+shared PresolveEngine capability serves NIA/NIRA/NRA. It retains exact rational
+endpoints, current-domain cuts, root refinement and original reason semantics;
+new tests mix rational/irrational roots and independent variable bounds. Native
+qualification and solver-level benefits remain unproven for that candidate.
+
+PR81's exact-merge main CI41132389466 has passed both jobs and every step.
+PR82 is merged as48054c2d after PR CI41133766183 passed both jobs and every step;
+its exact-merge main CI41136383267 is currently running. No extra server archive
+is a delivery prerequisite.
