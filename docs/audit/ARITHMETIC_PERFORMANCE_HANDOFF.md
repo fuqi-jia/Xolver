@@ -3156,3 +3156,32 @@ PR81's exact-merge main CI41132389466 has passed both jobs and every step.
 PR82 is merged as48054c2d after PR CI41133766183 passed both jobs and every step;
 its exact-merge main CI41136383267 is currently running. No extra server archive
 is a delivery prerequisite.
+
+
+### Indexed rational cuts: qualified pilot, no solver gain
+
+Commit63ba37b5 is frozen by R997 as CLI95b84a04, SV1c0099cb and
+workere1e3ea6c. All39 R999 server acceptance groups pass, including1846 unit
+cases/969873 assertions; targeted53/1432 and NRA231/NIA134/LIA80/LRA61 pass.
+R998's16 fresh original-input triads verify7 for each Xolver arm, no gained/lost
+solves, invalid models, opposite verdicts or protocol errors. PAR-2 is1081.768
+versus1081.769; same-round Z3 verifies12/14 raw, with unconfirmed UNSAT24/27
+excluded. R1001 seals source, logs, binaries, leases and model checks (SHA-256
+`a8dc06076b5c89f7c840b19de59ea142039a691f02f1e403e06bb754b01ed0f4`).
+This standalone candidate is not promoted or expanded to full160. Neither
+protected set was used. See the
+[cut-index pilot receipt](INDEXED_RATIONAL_CUTS_PILOT_20261031.json).
+
+R1000's public profiles show why the local improvement does not suffice: on69,
+presolve can now enter PolynomialEqualityCombination;12/24 samples land there,
+and individual presolve calls take about1.1s despite the existing50ms allocation.
+Its dense transpose includes zero columns for every affine equality and forms
+all null vectors before publishing any consequence. The follow-up replaces that
+matrix with sparse exact elimination of nonlinear monomials, retaining exact
+source coefficients (and removing canceled premises). Completed affine facts
+are published incrementally; partial work is local and observes the existing
+presolve/global deadlines. Affine inputs are retained, rather than recombined.
+Tests compare resulting consequence spans and reason-restricted membership with
+an independent dense solver on80 satisfiable integer/real rational-coefficient
+systems, plus expired/resumed work and a256-affine-premise control. This next
+source candidate still requires native qualification and a fresh fair pilot.
