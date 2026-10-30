@@ -40,15 +40,15 @@ Older tables describe their own frozen versions and evidence boundaries.
 
 ## Current arithmetic and ASP continuation
 
-The latest qualified arithmetic stage is
-[linear-fragment refutation](#exact-linear-fragment-refutation-r846r856):
-**99/160**, versus **117 verified /124 raw** same-round Z3 decisions.
-The preceding delivered main verifies98 in this fresh round.
-[PR77](https://github.com/fuqi-jia/Xolver/pull/77) is merged as main
-`0f4acd1c643d302f99148769ba83aa13df53d1f7`. Its exact-head
-[PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/41043796717) is green;
-fresh [main CI](https://github.com/fuqi-jia/Xolver/actions/runs/41047671267)
-is running. Earlier rounds retain their own frozen versions and evidence boundaries.
+The latest arithmetic candidate is
+[shared polynomial linear relaxation](#shared-polynomial-linear-relaxation-r857r865):
+**100/160**, versus **118 verified /125 raw** same-round Z3 decisions.
+[PR78](https://github.com/fuqi-jia/Xolver/pull/78) has passed full Panda1 acceptance
+and the frozen comparison; final exact-head PR CI remains required before merging.
+Delivered main is PR77`0f4acd1c`, qualified at99 in its own fresh round; both
+[PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/41043796717) and fresh
+[main CI](https://github.com/fuqi-jia/Xolver/actions/runs/41047671267) are fully green.
+Earlier rounds retain their own frozen versions and evidence boundaries.
 
 The retained branches are `main`, `feat/qcp-foundations` (QCP and solver
 foundations), and `feat/draco-asp`. Historical branch tips are archived in
@@ -2539,7 +2539,7 @@ oracles;52 SAT models pass104 positive independent replays. Qualified code is
 Final source/binary/lease/witness audit EOS`01b83557720a` passes; the
 [stage receipt](LINEAR_FRAGMENT_REFUTATION_STAGE_20261030.json) binds the full
 round and the exact PR/main CI links. PR77 is merged as`0f4acd1c`; fresh main CI
-is running. This does not establish overall SMT or QCP superiority. Both
+is fully green. This does not establish overall SMT or QCP superiority. Both
 protected sets remain untouched; no additional server archive is required.
 
 The next implementation generalizes the shared relaxation: each canonical
@@ -2550,3 +2550,47 @@ Unlike a successful relaxation proof, a feasible abstract model proves no
 polynomial SAT result. The canonical module replaces the linear-only entry,
 with no compatibility alias. This diagnostic is not a new formal score; the new
 core requires its own build, correctness checks and frozen full-suite comparison.
+
+
+## Shared polynomial linear relaxation (R857–R865)
+
+The linear-only subset rule misses contradictions between nonlinear rows that
+share monomials. PR78 gives every canonical monomial one unconstrained real
+Simplex column across all rows. Every original model induces a relaxed model;
+therefore exact relaxed UNSAT is sound for both integer and real clients. The
+converse is not assumed: a feasible relaxation remains open. Strict bounds,
+exact coefficients and original signed premise explanations are retained.
+The canonical polynomial module replaces the linear-only entry without an alias.
+The2ms/100k local and50ms global allocations and LIA/LRA state policies are unchanged.
+
+Initial qualification is retained as failed. A full-target build reaches the
+optional Python shared module and fails because the server's existing static
+MPFR lacks suitable shared-object TLS. The established native-target list builds
+successfully. The first rule order also increases an existing exact2-conflict
+test to3: a weaker relaxed conflict precedes the direct sign contradiction.
+Production now tries the cheap sign rule first; original strict assertions pass
+unchanged. No test, search allocation or capability gate is weakened.
+
+Panda1/ExperimentOS passes**1,817 unit cases/879,534 assertions**,38 other
+regression/tool/model groups and22 targeted cases/154 assertions. Independent
+signed Boolean/polynomial checks cover**152 integer/real cases**:76 early
+UNSAT proofs agree with Z3/cvc5, and76 exported SAT models pass152 positive
+independent replays. The fresh full frozen160 comparison is**99→100 verified**,
+54 SAT/46 UNSAT/1 unknown/59 timeouts, gained1/lost0. Original113 changes
+**60.017s timeout→0.0660s UNSAT**, agreeing with same-round Z3. Previous39/127
+remain solved. Verified PAR-2 improves**7671.203→7549.853**; same-round Z3 is
+**118 verified/125 raw**, verified PAR-2**5383.713**. Seven unconfirmed UNSAT
+indices12/24/27/42/80/114/159 remain excluded. No opposite verdict, invalid
+model, formal-budget violation or solver retry occurs in this round.
+
+Qualified core is`62f19656`; frozen CLI SHA-256 is
+`791960fb64631fe959933860938f9cfe101479098f5ccd40675ae290f784d69a`.
+Audit EOS`75b6e7ad28a3` binds sources, native targets, original failures, all
+160 timed triads, physical leases and unchanged-input supplementary truth.
+The [stage receipt](POLYNOMIAL_LINEAR_REFUTATION_STAGE_20261030.json) records
+full results. Receipt-only changes after the qualified core do not create a
+new native solver version. PR78 remains unmerged until final-head PR CI passes;
+its resulting main CI must then be checked. Both protected sets remain unused.
+The complete new-core original GCD workflow is starting separately; no new
+whole-program QCP result or overall superiority is claimed here. No additional
+current-main server archive is required.

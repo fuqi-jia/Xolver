@@ -387,7 +387,7 @@
     "pr_ci_conclusion": "success",
     "merge_commit": "0f4acd1c643d302f99148769ba83aa13df53d1f7",
     "main_ci": "https://github.com/fuqi-jia/Xolver/actions/runs/41047671267",
-    "main_ci_conclusion": "in_progress"
+    "main_ci_conclusion": "success"
   },
   "boundaries": [
     "99 verified solutions versus117 verified/124 raw same-round Z3; overall superiority not achieved.",
