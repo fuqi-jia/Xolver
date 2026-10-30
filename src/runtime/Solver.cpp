@@ -1840,9 +1840,12 @@ void Solver::dumpModel(std::ostream& os) const {
     // construction API instead retain their original free symbols by handle;
     // do not export fresh variables introduced by solving/preprocessing.
     std::vector<SOMTParser::Node> variables;
-    if (pImpl->parser) {
+    if (pImpl->parser)
         variables = pImpl->parser->getDeclaredVariables();
-    } else if (pImpl->ir) {
+    if (pImpl->ir) {
+        std::unordered_set<std::string> names;
+        for (const auto &variable : variables)
+            if (variable) names.insert(variable->getName());
         std::vector<ExprId> ids;
         ids.reserve(pImpl->symbolTerms_.size());
         for (const auto &[name, id] : pImpl->symbolTerms_) {
@@ -1850,8 +1853,11 @@ void Solver::dumpModel(std::ostream& os) const {
             ids.push_back(id);
         }
         std::sort(ids.begin(), ids.end());
-        for (auto id : ids)
-            variables.push_back(pImpl->ir->native(id));
+        for (auto id : ids) {
+            auto variable = pImpl->ir->native(id);
+            if (names.insert(variable->getName()).second)
+                variables.push_back(std::move(variable));
+        }
     }
 
     // -----------------------------------------------------------------------

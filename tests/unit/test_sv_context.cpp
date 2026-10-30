@@ -214,6 +214,7 @@ TEST_CASE("API: native snapshots export original scalar array and function model
         REQUIRE((answer.result == Result::Sat));
         std::ostringstream model;
         solver.dumpModel(model);
+        INFO(model.str());
         CHECK(model.str().find("(define-fun x ()") != std::string::npos);
         CHECK(model.str().find("(error ") == std::string::npos);
         if (std::string(source).find("declare-fun f") != std::string::npos)
@@ -230,6 +231,7 @@ TEST_CASE("API: construction exports constrained and unconstrained original symb
     REQUIRE((solver.checkSat() == Result::Sat));
     std::ostringstream model;
     solver.dumpModel(model);
+    INFO(model.str());
     CHECK(model.str().find("(define-fun b () Bool true)") != std::string::npos);
     CHECK(model.str().find("(define-fun unused () Int 0)") != std::string::npos);
 }
