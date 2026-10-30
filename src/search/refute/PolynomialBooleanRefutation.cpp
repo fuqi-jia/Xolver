@@ -1,7 +1,7 @@
 #include "search/refute/PolynomialBooleanRefutation.h"
 #include "search/boolean/Atomizer.h"
 #include "search/refute/PolynomialSignClosure.h"
-#include "search/refute/LinearFragmentRefutation.h"
+#include "search/refute/PolynomialLinearRefutation.h"
 #include "algebra/poly/PolynomialConverter.h"
 #include "base/WorkBudget.h"
 #include <algorithm>
@@ -102,15 +102,21 @@ bool refutePolynomialBoolean(const NativeTerms& terms, const std::vector<ExprId>
             }
             ++stats.theoryCalls;
             const auto started = std::chrono::steady_clock::now();
-            LinearFragmentStatistics linear;
-            auto conflict = refuteLinearFragment(constraints,
-                std::min(limits.deadline, started + std::chrono::milliseconds(2)), &linear);
-            ++stats.linearCalls;
-            stats.linearConstraints += linear.constraints;
-            stats.linearExhaustions += linear.exhausted;
-            stats.linearMicroseconds += std::chrono::duration_cast<std::chrono::microseconds>(
-                std::chrono::steady_clock::now() - started).count();
-            if (!conflict) conflict = refuteBySignDefiniteness(constraints);
+            // Cheap product signs can explain a whole Boolean alternative.
+            // Prefer them to a weaker conflict between abstract monomial rows,
+            // which can leave additional assignments for the SAT solver.
+            auto conflict = refuteBySignDefiniteness(constraints);
+            if (!conflict) {
+                const auto linearStarted = std::chrono::steady_clock::now();
+                PolynomialLinearStatistics linear;
+                conflict = refutePolynomialLinearRelaxation(constraints,
+                    std::min(limits.deadline, linearStarted + std::chrono::milliseconds(2)), &linear);
+                ++stats.linearCalls;
+                stats.linearConstraints += linear.constraints;
+                stats.linearExhaustions += linear.exhausted;
+                stats.linearMicroseconds += std::chrono::duration_cast<std::chrono::microseconds>(
+                    std::chrono::steady_clock::now() - linearStarted).count();
+            }
             if (!conflict) {
                 PolynomialSignStatistics sign;
                 conflict = refuteByPolynomialSignClosure(constraints, &sign);

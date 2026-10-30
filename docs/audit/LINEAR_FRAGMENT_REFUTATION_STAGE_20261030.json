@@ -1,0 +1,400 @@
+{
+  "schema": "xolver-linear-fragment-refutation-stage/1",
+  "implementation": {
+    "qualified_head": "372245e36992660c3de56ba27c1ad5f41839569f",
+    "source_manifest": "validation/arithmetic-r103/source-r846.tar.json",
+    "source_manifest_sha256": "a4469bf19c2c5aaef45097bb8993ed3e82a486527efc2ce6cead49e0d7456567",
+    "candidate_binary_sha256": "f27b1f2894090010d4937530c9538bd879fa442b463a98e8b3c817e4b4a7e0af",
+    "unit_binary_sha256": "62d92b6de5c83ce74546850bbe74a758ef87ffbcec9594f78da9eb380fd0e4be"
+  },
+  "algorithm": {
+    "rule": "Prove UNSAT of the exact linear subset of a mixed arithmetic assignment over reals; retain signed original SAT premise explanations.",
+    "placement": "Shared integer/real polynomial Boolean refutation before nonlinear search.",
+    "limits": {
+      "linear_wall_ms": 2,
+      "work": 100000,
+      "global_boolean_wall_ms": 50,
+      "boolean_models": 8
+    },
+    "boundary": "Nonlinear atoms and disequalities omitted. Feasible or exhausted relaxation is open, never SAT. Existing LIA/LRA state policies preserved."
+  },
+  "validation": {
+    "unit_cases": 1816,
+    "unit_assertions": 879519,
+    "acceptance_groups": 39,
+    "independent_cases": 104,
+    "early_refutations": 52,
+    "exported_sat_models": 52,
+    "positive_independent_replays": 104,
+    "source_binary_eos_audit": "443b70c66789",
+    "final_witness_audit": "01b83557720a",
+    "audit_record": "validation/arithmetic-r103/stage-r856.json",
+    "audit_record_sha256": "69d8c1a022b7a8ef500202486f202ddd33234288e389d5360fc9a2dad3e451b8"
+  },
+  "formal_fixed160": {
+    "cases": 160,
+    "seconds_per_solver_case": 60,
+    "physical_cpus_per_solver_case": 1,
+    "memory_bytes": 17179869184,
+    "frozen_binaries": {
+      "baseline": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/boolean-refute-r825/xolver",
+        "sha256": "ce2c642efdb7a9b4e0f946ad6099a2f2f82f3a7b724f5e70caa4d1c59593f852"
+      },
+      "candidate": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/linear-fragment-r846/xolver",
+        "sha256": "f27b1f2894090010d4937530c9538bd879fa442b463a98e8b3c817e4b4a7e0af"
+      },
+      "z3": {
+        "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+        "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      }
+    },
+    "counts": {
+      "baseline": {
+        "unsat": 44,
+        "decided": 98,
+        "verified_decided": 98,
+        "verified_par2": 7773.572121892124,
+        "raw_par2": 7773.572121892124,
+        "timeout": 61,
+        "sat": 54,
+        "unknown": 1
+      },
+      "candidate": {
+        "unsat": 45,
+        "decided": 99,
+        "verified_decided": 99,
+        "verified_par2": 7659.084211155772,
+        "raw_par2": 7659.084211155772,
+        "timeout": 60,
+        "sat": 54,
+        "unknown": 1
+      },
+      "z3": {
+        "unsat": 58,
+        "decided": 124,
+        "verified_decided": 117,
+        "verified_par2": 5473.412693418562,
+        "raw_par2": 4673.364782689139,
+        "sat": 66,
+        "timeout": 36
+      }
+    },
+    "by_logic": {
+      "QF_LIA": {
+        "baseline": {
+          "unsat": 15,
+          "decided": 34,
+          "verified_decided": 34,
+          "verified_par2": 1889.2208174113184,
+          "raw_par2": 1889.2208174113184,
+          "timeout": 14,
+          "sat": 19
+        },
+        "candidate": {
+          "unsat": 15,
+          "decided": 34,
+          "verified_decided": 34,
+          "verified_par2": 1895.3231148216873,
+          "raw_par2": 1895.3231148216873,
+          "timeout": 14,
+          "sat": 19
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 39,
+          "verified_decided": 37,
+          "verified_par2": 1412.0081350654364,
+          "raw_par2": 1211.0301661286503,
+          "sat": 24,
+          "timeout": 9
+        }
+      },
+      "QF_NIA": {
+        "baseline": {
+          "timeout": 21,
+          "decided": 27,
+          "verified_decided": 27,
+          "verified_par2": 2574.0113818813115,
+          "raw_par2": 2574.0113818813115,
+          "unsat": 14,
+          "sat": 13
+        },
+        "candidate": {
+          "timeout": 20,
+          "decided": 28,
+          "verified_decided": 28,
+          "verified_par2": 2453.4105639811605,
+          "raw_par2": 2453.4105639811605,
+          "unsat": 15,
+          "sat": 13
+        },
+        "z3": {
+          "unsat": 22,
+          "decided": 33,
+          "verified_decided": 29,
+          "verified_par2": 2312.174966212362,
+          "raw_par2": 1832.8391324598342,
+          "sat": 11,
+          "timeout": 15
+        }
+      },
+      "QF_LRA": {
+        "baseline": {
+          "timeout": 16,
+          "decided": 16,
+          "verified_decided": 16,
+          "verified_par2": 1978.5713049452752,
+          "raw_par2": 1978.5713049452752,
+          "sat": 7,
+          "unsat": 9
+        },
+        "candidate": {
+          "timeout": 16,
+          "decided": 16,
+          "verified_decided": 16,
+          "verified_par2": 1978.380186183378,
+          "raw_par2": 1978.380186183378,
+          "sat": 7,
+          "unsat": 9
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 26,
+          "verified_decided": 26,
+          "verified_par2": 813.720512310043,
+          "raw_par2": 813.720512310043,
+          "sat": 11,
+          "timeout": 6
+        }
+      },
+      "QF_NRA": {
+        "baseline": {
+          "sat": 15,
+          "decided": 21,
+          "verified_decided": 21,
+          "verified_par2": 1331.7686176542193,
+          "raw_par2": 1331.7686176542193,
+          "unsat": 6,
+          "timeout": 10,
+          "unknown": 1
+        },
+        "candidate": {
+          "sat": 15,
+          "decided": 21,
+          "verified_decided": 21,
+          "verified_par2": 1331.9703461695462,
+          "raw_par2": 1331.9703461695462,
+          "unsat": 6,
+          "timeout": 10,
+          "unknown": 1
+        },
+        "z3": {
+          "sat": 20,
+          "decided": 26,
+          "verified_decided": 25,
+          "verified_par2": 935.509079830721,
+          "raw_par2": 815.7749717906117,
+          "timeout": 6,
+          "unsat": 6
+        }
+      }
+    },
+    "changes": [
+      {
+        "index": 39,
+        "case": "QF_NIA/LassoRanker/PodelskiRybalchenko-VMCAI2004-Ex1_true-termination.c_Iteration3_Loop+nonterminationTemplate_0.smt2",
+        "kind": "gained",
+        "truth": "unsat",
+        "evidence": [
+          "independent-z3-xolver-agreement"
+        ],
+        "observations": {
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.00649278983474
+          },
+          "candidate": {
+            "result": "unsat",
+            "seconds": 0.06604078970849514
+          },
+          "z3": {
+            "result": "unsat",
+            "seconds": 0.41677880845963955
+          }
+        }
+      }
+    ],
+    "gained_solves": 1,
+    "lost_solves": 0,
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "other_changes_over_one_second": [
+      {
+        "index": 18,
+        "result": "unsat",
+        "baseline_seconds": 47.42449208162725,
+        "candidate_seconds": 49.63118038326502
+      },
+      {
+        "index": 44,
+        "result": "unsat",
+        "baseline_seconds": 18.413435075432062,
+        "candidate_seconds": 17.30584690347314
+      },
+      {
+        "index": 52,
+        "result": "sat",
+        "baseline_seconds": 6.531684936955571,
+        "candidate_seconds": 9.091470032930374
+      },
+      {
+        "index": 59,
+        "result": "sat",
+        "baseline_seconds": 39.37711623311043,
+        "candidate_seconds": 36.51873457059264
+      },
+      {
+        "index": 97,
+        "result": "sat",
+        "baseline_seconds": 33.99872259795666,
+        "candidate_seconds": 36.6387157831341
+      }
+    ],
+    "unconfirmed_indices": [
+      12,
+      24,
+      27,
+      42,
+      80,
+      114,
+      159
+    ],
+    "invalid_initial_triads": [
+      {
+        "index": 51,
+        "run": "84ae4f4c3ce9",
+        "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r850/case-051/report.json",
+        "report_sha256": "c6d43810ae34f6f99a45f702c29436b96690be6f4e6d703ff5756fe6ccb954d3",
+        "protocol_errors": [
+          {
+            "label": "baseline",
+            "seconds": 62.231033727526665,
+            "launch_seconds": 0.0023438148200511932,
+            "wait_seconds": 62.22868991270661,
+            "returncode": -9,
+            "timeout_notified_seconds": 62.20834586210549,
+            "cleanup_seconds": 0.022687865421175957,
+            "timed_out": true,
+            "budget_overrun": true
+          }
+        ],
+        "infra_attempt": 0,
+        "terminal_status": "failed",
+        "terminal_log": ""
+      },
+      {
+        "index": 72,
+        "run": "d6b0335f506a",
+        "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r850/case-072/report.json",
+        "report_sha256": "04357ae028cbd96d454c8ad3888ac9a20fde7f9c19faf698bafdd0bedffe5d54",
+        "protocol_errors": [
+          {
+            "label": "baseline",
+            "seconds": 67.00498807430267,
+            "launch_seconds": 0.0023837294429540634,
+            "wait_seconds": 67.00260434485972,
+            "returncode": -9,
+            "timeout_notified_seconds": 60.00011190585792,
+            "cleanup_seconds": 7.004876168444753,
+            "timed_out": true,
+            "budget_overrun": true
+          }
+        ],
+        "infra_attempt": 0,
+        "terminal_status": "failed",
+        "terminal_log": ""
+      },
+      {
+        "index": 86,
+        "run": "612250fd0584",
+        "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r850/case-086/report.json",
+        "report_sha256": "ae4c0b68477519e2a6ce5b02b85ece66840316e8055390a4f3d6816a97b4c887",
+        "protocol_errors": [
+          {
+            "label": "baseline",
+            "seconds": 66.23191328346729,
+            "launch_seconds": 0.0019010026007890701,
+            "wait_seconds": 66.2300122808665,
+            "returncode": -9,
+            "timeout_notified_seconds": 66.22314387187362,
+            "cleanup_seconds": 0.008769411593675613,
+            "timed_out": true,
+            "budget_overrun": true
+          },
+          {
+            "label": "candidate",
+            "seconds": 128.62644767574966,
+            "launch_seconds": 0.0024132132530212402,
+            "wait_seconds": 128.62403446249664,
+            "returncode": -9,
+            "timeout_notified_seconds": 128.4413993153721,
+            "cleanup_seconds": 0.18504836037755013,
+            "timed_out": true,
+            "budget_overrun": true
+          }
+        ],
+        "infra_attempt": 2,
+        "terminal_status": "failed",
+        "terminal_log": "taskset: failed to parse CPU list: \n"
+      },
+      {
+        "index": 94,
+        "run": "2e55708af60d",
+        "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r850/case-094/report.json",
+        "report_sha256": "9b7d671ca12451f29bfc8d52b52c43c6792f40668caba19da974ec01e2310975",
+        "protocol_errors": [
+          {
+            "label": "candidate",
+            "seconds": 62.77926480025053,
+            "launch_seconds": 0.0027694199234247208,
+            "wait_seconds": 62.776495380327106,
+            "returncode": -9,
+            "timeout_notified_seconds": 62.69687085598707,
+            "cleanup_seconds": 0.08239394426345825,
+            "timed_out": true,
+            "budget_overrun": true
+          }
+        ],
+        "infra_attempt": 0,
+        "terminal_status": "failed",
+        "terminal_log": ""
+      }
+    ],
+    "retry_runs": [
+      "c0baae7929b9",
+      "fbd1ccc3a031",
+      "d0dfc26e3ec4",
+      "f09a5d8bd1ab"
+    ],
+    "verification_boundary": "Only checked verdicts count. Original hashes reuse prior checked witnesses94/122, modular certificate115 and offline independent UNSAT50. R855 freshly replays prior raw47 model in both checkers; truth eligibility only, no timing substitution. Seven unconfirmed UNSAT results remain excluded."
+  },
+  "delivery": {
+    "pr": "https://github.com/fuqi-jia/Xolver/pull/77",
+    "server_acceptance": "success",
+    "pr_ci": "https://github.com/fuqi-jia/Xolver/actions/runs/41043796717",
+    "pr_ci_conclusion": "success",
+    "merge_commit": "0f4acd1c643d302f99148769ba83aa13df53d1f7",
+    "main_ci": "https://github.com/fuqi-jia/Xolver/actions/runs/41047671267",
+    "main_ci_conclusion": "success"
+  },
+  "boundaries": [
+    "99 verified solutions versus117 verified/124 raw same-round Z3; overall superiority not achieved.",
+    "No whole-program QCP coverage or speed improvement is attributed to this arithmetic binary.",
+    "Neither protected set has been inspected or run."
+  ],
+  "protected_sets_used": false,
+  "above_z3_claim": false,
+  "extra_current_main_server_archive_required": false
+}

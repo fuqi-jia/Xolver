@@ -1,0 +1,296 @@
+{
+  "schema": "xolver-polynomial-linear-refutation-stage/1",
+  "implementation": {
+    "qualified_head": "62f1965697f36e3b4d63dce211726cae55c64c11",
+    "source_manifest": "validation/arithmetic-r103/source-r864.tar.json",
+    "source_manifest_sha256": "7e376b80e3e0ad8194569d89b2f733387d35ff32653df835416c24b46c16895b",
+    "candidate_binary_sha256": "791960fb64631fe959933860938f9cfe101479098f5ccd40675ae290f784d69a",
+    "sv_binary_sha256": "99ded03d3b7d94b90d4d1446fbfeb619170365d6a6e3e10841abee67099f39f0",
+    "unit_binary_sha256": "21d690bf110641b472821b3db1711a3cf4401291b9aaf6a0aaddabcd21379b67"
+  },
+  "algorithm": {
+    "rule": "One unconstrained exact real Simplex column per canonical polynomial monomial, shared across all constraints. Exact infeasibility refutes the polynomial assignment; feasibility never proves SAT.",
+    "explanations": "Return signed original SAT premises only; retain exact rationals, offsets and strict infinitesimals.",
+    "ordering": "Prefer existing cheap sign-definiteness conflicts before linear relaxation to avoid weaker clauses and unnecessary Boolean assignments.",
+    "limits": {
+      "linear_wall_ms": 2,
+      "work": 100000,
+      "global_boolean_wall_ms": 50,
+      "boolean_models": 8
+    },
+    "canonical_interface": "PolynomialLinearRefutation replaces LinearFragmentRefutation; no compatibility alias."
+  },
+  "validation": {
+    "unit_cases": 1817,
+    "unit_assertions": 879534,
+    "acceptance_groups": 39,
+    "targeted_cases": 22,
+    "targeted_assertions": 154,
+    "independent_cases": 152,
+    "early_refutations": 76,
+    "exported_sat_models": 76,
+    "positive_independent_replays": 152,
+    "qualification_run": "6824466f3d26",
+    "source_binary_eos_audit": "75b6e7ad28a3",
+    "audit_record": "validation/arithmetic-r103/stage-r865.json",
+    "audit_record_sha256": "655e671221b2fc4d4856972ac392f6dce893108a401188b5849a7d9a1b929cb8",
+    "rejected_qualification_attempts": [
+      {
+        "run": "b3785c6c952c",
+        "reason": "Optional Python shared module cannot link server static MPFR local-exec TLS; native targets build before failure."
+      },
+      {
+        "run": "09c784bd88d3",
+        "reason": "First monomial relaxation learned a weaker conflict and changed a strict existing2-conflict assertion to3. Fixed production oracle priority; original tests unchanged."
+      }
+    ],
+    "boundary": "The optional Python extension is not qualified on the server: its existing static MPFR cannot link into a shared module. All established native acceptance targets pass. The initial conflict-count failure was fixed by production oracle ordering; original strict assertions are unchanged."
+  },
+  "formal_fixed160": {
+    "cases": 160,
+    "seconds_per_solver_case": 60,
+    "physical_cpus_per_solver_case": 1,
+    "memory_bytes": 17179869184,
+    "frozen_binaries": {
+      "baseline": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/linear-fragment-r846/xolver",
+        "sha256": "f27b1f2894090010d4937530c9538bd879fa442b463a98e8b3c817e4b4a7e0af"
+      },
+      "candidate": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/polynomial-linear-r864/xolver",
+        "sha256": "791960fb64631fe959933860938f9cfe101479098f5ccd40675ae290f784d69a"
+      },
+      "z3": {
+        "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+        "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      }
+    },
+    "counts": {
+      "baseline": {
+        "unsat": 45,
+        "decided": 99,
+        "verified_decided": 99,
+        "verified_par2": 7671.203160824254,
+        "raw_par2": 7671.203160824254,
+        "timeout": 60,
+        "sat": 54,
+        "unknown": 1
+      },
+      "candidate": {
+        "unsat": 46,
+        "decided": 100,
+        "verified_decided": 100,
+        "verified_par2": 7549.852866673842,
+        "raw_par2": 7549.852866673842,
+        "timeout": 59,
+        "sat": 54,
+        "unknown": 1
+      },
+      "z3": {
+        "unsat": 58,
+        "decided": 125,
+        "verified_decided": 118,
+        "verified_par2": 5383.712711410597,
+        "raw_par2": 4583.729092089459,
+        "sat": 67,
+        "timeout": 35
+      }
+    },
+    "by_logic": {
+      "QF_LIA": {
+        "baseline": {
+          "unsat": 15,
+          "decided": 34,
+          "verified_decided": 34,
+          "verified_par2": 1900.4978979863226,
+          "raw_par2": 1900.4978979863226,
+          "timeout": 14,
+          "sat": 19
+        },
+        "candidate": {
+          "unsat": 15,
+          "decided": 34,
+          "verified_decided": 34,
+          "verified_par2": 1900.5538273267448,
+          "raw_par2": 1900.5538273267448,
+          "timeout": 14,
+          "sat": 19
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 39,
+          "verified_decided": 37,
+          "verified_par2": 1417.5693491455168,
+          "raw_par2": 1216.6548915039748,
+          "sat": 24,
+          "timeout": 9
+        }
+      },
+      "QF_NIA": {
+        "baseline": {
+          "timeout": 20,
+          "decided": 28,
+          "verified_decided": 28,
+          "verified_par2": 2455.64003399387,
+          "raw_par2": 2455.64003399387,
+          "unsat": 15,
+          "sat": 13
+        },
+        "candidate": {
+          "timeout": 19,
+          "decided": 29,
+          "verified_decided": 29,
+          "verified_par2": 2334.616336029023,
+          "raw_par2": 2334.616336029023,
+          "unsat": 16,
+          "sat": 13
+        },
+        "z3": {
+          "unsat": 22,
+          "decided": 34,
+          "verified_decided": 30,
+          "verified_par2": 2210.1735914032906,
+          "raw_par2": 1730.8384317029268,
+          "sat": 12,
+          "timeout": 14
+        }
+      },
+      "QF_LRA": {
+        "baseline": {
+          "timeout": 16,
+          "decided": 16,
+          "verified_decided": 16,
+          "verified_par2": 1982.4460971262306,
+          "raw_par2": 1982.4460971262306,
+          "sat": 7,
+          "unsat": 9
+        },
+        "candidate": {
+          "timeout": 16,
+          "decided": 16,
+          "verified_decided": 16,
+          "verified_par2": 1982.4171768166125,
+          "raw_par2": 1982.4171768166125,
+          "sat": 7,
+          "unsat": 9
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 26,
+          "verified_decided": 26,
+          "verified_par2": 820.1384638305753,
+          "raw_par2": 820.1384638305753,
+          "sat": 11,
+          "timeout": 6
+        }
+      },
+      "QF_NRA": {
+        "baseline": {
+          "sat": 15,
+          "decided": 21,
+          "verified_decided": 21,
+          "verified_par2": 1332.619131717831,
+          "raw_par2": 1332.619131717831,
+          "unsat": 6,
+          "timeout": 10,
+          "unknown": 1
+        },
+        "candidate": {
+          "sat": 15,
+          "decided": 21,
+          "verified_decided": 21,
+          "verified_par2": 1332.2655265014619,
+          "raw_par2": 1332.2655265014619,
+          "unsat": 6,
+          "timeout": 10,
+          "unknown": 1
+        },
+        "z3": {
+          "sat": 20,
+          "decided": 26,
+          "verified_decided": 25,
+          "verified_par2": 935.8313070312142,
+          "raw_par2": 816.0973050519824,
+          "timeout": 6,
+          "unsat": 6
+        }
+      }
+    },
+    "changes": [
+      {
+        "index": 113,
+        "case": "QF_NIA/LassoRanker/PodelskiRybalchenko-LICS2004-Fig2-TACAS2011-Fig3_true-termination.c_Iteration9_Loop+nonterminationTemplate_0.smt2",
+        "kind": "gained",
+        "truth": "unsat",
+        "evidence": [
+          "independent-z3-xolver-agreement"
+        ],
+        "observations": {
+          "z3": {
+            "result": "unsat",
+            "seconds": 0.46796669997274876
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.01712311245501
+          },
+          "candidate": {
+            "result": "unsat",
+            "seconds": 0.06600656732916832
+          }
+        }
+      }
+    ],
+    "gained_solves": 1,
+    "lost_solves": 0,
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "other_changes_over_one_second": [
+      {
+        "index": 4,
+        "result": "sat",
+        "baseline_seconds": 37.56854304857552,
+        "candidate_seconds": 35.296069452539086
+      },
+      {
+        "index": 7,
+        "result": "unsat",
+        "baseline_seconds": 20.619259510189295,
+        "candidate_seconds": 19.364362237975
+      },
+      {
+        "index": 18,
+        "result": "unsat",
+        "baseline_seconds": 49.85393528267741,
+        "candidate_seconds": 52.25537743233144
+      }
+    ],
+    "unconfirmed_indices": [
+      12,
+      24,
+      27,
+      42,
+      80,
+      114,
+      159
+    ],
+    "invalid_initial_triads": [],
+    "verification_boundary": "No invalid formal triad or solver retry in this round. Only checked verdicts count. Identical-input checked witnesses/certificates supplement truth eligibility, never timed observations. Seven unconfirmed UNSAT results remain excluded."
+  },
+  "delivery": {
+    "pr": "https://github.com/fuqi-jia/Xolver/pull/78",
+    "server_acceptance": "success",
+    "pr_ci": "https://github.com/fuqi-jia/Xolver/pull/78/checks",
+    "pr_ci_conclusion": "pending-final-head",
+    "merge_commit": null,
+    "main_ci_conclusion": "not-merged"
+  },
+  "boundaries": [
+    "100 verified versus118 verified/125 raw same-round Z3; overall superiority not achieved.",
+    "This arithmetic stage makes no new whole-program QCP coverage or timing claim.",
+    "Neither independent protected set was used."
+  ],
+  "protected_sets_used": false,
+  "above_z3_claim": false,
+  "extra_current_main_server_archive_required": false
+}

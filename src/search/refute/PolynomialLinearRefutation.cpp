@@ -1,16 +1,16 @@
-#include "search/refute/LinearFragmentRefutation.h"
+#include "search/refute/PolynomialLinearRefutation.h"
 #include "search/lra/GeneralSimplex.h"
 #include "base/WorkBudget.h"
 #include <algorithm>
-#include <unordered_map>
+#include <map>
 
 namespace xolver {
 
-std::optional<std::vector<SatLit>> refuteLinearFragment(
+std::optional<std::vector<SatLit>> refutePolynomialLinearRelaxation(
     const std::vector<SignRefuteConstraint>& constraints,
     std::chrono::steady_clock::time_point deadline,
-    LinearFragmentStatistics* statistics) {
-    LinearFragmentStatistics local;
+    PolynomialLinearStatistics* statistics) {
+    PolynomialLinearStatistics local;
     auto& stats = statistics ? *statistics : local;
     stats = {};
     try {
@@ -18,33 +18,30 @@ std::optional<std::vector<SatLit>> refuteLinearFragment(
         auto tick = [&](size_t amount = 1) {
             work.tick(amount);
             if (std::chrono::steady_clock::now() >= deadline)
-                throw ResourceExhausted("linear fragment allocation exhausted");
+                throw ResourceExhausted("polynomial linear relaxation allocation exhausted");
         };
         tick();
         GeneralSimplex simplex;
-        std::unordered_map<VarId, int> variables;
+        std::map<MonomialKey, int> variables;
         for (const auto& constraint : constraints) {
             tick();
             if (constraint.rel == Relation::Neq) continue;
-            bool linear = true;
             for (const auto& [monomial, coefficient] : constraint.poly.terms()) {
                 tick(1 + monomial.size() + mpz_sizeinbase(coefficient.get_num_mpz_t(), 2) +
                      mpz_sizeinbase(coefficient.get_den_mpz_t(), 2));
-                if (!monomial.empty() && (monomial.size() != 1 || monomial[0].second != 1)) {
-                    linear = false;
-                    break;
-                }
             }
-            if (!linear) continue;
             mpq_class constant = 0;
             std::vector<std::pair<int, mpq_class>> terms;
             for (const auto& [monomial, coefficient] : constraint.poly.terms()) {
                 tick();
                 if (monomial.empty()) { constant += coefficient; continue; }
-                const auto variable = monomial[0].first;
-                auto it = variables.find(variable);
+                // Canonical monomials share one unconstrained real column
+                // across all rows. Every polynomial model induces such a
+                // linear model; the converse is deliberately not assumed.
+                auto it = variables.find(monomial);
                 if (it == variables.end()) {
-                    it = variables.emplace(variable, simplex.addVar("p" + std::to_string(variable))).first;
+                    it = variables.emplace(monomial,
+                        simplex.addVar("m" + std::to_string(variables.size()))).first;
                     ++stats.variables;
                 }
                 terms.emplace_back(it->second, coefficient);
