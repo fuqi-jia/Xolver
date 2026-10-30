@@ -92,7 +92,10 @@ private:
         int auxVar = -1;  // pre-computed aux var for this linear form
         bool isDiseq = false;
     };
-    std::vector<LraTrailEntry> theoryTrail_;
+    struct TrailKey {
+        SatVar operator()(const LraTrailEntry& entry) const { return entry.atom.satVar; }
+    };
+    incremental::IndexedContext<LraTrailEntry, TrailKey> theoryTrail_;
     size_t appliedCursor_ = 0;
     std::optional<TheoryCheckResult> pendingConflict_;
 

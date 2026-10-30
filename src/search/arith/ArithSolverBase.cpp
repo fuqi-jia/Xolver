@@ -162,15 +162,13 @@ void ArithSolverBase::pop(uint32_t n) {
 void ArithSolverBase::assertLit(const TheoryAtomRecord& atom, bool value,
                                 int level, SatLit assertedLit) {
     // Dedup by satVar: replace an existing assignment for the same SAT
-    // variable in place, else append. This reproduces the pre-refactor
-    // assertLit body shared by IDL/RDL/NIA/NIRA/LIRA verbatim.
-    for (size_t i = 0; i < state_.trail.size(); ++i) {
-        if (state_.trail[i].atom.satVar == atom.satVar) {
-            state_.trail.replace(i, {level, assertedLit, atom, value});
-            if (level > state_.currentLevel) state_.currentLevel = level;
-            onAssertLit(atom, value, level, assertedLit);
-            return;
-        }
+    // variable in place, else append. The context owns lookup invalidation
+    // across filtered withdrawal, replacement, reset and snapshots.
+    if (const auto position = state_.trail.find(atom.satVar)) {
+        state_.trail.replace(*position, {level, assertedLit, atom, value});
+        if (level > state_.currentLevel) state_.currentLevel = level;
+        onAssertLit(atom, value, level, assertedLit);
+        return;
     }
     state_.trail.append({level, assertedLit, atom, value});
     if (level > state_.currentLevel) state_.currentLevel = level;
