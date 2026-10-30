@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "status": "server_qualified_pr_ci_pending",
+  "status": "merged_main_ci_pending",
   "implementation_commit": "d85eac566e29329e0f25e18a7e364429544305b7",
   "problem": "Iterative ITE postorder traversal rescans completed siblings and rematerializes the same wide parent after each child. NativeTerms.get returns a value containing the child list.",
   "implementation": "Keep the child list and next-child cursor in each active DFS frame. Preserve root iteration, visitation, postorder, generated assertions and incremental ITE definitions across roots.",
@@ -217,5 +217,14 @@
   },
   "protected_sets_used": false,
   "qcp_boundary": "The candidate passes QCP arithmetic, fixture and generated-condition regressions. Original max3 whole-program qualification belongs to earlier frozen transport worker 578144c1; this arithmetic worker has no new whole-program performance claim.",
-  "delivery_boundary": "Server acceptance and the full fair round are sealed. Merge requires this stage PR CI and fresh main CI. No additional current-main server archive is required."
+  "delivery_boundary": "Merged by PR81 after server acceptance and every exact-head PR CI step passed; fresh main CI 41132389466 is running. No additional current-main server archive is required.",
+  "delivery": {
+    "pr": 81,
+    "head_commit": "5502108259ea21679a4cd4f8e93b0060bf32774d",
+    "merge_commit": "795fb15a1d81514c61f9369f438d5c3914593a18",
+    "pr_ci": 41129059624,
+    "pr_ci_conclusion": "success",
+    "main_ci": 41132389466,
+    "main_ci_conclusion": "in_progress"
+  }
 }

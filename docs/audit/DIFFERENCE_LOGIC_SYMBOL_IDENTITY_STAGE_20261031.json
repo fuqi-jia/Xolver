@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "status": "server_qualified_pr_ci_pending",
+  "status": "merged_main_ci_pending",
   "implementation_commit": "d5a3d306176e39b74f1ac6035e992a6879c9d6f2",
   "source_manifest_sha256": "5632802701cb5789dc8f16dedeb66b7a2924b4faa85979fb9ab61ae67fd021b2",
   "binaries": {
@@ -193,5 +193,14 @@
       "run": "c7a48ca74ac9",
       "reason": "The audit misclassified the old diagnostic label model_replay as Xolver instead of Z3. Inspecting its actual command proves the expected Z3 binary; no native test, input, timing or solver was repeated."
     }
+  },
+  "delivery": {
+    "pr": 81,
+    "head_commit": "5502108259ea21679a4cd4f8e93b0060bf32774d",
+    "merge_commit": "795fb15a1d81514c61f9369f438d5c3914593a18",
+    "pr_ci": 41129059624,
+    "pr_ci_conclusion": "success",
+    "main_ci": 41132389466,
+    "main_ci_conclusion": "in_progress"
   }
 }

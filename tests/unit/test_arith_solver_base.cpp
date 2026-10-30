@@ -104,8 +104,16 @@ TEST_CASE("ArithSolverBase: replacing an early assignment retains later parent s
     solver.assertLit(mkAtom(5), true, 2, SatLit::positive(5));
     solver.backtrackToLevel(1);
     CHECK(solver.trailVariables() == std::vector<SatVar>{2, 4});
+    // Interior removal moved SAT variable 4 to a new position. Replacement
+    // must use its retained source, rather than an obsolete cached offset.
+    solver.assertLit(mkAtom(4), false, 1, SatLit::negative(4));
+    CHECK(solver.trailVariables() == std::vector<SatVar>{2, 4});
+    solver.assertLit(mkAtom(1), true, 1, SatLit::positive(1));
+    CHECK(solver.trailVariables() == std::vector<SatVar>{2, 4, 1});
     solver.backtrackToLevel(0);
     CHECK(solver.trailSize() == 0);
+    solver.assertLit(mkAtom(4), true, 0, SatLit::positive(4));
+    CHECK(solver.trailVariables() == std::vector<SatVar>{4});
 }
 
 TEST_CASE("ArithSolverBase: pending cleared on backtrack when level > target") {

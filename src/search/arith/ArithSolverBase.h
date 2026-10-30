@@ -125,6 +125,9 @@ protected:
         TheoryAtomRecord atom;
         bool value;
     };
+    struct AssignmentKey {
+        SatVar operator()(const ActiveAssignment& entry) const { return entry.atom.satVar; }
+    };
 
     // ----- Generic level-tagged pending result -----
     struct PendingResult {
@@ -133,7 +136,7 @@ protected:
     };
 
     struct TheoryState {
-        incremental::Context<ActiveAssignment> trail;
+        incremental::IndexedContext<ActiveAssignment, AssignmentKey> trail;
         std::optional<PendingResult> pending;
         int currentLevel = 0;
         ScopeLevel scopeLevel = 0;

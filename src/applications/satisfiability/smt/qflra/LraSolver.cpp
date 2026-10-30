@@ -102,22 +102,20 @@ void LraSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
     Relation effectiveRel = value ? payload.rel : negateRelation(payload.rel);
     bool isDiseq = (effectiveRel == Relation::Neq);
 
-    for (auto& e : theoryTrail_) {
-        if (e.atom.satVar == atom.satVar) {
-            if (e.isDiseq) {
-                // Remove stale disequality from incremental cache.
-                auto it = std::remove_if(activeDisequalities_.begin(), activeDisequalities_.end(),
-                    [&e](const auto& d) { return d.lit == e.lit; });
-                activeDisequalities_.erase(it, activeDisequalities_.end());
-            }
-            e = {level, assertedLit, atom, value, auxVar, isDiseq};
-            if (isDiseq) {
-                activeDisequalities_.push_back({auxVar, payload.lhs, rhs, assertedLit, level});
-            }
-            return;
+    if (const auto position = theoryTrail_.find(atom.satVar)) {
+        const auto& previous = theoryTrail_[*position];
+        if (previous.isDiseq) {
+            // Remove stale disequality from incremental cache.
+            auto it = std::remove_if(activeDisequalities_.begin(), activeDisequalities_.end(),
+                [&previous](const auto& d) { return d.lit == previous.lit; });
+            activeDisequalities_.erase(it, activeDisequalities_.end());
         }
+        theoryTrail_.replace(*position, {level, assertedLit, atom, value, auxVar, isDiseq});
+        if (isDiseq)
+            activeDisequalities_.push_back({auxVar, payload.lhs, rhs, assertedLit, level});
+        return;
     }
-    theoryTrail_.push_back({level, assertedLit, atom, value, auxVar, isDiseq});
+    theoryTrail_.append({level, assertedLit, atom, value, auxVar, isDiseq});
 
     if (isDiseq) {
         activeDisequalities_.push_back({auxVar, payload.lhs, rhs, assertedLit, level});
@@ -139,9 +137,9 @@ void LraSolver::onBacktrack(int level) {
         gs_.backtrackToLevel(level, GeneralSimplex::AssignmentPolicy::Preserve);
 
         // Synchronize theory trail.
-        while (!theoryTrail_.empty() && theoryTrail_.back().level > level) {
-            theoryTrail_.pop_back();
-        }
+        size_t retained = theoryTrail_.size();
+        while (retained && theoryTrail_[retained - 1].level > level) --retained;
+        theoryTrail_.truncate(retained);
 
         // Interface equalities / disequalities
         auto ieIt = std::remove_if(interfaceEqualities_.begin(), interfaceEqualities_.end(),

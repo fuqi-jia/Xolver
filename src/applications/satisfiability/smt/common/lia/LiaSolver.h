@@ -159,16 +159,11 @@ private:
         int auxVar;
         bool isDiseq;
     };
-    incremental::Context<LiaTrailEntry> theoryTrail_;
-    // satVar -> theoryTrail_ index for O(1) lookup in assertLit's update path.
-    // assertLit's hot path used to linear-scan theoryTrail_ to find an existing
-    // entry for the same satVar (e->update vs append). On large QF_LIA loads
-    // (Dartagnan ReachSafety-Loops, elster B_1: 17-22 k atoms after preprocess)
-    // that scan is O(N) per assertLit call -- O(N^2) per SAT decision -- and was
-    // the dominant cost on these cases (60s wall, only 5s in lia.core; ~90%
-    // outside theory check). Keep this map in lockstep with theoryTrail_:
-    // assertLit, onBacktrack, reset, and the level-trim path must all update it.
-    std::unordered_map<uint32_t, size_t> trailIndexBySatVar_;
+    struct TrailKey {
+        SatVar operator()(const LiaTrailEntry& entry) const { return entry.atom.satVar; }
+    };
+    using TrailContext = incremental::IndexedContext<LiaTrailEntry, TrailKey>;
+    TrailContext theoryTrail_;
     struct PendingConflict {
         int level;
         TheoryConflict conflict;
@@ -221,7 +216,7 @@ private:
     std::vector<InterfaceEq> appliedInterfaceEqualities_;
     std::optional<uint64_t> appliedBoundRevision_;
     struct ScopeState {
-        incremental::Context<LiaTrailEntry>::Snapshot trail;
+        TrailContext::Snapshot trail;
         std::vector<InterfaceEq> equalities, disequalities;
         int level;
     };
