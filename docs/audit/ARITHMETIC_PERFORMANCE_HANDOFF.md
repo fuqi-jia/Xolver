@@ -3273,3 +3273,46 @@ open bounds and rejection of a non-original model. The stage schedule is an
 unqualified dependency of this new combined candidate; none of these changes
 has a new verified fixed160 gain or whole-program QCP claim yet. Next: native
 source qualification, constructed-model replay, full acceptance and fresh pilot.
+
+
+### Projected relaxation candidate: complete negative pilot
+
+R1018 qualifies sourcee02dd31d (manifest SHA-256
+`bf04b005fb43ca9eebab321629917561f9828e027f39b1bd323c7b27a1afe0e4`),
+CLIef801757, SV798c913c and worker2dca37d8.58 targeted cases/4510 assertions,
+NRA233/NIA134/LIA80/LRA61 and all39 R1021 acceptance groups pass, including1851
+unit cases/972951 assertions. The2^-256 open-bound SAT witness is replayed
+independently; the non-original relaxation assignment case is independently
+UNSAT. The long4-variable modular unit case takes120.030s on both the prior
+sparse unit run and this run; it is not a new hang/regression.
+
+R1019's12 fresh original-input triads (20/22/65/69/70/72/73/77/144/146/148/149)
+retain60s/one leased physical CPU/16GiB and initial-model capture. Both Xolver
+arms verify6 (4 SAT,2 UNSAT) and time out6, with no gains/losses/errors or
+unconfirmed verdicts. PAR-2 is721.599 versus721.653; Z3 verifies11, PAR-2 159.561.
+Every actual Xolver SAT model replays positively. Z3's148 root-object replay
+boundary remains explicit; independently verified Xolver witnesses establish
+input truth. No valid trial is repeated. R1022 seals source, binaries, all39
+acceptance groups, constructed diagnostics and original timing/model/lease
+records (SHA-256
+`60de05a7afbb0e5e9ab142d3584788a29842c452a5b8876013db3a07f66943cf`).
+This combined candidate is not promoted or expanded to full160; see the
+[projection receipt](PROJECTED_RELAXATION_CANDIDATE_PILOT_20261031.json).
+
+R1020 rejects the projected point on all three public gaps:69 has1217 variables
+and spends6890us on projection/validation;77 has132/940us,149 has135/1372us.
+All three10s diagnostics still time out. On69, the existing boundary search
+still expires during parameter preparation without building a linear context;
+on77/149 it reaches only37/66 of80/70 parameters before its20ms allocation,
+then square-cascade dominates. There is no validated new model from the point
+projection alone. The next investigation should measure candidate repair from
+the existing LP point versus the current local-search start, or eliminate
+repeated full rescoring in the greedy monomial cover. Keep exact original
+validation, scoped state and the fair final suite. Do not repeat the closed
+interval-cache, prefix-value-only or standalone projection experiments.
+
+No new PR is open for these zero-gain candidates, and main remains48054c2d with
+fully green CI41136383267. The development branch retains the qualified native
+commits and bounded receipts; Draco is unchanged. Both protected sets and the
+fresh multi-program QCP comparison remain outstanding. The main fixed160
+reference is still100 verified Xolver versus118 verified/125 raw Z3, not a win.
