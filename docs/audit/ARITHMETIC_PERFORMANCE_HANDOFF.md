@@ -2431,11 +2431,11 @@ replays, no model completions. R820, EOS`9f8370812cb1`, audits the exact queries
 raw witnesses, reconstructed replay assertions, positive checker outputs and
 source-bound qualification. No opposite verdict or invalid model is observed.
 
-This closes the native selection interface gap. It does not finish the full
-C→VC→selected SMT→Rocq program comparison. Those canonical controller runs still
-need complete original-VC proofs, final-check and witness audits. Xolver's core
-binary is unchanged from R802; this stage establishes no new fixed160 score or
-performance advantage. Neither protected set has been inspected or run.
+This closes the native selection interface gap. The supplementary qualification
+below completes the C→VC→selected SMT→Rocq path for one original development
+program on both backends. It does not establish a program-suite coverage or timing
+advantage. Xolver's core binary in this integration stage is unchanged from R802;
+there is no new fixed160 score here. Neither protected set has been inspected or run.
 
 
 R819/R821 additionally completes the original frozen `branch_destruct` C program
@@ -2449,5 +2449,12 @@ native calls (222 SAT /342 UNSAT) across three frontend/freshness executions;
 every actual formula hash/result matches the independently checked R817
 inventory. Do not count repeated native calls as extra programs or VCs.
 Original C/specification SHA remains`4d81aabd16ceb9d402fa0f1a3621dd8a6bf0ad28659bcb6cf60eedebec69e22d`.
-The matched fresh Z3 controller workflow has started. It has not yet completed,
-and this functional qualification does not establish a whole-program speed win.
+The matched fresh Z3 workflow also passes canonical final-check, EOS`5bf4a7937bb3`,
+with **1 verified program /10 original VCs /14 external queries /564 native calls**.
+R824 pair audit, EOS`39db35282eaa`, authenticates both final checks, exact candidate
+bodies and native query hashes/verdicts; all original VC token streams agree after
+formal-module namespace normalization. The pair record SHA-256 is
+`691b561a2ca19c138a272fa7912a7874af5735a2a21be4420b266bc7579b5d45`.
+This is one unique program verified by each backend. The approximately33.8s final
+controller timings are diagnostic, without matched CPU/order repetitions, and do
+not establish a whole-program speed win.

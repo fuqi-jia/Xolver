@@ -106,28 +106,43 @@
   },
   "boundaries": [
     "This replaces the native SAT entry, unlike standalone trace replay or post-generation proof-candidate discharge.",
-    "R815 records frontend/backend integration. Supplementary R819/R821 completes one original development C proof through selected native Xolver and Rocq final-check; this does not establish a fair whole-program timing advantage over Z3.",
+    "R815 records frontend/backend integration. R819/R824 additionally qualifies the same complete original development C program through each selected native backend and Rocq final-check; this does not establish a fair whole-program timing advantage.",
     "Native and printed integer functions retain only their established uninterpreted signatures.",
     "The Xolver core executable is the unchanged R802 binary. There is no fresh fixed160 result or new arithmetic performance gain in this integration stage.",
     "Neither protected set has been inspected or run. No superiority over Z3 is claimed."
   ],
   "complete_program_qualification": {
     "program": "branch_destruct",
-    "backend": "xolver",
-    "verified_programs": 1,
-    "verified_original_vcs": 10,
-    "external_queries": 14,
-    "external_unsat": 14,
-    "native_entry_calls_including_freshness_runs": 564,
-    "native_frontend_runs": 3,
     "source_sha256": "4d81aabd16ceb9d402fa0f1a3621dd8a6bf0ad28659bcb6cf60eedebec69e22d",
-    "final_check_eos_run": "578afc065663",
-    "audit_eos_run": "ae37dfde9890",
-    "audit_record": "validation/arithmetic-r103/qcp-native-audit-r821/report.json",
-    "audit_record_sha256": "914cf1c873c72b97c2fbbb9067d1804eb5a65196d48e4f90ecbb1408ed615e89",
-    "backend_qualified": true,
+    "backends": {
+      "xolver": {
+        "verified_programs": 1,
+        "verified_original_vcs": 10,
+        "external_queries": 14,
+        "external_unsat": 14,
+        "native_entry_calls_including_freshness_runs": 564,
+        "native_frontend_runs": 3,
+        "final_check_eos_run": "578afc065663",
+        "witness_audit_eos_run": "ae37dfde9890"
+      },
+      "z3": {
+        "verified_programs": 1,
+        "verified_original_vcs": 10,
+        "external_queries": 14,
+        "external_unsat": 14,
+        "native_entry_calls_including_freshness_runs": 564,
+        "native_frontend_runs": 3,
+        "final_check_eos_run": "5bf4a7937bb3"
+      }
+    },
+    "pair_audit_eos_run": "39db35282eaa",
+    "pair_audit_record": "validation/arithmetic-r103/qcp-native-pair-r824/report.json",
+    "pair_audit_record_sha256": "691b561a2ca19c138a272fa7912a7874af5735a2a21be4420b266bc7579b5d45",
+    "both_backends_qualified": true,
     "proof_candidate_bodies_match_checked_original_vcs": true,
     "all_native_formula_hashes_match_independently_checked_inventory": true,
-    "fair_z3_whole_program_timing_comparison_complete": false
+    "original_vc_tokens_match_after_formal_namespace_normalization": true,
+    "fair_z3_whole_program_timing_comparison_complete": false,
+    "boundary": "One unique original development program verified through each frozen backend. Repeated frontend calls do not increase program/VC coverage. Controller timings are diagnostic; no end-to-end timing advantage is claimed."
   }
 }
