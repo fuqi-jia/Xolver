@@ -1,7 +1,7 @@
 #include "search/refute/PolynomialBooleanRefutation.h"
 #include "search/boolean/Atomizer.h"
 #include "search/refute/PolynomialSignClosure.h"
-#include "search/refute/LinearFragmentRefutation.h"
+#include "search/refute/PolynomialLinearRefutation.h"
 #include "algebra/poly/PolynomialConverter.h"
 #include "base/WorkBudget.h"
 #include <algorithm>
@@ -102,8 +102,8 @@ bool refutePolynomialBoolean(const NativeTerms& terms, const std::vector<ExprId>
             }
             ++stats.theoryCalls;
             const auto started = std::chrono::steady_clock::now();
-            LinearFragmentStatistics linear;
-            auto conflict = refuteLinearFragment(constraints,
+            PolynomialLinearStatistics linear;
+            auto conflict = refutePolynomialLinearRelaxation(constraints,
                 std::min(limits.deadline, started + std::chrono::milliseconds(2)), &linear);
             ++stats.linearCalls;
             stats.linearConstraints += linear.constraints;

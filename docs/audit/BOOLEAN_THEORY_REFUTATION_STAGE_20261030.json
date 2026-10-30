@@ -414,7 +414,7 @@
     "pr_ci_conclusion": "success",
     "merge_commit": "980969d35453c6138e5bfc351c90567859a7fd29",
     "main_ci": "https://github.com/fuqi-jia/Xolver/actions/runs/41041660875",
-    "main_ci_conclusion": "in_progress"
+    "main_ci_conclusion": "success"
   },
   "boundaries": [
     "Verified solves remain98/160; same-round Z3 has117 verified/124 raw. This stage does not meet the requested overall superiority objective.",
