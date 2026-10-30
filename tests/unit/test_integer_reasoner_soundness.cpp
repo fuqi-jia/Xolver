@@ -194,6 +194,7 @@ TEST_CASE("LraSolver: original columns project weaker predicates across backtrac
 
 TEST_CASE("LraSolver: repeated endpoints spend one slot per signed conclusion") {
     for (bool positive : {false, true}) {
+        CAPTURE(positive);
         Allocator allocator;
         TheoryAtomRegistry registry;
         registry.setContext(&allocator, &allocator);
@@ -217,6 +218,7 @@ TEST_CASE("LraSolver: repeated endpoints spend one slot per signed conclusion") 
         const auto records = registry.numAtomVars();
         TheoryLemmaDatabase database;
         for (int epoch = 0; epoch < 2; ++epoch) {
+            CAPTURE(epoch);
             for (auto literal : {first, yLower, second, zLower})
                 solver.assertLit(*registry.findBySatVar(literal.var), true, 1, literal);
             REQUIRE(solver.check(database, TheoryEffort::Standard).kind == TheoryCheckResult::Kind::Consistent);
@@ -245,6 +247,44 @@ TEST_CASE("LraSolver: repeated endpoints spend one slot per signed conclusion") 
             CHECK(registry.numAtomVars() == records);
         }
     }
+}
+
+TEST_CASE("LraSolver: one endpoint obeys the distinct propagation limit") {
+    Allocator allocator;
+    TheoryAtomRegistry registry;
+    registry.setContext(&allocator, &allocator);
+    LraSolver solver;
+    solver.setRegistry(&registry);
+    auto atom = [&](LinearFormKey form, Relation relation, const mpq_class& rhs) {
+        const auto variable = allocator.newVar();
+        registry.registerParsedTheoryAtom(variable, NullExpr, TheoryId::LRA,
+            LinearAtomPayload{form, relation, RealValue::fromMpq(rhs)});
+        return SatLit::positive(variable);
+    };
+    const auto first = atom({{{"x", 1}, {"y", 1}}}, Relation::Leq, 0);
+    const auto second = atom({{{"y", 1}}}, Relation::Geq, 0);
+    std::vector<SatLit> targets;
+    for (int endpoint = 1; endpoint <= 100; ++endpoint) {
+        const bool positive = endpoint % 2 == 0;
+        const auto literal = atom({{{"x", 1}}}, positive ? Relation::Leq : Relation::Gt, endpoint);
+        targets.push_back(positive ? literal : literal.negated());
+    }
+    const auto records = registry.numAtomVars();
+    for (auto literal : {first, second})
+        solver.assertLit(*registry.findBySatVar(literal.var), true, 1, literal);
+    TheoryLemmaDatabase database;
+    REQUIRE(solver.check(database, TheoryEffort::Standard).kind == TheoryCheckResult::Kind::Consistent);
+    const auto lemmas = solver.takeEntailmentPropagations();
+    REQUIRE(lemmas.size() == 64);
+    std::vector<SatLit> seen;
+    for (const auto& lemma : lemmas) {
+        REQUIRE_FALSE(lemma.lits.empty());
+        const auto conclusion = lemma.lits.back();
+        CHECK(std::find(targets.begin(), targets.end(), conclusion) != targets.end());
+        CHECK(std::find(seen.begin(), seen.end(), conclusion) == seen.end());
+        seen.push_back(conclusion);
+    }
+    CHECK(registry.numAtomVars() == records);
 }
 
 TEST_CASE("Linear model phase hints: strict endpoints respect infinitesimals") {

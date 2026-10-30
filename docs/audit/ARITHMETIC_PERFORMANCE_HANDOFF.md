@@ -2790,3 +2790,11 @@ The set is local to the check; LIA's existing backtrack-epoch deduplication
 policy is unchanged. A regression exercises two stronger row endpoints, two
 weaker signed targets, exact clause replay over rational points, and renewed
 emission after rollback. Qualification and a fresh comparison are pending.
+
+Initial R921 qualification fails that new regression: after rollback the changed
+row order can produce only one strongest endpoint, and the implementation still
+extracts only one implied predicate from it. The two-target requirement remains
+unchanged. Production now drains distinct existing targets from each endpoint
+until none remains or the64-output budget is full. Exact original premises and
+both signed targets are retained. The failed build is recorded; no binary was
+frozen or benchmark score claimed for it. Requalification is pending.

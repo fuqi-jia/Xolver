@@ -334,7 +334,11 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
     queuedConclusions.reserve(kMaxProps);
     propagationEngine_.propagateAll(gs_, {}, nullptr,
         [&](const LraPropagationEngine::ExplainedBound& bound) {
-            if (auto lemma = buildEntailmentLemma(bound, activeValues, queuedConclusions)) {
+            // One interval endpoint can force several registered predicates,
+            // even when no later row produces another endpoint for this form.
+            while (entailmentProps_.size() < kMaxProps) {
+                auto lemma = buildEntailmentLemma(bound, activeValues, queuedConclusions);
+                if (!lemma) break;
                 const auto conclusion = lemma->lits.back();
                 queuedConclusions.insert((static_cast<uint64_t>(conclusion.var) << 1) | conclusion.sign);
                 entailmentProps_.push_back(std::move(*lemma));
