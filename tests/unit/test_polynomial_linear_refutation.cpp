@@ -169,6 +169,15 @@ TEST_CASE("Polynomial linear refutation: source identity cannot alias a changed 
         {variable(1) - constant(2), Relation::Eq, SatLit::positive(4)}}, deadline()));
 }
 
+TEST_CASE("Polynomial linear refutation: constant disequalities retain their exact verdict") {
+    PolynomialLinearRefuter refuter;
+    CHECK_FALSE(refuter.check({{constant(1), Relation::Neq, SatLit::positive(8)}}, deadline()));
+    const auto conflict = refuter.check({{constant(0), Relation::Neq, SatLit::negative(9)}}, deadline());
+    REQUIRE(conflict);
+    CHECK(*conflict == std::vector<SatLit>{SatLit::negative(9)});
+    CHECK_FALSE(refuter.check({}, deadline()));
+}
+
 TEST_CASE("Polynomial linear refutation: reused branch contexts and their conflicts match fresh monomial systems") {
     auto kernel = createPolynomialKernel();
     const auto xid = kernel->getOrCreateVar("x"), yid = kernel->getOrCreateVar("y");

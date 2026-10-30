@@ -37,7 +37,15 @@ std::optional<std::vector<SatLit>> PolynomialLinearRefuter::check(
         };
         for (const auto& constraint : constraints) {
             tick();
-            if (constraint.rel == Relation::Neq) continue;
+            if (constraint.rel == Relation::Neq) {
+                // Non-convex disequalities are omitted, but the constant
+                // contradiction 0 != 0 needs no relaxation or case split.
+                if (constraint.poly.isZero()) {
+                    ++stats.constraints;
+                    return std::vector<SatLit>{constraint.reason};
+                }
+                continue;
+            }
             auto found = rows_.find(constraint.reason.var);
             int row;
             if (found != rows_.end() &&

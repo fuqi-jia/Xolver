@@ -31,7 +31,7 @@ class PolynomialLinearRefuter;
 class NraSolver : public ArithSolverBase {
 public:
     explicit NraSolver(std::unique_ptr<PolynomialKernel> kernel);
-    ~NraSolver() override;  // out-of-line: NraLinearizationAdapter is incomplete here
+    ~NraSolver() override;  // out-of-line: backend and refuter types are incomplete here
 
     TheoryId id() const override { return TheoryId::NRA; }
 
