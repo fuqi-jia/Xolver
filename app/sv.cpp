@@ -1,4 +1,4 @@
-#include "applications/satisfiability/smt/Solver.h"
+#include "xolver/Solver.h"
 #include "applications/verification/model_checking/Range.h"
 #include "frontend/parser/NativeTheoryPolicy.h"
 #include <fstream>
@@ -36,7 +36,7 @@ int main(int argc, char **argv) {
         v::Obligation obligation{path, assertions, conclusion};
         obligation.assumptions.pop_back();
         DecisionOracle oracle = [](const NativeAssertions &q) {
-            return applications::satisfiability::smt::Solver().solve({q, {}, {}, {}});
+            return Solver().decide(q);
         };
         auto status = [](v::Status value) {
             return value == v::Status::Valid          ? "valid"

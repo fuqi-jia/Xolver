@@ -326,6 +326,7 @@ set(XOLVER_APPLICATIONS_SOURCES
 )
 
 set(XOLVER_RUNTIME_SOURCES
+    "runtime/NativeDecision.cpp"
     "runtime/ReadOnlyArrayModel.cpp"
     "runtime/Solver.cpp"
     "runtime/Solver_impl_checksat.cpp"

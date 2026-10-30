@@ -14,6 +14,15 @@ Oracle exceptions preserve completed results and leave unfinished work unknown.
 This interface accepts Boolean obligations over any theory supported by the
 injected oracle; it does not infer source-language semantics.
 
+`xolver::Solver::decide(NativeAssertions)` supplies the complete runtime as a
+snapshot oracle. It indexes the original DAG directly, infers the theory logic,
+and returns `SolverAnswer` with its native model and proof. It replaces previous
+query scopes and invalidates their term/sort handles, while retaining options
+and runtime budgets. Invalid Boolean roots are rejected before replacement.
+Include `contracts/DecisionOracle.h` for the native request/result types. The SV
+executable uses this path so supported array/UF combinations reach their runtime
+backend instead of the standalone application's limited fallback.
+
 The executable `xolver-sv context obligation.smt2` exposes both results as JSON
 (`context`: `sat`/`unsat`/`unknown`, `status`: `valid`/`invalid`/`unknown`). As with
 the ordinary executable operation, the final assertion is the **refutation

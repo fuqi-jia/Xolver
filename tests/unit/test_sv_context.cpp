@@ -1,4 +1,4 @@
-#include "applications/satisfiability/smt/Solver.h"
+#include "xolver/Solver.h"
 #include "applications/verification/model_checking/Solver.h"
 #include "frontend/parser/NativeTheoryPolicy.h"
 #include "ir/NativeBuilder.h"
@@ -9,7 +9,7 @@ using namespace xolver;
 namespace context_v = applications::verification::model_checking;
 namespace {
 DecisionOracle contextDecision = [](const NativeAssertions &query) {
-    return applications::satisfiability::smt::Solver().solve({query, {}, {}, {}});
+    return Solver().decide(query);
 };
 context_v::Obligation obligation(const std::string &source) {
     SOMTParser::Parser parser;
@@ -32,7 +32,7 @@ TEST_CASE("SV context: infeasibility and implication are distinct across theorie
              "(declare-const x (_ BitVec 8)) (assert (bvult x x)) (assert true)",
              "(declare-const a (Array Int Int)) (assert (distinct (select a 0) (select a 0))) (assert true)",
              "(declare-sort U 0) (declare-const x U) (assert (distinct x x)) (assert true)"}) {
-        INFO(source);
+        INFO(std::string(source));
         auto task = obligation(std::string("(set-logic ALL) ") + source);
         auto answer = context_v::ContextSolver(contextDecision).solve(task);
         INFO(answer.implication.reason);
@@ -51,7 +51,7 @@ TEST_CASE("SV context: feasible goals retain models and do not mutate assumption
              "(declare-const x Real) (assert (= x (/ 1 2))) (assert (> x 0))",
              "(declare-const x (_ BitVec 8)) (assert (= x #x02)) (assert (= x #x02))",
              "(declare-const a (Array Int Int)) (assert (= (select a 0) 2)) (assert (= (select a 0) 2))"}) {
-        INFO(source);
+        INFO(std::string(source));
         auto task = obligation(std::string("(set-logic ALL) ") + source);
         const auto original = task.assumptions;
         auto answer = context_v::ContextSolver(contextDecision).solve(task);
@@ -157,4 +157,38 @@ TEST_CASE("SV context: a failed implication keeps the completed feasibility verd
     CHECK(answer.implication.status == context_v::Status::Unknown);
     CHECK(answer.implication.reason == "refutation cancelled");
     CHECK(answer.queries == 2);
+}
+
+TEST_CASE("API: native snapshots are transactional and isolate previous scopes") {
+    native::Nodes b({});
+    Solver solver;
+    solver.setOption("seed", OptionValue(int64_t(13)));
+    auto old = solver.mkBool(true);
+    solver.assertFormula(old);
+    solver.push();
+    solver.assertFormula(solver.mkBool(false));
+    CHECK_THROWS_AS(solver.decide({b.numeral(1)}), std::invalid_argument);
+    CHECK_THROWS_AS(solver.decide({{}}), std::invalid_argument);
+    CHECK((solver.checkSat() == Result::Unsat));
+    solver.pop();
+    CHECK((solver.checkSat() == Result::Sat));
+    auto task = obligation("(set-logic ALL)(declare-const x Real)"
+                           "(assert (= x (/ 1 2)))(assert true)");
+    auto original = task.assumptions.front();
+    auto answer = solver.decide(task.assumptions);
+    REQUIRE((answer.result == Result::Sat));
+    REQUIRE(answer.model);
+    CHECK(answer.model->numericAssignments.at("x") == RealValue::fromMpq(mpq_class(1, 2)));
+    CHECK((solver.validateModel() == Solver::ModelValidation::Satisfied));
+    CHECK(solver.getOption("seed").i == 13);
+    CHECK_THROWS_AS(solver.assertFormula(old), std::invalid_argument);
+    CHECK(task.assumptions.front() == original);
+    solver.push();
+    solver.assertFormula(solver.mkBool(false));
+    CHECK((solver.checkSat() == Result::Unsat));
+    solver.pop();
+    CHECK((solver.checkSat() == Result::Sat));
+    CHECK((solver.decide({b.boolean(false)}).result == Result::Unsat));
+    CHECK((solver.decide({}).result == Result::Sat));
+    CHECK((solver.decide(task.assumptions).result == Result::Sat));
 }
