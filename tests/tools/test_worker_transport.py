@@ -94,12 +94,17 @@ time.sleep(300)
             pid = int(pid_file.read_text())
             # A killed orphan can briefly remain a zombie until init reaps it.
             state = Path('/proc') / str(pid) / 'stat'
+            def read_state():
+                try:
+                    return state.read_text().rsplit(')', 1)[1].split()[0]
+                except FileNotFoundError:
+                    return None  # init reaped the child before this read
+
             for _ in range(100):
-                if not state.exists() or state.read_text().rsplit(')', 1)[1].split()[0] in ('Z', 'X'):
+                if read_state() in (None, 'Z', 'X'):
                     break
                 time.sleep(0.01)
-            if state.exists():
-                self.assertIn(state.read_text().rsplit(')', 1)[1].split()[0], ('Z', 'X'))
+            self.assertIn(read_state(), (None, 'Z', 'X'))
 
     def test_deadline_already_expired_never_starts_a_process(self):
         with ProcessChannel(('unused',)) as channel:
