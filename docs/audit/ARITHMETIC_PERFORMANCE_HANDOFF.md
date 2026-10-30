@@ -43,9 +43,20 @@ Older tables describe their own frozen versions and evidence boundaries.
 The latest qualified arithmetic stage is
 [explained affine factor proofs](#explained-affine-factor-proofs-r782r784r785r789):
 **98/160**, versus **117 verified /125 raw** same-round Z3 decisions.
-The preceding delivered main verifies97 in this fresh round. This candidate
-passes server acceptance and awaits PR CI and merge. Previous rounds and
-supplementary truth records below retain their own evidence boundaries.
+The preceding delivered main verifies97 in this fresh round.
+[PR73](https://github.com/fuqi-jia/Xolver/pull/73) is delivered as main
+`efaf8997bc6bca94398c6f312b7a4aa48593d74b`. Both its
+[PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/41001993376) and fresh,
+exact-head [main CI](https://github.com/fuqi-jia/Xolver/actions/runs/41007150900)
+are fully green. Previous rounds and supplementary truth records below retain
+their own evidence boundaries.
+
+The retained branches are `main`, `feat/qcp-foundations` (QCP and solver
+foundations), and `feat/draco-asp`. Historical branch tips are archived in
+`validation/arithmetic-r103/branch-archive-20261030/history.bundle`, SHA-256
+`e318c3063355737900a6c0318a2bc6e356cbf30413b927908c7eabfe28f91971`;
+the adjacent manifest maps original refs. Historical worktrees are detached
+and retained. Do not create an experimental branch for each subsequent change.
 
 [PR72](https://github.com/fuqi-jia/Xolver/pull/72) is delivered as main
 `6802c5e4d5ddea0ef8a86614521d96bf3605c424`. Both its
@@ -2287,5 +2298,31 @@ question, not another implementation or formal gain in this stage.
 
 This closes one additional real gap and does **not** establish superiority over
 Z3 or whole-program QCP performance. Neither protected set is inspected or run.
-PR CI, merge and fresh main CI are still required; no extra current-main server
-archive is a delivery prerequisite.
+Server acceptance, PR CI, merge and fresh main CI are complete; the current
+continuation section links the exact delivery receipts. No extra current-main
+server archive is a delivery prerequisite.
+
+## Native QCP trace capture and context feasibility (R792/R793)
+
+The pinned native QCP binary exposes `QCP_DEBUG_SMT=1` diagnostics containing
+printed Source/Target pairs and a result flag. The three unchanged public
+development programs produce402 captured checks: branch106, GCD148, max3148.
+The residual-only `--dump-smt-vc-file` output is not a complete query census.
+R792 captures raw output, original C and binary hashes; R793, native EOS
+`74498f9e716d`, exports all402 occurrences with no unsupported checks and passes
+43 QCP Python tests plus architecture/regression-harness checks. The SMT CLI
+remains byte-identical to qualified R782. `qcp_native.py` preserves applications
+such as `Omod` and `Zgcd` as typed uninterpreted functions, without adding
+unestablished arithmetic axioms. Native flags are observations, not evidence.
+
+One observed `flag=-1` has a source containing `x<x` and target `True`.
+Therefore that flag must not be labeled a refuted target: source infeasibility
+and implication validity need separate checks. The generic SV `ContextSolver`
+and `xolver-sv context` operation expose both, without changing ordinary
+implication checking or assuming a QCP-specific flag ABI. Native qualification
+of this API is required before delivery.
+
+Capture and standalone replay do not replace QCP's opaque internal SMT backend,
+establish complete native-call coverage, or verify a whole C program. A true
+whole-program selected-backend comparison remains outstanding. Neither
+protected set has been inspected or run.

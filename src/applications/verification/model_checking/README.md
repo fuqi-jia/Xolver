@@ -4,6 +4,23 @@
 whether assumptions together with the negated conclusion are satisfiable.
 Results distinguish validity, a counterexample, unknown and invalid input.
 
+`ContextSolver` additionally checks whether the assumptions themselves are
+satisfiable. `ContextAnswer.context` retains that independent solver verdict,
+model and proof; `implication` reports the ordinary obligation result. An UNSAT
+context gives vacuous validity after one oracle call. Otherwise a second,
+independent snapshot checks the negated conclusion. An unknown context never
+means unreachable: the second query can still prove or refute the implication.
+Oracle exceptions preserve completed results and leave unfinished work unknown.
+This interface accepts Boolean obligations over any theory supported by the
+injected oracle; it does not infer source-language semantics.
+
+The executable `xolver-sv context obligation.smt2` exposes both results as JSON
+(`context`: `sat`/`unsat`/`unknown`, `status`: `valid`/`invalid`/`unknown`). As with
+the ordinary executable operation, the final assertion is the **refutation
+condition**, and preceding assertions are assumptions. For example, assertions
+`(< x x)` and `(not true)` produce `context=unsat,status=valid`: an infeasible
+path, not a program counterexample. Neither result alone verifies a C program.
+
 `TransitionSystem` declares current/next state pairs of identical sorts,
 immutable parameters, per-transition nondeterministic inputs, initial conditions
 `I`, transitions `T`, and a safety property `P`. Inputs receive fresh symbols at
@@ -18,6 +35,7 @@ Heap entailments use the separate SL application.
 | Solver | Algorithm |
 | --- | --- |
 | `Solver` | Refute assumptions and the negated conclusion of each named condition |
+| `ContextSolver` | Check context feasibility separately, then refute the conclusion if needed |
 | `InvariantSolver` | Check `I => C`, `C /\ T => C'`, and `C => P` (indices 0, 1, 2) |
 | `InferenceSolver` | Houdini elimination of candidate conjuncts; recheck survivors whenever assumptions weaken |
 | `SafetySolver` | Increasing-depth reachability, invariant strengthening, k-induction and simple-path completion |

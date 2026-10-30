@@ -306,6 +306,7 @@ set(XOLVER_APPLICATIONS_SOURCES
     "applications/satisfiability/smt/qfuf/EufSolver_check.cpp"
     "applications/satisfiability/smt/qfuf/EufSolver_diagnostics.cpp"
     "applications/satisfiability/smt/qfuf/EufSolver_model.cpp"
+    "applications/verification/model_checking/Context.cpp"
     "applications/verification/model_checking/ModelChecking.cpp"
     "applications/verification/model_checking/Range.cpp"
     "applications/verification/model_checking/Reachability.cpp"

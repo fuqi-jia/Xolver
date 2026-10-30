@@ -15,9 +15,11 @@ int main(int argc, char **argv) {
     namespace v = applications::verification::model_checking;
     nlohmann::json output;
     try {
-        if (argc != 2)
-            throw std::invalid_argument("usage: xolver-sv obligation.smt2");
-        std::ifstream stream(argv[1]);
+        bool context = argc == 3 && std::string_view(argv[1]) == "context";
+        if (argc != 2 && !context)
+            throw std::invalid_argument("usage: xolver-sv [context] obligation.smt2");
+        const char *path = argv[context ? 2 : 1];
+        std::ifstream stream(path);
         if (!stream)
             throw std::invalid_argument("cannot open obligation");
         std::string source((std::istreambuf_iterator<char>(stream)), {});
@@ -31,20 +33,36 @@ int main(int argc, char **argv) {
         auto conclusion = std::make_shared<SOMTParser::DAGNode>(
             SOMTParser::SortManager::getBool(), SOMTParser::NODE_KIND::NT_NOT, "not",
             std::vector<SOMTParser::Node>{assertions.back()});
-        v::Obligation obligation{argv[1], assertions, conclusion};
+        v::Obligation obligation{path, assertions, conclusion};
         obligation.assumptions.pop_back();
         DecisionOracle oracle = [](const NativeAssertions &q) {
             return applications::satisfiability::smt::Solver().solve({q, {}, {}, {}});
         };
-        auto answer = v::RangeAssistedSolver(oracle).solve(obligation);
-        const char *status = answer.status == v::Status::Valid     ? "valid"
-                             : answer.status == v::Status::Invalid ? "invalid"
-                                                                   : "unknown";
-        output = {{"status", status},
-                  {"method", answer.method == v::VerificationMethod::Interval ? "interval" : "smt"},
-                  {"reason", answer.reason},
-                  {"work", answer.intervalWork},
-                  {"certificate_replayed", bool(answer.certificate)}};
+        auto status = [](v::Status value) {
+            return value == v::Status::Valid          ? "valid"
+                   : value == v::Status::Invalid      ? "invalid"
+                   : value == v::Status::InvalidInput ? "invalid-input"
+                                                      : "unknown";
+        };
+        if (context) {
+            auto answer = v::ContextSolver(oracle).solve(obligation);
+            const char *feasibility = answer.context.result == Result::Sat     ? "sat"
+                                      : answer.context.result == Result::Unsat ? "unsat"
+                                                                               : "unknown";
+            output = {{"status", status(answer.implication.status)},
+                      {"context", feasibility},
+                      {"context_reason", answer.context.reason},
+                      {"reason", answer.implication.reason},
+                      {"method", "smt"},
+                      {"queries", answer.queries}};
+        } else {
+            auto answer = v::RangeAssistedSolver(oracle).solve(obligation);
+            output = {{"status", status(answer.status)},
+                      {"method", answer.method == v::VerificationMethod::Interval ? "interval" : "smt"},
+                      {"reason", answer.reason},
+                      {"work", answer.intervalWork},
+                      {"certificate_replayed", bool(answer.certificate)}};
+        }
         output["program_verified"] = false;
         std::cout << output.dump() << '\n';
         return 0;
