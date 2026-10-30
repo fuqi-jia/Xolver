@@ -3,6 +3,7 @@
 #include "parallel/ThreadPool.h"
 #include <cstdint>
 #include <functional>
+#include <iosfwd>
 #include <memory>
 #include <shared_mutex>
 #include <span>
@@ -60,6 +61,12 @@ std::string encodeTasks(const std::vector<Task>&);
 std::vector<Task> decodeTasks(std::string_view, std::size_t maxBytes = 64 * 1024 * 1024);
 std::string encodeResults(const std::vector<TaskResult>&);
 std::vector<TaskResult> decodeResults(std::string_view, std::size_t maxBytes = 64 * 1024 * 1024);
+
+// Persistent stream transport: an unsigned 64-bit big-endian length followed
+// by one nonempty message. EOF is valid only between frames. No solver state
+// is implied by keeping the transport open.
+bool readFrame(std::istream&, std::string&, std::size_t maxBytes = 64 * 1024 * 1024);
+void writeFrame(std::ostream&, std::string_view, std::size_t maxBytes = 64 * 1024 * 1024);
 
 enum class Backend { Local, Mpi, Spark, Dask, Cuda, Hip, OpenAcc };
 bool compiled(Backend) noexcept;

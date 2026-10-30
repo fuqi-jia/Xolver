@@ -2,11 +2,12 @@
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 import json
+import math
 from pathlib import Path
-import subprocess
 from typing import Sequence, Tuple
 
-from .protocol import Task, decode_results, encode_tasks
+from .protocol import Task
+from .session import WorkerSession
 
 
 def compiled_backends():
@@ -31,21 +32,12 @@ class Worker:
         if isinstance(self.argv, (str, bytes)) or not self.argv or any(not isinstance(s, str) for s in self.argv):
             raise TypeError("worker argv must be a nonempty sequence of strings")
         object.__setattr__(self, "argv", tuple(self.argv))
-        if self.timeout <= 0 or self.max_bytes <= 0:
+        if not math.isfinite(self.timeout) or self.timeout <= 0 or type(self.max_bytes) is not int or self.max_bytes <= 0:
             raise ValueError("worker timeout and message budget must be positive")
 
     def run(self, tasks: Sequence[Task]):
-        request = encode_tasks(tasks)
-        if len(request) > self.max_bytes:
-            raise ValueError("worker request exceeds message budget")
-        completed = subprocess.run(self.argv, input=request, stdout=subprocess.PIPE,
-                                   stderr=subprocess.PIPE, timeout=self.timeout, check=False)
-        if completed.returncode:
-            raise RuntimeError("worker failed ({}): {}".format(
-                completed.returncode, completed.stderr[-4096:].decode("utf-8", errors="replace")))
-        if len(completed.stdout) > self.max_bytes:
-            raise ValueError("worker response exceeds message budget")
-        return decode_results(completed.stdout, tasks)
+        with WorkerSession(self) as session:
+            return session.run(tasks)
 
 
 def _one(worker, task):
@@ -54,16 +46,17 @@ def _one(worker, task):
 
 def _partition(worker, items):
     # Bounded batches avoid materializing an entire Spark partition at once.
-    batch = []
-    for index, task in items:
-        batch.append((index, task))
-        if len(batch) == 32:
-            for (index, _), result in zip(batch, worker.run([task for _, task in batch])):
+    with WorkerSession(worker) as session:
+        batch = []
+        for index, task in items:
+            batch.append((index, task))
+            if len(batch) == 32:
+                for (index, _), result in zip(batch, session.run([task for _, task in batch])):
+                    yield index, result
+                batch = []
+        if batch:
+            for (index, _), result in zip(batch, session.run([task for _, task in batch])):
                 yield index, result
-            batch = []
-    if batch:
-        for (index, _), result in zip(batch, worker.run([task for _, task in batch])):
-            yield index, result
 
 
 class LocalExecutor:

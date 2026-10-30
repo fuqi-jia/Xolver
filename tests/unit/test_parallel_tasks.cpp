@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <atomic>
 #include <stdexcept>
+#include <sstream>
 
 using namespace xolver::parallel;
 
@@ -38,6 +39,39 @@ TEST_CASE("parallel tasks: protocol rejects truncation, wrong versions and wire 
     CHECK_THROWS(decodeTasks("{\"version\":true,\"tasks\":[]}"));
     CHECK_THROWS(decodeTasks(encodeTasks({}), 1));
     CHECK_THROWS(decodeResults("{\"version\":1,\"results\":[{}]}"));
+}
+
+TEST_CASE("parallel tasks: persistent frames preserve binary boundaries and clean EOF") {
+    std::stringstream stream;
+    const std::string binary("\0\xff\n", 3);
+    writeFrame(stream, binary);
+    writeFrame(stream, "second");
+    std::string output;
+    REQUIRE(readFrame(stream, output));
+    CHECK(output == binary);
+    REQUIRE(readFrame(stream, output));
+    CHECK(output == "second");
+    CHECK_FALSE(readFrame(stream, output));
+    CHECK(output.empty());
+}
+
+TEST_CASE("parallel tasks: framed input rejects truncation and lengths before allocation") {
+    std::stringstream complete;
+    writeFrame(complete, "payload");
+    const auto wire = complete.str();
+    std::string output;
+    for (std::size_t length = 1; length < wire.size(); ++length) {
+        std::istringstream partial(wire.substr(0, length));
+        CHECK_THROWS(readFrame(partial, output));
+    }
+    for (const auto& invalid : {std::string(8, '\0'), std::string(8, '\xff')}) {
+        std::istringstream stream(invalid);
+        CHECK_THROWS_AS(readFrame(stream, output), std::length_error);
+    }
+    std::istringstream limited(wire);
+    CHECK_THROWS_AS(readFrame(limited, output, 6), std::length_error);
+    CHECK_THROWS_AS(writeFrame(complete, "", 6), std::length_error);
+    CHECK_THROWS_AS(writeFrame(complete, "payload", 6), std::length_error);
 }
 
 namespace {

@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import math
 import os
 from pathlib import Path
 import socket
@@ -16,10 +15,13 @@ import time
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / 'python'))
 from tools.integration.qcp import Unsupported
 from tools.integration.qcp_backend import leased_cpu
 from tools.integration.qcp_native import formula_query
-from tools.process_budget import run_with_budget
+from xolver_parallel import Task
+from xolver_parallel.protocol import decode_results, encode_tasks
+from xolver_parallel.transport import HEADER, ProcessChannel, frame
 
 QCP_SHA256 = '0e74c446cebca8c804ff9b838f07c67f23e31a093630675bc720b25c986e1032'
 QUERY_BYTES = 16 * 1024**2
@@ -48,43 +50,124 @@ def solver_environment() -> dict:
             if key not in excluded and not key.startswith('XOLVER_QCP_')}
 
 
-def decide(formula: str, backend: str, solver: Path, guard: Path,
-           output: Path, started_ns: int) -> dict:
+class BackendSession:
+    """One selected backend process, with a fresh context for each occurrence."""
+    def __init__(self, backend: str, solver: Path, guard: Path):
+        if backend not in ('xolver', 'z3'):
+            raise ValueError('unsupported backend')
+        self.backend = backend
+        command = [str(guard), 'prlimit', '--as=' + str(MEMORY_BYTES), '--', str(solver)]
+        if backend == 'z3':
+            command.append('-in')
+        # A cumulative CPU limit would expire a healthy long-lived process.
+        # Every query instead has one wall deadline on its leased physical CPU.
+        self.channel = ProcessChannel(command, environment=solver_environment())
+        self.ordinal = 0
+        self.stderr_offset = 0
+
+    def solve(self, script: str, output: Path, started_ns: int) -> dict:
+        deadline = (started_ns + WALL_NS) / 1e9
+        began = time.monotonic()
+        self.channel.remaining(deadline)
+        first = self.channel.process is None
+        if self.backend == 'xolver':
+            payload = json.dumps(dict(smt2=script, model=False,
+                timeout_ms=max(1, int(self.channel.remaining(deadline) * 1000)))).encode()
+            tasks = [Task(str(self.ordinal), 'smt.solve', payload)]
+            request = frame(encode_tasks(tasks), self.channel.max_bytes)
+        else:
+            # formula_query emits a standalone check-sat/exit script. Remove
+            # only its generated final exit for the persistent transport.
+            # reset removes declarations, assertions and options from the last
+            # occurrence; every occurrence is still solved, including repeats.
+            if not script.endswith('(exit)\n'):
+                raise ValueError('expected the generated terminal exit command')
+            marker = 'qcp-query-{}-done'.format(self.ordinal)
+            request = ('(reset)\n(set-option :print-success false)\n'
+                '(set-option :timeout {})\n'.format(max(1, int(self.channel.remaining(deadline) * 1000)))
+                + script[:-len('(exit)\n')] + '(echo "' + marker + '")\n').encode()
+        (output / 'request.bin').write_bytes(request)
+        self.channel.write(request, deadline)
+        if self.backend == 'xolver':
+            header = self.channel.read_exact(HEADER.size, deadline)
+            length, = HEADER.unpack(header)
+            response = self.channel.read_exact(length, deadline)
+            (output / 'response.bin').write_bytes(header + response)
+            value = json.loads(decode_results(response, tasks)[0].get())
+            result = value.get('result')
+            if result not in ('sat', 'unsat', 'unknown'):
+                raise ValueError('invalid typed solver result')
+        else:
+            answer = self.channel.read_line(deadline)
+            terminator = self.channel.read_line(deadline)
+            (output / 'response.bin').write_bytes(answer + terminator)
+            if terminator.strip() != marker.encode():
+                raise ValueError('mismatched SMT-LIB response boundary')
+            result = answer.strip().decode()
+            if result not in ('sat', 'unsat', 'unknown'):
+                raise ValueError('invalid SMT-LIB solver result')
+        self.channel.remaining(deadline)
+        stderr, self.stderr_offset = self.channel.diagnostics(self.stderr_offset)
+        (output / 'stdout').write_text(result + '\n')
+        (output / 'stderr').write_bytes(stderr)
+        record = dict(result=result, command=list(self.channel.argv),
+            process_pid=self.channel.process.pid, process_started=first,
+            process_query_ordinal=self.ordinal, transport=('task-frame/1'
+                if self.backend == 'xolver' else 'smtlib-reset/1'),
+            seconds=time.monotonic() - began, returncode=None, timed_out=False,
+            stdout_format='normalized-solver-decision',
+            request_sha256=sha256(output / 'request.bin'),
+            response_sha256=sha256(output / 'response.bin'),
+            stdout_sha256=sha256(output / 'stdout'), stderr_sha256=sha256(output / 'stderr'))
+        self.ordinal += 1
+        return record
+
+    def close(self):
+        self.channel.close()
+
+    def abort(self, output: Path) -> dict:
+        evidence = dict(command=list(self.channel.argv), process_query_ordinal=self.ordinal)
+        if self.channel.process is not None:
+            evidence['process_pid'] = self.channel.process.pid
+        try:
+            stderr, self.stderr_offset = self.channel.diagnostics(self.stderr_offset)
+            (output / 'stderr').write_bytes(stderr)
+        except Exception as error:
+            evidence['diagnostic_error'] = repr(error)
+        finally:
+            self.close()
+        for name in ('request.bin', 'response.bin', 'stderr'):
+            if (output / name).exists():
+                evidence[name.replace('.bin', '') + '_sha256'] = sha256(output / name)
+        return evidence
+
+
+def decide(formula: str, session: BackendSession, output: Path, started_ns: int) -> dict:
     """One unchanged formula, one selected solver, one shared callback budget."""
     output.mkdir(exist_ok=False)
     (output / 'formula.txt').write_text(formula)
-    record = dict(backend=backend, formula_sha256=sha256(output / 'formula.txt'),
+    record = dict(backend=session.backend, formula_sha256=sha256(output / 'formula.txt'),
                   result='error', program_verified=False)
     try:
         script, signature = formula_query(formula)
         query = output / 'query.smt2'
         query.write_text(script)
         record.update(signature=signature, query_sha256=sha256(query))
-        remaining = (started_ns + WALL_NS - time.monotonic_ns()) / 1e9
-        if remaining <= 0:
+        if started_ns + WALL_NS <= time.monotonic_ns():
             record['result'] = 'timeout'
         else:
-            seconds = max(1, math.ceil(remaining))
-            command = [str(guard), 'prlimit', '--as=' + str(MEMORY_BYTES),
-                       '--cpu=62:63', '--', str(solver)]
-            command += (['solve', str(query), '--timeout', str(seconds)] if backend == 'xolver'
-                        else ['-T:' + str(seconds), str(query)])
-            stdout, stderr, timing = run_with_budget(command, remaining, solver_environment())
-            (output / 'stdout').write_bytes(stdout)
-            (output / 'stderr').write_bytes(stderr)
-            bare = stdout.strip()
-            result = ('timeout' if timing['timed_out'] else
-                      bare.decode() if timing['returncode'] == 0 and
-                      bare in (b'sat', b'unsat', b'unknown') else 'error')
-            record.update(result=result, command=command, **timing,
-                          stdout_sha256=sha256(output / 'stdout'),
-                          stderr_sha256=sha256(output / 'stderr'))
+            record.update(session.solve(script, output, started_ns))
     except Unsupported as error:
         record.update(result='unsupported', reason=str(error))
+    except TimeoutError as error:
+        record.update(session.abort(output))
+        record.update(result='timeout', timed_out=True, reason=str(error))
     except Exception as error:
+        record.update(session.abort(output))
         record.update(result='error', reason=repr(error))
     record['callback_seconds'] = (time.monotonic_ns() - started_ns) / 1e9
     if record['callback_seconds'] >= 60 and record['result'] in ('sat', 'unsat'):
+        session.close()
         record.update(result='timeout', reason='serialization/startup exceeded the shared wall budget')
     write_json(output / 'record.json', record)
     return record
@@ -105,13 +188,15 @@ def receive(connection: socket.socket, length: int, allow_eof: bool = False) -> 
 def run_worker(descriptor: int, backend: str, solver: Path, guard: Path, output: Path) -> int:
     cpu = leased_cpu()
     solver_hash, guard_hash = sha256(solver), sha256(guard)
-    report = dict(schema=1, integration='native-qcp-sat-entry', backend=backend,
+    report = dict(schema=2, integration='native-qcp-sat-entry', backend=backend,
                   solver=dict(path=str(solver), sha256=solver_hash),
                   guard_sha256=guard_hash, worker_sha256=sha256(Path(__file__)),
                   parser_sha256=sha256(ROOT / 'tools/integration/qcp_native.py'),
+                  transport_sha256=sha256(ROOT / 'python/xolver_parallel/transport.py'),
                   cpu=cpu, wall_seconds=60, memory_bytes=MEMORY_BYTES, calls=[],
                   complete=False, program_verified=False, errors=[])
     write_json(output / 'session.json', report)
+    session = BackendSession(backend, solver, guard)
     try:
         with socket.socket(fileno=descriptor) as connection:
             while True:
@@ -124,7 +209,7 @@ def run_worker(descriptor: int, backend: str, solver: Path, guard: Path, output:
                     raise ValueError('invalid native SAT protocol header')
                 formula = receive(connection, length).decode('utf-8')
                 query = output / f'query-{ordinal:05d}'
-                row = decide(formula, backend, solver, guard, query, started_ns)
+                row = decide(formula, session, query, started_ns)
                 report['calls'].append(dict(ordinal=ordinal, mode=mode, caller=hex(caller),
                     result=row['result'], query=str(query),
                     formula_sha256=row['formula_sha256'],
@@ -145,6 +230,17 @@ def run_worker(descriptor: int, backend: str, solver: Path, guard: Path, output:
     except Exception as error:
         report['complete'] = False
         report['errors'].append(repr(error))
+    finally:
+        report['solver_processes'] = int(session.channel.process is not None)
+        report['solver_queries'] = session.ordinal
+        try:
+            if report['complete'] and not report['errors']:
+                session.channel.finish()
+            else:
+                session.close()
+        except Exception as error:
+            report['complete'] = False
+            report['errors'].append(repr(error))
     write_json(output / 'session.json', report)
     return int(not report['complete'] or bool(report['errors']))
 
@@ -158,7 +254,9 @@ def launch(binary: Path, library: Path, backend: str, solver: Path,
         raise ValueError('supply the native QCP or controller command after --')
     output.mkdir(parents=True, exist_ok=False)
     files = dict(qcp=binary, library=library, solver=solver, guard=guard,
-                 worker=Path(__file__).resolve(), parser=ROOT / 'tools/integration/qcp_native.py')
+                 worker=Path(__file__).resolve(), parser=ROOT / 'tools/integration/qcp_native.py',
+                 transport=ROOT / 'python/xolver_parallel/transport.py',
+                 protocol=ROOT / 'python/xolver_parallel/protocol.py')
     identities = {name: dict(path=str(path), sha256=sha256(path)) for name, path in files.items()}
     report = dict(schema=1, command=command, files=identities, backend=backend,
                   cpu=cpu, wall_seconds_per_query=60, memory_bytes=MEMORY_BYTES,
@@ -195,7 +293,8 @@ def launch(binary: Path, library: Path, backend: str, solver: Path,
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--backend', choices=['xolver', 'z3'], required=True)
-    parser.add_argument('--solver', type=Path, required=True)
+    parser.add_argument('--solver', type=Path, required=True,
+                        help='frozen xolver-parallel-worker or Z3 executable')
     parser.add_argument('--exec-guard', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--qcp-binary', type=Path)

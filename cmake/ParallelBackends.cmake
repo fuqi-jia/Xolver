@@ -62,7 +62,7 @@ endforeach()
 
 set(XOLVER_PARALLEL_PYTHON_DIR "${CMAKE_BINARY_DIR}/python/xolver_parallel")
 file(MAKE_DIRECTORY "${XOLVER_PARALLEL_PYTHON_DIR}")
-foreach(module __init__.py executors.py protocol.py)
+foreach(module __init__.py executors.py protocol.py session.py transport.py)
     configure_file("${CMAKE_SOURCE_DIR}/python/xolver_parallel/${module}"
                    "${XOLVER_PARALLEL_PYTHON_DIR}/${module}" COPYONLY)
 endforeach()

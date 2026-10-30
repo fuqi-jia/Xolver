@@ -195,20 +195,26 @@ or canonical controller command unchanged after `--`:
 python3 tools/integration/qcp_native_backend.py \
   --qcp-binary /path/to/pinned/QCP/linux-binary/symexec \
   --library build/qcp-native-backend.so --exec-guard build/qcp-backend-exec \
-  --backend xolver --solver /path/to/frozen/xolver --output validation/native-run \
+  --backend xolver --solver /path/to/frozen/xolver-parallel-worker --output validation/native-run \
   -- /path/to/pinned/QCP/linux-binary/symexec ORIGINAL_ARGUMENTS
 ```
 
 Use `--backend z3 --solver /path/to/frozen/z3` with identical inputs/settings.
-A persistent worker serializes each actual argument with QCP's own printer,
-then runs only the selected backend with a shared 60-second callback budget and
-16 GiB address-space limit. Each occurrence, query, native mode, caller,
-stdout/stderr and executable hashes are recorded. Printed integer functions
+A persistent adapter serializes each actual argument with QCP's own printer.
+Both backends reuse one selected solver process per native invocation: Xolver
+uses the generic framed task worker with a fresh `Solver` per task; Z3 uses
+`-in` with `(reset)` per occurrence and a checked response boundary. Repeated
+queries are solved again. Encoding, initial process startup and transport share
+each 60-second callback budget, with a 16 GiB address-space limit and the same
+leased physical CPU. Each occurrence, query, native mode, caller, process PID,
+process/query counts, request/response bytes, stdout/stderr and executable
+hashes are recorded. Printed integer functions
 remain uninterpreted; no arithmetic meaning is inferred from their names.
 Unknown, timeout, unsupported syntax and protocol errors stop the native
 invocation explicitly: the pinned ABI has no established unknown return code.
 Parent-death guards terminate workers and detached solver children on
-cancellation. These helpers are independent of the normal Xolver build.
+cancellation. The two C helpers are independent of the normal Xolver build;
+the Xolver backend requires the built `xolver-parallel-worker` target.
 
 `complete` in these records means the instrumented command/protocol completed.
 It does not certify a C program or a proof. Full program verification still
