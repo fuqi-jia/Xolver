@@ -1,0 +1,61 @@
+{
+  "schema": 1,
+  "status": "full_server_acceptance_passed_formal_round_in_progress",
+  "implementation_commit": "d5a3d306176e39b74f1ac6035e992a6879c9d6f2",
+  "source_manifest_sha256": "5632802701cb5789dc8f16dedeb66b7a2924b4faa85979fb9ab61ae67fd021b2",
+  "binaries": {
+    "xolver": "9d11c22d874ac89acd45785c6a5b3920d9bdbfe2dcf1ece64cf227113ef4b368",
+    "xolver-sv": "24e376a45ffc935b96d18eff4c7e1b61c72bd5dce1957b6fd835e35d8b309b0a",
+    "xolver-parallel-worker": "caad8cb7c3dfd2dc871d6ec7d01c30bf6c7e8483115fad9a0025513c425ecf48"
+  },
+  "problem": "The difference graph conflated its constant vertex with a user variable named __ZERO__; model export also discarded ordinary user names beginning with __. Both IDL and RDL were affected.",
+  "implementation": "Keep the constant vertex outside both graph symbol maps; represent constant endpoints by nullopt in normalisation and shared disequality splitting; omit the constant vertex from model maps by identity and preserve all variable names.",
+  "baseline": {
+    "binary_sha256": "1906c863afad990600d3a6c017bc07396bc8fbe5ea1d62a589e0f1721267bd4b",
+    "experiment": "eff4b0f56701",
+    "run": "e53d95d59e65",
+    "report_sha256": "a294e510967f542cd9d8d034b260f61a77f962df98815d3380a35b21d592f732",
+    "opposite_verdicts": 2,
+    "unavailable_models": 2
+  },
+  "targeted_build": {
+    "experiment": "9ac1aed27b28",
+    "run": "d99e75a5c527",
+    "cases": 68,
+    "assertions": 284883,
+    "idl_regressions": 20,
+    "rdl_regressions": 17
+  },
+  "model_verification": {
+    "experiment": "9abc1125a644",
+    "run": "a02dec58d7e4",
+    "report_sha256": "e7ae7a0273fd1212d43fe7c79a99b21b6490750bdce521501503acad1b365517",
+    "identical_input_hashes": true,
+    "cases": 6,
+    "opposite_verdicts": 0,
+    "unavailable_models": 0,
+    "models_replayed_by_both_oracles": 6
+  },
+  "full_acceptance": {
+    "experiments": [
+      "d4a12930223e",
+      "e920e527afb9"
+    ],
+    "groups": 39,
+    "unit_cases": 1837,
+    "unit_assertions": 922772,
+    "failures": 0
+  },
+  "formal": {
+    "pilot_experiment": "59ab24992759",
+    "output": "validation/arithmetic-r103/fair-r969",
+    "remaining_dispatch": "validation/arithmetic-r103/dispatch-r971-rest.json",
+    "cases": 160,
+    "wall_seconds": 60,
+    "memory_gib": 16,
+    "physical_cpus_per_case": 1,
+    "status": "in_progress"
+  },
+  "protected_sets_used": false,
+  "boundary": "The six constructed name-identity/model diagnostics are separate from fixed160 and do not increase its score. Both independent oracles decide every original diagnostic input SAT, and both replay each actual fixed-version model. R964 stopped on an unavailable-model parser error and is retained; R965 completes the original diagnostic. The arithmetic baseline remains explicitly frozen; the new fair round is not yet scored. Full-program max3 qualification belongs to the earlier worker, not to this new kernel."
+}

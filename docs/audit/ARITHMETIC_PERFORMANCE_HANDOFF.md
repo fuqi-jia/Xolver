@@ -2995,3 +2995,42 @@ three architecture/parallel CTests, with every native byte unchanged from R960.
 This test-only fix remains in PR80; its new exact-head CI is41121158561. The
 prior failed run and the completed requalification remain visible. See the
 [closed experiment receipt](DEFERRED_ROW_EXPLANATIONS_REJECTED_20261031.json).
+
+
+### Difference-logic constant identity and model repair (R964–R969)
+
+A user variable named`__ZERO__` collided with graph node0, while getModel
+silently omitted any user name beginning`__`. Fresh constructed IDL/RDL inputs
+`(assert (or (= __ZERO__ 1) (= __ZERO__ 2)))` produced two wrong UNSAT answers;
+both independent solvers returned SAT. Two analogous`__user` inputs returned
+SAT without an available model. R964's diagnostic stopped on that unavailable-
+model parser error; the complete R965 report retains all six inputs and two
+ordinary-name controls (SHA-256
+`a294e510967f542cd9d8d034b260f61a77f962df98815d3380a35b21d592f732`).
+
+Commit`d5a3d306176e39b74f1ac6035e992a6879c9d6f2` separates the constant vertex
+from the symbol map in both batch and incremental graphs, uses explicit absent
+endpoints for zero in both solvers and their shared disequality splitter, and
+exports user names without a prefix filter. No old name alias remains. Tests
+cover both weights, graph backtracking, positive/negative bounds, model invalidation
+and the exact unary split tautologies. R966 passes68 targeted cases/284883
+assertions and20 IDL/17 RDL regressions; source manifest SHA-256
+`5632802701cb5789dc8f16dedeb66b7a2924b4faa85979fb9ab61ae67fd021b2`,
+CLI`9d11c22d874ac89acd45785c6a5b3920d9bdbfe2dcf1ece64cf227113ef4b368`.
+R967 authenticates six matching input hashes and positive replay of every actual
+exported model through both Z3 and cvc5 (report SHA-256
+`e7ae7a0273fd1212d43fe7c79a99b21b6490750bdce521501503acad1b365517`).
+These are correctness/capability regressions, not additional fixed160 solves.
+
+All39 R968 acceptance groups pass, including1837 unit cases/922772 assertions.
+The fresh R969/R971 fixed160 round is running at60s/one physical CPU/16GiB with
+initial model capture; it has no final score yet. No protected set was used.
+See the [symbol identity receipt](DIFFERENCE_LOGIC_SYMBOL_IDENTITY_STAGE_20261031.json).
+
+The persistent transport stage is merged by PR80 as main
+`ec1912f519cba5455155725adb6ab829d0a357eb`, after exact-head
+[PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/41121158561) passed.
+Its fresh [main CI](https://github.com/fuqi-jia/Xolver/actions/runs/41124740311)
+is still in progress at this receipt. The CLI/SV bytes of that transport-only
+stage are unchanged from R926; the new arithmetic kernel above is separate and
+has not yet been merged.
