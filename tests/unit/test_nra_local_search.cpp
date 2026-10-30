@@ -4,11 +4,45 @@
 #include "algebra/poly/PolynomialKernel.h"
 #include "contracts/SatSolver.h"
 #include <gmpxx.h>
+#include <algorithm>
 #include <chrono>
 
 using namespace xolver;
 
 static SatLit mkReason(SatVar v) { return SatLit::positive(v); }
+
+TEST_CASE("NraLocalSearch: bracket preparation indexes sources and short circuits rejected starts") {
+    auto kernel = createPolynomialKernel();
+    std::vector<VarId> variables;
+    std::vector<NraLocalSearch::Constraint> constraints;
+    constexpr int count = 200;
+    for (int i = 0; i < count; ++i) {
+        const auto var = kernel->getOrCreateVar("bounded_" + std::to_string(i));
+        variables.push_back(var);
+        const auto poly = kernel->mkVar(var);
+        // Negative coefficients exercise both direction reversals. Each
+        // coordinate must move away from zero, so individual probes fail.
+        constraints.push_back({kernel->sub(kernel->mkOne(), poly), Relation::Lt, mkReason(2 * i + 1)});
+        constraints.push_back({kernel->sub(kernel->mkConst(2), poly), Relation::Gt, mkReason(2 * i + 2)});
+    }
+    constraints.push_back({kernel->sub(kernel->mul(kernel->mkVar(variables.front()),
+        kernel->mkVar(variables.back())), kernel->mkConst(2)), Relation::Gt, mkReason(2 * count + 1)});
+    NraLocalSearch search(*kernel);
+    search.setBudgetMs(0);
+    search.setMaxRounds(0);
+    for (int repeat = 0; repeat < 2; ++repeat) {
+        const auto model = search.tryFindModel(constraints, variables);
+        REQUIRE(model.has_value());
+        REQUIRE(model->size() == variables.size());
+        for (const auto var : variables) CHECK(model->at(var) == mpq_class(3, 2));
+        CHECK(model->at(variables.front()) * model->at(variables.back()) > 2);
+        CHECK(search.statistics().bracketSourceScans == constraints.size());
+        // Three candidates per variable; only probes on the first variable
+        // can get past the first false atom. Full score rescans are quadratic.
+        CHECK(search.statistics().initialProbeAtoms <= 4 * count);
+        std::reverse(variables.begin(), variables.end());
+    }
+}
 
 TEST_CASE("NraLocalSearch: independent high-degree atoms and coupled coordinates") {
     auto kernel = createPolynomialKernel();
