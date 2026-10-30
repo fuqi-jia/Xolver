@@ -433,6 +433,44 @@ TEST_CASE("PolynomialConverter: division by variable is unsupported") {
     CHECK(!res.ok());
 }
 
+TEST_CASE("PolynomialConverter: unsupported factors invalidate the complete product") {
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Real);
+    ir.registerSort(1, SortKind::Int);
+    auto kernel = createPolynomialKernel();
+    PolynomialConverter converter(*kernel);
+    auto one = ir.add(TermExpr{Kind::ConstInt, 1, {}, Payload(int64_t(1))});
+    auto two = ir.add(TermExpr{Kind::ConstInt, 1, {}, Payload(int64_t(2))});
+    auto zero = ir.add(TermExpr{Kind::ConstInt, 1, {}, Payload(int64_t(0))});
+    auto x = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("x"))});
+    const std::vector<ExprId> unsupported{
+        ir.add(TermExpr{Kind::Div, 0, {one, zero}, {}}),
+        ir.add(TermExpr{Kind::Div, 0, {one, x}, {}}),
+        ir.add(TermExpr{Kind::UFApply, 0, {x}, Payload(std::string("f"))})};
+    for (auto factor : unsupported) {
+        for (size_t position = 0; position != 3; ++position) {
+            std::vector<ExprId> factors{two, x};
+            factors.insert(factors.begin() + position, factor);
+            TermExpr product{Kind::Mul, 0, {}, {}};
+            for (auto child : factors) product.children.push_back(child);
+            auto expression = ir.add(std::move(product));
+            CHECK_FALSE(converter.convert(expression, ir).ok());
+            auto constraint = converter.convertConstraint(expression, zero, Relation::Eq, ir);
+            CHECK((constraint.status == PolyConstraintStatus::UnsupportedNonPolynomial));
+            auto nested = ir.add(TermExpr{Kind::Mul, 0, {two, expression}, {}});
+            CHECK_FALSE(converter.convert(nested, ir).ok());
+        }
+    }
+    // A rejected query must not leave a partial polynomial in a reused converter.
+    auto valid = ir.add(TermExpr{Kind::Mul, 0, {two, x, two}, {}});
+    auto converted = converter.convert(valid, ir);
+    REQUIRE(converted.ok());
+    auto value = kernel->evalIntegerVarId(converted.poly, {{kernel->getOrCreateVar("x"), 3}});
+    REQUIRE(value.has_value());
+    const mpq_class actual = converted.scale * *value;
+    CHECK(actual == 12);
+}
+
 TEST_CASE("PolynomialConverter: power expansion") {
     NativeTerms ir;
     ir.registerSort(0, SortKind::Real);

@@ -2397,7 +2397,9 @@ SAT entry, preserving QCP's own classifier and preprocessing.
 [PR75](https://github.com/fuqi-jia/Xolver/pull/75) implements actual native backend
 selection, qualified code `9f36803e`; the source/binary hashes, EOS runs and
 evidence boundaries are in the [stage receipt](NATIVE_QCP_BACKEND_STAGE_20261030.json).
-Server acceptance is complete; PR CI, merge and exact-head main CI remain pending.
+Server acceptance and both exact-head [PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/41026885983)
+passed. The PR is merged as main`b5a2fe6bd8895bec68af362fdf525410c26a1ddb`;
+fresh [main CI](https://github.com/fuqi-jia/Xolver/actions/runs/41030001591) is running.
 
 The pinned Linux QCP executable has no exported backend switch. The adapter
 checks its full executable hash, native entry/call-site bytes and executable
@@ -2433,3 +2435,18 @@ C→VC→selected SMT→Rocq program comparison. Those canonical controller runs
 need complete original-VC proofs, final-check and witness audits. Xolver's core
 binary is unchanged from R802; this stage establishes no new fixed160 score or
 performance advantage. Neither protected set has been inspected or run.
+
+
+R819/R821 additionally completes the original frozen `branch_destruct` C program
+through actual native Xolver, external Xolver discharge and canonical Rocq
+final-check: **1 verified program /10 original VCs /14 external queries**, all
+external queries UNSAT and all candidate bodies identical to the checked full
+VC proofs. Final-check EOS`578afc065663` returns`passed/done`; independent witness
+and provenance audit EOS`ae37dfde9890` is backend-qualified, with no admitted
+case proofs or extra assumptions. The complete controller workflow records564
+native calls (222 SAT /342 UNSAT) across three frontend/freshness executions;
+every actual formula hash/result matches the independently checked R817
+inventory. Do not count repeated native calls as extra programs or VCs.
+Original C/specification SHA remains`4d81aabd16ceb9d402fa0f1a3621dd8a6bf0ad28659bcb6cf60eedebec69e22d`.
+The matched fresh Z3 controller workflow has started. It has not yet completed,
+and this functional qualification does not establish a whole-program speed win.

@@ -433,7 +433,9 @@ SatLit Atomizer::atomizeRec(ExprId eid, const NativeTerms& ir) {
                              e.kind == Kind::Lt || e.kind == Kind::Leq ||
                              e.kind == Kind::Gt || e.kind == Kind::Geq);
 
-            if (isTheory && registry_) {
+            // Boolean equalities are propositional even without a theory
+            // registry (for example in a standalone refutation abstraction).
+            {
                 // Bool equalities/distincts are propositional regardless of target theory.
                 // Eq/Distinct operands share a sort, so if ANY operand is provably
                 // Boolean the whole atom is Boolean — this catches cases where a
@@ -451,7 +453,9 @@ SatLit Atomizer::atomizeRec(ExprId eid, const NativeTerms& ir) {
                     memo_[eid] = result;
                     return result;
                 }
+            }
 
+            if (isTheory && registry_) {
                 TheoryId targetTheory = defaultTheory_;
                 if (defaultTheory_ == TheoryId::Combination) {
                     bool isEqOrDistinct = (e.kind == Kind::Eq || e.kind == Kind::Distinct);
