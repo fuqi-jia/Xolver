@@ -2887,3 +2887,27 @@ adapter checks and all69 tool CTest targets pass again. All native/unit binary
 hashes remain unchanged; the1831-case native result is retained. R935 timings
 precede this shutdown fix and remain explicitly diagnostic. Subsequent whole-
 program actions use the R939 source manifest, with the same frozen worker.
+
+
+### Original max3 with both persistent backends (R937/R949/R952)
+
+Both fresh runs now reach canonical`done` on the unchanged original max3.c
+(SHA-256`7ddaa9f590cd9c37d3dd644ea280ecd3fa6cee084441c82caf9c0e1afb6dde5d`),
+with all4 original VCs reconstructed and checked by Rocq. No specification,
+assumption, helper or original obligation is weakened. R949 runs the two fresh
+final-check actions sequentially on the same leased physical CPU0. Xolver takes
+28.690s and Z3 29.536s. Each actual final refresh makes296 native SAT calls in
+one selected process:148 SAT/148 UNSAT over60 distinct original queries, all
+matching the independently model/judgment-checked R817/R820 inventory.
+
+R952 authenticates every request/reply frame, query/formula hash, ordinal,
+process identity, resource cap, complete controller state and original goal-token
+stream. The whole program result is separate from the raw adapter's intentionally
+false`program_verified` flag. External proof-discharge queries remain0: native
+SMT selection is exercised during actual QCP symexec, while Rocq reconstruction
+is common. Closers differ syntactically (`lia` versus `lia || int_auto`); one
+program/order cannot establish an overall QCP performance advantage. Neither
+protected set was used. This qualification binds frozen worker`578144c1` and
+the delivered arithmetic core; a later core candidate needs its own evidence.
+See the updated transport receipt. The broader multi-program comparison and the
+fixed160 target of at least126 verified solves remain outstanding.
