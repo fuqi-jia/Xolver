@@ -2763,3 +2763,30 @@ call or rollback, and no arithmetic budget or solver gate changes. Tests cover
 skipping all row arithmetic, strict negative division when just one extremum
 becomes usable, rollback and a skipped row becoming productive during the same
 local closure. Native qualification and frozen comparison remain pending.
+
+The R908 completed audit now seals the preceding streaming core R901:
+**100→100 verified**, no gained/lost result, PAR-2 **7539.698→7521.056**
+(about0.25% better). Same-round Z3 has117 verified/124 raw decisions. The seven
+unconfirmed UNSATs12/24/27/42/80/114/159 remain excluded. R905 confirms the
+three duplicated initial Z3 models47/108/122: explicit`get-model` plus`-model`
+printed identical model ASTs, positively replayed by both independent checkers.
+Only truth eligibility is supplemented; no old solve timing is substituted.
+See [the stage receipt](LINEAR_PROPAGATION_STAGE_20261031.json). The three
+budget-invalid original triads are retained beside their valid full R912 retries.
+
+R917 qualifies the unavailable-extrema implementation with43 targeted cases/
+80,305 assertions. Its pilot is negative:48/51/131 remain timeouts, and59
+regresses from39.109s SAT to timeout. No opposite verdict is observed. Saved
+arithmetic changes the conclusions reached within the time allocation and the
+subsequent search; the snapshot counters do not establish a solver improvement.
+This candidate must not be merged on diagnostic arithmetic savings.
+
+The next change addresses R900's observed duplicate conclusions:22,639 of
+65,435 emitted59 clauses repeat a signed target, consuming the64-clause budget.
+LRA now uses the existing predicate-acceptance filter to skip targets already
+queued during this check, allowing another implied registered predicate to use
+the slot. Original SAT assignments and signed premise explanations stay separate.
+The set is local to the check; LIA's existing backtrack-epoch deduplication
+policy is unchanged. A regression exercises two stronger row endpoints, two
+weaker signed targets, exact clause replay over rational points, and renewed
+emission after rollback. Qualification and a fresh comparison are pending.

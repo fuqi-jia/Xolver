@@ -326,10 +326,19 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
     std::vector<int8_t> activeValues(static_cast<size_t>(maximumVariable) + 1, 0);
     for (const auto& entry : theoryTrail_) activeValues[entry.lit.var] = entry.lit.sign ? 1 : -1;
     constexpr std::size_t kMaxProps = 64;
+    // Several stronger row endpoints may imply the same registered predicate.
+    // Count distinct signed conclusions against the output limit, without
+    // confusing a queued fact with an actual SAT assignment. This set is local
+    // to the check; the LIA pin scanner retains its own backtrack-epoch policy.
+    std::unordered_set<uint64_t> queuedConclusions;
+    queuedConclusions.reserve(kMaxProps);
     propagationEngine_.propagateAll(gs_, {}, nullptr,
         [&](const LraPropagationEngine::ExplainedBound& bound) {
-            if (auto lemma = buildEntailmentLemma(bound, activeValues))
+            if (auto lemma = buildEntailmentLemma(bound, activeValues, queuedConclusions)) {
+                const auto conclusion = lemma->lits.back();
+                queuedConclusions.insert((static_cast<uint64_t>(conclusion.var) << 1) | conclusion.sign);
                 entailmentProps_.push_back(std::move(*lemma));
+            }
             return entailmentProps_.size() < kMaxProps;
         });
     // Interface disequality vs. an entailed equality: if an asserted 2-var
@@ -753,7 +762,8 @@ std::vector<SatLit> LraSolver::allActiveReasons() const {
 
 std::optional<TheoryLemma> LraSolver::buildEntailmentLemma(
     const LraPropagationEngine::ExplainedBound& eb,
-    const std::vector<int8_t>& activeValues) {
+    const std::vector<int8_t>& activeValues,
+    const std::unordered_set<uint64_t>& queuedConclusions) {
     if (!registry_ || eb.reasons.empty()) return std::nullopt;
     auto it = columnForms_.find(eb.var);
     if (it == columnForms_.end()) {
@@ -794,6 +804,8 @@ std::optional<TheoryLemma> LraSolver::buildEntailmentLemma(
         [&](SatLit literal) {
             if (literal.var < activeValues.size() &&
                 activeValues[literal.var] == (literal.sign ? 1 : -1)) return false;
+            if (queuedConclusions.contains((static_cast<uint64_t>(literal.var) << 1) | literal.sign))
+                return false;
             return std::find(eb.reasons.begin(), eb.reasons.end(), literal) == eb.reasons.end();
         });
     if (!implied) return std::nullopt;

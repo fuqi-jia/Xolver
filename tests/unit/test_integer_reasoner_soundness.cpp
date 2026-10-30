@@ -192,6 +192,61 @@ TEST_CASE("LraSolver: original columns project weaker predicates across backtrac
         }
 }
 
+TEST_CASE("LraSolver: repeated endpoints spend one slot per signed conclusion") {
+    for (bool positive : {false, true}) {
+        Allocator allocator;
+        TheoryAtomRegistry registry;
+        registry.setContext(&allocator, &allocator);
+        LraSolver solver;
+        solver.setRegistry(&registry);
+        auto atom = [&](LinearFormKey form, Relation relation, const mpq_class& rhs) {
+            const auto variable = allocator.newVar();
+            registry.registerParsedTheoryAtom(variable, NullExpr, TheoryId::LRA,
+                LinearAtomPayload{form, relation, RealValue::fromMpq(rhs)});
+            return SatLit::positive(variable);
+        };
+        const auto first = atom({{{"x", 1}, {"y", 1}}}, Relation::Leq, 3);
+        const auto yLower = atom({{{"y", 1}}}, Relation::Geq, 0);
+        const auto second = atom({{{"x", 1}, {"z", 1}}}, Relation::Leq, 2);
+        const auto zLower = atom({{{"z", 1}}}, Relation::Geq, 0);
+        const auto relation = positive ? Relation::Leq : Relation::Gt;
+        const auto p = atom({{{"x", 1}}}, relation, 5);
+        const auto q = atom({{{"x", 1}}}, relation, 6);
+        const auto targetP = positive ? p : p.negated();
+        const auto targetQ = positive ? q : q.negated();
+        const auto records = registry.numAtomVars();
+        TheoryLemmaDatabase database;
+        for (int epoch = 0; epoch < 2; ++epoch) {
+            for (auto literal : {first, yLower, second, zLower})
+                solver.assertLit(*registry.findBySatVar(literal.var), true, 1, literal);
+            REQUIRE(solver.check(database, TheoryEffort::Standard).kind == TheoryCheckResult::Kind::Consistent);
+            const auto lemmas = solver.takeEntailmentPropagations();
+            CHECK(std::count_if(lemmas.begin(), lemmas.end(), [&](const auto& lemma) {
+                return lemma.lits.back() == targetP;
+            }) == 1);
+            CHECK(std::count_if(lemmas.begin(), lemmas.end(), [&](const auto& lemma) {
+                return lemma.lits.back() == targetQ;
+            }) == 1);
+            for (const auto& lemma : lemmas) {
+                for (int xn = -4; xn <= 16; ++xn)
+                    for (int yn = -4; yn <= 4; ++yn) for (int zn = -4; zn <= 4; ++zn) {
+                        const Values values{{"x", mpq_class(xn, 2)}, {"y", mpq_class(yn, 2)}, {"z", mpq_class(zn, 2)}};
+                        bool holds = false;
+                        for (auto literal : lemma.lits) {
+                            const auto& payload = std::get<LinearAtomPayload>(registry.findBySatVar(literal.var)->payload);
+                            holds |= compare(payload.rel, eval(payload.lhs, values), payload.rhs.asRational()) == literal.sign;
+                        }
+                        CHECK(holds);
+                    }
+            }
+            solver.backtrackToLevel(0);
+            REQUIRE(solver.check(database, TheoryEffort::Standard).kind == TheoryCheckResult::Kind::Consistent);
+            CHECK(solver.takeEntailmentPropagations().empty());
+            CHECK(registry.numAtomVars() == records);
+        }
+    }
+}
+
 TEST_CASE("Linear model phase hints: strict endpoints respect infinitesimals") {
     const std::vector<Relation> relations{Relation::Eq,Relation::Neq,Relation::Lt,
         Relation::Leq,Relation::Gt,Relation::Geq};

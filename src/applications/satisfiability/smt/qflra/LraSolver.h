@@ -166,7 +166,8 @@ private:
     // search; the propagator verifies it is unit/falsified.
     std::optional<TheoryLemma> buildEntailmentLemma(
         const LraPropagationEngine::ExplainedBound& eb,
-        const std::vector<int8_t>& activeValues);
+        const std::vector<int8_t>& activeValues,
+        const std::unordered_set<uint64_t>& queuedConclusions);
 
     // Buffer of this check's entailment propagations.
     std::vector<TheoryLemma> entailmentProps_;
