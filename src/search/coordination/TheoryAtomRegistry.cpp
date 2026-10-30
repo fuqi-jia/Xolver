@@ -1,6 +1,7 @@
 #include "search/coordination/TheoryAtomRegistry.h"
 #include "algebra/linear/LinearExpr.h"
 #include <cassert>
+#include <algorithm>
 
 namespace xolver {
 
@@ -69,6 +70,7 @@ void TheoryAtomRegistry::registerParsedTheoryAtom(
             auto it = linearLookup_.find(key);
             if (it == linearLookup_.end()) {
                 linearLookup_[key] = idx;
+                indexLinearBound(idx);
             } else {
                 const auto& existing = records_[it->second];
                 wireEquivalence(satVar, existing.satVar);
@@ -108,6 +110,78 @@ std::optional<SatLit> TheoryAtomRegistry::findLinearLiteral(
     return std::nullopt;
 }
 
+void TheoryAtomRegistry::indexLinearBound(size_t index) {
+    const auto& atom = std::get<LinearAtomPayload>(records_[index].payload);
+    if (!atom.rhs.isRational()) return;
+    auto& family = linearBoundFamilies_[atom.lhs];
+    const auto position = std::upper_bound(family.begin(), family.end(), atom.rhs.asRational(),
+        [&](const mpq_class& value, size_t candidate) {
+            return value < std::get<LinearAtomPayload>(records_[candidate].payload).rhs.asRational();
+        });
+    family.insert(position, index);
+}
+
+std::optional<SatLit> TheoryAtomRegistry::findImpliedLinearLiteral(
+    const LinearFormKey& lhs, Relation rel, const mpq_class& rhs,
+    const std::function<bool(SatLit)>& accept) const {
+    if (rel != Relation::Lt && rel != Relation::Leq &&
+        rel != Relation::Gt && rel != Relation::Geq) return std::nullopt;
+    const auto found = linearBoundFamilies_.find(lhs);
+    if (found == linearBoundFamilies_.end()) return std::nullopt;
+    const bool lower = rel == Relation::Gt || rel == Relation::Geq;
+    const bool strict = rel == Relation::Gt || rel == Relation::Lt;
+    const auto& family = found->second;
+    auto endpoint = [&](size_t index) -> const mpq_class& {
+        return std::get<LinearAtomPayload>(records_[index].payload).rhs.asRational();
+    };
+    auto select = [&](auto begin, auto end, const mpq_class& value) -> std::optional<SatLit> {
+        // Prefer interval predicates to the weaker disequality consequence.
+        for (int rank : {0, 1, 2}) {
+            const bool targetStrict = rank != 1;
+            if (targetStrict && value == rhs && !strict) continue;
+            for (auto it = begin; it != end; ++it) {
+                const auto& record = records_[*it];
+                const auto relation = std::get<LinearAtomPayload>(record.payload).rel;
+                const bool point = relation == Relation::Eq || relation == Relation::Neq;
+                if (point != (rank == 2)) continue;
+                if (point) {
+                    const SatLit literal{record.satVar, relation == Relation::Neq};
+                    if (!accept || accept(literal)) return literal;
+                    continue;
+                }
+                const bool positive = lower
+                    ? relation == Relation::Gt || relation == Relation::Geq
+                    : relation == Relation::Lt || relation == Relation::Leq;
+                const auto effective = positive ? relation : negateRelation(relation);
+                if ((effective == Relation::Gt || effective == Relation::Lt) != targetStrict) continue;
+                const SatLit literal{record.satVar, positive};
+                if (!accept || accept(literal)) return literal;
+            }
+        }
+        return std::nullopt;
+    };
+    if (lower) {
+        auto it = std::upper_bound(family.begin(), family.end(), rhs,
+            [&](const mpq_class& value, size_t index) { return value < endpoint(index); });
+        while (it != family.begin()) {
+            const auto end = it;
+            const auto& value = endpoint(*--it);
+            while (it != family.begin() && endpoint(*(it - 1)) == value) --it;
+            if (auto literal = select(it, end, value)) return literal;
+        }
+    } else {
+        auto it = std::lower_bound(family.begin(), family.end(), rhs,
+            [&](size_t index, const mpq_class& value) { return endpoint(index) < value; });
+        while (it != family.end()) {
+            const auto begin = it;
+            const auto& value = endpoint(*it++);
+            while (it != family.end() && endpoint(*it) == value) ++it;
+            if (auto literal = select(begin, it, value)) return literal;
+        }
+    }
+    return std::nullopt;
+}
+
 SatLit TheoryAtomRegistry::getOrCreateLinearBoundAtom(
     const LinearFormKey& lhs,
     Relation rel,
@@ -133,6 +207,7 @@ SatLit TheoryAtomRegistry::getOrCreateLinearBoundAtom(
     satVarToIdx_[lit.var] = idx;
     if (expr != NullExpr) exprIdToIdxs_[expr].push_back(idx);  // iter-101 perf
     linearLookup_[key] = idx;
+    indexLinearBound(idx);
     observeIfNeeded(lit.var);
 
     return lit;

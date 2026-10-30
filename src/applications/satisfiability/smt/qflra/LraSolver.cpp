@@ -98,7 +98,7 @@ void LraSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
     // LRA bounds are rational; an algebraic RHS never arises from inputs.
     const mpq_class& rhs = payload.rhs.asRational();
     int auxVar = manager_.getOrCreateAuxVar(gs_, payload.lhs, rhs);
-    auxFormInfo_[auxVar] = {payload.lhs, rhs};
+    columnForms_[auxVar] = {payload.lhs, rhs};
     Relation effectiveRel = value ? payload.rel : negateRelation(payload.rel);
     bool isDiseq = (effectiveRel == Relation::Neq);
 
@@ -321,11 +321,17 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
 
     // Lift explained row bounds to SAT as entailment clauses.
     auto derived = propagationEngine_.propagateAll(gs_);
-    const int kMaxProps = 64;
-    for (const auto& eb : derived) {
-        if (static_cast<int>(entailmentProps_.size()) >= kMaxProps) break;
-        if (auto lem = buildEntailmentLemma(eb)) {
-            entailmentProps_.push_back(std::move(*lem));
+    if (!derived.empty()) {
+        SatVar maximumVariable = 0;
+        for (const auto& entry : theoryTrail_) maximumVariable = std::max(maximumVariable, entry.lit.var);
+        std::vector<int8_t> activeValues(static_cast<size_t>(maximumVariable) + 1, 0);
+        for (const auto& entry : theoryTrail_) activeValues[entry.lit.var] = entry.lit.sign ? 1 : -1;
+        const int kMaxProps = 64;
+        for (const auto& eb : derived) {
+            if (static_cast<int>(entailmentProps_.size()) >= kMaxProps) break;
+            if (auto lem = buildEntailmentLemma(eb, activeValues)) {
+                entailmentProps_.push_back(std::move(*lem));
+            }
         }
     }
     // Interface disequality vs. an entailed equality: if an asserted 2-var
@@ -748,12 +754,20 @@ std::vector<SatLit> LraSolver::allActiveReasons() const {
 }
 
 std::optional<TheoryLemma> LraSolver::buildEntailmentLemma(
-    const LraPropagationEngine::ExplainedBound& eb) const {
+    const LraPropagationEngine::ExplainedBound& eb,
+    const std::vector<int8_t>& activeValues) {
     if (!registry_ || eb.reasons.empty()) return std::nullopt;
-    auto it = auxFormInfo_.find(eb.var);
-    if (it == auxFormInfo_.end()) return std::nullopt;
+    auto it = columnForms_.find(eb.var);
+    if (it == columnForms_.end()) {
+        // Original columns have a single-variable form even when no active
+        // predicate has introduced an auxiliary row for that variable. Intern
+        // this immutable view once for the lifetime of the simplex column.
+        const auto name = manager_.getVarName(eb.var);
+        if (name.empty()) return std::nullopt;
+        it = columnForms_.emplace(eb.var, ColumnForm{LinearFormKey{{{name, 1}}}, 0}).first;
+    }
     const auto& info = it->second;
-    mpq_class boundRhs = info.rhs + eb.value.a;
+    const mpq_class boundRhs = info.rhs + eb.value.a;
 
     // Sound rational reconstruction of a delta-rational bound s ~ a + bδ
     // (δ a positive infinitesimal), translated to formValue = s + rhs:
@@ -778,9 +792,13 @@ std::optional<TheoryLemma> LraSolver::buildEntailmentLemma(
     // registered SAT vocabulary. Creating an atom for every intermediate
     // rational endpoint feeds fresh atoms back into propagation indefinitely.
     // Cut/split algorithms use the explicit registration interface separately.
-    const auto implied = registry_->findLinearLiteral(info.lhs, rel, boundRhs);
-    if (!implied || std::find(eb.reasons.begin(), eb.reasons.end(), *implied) != eb.reasons.end())
-        return std::nullopt;
+    const auto implied = registry_->findImpliedLinearLiteral(info.lhs, rel, boundRhs,
+        [&](SatLit literal) {
+            if (literal.var < activeValues.size() &&
+                activeValues[literal.var] == (literal.sign ? 1 : -1)) return false;
+            return std::find(eb.reasons.begin(), eb.reasons.end(), literal) == eb.reasons.end();
+        });
+    if (!implied) return std::nullopt;
 
     // Clause (¬reason₁ ∨ ... ∨ ¬reasonₖ ∨ implied): a theory tautology, since
     // the reasons Farkas-entail `implied`. Reasons are asserted-true literals,

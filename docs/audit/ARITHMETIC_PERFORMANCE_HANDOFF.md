@@ -40,15 +40,15 @@ Older tables describe their own frozen versions and evidence boundaries.
 
 ## Current arithmetic and ASP continuation
 
-The latest arithmetic candidate is
+The latest delivered arithmetic stage is
 [shared polynomial linear relaxation](#shared-polynomial-linear-relaxation-r857r865):
 **100/160**, versus **118 verified /125 raw** same-round Z3 decisions.
-[PR78](https://github.com/fuqi-jia/Xolver/pull/78) has passed full Panda1 acceptance
-and the frozen comparison; final exact-head PR CI remains required before merging.
-Delivered main is PR77`0f4acd1c`, qualified at99 in its own fresh round; both
-[PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/41043796717) and fresh
-[main CI](https://github.com/fuqi-jia/Xolver/actions/runs/41047671267) are fully green.
-Earlier rounds retain their own frozen versions and evidence boundaries.
+[PR78](https://github.com/fuqi-jia/Xolver/pull/78) is merged as main
+`ecf1e7c6fa8e074158a38d22e4eb255aeafc4007`. Both exact-head
+[PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/41050990683) and fresh
+[main CI](https://github.com/fuqi-jia/Xolver/actions/runs/41055517535) are fully green.
+The preceding delivered main verifies99 in this fresh round. Earlier rounds
+retain their own frozen versions and evidence boundaries.
 
 The retained branches are `main`, `feat/qcp-foundations` (QCP and solver
 foundations), and `feat/draco-asp`. Historical branch tips are archived in
@@ -2589,8 +2589,42 @@ Audit EOS`75b6e7ad28a3` binds sources, native targets, original failures, all
 160 timed triads, physical leases and unchanged-input supplementary truth.
 The [stage receipt](POLYNOMIAL_LINEAR_REFUTATION_STAGE_20261030.json) records
 full results. Receipt-only changes after the qualified core do not create a
-new native solver version. PR78 remains unmerged until final-head PR CI passes;
-its resulting main CI must then be checked. Both protected sets remain unused.
+new native solver version. PR78 is merged as`ecf1e7c6`; both final-head PR CI`41050990683`
+and fresh main CI`41055517535` are fully green. Both protected sets remain unused.
 The complete new-core original GCD workflow is starting separately; no new
 whole-program QCP result or overall superiority is claimed here. No additional
 current-main server archive is required.
+
+
+## Existing numeric predicate projection (R868–R873, candidate)
+
+R870 diagnostic counters reject an unchanged-state propagation cache: original
+48/51/131 complete4,344/1,479/2,505 propagation calls with0/0/1 repeated analysis
+states. Propagation consumes about32.4/12.6/41.3s in these instrumented60s runs.
+The first R869 observation omitted verbose output and collected no counters; it
+is inconclusive and is not a benchmark result. No propagation result cache is introduced.
+
+R872 identifies a different loss of information. Of1,877,665/233,327/427,474
+attempted bound projections, only186,932/12,714/50,231 find an existing literal.
+Original columns lack auxiliary-form metadata, and exact endpoint lookup drops
+stronger facts such as`x<=2` when only`x<=3` is registered. These diagnostic
+timings and counts are excluded from formal scores.
+
+The candidate adds shared ordered projection onto existing linear predicates,
+including both inequality polarities and equality points excluded by a proved
+interval. LRA also maps original columns to single-variable forms and skips
+already asserted conclusions. Queries never create atoms. Exact identity lookup
+retains its distinct registration/introspection contract. New checks compare
+rational half-line implication against all truth regions, including130-bit
+endpoints, and exercise original-column propagation and backtracking. Exact
+infinitesimal reconstruction and the existing LIA/LRA policies are unchanged.
+This candidate has no qualified binary or new score until its own build,
+independent checks and full frozen comparison finish.
+
+The new-core original GCD workflow`native_gcd_xolver_r864-20261030194758` uses
+frozen791960... throughout actual native calls. Annotation and independent VC
+checking are accepted; three owners have completed9 top-level VC proofs and
+assigned splits, with group acceptance/parent/final-check still pending.
+The70 distinct native inputs match prior independently checked truth. GCD return
+identities use checked Rocq mathematics and are not counted as direct Xolver SMT
+proofs. There is no new matched whole-program timing or coverage claim yet.

@@ -69,6 +69,129 @@ struct Fixture {
 };
 }
 
+TEST_CASE("Linear predicate projection: weaker signed endpoints reuse existing atoms") {
+    Fixture f;
+    const LinearFormKey x{{{"x", 1}}};
+    const auto strict = f.atom(x, Relation::Gt, 2).lit;
+    const auto weak = f.atom(x, Relation::Geq, 1).lit;
+    const auto upperComplement = f.atom(x, Relation::Geq, 4).lit.negated();
+    const auto count = f.registry.numAtomVars();
+    CHECK_FALSE(f.registry.findLinearLiteral(x, Relation::Leq, 3));
+    CHECK(f.registry.findImpliedLinearLiteral(x, Relation::Leq, 3) == upperComplement);
+    CHECK(f.registry.findImpliedLinearLiteral(x, Relation::Geq, 2) == weak);
+    CHECK(f.registry.findImpliedLinearLiteral(x, Relation::Gt, 2,
+        [&](SatLit literal) { return literal != strict; }) == weak);
+    CHECK(f.registry.numAtomVars() == count);
+
+    const auto openUpper = f.atom(x, Relation::Lt, 2).lit;
+    auto onlyOpenUpper = [&](SatLit literal) { return literal == openUpper; };
+    CHECK_FALSE(f.registry.findImpliedLinearLiteral(x, Relation::Leq, 2, onlyOpenUpper));
+    CHECK(f.registry.findImpliedLinearLiteral(x, Relation::Lt, 2, onlyOpenUpper) == openUpper);
+    const auto dynamic = f.registry.getOrCreateLinearBoundAtom(x, Relation::Geq, mpq_class(3, 2), TheoryId::LRA);
+    CHECK(f.registry.findImpliedLinearLiteral(x, Relation::Geq, 2,
+        [&](SatLit literal) { return literal == dynamic; }) == dynamic);
+    const auto point = f.atom(x, Relation::Eq, 3).lit;
+    CHECK(f.registry.findImpliedLinearLiteral(x, Relation::Leq, 2,
+        [&](SatLit literal) { return literal.var == point.var; }) == point.negated());
+    CHECK_FALSE(f.registry.findImpliedLinearLiteral(x, Relation::Geq, 3,
+        [&](SatLit literal) { return literal.var == point.var; }));
+    CHECK_FALSE(f.registry.findImpliedLinearLiteral(x, Relation::Eq, 2));
+    CHECK_FALSE(f.registry.findImpliedLinearLiteral({{{"other", 1}}}, Relation::Leq, 3));
+    const auto after = f.registry.numAtomVars();
+    CHECK_FALSE(f.registry.findImpliedLinearLiteral(x, Relation::Geq, 2, [](SatLit) { return false; }));
+    CHECK(f.registry.numAtomVars() == after);
+}
+
+TEST_CASE("Linear predicate projection: exact rational half-lines match semantic counterexamples") {
+    Fixture f;
+    const LinearFormKey form{{{"x", 1}, {"y", -1}}};
+    const mpz_class numerator = (mpz_class(1) << 130) + 7;
+    const mpq_class large(numerator, mpz_class(3));
+    const std::vector<Relation> bounds{Relation::Lt, Relation::Leq, Relation::Gt, Relation::Geq};
+    const std::vector<Relation> predicates{Relation::Eq, Relation::Neq,
+        Relation::Lt, Relation::Leq, Relation::Gt, Relation::Geq};
+    const std::vector<mpq_class> sources{-2, 0, mpq_class(1, 2), 2, large};
+    const std::vector<mpq_class> endpoints{mpq_class(-3, 2), 0, mpq_class(5, 3), large};
+    std::vector<ActiveLinearAtom> targets;
+    for (auto relation : predicates) for (const auto& endpoint : endpoints)
+        targets.push_back(f.atom(form, relation, endpoint));
+    const auto count = f.registry.numAtomVars();
+    for (auto source : bounds) for (const auto& boundary : sources)
+        for (const auto& target : targets) for (bool positive : {false, true}) {
+            const SatLit wanted{target.lit.var, positive};
+            // All truth regions are separated by these two endpoints. Test
+            // their boundaries, interiors and exterior rays independently.
+            const std::vector<mpq_class> points{boundary - 1, boundary, boundary + 1,
+                target.rhs - 1, target.rhs, target.rhs + 1, (boundary + target.rhs) / 2};
+            bool entailed = true;
+            for (const auto& point : points)
+                if (compare(source, point, boundary) &&
+                    !f.holds(wanted, Values{{"x", point}, {"y", 0}})) entailed = false;
+            const auto projected = f.registry.findImpliedLinearLiteral(form, source, boundary,
+                [&](SatLit literal) { return literal == wanted; });
+            CHECK(projected.has_value() == entailed);
+            if (projected) CHECK(*projected == wanted);
+        }
+    CHECK(f.registry.numAtomVars() == count);
+}
+
+TEST_CASE("LraSolver: original columns project weaker predicates across backtracking") {
+    for (bool lower : {false, true}) for (bool strict : {false, true})
+        for (bool positive : {false, true}) {
+            Allocator allocator;
+            TheoryAtomRegistry registry;
+            registry.setContext(&allocator, &allocator);
+            LraSolver solver;
+            solver.setRegistry(&registry);
+            auto atom = [&](LinearFormKey form, Relation relation, const mpq_class& rhs) {
+                const auto variable = allocator.newVar();
+                registry.registerParsedTheoryAtom(variable, NullExpr, TheoryId::LRA,
+                    LinearAtomPayload{form, relation, RealValue::fromMpq(rhs)});
+                return SatLit::positive(variable);
+            };
+            const LinearFormKey x{{{"x", 1}}}, y{{{"y", 1}}}, difference{{{"x", 1}, {"y", -1}}};
+            const auto relation = lower ? (strict ? Relation::Gt : Relation::Geq)
+                                        : (strict ? Relation::Lt : Relation::Leq);
+            const auto first = atom(y, relation, 1), second = atom(difference, relation, 1);
+            const auto targetRelation = lower ? Relation::Geq : Relation::Leq;
+            const auto registered = atom(x, positive ? targetRelation : negateRelation(targetRelation), lower ? 1 : 3);
+            const auto target = positive ? registered : registered.negated();
+            const auto count = registry.numAtomVars();
+            for (auto literal : {first, second})
+                solver.assertLit(*registry.findBySatVar(literal.var), true, 1, literal);
+            TheoryLemmaDatabase database;
+            REQUIRE(solver.check(database, TheoryEffort::Standard).kind == TheoryCheckResult::Kind::Consistent);
+            const auto lemmas = solver.takeEntailmentPropagations();
+            CHECK(std::any_of(lemmas.begin(), lemmas.end(), [&](const auto& lemma) {
+                return std::find(lemma.lits.begin(), lemma.lits.end(), target) != lemma.lits.end();
+            }));
+            for (const auto& lemma : lemmas)
+                for (int xn = -8; xn <= 8; ++xn) for (int yn = -8; yn <= 8; ++yn) {
+                    const Values values{{"x", mpq_class(xn, 2)}, {"y", mpq_class(yn, 2)}};
+                    bool holds = false;
+                    for (auto literal : lemma.lits) {
+                        const auto& payload = std::get<LinearAtomPayload>(registry.findBySatVar(literal.var)->payload);
+                        holds |= compare(payload.rel, eval(payload.lhs, values), payload.rhs.asRational()) == literal.sign;
+                    }
+                    CHECK(holds);
+                }
+            solver.backtrackToLevel(0);
+            REQUIRE(solver.check(database, TheoryEffort::Standard).kind == TheoryCheckResult::Kind::Consistent);
+            CHECK(solver.takeEntailmentPropagations().empty());
+            CHECK(registry.numAtomVars() == count);
+            const auto opposite = lower ? Relation::Leq : Relation::Geq;
+            const auto newFirst = atom(y, opposite, lower ? -10 : 10);
+            const auto newSecond = atom(difference, opposite, lower ? -10 : 10);
+            for (auto literal : {newFirst, newSecond})
+                solver.assertLit(*registry.findBySatVar(literal.var), true, 1, literal);
+            REQUIRE(solver.check(database, TheoryEffort::Standard).kind == TheoryCheckResult::Kind::Consistent);
+            const auto later = solver.takeEntailmentPropagations();
+            CHECK(std::any_of(later.begin(), later.end(), [&](const auto& lemma) {
+                return std::find(lemma.lits.begin(), lemma.lits.end(), target.negated()) != lemma.lits.end();
+            }));
+        }
+}
+
 TEST_CASE("Linear model phase hints: strict endpoints respect infinitesimals") {
     const std::vector<Relation> relations{Relation::Eq,Relation::Neq,Relation::Lt,
         Relation::Leq,Relation::Gt,Relation::Geq};

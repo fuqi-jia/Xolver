@@ -280,10 +280,11 @@
   "delivery": {
     "pr": "https://github.com/fuqi-jia/Xolver/pull/78",
     "server_acceptance": "success",
-    "pr_ci": "https://github.com/fuqi-jia/Xolver/pull/78/checks",
-    "pr_ci_conclusion": "pending-final-head",
-    "merge_commit": null,
-    "main_ci_conclusion": "not-merged"
+    "pr_ci": "https://github.com/fuqi-jia/Xolver/actions/runs/41050990683",
+    "pr_ci_conclusion": "success",
+    "merge_commit": "ecf1e7c6fa8e074158a38d22e4eb255aeafc4007",
+    "main_ci_conclusion": "success",
+    "main_ci": "https://github.com/fuqi-jia/Xolver/actions/runs/41055517535"
   },
   "boundaries": [
     "100 verified versus118 verified/125 raw same-round Z3; overall superiority not achieved.",
