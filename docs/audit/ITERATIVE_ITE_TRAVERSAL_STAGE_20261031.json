@@ -1,0 +1,221 @@
+{
+  "schema": 1,
+  "status": "server_qualified_pr_ci_pending",
+  "implementation_commit": "d85eac566e29329e0f25e18a7e364429544305b7",
+  "problem": "Iterative ITE postorder traversal rescans completed siblings and rematerializes the same wide parent after each child. NativeTerms.get returns a value containing the child list.",
+  "implementation": "Keep the child list and next-child cursor in each active DFS frame. Preserve root iteration, visitation, postorder, generated assertions and incremental ITE definitions across roots.",
+  "shared_scope": "Common Boolean and typed-term frontend used by applicable SMT theories and applications; no solver gate, answer-specific behavior or arithmetic/model semantic change.",
+  "source_manifest_sha256": "98d56c690144059be39ce9726797bd2bb4872267c66b10d271e2ea14214ebe6f",
+  "binaries": {
+    "xolver": "1906c863afad990600d3a6c017bc07396bc8fbe5ea1d62a589e0f1721267bd4b",
+    "xolver-sv": "3748c3de132a04b77be700bc235867d6783004ed91fd3ba6bb718fff656c1fb9",
+    "xolver-parallel-worker": "67bfabc32e482637381e5e1cbbe4f272021695b8ead5363839de7588c1c3043a"
+  },
+  "build": {
+    "experiment": "20f7b1ab81d4",
+    "run": "e2d588bcf4e4",
+    "targeted_ite_cases": 20,
+    "targeted_ite_assertions": 27212
+  },
+  "acceptance": {
+    "experiments": [
+      "b938281166b3",
+      "bacbf87a1b9b"
+    ],
+    "groups": 39,
+    "unit_cases": 1832,
+    "unit_assertions": 922470,
+    "failures": 0
+  },
+  "root_cause_diagnostic": {
+    "input_index": 13,
+    "input_sha256": "d9c546291b74c1b0021e19bff6aa4e9fbbb220fdcd253de67479375572f913f6",
+    "original": {
+      "child_scans": 18400451,
+      "graph_edges": 47326,
+      "prefix_us": 4302558
+    },
+    "cursor_only_negative": {
+      "child_scans": 47326,
+      "graph_edges": 47326,
+      "prefix_us": 4527819
+    },
+    "owned_children_and_cursor": {
+      "child_scans": 47326,
+      "graph_edges": 47326,
+      "prefix_us": 69671
+    },
+    "boundary": "Private instrumented diagnostics on public inputs 1, 13 and 89, excluded from formal 60-second timings. Cursor-only did not speed up materialization. R942 had no visible counters and is retained but excluded. Case 13 remains a formal timeout; prefix speed is not a new solved result."
+  },
+  "formal": {
+    "cases": 160,
+    "wall_seconds": 60,
+    "physical_cpus_per_case": 1,
+    "memory_gib": 16,
+    "model_capture": "initial-solve",
+    "counts": {
+      "baseline": {
+        "unsat": 46,
+        "decided": 99,
+        "verified_decided": 99,
+        "verified_par2": 7588.984282180667,
+        "raw_par2": 7588.984282180667,
+        "timeout": 60,
+        "sat": 53,
+        "unknown": 1
+      },
+      "candidate": {
+        "unsat": 46,
+        "decided": 100,
+        "verified_decided": 100,
+        "verified_par2": 7504.372762920335,
+        "raw_par2": 7504.372762920335,
+        "timeout": 59,
+        "sat": 54,
+        "unknown": 1
+      },
+      "z3": {
+        "unsat": 58,
+        "decided": 125,
+        "verified_decided": 118,
+        "verified_par2": 5376.06690437533,
+        "raw_par2": 4577.476526195183,
+        "sat": 67,
+        "timeout": 35
+      }
+    },
+    "gained": [
+      4
+    ],
+    "lost": [],
+    "case4": {
+      "index": 4,
+      "case": "QF_LIA/bofill-scheduling/SMT_real_LIA/ex8600_2400_100.smt2",
+      "kind": "gained",
+      "truth": "sat",
+      "evidence": [
+        "candidate-exported-model-replay",
+        "z3-exported-model-replay"
+      ],
+      "observations": {
+        "candidate": {
+          "result": "sat",
+          "seconds": 30.93503879196942
+        },
+        "z3": {
+          "result": "sat",
+          "seconds": 0.2673123683780432
+        },
+        "baseline": {
+          "result": "timeout",
+          "seconds": 60.0384353492409
+        }
+      }
+    },
+    "unconfirmed_z3_unsat": [
+      12,
+      24,
+      27,
+      42,
+      80,
+      114,
+      159
+    ],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "invalid_original_triads": [
+      {
+        "index": 4,
+        "run": "e9d349790d1a",
+        "report_sha256": "bc175b40a2c225a4fdcfa156334b404e13e633e4c529a1ba6ce592872856bb57"
+      },
+      {
+        "index": 29,
+        "run": "067f7da1de8b",
+        "report_sha256": "006f5bc2d45439e7782a85311a8faacdc4d85b516a0367eafa73fd607b343c54"
+      },
+      {
+        "index": 47,
+        "run": "ac01a9775bfb",
+        "report_sha256": "d9e0b5e14a9cd2a30ec6d5e6aa95fc9581aba98ed9a0027e8f3b7ac2dc3cd441"
+      }
+    ],
+    "invalid_trial_policy": "Three original baseline watchdog invocations exceeded their wall budgets while externally pinned workloads appeared on those CPUs. Preserve the failed original records. After each original became terminal, rerun the complete baseline/candidate/Z3 triad once with the same frozen versions and budgets. Only the three valid R954 replacements enter the score.",
+    "supplementary_truth": [
+      {
+        "index": 115,
+        "truth": "unsat",
+        "input_sha256": "02a58b11df8951543940a1090a140592e24de41dcaeb6470e7a50d42e804be64",
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r950/certificate-115/0.log",
+        "sha256": "823672e87696cac914fac33d8d0027db15a21b566e700a65300cdca704cf910e",
+        "boundary": "Fresh original-input checked modular certificate."
+      },
+      {
+        "index": 47,
+        "truth": "sat",
+        "input_sha256": "2c37069c8324458e8f3ad46cc6dbe0cc3a6c2f31012ed504123e660bfdf7aba4",
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/current-model-replay-r955/47/record.json",
+        "sha256": "71f0d6366c7d87108591bf04d59bc78e91408849dd366318c93345a5c68760fc",
+        "boundary": "Two identical models from original timed R951/R954 output, positively replayed by both checkers; eligibility only, no timing replacement."
+      },
+      {
+        "index": 108,
+        "truth": "sat",
+        "input_sha256": "26d6012f717dec2f43e57be63e8638d1a13b6bc9cb5fcc963c08476793385786",
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/current-model-replay-r955/108/record.json",
+        "sha256": "24962db5ff4703fa5033e3579c3694de750d1ca76d2a5c18e2fb39940103a41f",
+        "boundary": "Two identical models from original timed R951/R954 output, positively replayed by both checkers; eligibility only, no timing replacement."
+      },
+      {
+        "index": 122,
+        "truth": "sat",
+        "input_sha256": "c88289f0453a6bbe098b4c5f092dfc50cd9e0ac21d799c6ccfc0a61b5a974389",
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/current-model-replay-r955/122/record.json",
+        "sha256": "2924bd75d2dd7ec56edb8d9c6176bfd47736a90ad759fc42a039708ae8141c56",
+        "boundary": "Two identical models from original timed R951/R954 output, positively replayed by both checkers; eligibility only, no timing replacement."
+      },
+      {
+        "index": 50,
+        "truth": "unsat",
+        "input_sha256": "7e71a151d917978f1b5afc2791abf589e30c8ff97e930979df6ef82ad72dcdc0",
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/independent-truth-r761/case-050/record.json",
+        "sha256": "13a20b8e90bb8a8fff028fd665ee4ef661ae88e851766af64ed9b83ee255175c",
+        "boundary": "Existing independently checked 300s offline UNSAT; eligibility only, all original timed budgets stay 60s."
+      },
+      {
+        "index": 94,
+        "truth": "sat",
+        "input_sha256": "a6b68604187a341c570d8bd76135552ece1bbf958a1d7e9d4ff7f3eae998fd8f",
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/model-replay-r732/case-094/record.json",
+        "sha256": "251f695441367d616c3ee7b69b8f5bccce1df0b9322a47138f2804e032301a0a",
+        "boundary": "Existing independently checked ground witness; eligibility only, no old timing substitution."
+      }
+    ],
+    "model_evidence_boundary": "Every original timed Xolver SAT model replays positively. Z3 47/108/122 emitted two identical models; both independent checkers replay their original assignments positively in R955, without re-solving the original timed comparison. Z3 75/148 model-parser errors and 94 unsupported binding remain documented; independent witnesses establish the input truth, without claiming all Z3 models validated.",
+    "timing_regressions_over_one_second": [
+      {
+        "index": 18,
+        "result": "unsat",
+        "baseline_seconds": 51.60205824114382,
+        "candidate_seconds": 54.25247170776129
+      },
+      {
+        "index": 97,
+        "result": "sat",
+        "baseline_seconds": 33.09433839097619,
+        "candidate_seconds": 35.20562224648893
+      }
+    ],
+    "historical_boundary": "This round verifies baseline 99 versus candidate 100, with case 4 gained and no losses. The preceding delivered round had already verified 100 on its own frozen observations. This does not increase that historical best or establish superiority over same-round Z3 (118 verified, 125 raw)."
+  },
+  "audit": {
+    "experiment": "b19cfa336318",
+    "run": "1724a37009db",
+    "sha256": "de78d8330fc7ed68f6882e215b6d89df8c0671fe62d043fd5f026975f8c9027b",
+    "independent_models_experiment": "1c3406449282",
+    "invalid_trial_retry_experiment": "09858b69199a"
+  },
+  "protected_sets_used": false,
+  "qcp_boundary": "The candidate passes QCP arithmetic, fixture and generated-condition regressions. Original max3 whole-program qualification belongs to earlier frozen transport worker 578144c1; this arithmetic worker has no new whole-program performance claim.",
+  "delivery_boundary": "Server acceptance and the full fair round are sealed. Merge requires this stage PR CI and fresh main CI. No additional current-main server archive is required."
+}

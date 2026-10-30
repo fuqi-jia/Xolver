@@ -54,6 +54,16 @@ overall solver-superiority result. Earlier rounds retain their own frozen
 versions, timings and evidence boundaries. No extra current-main archive is
 required after green CI.
 
+The next server-qualified candidate retains active ITE child lists and cursors
+(commit `d85eac566e29329e0f25e18a7e364429544305b7`). Its fresh R951/R953/R954
+round verifies **99 baseline → 100 candidate**, versus **118 verified /125 raw**
+same-round Z3, with one gain and no losses. The delivered stage above already
+reached100 in its earlier round; this is not a new historical coverage record.
+The [ITE receipt](ITERATIVE_ITE_TRAVERSAL_STAGE_20261031.json) binds the full
+1832-case server acceptance, three rejected budget-overrun triads and their
+valid replacements, independently checked models and remaining seven
+unconfirmed UNSATs. This candidate has not yet passed its own PR/main CI.
+
 The retained branches are `main`, `feat/qcp-foundations` (QCP and solver
 foundations), and `feat/draco-asp`. Historical branch tips are archived in
 `validation/arithmetic-r103/branch-archive-20261030/history.bundle`, SHA-256
@@ -2911,3 +2921,49 @@ protected set was used. This qualification binds frozen worker`578144c1` and
 the delivered arithmetic core; a later core candidate needs its own evidence.
 See the updated transport receipt. The broader multi-program comparison and the
 fixed160 target of at least126 verified solves remain outstanding.
+
+
+### Retain active children in iterative ITE traversal (R940–R956)
+
+`NativeTerms::get` materializes a node by value. Phase two of
+`IteLowerer::lowerAssertion` repeatedly decoded each wide parent and scanned its
+completed children after returning from a descendant. On public fixed-suite
+input13, R943 counted18,400,451 child scans for47,326 graph edges. A cursor-only
+experiment reduced scans but still rebuilt the parent:4.303s→4.528s, so that
+attempt was rejected. Owning the active child list as well as its cursor reduces
+the same measured prefix to0.070s and scans each edge once. Root order,
+postorder, generated constraints and incremental definitions are preserved.
+The common frontend change applies across its supported theories.
+
+R948 freezes source `d85eac56`, manifest SHA-256
+`98d56c690144059be39ce9726797bd2bb4872267c66b10d271e2ea14214ebe6f`,
+CLI `1906c863afad990600d3a6c017bc07396bc8fbe5ea1d62a589e0f1721267bd4b`,
+SV `3748c3de132a04b77be700bc235867d6783004ed91fd3ba6bb718fff656c1fb9`,
+and worker `67bfabc32e482637381e5e1cbbe4f272021695b8ead5363839de7588c1c3043a`.
+R950 passes1832 unit cases/922470 assertions and38 other acceptance groups,
+including the new4096-wide shared Boolean/Int/Real ITE regression and independent
+model/arithmetic/QCP checks.
+
+The full fresh160 comparison keeps60s/one leased physical CPU/16GiB and captures
+models during the actual timed solve for all versions. R953 originals4/29/47
+exceeded wall budgets under new external CPU contention; their failed records
+are retained and excluded. All three became terminal before R954 reran each
+complete triad once. The final valid selection has no protocol error, opposite
+verdict or invalid exported model. Baseline verifies99 versus candidate100,
+PAR-2 7588.984→7504.373; case4 changes timeout→30.935s SAT with its actual model
+checked. No result is lost; matched cases18 and97 are slower by2.650s and2.111s.
+Case13 remains a timeout: the diagnostic prefix speed is not a new solve.
+
+Same-round Z3 has118 verified/125 raw decisions; unconfirmed UNSAT inputs
+12/24/27/42/80/114/159 remain excluded. R955 independently replays the identical
+duplicate original models for47/108/122 through both checkers; fresh certificate
+115, existing input-hash-bound UNSAT50 and ground witness94 establish eligibility
+only, with all measured budgets unchanged. Z3 model-format limitations75/148/94
+remain explicit. R956 authenticates source, binaries, all39 acceptance groups,
+all selected timing/lease/model records and the negative/positive traversal
+diagnostics; receipt SHA-256
+`de78d8330fc7ed68f6882e215b6d89df8c0671fe62d043fd5f026975f8c9027b`.
+The earlier delivered round already reached100; no historical coverage increase
+or superiority over Z3 is claimed. Neither protected set was used. The original
+max3 qualification above belongs to the preceding frozen worker, not this
+candidate's full-program performance. See the ITE receipt for delivery status.
