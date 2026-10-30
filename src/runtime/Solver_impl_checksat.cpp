@@ -6,6 +6,7 @@
 #include "applications/verification/sl/Solver.h"
 #include "search/array/ArrayModelCompletion.h"
 #include "search/linear/BoundAxiomGenerator.h"
+#include "search/refute/PolynomialBooleanRefutation.h"
 
 namespace xolver {
 // Relocated Solver::Impl method definitions (declared in SolverImpl.h).
@@ -826,6 +827,38 @@ Result Solver::Impl::checkSatGround() {
             finalizeCaseStats(Result::Unknown, 0.0, nullptr, nullptr, cadicalBackend);
 #endif
             return Result::Unknown;
+        }
+
+        // Give exact, explained Boolean/theory refutation a bounded attempt
+        // before a SAT-only portfolio arm. The polynomial rules are shared by
+        // integer and real arithmetic; an open relaxation changes no verdict.
+        if (features.hasNonlinear && !features.hasUF && !features.hasArray &&
+            !features.hasDatatype && !features.hasUnsupported) {
+            auto roots = ir->assertions();
+            roots.insert(roots.end(), assumptionIndicators.begin(), assumptionIndicators.end());
+            roots.insert(roots.end(), indicatorRoots_.begin(), indicatorRoots_.end());
+            const auto started = std::chrono::steady_clock::now();
+            BooleanRefutationLimits limits;
+            limits.deadline = started + std::chrono::milliseconds(50);
+            PolynomialBooleanStatistics stats;
+            const bool refuted = refutePolynomialBoolean(*ir, roots, limits, &stats);
+            const auto profile = config::read<config::ReadKind::ProfilePath>("ARITH_STAGE_PROF", "/tmp/xolver_stageprof.txt");
+            if (!profile.empty()) {
+                std::ofstream out(profile.string() + ".boolean-refutation.log", std::ios::app);
+                out << "atoms=" << stats.convertedAtoms << " assignments=" << stats.boolean.assignments
+                    << " conflicts=" << stats.boolean.conflicts << " theory_calls=" << stats.theoryCalls
+                    << " largest_context=" << stats.largestContext << " theory_us=" << stats.theoryMicroseconds
+                    << " sign_exhaustions=" << stats.signExhaustions
+                    << " exhausted=" << stats.exhausted << " refuted=" << refuted << " us="
+                    << std::chrono::duration_cast<std::chrono::microseconds>(
+                        std::chrono::steady_clock::now() - started).count() << '\n';
+            }
+            if (refuted) {
+#ifdef XOLVER_ENABLE_CASESTATS
+                finalizeCaseStats(Result::Unsat, 0.0, nullptr, nullptr, cadicalBackend);
+#endif
+                return Result::Unsat;
+            }
         }
 
         // -------------------------------------------------------------------

@@ -20,7 +20,14 @@
     "nondefinite_result": "Record unknown/timeout/unsupported/error separately and stop the native invocation; no guessed SAT/UNSAT return.",
     "native_branch_classifier": "Preserved. It tests S AND P and NOT(S IMPLIES P); -1 does not universally mean source infeasibility."
   },
-  "resources": {"host": "Panda1", "scheduler": "ExperimentOS", "physical_cpus_per_task": 1, "wall_seconds_per_smt_call": 60, "memory_gib": 16, "maximum_independent_witness_tasks_in_a_batch": 64},
+  "resources": {
+    "host": "Panda1",
+    "scheduler": "ExperimentOS",
+    "physical_cpus_per_task": 1,
+    "wall_seconds_per_smt_call": 60,
+    "memory_gib": 16,
+    "maximum_independent_witness_tasks_in_a_batch": 64
+  },
   "qualification": {
     "compile_run": "ca52c467ac6f",
     "compile_record": "validation/arithmetic-r103/native-backend-r814/qualification.json",
@@ -29,7 +36,15 @@
     "final_source_bound_run": "1727e0789665",
     "final_source_bound_record": "validation/arithmetic-r103/native-edges-r818/report.json",
     "final_source_bound_record_sha256": "35e9a3a108156d98f98733f890a2ad97186134bf081b4da2f78ad46f80b1eb54",
-    "checks": ["architecture", "full regression-harness", "49 QCP Python tests", "mode 0/1 native TT/FF through both selected backends", "non-target executable unchanged", "unknown stops without native fallback", "detached selected solver terminates after cancellation"]
+    "checks": [
+      "architecture",
+      "full regression-harness",
+      "49 QCP Python tests",
+      "mode 0/1 native TT/FF through both selected backends",
+      "non-target executable unchanged",
+      "unknown stops without native fallback",
+      "detached selected solver terminates after cancellation"
+    ]
   },
   "actual_native_regression": {
     "experiment": "76c5a8da7ee6",
@@ -37,9 +52,24 @@
     "original_development_programs": 3,
     "frontend_runs": 6,
     "per_backend": {
-      "branch": {"calls": 188, "sat": 74, "unsat": 114, "branch_diagnostics": 106},
-      "gcd": {"calls": 296, "sat": 174, "unsat": 122, "branch_diagnostics": 148},
-      "max3": {"calls": 296, "sat": 148, "unsat": 148, "branch_diagnostics": 148}
+      "branch": {
+        "calls": 188,
+        "sat": 74,
+        "unsat": 114,
+        "branch_diagnostics": 106
+      },
+      "gcd": {
+        "calls": 296,
+        "sat": 174,
+        "unsat": 122,
+        "branch_diagnostics": 148
+      },
+      "max3": {
+        "calls": 296,
+        "sat": 148,
+        "unsat": 148,
+        "branch_diagnostics": 148
+      }
     },
     "total_actual_selected_calls": 1560,
     "unique_formulas": 174,
@@ -49,7 +79,11 @@
     "mode_0_boundary": "No mode0 calls occurred in these three frontend runs; mode0 is qualified on native TT/FF separately."
   },
   "independent_validation": {
-    "witness_experiments": ["16c55d9bb22e", "dacb283de377", "b9d9a512e6fb"],
+    "witness_experiments": [
+      "16c55d9bb22e",
+      "dacb283de377",
+      "b9d9a512e6fb"
+    ],
     "audit_run": "9f8370812cb1",
     "audit_record": "validation/arithmetic-r103/native-audit-r820/report.json",
     "audit_record_sha256": "f24f42a692c7b2c8ec98f7c1c7b7f1abce72ad622187444bea65b1e94983fbe9",
@@ -61,12 +95,54 @@
     "model_completions": 0,
     "all_unsat_independently_confirmed_by_cvc5": true
   },
-  "delivery": {"pr": "https://github.com/fuqi-jia/Xolver/pull/75", "server_acceptance": "success", "pr_ci_merge_and_main_ci": "pending"},
+  "delivery": {
+    "pr": "https://github.com/fuqi-jia/Xolver/pull/75",
+    "server_acceptance": "success",
+    "pr_ci": "https://github.com/fuqi-jia/Xolver/actions/runs/41026885983",
+    "pr_ci_conclusion": "success",
+    "merge_commit": "b5a2fe6bd8895bec68af362fdf525410c26a1ddb",
+    "main_ci": "https://github.com/fuqi-jia/Xolver/actions/runs/41030001591",
+    "main_ci_conclusion": "success"
+  },
   "boundaries": [
     "This replaces the native SAT entry, unlike standalone trace replay or post-generation proof-candidate discharge.",
-    "These are frontend/backend integration runs, not complete C proofs or a fair whole-program timing comparison.",
+    "R815 records frontend/backend integration. R819/R824 additionally qualifies the same complete original development C program through each selected native backend and Rocq final-check; this does not establish a fair whole-program timing advantage.",
     "Native and printed integer functions retain only their established uninterpreted signatures.",
     "The Xolver core executable is the unchanged R802 binary. There is no fresh fixed160 result or new arithmetic performance gain in this integration stage.",
     "Neither protected set has been inspected or run. No superiority over Z3 is claimed."
-  ]
+  ],
+  "complete_program_qualification": {
+    "program": "branch_destruct",
+    "source_sha256": "4d81aabd16ceb9d402fa0f1a3621dd8a6bf0ad28659bcb6cf60eedebec69e22d",
+    "backends": {
+      "xolver": {
+        "verified_programs": 1,
+        "verified_original_vcs": 10,
+        "external_queries": 14,
+        "external_unsat": 14,
+        "native_entry_calls_including_freshness_runs": 564,
+        "native_frontend_runs": 3,
+        "final_check_eos_run": "578afc065663",
+        "witness_audit_eos_run": "ae37dfde9890"
+      },
+      "z3": {
+        "verified_programs": 1,
+        "verified_original_vcs": 10,
+        "external_queries": 14,
+        "external_unsat": 14,
+        "native_entry_calls_including_freshness_runs": 564,
+        "native_frontend_runs": 3,
+        "final_check_eos_run": "5bf4a7937bb3"
+      }
+    },
+    "pair_audit_eos_run": "39db35282eaa",
+    "pair_audit_record": "validation/arithmetic-r103/qcp-native-pair-r824/report.json",
+    "pair_audit_record_sha256": "691b561a2ca19c138a272fa7912a7874af5735a2a21be4420b266bc7579b5d45",
+    "both_backends_qualified": true,
+    "proof_candidate_bodies_match_checked_original_vcs": true,
+    "all_native_formula_hashes_match_independently_checked_inventory": true,
+    "original_vc_tokens_match_after_formal_namespace_normalization": true,
+    "fair_z3_whole_program_timing_comparison_complete": false,
+    "boundary": "One unique original development program verified through each frozen backend. Repeated frontend calls do not increase program/VC coverage. Controller timings are diagnostic; no end-to-end timing advantage is claimed."
+  }
 }

@@ -6,9 +6,12 @@
 #include "algebra/poly/RationalPolynomial.h"
 #include <gmpxx.h>
 #include <optional>
+#include <chrono>
 #include <unordered_map>
 
 namespace xolver {
+
+class WorkBudget;
 
 enum class PolyConstraintStatus {
     Constraint,            // normal polynomial constraint
@@ -37,8 +40,9 @@ enum class PolyConstraintStatus {
  */
 class PolynomialConverter {
 public:
-    explicit PolynomialConverter(PolynomialKernel& kernel)
-        : kernel_(kernel) {}
+    explicit PolynomialConverter(PolynomialKernel& kernel, WorkBudget* budget = nullptr,
+        std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::time_point::max())
+        : kernel_(kernel), budget_(budget), deadline_(deadline) {}
 
     /** Convert a single expression. Returns {poly, scale} where
      *  original_expr = scale * poly, scale > 0.
@@ -64,7 +68,13 @@ public:
 
 private:
     PolynomialKernel& kernel_;
+    WorkBudget* budget_;
+    std::chrono::steady_clock::time_point deadline_;
     std::unordered_map<ExprId, std::optional<RationalPolynomial>> memo_;
+
+    void charge(size_t amount = 1);
+    void chargeProduct(const RationalPolynomial&, const RationalPolynomial&);
+    RationalPolynomial power(RationalPolynomial, uint32_t);
 
     std::optional<RationalPolynomial> collectRec(ExprId eid, const NativeTerms& ir);
     // Iterative bottom-up pre-pass that memoizes nested arith subterms so

@@ -2397,7 +2397,10 @@ SAT entry, preserving QCP's own classifier and preprocessing.
 [PR75](https://github.com/fuqi-jia/Xolver/pull/75) implements actual native backend
 selection, qualified code `9f36803e`; the source/binary hashes, EOS runs and
 evidence boundaries are in the [stage receipt](NATIVE_QCP_BACKEND_STAGE_20261030.json).
-Server acceptance is complete; PR CI, merge and exact-head main CI remain pending.
+Server acceptance and both exact-head [PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/41026885983)
+passed. The PR is merged as main`b5a2fe6bd8895bec68af362fdf525410c26a1ddb`;
+fresh exact-head [main CI](https://github.com/fuqi-jia/Xolver/actions/runs/41030001591)
+is fully green. No extra server archive is a delivery prerequisite.
 
 The pinned Linux QCP executable has no exported backend switch. The adapter
 checks its full executable hash, native entry/call-site bytes and executable
@@ -2428,8 +2431,77 @@ replays, no model completions. R820, EOS`9f8370812cb1`, audits the exact queries
 raw witnesses, reconstructed replay assertions, positive checker outputs and
 source-bound qualification. No opposite verdict or invalid model is observed.
 
-This closes the native selection interface gap. It does not finish the full
-C→VC→selected SMT→Rocq program comparison. Those canonical controller runs still
-need complete original-VC proofs, final-check and witness audits. Xolver's core
-binary is unchanged from R802; this stage establishes no new fixed160 score or
-performance advantage. Neither protected set has been inspected or run.
+This closes the native selection interface gap. The supplementary qualification
+below completes the C→VC→selected SMT→Rocq path for one original development
+program on both backends. It does not establish a program-suite coverage or timing
+advantage. Xolver's core binary in this integration stage is unchanged from R802;
+there is no new fixed160 score here. Neither protected set has been inspected or run.
+
+
+R819/R821 additionally completes the original frozen `branch_destruct` C program
+through actual native Xolver, external Xolver discharge and canonical Rocq
+final-check: **1 verified program /10 original VCs /14 external queries**, all
+external queries UNSAT and all candidate bodies identical to the checked full
+VC proofs. Final-check EOS`578afc065663` returns`passed/done`; independent witness
+and provenance audit EOS`ae37dfde9890` is backend-qualified, with no admitted
+case proofs or extra assumptions. The complete controller workflow records564
+native calls (222 SAT /342 UNSAT) across three frontend/freshness executions;
+every actual formula hash/result matches the independently checked R817
+inventory. Do not count repeated native calls as extra programs or VCs.
+Original C/specification SHA remains`4d81aabd16ceb9d402fa0f1a3621dd8a6bf0ad28659bcb6cf60eedebec69e22d`.
+The matched fresh Z3 workflow also passes canonical final-check, EOS`5bf4a7937bb3`,
+with **1 verified program /10 original VCs /14 external queries /564 native calls**.
+R824 pair audit, EOS`39db35282eaa`, authenticates both final checks, exact candidate
+bodies and native query hashes/verdicts; all original VC token streams agree after
+formal-module namespace normalization. The pair record SHA-256 is
+`691b561a2ca19c138a272fa7912a7874af5735a2a21be4420b266bc7579b5d45`.
+This is one unique program verified by each backend. The approximately33.8s final
+controller timings are diagnostic, without matched CPU/order repetitions, and do
+not establish a whole-program speed win.
+
+
+## Shared explained Boolean/theory refutation (R823–R835)
+
+[PR76](https://github.com/fuqi-jia/Xolver/pull/76) adds a theory-independent
+Boolean refutation driver and a shared integer/real polynomial client. Exact
+explained conflicts learn clauses before whole-formula SAT-only bit blasting.
+An open or exhausted assignment preserves the original search allocation; it
+never proves SAT. The conversion layer also rejects unsupported whole products
+instead of accepting a converted prefix, bounds optional expansion work, and
+rejects exponents outside the monomial representation.
+
+The first minimal Boolean-support experiment R823 did not improve timing and
+was not promoted. Complete true/false atom assignments in R825 close the
+previously open branch. The fixed160 fresh round observes original37
+(AProVE) **20.317s→0.0666s** and original127 (LassoRanker)
+**20.067s→0.0671s**, with independent same-round Z3 UNSAT agreement.
+The generic refutation stays bounded to8 Boolean models /1000 SAT conflicts
+per solve /50ms; existing sign closure stays10ms /100k work /32 rounds.
+
+Final Panda1/ExperimentOS validation passes **1,813 unit cases /879,499
+assertions**, with38 additional source-bound regression/tool/model acceptance
+groups. The MCSAT tests now directly connect parsed formulas, atomization and
+real SAT/theory callbacks and require a positive backend check count; early
+runtime proofs no longer make those backend tests vacuous. New API checks cover
+assumption cores, SAT model validation and push/pop isolation. Independent signed
+Boolean/polynomial checks cover56 integer/real cases:28 early refutations agree
+with Z3 and cvc5, and28 SAT models pass56 positive independent replays.
+
+The full fresh frozen160 comparison is **98 verified solutions before and after**
+(54 SAT /44 UNSAT /1 unknown /61 timeouts), no gained or lost solves and no
+opposite verdict or invalid exported model. Verified PAR-2 improves
+**7822.034→7777.251**. Same-round Z3 is **117 verified /124 raw**, with seven
+unconfirmed UNSAT results `[12,24,27,42,80,114,159]` excluded. R834 freshly
+replays a prior raw122 SAT model in both independent checkers on the identical
+original input hash; this supplements eligibility without replacing a timed
+solve. Initial81/104 Z3 budget overruns are excluded; both original jobs and
+children ended before all three versions were repeated at the unchanged budget.
+The other158 valid original triads are immutable.
+
+Qualified implementation/test head is`6e46e157`; frozen CLI SHA-256 is
+`ce2c642efdb7a9b4e0f946ad6099a2f2f82f3a7b724f5e70caa4d1c59593f852`.
+Final audit EOS`0732c961bbde` binds all sources, binaries, leases, acceptance and
+witnesses in the [stage receipt](BOOLEAN_THEORY_REFUTATION_STAGE_20261030.json).
+This is a verified latency improvement, not overall superiority over Z3. Both
+protected sets remain untouched. Require the exact-head PR CI and resulting main
+CI for delivery; no extra current-main server archive is required.

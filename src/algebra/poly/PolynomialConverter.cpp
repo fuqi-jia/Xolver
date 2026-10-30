@@ -4,8 +4,63 @@
 #include "ir/payload.h"
 #include <cassert>
 #include <gmpxx.h>
+#include "base/WorkBudget.h"
+#include <limits>
+#include <algorithm>
+#include <climits>
 
 namespace xolver {
+
+void PolynomialConverter::charge(size_t amount) {
+    if (!budget_) return;
+    budget_->tick(amount);
+    if (std::chrono::steady_clock::now() >= deadline_)
+        throw ResourceExhausted("polynomial conversion wall allocation exhausted");
+}
+
+void PolynomialConverter::chargeProduct(const RationalPolynomial& a, const RationalPolynomial& b) {
+    if (!budget_) return;
+    size_t bits = 1;
+    size_t degree = 0;
+    for (const auto* polynomial : {&a, &b}) {
+        size_t maximum = 1;
+        size_t maximumDegree = 0;
+        for (const auto& [monomial, coefficient] : polynomial->terms()) {
+            charge(1 + monomial.size());
+            size_t termDegree = 0;
+            for (const auto& [variable, exponent] : monomial) {
+                (void)variable;
+                if (exponent < 0 || size_t(exponent) > size_t(INT_MAX) - termDegree)
+                    throw ResourceExhausted("polynomial degree allocation overflow");
+                termDegree += exponent;
+            }
+            maximumDegree = std::max(maximumDegree, termDegree);
+            maximum = std::max(maximum, mpz_sizeinbase(coefficient.get_num_mpz_t(), 2) +
+                mpz_sizeinbase(coefficient.get_den_mpz_t(), 2));
+        }
+        if (maximumDegree > size_t(INT_MAX) - degree)
+            throw ResourceExhausted("polynomial degree allocation overflow");
+        degree += maximumDegree;
+        if (maximum > SIZE_MAX - bits) throw ResourceExhausted("polynomial coefficient allocation overflow");
+        bits += maximum;
+    }
+    const auto left = a.terms().size(), right = b.terms().size();
+    if (left && right > SIZE_MAX / left) throw ResourceExhausted("polynomial product allocation overflow");
+    const auto terms = left * right;
+    if (terms && bits > SIZE_MAX / terms) throw ResourceExhausted("polynomial product allocation overflow");
+    charge(terms * bits);
+}
+
+RationalPolynomial PolynomialConverter::power(RationalPolynomial base, uint32_t exponent) {
+    if (!budget_) return base.pow(exponent);
+    auto result = RationalPolynomial::fromConstant(1);
+    while (exponent) {
+        if (exponent & 1) { chargeProduct(result, base); result = result * base; }
+        exponent >>= 1;
+        if (exponent) { chargeProduct(base, base); base = base * base; }
+    }
+    return result;
+}
 
 // ============================================================================
 // Public API
@@ -68,7 +123,14 @@ PolynomialConverter::ConvertedConstraint PolynomialConverter::convertConstraint(
 std::optional<RationalPolynomial> PolynomialConverter::collectRec(
     ExprId eid, const NativeTerms& ir) {
     auto it = memo_.find(eid);
-    if (it != memo_.end()) return it->second;
+    if (it != memo_.end()) {
+        if (budget_ && it->second)
+            for (const auto& [monomial, coefficient] : it->second->terms())
+                charge(1 + monomial.size() + mpz_sizeinbase(coefficient.get_num_mpz_t(), 2) +
+                       mpz_sizeinbase(coefficient.get_den_mpz_t(), 2));
+        return it->second;
+    }
+    charge();
 
     const TermExpr& e = ir.get(eid);
     std::optional<RationalPolynomial> result;
@@ -81,12 +143,14 @@ std::optional<RationalPolynomial> PolynomialConverter::collectRec(
                 // Large integer literals (e.g. EVM 2^256 constants) do not fit
                 // int64 and are stored as decimal strings — parse at full
                 // precision (mirrors the ConstReal path) rather than dropping them.
+                charge(s->size());
                 result = RationalPolynomial::fromConstant(mpqFromString(*s));
             }
             break;
         }
         case Kind::ConstReal: {
             if (auto* s = std::get_if<std::string>(&e.payload.value)) {
+                charge(s->size());
                 result = RationalPolynomial::fromConstant(mpqFromString(*s));
             }
             break;
@@ -154,12 +218,16 @@ std::optional<RationalPolynomial> PolynomialConverter::collectRec(
                 auto first = collectRec(e.children[0], ir);
                 if (!first) { result = std::nullopt; break; }
                 RationalPolynomial acc = std::move(*first);
+                bool complete = true;
                 for (size_t i = 1; i < e.children.size(); ++i) {
                     auto next = collectRec(e.children[i], ir);
-                    if (!next) { result = std::nullopt; break; }
+                    if (!next) { complete = false; break; }
+                    chargeProduct(acc, *next);
                     acc = acc * (*next);
                 }
-                if (!result.has_value()) result = std::move(acc);
+                // An unsupported factor invalidates the whole product. A
+                // converted prefix is not equivalent to the original term.
+                if (complete) result = std::move(acc);
             }
             break;
         }
@@ -234,10 +302,12 @@ std::optional<RationalPolynomial> PolynomialConverter::collectRec(
                 }
                 if (!expInt) {
                     result = std::nullopt;  // non-integer or non-constant exponent
-                } else if (*expInt < 0) {
-                    result = std::nullopt;  // negative exponent unsupported in polynomial ring
+                } else if (*expInt < 0 || *expInt > std::numeric_limits<int>::max()) {
+                    // Monomial exponents use int. Never truncate a larger
+                    // SMT exponent into a different, apparently easy power.
+                    result = std::nullopt;
                 } else {
-                    result = base->pow(static_cast<uint32_t>(*expInt));
+                    result = power(std::move(*base), static_cast<uint32_t>(*expInt));
                 }
             }
             break;
@@ -294,6 +364,7 @@ void PolynomialConverter::preCollectIterative(ExprId root, const NativeTerms& ir
     std::vector<Frame> stack;
     stack.push_back({root, false});
     while (!stack.empty()) {
+        charge();
         Frame& fr = stack.back();
         ExprId eid = fr.eid;
         if (memo_.find(eid) != memo_.end()) { stack.pop_back(); continue; }
