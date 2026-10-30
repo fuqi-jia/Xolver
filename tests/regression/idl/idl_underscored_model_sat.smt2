@@ -1,0 +1,7 @@
+(set-logic QF_IDL)
+(set-info :status sat)
+(declare-fun __user () Int)
+(assert (>= __user 0))
+(assert (<= __user 1))
+(assert (distinct __user 0))
+(check-sat)

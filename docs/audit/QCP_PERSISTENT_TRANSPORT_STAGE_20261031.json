@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "status": "transport_and_original_max3_qualified_ci_pending",
+  "status": "merged_main_ci_passed",
   "source_base_commit": "76a1e0951b3ab5130c669fb871c61a34f7f9fd30",
   "source_manifest_sha256": "b0dec019f0d7297e138f91d673f5239598cf5021b63c292a482d820c0ec40e53",
   "source_overlay_sha256": "0a362ffefc03ea7538c555aca03847f2f906790bd5fcb18115803b37d9e49c4a",
@@ -103,5 +103,14 @@
     "xolver_seconds": 28.689698062837124,
     "z3_seconds": 29.5356092043221,
     "boundary": "Fresh canonical final-check per backend, sequentially on the same physical CPU with identical query/controller budgets. One unchanged original C program, all four VCs and every actual native query are authenticated. Rocq closers differ syntactically: lia versus lia || int_auto. One program and one order do not establish an overall QCP performance win. Earlier generations are not added to this final-check call census. The qualification uses frozen worker 578144c1 and the delivered f095 arithmetic core; it does not qualify a subsequent arithmetic candidate."
+  },
+  "delivery": {
+    "pr": 80,
+    "head_commit": "caeea3b72877d68240592c039ecb18eceef7cea5",
+    "merge_commit": "ec1912f519cba5455155725adb6ab829d0a357eb",
+    "pr_ci": 41121158561,
+    "main_ci": 41124740311,
+    "pr_ci_conclusion": "success",
+    "main_ci_conclusion": "success"
   }
 }

@@ -1,0 +1,197 @@
+{
+  "schema": 1,
+  "status": "server_qualified_pr_ci_pending",
+  "implementation_commit": "d5a3d306176e39b74f1ac6035e992a6879c9d6f2",
+  "source_manifest_sha256": "5632802701cb5789dc8f16dedeb66b7a2924b4faa85979fb9ab61ae67fd021b2",
+  "binaries": {
+    "xolver": "9d11c22d874ac89acd45785c6a5b3920d9bdbfe2dcf1ece64cf227113ef4b368",
+    "xolver-sv": "24e376a45ffc935b96d18eff4c7e1b61c72bd5dce1957b6fd835e35d8b309b0a",
+    "xolver-parallel-worker": "caad8cb7c3dfd2dc871d6ec7d01c30bf6c7e8483115fad9a0025513c425ecf48"
+  },
+  "problem": "The difference graph conflated its constant vertex with a user variable named __ZERO__; model export also discarded ordinary user names beginning with __. Both IDL and RDL were affected.",
+  "implementation": "Keep the constant vertex outside both graph symbol maps; represent constant endpoints by nullopt in normalisation and shared disequality splitting; omit the constant vertex from model maps by identity and preserve all variable names.",
+  "baseline": {
+    "binary_sha256": "1906c863afad990600d3a6c017bc07396bc8fbe5ea1d62a589e0f1721267bd4b",
+    "experiment": "eff4b0f56701",
+    "run": "e53d95d59e65",
+    "report_sha256": "a294e510967f542cd9d8d034b260f61a77f962df98815d3380a35b21d592f732",
+    "opposite_verdicts": 2,
+    "unavailable_models": 2
+  },
+  "targeted_build": {
+    "experiment": "9ac1aed27b28",
+    "run": "d99e75a5c527",
+    "cases": 68,
+    "assertions": 284883,
+    "idl_regressions": 20,
+    "rdl_regressions": 17
+  },
+  "model_verification": {
+    "experiment": "9abc1125a644",
+    "run": "a02dec58d7e4",
+    "report_sha256": "e7ae7a0273fd1212d43fe7c79a99b21b6490750bdce521501503acad1b365517",
+    "identical_input_hashes": true,
+    "cases": 6,
+    "opposite_verdicts": 0,
+    "unavailable_models": 0,
+    "models_replayed_by_both_oracles": 6
+  },
+  "full_acceptance": {
+    "experiments": [
+      "d4a12930223e",
+      "e920e527afb9"
+    ],
+    "groups": 39,
+    "unit_cases": 1837,
+    "unit_assertions": 922772,
+    "failures": 0
+  },
+  "formal": {
+    "pilot_experiment": "59ab24992759",
+    "output": "validation/arithmetic-r103/fair-r969",
+    "remaining_dispatch": "validation/arithmetic-r103/dispatch-r971-rest.json",
+    "cases": 160,
+    "wall_seconds": 60,
+    "memory_gib": 16,
+    "physical_cpus_per_case": 1,
+    "status": "complete",
+    "counts": {
+      "baseline": {
+        "unsat": 46,
+        "decided": 100,
+        "verified_decided": 100,
+        "verified_par2": 7506.071269614622,
+        "raw_par2": 7506.071269614622,
+        "timeout": 59,
+        "sat": 54,
+        "unknown": 1
+      },
+      "candidate": {
+        "unsat": 46,
+        "decided": 100,
+        "verified_decided": 100,
+        "verified_par2": 7513.403572719544,
+        "raw_par2": 7513.403572719544,
+        "timeout": 59,
+        "sat": 54,
+        "unknown": 1
+      },
+      "z3": {
+        "unsat": 57,
+        "decided": 124,
+        "verified_decided": 117,
+        "verified_par2": 5444.159846223891,
+        "raw_par2": 4645.882100660354,
+        "sat": 67,
+        "timeout": 36
+      }
+    },
+    "changes": [],
+    "unconfirmed": [
+      12,
+      24,
+      27,
+      42,
+      80,
+      114,
+      159
+    ],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "timing_changes_over_one_second": [
+      {
+        "index": 2,
+        "result": "sat",
+        "baseline_seconds": 36.40836449339986,
+        "candidate_seconds": 34.85320396721363
+      },
+      {
+        "index": 4,
+        "result": "sat",
+        "baseline_seconds": 33.23875782452524,
+        "candidate_seconds": 34.59207311831415
+      },
+      {
+        "index": 18,
+        "result": "unsat",
+        "baseline_seconds": 51.544035606086254,
+        "candidate_seconds": 53.699360836297274
+      },
+      {
+        "index": 84,
+        "result": "unsat",
+        "baseline_seconds": 5.980894761160016,
+        "candidate_seconds": 9.993647180497646
+      },
+      {
+        "index": 97,
+        "result": "sat",
+        "baseline_seconds": 33.0030391830951,
+        "candidate_seconds": 34.396844424307346
+      }
+    ],
+    "supplementary_truth": [
+      {
+        "index": 115,
+        "truth": "unsat",
+        "input_sha256": "02a58b11df8951543940a1090a140592e24de41dcaeb6470e7a50d42e804be64",
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r968/certificate-115/0.log",
+        "sha256": "823672e87696cac914fac33d8d0027db15a21b566e700a65300cdca704cf910e",
+        "boundary": "Fresh original-input checked modular certificate."
+      },
+      {
+        "index": 47,
+        "truth": "sat",
+        "input_sha256": "2c37069c8324458e8f3ad46cc6dbe0cc3a6c2f31012ed504123e660bfdf7aba4",
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/current-model-replay-r972/47/record.json",
+        "sha256": "9427f6d56539a9d4b13a15a403b56bf8c17898210ab304cb7903d62f206c1c09",
+        "boundary": "Two identical models from original timed R969/R971 output, positively replayed by both checkers; eligibility only, no timing replacement."
+      },
+      {
+        "index": 108,
+        "truth": "sat",
+        "input_sha256": "26d6012f717dec2f43e57be63e8638d1a13b6bc9cb5fcc963c08476793385786",
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/current-model-replay-r972/108/record.json",
+        "sha256": "cd873ef252ca7f31c5eb844d424c42eea28743a590f308bc340a3309d04b13ca",
+        "boundary": "Two identical models from original timed R969/R971 output, positively replayed by both checkers; eligibility only, no timing replacement."
+      },
+      {
+        "index": 122,
+        "truth": "sat",
+        "input_sha256": "c88289f0453a6bbe098b4c5f092dfc50cd9e0ac21d799c6ccfc0a61b5a974389",
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/current-model-replay-r972/122/record.json",
+        "sha256": "6d7f42681541b8a493e1f7a8050477ad2767bd69d440bef2edd7a62090339641",
+        "boundary": "Two identical models from original timed R969/R971 output, positively replayed by both checkers; eligibility only, no timing replacement."
+      },
+      {
+        "index": 50,
+        "truth": "unsat",
+        "input_sha256": "7e71a151d917978f1b5afc2791abf589e30c8ff97e930979df6ef82ad72dcdc0",
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/independent-truth-r761/case-050/record.json",
+        "sha256": "13a20b8e90bb8a8fff028fd665ee4ef661ae88e851766af64ed9b83ee255175c",
+        "boundary": "Existing independently checked 300s offline UNSAT; eligibility only, all original timed budgets stay 60s."
+      },
+      {
+        "index": 94,
+        "truth": "sat",
+        "input_sha256": "a6b68604187a341c570d8bd76135552ece1bbf958a1d7e9d4ff7f3eae998fd8f",
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/model-replay-r732/case-094/record.json",
+        "sha256": "251f695441367d616c3ee7b69b8f5bccce1df0b9322a47138f2804e032301a0a",
+        "boundary": "Existing independently checked ground witness; eligibility only, no old timing substitution."
+      }
+    ],
+    "invalid_original_triads": []
+  },
+  "protected_sets_used": false,
+  "boundary": "The six constructed name-identity/model diagnostics are separate from fixed160 and do not increase its score. Both independent oracles decide each diagnostic SAT and replay every actual fixed-version model. The fresh original-input round verifies 100 for each Xolver arm versus 117 for same-round Z3 (124 raw); seven unconfirmed Z3 UNSAT results stay excluded. There are no gained or lost solves, opposite verdicts, invalid models or protocol errors. Candidate verified PAR-2 is 7513.404 versus baseline 7506.071; no overall performance gain is claimed. The correctness fix is retained. Current timed Z3 duplicate models for 47/108/122 are independently replayed; existing model-format boundaries remain recorded. Full-program max3 qualification belongs to the earlier worker, not this kernel. No protected set was used.",
+  "audit": {
+    "experiment": "8072542b6259",
+    "run": "e1949255aedb",
+    "sha256": "c7812033037fed492e7e70cdc88b9606bed08b5b2296699c1d16d69ff3e9a667",
+    "model_replay_experiment": "5adeb46b44d8",
+    "prior_failed_audit": {
+      "run": "c7a48ca74ac9",
+      "reason": "The audit misclassified the old diagnostic label model_replay as Xolver instead of Z3. Inspecting its actual command proves the expected Z3 binary; no native test, input, timing or solver was repeated."
+    }
+  }
+}

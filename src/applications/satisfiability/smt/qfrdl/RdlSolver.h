@@ -30,7 +30,7 @@ public:
 
     // Model read-off: buildRdlModel already instantiates the infinitesimal δ to
     // a concrete ε and returns a full rational assignment (anchored at
-    // __ZERO__=0). check() computes it for the disequality split; we keep it for
+    // the constant vertex). check() computes it for the disequality split; we keep it for
     // getModel() so the printed model satisfies every difference constraint.
     // Without it the model builder defaults all RDL variables to 0
     // (model-extraction incompleteness — strict-validation flips rdl_007/009/012).
@@ -42,8 +42,8 @@ protected:
 
 private:
     struct DiseqInfo {
-        std::string x;
-        std::string y;
+        std::optional<std::string> x; // nullopt denotes the constant zero
+        std::optional<std::string> y;
         mpq_class rhs;  // x - y != rhs
         SatLit lit;
     };
@@ -60,7 +60,7 @@ private:
     TheoryLemma buildDiseqSplitLemma(const DiseqInfo& d, TheoryLemmaStorage& lemmaDb);
 
     // Concrete rational model of the last consistent check (name -> value,
-    // includes __ZERO__=0), used by getModel(). Valid only while haveModel_.
+    // excludes the constant vertex), used by getModel(). Valid only while haveModel_.
     std::unordered_map<std::string, mpq_class> lastModel_;
     bool haveModel_ = false;
 

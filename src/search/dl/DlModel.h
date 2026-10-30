@@ -15,7 +15,6 @@ buildIdlModel(const std::vector<mpz_class>& dist,
               int zeroNode,
               const DifferenceGraph<mpz_class>& graph) {
     std::unordered_map<std::string, mpz_class> model;
-    model[graph.nodeName(zeroNode)] = 0;
     for (int i = 0; i < graph.numNodes(); ++i) {
         if (i == zeroNode) continue;
         model[graph.nodeName(i)] = dist[i] - dist[zeroNode];
@@ -79,11 +78,9 @@ buildRdlModel(const std::vector<RdlWeight>& dist,
     }
 
     std::unordered_map<std::string, mpq_class> model;
-    model[graph.nodeName(zeroNode)] = 0;
     for (int i = 0; i < graph.numNodes(); ++i) {
         if (i == zeroNode) continue;
         const std::string& name = graph.nodeName(i);
-        if (name.empty()) continue;
         model[name] = (dist[i].c - dist[zeroNode].c)
                     + (dist[i].deltaCoeff - dist[zeroNode].deltaCoeff) * epsilon;
     }

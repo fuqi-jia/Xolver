@@ -54,6 +54,16 @@ overall solver-superiority result. Earlier rounds retain their own frozen
 versions, timings and evidence boundaries. No extra current-main archive is
 required after green CI.
 
+The next server-qualified candidate retains active ITE child lists and cursors
+(commit `d85eac566e29329e0f25e18a7e364429544305b7`). Its fresh R951/R953/R954
+round verifies **99 baseline → 100 candidate**, versus **118 verified /125 raw**
+same-round Z3, with one gain and no losses. The delivered stage above already
+reached100 in its earlier round; this is not a new historical coverage record.
+The [ITE receipt](ITERATIVE_ITE_TRAVERSAL_STAGE_20261031.json) binds the full
+1832-case server acceptance, three rejected budget-overrun triads and their
+valid replacements, independently checked models and remaining seven
+unconfirmed UNSATs. This candidate has not yet passed its own PR/main CI.
+
 The retained branches are `main`, `feat/qcp-foundations` (QCP and solver
 foundations), and `feat/draco-asp`. Historical branch tips are archived in
 `validation/arithmetic-r103/branch-archive-20261030/history.bundle`, SHA-256
@@ -2911,3 +2921,129 @@ protected set was used. This qualification binds frozen worker`578144c1` and
 the delivered arithmetic core; a later core candidate needs its own evidence.
 See the updated transport receipt. The broader multi-program comparison and the
 fixed160 target of at least126 verified solves remain outstanding.
+
+
+### Retain active children in iterative ITE traversal (R940–R956)
+
+`NativeTerms::get` materializes a node by value. Phase two of
+`IteLowerer::lowerAssertion` repeatedly decoded each wide parent and scanned its
+completed children after returning from a descendant. On public fixed-suite
+input13, R943 counted18,400,451 child scans for47,326 graph edges. A cursor-only
+experiment reduced scans but still rebuilt the parent:4.303s→4.528s, so that
+attempt was rejected. Owning the active child list as well as its cursor reduces
+the same measured prefix to0.070s and scans each edge once. Root order,
+postorder, generated constraints and incremental definitions are preserved.
+The common frontend change applies across its supported theories.
+
+R948 freezes source `d85eac56`, manifest SHA-256
+`98d56c690144059be39ce9726797bd2bb4872267c66b10d271e2ea14214ebe6f`,
+CLI `1906c863afad990600d3a6c017bc07396bc8fbe5ea1d62a589e0f1721267bd4b`,
+SV `3748c3de132a04b77be700bc235867d6783004ed91fd3ba6bb718fff656c1fb9`,
+and worker `67bfabc32e482637381e5e1cbbe4f272021695b8ead5363839de7588c1c3043a`.
+R950 passes1832 unit cases/922470 assertions and38 other acceptance groups,
+including the new4096-wide shared Boolean/Int/Real ITE regression and independent
+model/arithmetic/QCP checks.
+
+The full fresh160 comparison keeps60s/one leased physical CPU/16GiB and captures
+models during the actual timed solve for all versions. R953 originals4/29/47
+exceeded wall budgets under new external CPU contention; their failed records
+are retained and excluded. All three became terminal before R954 reran each
+complete triad once. The final valid selection has no protocol error, opposite
+verdict or invalid exported model. Baseline verifies99 versus candidate100,
+PAR-2 7588.984→7504.373; case4 changes timeout→30.935s SAT with its actual model
+checked. No result is lost; matched cases18 and97 are slower by2.650s and2.111s.
+Case13 remains a timeout: the diagnostic prefix speed is not a new solve.
+
+Same-round Z3 has118 verified/125 raw decisions; unconfirmed UNSAT inputs
+12/24/27/42/80/114/159 remain excluded. R955 independently replays the identical
+duplicate original models for47/108/122 through both checkers; fresh certificate
+115, existing input-hash-bound UNSAT50 and ground witness94 establish eligibility
+only, with all measured budgets unchanged. Z3 model-format limitations75/148/94
+remain explicit. R956 authenticates source, binaries, all39 acceptance groups,
+all selected timing/lease/model records and the negative/positive traversal
+diagnostics; receipt SHA-256
+`de78d8330fc7ed68f6882e215b6d89df8c0671fe62d043fd5f026975f8c9027b`.
+The earlier delivered round already reached100; no historical coverage increase
+or superiority over Z3 is claimed. Neither protected set was used. The original
+max3 qualification above belongs to the preceding frozen worker, not this
+candidate's full-program performance. See the ITE receipt for delivery status.
+
+
+### Deferred row explanation merging rejected (R957–R963)
+
+Existing stack samples placed11/25 frames for public LRA gap131 in propagation
+and10/25 in simplex pivots. Private counters counted1,957,664 premise-map updates
+for226,069 improving candidates in a ten-second diagnostic. Prototype642a4f9e
+therefore deferred each immutable row snapshot's explanation union until a
+numeric endpoint improved. It passed50 targeted cases/34846 assertions, including
+shared excluded premises and unchanged-bound rows.
+
+The fresh six-case pilot rejected the change: baseline3 verified versus
+candidate2, PAR-2 426.113→516.275, no gains and one loss at51 (30.384s SAT with
+its original exported model checked, versus candidate60s timeout). Every triad
+has a valid lease/budget, no opposite verdict and no invalid model. R963 seals
+all records (SHA-256
+`61e90552e23caea3e65df0da0f853373bfb15e0f2c2aea351a6ac6a8731ca540`).
+The implementation, added counters and prototype tests are removed; no full160
+expansion or valid-trial rerun is justified. No protected input was used.
+
+R960 separately exposed a Python test observation race: init reaped a killed
+orphan between `/proc` existence checking and reading. Commitcaeea3b7 reads its
+state once per observation and accepts an already reaped child. R962 passes all
+50 native targeted cases, seven transport tests, seven QCP adapter tests and
+three architecture/parallel CTests, with every native byte unchanged from R960.
+This test-only fix remains in PR80; its new exact-head CI is41121158561. The
+prior failed run and the completed requalification remain visible. See the
+[closed experiment receipt](DEFERRED_ROW_EXPLANATIONS_REJECTED_20261031.json).
+
+
+### Difference-logic constant identity and model repair (R964–R974)
+
+A user variable named`__ZERO__` collided with graph node0, while getModel
+silently omitted any user name beginning`__`. Fresh constructed IDL/RDL inputs
+`(assert (or (= __ZERO__ 1) (= __ZERO__ 2)))` produced two wrong UNSAT answers;
+both independent solvers returned SAT. Two analogous`__user` inputs returned
+SAT without an available model. R964's diagnostic stopped on that unavailable-
+model parser error; the complete R965 report retains all six inputs and two
+ordinary-name controls (SHA-256
+`a294e510967f542cd9d8d034b260f61a77f962df98815d3380a35b21d592f732`).
+
+Commit`d5a3d306176e39b74f1ac6035e992a6879c9d6f2` separates the constant vertex
+from the symbol map in both batch and incremental graphs, uses explicit absent
+endpoints for zero in both solvers and their shared disequality splitter, and
+exports user names without a prefix filter. No old name alias remains. Tests
+cover both weights, graph backtracking, positive/negative bounds, model invalidation
+and the exact unary split tautologies. R966 passes68 targeted cases/284883
+assertions and20 IDL/17 RDL regressions; source manifest SHA-256
+`5632802701cb5789dc8f16dedeb66b7a2924b4faa85979fb9ab61ae67fd021b2`,
+CLI`9d11c22d874ac89acd45785c6a5b3920d9bdbfe2dcf1ece64cf227113ef4b368`.
+R967 authenticates six matching input hashes and positive replay of every actual
+exported model through both Z3 and cvc5 (report SHA-256
+`e7ae7a0273fd1212d43fe7c79a99b21b6490750bdce521501503acad1b365517`).
+These are correctness/capability regressions, not additional fixed160 solves.
+
+All39 R968 acceptance groups pass, including1837 unit cases/922772 assertions.
+The completed fresh R969/R971 fixed160 round keeps60s/one physical CPU/16GiB
+and initial model capture. Both Xolver arms verify100 (54 SAT/46 UNSAT), with
+59 timeouts and one unknown; there are no gains or losses. Verified PAR-2 is
+7506.071 baseline versus7513.404 candidate. Same-round Z3 verifies117/124 raw;
+seven unconfirmed UNSAT inputs12/24/27/42/80/114/159 remain excluded. There
+are no protocol errors, opposite verdicts or invalid exported models. R972
+positively replays the actual timed duplicate models47/108/122 through both
+independent checkers. R974 seals source/binaries, all39 acceptance groups,
+all160 original timing/lease/model records and the six distinct correctness
+diagnostics (SHA-256 `c7812033037fed492e7e70cdc88b9606bed08b5b2296699c1d16d69ff3e9a667`).
+R973 failed only because its audit misclassified the old diagnostic label
+`model_replay` as Xolver rather than Z3; its original command proves the Z3
+checker. That failed audit remains retained, and no solver run was repeated.
+The correctness repair is retained; no overall speedup is claimed. No protected
+set was used.
+See the [symbol identity receipt](DIFFERENCE_LOGIC_SYMBOL_IDENTITY_STAGE_20261031.json).
+
+The persistent transport stage is merged by PR80 as main
+`ec1912f519cba5455155725adb6ab829d0a357eb`, after exact-head
+[PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/41121158561) passed.
+Its fresh [main CI](https://github.com/fuqi-jia/Xolver/actions/runs/41124740311)
+has completed successfully. The CLI/SV bytes of that transport-only
+stage are unchanged from R926; the new arithmetic kernel above is separate and
+has not yet been merged.

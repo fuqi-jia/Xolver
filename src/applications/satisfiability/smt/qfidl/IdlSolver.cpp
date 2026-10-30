@@ -73,15 +73,15 @@ IdlSolver::NormalizeResult IdlSolver::normalizeAndAdd(const ActiveAssignment& a)
     // plusVar and the negative as minusVar absorbs the sign, so the relation is
     // never flipped; the switch below applies integer floor/ceil rounding to the
     // (now rational) scaled rhs. All arithmetic is exact mpq_class.
-    std::string plusVar, minusVar;
+    std::optional<std::string> plusVar, minusVar;
     mpq_class plusCoeff(0), minusCoeff(0);
     for (const auto& [name, coeff] : terms) {
         if (coeff == 0) continue;
         if (coeff > 0) {
-            if (!plusVar.empty()) return NormalizeResult::Unsupported;  // >1 positive var
+            if (plusVar) return NormalizeResult::Unsupported;  // >1 positive var
             plusVar = name; plusCoeff = coeff;
         } else {
-            if (!minusVar.empty()) return NormalizeResult::Unsupported; // >1 negative var
+            if (minusVar) return NormalizeResult::Unsupported; // >1 negative var
             minusVar = name; minusCoeff = coeff;
         }
     }
@@ -93,7 +93,7 @@ IdlSolver::NormalizeResult IdlSolver::normalizeAndAdd(const ActiveAssignment& a)
     // otherwise sinks the entire IDL solve (#81). Sound: pure constant
     // arithmetic, no node/edge ever created. (rhs is exact; the 0-vs-rhs
     // comparison needs no integer rounding since there is no variable.)
-    if (plusVar.empty() && minusVar.empty()) {
+    if (!plusVar && !minusVar) {
         bool holds = false;
         switch (rel) {
             case Relation::Leq: holds = (rhs >= 0); break;  // 0 <= rhs
@@ -108,25 +108,23 @@ IdlSolver::NormalizeResult IdlSolver::normalizeAndAdd(const ActiveAssignment& a)
     }
 
     mpq_class mag;
-    if (!plusVar.empty() && !minusVar.empty()) {
+    if (plusVar && minusVar) {
         // Two vars: require the antisymmetric form a*p - a*q (exact comparison).
         if (plusCoeff + minusCoeff != 0) return NormalizeResult::Unsupported;
         mag = plusCoeff;            // > 0
-    } else if (!plusVar.empty()) {
+    } else if (plusVar) {
         // Single positive var a*p: plus = p, minus = ZERO.
         mag = plusCoeff;            // > 0
-        minusVar = "__ZERO__";
     } else {
         // Single negative var -a*q: plus = ZERO, minus = q.
         mag = -minusCoeff;          // > 0
-        plusVar = "__ZERO__";
     }
 
     // Divide through by the positive magnitude; relation stays as-is.
     rhs /= mag;
 
-    int plusNode = graph_.getOrCreateNode(plusVar);
-    int minusNode = graph_.getOrCreateNode(minusVar);
+    int plusNode = plusVar ? graph_.getOrCreateNode(*plusVar) : graph_.zeroNode();
+    int minusNode = minusVar ? graph_.getOrCreateNode(*minusVar) : graph_.zeroNode();
 
     switch (rel) {
         case Relation::Leq: {
@@ -177,8 +175,8 @@ bool IdlSolver::validateModel(const std::vector<mpz_class>& dist) {
         }
     }
     for (const auto& d : disequalities_) {
-        int plusNode = graph_.nodeByName(d.x);
-        int minusNode = graph_.nodeByName(d.y);
+        int plusNode = d.x ? graph_.nodeByName(*d.x) : graph_.zeroNode();
+        int minusNode = d.y ? graph_.nodeByName(*d.y) : graph_.zeroNode();
         if (plusNode < 0 || minusNode < 0) continue;
         mpz_class diff = dist[plusNode] - dist[minusNode];
         if (diff == d.rhs) return false;
@@ -252,8 +250,8 @@ TheoryCheckResult IdlSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
 
     // Disequality split
     for (const auto& d : disequalities_) {
-        int plusNode = graph_.nodeByName(d.x);
-        int minusNode = graph_.nodeByName(d.y);
+        int plusNode = d.x ? graph_.nodeByName(*d.x) : graph_.zeroNode();
+        int minusNode = d.y ? graph_.nodeByName(*d.y) : graph_.zeroNode();
         if (plusNode < 0 || minusNode < 0) continue;
         mpz_class diff = bfResult.dist[plusNode] - bfResult.dist[minusNode];
         if (diff == d.rhs) {
@@ -268,8 +266,8 @@ TheoryCheckResult IdlSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     if (!validateModel(bfResult.dist)) {
         // Disequality violated: try to return a repair lemma before giving up.
         for (const auto& d : disequalities_) {
-            int plusNode = graph_.nodeByName(d.x);
-            int minusNode = graph_.nodeByName(d.y);
+            int plusNode = d.x ? graph_.nodeByName(*d.x) : graph_.zeroNode();
+            int minusNode = d.y ? graph_.nodeByName(*d.y) : graph_.zeroNode();
             if (plusNode < 0 || minusNode < 0) continue;
             mpz_class diff = bfResult.dist[plusNode] - bfResult.dist[minusNode];
             if (diff == d.rhs) {
@@ -304,10 +302,8 @@ std::optional<IdlSolver::TheoryModel> IdlSolver::getModel() const {
     for (int node = 0; node < graph_.numNodes(); ++node) {
         if (node == zero) continue;
         const std::string& name = graph_.nodeName(node);
-        if (name.empty()) continue;
-        if (name.size() >= 2 && name[0] == '_' && name[1] == '_') continue;  // internal
         if (node >= static_cast<int>(lastDist_.size())) continue;
-        // value(v) = dist[v] - dist[__ZERO__]  (anchor __ZERO__ at 0)
+        // value(v) = dist[v] - dist[zero]  (anchor the constant vertex at 0)
         mpz_class val = lastDist_[node] - base;
         model.assignments[name] = val.get_str();
         model.numericAssignments.insert({name, RealValue::fromMpq(mpq_class(val))});
