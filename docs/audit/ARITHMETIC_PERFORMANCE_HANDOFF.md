@@ -2798,3 +2798,47 @@ unchanged. Production now drains distinct existing targets from each endpoint
 until none remains or the64-output budget is full. Exact original premises and
 both signed targets are retained. The failed build is recorded; no binary was
 frozen or benchmark score claimed for it. Requalification is pending.
+
+
+## Qualified saturation of linear consequences (R926–R933)
+
+The final core`f095b3b2` drains distinct existing predicates from each explained
+endpoint, so one strongest endpoint can still propagate every applicable target
+within64 slots. It retains exact rational/infinitesimal handling,512 derived
+bounds,2,048 direction visits,20ms producer arithmetic and the existing LIA/LRA
+state policies. No new atoms, solver gate, filename rule or external runtime
+oracle is introduced. R921's failed two-target regression remains recorded;
+production was fixed without weakening that requirement. A separate100-target
+case checks the64-distinct-output cap.
+
+Panda1/ExperimentOS passes**1,829 unit cases/897,855 assertions**,38 other
+regression/tool/model groups and45 targeted cases/94,132 assertions. All54
+Xolver SAT models from the actual timed solves positively replay. The fresh
+full160 round verifies**100→100**,54 SAT/46 UNSAT/1 unknown/59 timeouts,
+no gained/lost solve. Verified PAR-2 improves**7534.598→7498.860** (about0.47%).
+Original59 improves**39.692s→2.823s SAT**, with its actual model checked; original
+51/131 remain timeouts. No wrong verdict, invalid Xolver model, budget-invalid
+triad or solver retry occurs in this round. Same-round Z3 is**116 verified/123
+raw**, not the older125 raw reference; the target of at least126 verified
+results is unchanged. Seven unconfirmed UNSATs12/24/27/42/80/114/159 are excluded.
+
+R933 positively checks both duplicated current Z3 models47/108 with both
+oracles. Its122 setup attempt fails before invoking a checker because all three
+original timed solves return timeout; that valid timing is retained and no
+original solve is repeated. Z3 model replays75/148 retain explicit error
+boundaries; checked Xolver witnesses independently confirm those SAT decisions.
+EOS`ea2b81d2d3b5` seals source/binaries, all160 leases and model/certificate
+eligibility. See [the final stage receipt](LINEAR_PROPAGATION_SATURATION_STAGE_20261031.json).
+CLI SHA-256 is`a5719bd76d2b443abe58de3e8bd80b8904c834cef1050f4574a087f11068555b`.
+The stage is awaiting PR CI; main remains PR78. Neither protected set was used.
+This is a local propagation improvement, not overall superiority over Z3.
+
+QCP R930 attributes20.477s of the historical GCD Xolver final-check to296
+callbacks, versus12.605s for Z3; each has70 distinct inputs. Proof scripts and
+schedules differ, so those totals are diagnostic. R931 runs all70 unchanged,
+independently checked queries with both process orders: Xolver CLI starts total
+2.357/2.531s, existing native worker batches0.421/0.422s; Z3 CLI2.725/2.752s,
+reset batches0.516/0.567s. All decisions agree. Child CPU/system times confirm
+startup cost. These are query diagnostics, not a C-program comparison. The next
+QCP stage should connect a reusable task channel for both backends and repeat
+canonical whole-program checking with matched proof routes and budgets.
