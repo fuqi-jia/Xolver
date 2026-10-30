@@ -4,19 +4,21 @@
 #include <doctest/doctest.h>
 #include <xolver/Result.h>
 #include <xolver/Solver.h>
-#include "applications/satisfiability/smt/SolverRegistry.h"
+#include "frontend/parser/adapter.h"
+#include "search/boolean/Atomizer.h"
 #include "search/coordination/TheoryManager.h"
+#include "search/coordination/TheoryAtomRegistry.h"
+#include "search/coordination/TheoryLemmaDatabase.h"
+#include "search/sat/CadicalBackend.h"
+#include "search/sat/CadicalTheoryPropagator.h"
 #include "applications/satisfiability/smt/qfnra/McsatSolver.h"
 #include "search/nra/backend/LibpolyBackend.h"
 #include "search/nra/engine/NlsatEngine.h"
-#include "applications/satisfiability/smt/qflra/LraSolver.h"
 
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <string>
-#include <cerrno>
-#include <sys/wait.h>
 #include <unistd.h>
 
 using namespace xolver;
@@ -46,44 +48,57 @@ Result solveSmt2(const std::string& text) {
 }
 
 Result solveSmt2WithMcsat(const std::string& text) {
-    // The existing builder interface connects the experimental backend in this
-    // test only. A child process isolates the registry override from all other
-    // tests, without adding a production option or mutating the environment.
-    pid_t child = fork();
-    REQUIRE(child >= 0);
-    if (child == 0) {
-        bool built = false;
-        SolverRegistry::ensureBuiltinsRegistered();
-        SolverRegistry::registerLogic({"QF_NRA"}, 100, [&](BuildContext& c) {
-            built = true;
-            auto kernel = createPolynomialKernel();
-            c.result->polyKernelRaw = kernel.get();
-            auto algebra = std::make_unique<LibpolyBackend>(kernel.get());
-            auto engine = std::make_unique<nlsat::NlsatEngine>();
-            engine->setAlgebra(kernel.get(), algebra.get());
-            engine->setNativeTerms(c.ir);
-            auto mcsat = std::make_unique<McsatSolver>();
-            mcsat->setEngine(std::move(engine), TheoryId::NRA);
-            mcsat->setKernel(std::move(kernel));
-            mcsat->setAlgebra(std::move(algebra));
-            c.theoryManager->registerSolver(std::move(mcsat));
-            auto lra = std::make_unique<LraSolver>();
-            lra->setRegistry(c.registry);
-            c.theoryManager->registerSolver(std::move(lra));
-        }, "test-mcsat");
-        Result result = solveSmt2(text);
-        // Reject a vacuous test that never reached the experimental backend.
-        _exit(built ? 10 + static_cast<int>(result) : 99);
-    }
-    int status = 0;
-    pid_t waited;
-    do { waited = waitpid(child, &status, 0); } while (waited < 0 && errno == EINTR);
-    REQUIRE(waited == child);
-    REQUIRE(WIFEXITED(status));
-    const int code = WEXITSTATUS(status) - 10;
-    REQUIRE(code >= static_cast<int>(Result::Sat));
-    REQUIRE(code <= static_cast<int>(Result::Unknown));
-    return static_cast<Result>(code);
+    // Exercise the selected theory through the real parser, atomizer and SAT
+    // callbacks. Runtime preprocessing can now prove UNSAT before constructing
+    // any theory stack; using it here would leave the backend test vacuous.
+    SOMTParser::Parser parser;
+    REQUIRE(parser.parseStr(text));
+    FrontendAdapter adapter(parser);
+    auto terms = adapter.importProblem(false);
+    auto sat = createSatSolver();
+    auto& backend = dynamic_cast<CadicalBackend&>(*sat);
+    TheoryAtomRegistry registry;
+    TheoryManager theories;
+    TheoryLemmaDatabase lemmas;
+    auto kernel = createPolynomialKernel();
+    auto* polynomialKernel = kernel.get();
+    auto algebra = std::make_unique<LibpolyBackend>(polynomialKernel);
+    auto engine = std::make_unique<nlsat::NlsatEngine>();
+    engine->setAlgebra(polynomialKernel, algebra.get());
+    engine->setNativeTerms(terms.get());
+    struct TrackedMcsat : McsatSolver {
+        size_t checks = 0;
+        TheoryCheckResult check(TheoryLemmaStorage& db, TheoryEffort effort) override {
+            ++checks;
+            return McsatSolver::check(db, effort);
+        }
+    };
+    auto mcsat = std::make_unique<TrackedMcsat>();
+    auto* tracked = mcsat.get();
+    mcsat->setEngine(std::move(engine), TheoryId::NRA);
+    mcsat->setKernel(std::move(kernel));
+    mcsat->setAlgebra(std::move(algebra));
+    theories.registerSolver(std::move(mcsat));
+    theories.setRegistry(&registry);
+    CadicalTheoryPropagator propagator(registry, theories, lemmas, backend);
+    backend.connectPropagator(&propagator);
+    struct Disconnect {
+        CadicalBackend& backend;
+        ~Disconnect() { backend.disconnectPropagator(); }
+    } disconnect{backend};
+    Atomizer atomizer(*sat);
+    registry.setContext(sat.get(), &atomizer);
+    atomizer.setRegistry(&registry);
+    atomizer.setBoolSortId(adapter.getBoolSortId());
+    atomizer.setDefaultTheory(TheoryId::NRA);
+    atomizer.setPolynomialKernel(polynomialKernel);
+    for (auto root : terms->assertions()) sat->addClause({atomizer.atomize(root, *terms)});
+    sat->setDeadline(std::chrono::steady_clock::now() + std::chrono::seconds(5));
+    const auto result = sat->solve();
+    REQUIRE(tracked->checks > 0);
+    if (result == SatSolver::SolveResult::Unsat) return Result::Unsat;
+    if (result == SatSolver::SolveResult::Sat) return Result::Sat;
+    return Result::Unknown;
 }
 
 // One-direction soundness gate. The "true" verdict comes from the

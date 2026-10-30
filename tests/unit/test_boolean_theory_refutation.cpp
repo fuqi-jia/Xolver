@@ -3,6 +3,7 @@
 #include "search/refute/PolynomialBooleanRefutation.h"
 #include "algebra/poly/PolynomialConverter.h"
 #include "base/WorkBudget.h"
+#include <xolver/Solver.h>
 
 using namespace xolver;
 
@@ -107,5 +108,40 @@ TEST_CASE("Polynomial conversion: bounded expansion and unrepresentable powers s
         auto count = terms.add(TermExpr{Kind::ConstInt, 0, {}, Payload(exponent)});
         auto huge = terms.add(TermExpr{Kind::Pow, 0, {x, count}, {}});
         CHECK_FALSE(ordinary.convert(huge, terms).ok());
+    }
+}
+
+TEST_CASE("Polynomial refutation: runtime explanations respect assumptions and scopes") {
+    for (bool integer : {false, true}) {
+        Solver solver;
+        solver.setLogic(integer ? "QF_NIA" : "QF_NRA");
+        auto op = [&](Kind kind, std::vector<Term> children) {
+            return solver.mkOp(static_cast<uint32_t>(kind), std::move(children));
+        };
+        const auto sort = integer ? solver.intSort() : solver.realSort();
+        const auto x = solver.mkConst(sort, "x");
+        const auto y = solver.mkConst(sort, "y");
+        const auto p = solver.mkConst(solver.boolSort(), "p");
+        const auto zero = integer ? solver.mkInt(0) : solver.mkReal("0");
+        const auto product = op(Kind::Mul, {x, y});
+        const auto impossible = op(Kind::Or, {
+            op(Kind::Eq, {product, zero}), op(Kind::Lt, {product, zero})});
+        const auto notP = op(Kind::Not, {p});
+        solver.assertFormula(op(Kind::Gt, {x, zero}));
+        solver.assertFormula(op(Kind::Gt, {y, zero}));
+        solver.assertFormula(op(Kind::Implies, {p, impossible}));
+        for (int repeat = 0; repeat < 2; ++repeat) {
+            REQUIRE((solver.checkSatAssuming({p}) == Result::Unsat));
+            const auto core = solver.getUnsatCore();
+            CHECK(std::find(core.begin(), core.end(), p) != core.end());
+            REQUIRE((solver.checkSatAssuming({notP}) == Result::Sat));
+            CHECK(solver.validateModel() == Solver::ModelValidation::Satisfied);
+            solver.push();
+            solver.assertFormula(p);
+            REQUIRE((solver.checkSat() == Result::Unsat));
+            solver.pop();
+            REQUIRE((solver.checkSat() == Result::Sat));
+            CHECK(solver.validateModel() == Solver::ModelValidation::Satisfied);
+        }
     }
 }
