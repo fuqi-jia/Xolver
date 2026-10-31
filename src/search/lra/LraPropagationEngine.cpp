@@ -183,12 +183,14 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
             snapshot->revision = inputRevision;
             auto& contributions = snapshot->contributions;
             if (statistics) ++statistics->rowSnapshots;
-            // A forward bound needs every contribution; a backward bound can
-            // omit only its target. Two unavailable endpoints in EACH extremum
-            // rule out both directions, regardless of the basic variable's
-            // bounds. Detect that before doing rational arithmetic or building
-            // explanations. A new non-basic bound changes inputRevision and
-            // requeues incident rows, so this cannot hide a later deduction.
+            // A forward bound needs every contribution. A backward bound also
+            // needs an explained basic endpoint and may omit only its target.
+            // Stop when the inspected prefix rules out every deduction, before
+            // rational arithmetic and explanation construction. A skipped row
+            // cannot create a basic endpoint itself; a non-basic update changes
+            // inputRevision and requeues the row before it can become useful.
+            const bool basicLower = bounds[item.basic][0].usable();
+            const bool basicUpper = bounds[item.basic][1].usable();
             int missingMinimum = 0, missingMaximum = 0;
             for (const auto& entry : row.entries) {
                 if (exhausted()) return accepted;
@@ -197,7 +199,9 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
                 const size_t minSide = entry.coeff > 0 ? 0 : 1;
                 missingMinimum += !variable[minSide].usable();
                 missingMaximum += !variable[1 - minSide].usable();
-                if (missingMinimum > 1 && missingMaximum > 1) {
+                if (missingMinimum > 0 && missingMaximum > 0 &&
+                    (!basicLower || missingMaximum > 1) &&
+                    (!basicUpper || missingMinimum > 1)) {
                     snapshot->insufficientBounds = true;
                     if (statistics) ++statistics->unproductiveSnapshots;
                     break;
