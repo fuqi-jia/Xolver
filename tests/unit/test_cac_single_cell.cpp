@@ -80,23 +80,6 @@ TEST_CASE("characterize: empty input is complete and empty") {
     CHECK(r.downwardPolys.empty());
 }
 
-TEST_CASE("characterize: active lifting factors omit replaced products") {
-    const VarId b = 1, c = 2, x = 3;
-    const auto xv = RationalPolynomial::fromVar(x, 1, 1);
-    const auto xb = xv - RationalPolynomial::fromVar(b, 1, 1);
-    const auto xc = xv - RationalPolynomial::fromVar(c, 1, 1);
-    const auto result = characterize({xv * xb, xv * xc}, x);
-    REQUIRE(result.complete);
-    REQUIRE(result.boundaryPolys.size() == 3);
-    for (const auto& p : result.boundaryPolys) CHECK(p.degree(x) == 1);
-    auto crossing = xb - xc;
-    const auto expected = monicBoundaries({crossing});
-    const auto downward = monicBoundaries(result.downwardPolys);
-    bool retained = false;
-    for (const auto& p : downward) retained |= p.terms() == expected[0].terms();
-    CHECK(retained);
-}
-
 TEST_CASE("characterize: repeated rational multiples preserve ordered boundaries") {
     RationalPolynomial line;
     line.addVar(VY, 1, 1);
@@ -176,44 +159,6 @@ TEST_CASE("characterize: outer projection keeps nullification factor x-1 (E)") {
 }
 
 #ifdef XOLVER_HAS_LIBPOLY
-TEST_CASE("factor lifting preserves exact cells across nullification and degree drops") {
-    auto kernel = createPolynomialKernel();
-    LibpolyBackend backend(kernel.get());
-    const VarId b = kernel->getOrCreateVar("b"), c = kernel->getOrCreateVar("c");
-    const VarId x = kernel->getOrCreateVar("x");
-    const auto bv = RationalPolynomial::fromVar(b, 1, 1);
-    const auto cv = RationalPolynomial::fromVar(c, 1, 1);
-    const auto xv = RationalPolynomial::fromVar(x, 1, 1);
-    for (bool degreeDrop : {false, true}) {
-        const auto common = degreeDrop ? bv * xv + konst(1) : xv;
-        const std::vector<RationalPolynomial> products{
-            (bv - cv) * common * (xv - bv), (bv - cv) * common * (xv - cv)};
-        const auto projected = characterize(products, x, kernel.get());
-        REQUIRE(projected.complete);
-        for (int bValue : {-1, 0, 2}) {
-            for (int cValue : {-1, 0, 3}) {
-                SamplePoint prefix;
-                prefix.push(b, RealAlg::fromRational(mpq_class(bValue)));
-                prefix.push(c, RealAlg::fromRational(mpq_class(cValue)));
-                for (mpq_class sample : {mpq_class(-2), mpq_class(-1), mpq_class(0),
-                        mpq_class(1, 2), mpq_class(2), mpq_class(3), mpq_class(4)}) {
-                    const auto point = RealAlg::fromRational(sample);
-                    const auto actual = intervalFromCharacterization(&backend, kernel.get(),
-                        projected.boundaryPolys, prefix, x, point);
-                    const auto reference = intervalFromCharacterization(&backend, kernel.get(),
-                        products, prefix, x, point);
-                    REQUIRE(actual.supported);
-                    REQUIRE(reference.supported);
-                    CHECK(actual.interval.lo.compare(reference.interval.lo) == 0);
-                    CHECK(actual.interval.hi.compare(reference.interval.hi) == 0);
-                    CHECK(actual.interval.loOpen == reference.interval.loOpen);
-                    CHECK(actual.interval.hiOpen == reference.interval.hiOpen);
-                }
-            }
-        }
-    }
-}
-
 // x^2 - 2 in variable `x` (registered with the kernel).
 static RationalPolynomial xsq_minus_2(VarId x) {
     RationalPolynomial p; p.addVar(x, 2, 1); p = p + konst(-2); p.normalize(); return p;

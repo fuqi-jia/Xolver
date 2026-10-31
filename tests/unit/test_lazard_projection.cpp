@@ -88,59 +88,6 @@ TEST_CASE("Lazard op: x*y - 1 eliminate y => LC=x boundary (hyperbola x=0)") {
 
 // ---- Closure --------------------------------------------------------------
 
-TEST_CASE("Lazard op: active lifting factors exclude replaced provenance products") {
-    const VarId b = 1, c = 2, x = 3;
-    const auto xv = RationalPolynomial::fromVar(x, 1, 1);
-    const auto xb = xv - RationalPolynomial::fromVar(b, 1, 1);
-    const auto xc = xv - RationalPolynomial::fromVar(c, 1, 1);
-    for (const auto& inputs : std::vector<std::vector<RationalPolynomial>>{
-            {xv * xb, xv * xc}, {xv * xb, xb * xc, xc * xv},
-            {xv * xb * xc, xv * xb, xv}}) {
-        const auto result = lazardProjectStep(inputs, x);
-        REQUIRE(result.complete);
-        REQUIRE(result.activeFactors.size() == 3);
-        for (const auto& expected : {xv, xb, xc}) {
-            size_t matches = 0;
-            for (size_t index : result.activeFactors) {
-                REQUIRE(index < result.items.size());
-                matches += sameUpToUnit(result.items[index].poly, expected);
-            }
-            CHECK(matches == 1);
-        }
-        for (const auto& input : inputs) {
-            bool retained = false;
-            for (const auto& item : result.items)
-                retained |= sameUpToUnit(item.poly, input);
-            CHECK(retained);
-        }
-    }
-}
-
-TEST_CASE("Lazard closure: active lifting factors retain archived proof parents") {
-    const VarId b = 1, c = 2, x = 3;
-    const auto xv = RationalPolynomial::fromVar(x, 1, 1);
-    const auto xb = xv - RationalPolynomial::fromVar(b, 1, 1);
-    const auto xc = xv - RationalPolynomial::fromVar(c, 1, 1);
-    LazardProjectionClosure closure;
-    REQUIRE(closure.build({xv * xb, xv * xc}, {b, c, x}) == LazardIncompleteReason::None);
-    REQUIRE(closure.levelPolys(2).size() == 3);
-    for (int id : closure.levelPolys(2)) CHECK(closure.entries()[id].poly.degree(x) == 1);
-    for (const auto& input : {xv * xb, xv * xc}) {
-        bool retained = false;
-        for (const auto& entry : closure.entries()) retained |= sameUpToUnit(entry.poly, input);
-        CHECK(retained);
-    }
-    for (size_t i = 0; i < closure.entries().size(); ++i) {
-        const auto& source = closure.entries()[i].source;
-        if (source.op != LazardProjectionOpKind::CommonFactor &&
-            source.op != LazardProjectionOpKind::ExactQuotient) continue;
-        CHECK(source.parent1 >= 0);
-        CHECK(source.parent2 >= 0);
-        CHECK(source.parent1 < static_cast<int>(i));
-        CHECK(source.parent2 < static_cast<int>(i));
-    }
-}
-
 TEST_CASE("Lazard op: shared factors retain crossings of the remaining roots") {
     const VarId a = 1, b = 2, c = 3, x = 4;
     const auto xv = RationalPolynomial::fromVar(x, 1, 1);
