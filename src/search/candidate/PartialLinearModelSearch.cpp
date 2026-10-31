@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <chrono>
 #include <map>
+#include <limits>
 #include <set>
 
 namespace xolver {
@@ -204,6 +205,8 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
             ++stats.linearChecks;
             const auto result = simplex.checkUntil(deadline);
             stats.exhausted |= result == GeneralSimplex::Result::Unknown;
+            if (result == GeneralSimplex::Result::Unknown)
+                throw ResourceExhausted("partial linear feasibility allocation exhausted");
             return result;
         };
         std::map<VarId, int> columns;
@@ -211,9 +214,15 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
             tick();
             columns[var] = simplex.addVar(std::string(kernel.varName(var)));
         }
-        const auto reason = SatLit::positive(1); // private; never exported
-        auto fix = [&](int column, const mpq_class& value, int level) {
-            const BoundInfo bound(BoundValue(DeltaRational(value)), reason);
+        if (parameters.size() > static_cast<size_t>(std::numeric_limits<int>::max()) ||
+            parameters.size() >= std::numeric_limits<SatVar>::max() ||
+            atoms.size() >= std::numeric_limits<SatVar>::max() - parameters.size()) return std::nullopt;
+        // These private IDs distinguish parameter choices from original atoms;
+        // they never enter the caller's SAT solver or escape as a refutation.
+        auto fix = [&](int column, const mpq_class& value, size_t depth) {
+            const BoundInfo bound(BoundValue(DeltaRational(value)),
+                                  SatLit::positive(static_cast<SatVar>(depth + 1)));
+            const int level = static_cast<int>(depth) + 1;
             return simplex.assertLower(column, bound, level) &&
                    simplex.assertUpper(column, bound, level);
         };
@@ -243,6 +252,8 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
         using Row = std::vector<std::pair<int, mpq_class>>;
         std::map<std::pair<Row, mpq_class>, int> definitions;
         std::vector<bool> active(atoms.size(), false);
+        std::vector<std::vector<size_t>> atomParameters(atoms.size()), atomDependencies(atoms.size());
+        std::optional<std::vector<size_t>> directConflict;
         std::vector<std::vector<size_t>> introduced(parameters.size() + 1);
         std::vector<std::vector<size_t>> affected(parameters.size());
         std::map<VarId, size_t> parameterDepth;
@@ -263,10 +274,39 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
                 }
             for (const auto var : support) {
                 tick();
-                if (const auto it = parameterDepth.find(var); it != parameterDepth.end())
+                if (const auto it = parameterDepth.find(var); it != parameterDepth.end()) {
                     affected[it->second].push_back(index);
+                    atomParameters[index].push_back(it->second);
+                }
             }
         }
+        auto conflictDependencies = [&]() {
+            std::set<size_t> dependencies;
+            bool explained = !simplex.getConflict().empty();
+            for (const auto& bound : simplex.getConflict()) {
+                tick();
+                const size_t id = bound.reason.var;
+                if (!bound.reason.sign || !id) { explained = false; break; }
+                if (id <= parameters.size()) {
+                    const size_t depth = id - 1;
+                    if (!selected.contains(parameters[depth])) { explained = false; break; }
+                    dependencies.insert(depth);
+                } else {
+                    const size_t index = id - parameters.size() - 1;
+                    if (index >= atoms.size() || !active[index]) { explained = false; break; }
+                    dependencies.insert(atomDependencies[index].begin(), atomDependencies[index].end());
+                }
+            }
+            if (!explained) {
+                ++stats.explanationFallbacks;
+                dependencies.clear();
+                for (const auto& [var, value] : selected) {
+                    (void)value;
+                    dependencies.insert(parameterDepth.at(var));
+                }
+            }
+            return std::vector<size_t>(dependencies.begin(), dependencies.end());
+        };
         auto activate = [&](const std::vector<size_t>& indices, int level) {
             for (const auto index : indices) {
                 tick();
@@ -293,12 +333,22 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
                 if (!affine) continue;
                 active[index] = true;
                 introduced[level].push_back(index);
+                auto& dependencies = atomDependencies[index];
+                dependencies.clear();
+                for (const auto depth : atomParameters[index]) {
+                    tick();
+                    if (selected.contains(parameters[depth])) dependencies.push_back(depth);
+                }
+                const auto reason = SatLit::positive(static_cast<SatVar>(parameters.size() + index + 1));
                 Row row;
                 for (const auto& [column, coefficient] : coefficients)
                     if (coefficient != 0) row.emplace_back(column, coefficient);
                 const auto relation = constraints[index].rel;
                 if (row.empty()) {
-                    if (!holds(constant, relation)) return false;
+                    if (!holds(constant, relation)) {
+                        directConflict = dependencies;
+                        return false;
+                    }
                     continue;
                 }
                 if (relation == Relation::Neq) continue; // final original-model check
@@ -306,7 +356,8 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
                 auto it = definitions.find(key);
                 if (it == definitions.end()) {
                     const int auxiliary = simplex.addConstraint(row, -constant);
-                    if (auxiliary < 0) return false;
+                    if (auxiliary < 0)
+                        throw ResourceExhausted("partial linear row registration failed");
                     it = definitions.emplace(key, auxiliary).first;
                     ++stats.definitions;
                 }
@@ -350,7 +401,8 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
             std::vector<mpq_class> values;
             // A retained child assignment can violate its parent's bounds.
             // Repair before taking a concrete value from this prefix.
-            if (check() != GeneralSimplex::Result::Sat) return values;
+            if (check() != GeneralSimplex::Result::Sat)
+                return CandidateChoices<mpq_class>{{}, conflictDependencies()};
             const auto var = parameters[depth];
             const auto& b = intervals[var];
             auto add = [&](const mpq_class& value) {
@@ -369,8 +421,7 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
             if (b.lower && !b.lower->strict) lower = b.lower->value;
             if (b.upper && !b.upper->strict) upper = b.upper->value;
             for (const auto& endpoint : boundaryCandidates(lower, upper)) add(endpoint);
-            const auto current = simplex.value(columns.at(var));
-            addRounded(mpq_class(current.a + current.b * simplex.computeSafeDelta()));
+            const auto endpointCount = values.size();
             if (b.lower && b.upper) addRounded(mpq_class((b.lower->value + b.upper->value) / 2));
             for (const int seed : {0, 1, -1}) {
                 mpq_class q = seed;
@@ -378,31 +429,72 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
                 if (b.lower && q <= b.lower->value) q = b.lower->value + (b.lower->strict ? 1 : 0);
                 add(q);
             }
-            return values;
+            auto independent = std::move(values);
+            values.assign(independent.begin(), independent.begin() + endpointCount);
+            const auto current = simplex.value(columns.at(var));
+            addRounded(mpq_class(current.a + current.b * simplex.computeSafeDelta()));
+            bool dependent = false;
+            for (const auto& q : values)
+                dependent |= std::find(independent.begin(), independent.end(), q) == independent.end();
+            for (size_t index = endpointCount; index < independent.size(); ++index) add(independent[index]);
+            CandidateChoices<mpq_class> result{std::move(values), {}};
+            if (dependent) {
+                ++stats.dependentDomains;
+                // An arbitrary simplex point can depend on every active bound.
+                // Static endpoints/seeds need no such dependency when they
+                // already cover all of the point-derived candidate values.
+                for (size_t previous = 0; previous < depth; ++previous)
+                    result.dependencies.push_back(previous);
+            }
+            return result;
         };
         auto apply = [&](size_t depth, const mpq_class& value) {
             tick();
             const int level = static_cast<int>(depth) + 1;
             selected[parameters[depth]] = value;
-            if (!fix(columns.at(parameters[depth]), value, level) ||
-                !activate(affected[depth], level)) return false;
-            return check() == GeneralSimplex::Result::Sat;
+            directConflict.reset();
+            if (!fix(columns.at(parameters[depth]), value, depth))
+                return CandidatePropagation::reject(conflictDependencies());
+            if (!activate(affected[depth], level)) {
+                // A constant violation is explained directly; a failed bound
+                // assertion carries the simplex's currently active reasons.
+                if (directConflict) return CandidatePropagation::reject(*directConflict);
+                return CandidatePropagation::reject(conflictDependencies());
+            }
+            if (check() != GeneralSimplex::Result::Sat)
+                return CandidatePropagation::reject(conflictDependencies());
+            return CandidatePropagation::accept();
         };
         auto push = [&](size_t depth, const mpq_class& value) {
             ++stats.choices;
             stats.maxDepth = std::max(stats.maxDepth, depth + 1);
-            const bool feasible = apply(depth, value);
-            stats.rejectedChoices += !feasible;
-            return feasible;
+            auto result = apply(depth, value);
+            stats.rejectedChoices += result.conflict.has_value();
+            return result;
         };
         auto pop = [&](size_t depth) {
             simplex.backtrackToLevel(static_cast<int>(depth), GeneralSimplex::AssignmentPolicy::Preserve);
-            for (auto index : introduced[depth + 1]) active[index] = false;
+            for (auto index : introduced[depth + 1]) {
+                active[index] = false;
+                atomDependencies[index].clear();
+            }
             introduced[depth + 1].clear();
             selected.erase(parameters[depth]);
             selectedPowers.erase(parameters[depth]);
         };
-        return searchBoundaryCandidates(parameters.size(), candidates, push, pop, complete);
+        CandidateSearchStatistics traversal;
+        auto recordTraversal = [&]() {
+            stats.backjumps = traversal.backjumps;
+            stats.skippedLevels = traversal.skippedLevels;
+        };
+        try {
+            auto result = searchBoundaryCandidates(parameters.size(), candidates, push, pop, complete, &traversal);
+            recordTraversal();
+            return result;
+        } catch (...) {
+            recordTraversal();
+            throw;
+        }
     } catch (const ResourceExhausted&) {
         stats.exhausted = true;
     } catch (const std::exception&) {

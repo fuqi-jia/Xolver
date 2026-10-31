@@ -19,6 +19,8 @@ public:
         size_t variables = 0, parameters = 0, contexts = 0, linearChecks = 0;
         size_t retainedEqualityVariables = 0;
         size_t choices = 0, rejectedChoices = 0, definitions = 0, modelChecks = 0, maxDepth = 0;
+        size_t backjumps = 0, skippedLevels = 0, explanationFallbacks = 0;
+        size_t dependentDomains = 0;
         bool exhausted = false;
     };
 
