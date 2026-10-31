@@ -16,12 +16,14 @@ struct PolynomialLinearStatistics {
     size_t reusedRows = 0;
     size_t retainedRows = 0;
     bool exhausted = false;
+    size_t productFacts = 0, reusedProductRows = 0, closureChecks = 0;
 };
 
 // Refute a polynomial assignment by an exact linear relaxation over the reals.
-// Each distinct canonical monomial is an unconstrained shared column. This is
-// also sound for integer clients; no integrality or product identities are
-// assumed. Disequalities are omitted. Feasibility establishes no SAT result.
+// Each canonical monomial starts as an independent shared column. Exact fixed
+// factors justify explained product identities; no candidate point or integer
+// rounding is used to derive them. This is sound for real and integer clients.
+// Disequalities are omitted. Feasibility establishes no SAT result.
 // Returned literals are the original premises of an exact Simplex conflict.
 // Definitions are unconditional s = polynomial equations and survive between
 // checks. Every check replaces the complete explained bound base. Call reset
@@ -49,6 +51,8 @@ private:
     // A source may change polynomial as well as polarity. Compare its entire
     // polynomial before reusing a definition; identity alone is insufficient.
     std::unordered_map<SatVar, Row> rows_;
+    using LinearRow = std::vector<std::pair<int, mpq_class>>;
+    std::map<LinearRow, int> productRows_;
 };
 
 } // namespace xolver

@@ -97,8 +97,8 @@ time.sleep(300)
             def read_state():
                 try:
                     return state.read_text().rsplit(')', 1)[1].split()[0]
-                except FileNotFoundError:
-                    return None  # init reaped the child before this read
+                except (FileNotFoundError, ProcessLookupError):
+                    return None  # init reaped the child while /proc was opened or read
 
             for _ in range(100):
                 if read_state() in (None, 'Z', 'X'):

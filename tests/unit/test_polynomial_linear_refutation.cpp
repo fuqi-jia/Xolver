@@ -151,9 +151,8 @@ TEST_CASE("Polynomial linear refutation: shared canonical products explain stric
     CHECK(PolynomialLinearRefuter{}.check({
         {square - constant(mpq_class(2, 3)), Relation::Eq, SatLit::positive(1)},
         {y * x * x - constant(mpq_class(2, 3)), Relation::Lt, SatLit::positive(2)}}, deadline()));
-    // A relaxed monomial may disagree with the product of the base columns.
-    // That must remain open, even though the original equations are UNSAT.
-    CHECK_FALSE(PolynomialLinearRefuter{}.check({
+    // Exact fixed base values now justify an explained product identity.
+    CHECK(PolynomialLinearRefuter{}.check({
         {p - x, Relation::Eq, SatLit::positive(1)},
         {x - constant(1), Relation::Eq, SatLit::positive(2)},
         {y - constant(2), Relation::Eq, SatLit::positive(3)}}, deadline()));
@@ -274,4 +273,66 @@ TEST_CASE("Polynomial linear refutation: reused branch contexts and their confli
             CHECK(freshConflict(premises));
         }
     }
+}
+
+
+TEST_CASE("Polynomial linear refutation: exact factor identities reuse definitions and withdraw their explanations") {
+    const auto x = variable(0), y = variable(1), z = variable(2);
+    std::vector<SignRefuteConstraint> constraints{
+        {x - constant(2), Relation::Eq, SatLit::positive(1)},
+        {x * y - constant(6), Relation::Eq, SatLit::positive(2)},
+        {y * z - constant(12), Relation::Eq, SatLit::positive(3)},
+        {z - constant(5), Relation::Eq, SatLit::positive(4)}};
+    PolynomialLinearRefuter refuter;
+    PolynomialLinearStatistics stats;
+    const auto conflict = refuter.check(constraints, deadline(), &stats);
+    REQUIRE(conflict);
+    CHECK(conflict->size() == 4);
+    CHECK(stats.productFacts >= 2);
+    for (const auto& c : constraints)
+        CHECK(std::find(conflict->begin(), conflict->end(), c.reason) != conflict->end());
+    auto withdrawn = constraints;
+    withdrawn.erase(withdrawn.begin());
+    REQUIRE_FALSE(refuter.check(withdrawn, deadline(), &stats));
+    CHECK(stats.reusedProductRows > 0);
+    WorkBudget work;
+    const auto model = refuter.projectCandidate(withdrawn, work);
+    REQUIRE(model);
+    for (const auto& c : withdrawn) CHECK(c.poly.evaluateRational(*model) == 0);
+    CHECK(model->at(0) == mpq_class(5, 2));
+    CHECK(model->at(1) == mpq_class(12, 5));
+    constraints[0].reason = SatLit::negative(20);
+    const auto rebound = refuter.check(constraints, deadline());
+    REQUIRE(rebound);
+    CHECK(std::find(rebound->begin(), rebound->end(), SatLit::positive(1)) == rebound->end());
+    CHECK(std::find(rebound->begin(), rebound->end(), SatLit::negative(20)) != rebound->end());
+    constraints[0].poly = x - constant(mpq_class(5, 2));
+    CHECK_FALSE(refuter.check(constraints, deadline()));
+    refuter.reset();
+    CHECK_FALSE(refuter.check({}, deadline(), &stats));
+    CHECK(stats.retainedRows == 0);
+}
+
+TEST_CASE("Polynomial linear refutation: zero products avoid huge powers and optional coefficient growth is bounded") {
+    const auto x = variable(0), y = RationalPolynomial::fromVar(1, 2147483647, 1);
+    PolynomialLinearRefuter refuter(0);
+    PolynomialLinearStatistics stats;
+    std::vector<SignRefuteConstraint> constraints{
+        {x, Relation::Eq, SatLit::positive(1)},
+        {x * y, Relation::Gt, SatLit::negative(2)}};
+    const auto conflict = refuter.check(constraints, deadline(), &stats);
+    REQUIRE(conflict);
+    CHECK(conflict->size() == 2);
+    CHECK(stats.productFacts == 1);
+    CHECK_FALSE(stats.exhausted);
+    constraints.erase(constraints.begin());
+    CHECK_FALSE(refuter.check(constraints, deadline()));
+    const auto huge = RationalPolynomial::fromVar(0, 2147483647, 1);
+    constraints = {{x - constant(2), Relation::Eq, SatLit::positive(3)},
+                   {huge - constant(1), Relation::Eq, SatLit::positive(4)}};
+    CHECK_FALSE(refuter.check(constraints, deadline(), &stats));
+    CHECK(stats.exhausted);
+    constraints[0].poly = x - constant(1);
+    CHECK_FALSE(refuter.check(constraints, deadline(), &stats));
+    CHECK_FALSE(stats.exhausted);
 }

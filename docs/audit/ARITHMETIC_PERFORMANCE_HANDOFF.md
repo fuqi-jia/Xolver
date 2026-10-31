@@ -40,6 +40,43 @@ Older tables describe their own frozen versions and evidence boundaries.
 
 ## Current arithmetic and ASP continuation
 
+[PR88](https://github.com/fuqi-jia/Xolver/pull/88), core `32d23ec3`, closes the
+shared real/integer polynomial linear refuter over exact fixed-factor identities:
+entailed `x = c` yields explained `x*y = c*y`. Only unconditional row definitions
+survive; every check replaces conditional bounds and expands their transitive
+original premises. No sampled model values or integer rounding justify facts.
+R1227 qualifies the canonical source and CLI/SV/worker/Python binaries; all39
+R1228 server groups pass, including1893 units /986870 assertions and31 Python
+API tests. The same-layout old algorithm fails both new focused tests.
+
+R1230 seals fresh fixed160: **101 baseline/103 candidate/118 verified Z3**
+(125 raw Z3 decisions). SAT gains69 (timeout→17.559s) and146 (timeout→16.265s)
+have independently replayed initial models; no losses, opposite verdicts or
+invalid models. Baseline/candidate each have2 unknowns; timeouts57/55. Verified
+PAR-2 is7390.501/7179.970/5398.871; the two gains explain most of the improvement,
+while other single-round timing changes are not an established general speedup.
+All160 original triads are budget-valid; no replacement is needed. Seven
+unconfirmed Z3 UNSATs stay excluded. Exact delivery-head PR CI and postmerge
+main CI remain required. Audit-document delivery updates need no extra server
+archive. See [the phase evidence](FIXED_FACTOR_MONOMIAL_STAGE_20261031.json).
+PR88 delivery CI41192531385 passes proofs, native units, all941 regressions
+and136 quantified differential cases, but fails the process-cancellation test:
+Linux can return ESRCH when `/proc/<pid>/stat` disappears during a read. Handle
+`ProcessLookupError` alongside `FileNotFoundError`; keep the live-descendant,
+timeout and stale-reply assertions. R1238 deterministically reproduces the old
+failure, passes the fixed test, five ordinary cancellations and the full tool
+harness. Only this test and audit documents change; qualified solver sources,
+CLI/SV/worker/library/unit bytes and full160 evidence are reused. Rerun exact-head
+PR CI before merge; no extra server archive is needed.
+
+Both protected sets remain unused; Xolver has not surpassed Z3. The controlled
+current-kernel QCP comparison is running separately and supplies no score yet.
+
+PR87 is merged as main `f5e75646`; exact delivery `dd2e3510` passes both jobs of
+[PR CI41189844465](https://github.com/fuqi-jia/Xolver/actions/runs/41189844465).
+[Postmerge main CI41191532259](https://github.com/fuqi-jia/Xolver/actions/runs/41191532259)
+passes both jobs; the PR87 delivery is complete.
+
 [PR87](https://github.com/fuqi-jia/Xolver/pull/87) implements generic exact root
 refutations, complete square models and canonical algebraic model/DSL output,
 core `ffa78765`. R1215 qualifies the canonical source, CLI/SV/worker and native
@@ -3768,7 +3805,7 @@ or superiority. See [prototype evidence](NRA_ROOT_REFUTATION_STAGE_20261031.json
 R1215 then qualifies committed coreffa78765; all39 R1217 server groups pass,
 including1891 cases/986840 assertions and31 same-core Python tests. R1220 seals
 fresh full160: verified101/101/117, no solving gain/loss or wrong/invalid model,
-PAR-27386.707/7382.464/5452.788. Baseline/candidate unknowns are1/2;156 changes
+PAR-2 7386.707/7382.464/5452.788. Baseline/candidate unknowns are1/2;156 changes
 from timeout to unknown and remains unsolved. Original triad144 is excluded
 solely for a measured389.735s baseline wall-budget violation after its run
 terminates; a complete valid replacement is selected. The raw original remains
