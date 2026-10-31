@@ -1,0 +1,228 @@
+{
+  "schema": "xolver-polynomial-residue-stage/1",
+  "implementation_commit": "243a267fa8fbeb39e3bd796b32dc28de31148b99",
+  "source_manifest_sha256": "ee2270b70b57276f87ec3390c037253e47b8ba9c10b42c968553b8c199cf8eab",
+  "native_qualification_sha256": "b3a16dd390a7102b4f8eaf6437a37238a5a6a926981d795f7b1e0274574f2a99",
+  "binaries": {
+    "xolver": "8dc1884e8ac2b43d3d1da45d581e42c6fd9a91df6c71a64efbad8b2bca5fbf07",
+    "xolver-sv": "cc77330d73a37508c851a33123e2bf888e07d749f2768de360b5f1542159fcb7",
+    "xolver-parallel-worker": "86e868a97338665c4c427d58afc71c02a025ad47e939e1a8bbe3b50d6d370275"
+  },
+  "unit_binary_sha256": "17db13c6888f57fb4a18b1e285694e70a0fef01b98bd6a013ae69dc7a8f5014a",
+  "library_sha256": "8a73c3922a660a95e2634b2dc485afbbb06625f5955be66fd3d1cb89c7165088",
+  "native_build_runs": [
+    {
+      "experiment": "345289434c91",
+      "run": "cc37c244f00c",
+      "input": "build",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "4"
+        ]
+      }
+    }
+  ],
+  "acceptance_groups": 39,
+  "unit_cases": 1883,
+  "unit_assertions": 986681,
+  "audit_file": "validation/arithmetic-r103/stage-r1120.json",
+  "audit_sha256": "76dee94deb3cc88f9d4e5d762173aee9a9a6fdc34f01c73dffe292fb56f7c3d2",
+  "formal": {
+    "cases": 160,
+    "timeout": 60,
+    "memory_bytes": 17179869184,
+    "model_capture": "initial-solve-single-model",
+    "counts": {
+      "baseline": {
+        "unsat": 46,
+        "decided": 101,
+        "verified_decided": 101,
+        "verified_par2": 7394.575829686597,
+        "raw_par2": 7394.575829686597,
+        "timeout": 58,
+        "sat": 55,
+        "unknown": 1
+      },
+      "candidate": {
+        "unsat": 46,
+        "decided": 101,
+        "verified_decided": 101,
+        "verified_par2": 7381.610411021858,
+        "raw_par2": 7381.610411021858,
+        "timeout": 58,
+        "sat": 55,
+        "unknown": 1
+      },
+      "z3": {
+        "unsat": 58,
+        "decided": 124,
+        "verified_decided": 117,
+        "verified_par2": 5501.697757784277,
+        "raw_par2": 4706.888175051659,
+        "sat": 66,
+        "timeout": 36
+      }
+    },
+    "changes": [],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "unverified": [
+      {
+        "index": 12,
+        "case": "QF_LIA/fft/Sz128_2823.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 24,
+        "case": "QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 27,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 42,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep2a.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 80,
+        "case": "QF_LIA/cut_lemmas/20-vars/cut_lemma_03_004.smt2",
+        "results": {
+          "z3": "unsat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 114,
+        "case": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 159,
+        "case": "QF_NRA/20161105-Sturm-MGC/mgc_07.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      }
+    ]
+  },
+  "invalid_original_triads": [
+    {
+      "index": 45,
+      "run": "09abeb05c447",
+      "reason": "observed_wall_budget_violation",
+      "report_sha256": "edce3c0c66b74bf907f242ced6bc6901501bd2abb980f8ed1ffffa79df93cdeb"
+    },
+    {
+      "index": 56,
+      "run": "85e312aefcb3",
+      "reason": "observed_wall_budget_violation",
+      "report_sha256": "e8fd9bbe2a5109b695a1bc4d2b0b9409c805548b0a458aeefbe3f7fb9eb2448a"
+    },
+    {
+      "index": 140,
+      "run": "d6aeb7cf8043",
+      "reason": "observed_wall_budget_violation",
+      "report_sha256": "4c29f30eec9f9862783355c9b72a62fbb35d09ce47eca1d34e7c021794330629"
+    }
+  ],
+  "isolated_regression": {
+    "report_sha256": "552f678a55d3d5d2477c72b104f6af211d2543e82a9a0f39cb69c2d29e0ce143",
+    "input_sha256": "a2e8a18b34eea1e35aa00fcf9152efb772cae4dc6b76f0891b8541d843367c4d",
+    "proof_record_sha256": "bc9eb57e81f0e351372aa1112abd4b733de0b1262a945286f204ea356fd3e006",
+    "certificate": {
+      "input_sha256": "a2e8a18b34eea1e35aa00fcf9152efb772cae4dc6b76f0891b8541d843367c4d",
+      "certificate_sha256": "cb704166fc080b32a1a6853be4067eae6e10a67c7fb024b5cacb6c61395d04fa",
+      "checker_sha256": "c61a8575ea8f1068dba94f7c0fe498bb34bb0208ffb9594fcb4c2ed3bf4e1989",
+      "result": "unsat",
+      "checked_residue_classes": 81,
+      "variables": [
+        "w",
+        "x",
+        "y",
+        "z"
+      ],
+      "boundary": "Exact original AST evaluation over all 3^4 residue classes. Every class violates an asserted positive-conjunction equality. Integer +,-,* preserve congruence, so no integer model exists. No Xolver arithmetic, polynomial normalization or model is used. This isolated regression is not part of fixed160.",
+      "protected_sets_used": false
+    },
+    "observations": {
+      "baseline": {
+        "result": "unsat",
+        "seconds": 19.90752048790455
+      },
+      "candidate": {
+        "result": "unsat",
+        "seconds": 0.06851079314947128
+      },
+      "z3": {
+        "result": "timeout",
+        "seconds": 60.00465935282409
+      }
+    },
+    "baseline_verified": true,
+    "candidate_verified": true,
+    "boundary": "Independent complete residue certificate establishes UNSAT eligibility for both timed Xolver decisions. Z3 and cvc5 time out. Raw comparison verification flags remain unchanged; this separate regression never changes fixed160 counts."
+  },
+  "certificate_file": "docs/audit/COUPLED_SQUARE_RESIDUE_CERTIFICATE.json",
+  "checker": "tools/soundness/polynomial_residue_certificate.py",
+  "reproduction": [
+    "python3 tools/soundness/polynomial_residue_certificate.py check tests/regression/nia/coupled_square_residues_unsat.smt2 docs/audit/COUPLED_SQUARE_RESIDUE_CERTIFICATE.json"
+  ],
+  "final_source_qualification": "validation/arithmetic-r103/residue-certificate-r1121/qualification.json",
+  "protected_sets_used": false,
+  "boundary": "The full160 round has no solving gain or loss; its12.965s PAR-2 decrease in one round is not an established aggregate improvement. The81-class certificate verifies only the separate coupled-square regression. Final checker-source qualification must prove unchanged solver artifacts before reusing the native acceptance and comparison. PR85 and postmerge main CI remain delivery gates; no whole-solver or real-program-set superiority is claimed.",
+  "delivered_baseline_main_ci": {
+    "id": 41170953772,
+    "head_sha": "b9a15a256569067f21561678ae2b4df4f446baca",
+    "status": "in_progress",
+    "conclusion": null
+  }
+}

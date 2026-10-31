@@ -40,52 +40,55 @@ Older tables describe their own frozen versions and evidence boundaries.
 
 ## Current arithmetic and ASP continuation
 
-The latest delivered arithmetic stage is [PR83](https://github.com/fuqi-jia/Xolver/pull/83):
-core `65c9cb8c`, merged as `d3b767af`. Current main `5b8592b0` only merges the
-already-delivered Draco history and has the same source tree. Exact-head
-[PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/41162240789) and latest
-[main CI](https://github.com/fuqi-jia/Xolver/actions/runs/41165659029) both pass
-build-test and proof-gate. The earlier main run41164344182 was cancelled by
-the newer history-only push; it is not a functional failure. All39 native
-groups pass, with1873 unit cases/986585 assertions.
+[PR84](https://github.com/fuqi-jia/Xolver/pull/84) is merged as main `b9a15a25`.
+Its exact delivery head `d753bfa5` passes both jobs of
+[PR CI41169407864](https://github.com/fuqi-jia/Xolver/actions/runs/41169407864).
+EOS `601c890f32c3` qualifies the final canonical comparison tool: 16 tool tests
+and 243 targeted native cases pass; CLI/SV/worker/unit hashes match the 1877-case
+solver qualification. Frozen delivered CLI:
+`aab07fcc078c31c3aaf25b38cab9219b9cc750213357db0f0cd9cac39553e12a`.
+The postmerge [main CI41170953772](https://github.com/fuqi-jia/Xolver/actions/runs/41170953772)
+is still running at this evidence snapshot; its proof gate passes.
 
-R1089 records100 baseline→102 candidate verified results.149 improves from a
-baseline timeout to0.166s SAT;51 is timing-sensitive and is not a stable attributed
-gain. There are no lost solves, opposite verdicts or invalid exported models.
-Its recorded Z3 score is117 verified/124 raw, with seven unconfirmed UNSATs
-excluded. A subsequent protocol audit found that original inputs32/47/108/122
-already request get-model while the legacy runner also adds -model, causing
-extra Z3 model exports. Preserve those exact-command observations; they are not
-a final uniform single-export Z3 timing comparison. Xolver has not surpassed Z3.
+[PR85](https://github.com/fuqi-jia/Xolver/pull/85) develops shared integer
+polynomial residue refutation, core `243a267f`. Reduce coefficients before
+collecting variables, enumerate independent components, and retain original
+SAT premises for every conflict. The bounded Boolean prepass checks explicit
+integer sorts and shares the same implementation with NIA algebraic reasoning.
+No integer residue rule is applied to real variables. R1115 passes 67 targeted
+cases / 782 assertions. All 39 R1116 native groups pass, including 1883 unit
+cases / 986681 assertions. Frozen candidate CLI:
+`8dc1884e8ac2b43d3d1da45d581e42c6fd9a91df6c71a64efbad8b2bca5fbf07`.
 
-The next core `45570429`, in [draft PR84](https://github.com/fuqi-jia/Xolver/pull/84),
-reuses candidate evaluation across one immutable assignment and checks deadlines
-inside DAG traversal. Native R1096 qualification passes243 targeted cases/23553
-assertions; all39 R1097 groups pass, including1877 unit cases/986592 assertions.
-The frozen CLI is `aab07fcc078c31c3aaf25b38cab9219b9cc750213357db0f0cd9cac39553e12a`;
-the comparison baseline is the delivered CLI b9f3e3ff. The constructed shared-DAG
-speedup remains a local result; original47/108/122 profiles still time out.
+R1120 seals a fresh fixed160 round: **101 delivered main / 101 candidate / 117 Z3
+verified**, with 124 Z3 raw decisions. Both Xolver versions have 55 SAT, 46 UNSAT,
+58 timeouts and 1 unknown. No gained/lost solves, opposite verdicts or invalid
+models. PAR-2 is 7394.576/7381.610/5501.698s; the 12.965s single-round difference
+does not establish an aggregate speedup. All timed solves use 60s, one leased
+physical CPU and 16GiB, and export one initial model. Three complete triads
+(45/56/140) replace observed wall-budget violations; their raw records remain.
+Unconfirmed UNSATs 12/24/27/42/80/114/159 remain excluded.
 
-The single-model protocol fix passes16 tool tests and actual pinned-Z3 checks:
-with an explicit get-model, legacy -model exports twice and the corrected request
-exports once. Original input hashes and assertions are preserved. Current round
-R1098 has150 valid triads whose commands already match this policy. Six budget
-violations (93/114/118/119/128/138) and four redundant-export triads are replaced
-as COMPLETE triads, using the same frozen binaries and60s/one leased physical
-CPU/16GiB per solver.128's R1101 replacement passes; R1107/R1108 handle the others.
-R1099 checks every selected command before refining capture metadata; raw
-decisions and times are unchanged. The completed effective-single-export round
-verifies101 main/101 candidate/117 Z3 (124 raw), no gains/losses/errors.
-PAR-2 is7398.656/7394.498/5515.109. The4.157s difference in one round does not
-establish aggregate improvement. The local shared-DAG/resource fix is retained;
-final validation-tool source qualification and exact delivery-head CI remain
-pending. Seven unconfirmed Z3 UNSATs stay excluded.
+The separate coupled-square regression improves 19.908s→0.068511s under the
+same budgets, while Z3 and cvc5 time out. An independent direct-AST checker
+validates all 81 original residue classes, proving UNSAT without using Xolver
+arithmetic. The unit test changes 120.034762s→0.018012s. These are local results
+outside fixed160. The published certificate and reproducible checker are
+[recorded here](POLYNOMIAL_RESIDUE_STAGE_20261031.json). Final offline-checker
+source qualification and exact delivery-head CI gate PR85 promotion.
 
-The completed original GCD pair on the earlier d80fb40b worker verifies all nine
-original VCs with each backend and audits296 actual native calls/70 unique
-formulas per backend. It does not qualify a final-kernel program-set comparison.
-Both independent protected sets remain unused. Earlier named rounds and receipts
-below describe their own frozen source snapshots and protocol boundaries.
+R1099's preceding candidate-cache round also verifies 101/101/117 with no solving
+gain. Earlier R1089 records 100→102 and legacy duplicate Z3 model exports on
+32/47/108/122; those historical timings are not the current single-export round.
+The R1113 early-quadratic experiment solves none of 27/34/42/116 and is closed.
+No overall superiority over Z3 is established.
+
+The original GCD pair on the earlier d80fb40b worker verifies all nine original
+VCs with each backend and audits 296 actual native calls / 70 unique formulas per
+backend. This does not qualify a final-kernel original multi-program QCP round.
+Both independent protected sets remain unused. No extra current-main server
+archive is a delivery prerequisite. Earlier named rounds describe their own
+frozen sources and evidence boundaries.
 
 The retained branches are `main`, `feat/qcp-foundations` (QCP and solver
 foundations), and `feat/draco-asp`. Historical branch tips are archived in
@@ -3594,28 +3597,32 @@ per-input command-equivalence check. Final source qualification and PR84 exact
 head CI remain required. Both protected sets are untouched, and the final-kernel
 original multi-program QCP comparison remains outstanding.
 
-### Integer residue components before the SAT portfolio (in progress)
+### Shared integer residue components (R1115–R1121)
 
-The delivered candidate-evaluation source is finally source-qualified by EOS
-`601c890f32c3`: all four relevant executable hashes match source 45570429,
-16 canonical comparison tests and 243 targeted native cases pass. This authorizes
-reuse of the 39-group / 1877-case acceptance and corrected 101/101/117 fixed160
-round; exact-head PR84 CI still gates delivery.
+The measured root cause is starvation of exact modular reasoning behind a
+SAT-only portfolio, plus collecting irrelevant quotient and disconnected
+variables before the old enumeration cap. Shared coefficient reduction and
+component enumeration now run in the Boolean prepass and the NIA algebraic
+stage. Every conflict has a complete finite residue justification and original
+equality premises. Incomplete search yields no verdict. The existing NIA
+controls, LRA/LIA withdrawal policies and public solver API are preserved.
 
-R1111 profiles public UNSAT gaps 27/34/42/116. A private R1113 early-quadratic
-reuse passes 16 selected cases / 598 assertions, but R1114 still times out on all
-four in 20-second diagnostics; no quadratic certificate is produced. That
-experiment is closed and its transform is not production code.
+R1115 qualifies committed core 243a267f; R1116 passes all 39 acceptance groups,
+1883 cases / 986681 assertions. R1120 seals the full 160 comparison and independent
+81-class local regression certificate. Its SHA-256 is
+`76dee94deb3cc88f9d4e5d762173aee9a9a6fdc34f01c73dffe292fb56f7c3d2`.
+Verified coverage remains 101/101/117; no original gap is closed. The local
+19.908s→0.068511s result is retained without claiming whole-suite superiority.
 
-An independent existing regression, `NIA-Core: 4-var modular system over mod 3`,
-takes 120.034762s in the accepted R1097 full unit run. Its two equalities imply
-x=y=0 modulo 3 and x+y=1 modulo 3. The new shared residue refuter reduces
-coefficients before collecting variables and enumerates connected components;
-quotient variables multiplied by the modulus disappear. Boolean polynomial
-refutation invokes it with a 2ms slice before the SAT-only portfolio, accepting
-only explicitly integer-sorted variables. The NIA algebraic stage reuses the
-same implementation and existing enumeration controls. Every conflict retains
-the original equality premises; inequalities/disequalities, incomplete search
-and resource exhaustion provide no UNSAT conclusion. Native qualification,
-independent checks and the fresh fixed160 comparison for this implementation
-are pending. Neither protected set has been used.
+The final source publishes an independent checker and adversarial certificate
+tests. Reproduction from the repository root:
+
+```sh
+python3 tools/soundness/polynomial_residue_certificate.py check tests/regression/nia/coupled_square_residues_unsat.smt2 docs/audit/COUPLED_SQUARE_RESIDUE_CERTIFICATE.json
+```
+
+R1121 must validate that public checker and confirm every native executable,
+library and solver source is unchanged before reusing R1120's acceptance and
+comparison. Exact final-head PR CI remains a promotion gate. The next capability
+work must target original gaps or real QCP validation; the closed early-quadratic
+and candidate-cache gap profiles must not be repeated as new experiments.
