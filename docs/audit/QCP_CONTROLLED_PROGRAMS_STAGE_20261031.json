@@ -1,0 +1,2825 @@
+{
+  "schema": 2,
+  "status": "all-three-controlled-original-program-pairs-complete",
+  "solver_implementation_commit": "e0cafba87cc09740f465d27916d852a83b4a0bf6",
+  "source_manifest_sha256": "585ea2ba07c72b0ff7135dffbe50daa09e9edfafe2a9da792ecd08918b456de0",
+  "programs": {
+    "branch": {
+      "audit_path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1267/branch/stage-r1283.json",
+      "audit_sha256": "5184fe53aaab2ae05ed1d3c7bcd74447e9e4df8263d094a0cee33e237ac27ced",
+      "backends": {
+        "xolver": {
+          "programs": 1,
+          "function_contracts": [
+            "example"
+          ],
+          "verified_function_bodies": [
+            "example"
+          ],
+          "assumed_external_contracts": [],
+          "top_level_vcs": 10,
+          "run_id": "native_branch_xolver_r1124-20261031121753",
+          "program_verified": true,
+          "library_policy": "present",
+          "solver_sha256": "6302b2376bd27bb49a69414a8a5223a005f8adf4d5e7e9c6fad9464d55f48e80",
+          "state_sha256": "1cdc6b0b9b48ce1acf109727b6062a114d0348c581800b94c396b6a67d224786",
+          "final_check_sha256": "764131f52f93ddb6b98ee1648d050de1a26c6b77452615368240b4e9a75149c4",
+          "parent_check_sha256": "9810cbda7b886bbe03964cf8f88e3ca71dea38a96f045f73f9ace13df81d1344",
+          "group_plan_sha256": "e76580baffde8ab079803519ec8bbc16d419019f03bb745419ad87f942aca925",
+          "accepted_files": {
+            "c_file": "4d81aabd16ceb9d402fa0f1a3621dd8a6bf0ad28659bcb6cf60eedebec69e22d",
+            "formal_case_lib": "1f8a54afaa392924392567aef82ee5ba89cdf1a63d87dffd441a01e206123963",
+            "goal_file": "892a52f37efbf5941b4288a872c42f47538c67e8f6c49debba0a521f5bcf793e",
+            "proof_auto_file": "59f3b83b96df947372930f6ffbed076bbd2d7a63e2b8c746a9fd022b3c5859f4",
+            "proof_manual_file": "a4e183e8c449baf5c373238627bd4294bc1300c2ae40a0c2031feb7f129d70a4",
+            "goal_check_file": "2b059ae6dd1521e7db565cd1025d290149471416bb43ed6b9a0c52f670871b44"
+          },
+          "sessions": [
+            {
+              "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1267/branch/xolver/003-finalize-annotation/native/session-2427525/session.json",
+              "sha256": "282b507216cf0f3b2f730bea8e5a0fa49956afba571e1bc9625c8facaae6f069",
+              "queries": 188,
+              "verdicts": {
+                "sat": 74,
+                "unsat": 114
+              },
+              "callback_seconds": 1.422014591
+            },
+            {
+              "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1267/branch/xolver/017-final-check/native/session-2757969/session.json",
+              "sha256": "d40bf78266f5aad8f112abf21992064a7921bda8da564838c7ac75f83de88775",
+              "queries": 188,
+              "verdicts": {
+                "sat": 74,
+                "unsat": 114
+              },
+              "callback_seconds": 1.400151248
+            },
+            {
+              "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1267/branch/xolver/annotation-symexec-01/native/session-2395545/session.json",
+              "sha256": "ef198e16f9f14a9040e7d4c8a39f5d39e3637ffaf4e8dfff7c682aa657da5776",
+              "queries": 188,
+              "verdicts": {
+                "sat": 74,
+                "unsat": 114
+              },
+              "callback_seconds": 2.002180194
+            }
+          ],
+          "smt_queries_all_invocations": 564,
+          "smt_verdicts": {
+            "sat": 222,
+            "unsat": 342
+          },
+          "smt_callback_seconds": 4.824346033,
+          "executed_invocation_count": 24,
+          "executed_invocation_seconds": 249.45581169053912,
+          "commands": {
+            "init-run": 1,
+            "step": 2,
+            "claim-attempt": 5,
+            "finalize-delivery": 5,
+            "dune-build": 1,
+            "vc-proving-preparing": 1,
+            "vc-proving-verify": 1,
+            "final-apply": 1,
+            "final-check": 1,
+            "coq-check": 5,
+            "symexec": 1
+          },
+          "invocations": [
+            {
+              "stage": "000-init",
+              "action": "init-run",
+              "seconds": 0.4178097676485777,
+              "result_sha256": "fff738ea617c95dcb0e09e1f423f0f0255e17801832ffc86d88fee6218dbc451",
+              "launch_sha256": "d6051d027eca0eceaea66ce4899f69390eb767740ba5c13cc19c67acb6bd4226"
+            },
+            {
+              "stage": "001-step",
+              "action": "step",
+              "seconds": 1.0827345866709948,
+              "result_sha256": "0844fec72415eb636cbc86aef5f59e20f91d1acff1984f4e35438057260ec4a1",
+              "launch_sha256": "fe183cd94e185b3bd22e1cd7d2f29df2f170b79085a852d9e1ee4890717ec8d2"
+            },
+            {
+              "stage": "002-claim-annotation",
+              "action": "claim-attempt",
+              "seconds": 0.4179173056036234,
+              "result_sha256": "b713daa29ec6ec10f8c445ee7d53d8001f3239c7fe0c83902190e77df0a8edb8",
+              "launch_sha256": "13f353158dff0ed3400434004c9aff77b0f8f1353246e1e8ea78992217dad989"
+            },
+            {
+              "stage": "003-finalize-annotation",
+              "action": "finalize-delivery",
+              "seconds": 3.2296200301498175,
+              "result_sha256": "44d169173f5594a7362c32cea9b69eaf5b7c840c4a3455471fcf2a5235663c9c",
+              "launch_sha256": "1365008691ed14ca089752ce848a7fa0ca677846f0b8e6d95a64fadf850bd92d"
+            },
+            {
+              "stage": "004-dune-build",
+              "action": "dune-build",
+              "seconds": 2.677220841869712,
+              "result_sha256": "c3124348c72641f5222a089ee99ea9f8451bfdc3ed384794b344846bda769bf1",
+              "launch_sha256": "bdc22a57a6ee09b125dee45054c723c5f1d598052c80facc8f13905de822c7a7"
+            },
+            {
+              "stage": "005-claim-vc",
+              "action": "claim-attempt",
+              "seconds": 0.46861324086785316,
+              "result_sha256": "ec720370d7fb317d415ac0c1341a103ca37d57117225710cadbd3580e6860c7e",
+              "launch_sha256": "a93227faecd75fe01cea67a3107c5168091c360a76df9545c7f1d1e75a89240c"
+            },
+            {
+              "stage": "006-finalize-vc",
+              "action": "finalize-delivery",
+              "seconds": 0.5689140874892473,
+              "result_sha256": "00181314ed63e4334b81b62cd070b6ac8fda6da163babd7dba024043f10f6b6d",
+              "launch_sha256": "ce3905fb6c8a83dbeb3e8f462a99cf2e1857561a26245686b45f859c5bbc2e46"
+            },
+            {
+              "stage": "007-vc-proving-preparing",
+              "action": "vc-proving-preparing",
+              "seconds": 0.5685258638113737,
+              "result_sha256": "9986880064d3b6b8e4135d0c5cac9167089f2a9cc65d0916272fe2dcc94bb769",
+              "launch_sha256": "68e6c8836a61f7548dbad4019fb281f52f1f59bfa96b18e1521fe32d908ea975"
+            },
+            {
+              "stage": "008-claim-coverage",
+              "action": "claim-attempt",
+              "seconds": 0.5180361438542604,
+              "result_sha256": "87ab2a14c60ddc6e988783a2aee9dbb8f3fc3a496a474815f3ba4bb04af30ae4",
+              "launch_sha256": "ca221480305bde3e7fe6e923d92141f7b0922f105438b66bb48505515920cf56"
+            },
+            {
+              "stage": "009-finalize-coverage",
+              "action": "finalize-delivery",
+              "seconds": 25.292425202205777,
+              "result_sha256": "7b37e7718a8d2343ae3a3fcb0b0caf8ae9e875d1da7fa41190cb29e92ac04eff",
+              "launch_sha256": "03f0ef21aa83581c4f5db170ca09481cdfcdd1c3a30a6540a9ec48c2f89e3fce"
+            },
+            {
+              "stage": "010-claim-infeasible",
+              "action": "claim-attempt",
+              "seconds": 0.5186999477446079,
+              "result_sha256": "a025c43dc7488231b281efdc844869e8ac3fddb360a304abb1f3ecfef54f8d26",
+              "launch_sha256": "95efbc624e7f5019527a167019287ad56c53568881c8644f97b3fd95ccdf2f92"
+            },
+            {
+              "stage": "011-claim-returns",
+              "action": "claim-attempt",
+              "seconds": 0.5190940443426371,
+              "result_sha256": "8d0b73937fde146d96765658dbb95d4d6c83e6b45fd8c42d554f9df7266b0d41",
+              "launch_sha256": "748f7f029936a8c7d1b0209c06e7a2124906a307400e37da6bff8dfef969f7ac"
+            },
+            {
+              "stage": "012-finalize-infeasible",
+              "action": "finalize-delivery",
+              "seconds": 24.49144416488707,
+              "result_sha256": "35f7ff6a8f4a2b7bc98112a8b08853fee576b9b1293598f330d1f0cb569ba1ba",
+              "launch_sha256": "950344f8b5c1fb9d659bec013b0e5e7098b3eb3338eeb7a480d9a1f85e4efde4"
+            },
+            {
+              "stage": "013-finalize-returns",
+              "action": "finalize-delivery",
+              "seconds": 24.992478348314762,
+              "result_sha256": "07a87b9f15d2366e88fb0f9ea601b8283f588621684d07037238ce2e0db8b7b9",
+              "launch_sha256": "c756506f4c66ec2c7c1b62b11268c63222f0981843c08888950e44f6704c2681"
+            },
+            {
+              "stage": "014-vc-proving-verify",
+              "action": "vc-proving-verify",
+              "seconds": 24.992222597822547,
+              "result_sha256": "9810cbda7b886bbe03964cf8f88e3ca71dea38a96f045f73f9ace13df81d1344",
+              "launch_sha256": "cfa7db82070bd29fd0840c667a8f7ab34536984c4655cc38ed9e06219af27b4b"
+            },
+            {
+              "stage": "015-final-apply",
+              "action": "final-apply",
+              "seconds": 26.350404910743237,
+              "result_sha256": "8b04699f0fa218f80cd710ab27ad3dcfcb93f664a7f8807d67c6c9c6caf59f04",
+              "launch_sha256": "b0512ea16a298b6fec17b342598b66e5382387f4ee74a6d55609758890fb04a6"
+            },
+            {
+              "stage": "016-step",
+              "action": "step",
+              "seconds": 0.4176921285688877,
+              "result_sha256": "7b2bc8096002554e5cedb35daa739a1fbcf2e0efc2065e38d04d3f92ee362eb2",
+              "launch_sha256": "ad1dfe3f19e4427fcfedd2fa64b4afc7e18c9bdc88e0cc8ffeaf2197f324f84f"
+            },
+            {
+              "stage": "017-final-check",
+              "action": "final-check",
+              "seconds": 27.45379300042987,
+              "result_sha256": "764131f52f93ddb6b98ee1648d050de1a26c6b77452615368240b4e9a75149c4",
+              "launch_sha256": "64ce11adeea71e40ffd3a9b10b08bd646589a01110f743fea043fea18f71e937"
+            },
+            {
+              "stage": "annotation-design-01",
+              "action": "coq-check",
+              "seconds": 1.3204422108829021,
+              "result_sha256": "ff6feee55f4aa060821bbfab2282fd542818f9ff19394a10586e7ca3a3a1ebe5",
+              "launch_sha256": "06815058a61fcd0db593fb54b407d3f6c564a7f981f584dd462ee260978e8ddc"
+            },
+            {
+              "stage": "annotation-lib-01",
+              "action": "coq-check",
+              "seconds": 1.3716752845793962,
+              "result_sha256": "8c00fed3d7b61be399bee4098500da8ebe26ee44411742bf5e68aa5906d4cdeb",
+              "launch_sha256": "7ebe406e4c51334059af57558d7c0c7d94814e3f97785dfb3caddb4127377167"
+            },
+            {
+              "stage": "annotation-symexec-01",
+              "action": "symexec",
+              "seconds": 2.932631116360426,
+              "result_sha256": "88c104c6eaa546871f5d089821ebe6fe05232e19b05609a6a1b098f748fe21df",
+              "launch_sha256": "3ffeaa749ea5e26809b32037e5b74c59e168ac29f115b506cd66ee15bfbb6fa8"
+            },
+            {
+              "stage": "coverage-01",
+              "action": "coq-check",
+              "seconds": 25.104031167924404,
+              "result_sha256": "eb8be167120d5fafa5a607c830d0ae7f8b93465a3ff980f28b53cd6c13916686",
+              "launch_sha256": "1c7cd690924c36fcec8cee29a135681f204fc2ae5194b5602c7f31f919683517"
+            },
+            {
+              "stage": "infeasible-01",
+              "action": "coq-check",
+              "seconds": 28.50388114526868,
+              "result_sha256": "4c24477f47f66ddb1b0be1804f4a44ca46bd88605df9d102c934aa9bb4b23384",
+              "launch_sha256": "f1a137622f886f1903bbf398e88c41d8afe7a5a543d3dc3980a5477c7ab028d8"
+            },
+            {
+              "stage": "returns-01",
+              "action": "coq-check",
+              "seconds": 25.24550455249846,
+              "result_sha256": "26848a8832f5316c6d7b401fd40a0d7655f6698788538e04104b56e32a22d104",
+              "launch_sha256": "e4104ccd3180dcffd682f71c99f0b5be4114e278da3ce74812f3af96c8d661ad"
+            }
+          ],
+          "eos": [
+            {
+              "experiment": "xolver-qcp-controlled-branch-xolver-000-init-r1267-20261031",
+              "run": "e05dccbdfa5a",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "1"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-xolver-001-step-r1267-20261031",
+              "run": "bedfc5c188d7",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "1"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-xolver-002-claim-annotation-r1267-20261031",
+              "run": "6eb1ecd5357c",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "1"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-xolver-003-finalize-annotation-r1267-20261031",
+              "run": "b29768c81e7c",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "1"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-xolver-004-dune-build-r1267-20261031",
+              "run": "0564de2a7296",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "8"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-xolver-005-claim-vc-r1267-20261031",
+              "run": "09f979cc9d3e",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-xolver-006-finalize-vc-r1267-20261031",
+              "run": "23ec1ff63546",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "7"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-xolver-007-vc-proving-preparing-r1267-20261031",
+              "run": "6c661506f6cd",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "7"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-xolver-008-claim-coverage-r1267-20261031",
+              "run": "9bc243438c73",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-xolver-009-finalize-coverage-r1267-20261031",
+              "run": "283728d58cab",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "1"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-xolver-010-claim-infeasible-r1267-20261031",
+              "run": "8b43aef494e9",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-xolver-011-claim-returns-r1267-20261031",
+              "run": "29bdaf3b891b",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-xolver-012-finalize-infeasible-r1267-20261031",
+              "run": "c93873571ded",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-xolver-013-finalize-returns-r1267-20261031",
+              "run": "67fd63838ab8",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-xolver-014-vc-proving-verify-r1267-20261031",
+              "run": "71c511835bb6",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-xolver-015-final-apply-r1267-20261031",
+              "run": "e3497c3e5d90",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-xolver-016-step-r1267-20261031",
+              "run": "b2892a4ed22b",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-xolver-017-final-check-r1267-20261031",
+              "run": "f39f20ea5966",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-xolver-annotation-design-01-r1267-20261031",
+              "run": "383eec40eaee",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "2"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-xolver-annotation-lib-01-r1267-20261031",
+              "run": "8a3fe8a5d970",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-xolver-annotation-symexec-01-r1267-20261031",
+              "run": "d5be6dd4f3f6",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "1"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-xolver-coverage-01-r1267-20261031",
+              "run": "a4e807836df2",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "1"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-xolver-infeasible-01-r1267-20261031",
+              "run": "3d79fd2b3d63",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "5"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-xolver-returns-01-r1267-20261031",
+              "run": "030f1e651198",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "2"
+                ]
+              }
+            }
+          ],
+          "end_to_end_final_check_seconds": 27.45379300042987,
+          "observed_full_workflow_wall_seconds": 1474.0,
+          "observed_wall_scope": "Init-run EOS start through final-check EOS end, including owner thinking, scheduler/queue gaps, build-lock waits and orchestration delays; not an isolated solver-performance comparison."
+        },
+        "z3": {
+          "programs": 1,
+          "function_contracts": [
+            "example"
+          ],
+          "verified_function_bodies": [
+            "example"
+          ],
+          "assumed_external_contracts": [],
+          "top_level_vcs": 10,
+          "run_id": "native_branch_xolver_r1124-20261031121754",
+          "program_verified": true,
+          "library_policy": "present",
+          "solver_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+          "state_sha256": "b544a8aeb010cca5db65bdb99372cb59f6e511febe43bcd889966d9f747ca178",
+          "final_check_sha256": "f86c12e54e97ef6fade0f80887357421042d5911ba7fd72ea2a22e6fa4078c4a",
+          "parent_check_sha256": "095b3cecb42212d72332306bc0552afe9fd9e1b0d777467ab424fa8038691922",
+          "group_plan_sha256": "e76580baffde8ab079803519ec8bbc16d419019f03bb745419ad87f942aca925",
+          "accepted_files": {
+            "c_file": "4d81aabd16ceb9d402fa0f1a3621dd8a6bf0ad28659bcb6cf60eedebec69e22d",
+            "formal_case_lib": "1f8a54afaa392924392567aef82ee5ba89cdf1a63d87dffd441a01e206123963",
+            "goal_file": "892a52f37efbf5941b4288a872c42f47538c67e8f6c49debba0a521f5bcf793e",
+            "proof_auto_file": "59f3b83b96df947372930f6ffbed076bbd2d7a63e2b8c746a9fd022b3c5859f4",
+            "proof_manual_file": "a4e183e8c449baf5c373238627bd4294bc1300c2ae40a0c2031feb7f129d70a4",
+            "goal_check_file": "2b059ae6dd1521e7db565cd1025d290149471416bb43ed6b9a0c52f670871b44"
+          },
+          "sessions": [
+            {
+              "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1267/branch/z3/003-finalize-annotation/native/session-2915180/session.json",
+              "sha256": "d60e5b328c10aeacb2f96d47d01c967ab36c8007d2b4c574cf5f13160dee468a",
+              "queries": 188,
+              "verdicts": {
+                "sat": 74,
+                "unsat": 114
+              },
+              "callback_seconds": 3.420812173
+            },
+            {
+              "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1267/branch/z3/017-final-check/native/session-3312934/session.json",
+              "sha256": "b9c36d0d014489452a9b19f4d008041e508aff25c8071578c4f3275b91330673",
+              "queries": 188,
+              "verdicts": {
+                "sat": 74,
+                "unsat": 114
+              },
+              "callback_seconds": 3.284411323
+            },
+            {
+              "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1267/branch/z3/annotation-symexec-01/native/session-2863318/session.json",
+              "sha256": "a2cb4faf95d3e5836c0856b548349ac8b9b1de3e3104592e794ae58e8dbe6957",
+              "queries": 188,
+              "verdicts": {
+                "sat": 74,
+                "unsat": 114
+              },
+              "callback_seconds": 3.902891581
+            }
+          ],
+          "smt_queries_all_invocations": 564,
+          "smt_verdicts": {
+            "sat": 222,
+            "unsat": 342
+          },
+          "smt_callback_seconds": 10.608115077,
+          "executed_invocation_count": 24,
+          "executed_invocation_seconds": 259.7249685935676,
+          "commands": {
+            "init-run": 1,
+            "step": 2,
+            "claim-attempt": 5,
+            "finalize-delivery": 5,
+            "dune-build": 1,
+            "vc-proving-preparing": 1,
+            "vc-proving-verify": 1,
+            "final-apply": 1,
+            "final-check": 1,
+            "coq-check": 5,
+            "symexec": 1
+          },
+          "invocations": [
+            {
+              "stage": "000-init",
+              "action": "init-run",
+              "seconds": 0.6189336646348238,
+              "result_sha256": "9e61ff4c85e7982ad5d9443065b388cc1efa10849b43a059c2b1dc43a69f7dca",
+              "launch_sha256": "447c5791548fa0ddf6de141389b041b4bc31e80a72222cacc31468078a9fe812"
+            },
+            {
+              "stage": "001-step",
+              "action": "step",
+              "seconds": 0.618663839995861,
+              "result_sha256": "15a71909a19cdb15c3e6a636a4ec035d490f0348bb0541eb3a262c06b4a044bd",
+              "launch_sha256": "402d45ae993218a75369a8aeec86e6ce25d54f246d4c69e2229eda7e72b58798"
+            },
+            {
+              "stage": "002-claim-annotation",
+              "action": "claim-attempt",
+              "seconds": 0.6189519800245762,
+              "result_sha256": "6b20409f845e478ab0a8b4349e777f492e70ba67774e9634a86a7cf59ed6ba5a",
+              "launch_sha256": "ad68e05a8b90fe7eb7b11ed42425935b4bc0e558d9ed369e7448adfaadea6ed2"
+            },
+            {
+              "stage": "003-finalize-annotation",
+              "action": "finalize-delivery",
+              "seconds": 5.585391527041793,
+              "result_sha256": "eab44e1de8e84d182b9c6b0ca013b721ef92bd18f088bf3c37917ea9908705d3",
+              "launch_sha256": "9b6092bb197798832ac2606966f2d9d070a6a23bb982029034fb30450757eb08"
+            },
+            {
+              "stage": "004-dune-build",
+              "action": "dune-build",
+              "seconds": 2.673600370064378,
+              "result_sha256": "3393699a57760f5a032de8f534cf175163ce73c13b99959cc1e9060e3b898abb",
+              "launch_sha256": "26dc9b9923a1e7b2175ba5829e231919bb70565f3b25d757b8cd16ba2fc3ffb6"
+            },
+            {
+              "stage": "005-claim-vc",
+              "action": "claim-attempt",
+              "seconds": 0.6185315437614918,
+              "result_sha256": "fa8be8322854a55f8fd5563048c26a4a6ef9860a285a236478f373c098659145",
+              "launch_sha256": "a371fc86de54d95b3a7c210a4ec6fdb5a77f0fb2056e2d40b5fddd00aac8005a"
+            },
+            {
+              "stage": "006-finalize-vc",
+              "action": "finalize-delivery",
+              "seconds": 0.6677387990057468,
+              "result_sha256": "65848e1255996110fb490b5758cd9339736ec8e37ed10fef54661352b7f4aefb",
+              "launch_sha256": "5392a12b0f134fa8c9f5a7d33556d8a4fcd45fbb3c4b11ae578026b4e22447c2"
+            },
+            {
+              "stage": "007-vc-proving-preparing",
+              "action": "vc-proving-preparing",
+              "seconds": 0.7191571723669767,
+              "result_sha256": "4aeddd37f8e1ac08371031c3116a4457c0fbc44b49675a948f752fda73998327",
+              "launch_sha256": "2fdb7c4f1672f207d168d7e794d2ba085e2c4d4934ea7fba3c893095757b3382"
+            },
+            {
+              "stage": "008-claim-coverage",
+              "action": "claim-attempt",
+              "seconds": 0.6675981990993023,
+              "result_sha256": "92c98b1c35bb4cf2325ffe375b75a6fd456d650b801e28f76e9bbec68e83dab1",
+              "launch_sha256": "869ed5fb07ee8577ac9fdbfd7ff073a12acfc4b61f67fe565577d905e84a9b6b"
+            },
+            {
+              "stage": "009-claim-infeasible",
+              "action": "claim-attempt",
+              "seconds": 0.6680007204413414,
+              "result_sha256": "7d09a4fa786bc20b0ff4d36f834be3ee2e7e914ecada7f5eb3be31c1647b90b1",
+              "launch_sha256": "47e9e044dcf074fd772eb7dc707de6b9c504427dad520cd459964db2b7f1594e"
+            },
+            {
+              "stage": "010-finalize-infeasible",
+              "action": "finalize-delivery",
+              "seconds": 25.24933842383325,
+              "result_sha256": "46b88c3863a4066e2755bae0a22efd5f5f113da50ceb3801f4184160e3d97c59",
+              "launch_sha256": "c1991d2c7ec08e13316a329109a71b90f17adf3131047f5000bad56951766a6e"
+            },
+            {
+              "stage": "011-claim-returns",
+              "action": "claim-attempt",
+              "seconds": 0.669552082195878,
+              "result_sha256": "583b59a03fde05589138926c1d6fcf6b54bbd743d5736e644a4724f1690adc0b",
+              "launch_sha256": "035faf6f3d955a202d7d2689749224617ebdd25cf758209318cdb72ac1137a89"
+            },
+            {
+              "stage": "012-finalize-coverage",
+              "action": "finalize-delivery",
+              "seconds": 27.05452666990459,
+              "result_sha256": "ef6a0b1afab2ce5206fdb74accc036d216f5f891fa0090fc0343986bc911a80e",
+              "launch_sha256": "8e7a094ca2c9a5ca57dc49235a79e3c75308e697f3b529bd8fe94e18da64a2e3"
+            },
+            {
+              "stage": "013-finalize-returns",
+              "action": "finalize-delivery",
+              "seconds": 25.8481334913522,
+              "result_sha256": "935c481c3fe1f68aae6fb3bd9f3f89eeee936c59802c401c927cb207915b8607",
+              "launch_sha256": "abf030ac4dbf838e11d57712c91f96040d145cf8fd52047a0deee1f65dac8430"
+            },
+            {
+              "stage": "014-vc-proving-verify",
+              "action": "vc-proving-verify",
+              "seconds": 25.79601805470884,
+              "result_sha256": "095b3cecb42212d72332306bc0552afe9fd9e1b0d777467ab424fa8038691922",
+              "launch_sha256": "f1679019d997fae18f133c4d38c30aacc10665dac09d8e5cc80a3480042dcd60"
+            },
+            {
+              "stage": "015-final-apply",
+              "action": "final-apply",
+              "seconds": 25.748341023921967,
+              "result_sha256": "7eb4b278719f63347c2878aeb1e002dfbb69642a21caaeacf4e6a3513358f0b8",
+              "launch_sha256": "f09ec09d985d2285f23fd144fb7dc6a7c1e4ba9b5b72b0fce390a95168786d46"
+            },
+            {
+              "stage": "016-step",
+              "action": "step",
+              "seconds": 0.568223936483264,
+              "result_sha256": "055e513d524fa88d1ca4d81b4b06f173c7f609dd7667374e81df5b393bfbc020",
+              "launch_sha256": "9a3fc26f0c2074355ae9f8d9fd8e028afd9a0b95d345532a8792744d04b024d6"
+            },
+            {
+              "stage": "017-final-check",
+              "action": "final-check",
+              "seconds": 29.707239370793104,
+              "result_sha256": "f86c12e54e97ef6fade0f80887357421042d5911ba7fd72ea2a22e6fa4078c4a",
+              "launch_sha256": "68018de8771c882770a99af0c6a6e6e5fe258a24232cbf1af1695b98f266792c"
+            },
+            {
+              "stage": "annotation-design-01",
+              "action": "coq-check",
+              "seconds": 1.52149972692132,
+              "result_sha256": "810a245921011d207acc472a452b022888a07f87d3d2f52a9ebfb48723346e94",
+              "launch_sha256": "403a183417a8b7f13b5c9303a477c646229383b45bbdcb3f6c284665b8357bca"
+            },
+            {
+              "stage": "annotation-lib-01",
+              "action": "coq-check",
+              "seconds": 1.522167544811964,
+              "result_sha256": "dd79080691fa20d60e62d3317ebd0cc6404e8e2ffbce2939a3c65e7a1efb1fb8",
+              "launch_sha256": "c5585b95daf89cccd3ffacaa9d66ac0e44d2354ebdb687197f2d68203eb23f10"
+            },
+            {
+              "stage": "annotation-symexec-01",
+              "action": "symexec",
+              "seconds": 5.082582011818886,
+              "result_sha256": "e4d7124e45ba02bb24ead4b1dd57ffda689b63732797bfaa868bd9eb18bb0fc6",
+              "launch_sha256": "19bac8e03d78060a8f9bbae2e3ebd0b1d3ce02fb999bc3117db0f92f280c1874"
+            },
+            {
+              "stage": "coverage-01",
+              "action": "coq-check",
+              "seconds": 25.748015535995364,
+              "result_sha256": "b12f2adea05b64e293da32416dfb2164c8f6ac08638d4dcb7113b0cc066aea15",
+              "launch_sha256": "93f97cfdb51f60294a589cf4f6f27cd71700542d142f9a013515c5d942ad1363"
+            },
+            {
+              "stage": "infeasible-01",
+              "action": "coq-check",
+              "seconds": 25.146462634205818,
+              "result_sha256": "98934e021e26cdb916cc12d335d64655bc7d27a8fa2b4ca43f89092978a50956",
+              "launch_sha256": "d26919eb3f5742f453b52e320d4a474bcecfa9a3c568a87d3bb2097e47801d18"
+            },
+            {
+              "stage": "returns-01",
+              "action": "coq-check",
+              "seconds": 26.606300270184875,
+              "result_sha256": "47ff8bf540f9afc1c3192be9acb308f7c3914a9108c375b3b4d9b862fe32405c",
+              "launch_sha256": "00cb8e8756a8cc899ab78b262ba77d90cdb73e43b5e718fc9ad89a6ec48b17f6"
+            }
+          ],
+          "eos": [
+            {
+              "experiment": "xolver-qcp-controlled-branch-z3-000-init-r1267-20261031",
+              "run": "fca834b17f50",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "2"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-z3-001-step-r1267-20261031",
+              "run": "713338c3303a",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-z3-002-claim-annotation-r1267-20261031",
+              "run": "5d4fcf30d6a8",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-z3-003-finalize-annotation-r1267-20261031",
+              "run": "2a648473b34f",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-z3-004-dune-build-r1267-20261031",
+              "run": "cc924d5e2e04",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-z3-005-claim-vc-r1267-20261031",
+              "run": "1da2fa00e9da",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-z3-006-finalize-vc-r1267-20261031",
+              "run": "e93328e990a4",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-z3-007-vc-proving-preparing-r1267-20261031",
+              "run": "2652af73eed2",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-z3-008-claim-coverage-r1267-20261031",
+              "run": "870ceabfb799",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-z3-009-claim-infeasible-r1267-20261031",
+              "run": "ecc21e541f0f",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-z3-010-finalize-infeasible-r1267-20261031",
+              "run": "1f2314894a47",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-z3-011-claim-returns-r1267-20261031",
+              "run": "c172696a6ada",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-z3-012-finalize-coverage-r1267-20261031",
+              "run": "1041313f0b48",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-z3-013-finalize-returns-r1267-20261031",
+              "run": "52336a104e12",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-z3-014-vc-proving-verify-r1267-20261031",
+              "run": "edcccf9d2534",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-z3-015-final-apply-r1267-20261031",
+              "run": "7ccdf2d6263b",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-z3-016-step-r1267-20261031",
+              "run": "1225d9ba051c",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-z3-017-final-check-r1267-20261031",
+              "run": "f82f657fad60",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-z3-annotation-design-01-r1267-20261031",
+              "run": "156c3b8909ac",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-z3-annotation-lib-01-r1267-20261031",
+              "run": "9ae5f481bec5",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "1"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-z3-annotation-symexec-01-r1267-20261031",
+              "run": "f99638b82294",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-z3-coverage-01-r1267-20261031",
+              "run": "758ba1496a34",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-z3-infeasible-01-r1267-20261031",
+              "run": "cb8b1430a129",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-branch-z3-returns-01-r1267-20261031",
+              "run": "58a87ed0ae6d",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            }
+          ],
+          "end_to_end_final_check_seconds": 29.707239370793104,
+          "observed_full_workflow_wall_seconds": 1787.0,
+          "observed_wall_scope": "Init-run EOS start through final-check EOS end, including owner thinking, scheduler/queue gaps, build-lock waits and orchestration delays; not an isolated solver-performance comparison."
+        }
+      }
+    },
+    "gcd": {
+      "audit_path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1267/gcd/stage-r1283.json",
+      "audit_sha256": "85f9649eca8ce9089fd9474f6dcd93155c3aaeeae6843c17a92abc549a8dc831",
+      "backends": {
+        "xolver": {
+          "programs": 1,
+          "function_contracts": [
+            "abs",
+            "gcd"
+          ],
+          "verified_function_bodies": [
+            "gcd"
+          ],
+          "assumed_external_contracts": [
+            "abs"
+          ],
+          "top_level_vcs": 9,
+          "run_id": "native_gcd_xolver_r1124-20261031121755",
+          "program_verified": true,
+          "library_policy": "present",
+          "solver_sha256": "6302b2376bd27bb49a69414a8a5223a005f8adf4d5e7e9c6fad9464d55f48e80",
+          "state_sha256": "60f0b91c293679961b57cae868664f11dc9941007cd741cc9f130207862d53d4",
+          "final_check_sha256": "151e7767ffd8a3e420f488de6cd2ca66b83bd66cb279c4d3a44fca08b0159e9e",
+          "parent_check_sha256": "d955ceef97b43953a83d5a199aa6d7b84516259bc5f9d48a4d31d425e40adc08",
+          "group_plan_sha256": "a9529fc6b040ba71bac2df4f38037fe3c31183e370978d2b25a56ce37ca78bcd",
+          "accepted_files": {
+            "c_file": "255cd902a923b5044acdbe6372652e0b422af3a5a723cc37355040e613a8b3a3",
+            "formal_case_lib": "1f8a54afaa392924392567aef82ee5ba89cdf1a63d87dffd441a01e206123963",
+            "goal_file": "8f85baa2d2fd8afb8346f8b5d9f425932e3eb600b1d239193bf80c602ddc1db9",
+            "proof_auto_file": "29ad6d82a3f8579624995d912a0a42e20c928b40d6c76952606ad63b1aa9c87b",
+            "proof_manual_file": "fac251d14f084b4814ea8cdc7a0ee2ecca965deafa30916968f897b08a3e5139",
+            "goal_check_file": "36eb1e68251be9b3ef238e579031cb7fc2e2005c019d1366b5d77a8a8a73461b"
+          },
+          "sessions": [
+            {
+              "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1267/gcd/xolver/003-finalize-annotation/native/session-1785807/session.json",
+              "sha256": "93e5df458c41f611642a3e986b9c535ccf83b14fa46cf801d459d9cad15c48fd",
+              "queries": 296,
+              "verdicts": {
+                "sat": 174,
+                "unsat": 122
+              },
+              "callback_seconds": 2.877851918
+            },
+            {
+              "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1267/gcd/xolver/017-final-check/native/session-2372229/session.json",
+              "sha256": "2bd869b00408a5a55d06951e862f42e23087fc7c99e767f52692ad5afb472327",
+              "queries": 296,
+              "verdicts": {
+                "sat": 174,
+                "unsat": 122
+              },
+              "callback_seconds": 2.355188212
+            },
+            {
+              "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1267/gcd/xolver/annotation-02/native/session-1760998/session.json",
+              "sha256": "043c9189eb91aa9cbffdd3426ce364c10ed0db390e96fb76ecfdac3d1e41170c",
+              "queries": 296,
+              "verdicts": {
+                "sat": 174,
+                "unsat": 122
+              },
+              "callback_seconds": 2.466455938
+            }
+          ],
+          "smt_queries_all_invocations": 888,
+          "smt_verdicts": {
+            "sat": 522,
+            "unsat": 366
+          },
+          "smt_callback_seconds": 7.699496068,
+          "executed_invocation_count": 24,
+          "executed_invocation_seconds": 281.5746848974377,
+          "commands": {
+            "init-run": 1,
+            "step": 2,
+            "claim-attempt": 5,
+            "finalize-delivery": 5,
+            "dune-build": 1,
+            "vc-proving-preparing": 1,
+            "vc-proving-verify": 1,
+            "final-apply": 1,
+            "final-check": 1,
+            "coq-check": 5,
+            "symexec": 1
+          },
+          "invocations": [
+            {
+              "stage": "000-init",
+              "action": "init-run",
+              "seconds": 0.5277468673884869,
+              "result_sha256": "3137f6827466b908a3355c870c722354485343074fa38bbe10091a2faf6c4744",
+              "launch_sha256": "ce5b46131ecfe7fe59141bad3b5e03fe15d5f9a04aebe9b7e75d64c9c6c9be88"
+            },
+            {
+              "stage": "001-step",
+              "action": "step",
+              "seconds": 0.4682437162846327,
+              "result_sha256": "5fc0229835c5d8d2fa318e6382ec30a39d66254c39b2f6ab1c1ceb9fee89ca31",
+              "launch_sha256": "5aac1b8676b1ad999e1ca42942262ff9f09101281ab8db23b979b5f98f2ec497"
+            },
+            {
+              "stage": "002-claim-annotation",
+              "action": "claim-attempt",
+              "seconds": 0.41711082868278027,
+              "result_sha256": "fac8c2e4b08d6e10cc21b7607fc1e7152d37d6ba7865090a740bd7bd9de632d3",
+              "launch_sha256": "d78765560995287ab75dec452788186e08f732708c08f8a8304364c4e7a6871c"
+            },
+            {
+              "stage": "003-finalize-annotation",
+              "action": "finalize-delivery",
+              "seconds": 5.083734165877104,
+              "result_sha256": "9e960150efe66e8df5563300f03673b39140793e8afc9154bd051ac8706cc126",
+              "launch_sha256": "0d6fa62749d5cccc450ee82c5bbbabfdc2068aecc25492b674af770200a246ba"
+            },
+            {
+              "stage": "004-dependencies",
+              "action": "dune-build",
+              "seconds": 2.472709959372878,
+              "result_sha256": "da45947d073c855a8f621296056ff380278f430d8f803063384766a5ffa2ad31",
+              "launch_sha256": "7cc5fd2e586a5ff462ed87cab6c940a3776d46bfec671d1d7ef0cf7e84a5270d"
+            },
+            {
+              "stage": "005-claim-vc",
+              "action": "claim-attempt",
+              "seconds": 0.46822691336274147,
+              "result_sha256": "da04b18349ab9ca81f8b9d5f86e3f64319684a3543015264a582ecdde41d1259",
+              "launch_sha256": "72995c293e7c89c0960902d1bab1b978f1bf7999d9fcdcb6a065d15ebc322186"
+            },
+            {
+              "stage": "006-finalize-vc",
+              "action": "finalize-delivery",
+              "seconds": 0.5178501438349485,
+              "result_sha256": "efe97e0f93e9aaa6131b83d485780e22968be6997c7d7100adadcb032d97fe1d",
+              "launch_sha256": "d1732835e00ff8f496cb21b15e9074615c3cfa97d4b4229d6395a1d1f5f41aa6"
+            },
+            {
+              "stage": "007-proving-prepare",
+              "action": "vc-proving-preparing",
+              "seconds": 0.518700897693634,
+              "result_sha256": "03a83e13ea8ae617a3ff1cc4f2e168593c74afec664c92e6ad46c382fbe61b90",
+              "launch_sha256": "f123f6a28039cc229fbce7af359df53c4d57052e16a44bb22e00959a2a14110a"
+            },
+            {
+              "stage": "008-claim-remainder",
+              "action": "claim-attempt",
+              "seconds": 0.5183332301676273,
+              "result_sha256": "cea81eed960a165e286fcf0300db11070d954a900a5cde5512802bae92c8beb6",
+              "launch_sha256": "cfa4adadde2f56821ea27cfcd82aa2ca5cd6e87ba466e45a6f8be11d47188121"
+            },
+            {
+              "stage": "009-claim-returns",
+              "action": "claim-attempt",
+              "seconds": 0.46718465723097324,
+              "result_sha256": "e01c1145e17e8b28f0a98b368554584b2f3d4f143e53de771c639852f41a5231",
+              "launch_sha256": "c00372a0550abbfbd7c9d16ea5b0455b192c78335ea2307721e06cf694e25ff9"
+            },
+            {
+              "stage": "010-finalize-remainder",
+              "action": "finalize-delivery",
+              "seconds": 28.86536376364529,
+              "result_sha256": "485325940d737208ffc978d3ff9c2069630be20117b9562620908ca5efb18ecf",
+              "launch_sha256": "7cf8447e4d3c963de77b0287d194a9af317339c4e6b83052d5e6f86a6bfc0076"
+            },
+            {
+              "stage": "011-finalize-returns",
+              "action": "finalize-delivery",
+              "seconds": 25.502980848774314,
+              "result_sha256": "0017f95c60d17434ffd01a956bc138aee19e679090aa3a231b2d32538c6643dc",
+              "launch_sha256": "8bd74e0a51b35e1580e5b399926d99a6b76237b4bacd91588a8d6a16e29307de"
+            },
+            {
+              "stage": "012-claim-safety",
+              "action": "claim-attempt",
+              "seconds": 0.5189099870622158,
+              "result_sha256": "169bae48d77b8abe9fb0cbc1201cbc5124a60456d688fd3b1c9206c950dfcd3a",
+              "launch_sha256": "a7a3126b6618bcd0c7ac7e44739380548c96d67451a48299d93b822b6fb49cb8"
+            },
+            {
+              "stage": "013-finalize-safety",
+              "action": "finalize-delivery",
+              "seconds": 29.722537495195866,
+              "result_sha256": "88e165ee3ba78372fc415fe1000777d775c8f0ea419fc2c85417b87b7c99e772",
+              "launch_sha256": "8ffc569595bd6022ba17a6a9ed07821caafba80dd119f7d7270a9ec488f7fa0f"
+            },
+            {
+              "stage": "014-vc-proving-verify",
+              "action": "vc-proving-verify",
+              "seconds": 31.82518747076392,
+              "result_sha256": "d955ceef97b43953a83d5a199aa6d7b84516259bc5f9d48a4d31d425e40adc08",
+              "launch_sha256": "4e2cff3c0f3b88d32c22c18a32343b5add59a96d78a48c724777c4836dab75df"
+            },
+            {
+              "stage": "015-final-apply",
+              "action": "final-apply",
+              "seconds": 31.270495856180787,
+              "result_sha256": "3fa71b108236f1833420e505a87f46e869ee9b5688aed338df70e6920975f4bf",
+              "launch_sha256": "d70b4464e352fa365afa5e37e15ae40a41007b27ea7383264530dd139d92c343"
+            },
+            {
+              "stage": "016-step",
+              "action": "step",
+              "seconds": 0.41828063130378723,
+              "result_sha256": "c8a20d32789a295c0fcce51372696a22da74318b3c4445f4f7bd8f0f0160781e",
+              "launch_sha256": "b3f76e8f908084c05cb6f837634d6517f904281d07d952efc512f16a681e3d26"
+            },
+            {
+              "stage": "017-final-check",
+              "action": "final-check",
+              "seconds": 35.79846786335111,
+              "result_sha256": "151e7767ffd8a3e420f488de6cd2ca66b83bd66cb279c4d3a44fca08b0159e9e",
+              "launch_sha256": "dba707a03f2ad6ad8734d1f52b33c39080064ea6e828365e9d7be921a4d5c1ee"
+            },
+            {
+              "stage": "annotation-01",
+              "action": "coq-check",
+              "seconds": 1.3202594053000212,
+              "result_sha256": "8847b82fad2d846ead846acbff6b9e036fb5d92903c240824d18e2e54b28b68c",
+              "launch_sha256": "4af4e03135b63a0e330da2c9c342f381717a9f4b17a413a27eb21582730fe9d2"
+            },
+            {
+              "stage": "annotation-02",
+              "action": "symexec",
+              "seconds": 3.779519449919462,
+              "result_sha256": "2c3e5b8ecf0850622f919b6ee732536a2d07515ac18587cbd623e264849981e2",
+              "launch_sha256": "29ada86fd51b94816916063ea909a62f21b28be618714e6f2d4635eb69f5af89"
+            },
+            {
+              "stage": "annotation-03",
+              "action": "coq-check",
+              "seconds": 1.2711625881493092,
+              "result_sha256": "6ca9d55ff55db99c970ddb066a70cc2ea6bc6cf575541d1101255a1ce540f3ac",
+              "launch_sha256": "a1594112795716b9cff1d581853a667ac76292d8554fdb3e9039a66aa73beb14"
+            },
+            {
+              "stage": "remainder-01",
+              "action": "coq-check",
+              "seconds": 26.395615680143237,
+              "result_sha256": "52e97c2f12d5c524a1296016a10bb1fdab9859ca998b7f130c63fe0a18ee0374",
+              "launch_sha256": "98e666fc2232119b20182a8cb84a632ce04d9b27ded40a14bceae0d5b04be929"
+            },
+            {
+              "stage": "returns-01",
+              "action": "coq-check",
+              "seconds": 23.94404300674796,
+              "result_sha256": "3ef04f93e498b45e72c5ea21c5ddac017390d4194ef0c7c951aa32a14a6e79d6",
+              "launch_sha256": "a1b51f8631dceb600cf9fe3db87455d0180812439157415565c3ba24d4509b33"
+            },
+            {
+              "stage": "safety-01",
+              "action": "coq-check",
+              "seconds": 29.482019471004605,
+              "result_sha256": "04b0938cbdd4b29b6b069f2435b880ae44cbbdbc020db5a717deb08cd0de6024",
+              "launch_sha256": "e5bae2c20814d25d1ff558fc3a9a2f5494b55bb077a5baaa1507e2187454fd9b"
+            }
+          ],
+          "eos": [
+            {
+              "experiment": "xolver-qcp-controlled-gcd-xolver-000-init-r1267-20261031",
+              "run": "ed0a043928e5",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "53"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-xolver-001-step-r1267-20261031",
+              "run": "24000af8c857",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "3"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-xolver-002-claim-annotation-r1267-20261031",
+              "run": "32b97960d97c",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-xolver-003-finalize-annotation-r1267-20261031",
+              "run": "b245b5381fee",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-xolver-004-dependencies-r1267-20261031",
+              "run": "07df27775b82",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-xolver-005-claim-vc-r1267-20261031",
+              "run": "78017469bf93",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "1"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-xolver-006-finalize-vc-r1267-20261031",
+              "run": "318e94223309",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-xolver-007-proving-prepare-r1267-20261031",
+              "run": "d2b67e64ecd2",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-xolver-008-claim-remainder-r1267-20261031",
+              "run": "39b6f293c8e1",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-xolver-009-claim-returns-r1267-20261031",
+              "run": "47d8c34370d9",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-xolver-010-finalize-remainder-r1267-20261031",
+              "run": "d40178b0596f",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-xolver-011-finalize-returns-r1267-20261031",
+              "run": "e9cc64d7ed7e",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "1"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-xolver-012-claim-safety-r1267-20261031",
+              "run": "9b330e317590",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "1"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-xolver-013-finalize-safety-r1267-20261031",
+              "run": "01901d3464cf",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-xolver-014-vc-proving-verify-r1267-20261031",
+              "run": "d5eaab649b14",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-xolver-015-final-apply-r1267-20261031",
+              "run": "655b7ae81cc1",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-xolver-016-step-r1267-20261031",
+              "run": "608bb00fce46",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-xolver-017-final-check-r1267-20261031",
+              "run": "74413717eb3e",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-xolver-annotation-01-design",
+              "run": "0024d3d8c361",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-xolver-annotation-02-symexec",
+              "run": "9ef3060a9266",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-xolver-annotation-03-post-library",
+              "run": "e3833921b37f",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-xolver-remainder-01",
+              "run": "a2eba425ca6e",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-xolver-returns-01",
+              "run": "1d881f50c480",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "1"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-xolver-safety-01-r1267-20261031",
+              "run": "f5d5664e9f81",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            }
+          ],
+          "end_to_end_final_check_seconds": 35.79846786335111,
+          "observed_full_workflow_wall_seconds": 2836.0,
+          "observed_wall_scope": "Init-run EOS start through final-check EOS end, including owner thinking, scheduler/queue gaps, build-lock waits and orchestration delays; not an isolated solver-performance comparison."
+        },
+        "z3": {
+          "programs": 1,
+          "function_contracts": [
+            "abs",
+            "gcd"
+          ],
+          "verified_function_bodies": [
+            "gcd"
+          ],
+          "assumed_external_contracts": [
+            "abs"
+          ],
+          "top_level_vcs": 9,
+          "run_id": "native_gcd_xolver_r1124-20261031121756",
+          "program_verified": true,
+          "library_policy": "present",
+          "solver_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+          "state_sha256": "f7cc77f861188ea5bbe430fcfa6d89ed7cb5b0e269181e28c709c5b1d3132aaf",
+          "final_check_sha256": "00131d6f5927452b3f27006c106f221f6c9facb60ad5297707e9f20440ccef45",
+          "parent_check_sha256": "1a75707da7808bf387a5f23fc667f91bfc9e9ab2cf403d3d9e3b5b3fbca77c62",
+          "group_plan_sha256": "a9529fc6b040ba71bac2df4f38037fe3c31183e370978d2b25a56ce37ca78bcd",
+          "accepted_files": {
+            "c_file": "255cd902a923b5044acdbe6372652e0b422af3a5a723cc37355040e613a8b3a3",
+            "formal_case_lib": "1f8a54afaa392924392567aef82ee5ba89cdf1a63d87dffd441a01e206123963",
+            "goal_file": "8f85baa2d2fd8afb8346f8b5d9f425932e3eb600b1d239193bf80c602ddc1db9",
+            "proof_auto_file": "29ad6d82a3f8579624995d912a0a42e20c928b40d6c76952606ad63b1aa9c87b",
+            "proof_manual_file": "fac251d14f084b4814ea8cdc7a0ee2ecca965deafa30916968f897b08a3e5139",
+            "goal_check_file": "36eb1e68251be9b3ef238e579031cb7fc2e2005c019d1366b5d77a8a8a73461b"
+          },
+          "sessions": [
+            {
+              "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1267/gcd/z3/003-finalize-annotation/native/session-2490127/session.json",
+              "sha256": "5e49dd05ab250411f33c1dde3889a59dee991f3e453ed5ef3547aff4c0711b2e",
+              "queries": 296,
+              "verdicts": {
+                "sat": 174,
+                "unsat": 122
+              },
+              "callback_seconds": 2.49918012
+            },
+            {
+              "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1267/gcd/z3/017-final-check/native/session-2889849/session.json",
+              "sha256": "f8b5f9be866290e3fbe648673d5981e15db572de3c5324fa6a902f88703bbc0d",
+              "queries": 296,
+              "verdicts": {
+                "sat": 174,
+                "unsat": 122
+              },
+              "callback_seconds": 2.522052811
+            },
+            {
+              "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1267/gcd/z3/annotation-symexec-01/native/session-2445284/session.json",
+              "sha256": "eb01ebffbfe456d1166c66744f5c4f5bccf64a358945bb184c509d6b4c88c0af",
+              "queries": 296,
+              "verdicts": {
+                "sat": 174,
+                "unsat": 122
+              },
+              "callback_seconds": 3.888362706
+            }
+          ],
+          "smt_queries_all_invocations": 888,
+          "smt_verdicts": {
+            "sat": 522,
+            "unsat": 366
+          },
+          "smt_callback_seconds": 8.909595637,
+          "executed_invocation_count": 24,
+          "executed_invocation_seconds": 287.6228096410632,
+          "commands": {
+            "init-run": 1,
+            "step": 2,
+            "claim-attempt": 5,
+            "finalize-delivery": 5,
+            "dune-build": 1,
+            "vc-proving-preparing": 1,
+            "vc-proving-verify": 1,
+            "final-apply": 1,
+            "final-check": 1,
+            "coq-check": 5,
+            "symexec": 1
+          },
+          "invocations": [
+            {
+              "stage": "000-init",
+              "action": "init-run",
+              "seconds": 0.5682452488690615,
+              "result_sha256": "182a0bb340b91aa8b42e49c4aa86bdcfa3d777d06c811d1111b1a1ec2a56cf8d",
+              "launch_sha256": "d0fddf337bbfb927f6d883d023545ff42e0a8845b4a27b739175ad41548a0050"
+            },
+            {
+              "stage": "001-step",
+              "action": "step",
+              "seconds": 1.2911756075918674,
+              "result_sha256": "2b9bcccf9091243f68af7b7f62a6bd72c5cb3eedf8c44c6d834a7a7caeb6e291",
+              "launch_sha256": "501c94777a44327a34b801b3187e7452e07b989f03347d08525ec115a2496fcc"
+            },
+            {
+              "stage": "002-claim-annotation",
+              "action": "claim-attempt",
+              "seconds": 0.8693199511617422,
+              "result_sha256": "f6e96e2213717b8955976d5d4253d0f6dec9fd6330843678dbb4c35b4ce3afa2",
+              "launch_sha256": "f33736148706b02fdbd847b533f19be8b07103f68ce16a9bc2e6b25d31ef1dc5"
+            },
+            {
+              "stage": "003-finalize-annotation",
+              "action": "finalize-delivery",
+              "seconds": 4.981825867667794,
+              "result_sha256": "9ef8dd98a493d73a21f16fb22afce00ebb49f9bf3f8fed09a493ebfcfea982f5",
+              "launch_sha256": "9d30a4cb25f6fd0e5644f2253febc554bbbaac03960e98b0fba0d45914a5afa4"
+            },
+            {
+              "stage": "004-dune-build",
+              "action": "dune-build",
+              "seconds": 3.027315905317664,
+              "result_sha256": "2b27b56b3f2eb330617f313852234635e485ac3efb99de1f360589151e75c903",
+              "launch_sha256": "f864343beabe9bcb6cf62b3f21aa89b57c07f439544b31b020101adbba97aad2"
+            },
+            {
+              "stage": "005-claim-vc",
+              "action": "claim-attempt",
+              "seconds": 0.6687444783747196,
+              "result_sha256": "6fa6bf6db8f9fbcc72807a904e6bde61b590d402abcb6bf9132e9e2a55641694",
+              "launch_sha256": "88446a91a593ea633bb4de201dd4468f57270c78a13eec58a09b844337898b3f"
+            },
+            {
+              "stage": "006-finalize-vc",
+              "action": "finalize-delivery",
+              "seconds": 0.6676333118230104,
+              "result_sha256": "b03b71e649103f61228b640cdb755619d5c424ee539ab36f915f801ed978e4c7",
+              "launch_sha256": "d8da5c2c1cef6a819c2d8e17f916872e278e9641a9f46dff178b3fe3ffe40645"
+            },
+            {
+              "stage": "007-vc-proving-preparing",
+              "action": "vc-proving-preparing",
+              "seconds": 0.719249339774251,
+              "result_sha256": "ab1f02cf9ed771aafba814c1ac0832c82d71ed06028d66dd86c88ce145d20288",
+              "launch_sha256": "ea977bcdfad4e6f1e3f07b8b812615b8004adde4cba921df1db61922f00bfa06"
+            },
+            {
+              "stage": "008-claim-remainder",
+              "action": "claim-attempt",
+              "seconds": 0.6679612286388874,
+              "result_sha256": "2868e496bf5b34ba24611fb1160b6c523c21db8add9f6f4c4b8df2d76eefb972",
+              "launch_sha256": "0bba278d35d40869771928df47e517b557003957091631503f568d3543193747"
+            },
+            {
+              "stage": "009-finalize-remainder",
+              "action": "finalize-delivery",
+              "seconds": 27.146589556708932,
+              "result_sha256": "231dec624ef471dfa00900a5998d0c78d34a3c74afb72f72325ab389d7627de0",
+              "launch_sha256": "5114b205e8b6c4231092270dc7b374cf281a43eef1721fa5b463be46202955ad"
+            },
+            {
+              "stage": "010-claim-returns",
+              "action": "claim-attempt",
+              "seconds": 0.6681169588118792,
+              "result_sha256": "a3b118bd1704847eca4acd78db1c274510e8820076a5a1ae2ea2eafd6f7e09b3",
+              "launch_sha256": "47aad6f4636334cfb34159ed6416c39717478125c46aed6b8dcc96ddd1d32c9c"
+            },
+            {
+              "stage": "011-claim-safety",
+              "action": "claim-attempt",
+              "seconds": 0.6686459071934223,
+              "result_sha256": "e41fc0d26397b46fd01958c03340e492cd3a6a92e7d182da1225aa5e1abb500e",
+              "launch_sha256": "139d36467734570c4fb64a894cca3a1b215370c8f8507b67ddabaff0b4e11e2c"
+            },
+            {
+              "stage": "012-finalize-returns",
+              "action": "finalize-delivery",
+              "seconds": 25.70578394457698,
+              "result_sha256": "c4c93d11f6e4452d849a6b4e58c6cc7e4eda5d8b968c83b61bb60a7c5e90c9e2",
+              "launch_sha256": "004c61569087705a2c10329e003a393445d7274bf071584513b07845865e0efa"
+            },
+            {
+              "stage": "013-finalize-safety",
+              "action": "finalize-delivery",
+              "seconds": 29.43173234909773,
+              "result_sha256": "5f40c0c0b28bb0bcafc1165995a723f8bda9adb4a127bab4873d5c06295979aa",
+              "launch_sha256": "133a8875b773384c44acdb77e7c1f332539d9a9b78d568dd6252336af1ad81c4"
+            },
+            {
+              "stage": "014-vc-proving-verify",
+              "action": "vc-proving-verify",
+              "seconds": 30.917664121836424,
+              "result_sha256": "1a75707da7808bf387a5f23fc667f91bfc9e9ab2cf403d3d9e3b5b3fbca77c62",
+              "launch_sha256": "b173e4568ce39cce1cb8a21857b26a1c143f4bde71a30616841f72ff03ea0e89"
+            },
+            {
+              "stage": "015-final-apply",
+              "action": "final-apply",
+              "seconds": 32.74508369527757,
+              "result_sha256": "5b30609d372c6791b86ecd286203731ceebcc6ae0a52a2154ba9eed1cc0879b0",
+              "launch_sha256": "f8ec761b4f40de007b76ec9bbc40d07ec5adc4c446d0240b9c6d237471308518"
+            },
+            {
+              "stage": "016-step",
+              "action": "step",
+              "seconds": 0.5671695526689291,
+              "result_sha256": "8d358d14db1904bcdce36a2bb2922c3b28752829e083c8456b268eefca502925",
+              "launch_sha256": "984fa43e2905d5b77468191865a4695e4dfc3c9dcbc321d04811a14004f8af30"
+            },
+            {
+              "stage": "017-final-check",
+              "action": "final-check",
+              "seconds": 36.330338038504124,
+              "result_sha256": "00131d6f5927452b3f27006c106f221f6c9facb60ad5297707e9f20440ccef45",
+              "launch_sha256": "475530e3df7a81176b6d15d824cd8a17022082a35a25104500f80f90c5859887"
+            },
+            {
+              "stage": "annotation-design-01",
+              "action": "coq-check",
+              "seconds": 1.5731862969696522,
+              "result_sha256": "366d877f6d9fc83ab74df44abd8dc7f4a9af12bf9e7a528982101992df0587e2",
+              "launch_sha256": "04857533ed647d2a57fb20a38fb9cdd5b1f8acb33290ae3d72e43c3620a31de7"
+            },
+            {
+              "stage": "annotation-lib-01",
+              "action": "coq-check",
+              "seconds": 1.5208350140601397,
+              "result_sha256": "97c34473d488b7466e5939167a26774dff88682ad9e67297b0bf8500b2a04812",
+              "launch_sha256": "5edf6671a02fa25e5e9a3a604a125fa2211599dd700df38ef82e9cb8097aa0f7"
+            },
+            {
+              "stage": "annotation-symexec-01",
+              "action": "symexec",
+              "seconds": 5.785069853067398,
+              "result_sha256": "51cbb5849eccbfc52d2eada61420744b7023b3ff209e0ffd9aeb5c2f357b6e70",
+              "launch_sha256": "8a96804ab783d738efebd86c66073aee9d5722e4e407761740d976cb507ee554"
+            },
+            {
+              "stage": "remainder-01",
+              "action": "coq-check",
+              "seconds": 27.749826857820153,
+              "result_sha256": "2031771dbab224882ab765164aa41b39618bec8944385b18aeaef664ee8baa29",
+              "launch_sha256": "ade826741c40de4552abe340ebe8f25175fc1d0413684c1c73604edd857c764e"
+            },
+            {
+              "stage": "returns-01",
+              "action": "coq-check",
+              "seconds": 25.346455907449126,
+              "result_sha256": "2df0999d9db45eb3508eb28592728526260c4e46961a06061e6d9f3a197e9bc7",
+              "launch_sha256": "f0ce1bd120d6519593de3777b709ad3f8167111ca0bd7007abd545715396eaa0"
+            },
+            {
+              "stage": "safety-01",
+              "action": "coq-check",
+              "seconds": 28.004840647801757,
+              "result_sha256": "3df0214e1853254fb062f9e074dc1e8c4feeac9c44c8badc6e6ef2cf49f902bb",
+              "launch_sha256": "57086bc7656d3b8c37196ead7663292d9f64013bc78d5aa5f018efb9bf9c42ea"
+            }
+          ],
+          "eos": [
+            {
+              "experiment": "xolver-qcp-controlled-gcd-z3-000-init-r1267-20261031",
+              "run": "80e4ed5dc6e9",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-z3-001-step-r1267-20261031",
+              "run": "f1e155676cb6",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "1"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-z3-002-claim-annotation-r1267-20261031",
+              "run": "c77ca99709c5",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-z3-003-finalize-annotation-r1267-20261031",
+              "run": "3918539ea026",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-z3-004-dune-build-r1267-20261031",
+              "run": "115065cf765c",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "12"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-z3-005-claim-vc-r1267-20261031",
+              "run": "70f5eae20c2b",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "7"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-z3-006-finalize-vc-r1267-20261031",
+              "run": "a37ec12e5321",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "1"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-z3-007-vc-proving-preparing-r1267-20261031",
+              "run": "ed327431a1f5",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "4"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-z3-008-claim-remainder-r1267-20261031",
+              "run": "bc3858199d9d",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "2"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-z3-009-finalize-remainder-r1267-20261031",
+              "run": "6964d44331ca",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-z3-010-claim-returns-r1267-20261031",
+              "run": "107c7aa68901",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "1"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-z3-011-claim-safety-r1267-20261031",
+              "run": "4a2cf35171aa",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "1"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-z3-012-finalize-returns-r1267-20261031",
+              "run": "78b6093dbabd",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-z3-013-finalize-safety-r1267-20261031",
+              "run": "f522fde27bcf",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-z3-014-vc-proving-verify-r1267-20261031",
+              "run": "232c6232fa98",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "1"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-z3-015-final-apply-r1267-20261031",
+              "run": "4b626ca46a03",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-z3-016-step-r1267-20261031",
+              "run": "5313789da53c",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-z3-017-final-check-r1267-20261031",
+              "run": "6c3b15f241c5",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-z3-annotation-design-01-r1267-20261031",
+              "run": "d367baa9dcae",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-z3-annotation-lib-01-r1267-20261031",
+              "run": "9abab700b664",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-z3-annotation-symexec-01-r1267-20261031",
+              "run": "3056a8aa18fe",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-z3-remainder-01-r1267-20261031",
+              "run": "a2151c78ecf2",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "1"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-z3-returns-01-r1267-20261031",
+              "run": "3ad5895dccc5",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-gcd-z3-safety-01-r1267-20261031",
+              "run": "a89cc40eb7ce",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "1"
+                ]
+              }
+            }
+          ],
+          "end_to_end_final_check_seconds": 36.330338038504124,
+          "observed_full_workflow_wall_seconds": 1740.0,
+          "observed_wall_scope": "Init-run EOS start through final-check EOS end, including owner thinking, scheduler/queue gaps, build-lock waits and orchestration delays; not an isolated solver-performance comparison."
+        }
+      }
+    },
+    "max3": {
+      "audit_path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1267/max3/stage-r1283.json",
+      "audit_sha256": "2f658f477e7415e63ec45209b335fbe897bfa2925c5026df1cbbfc9f432bc6f8",
+      "backends": {
+        "xolver": {
+          "programs": 1,
+          "function_contracts": [
+            "max3"
+          ],
+          "verified_function_bodies": [
+            "max3"
+          ],
+          "assumed_external_contracts": [],
+          "top_level_vcs": 4,
+          "run_id": "native_max3_xolver_r1124-20261031121757",
+          "program_verified": true,
+          "library_policy": "present",
+          "solver_sha256": "6302b2376bd27bb49a69414a8a5223a005f8adf4d5e7e9c6fad9464d55f48e80",
+          "state_sha256": "0e4fd144b20f59d14062348080bea6bd5a3e42ffe930098da6c3346fed1290d8",
+          "final_check_sha256": "958e8231509e18cefb4bdca6fce916591a4bb51babee572d54788b3d897a7276",
+          "parent_check_sha256": "d7b315dc5224b06a86a7d56ccfda0d412a5e16b12f64174a242831bf206bc522",
+          "group_plan_sha256": "e3d25f6f1986b1178c8c6697366c2c2dacf4d2061c6498f2a36da51e63178f34",
+          "accepted_files": {
+            "c_file": "7ddaa9f590cd9c37d3dd644ea280ecd3fa6cee084441c82caf9c0e1afb6dde5d",
+            "formal_case_lib": "1f8a54afaa392924392567aef82ee5ba89cdf1a63d87dffd441a01e206123963",
+            "goal_file": "fbfdbcda4ce02d4e7c4ea5ee06b4912eb24b80c0702b1f800655ea029735c162",
+            "proof_auto_file": "a5c298bf8d07a5dd4c50cd9bf8d24d85396e2df331c2e9d99cad4b12ed5dafb8",
+            "proof_manual_file": "86d96e98e1d9c87ae810f1841f1591c88bd104cba8c8ae10edabebacaf112ff7",
+            "goal_check_file": "438d0f876b2dab1372319745992e31e7a1e29814c7bf97012d3cff381450fb32"
+          },
+          "sessions": [
+            {
+              "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1267/max3/xolver/003-finalize-annotation/native/session-1872923/session.json",
+              "sha256": "2227109fc3a511b2605948860fad6e08e00c341b4e10c9ac3ac208b27b3b7f58",
+              "queries": 296,
+              "verdicts": {
+                "sat": 148,
+                "unsat": 148
+              },
+              "callback_seconds": 2.83818148
+            },
+            {
+              "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1267/max3/xolver/013-final-check/native/session-2325270/session.json",
+              "sha256": "7f11a7f58628cf96384002f014f0d018045c00748f9303cb2b23e7539d9a9574",
+              "queries": 296,
+              "verdicts": {
+                "sat": 148,
+                "unsat": 148
+              },
+              "callback_seconds": 2.354159189
+            },
+            {
+              "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1267/max3/xolver/annotation-02-symexec/native/session-1782546/session.json",
+              "sha256": "380ac9d6aed11b631ab7e73b0af4f0d1b3dd0f98bbcf641590b4ba0d8d19647c",
+              "queries": 296,
+              "verdicts": {
+                "sat": 148,
+                "unsat": 148
+              },
+              "callback_seconds": 2.71366412
+            }
+          ],
+          "smt_queries_all_invocations": 888,
+          "smt_verdicts": {
+            "sat": 444,
+            "unsat": 444
+          },
+          "smt_callback_seconds": 7.906004789,
+          "executed_invocation_count": 18,
+          "executed_invocation_seconds": 149.942569186911,
+          "commands": {
+            "init-run": 1,
+            "step": 2,
+            "claim-attempt": 3,
+            "finalize-delivery": 3,
+            "dune-build": 1,
+            "vc-proving-preparing": 1,
+            "vc-proving-verify": 1,
+            "final-apply": 1,
+            "final-check": 1,
+            "coq-check": 3,
+            "symexec": 1
+          },
+          "invocations": [
+            {
+              "stage": "000-init",
+              "action": "init-run",
+              "seconds": 0.4177849479019642,
+              "result_sha256": "5ba5641cceff847ffc09a7ca0e9e9d7c69a824d64488caf5b375a31cbac6cb00",
+              "launch_sha256": "66a3edf884d0585c196076ab8ce53fac0fbb4064afe2a353c0d6b730941ca833"
+            },
+            {
+              "stage": "001-step",
+              "action": "step",
+              "seconds": 0.4716095831245184,
+              "result_sha256": "64279ec1278b9582819c072c4523ca7d53aa6e4b66ab091a1d47388712ffcc21",
+              "launch_sha256": "c3c5e41352dc55168053b6f54f059acfdf54455592146b1c75f9b1a7f6b5bec9"
+            },
+            {
+              "stage": "002-claim-annotation",
+              "action": "claim-attempt",
+              "seconds": 0.4172545522451401,
+              "result_sha256": "6f940ee0574f43af291382d6a8ccad449cd82eea8cbc7067f65b80383f0c82c7",
+              "launch_sha256": "9cb1efa8cb283d49aaec8a905af662e28413f93e236c385a8c9b810ea3c80df9"
+            },
+            {
+              "stage": "003-finalize-annotation",
+              "action": "finalize-delivery",
+              "seconds": 5.281970530748367,
+              "result_sha256": "6adf0dbaaf82c73dddf6324829329e203e398c34da82220ca71a5e4e13488ad5",
+              "launch_sha256": "157abe0b6077e68cb20344a089d94923012d60d902c30c68e33ec63ee74c5140"
+            },
+            {
+              "stage": "004-dependencies",
+              "action": "dune-build",
+              "seconds": 2.523836525157094,
+              "result_sha256": "688996731aae1492a044f2c07afc8b5c324a817fbcaeb1227e7d40ac3daee60d",
+              "launch_sha256": "e700962142e6c3edf8acac3bdc9faee4397b43b4a9bea783dcce285c95311919"
+            },
+            {
+              "stage": "005-claim-vc",
+              "action": "claim-attempt",
+              "seconds": 0.46805636771023273,
+              "result_sha256": "a35d14b4d2908605ff1bdae4baa32481602541c02f83a8c36e966ec68a17f364",
+              "launch_sha256": "2a2b244eb68974c9ab9e49d581a16e1517c10c40071df9a2e92fde69b71675bb"
+            },
+            {
+              "stage": "006-finalize-vc",
+              "action": "finalize-delivery",
+              "seconds": 0.46706292033195496,
+              "result_sha256": "46f7a8904df04ed37b5cceaaa2b38b5a32df74abae2e3c9aba6b974651c016d5",
+              "launch_sha256": "919ff4a6436be82bb5fa4be580ae588b06860d60e4bfe71ccaaa7a14ff498c66"
+            },
+            {
+              "stage": "007-proving-prepare",
+              "action": "vc-proving-preparing",
+              "seconds": 0.5178699605166912,
+              "result_sha256": "af9a48fafd7f2aba3e07c8f925ddc37a98d2b276bf9d2437e284637be89f6b61",
+              "launch_sha256": "3aa8f6d8aa5fb1e5f7c88175cc6e6251384a65ced66e1633a39025fbd9edf393"
+            },
+            {
+              "stage": "008-claim-return_bounds",
+              "action": "claim-attempt",
+              "seconds": 0.46771165542304516,
+              "result_sha256": "13260de9516cca201dceb08dc948cd6e3b5c59a53a1b1684ce60993ec172b994",
+              "launch_sha256": "d46a2e116bfa42af71ed6d87ce317b2dede1db47bf3734dbd10ca823ea133f25"
+            },
+            {
+              "stage": "009-finalize-returns",
+              "action": "finalize-delivery",
+              "seconds": 25.750835774466395,
+              "result_sha256": "519da9c65d88c4ee223cea7ad0d77c4ac340bf8a2982adfe3a5fa6e7c91c610f",
+              "launch_sha256": "c1c54785c096d3eb75e16ee6245edf5c9c42de59742aa0d067022ba800e54293"
+            },
+            {
+              "stage": "010-parent",
+              "action": "vc-proving-verify",
+              "seconds": 25.900503244251013,
+              "result_sha256": "d7b315dc5224b06a86a7d56ccfda0d412a5e16b12f64174a242831bf206bc522",
+              "launch_sha256": "6cbceb5eca2d19ab1db2fc6f7fe64ca31c523c953c19ec5f39393d941ff29f4a"
+            },
+            {
+              "stage": "011-final-apply",
+              "action": "final-apply",
+              "seconds": 25.5476156398654,
+              "result_sha256": "87a6f9a0a9deaa36387d25972c18c0d6b73e36a292d011f3a2235714deef78c1",
+              "launch_sha256": "ff0b57111657ed77d0b0e99cd9bd25c48090397d7ac1971c2026aa2c6363a42d"
+            },
+            {
+              "stage": "012-step",
+              "action": "step",
+              "seconds": 0.41763498447835445,
+              "result_sha256": "0ef340bbca1b931ef32c0cc2a828491f2b8433b6ff27005fab666e8841871daf",
+              "launch_sha256": "05782291d2ec8c8bbc063aa66ba3e20cad64d964cfcce2fb1df27df69a5d6349"
+            },
+            {
+              "stage": "013-final-check",
+              "action": "final-check",
+              "seconds": 29.00960549712181,
+              "result_sha256": "958e8231509e18cefb4bdca6fce916591a4bb51babee572d54788b3d897a7276",
+              "launch_sha256": "32eb46f534926815dcd37180a8a9487363994191ac02581336fb8b97e91ef993"
+            },
+            {
+              "stage": "annotation-01-design",
+              "action": "coq-check",
+              "seconds": 1.270090764388442,
+              "result_sha256": "65b176207dee69bb9d0eb8602d2b7ef4a8c5d53350c11dda920ab0eef74c90d9",
+              "launch_sha256": "488b43d644fd3a9a926b3cc2fb24b50cae86f3d11ce45b648e181aa3d4975656"
+            },
+            {
+              "stage": "annotation-02-symexec",
+              "action": "symexec",
+              "seconds": 3.9277829844504595,
+              "result_sha256": "60d0887f46e75b3e967f2ad8b5e13f87ecdf1e0852846913465ae78e77f80b52",
+              "launch_sha256": "c310565fa5f4c5ad2d67f4c65da54dd21d20e101211f137e05bcc24eefdfdc56"
+            },
+            {
+              "stage": "annotation-03-post-library",
+              "action": "coq-check",
+              "seconds": 1.3218467216938734,
+              "result_sha256": "26e7560960cf89ce104b0c0dcc22756bc97d4ff767980be87ecf89c6ae76d644",
+              "launch_sha256": "7a4735cbc8321f6780cb27df12db3ddfe3a76eddb2ffa907827b3f95fd0b710f"
+            },
+            {
+              "stage": "returns-01",
+              "action": "coq-check",
+              "seconds": 25.763496533036232,
+              "result_sha256": "7448d44db6f4e323fde30ac9ecf2db9e5477a5529f52d25e3e4ef9c6136d037c",
+              "launch_sha256": "b292595065c7929f388fd872117ee97e576f40f727fb6fa8afeab77c083cce06"
+            }
+          ],
+          "eos": [
+            {
+              "experiment": "xolver-qcp-controlled-max3-xolver-000-init-r1267-20261031",
+              "run": "cb4452885065",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "21"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-max3-xolver-001-step-r1267-20261031",
+              "run": "566652909837",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "3"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-max3-xolver-002-claim-annotation-r1267-20261031",
+              "run": "0430499974a9",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-max3-xolver-003-finalize-annotation-r1267-20261031",
+              "run": "780e8f94f9d2",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-max3-xolver-004-dependencies-r1267-20261031",
+              "run": "fcc35c45191b",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "1"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-max3-xolver-005-claim-vc-r1267-20261031",
+              "run": "9eedf2bb4bce",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "5"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-max3-xolver-006-finalize-vc-r1267-20261031",
+              "run": "0b44aaec6ae2",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-max3-xolver-007-proving-prepare-r1267-20261031",
+              "run": "3ff44e732c24",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-max3-xolver-008-claim-return_bounds-r1267-20261031",
+              "run": "8ad8c185f73a",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-max3-xolver-009-finalize-returns-r1267-20261031",
+              "run": "e7d10f8028ac",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "1"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-max3-xolver-010-parent-r1267-20261031",
+              "run": "569fd31d19e6",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-max3-xolver-011-final-apply-r1267-20261031",
+              "run": "63e56bec112d",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-max3-xolver-012-step-r1267-20261031",
+              "run": "63106b6a41d0",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-max3-xolver-013-final-check-r1267-20261031",
+              "run": "ef2eb475c9ce",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-max3-xolver-annotation-01-design-r1267-20261031",
+              "run": "b5a5b786d6c6",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-max3-xolver-annotation-02-symexec-r1267-20261031",
+              "run": "ba1efed6effd",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-max3-xolver-annotation-03-post-library-r1267-20261031",
+              "run": "c625cc515917",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-max3-xolver-returns-01-r1267-20261031",
+              "run": "9bb421e74bc0",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            }
+          ],
+          "end_to_end_final_check_seconds": 29.00960549712181,
+          "observed_full_workflow_wall_seconds": 2610.0,
+          "observed_wall_scope": "Init-run EOS start through final-check EOS end, including owner thinking, scheduler/queue gaps, build-lock waits and orchestration delays; not an isolated solver-performance comparison."
+        },
+        "z3": {
+          "programs": 1,
+          "function_contracts": [
+            "max3"
+          ],
+          "verified_function_bodies": [
+            "max3"
+          ],
+          "assumed_external_contracts": [],
+          "top_level_vcs": 4,
+          "run_id": "native_max3_xolver_r1124-20261031121758",
+          "program_verified": true,
+          "library_policy": "present",
+          "solver_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+          "state_sha256": "387233b71bf022c3cff2dbca19c7158114874dedb75df8459bc9a0923bc874b8",
+          "final_check_sha256": "aebd13bf617dbfa58f79789577d67adcd29584ae230b51b8166a9f3a3011677a",
+          "parent_check_sha256": "2b664d8c946e1696e655c123e68f21389b74e99a17a706da8d16b30d1eb79bbb",
+          "group_plan_sha256": "13e9dd4e0b2088daff8d2ace54bbfe225baaadb009e025faba878fe1d2dfe91f",
+          "accepted_files": {
+            "c_file": "7ddaa9f590cd9c37d3dd644ea280ecd3fa6cee084441c82caf9c0e1afb6dde5d",
+            "formal_case_lib": "1f8a54afaa392924392567aef82ee5ba89cdf1a63d87dffd441a01e206123963",
+            "goal_file": "fbfdbcda4ce02d4e7c4ea5ee06b4912eb24b80c0702b1f800655ea029735c162",
+            "proof_auto_file": "a5c298bf8d07a5dd4c50cd9bf8d24d85396e2df331c2e9d99cad4b12ed5dafb8",
+            "proof_manual_file": "86d96e98e1d9c87ae810f1841f1591c88bd104cba8c8ae10edabebacaf112ff7",
+            "goal_check_file": "438d0f876b2dab1372319745992e31e7a1e29814c7bf97012d3cff381450fb32"
+          },
+          "sessions": [
+            {
+              "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1267/max3/z3/003-finalize-annotation/native/session-2426773/session.json",
+              "sha256": "67199add18a24f6f15693ceb8b2490f01a42549bb202a7aafe1379081194cb2a",
+              "queries": 296,
+              "verdicts": {
+                "sat": 148,
+                "unsat": 148
+              },
+              "callback_seconds": 2.498575092
+            },
+            {
+              "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1267/max3/z3/013-final-check/native/session-2655590/session.json",
+              "sha256": "fb2904a2c048d9b5fa40c685d309b81439d03bc0dbdd519749a746ea811715bc",
+              "queries": 296,
+              "verdicts": {
+                "sat": 148,
+                "unsat": 148
+              },
+              "callback_seconds": 2.3623481330000002
+            },
+            {
+              "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1267/max3/z3/annotation-symexec-01/native/session-2394827/session.json",
+              "sha256": "53f14c77e718ec45ca8232984155a29ed826bbac8d0a1fc8bc1c891e15437f02",
+              "queries": 296,
+              "verdicts": {
+                "sat": 148,
+                "unsat": 148
+              },
+              "callback_seconds": 3.352331206
+            }
+          ],
+          "smt_queries_all_invocations": 888,
+          "smt_verdicts": {
+            "sat": 444,
+            "unsat": 444
+          },
+          "smt_callback_seconds": 8.213254431,
+          "executed_invocation_count": 18,
+          "executed_invocation_seconds": 155.95380577258766,
+          "commands": {
+            "init-run": 1,
+            "step": 2,
+            "claim-attempt": 3,
+            "finalize-delivery": 3,
+            "dune-build": 1,
+            "vc-proving-preparing": 1,
+            "vc-proving-verify": 1,
+            "final-apply": 1,
+            "final-check": 1,
+            "coq-check": 3,
+            "symexec": 1
+          },
+          "invocations": [
+            {
+              "stage": "000-init",
+              "action": "init-run",
+              "seconds": 0.5680866297334433,
+              "result_sha256": "54b5018f186cc250de603035e2bc98b6cbab0752b965275a7dd6464fdfdf8dbc",
+              "launch_sha256": "28cc144a6cfca726ba98223569f93e202707b61486832cce597fa78d420682da"
+            },
+            {
+              "stage": "001-step",
+              "action": "step",
+              "seconds": 0.6187036149203777,
+              "result_sha256": "281e4c0927f072b2d7ef2725d9ef38475cced0bd90fd640d5647123c4b6bd7de",
+              "launch_sha256": "98af0e7c8c6ad0146d71be328d8efa93b331f78b7106554d2649f503f5a8e2d4"
+            },
+            {
+              "stage": "002-claim-annotation",
+              "action": "claim-attempt",
+              "seconds": 0.6192889604717493,
+              "result_sha256": "dbc4d367bc95507e0d41159f8b731ecb9ba83623f806a3d73085fec65d8f63ab",
+              "launch_sha256": "18ead656ef3fa828a040f0e262deb16f69c54a7805290da05637bf93ffd0cb1d"
+            },
+            {
+              "stage": "003-finalize-annotation",
+              "action": "finalize-delivery",
+              "seconds": 4.937173603102565,
+              "result_sha256": "aed563bb17f5d0a6299a096d3bffdf45d2a316f6c3d36a667da21b4943562aed",
+              "launch_sha256": "878781b31c3b5c4ee93d09f08b84b2d7c1625016b73409ce77cf0ccc6a5188df"
+            },
+            {
+              "stage": "004-dune-build",
+              "action": "dune-build",
+              "seconds": 2.827738245949149,
+              "result_sha256": "c0a68dea5cac3e2c6b2671b9899bc40ebfec156f53f1abba315053ac4e2efc56",
+              "launch_sha256": "6db8b153db49939baf50454cf30bd7d6623c685af64e3ac9035c7e0089cd5647"
+            },
+            {
+              "stage": "005-claim-vc",
+              "action": "claim-attempt",
+              "seconds": 0.6184318754822016,
+              "result_sha256": "1f4c5461aa53c5bc8ed5d6dd3d2b3346f10b0586d238e46a6684c88a145b1a63",
+              "launch_sha256": "395ddd7774169b1b499a6615798ee0339b58eb1039fea170a4a8e913260472c7"
+            },
+            {
+              "stage": "006-finalize-vc",
+              "action": "finalize-delivery",
+              "seconds": 0.7187120318412781,
+              "result_sha256": "c65bff87f911e0df3729fc00b384da0741a3b9afda2612d69a5e7972a4175708",
+              "launch_sha256": "fbdc8f55fa815fb3fcb0f76f389d3a1f4ae21cd993f1b734fdf09217b3a629b2"
+            },
+            {
+              "stage": "007-vc-proving-preparing",
+              "action": "vc-proving-preparing",
+              "seconds": 0.7190587352961302,
+              "result_sha256": "a0e1e6e900d64bc7d9b7111bd3f6b368f9bf060da2df354ce6c2c63ead9e8285",
+              "launch_sha256": "6e1bd6552c985b2ca2a0ef8c5403c879946326b8ad8da1e77009e06944677fe4"
+            },
+            {
+              "stage": "008-claim-returns",
+              "action": "claim-attempt",
+              "seconds": 0.668793274089694,
+              "result_sha256": "7a09f459a900977a69464e7a342ed6fec2750f5dbc9cebc9fbae7ebc4945fb8b",
+              "launch_sha256": "e3469ee2ce7174c1bae7bec5f7373cc3e09d299f829f30e5f086a246868b3e87"
+            },
+            {
+              "stage": "009-finalize-returns",
+              "action": "finalize-delivery",
+              "seconds": 27.436523132026196,
+              "result_sha256": "4b97d38ea51c6cb2318a1a251313d06ce1fb6c448529463705021f22fb4f6873",
+              "launch_sha256": "2e1d4490df98ac646f336fd08f67ba6b3c0cb142d22c7907e3f0f0ccb6cac7bf"
+            },
+            {
+              "stage": "010-vc-proving-verify",
+              "action": "vc-proving-verify",
+              "seconds": 26.66285873018205,
+              "result_sha256": "2b664d8c946e1696e655c123e68f21389b74e99a17a706da8d16b30d1eb79bbb",
+              "launch_sha256": "4312b28e593e81cf0abcc5a95a9cdeaec73642557e905c115065a6b5819f30c6"
+            },
+            {
+              "stage": "011-final-apply",
+              "action": "final-apply",
+              "seconds": 25.552205488085747,
+              "result_sha256": "475af2007dcc6de03afa23598bfb43e984ac2632e823891bfb8c05a996afc92a",
+              "launch_sha256": "cd0ccff9a15c1e24bd2939efc1b9adf322daa78b40bd2d687ff7eb151d081d9e"
+            },
+            {
+              "stage": "012-step",
+              "action": "step",
+              "seconds": 0.5686949640512466,
+              "result_sha256": "b958f3bdc4dc30fddad85eb661f41809b68bced3aa19cb6db64375ee9c47cb8b",
+              "launch_sha256": "9fe287995b67e120b5da0c20101cc48042a3a1c3471b5158331004257fb0ec6f"
+            },
+            {
+              "stage": "013-final-check",
+              "action": "final-check",
+              "seconds": 29.30740102380514,
+              "result_sha256": "aebd13bf617dbfa58f79789577d67adcd29584ae230b51b8166a9f3a3011677a",
+              "launch_sha256": "100849ae4ea889468ed800902640d45172c302ed7914afe203c6e808acd444c8"
+            },
+            {
+              "stage": "annotation-design-01",
+              "action": "coq-check",
+              "seconds": 1.5213652346283197,
+              "result_sha256": "240908a280dc9e5c73bc7d4206aa9b907ba90420693257c0b09d5fb14926d196",
+              "launch_sha256": "a011e6e8fc36f8e01779f5093262d58ff71b75e631026e4b592dfd8f4ceaac65"
+            },
+            {
+              "stage": "annotation-lib-01",
+              "action": "coq-check",
+              "seconds": 1.5219059940427542,
+              "result_sha256": "41211cc0a31556fbb6871563c1ecc729d9acb511340ad31f2f05fe8a8b35a479",
+              "launch_sha256": "29c3c89bf47a6d2c6edf8c3f8a95bce0341b2f402ca6c876cb2e18c6c387a5a6"
+            },
+            {
+              "stage": "annotation-symexec-01",
+              "action": "symexec",
+              "seconds": 4.882682416588068,
+              "result_sha256": "a5afa1d115ebe13f3d45956b8787536d87f66d48f6a6bee8d21fa75452fc452d",
+              "launch_sha256": "54f8fab246de3976de2542f5fd7513f24031faf14234d05fe39280f6ef252d06"
+            },
+            {
+              "stage": "returns-01",
+              "action": "coq-check",
+              "seconds": 26.204181818291545,
+              "result_sha256": "535bbf932390f798483ec9c17b9f387a6362ace5638910141978d028a170c077",
+              "launch_sha256": "071c97adf693bbeeabbffa882b3a8e1d6aed427c54e06c891a4fc45f9d7c6ca2"
+            }
+          ],
+          "eos": [
+            {
+              "experiment": "xolver-qcp-controlled-max3-z3-000-init-r1267-20261031",
+              "run": "7e543029bdb1",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "1"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-max3-z3-001-step-r1267-20261031",
+              "run": "2d6dcea811da",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "1"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-max3-z3-002-claim-annotation-r1267-20261031",
+              "run": "c7d3bbd45af8",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "1"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-max3-z3-003-finalize-annotation-r1267-20261031",
+              "run": "948b8725f711",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-max3-z3-004-dune-build-r1267-20261031",
+              "run": "1dd03c6da8be",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "1"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-max3-z3-005-claim-vc-r1267-20261031",
+              "run": "d51c32c58582",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-max3-z3-006-finalize-vc-r1267-20261031",
+              "run": "3368d8eeee2c",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "7"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-max3-z3-007-vc-proving-preparing-r1267-20261031",
+              "run": "c6fa9f3d811c",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "7"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-max3-z3-008-claim-returns-r1267-20261031",
+              "run": "ef4c661b154a",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-max3-z3-009-finalize-returns-r1267-20261031",
+              "run": "6dd3d7422afb",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-max3-z3-010-vc-proving-verify-r1267-20261031",
+              "run": "3a4d9a5eb5fd",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "1"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-max3-z3-011-final-apply-r1267-20261031",
+              "run": "88bfb226207a",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-max3-z3-012-step-r1267-20261031",
+              "run": "1a0b2b0bacdf",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-max3-z3-013-final-check-r1267-20261031",
+              "run": "4af984ad2fd3",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-max3-z3-annotation-design-01-r1267-20261031",
+              "run": "b5404ab05ac6",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "1"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-max3-z3-annotation-lib-01-r1267-20261031",
+              "run": "9d2b2ec9c1ce",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "1"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-max3-z3-annotation-symexec-01-r1267-20261031",
+              "run": "061e73c62c78",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            },
+            {
+              "experiment": "xolver-qcp-controlled-max3-z3-returns-01-r1267-20261031",
+              "run": "a262024e51fe",
+              "resources": {
+                "cpu_slots": 1,
+                "cpu_ids": [
+                  "0"
+                ]
+              }
+            }
+          ],
+          "end_to_end_final_check_seconds": 29.30740102380514,
+          "observed_full_workflow_wall_seconds": 1138.0,
+          "observed_wall_scope": "Init-run EOS start through final-check EOS end, including owner thinking, scheduler/queue gaps, build-lock waits and orchestration delays; not an isolated solver-performance comparison."
+        }
+      }
+    }
+  },
+  "totals": {
+    "xolver": {
+      "programs": 3,
+      "function_contracts": 4,
+      "verified_function_bodies": 3,
+      "top_level_vcs": 23,
+      "smt_queries_all_invocations": 2340,
+      "smt_callback_seconds": 20.42984689,
+      "executed_invocation_seconds": 680.9730657748878,
+      "end_to_end_final_check_seconds": 92.26186636090279,
+      "observed_full_workflow_wall_seconds": 6920.0
+    },
+    "z3": {
+      "programs": 3,
+      "function_contracts": 4,
+      "verified_function_bodies": 3,
+      "top_level_vcs": 23,
+      "smt_queries_all_invocations": 2340,
+      "smt_callback_seconds": 27.730965145000003,
+      "executed_invocation_seconds": 703.3015840072185,
+      "end_to_end_final_check_seconds": 95.34497843310237,
+      "observed_full_workflow_wall_seconds": 4665.0
+    }
+  },
+  "protected_sets_used": false,
+  "superiority_claim": false,
+  "boundary": "Both frozen backends complete the actual original C -> QCP symbolic execution -> native SMT callbacks -> Rocq/controller done workflow for three original programs with identical C bytes, original contracts, accepted proof/library bytes, group proof modes and initially present library policy. Four contracts contain three verified bodies: abs is declaration-only and assumed. Max3 only proves its original return-lower-bound Ensure. Count all 2340 SMT occurrences per backend, including annotation development, annotation acceptance and independent final replay; 780 is final-check-only. Final-check wall time covers one complete independent C/symexec/SMT/Rocq verification with existing proofs. Executed-command sums exclude owner/queue gaps; observed whole-workflow wall time includes them. Single controlled observations, caching/core variation and unequal orchestration delays do not establish end-to-end speed superiority or protected-program generalization. This is the qualified R1264 worker, not the newer exact-hash candidate. Both protected sets remain unread and unused."
+}
