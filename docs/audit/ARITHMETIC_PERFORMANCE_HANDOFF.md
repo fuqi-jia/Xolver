@@ -175,9 +175,24 @@ The fix shares LRA active-source withdrawal between reset and root backtrack,
 clears stale interface/ordinary disequalities and buffered entailments on reset,
 and retains the existing full-reset Reinitialize / root-backtrack Preserve
 assignment policies. Cross-engine tests check withdrawn equalities/disequalities,
-pending/applied facts, exact models and repeated source reuse. Native negative
-control, positive qualification, full acceptance and fresh fixed160 are pending;
-keep PR91 draft. Both protected sets remain unread and unused.
+pending/applied facts, exact models and repeated source reuse. R1311 recompiles
+the published old hook against the same headers/ABI: both new tests fail;
+restoring the fixed source passes188 targeted cases /32242 assertions and31
+Python tests. All39 R1309 groups pass, including1901 full unit cases /988001
+assertions. CLI SHA-256 is
+`0fe81f47d37fa97c0f3f4cbaa515d36a36bbad4200f9a07f55cbcacc41e6b184`.
+
+R1312 seals fresh fixed160: **104 baseline/104 candidate/117 verified Z3**
+(124 raw Z3 decisions; the same seven unconfirmed UNSATs excluded). There are
+no gained/lost solves, opposite verdicts or invalid models. Both Xolver versions
+retain2 unknowns and54 timeouts. Verified PAR-2 is7105.484/7107.417/5451.485;
+this phase makes no performance-gain claim. All160 original triads are budget
+valid, requiring no replacements. See
+[the complete correctness phase](ARITHMETIC_RESET_CONTRACT_STAGE_20261101.json).
+Final delivery PR CI and merging remain pending; keep PR91 draft until both
+jobs pass. Documentation reuses the qualified implementation without an extra
+server archive. Both protected sets remain unread and unused; Xolver has not
+surpassed Z3.
 
 
 [PR88](https://github.com/fuqi-jia/Xolver/pull/88), core `32d23ec3`, closes the
