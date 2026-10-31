@@ -1,0 +1,374 @@
+{
+  "schema": 1,
+  "backends": {
+    "xolver": {
+      "run_id": "native_branch_pair_r1231-20261031101457",
+      "programs": 1,
+      "functions": 1,
+      "verification_conditions": 10,
+      "program_verified": true,
+      "controller_phase": "done",
+      "controller_state_sha256": "46d1c3da710de5a472faeddd7ba5880e721c5be288d2e0532a2d6939723c6827",
+      "final_check_sha256": "4ff541632ee62ef702f9f2d47ff57fdfc53a65cf5cb02848a1aebc98ff505bbf",
+      "parent_check_sha256": "9e073449b0e09cf6187c97fcc1923da1c797783a6b8a79f29fa3a09ccf9def85",
+      "proof_hashes": {
+        "proof_manual_file": "05a3819b8dea870e195c595a9d73434804090e16dd04579855ffd8143a7eee08",
+        "formal_case_lib": "1f8a54afaa392924392567aef82ee5ba89cdf1a63d87dffd441a01e206123963"
+      },
+      "group_plan_sha256": "793117ab61fad52cdfa4b68332274623e47330bfa1fe4e2a24d217479783327e",
+      "library_policy": "create",
+      "solver_sha256": "79cade8ff87d0c0e527837538a094fc146231cbc8d0dda18e15d88e3a56d1b5f",
+      "native_sessions": [
+        {
+          "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1231/branch/xolver/003-finalize-annotation/native/session-3458369/session.json",
+          "sha256": "38a0de5b8dd52f0ca3bc620d201721fa2e97e4117f0dbe7e7591e46594c8bbe5",
+          "queries": 188,
+          "verdicts": {
+            "sat": 74,
+            "unsat": 114
+          },
+          "callback_seconds": 1.419133326
+        },
+        {
+          "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1231/branch/xolver/017-final-check/native/session-3978761/session.json",
+          "sha256": "6886d39bbe8a15e561aeacd374660bb794ac73cc6346983dee4e8a0d2d8b8d2a",
+          "queries": 188,
+          "verdicts": {
+            "sat": 74,
+            "unsat": 114
+          },
+          "callback_seconds": 1.864584321
+        },
+        {
+          "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1231/branch/xolver/annotation-02-symexec/native/session-3435029/session.json",
+          "sha256": "69d4ff6cf034a4a593f626ece869b8994c81021b5f7528e1c1f3161fef6d047d",
+          "queries": 188,
+          "verdicts": {
+            "sat": 74,
+            "unsat": 114
+          },
+          "callback_seconds": 1.68965989
+        }
+      ],
+      "smt_queries_all_invocations": 564,
+      "smt_verdicts": {
+        "sat": 222,
+        "unsat": 342
+      },
+      "smt_callback_seconds": 4.973377537,
+      "executed_invocation_count": 24,
+      "executed_invocation_seconds": 249.6900881137699,
+      "invocations": [
+        {
+          "stage": "000-init",
+          "sha256": "2c5867a5954a5fd5d7bc6adc977d093a8e5f5510521d3f142e1fbbe15b621255",
+          "seconds": 0.46868961304426193
+        },
+        {
+          "stage": "001-step",
+          "sha256": "7b36f7e662412e028c0f4e1f62feb02d1e8feab26ab320773f6e9f73fad9084b",
+          "seconds": 0.4695311840623617
+        },
+        {
+          "stage": "002-claim",
+          "sha256": "839f0bf847f7dd8b64e3729bf4d984d42e10933cc679f973f126e7874d6292ac",
+          "seconds": 0.41787953302264214
+        },
+        {
+          "stage": "003-finalize-annotation",
+          "sha256": "5829dbc6d4184425a83459e716d62300402e88400eb4ba1eb06159bd366eadf2",
+          "seconds": 3.128576984629035
+        },
+        {
+          "stage": "004-dependencies",
+          "sha256": "3fa9e24e1ae7caf6fd748ca64c5cbbf728f8e62c2682e853ea59d9785b9c0de9",
+          "seconds": 2.372031284496188
+        },
+        {
+          "stage": "005-claim-vc",
+          "sha256": "35665f4c86b1c2e138df22c9a21d16c8568a821370ef7727bfbaaec00e1b3915",
+          "seconds": 0.4171952325850725
+        },
+        {
+          "stage": "006-finalize-vc",
+          "sha256": "57543738f2bb70661761775451cab046b8a575f8edbac065cc6c833168fe00ce",
+          "seconds": 0.5184978954494
+        },
+        {
+          "stage": "007-proving-prepare",
+          "sha256": "6e732fb2b60e681a8ec4a3efcc2267b44e4204f3f3c356bb1fe5e627e54ba80a",
+          "seconds": 0.5184069480746984
+        },
+        {
+          "stage": "008-claim-guards",
+          "sha256": "1dbe6a8c29a3c1916f80f1521db84b167bf77501510c598c54b639263a16b5a5",
+          "seconds": 0.518018314614892
+        },
+        {
+          "stage": "009-claim-inconsistent",
+          "sha256": "5f518017f7931eeaa91011d04b22647ed51c349a0b2856785c8ce3a432506575",
+          "seconds": 0.5184085313230753
+        },
+        {
+          "stage": "010-finalize-guards",
+          "sha256": "d35211e174cb6494ab6017948734dff4240dddf6c9e9f7beebc9701551f6a615",
+          "seconds": 24.63980522379279
+        },
+        {
+          "stage": "011-finalize-inconsistent",
+          "sha256": "228eacecd7df8b3ac6be6ae698c604ece71bdb93de1cbf24d4624a235b265845",
+          "seconds": 25.247788153588772
+        },
+        {
+          "stage": "012-claim-returns",
+          "sha256": "2c55cdd4fc2da5c4f784b37f072f5c1992473f58d129d35db88413d038b3067a",
+          "seconds": 0.5179267078638077
+        },
+        {
+          "stage": "013-finalize-returns",
+          "sha256": "07e9e6b02dce52aa9d53af2e78f26d963c6659f08251183e804f34a42623d3a4",
+          "seconds": 25.447165496647358
+        },
+        {
+          "stage": "014-parent",
+          "sha256": "9e073449b0e09cf6187c97fcc1923da1c797783a6b8a79f29fa3a09ccf9def85",
+          "seconds": 26.287873724475503
+        },
+        {
+          "stage": "015-final-apply",
+          "sha256": "98777cb1a4592a64faa3356dac6cc5ebf0f0dd9d3a3526be45e29041b882a76e",
+          "seconds": 25.647510036826134
+        },
+        {
+          "stage": "016-step-final",
+          "sha256": "2fc4461338d1658f1293e8c36829ab9397c8dfe6b14ff7bb83ac815a4743fa18",
+          "seconds": 0.36751484870910645
+        },
+        {
+          "stage": "017-final-check",
+          "sha256": "4ff541632ee62ef702f9f2d47ff57fdfc53a65cf5cb02848a1aebc98ff505bbf",
+          "seconds": 29.81752612069249
+        },
+        {
+          "stage": "annotation-01-design",
+          "sha256": "894d055d766fdea921d9df7dbd6ddff22a21e1504e7c5ca10c59417a848f50b7",
+          "seconds": 1.3722964506596327
+        },
+        {
+          "stage": "annotation-02-symexec",
+          "sha256": "83b7764e0628cd44e9162a54a41d59b17b8a6303147d135f971f1faddff75ad2",
+          "seconds": 2.5779213067144156
+        },
+        {
+          "stage": "annotation-03-lib",
+          "sha256": "2c9fa02072e753cbb3f1d6dd4268e7840e8a4ad46ecfaab1941dade0cc4696a6",
+          "seconds": 1.27010758779943
+        },
+        {
+          "stage": "guards-01-check",
+          "sha256": "1d668fc06e4813d3e961a3b9262027da5e180547d37b811191dd5c99118467d8",
+          "seconds": 24.946785921230912
+        },
+        {
+          "stage": "inconsistent-01-check",
+          "sha256": "64576b172f4f332adba56ee8f87d7a76ec1abad5129f2028c742e3b5abfc1a1f",
+          "seconds": 24.843082988634706
+        },
+        {
+          "stage": "returns-01-check",
+          "sha256": "b315071ae725e7c0db9a1f38a86ee84305a3264d6ed91d4238b2530357752fa3",
+          "seconds": 27.359548024833202
+        }
+      ]
+    },
+    "z3": {
+      "run_id": "native_branch_pair_r1231-20261031104927",
+      "programs": 1,
+      "functions": 1,
+      "verification_conditions": 10,
+      "program_verified": true,
+      "controller_phase": "done",
+      "controller_state_sha256": "10ae4aa321855dc1d07993f9fe25bb4aadf5e75a330c588d7b92f53c3991886f",
+      "final_check_sha256": "29473fe7d4558934c9cab7e2d20df03e4bdb03c8826f0969336448cfb477ffe3",
+      "parent_check_sha256": "e2f9dc209dc1bd9ee8dde97f925e9d199c5d28b298ee692b5740562f1384c9e2",
+      "proof_hashes": {
+        "proof_manual_file": "05a3819b8dea870e195c595a9d73434804090e16dd04579855ffd8143a7eee08",
+        "formal_case_lib": "1f8a54afaa392924392567aef82ee5ba89cdf1a63d87dffd441a01e206123963"
+      },
+      "group_plan_sha256": "f0413f4ecb5ae777383c8c8b7d4c2d7aceb88c6373213cbdef865f050a104693",
+      "library_policy": "present",
+      "solver_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+      "native_sessions": [
+        {
+          "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1231/branch/z3/003-finalize-annotation/native/session-133331/session.json",
+          "sha256": "8bd8d330460a11540e473760005272c3e32529f4f145eeb653459422132fda4e",
+          "queries": 188,
+          "verdicts": {
+            "sat": 74,
+            "unsat": 114
+          },
+          "callback_seconds": 3.459259584
+        },
+        {
+          "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1231/branch/z3/017-final-check/native/session-941858/session.json",
+          "sha256": "a277ada729a9d56723256b79dc0627e2070a1bfca050c9221ea722aab81f38dc",
+          "queries": 188,
+          "verdicts": {
+            "sat": 74,
+            "unsat": 114
+          },
+          "callback_seconds": 4.336219264
+        },
+        {
+          "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1231/branch/z3/annotation-02-symexec/native/session-97160/session.json",
+          "sha256": "16334926042159a656a342e1ecff1d107787f3b3da003f34422c249ec13fca6b",
+          "queries": 188,
+          "verdicts": {
+            "sat": 74,
+            "unsat": 114
+          },
+          "callback_seconds": 3.557374696
+        }
+      ],
+      "smt_queries_all_invocations": 564,
+      "smt_verdicts": {
+        "sat": 222,
+        "unsat": 342
+      },
+      "smt_callback_seconds": 11.352853544,
+      "executed_invocation_count": 24,
+      "executed_invocation_seconds": 262.8655430916697,
+      "invocations": [
+        {
+          "stage": "000-init",
+          "sha256": "881f8cb2eb0b64d6f0567db0df4edbc9b799d35a9912bf190dec86930f17af41",
+          "seconds": 0.8711255826056004
+        },
+        {
+          "stage": "001-step",
+          "sha256": "0f91ea345883ccda0031477d8e1d472563121b15efeef853f7dcb7dbdd6bb5d0",
+          "seconds": 0.6184112895280123
+        },
+        {
+          "stage": "002-claim",
+          "sha256": "f87b9d312df905ace02030700b8bc386f2120d96a1838616b3ee51e14f7bcc6c",
+          "seconds": 0.6186922732740641
+        },
+        {
+          "stage": "003-finalize-annotation",
+          "sha256": "56f8bd822107f9d2970d8d5de4d56e6a2b41e31862b66f21a1ebdf0ecee4c9be",
+          "seconds": 5.590024812147021
+        },
+        {
+          "stage": "004-dependencies",
+          "sha256": "917624bd71e6c00f3a26a1252883c288f628d50c7517864010117fcdecb8bb49",
+          "seconds": 2.725486798211932
+        },
+        {
+          "stage": "005-claim-vc",
+          "sha256": "b60d1821df0e4d2cba0006ca5f4de07ff9d60c1c5358f2ef1afe6a16c6edaccc",
+          "seconds": 0.6180908586829901
+        },
+        {
+          "stage": "006-finalize-vc",
+          "sha256": "e9b16b834da8cbd8a6a579b4587a951f58a48af2fa4b0bcb57f7ab4f5fbe83b3",
+          "seconds": 1.423457246273756
+        },
+        {
+          "stage": "007-proving-prepare",
+          "sha256": "4fbff797a24b0429d28de9798ac325cdcc639d4d8af858178110a730b2cd5a14",
+          "seconds": 0.7195787727832794
+        },
+        {
+          "stage": "008-claim-guards",
+          "sha256": "cf76f8d35122747a1d9b50eacfe6960d506fb9292fe049d5dfeceb481eb0922e",
+          "seconds": 0.6181966364383698
+        },
+        {
+          "stage": "009-claim-inconsistent",
+          "sha256": "d03e865b4eae39108b6b9f290d36cea463392520a9ec05d429b91c289428ad42",
+          "seconds": 0.6183981485664845
+        },
+        {
+          "stage": "010-finalize-guards",
+          "sha256": "da74bc523f1fe4e61c9285f9e0281de3905c762fafdbc73fbbcc66ef63045eaf",
+          "seconds": 25.696647891774774
+        },
+        {
+          "stage": "011-finalize-inconsistent",
+          "sha256": "aa7940dd37d07d771c7d070fecd6d72dae5a4d2f428e81668f8d5e1ebf306e02",
+          "seconds": 25.301132237538695
+        },
+        {
+          "stage": "012-claim-returns",
+          "sha256": "897a2b2d60b5dd3dfc58c542812b2750dc147ab76d0b68af0d5e7909b54ef231",
+          "seconds": 0.6685303989797831
+        },
+        {
+          "stage": "013-finalize-returns",
+          "sha256": "b322a9f9ddb1a8d9518197f144658061af4134c955f7dae656088f507005be99",
+          "seconds": 24.79309561662376
+        },
+        {
+          "stage": "014-parent",
+          "sha256": "e2f9dc209dc1bd9ee8dde97f925e9d199c5d28b298ee692b5740562f1384c9e2",
+          "seconds": 24.913162387907505
+        },
+        {
+          "stage": "015-final-apply",
+          "sha256": "b1e7f55dc06e7591132af7db24fb5c1828be7802d0f30c0e09dde2862fa352b6",
+          "seconds": 25.855435367673635
+        },
+        {
+          "stage": "016-step-final",
+          "sha256": "d8a7f5b73c9ecea5bca4a9466ee45dc0842884b915750e2643f93b87c24536cc",
+          "seconds": 0.5689257718622684
+        },
+        {
+          "stage": "017-final-check",
+          "sha256": "29473fe7d4558934c9cab7e2d20df03e4bdb03c8826f0969336448cfb477ffe3",
+          "seconds": 33.53255929611623
+        },
+        {
+          "stage": "annotation-01-design",
+          "sha256": "713869595c2e5ea035b345e9f40c7492d36d9fc52f501358222fc190088676d7",
+          "seconds": 1.4708739761263132
+        },
+        {
+          "stage": "annotation-02-symexec",
+          "sha256": "5b21a85b4f5d8a909a1991bf2ff4d35a70b568d03b1b040e5f3a437e31bf88e3",
+          "seconds": 4.729698054492474
+        },
+        {
+          "stage": "annotation-03-lib",
+          "sha256": "22f9b77977d32937fea11cf588f212c3bf388446cffd2500e96dc47676743020",
+          "seconds": 1.471010772511363
+        },
+        {
+          "stage": "guards-01-check",
+          "sha256": "b73a1e8c9a5d7301cccd8fe08ad00bd84a1cb51e7f958f94ac5b850bdf99bd1c",
+          "seconds": 27.84480879455805
+        },
+        {
+          "stage": "inconsistent-01-check",
+          "sha256": "616f97cad1610277ef8291238c31ac5e836c96d4520c9c83e5fc11a869decdfb",
+          "seconds": 25.24311712756753
+        },
+        {
+          "stage": "returns-01-check",
+          "sha256": "229569dd4de9fac0f5864c7f3e62511493b7805d445975ce053f0cc2e1ab6367",
+          "seconds": 26.355082979425788
+        }
+      ]
+    }
+  },
+  "program_sha256": "4d81aabd16ceb9d402fa0f1a3621dd8a6bf0ad28659bcb6cf60eedebec69e22d",
+  "symexec_sha256": "0e74c446cebca8c804ff9b838f07c67f23e31a093630675bc720b25c986e1032",
+  "solver_implementation_commit": "32d23ec3ea208c7057064bf6e87008506ab6a440",
+  "all_564_query_occurrences_match": true,
+  "identical_accepted_proof_and_library": true,
+  "identical_group_witness_modes": true,
+  "protected_sets_used": false,
+  "superiority_claim": false,
+  "boundary": "Actual frozen QCP controller runs reached done with final symexec and full Rocq parent checks. One original branch program, one function and ten VCs per backend; 564 actual SMT call occurrences per complete workflow, not 188. Independent program evidence is the completed original-program QCP/Rocq chain; pairwise query agreement is not an independent certificate for each SMT answer. This is a controlled functional pair only: first Xolver initialization used create library policy, Z3 used present, and single observations include setup/cache noise. Executed-invocation sums exclude agent thinking and scheduling gaps and do not establish whole-workflow speedup. Original GCD/max3 have not yet been requalified with this worker in this controlled pair. Both protected sets untouched."
+}

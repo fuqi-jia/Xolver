@@ -56,9 +56,10 @@ invalid models. Baseline/candidate each have2 unknowns; timeouts57/55. Verified
 PAR-2 is7390.501/7179.970/5398.871; the two gains explain most of the improvement,
 while other single-round timing changes are not an established general speedup.
 All160 original triads are budget-valid; no replacement is needed. Seven
-unconfirmed Z3 UNSATs stay excluded. Exact delivery-head PR CI and postmerge
-main CI remain required. Audit-document delivery updates need no extra server
-archive. See [the phase evidence](FIXED_FACTOR_MONOMIAL_STAGE_20261031.json).
+unconfirmed Z3 UNSATs stay excluded. Final PR CI41194973890 passes both jobs;
+PR88 is merged as main `65679c94`, whose
+[postmerge CI41196853028](https://github.com/fuqi-jia/Xolver/actions/runs/41196853028)
+passes both jobs. Audit-document delivery updates need no extra server archive. See [the phase evidence](FIXED_FACTOR_MONOMIAL_STAGE_20261031.json).
 PR88 delivery CI41192531385 passes proofs, native units, all941 regressions
 and136 quantified differential cases, but fails the process-cancellation test:
 Linux can return ESRCH when `/proc/<pid>/stat` disappears during a read. Handle
@@ -66,11 +67,42 @@ Linux can return ESRCH when `/proc/<pid>/stat` disappears during a read. Handle
 timeout and stale-reply assertions. R1238 deterministically reproduces the old
 failure, passes the fixed test, five ordinary cancellations and the full tool
 harness. Only this test and audit documents change; qualified solver sources,
-CLI/SV/worker/library/unit bytes and full160 evidence are reused. Rerun exact-head
-PR CI before merge; no extra server archive is needed.
+CLI/SV/worker/library/unit bytes and full160 evidence are reused. Final
+PR CI41194973890 and postmerge main CI41196853028 subsequently pass both jobs;
+the PR88 delivery is complete. No extra server archive is needed.
 
-Both protected sets remain unused; Xolver has not surpassed Z3. The controlled
-current-kernel QCP comparison is running separately and supplies no score yet.
+Both protected sets remain unused; Xolver has not surpassed Z3.
+
+The new root-assertion stage fixes a general SAT/theory synchronization gap:
+SAT retains root assignments after `notify_backtrack(0)`, while LRA/LIA clear
+their active sources for reconstruction. Four signed real/integer callback
+reproductions miss the contradiction `x>=1, x<=y, y<1` with the old adapter.
+Ten-second public-gap traces show17–100 root backtracks without root replay
+in all four sampled cases. Preserve each solver's root reset and assignment
+policy; a shared `restoreRootLiteral` protocol restores cleared engines and
+avoids readmitting sources to theories that already retain them. No feature
+gate or external oracle is added.
+
+R1256's private all-theory replay prototype passes1894 units /986906 assertions.
+Its fresh12-case60s pilot R1257/R1260 verifies **2 baseline/3 candidate/10 Z3**,
+with new SAT51 (timeout→28.341s), an independently replayed initial model, and
+no losses, opposite verdicts or invalid models. SAT59 slows3.324→8.236s and
+SAT76 slows4.477→5.076s; these regressions are recorded. Z3's unconfirmed UNSAT50
+is excluded. The new production retention protocol has additional tests and
+still needs canonical native qualification, full server acceptance, a new
+freeze/full160 comparison and exact-head PR/main CI. This pilot is not a new
+full-suite score. See [the pilot evidence](ROOT_ASSERTION_REPLAY_PILOT_20261031.json).
+
+The R1227-worker controlled QCP branch pair R1231/R1259 has completed both
+controllers through `done`, final native symexec and full Rocq checking. Each
+backend verifies1 original program,1 function and10 VCs with byte-identical
+accepted proofs/library and564 actual SMT query occurrences (222 SAT/342 UNSAT),
+all matching by formula/input hash and verdict. Executed command sums are
+249.690s Xolver/262.866s Z3; SMT callback sums4.973s/11.353s. These single-run
+timings exclude agent thinking and scheduling gaps and have differing initial
+library create/present policies, so they establish no end-to-end speedup.
+GCD/max3 have not yet been requalified in this controlled current-worker pair.
+See [the program evidence](QCP_CONTROLLED_BRANCH_STAGE_20261031.json).
 
 PR87 is merged as main `f5e75646`; exact delivery `dd2e3510` passes both jobs of
 [PR CI41189844465](https://github.com/fuqi-jia/Xolver/actions/runs/41189844465).

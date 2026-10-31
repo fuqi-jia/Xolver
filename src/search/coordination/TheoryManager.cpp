@@ -186,6 +186,25 @@ void TheoryManager::assertTheoryLit(const TheoryAtomRecord& atom,
     }
 }
 
+void TheoryManager::restoreRootLiteral(const TheoryAtomRecord& atom, SatLit lit) {
+    if (combinationMode_ && atom.theory == TheoryId::Combination) {
+        const auto& payload = std::get<SharedEqualityPayload>(atom.payload);
+        // An unprocessed root event already survived withdrawal. Processed
+        // events must re-enter the shared bus after its snapshot rollback.
+        if (std::none_of(pendingSharedEqEvents_.begin(), pendingSharedEqEvents_.end(),
+                [lit, &payload](const auto& event) {
+                    return event.decisionLevel == 0 && event.reasonLit == lit &&
+                        event.a == payload.a && event.b == payload.b &&
+                        event.isEquality == lit.sign;
+                }))
+            assertTheoryLit(atom, lit, 0);
+        return;
+    }
+    auto it = solverByTheory_.find(atom.theory);
+    if (it != solverByTheory_.end())
+        it->second->restoreRootLiteral(atom, lit.var == atom.satVar && lit.sign, lit);
+}
+
 void TheoryManager::backtrackToLevel(int level) {
     // Remove pending events from levels above target
     auto it = std::remove_if(

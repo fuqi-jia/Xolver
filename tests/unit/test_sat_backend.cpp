@@ -1,3 +1,7 @@
+#include "search/coordination/TheoryAtomRegistry.h"
+#include "search/coordination/TheoryManager.h"
+#include "applications/satisfiability/smt/qflra/LraSolver.h"
+#include "applications/satisfiability/smt/common/lia/LiaSolver.h"
 // White-box: SatSolver (CaDiCaL backend) — interface compliance and corner
 // cases that downstream theories implicitly rely on (unit propagation,
 // assumption-based unsat core, empty clause, single-literal clauses, etc.).
@@ -318,4 +322,139 @@ TEST_CASE("SAT: addObservedVar requires ExternalPropagator setup") {
     s->addClause({SatLit::positive(v)});
     auto r = s->solve();
     CHECK(static_cast<int>(r) == static_cast<int>(SatSolver::SolveResult::Sat));
+}
+
+TEST_CASE("SAT: retained root assertions remain available after a root backtrack") {
+    for (const bool integer : {false, true}) {
+        for (const bool negativeRoot : {false, true}) {
+            CAPTURE(integer);
+            CAPTURE(negativeRoot);
+            CadicalBackend backend;
+            TheoryAtomRegistry registry;
+            registry.setContext(&backend, nullptr);
+            TheoryManager manager;
+            TheoryLemmaDatabase lemmas;
+            const auto theory = integer ? TheoryId::LIA : TheoryId::LRA;
+            if (integer) {
+                auto solver = std::make_unique<LiaSolver>();
+                solver->setRegistry(&registry);
+                manager.registerSolver(std::move(solver));
+            } else {
+                auto solver = std::make_unique<LraSolver>();
+                solver->setRegistry(&registry);
+                manager.registerSolver(std::move(solver));
+            }
+            CadicalTheoryPropagator propagator{registry, manager, lemmas, backend};
+            backend.connectPropagator(&propagator);
+            struct Disconnect {
+                CadicalBackend& backend;
+                ~Disconnect() { backend.disconnectPropagator(); }
+            } disconnect{backend};
+            auto atom = [&](LinearFormKey form, Relation relation, mpq_class bound) {
+                auto var = backend.newVar();
+                registry.registerParsedTheoryAtom(var, static_cast<ExprId>(var), theory,
+                    LinearAtomPayload{form, relation, RealValue::fromMpq(bound)});
+                return static_cast<int>(var);
+            };
+            // Either signed literal states x >= 1.
+            const int rootAtom = atom({{{"x", 1}}}, negativeRoot ? Relation::Lt : Relation::Geq, 1);
+            const int root = negativeRoot ? -rootAtom : rootAtom;
+            const int harmless = atom({{{"z", 1}}}, Relation::Geq, 0);
+            const int link = atom({{{"x", 1}, {"y", -1}}}, Relation::Leq, 0);
+            const int upper = atom({{{"y", 1}}}, Relation::Lt, 1);
+            const int lower = atom({{{"y", 1}}}, Relation::Geq, 1);
+            propagator.notify_assignment({root});
+            REQUIRE(manager.check(lemmas, TheoryEffort::Standard).kind == TheoryCheckResult::Kind::Consistent);
+            propagator.notify_new_decision_level();
+            propagator.notify_assignment({harmless});
+            REQUIRE(manager.check(lemmas, TheoryEffort::Standard).kind == TheoryCheckResult::Kind::Consistent);
+            propagator.notify_backtrack(0);
+            propagator.notify_new_decision_level();
+            propagator.notify_assignment({link, upper});
+            auto conflict = manager.check(lemmas, TheoryEffort::Standard);
+            CHECK(conflict.kind == TheoryCheckResult::Kind::Conflict);
+            if (conflict.conflictOpt) {
+                const auto& reasons = conflict.conflictOpt->clause;
+                CHECK(std::find(reasons.begin(), reasons.end(), SatLit{static_cast<SatVar>(rootAtom), negativeRoot}) != reasons.end());
+                CHECK(std::find(reasons.begin(), reasons.end(), SatLit::negative(static_cast<SatVar>(harmless))) == reasons.end());
+                CHECK(reasons.size() == 3);
+                CHECK(std::find(reasons.begin(), reasons.end(), SatLit::negative(static_cast<SatVar>(link))) != reasons.end());
+                CHECK(std::find(reasons.begin(), reasons.end(), SatLit::negative(static_cast<SatVar>(upper))) != reasons.end());
+            }
+            // Discard the incompatible branch, retain x >= 1, and reuse state.
+            propagator.notify_backtrack(0);
+            propagator.notify_new_decision_level();
+            propagator.notify_assignment({link, lower});
+            CHECK(manager.check(lemmas, TheoryEffort::Standard).kind == TheoryCheckResult::Kind::Consistent);
+        }
+    }
+}
+
+TEST_CASE("SAT: restoring retained roots does not readmit a preserving theory's assertions") {
+    struct PreservingTheory : TheorySolver {
+        int admissions = 0;
+        std::vector<std::pair<int, SatLit>> active;
+        TheoryId id() const override { return TheoryId::EUF; }
+        void push() override {}
+        void pop(uint32_t) override {}
+        void reset() override { active.clear(); }
+        void assertLit(const TheoryAtomRecord&, bool, int level, SatLit lit) override {
+            ++admissions;
+            active.emplace_back(level, lit);
+        }
+        void backtrackToLevel(int level) override {
+            std::erase_if(active, [level](const auto& entry) { return entry.first > level; });
+        }
+        TheoryCheckResult check(TheoryLemmaStorage&, TheoryEffort) override {
+            return TheoryCheckResult::consistent();
+        }
+    };
+    CadicalBackend backend;
+    TheoryAtomRegistry registry;
+    registry.setContext(&backend, nullptr);
+    TheoryManager manager;
+    TheoryLemmaDatabase lemmas;
+    auto theory = std::make_unique<PreservingTheory>();
+    auto* retained = theory.get();
+    manager.registerSolver(std::move(theory));
+    CadicalTheoryPropagator propagator{registry, manager, lemmas, backend};
+    backend.connectPropagator(&propagator);
+    struct Disconnect {
+        CadicalBackend& backend;
+        ~Disconnect() { backend.disconnectPropagator(); }
+    } disconnect{backend};
+    const auto root = backend.newVar(), branch = backend.newVar();
+    for (const auto var : {root, branch})
+        registry.registerParsedTheoryAtom(var, NullExpr, TheoryId::EUF,
+            EufAtomPayload{NullExpr, NullExpr, Relation::Eq});
+    propagator.notify_assignment({-static_cast<int>(root)});
+    for (int repeat = 0; repeat < 32; ++repeat) {
+        propagator.notify_new_decision_level();
+        propagator.notify_assignment({static_cast<int>(branch)});
+        propagator.notify_backtrack(0);
+        REQUIRE(retained->active.size() == 1);
+        CHECK(retained->active.front().first == 0);
+        CHECK(retained->active.front().second == SatLit::negative(root));
+        CHECK(retained->admissions == repeat + 2);
+    }
+}
+
+TEST_CASE("Arithmetic: root reconstruction keeps its explicit clear and restore semantics") {
+    for (const bool integer : {false, true}) {
+        std::unique_ptr<TheorySolver> solver;
+        if (integer) solver = std::make_unique<LiaSolver>();
+        else solver = std::make_unique<LraSolver>();
+        TheoryLemmaDatabase lemmas;
+        const TheoryAtomRecord root{1, solver->id(), false, NullExpr,
+            LinearAtomPayload{{{{"x", 1}}}, Relation::Geq, RealValue::fromInt(1)}};
+        const TheoryAtomRecord upper{2, solver->id(), false, NullExpr,
+            LinearAtomPayload{{{{"x", 1}}}, Relation::Lt, RealValue::fromInt(1)}};
+        solver->assertLit(root, true, 0, SatLit::positive(1));
+        REQUIRE(solver->check(lemmas).kind == TheoryCheckResult::Kind::Consistent);
+        solver->backtrackToLevel(0);
+        solver->assertLit(upper, true, 0, SatLit::positive(2));
+        CHECK(solver->check(lemmas).kind == TheoryCheckResult::Kind::Consistent);
+        solver->restoreRootLiteral(root, true, SatLit::positive(1));
+        CHECK(solver->check(lemmas).kind == TheoryCheckResult::Kind::Conflict);
+    }
 }

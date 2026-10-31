@@ -27,6 +27,9 @@ public:
     // assertLit and routes push/pop/backtrack/reset through the base
     // hooks. check() is the base default driving a single core reasoner.
     void assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit assertedLit) override;
+    void restoreRootLiteral(const TheoryAtomRecord& atom, bool value, SatLit lit) override {
+        assertLit(atom, value, 0, lit);
+    }
 
     // setNativeTerms / setSharedTermRegistry now live in ArithSolverBase (hoisted
     // 2026-06-04). The NativeTerms* / SharedTermRegistry* fields are protected on

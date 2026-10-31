@@ -33,6 +33,13 @@ public:
     // Backtrack to target decision level
     virtual void backtrackToLevel(int level) = 0;
 
+    // SAT retains its level-zero assignments after backtracking. Most theories
+    // retain these assertions too; a theory that clears them while preparing
+    // model reconstruction restores each retained source through this hook.
+    // This is distinct from admitting a new assignment: retained theories must
+    // not accumulate duplicate assertions or explanations on every restart.
+    virtual void restoreRootLiteral(const TheoryAtomRecord&, bool, SatLit) {}
+
     // Check current incremental state
     virtual TheoryCheckResult check(TheoryLemmaStorage& lemmaDb,
                                     TheoryEffort effort = TheoryEffort::Standard) = 0;

@@ -48,6 +48,7 @@ public:
 
     void assertTheoryLit(const TheoryAtomRecord& atom, SatLit assignedLit, int level) override;
     void backtrackToLevel(int level) override;
+    void restoreRootLiteral(const TheoryAtomRecord& atom, SatLit lit) override;
     TheoryCheckResult check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort = TheoryEffort::Standard) override;
 
     // Aggregate ENTAILMENT-class propagations from single-theory solvers.

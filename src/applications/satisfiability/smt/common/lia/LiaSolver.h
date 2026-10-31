@@ -31,6 +31,9 @@ public:
     // base hooks. check() is the base default driving a single core
     // reasoner.
     void assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit assertedLit) override;
+    void restoreRootLiteral(const TheoryAtomRecord& atom, bool value, SatLit lit) override {
+        assertLit(atom, value, 0, lit);
+    }
 
     void setRegistry(TheoryAtomRegistry* reg) {
         if (registry_ != reg) {

@@ -1,0 +1,315 @@
+{
+  "status": "private-prototype-pilot-complete",
+  "qualification_sha256": "5b5e3cd3aea9d45f30f526a9802ee774b49646bfe445b3dfda195be3814d3d55",
+  "binary_sha256": "29cf9efd0b30eba5c56eb889bb4596af47f966ec15d8f78cd396fba118756ad6",
+  "unit_record": {
+    "qualification_sha256": "5b5e3cd3aea9d45f30f526a9802ee774b49646bfe445b3dfda195be3814d3d55",
+    "unit_binary_sha256": "d6d0aeec2d8d4343c3c13ef497ef04db78804c611adcd9def91ad8afa0cce863",
+    "unit_cases": 1894,
+    "unit_assertions": 986906,
+    "log_sha256": "f62ddb25fb762ed98f72029db6539f4e8b7698196809676bbfbdadfbfc296a16",
+    "metrics": {
+      "completed": 1,
+      "failures": 0
+    },
+    "protected_sets_used": false
+  },
+  "strict_verified_solved": {
+    "baseline": 2,
+    "candidate": 3,
+    "z3": 10
+  },
+  "par2_seconds": {
+    "baseline": 1207.8019851725549,
+    "candidate": 1121.6532234624028,
+    "z3": 276.6066605076194
+  },
+  "gains": [
+    51
+  ],
+  "losses": [],
+  "opposites": 0,
+  "protocol_errors": 0,
+  "budget_overruns": 0,
+  "records": [
+    {
+      "index": 13,
+      "input_sha256": "d9c546291b74c1b0021e19bff6aa4e9fbbb220fdcd253de67479375572f913f6",
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r1257/case-013/report.json",
+      "report_sha256": "a52b69cbfc28fe1aad6d799d8cb1b9b762509744ee2559472bdfe7419d1d217c",
+      "observations": {
+        "candidate": {
+          "result": "timeout",
+          "seconds": 60.026488499715924,
+          "verified": false
+        },
+        "z3": {
+          "result": "sat",
+          "seconds": 0.9190566595643759,
+          "verified": true
+        },
+        "baseline": {
+          "result": "timeout",
+          "seconds": 60.02798364683986,
+          "verified": false
+        }
+      }
+    },
+    {
+      "index": 14,
+      "input_sha256": "61dd96c9380ed7a50d9035168098ea6d0ea7f7ba9e8a80e53fcba5c744c8d7f1",
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r1257/case-014/report.json",
+      "report_sha256": "50f966b64dd987d235e43cde38a20368734a45bf381ee32465a3bee4e4ad4c09",
+      "observations": {
+        "z3": {
+          "result": "timeout",
+          "seconds": 60.00773649662733,
+          "verified": false
+        },
+        "baseline": {
+          "result": "timeout",
+          "seconds": 60.011477153748274,
+          "verified": false
+        },
+        "candidate": {
+          "result": "timeout",
+          "seconds": 60.011604107916355,
+          "verified": false
+        }
+      }
+    },
+    {
+      "index": 48,
+      "input_sha256": "1db0853aaa0f355969a8b7e17778b10137081d30ee7f98e6ff8d94039a55b85b",
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r1257/case-048/report.json",
+      "report_sha256": "67fe282b37bcbfe4097d010a5db2ec0e60750d6b61eb8054d7b35d8a266cccff",
+      "observations": {
+        "baseline": {
+          "result": "timeout",
+          "seconds": 60.00673405639827,
+          "verified": false
+        },
+        "candidate": {
+          "result": "timeout",
+          "seconds": 60.007212011143565,
+          "verified": false
+        },
+        "z3": {
+          "result": "unsat",
+          "seconds": 0.1163916364312172,
+          "verified": true
+        }
+      }
+    },
+    {
+      "index": 49,
+      "input_sha256": "d4baea957f7fe792713edbaf3edc6769274ab0aafe5e86182d023e858037d615",
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r1257/case-049/report.json",
+      "report_sha256": "fe47c96f2f7c4d2ae5ced8988adf9c392cc7498684ffdf5e110d9b39050bcc0f",
+      "observations": {
+        "candidate": {
+          "result": "timeout",
+          "seconds": 60.013471188023686,
+          "verified": false
+        },
+        "z3": {
+          "result": "sat",
+          "seconds": 1.9202393982559443,
+          "verified": true
+        },
+        "baseline": {
+          "result": "timeout",
+          "seconds": 60.01391167379916,
+          "verified": false
+        }
+      }
+    },
+    {
+      "index": 50,
+      "input_sha256": "7e71a151d917978f1b5afc2791abf589e30c8ff97e930979df6ef82ad72dcdc0",
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r1257/case-050/report.json",
+      "report_sha256": "1378451942fd3a50657a202d6b8954fa36e1bc60b5ba391303b3d02eb7c7b833",
+      "observations": {
+        "z3": {
+          "result": "unsat",
+          "seconds": 55.77830226905644,
+          "verified": false
+        },
+        "baseline": {
+          "result": "timeout",
+          "seconds": 60.007746728137136,
+          "verified": false
+        },
+        "candidate": {
+          "result": "timeout",
+          "seconds": 60.00721558369696,
+          "verified": false
+        }
+      }
+    },
+    {
+      "index": 51,
+      "input_sha256": "8fb5c2cfe016233a2f76c3d3b103066448f0f1d3faa1c9d9493c55c304d877cb",
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r1257/case-051/report.json",
+      "report_sha256": "8a0a1f3af64821595c1c1f04973609b8f1810153b35c4812ee47e805de66f654",
+      "observations": {
+        "baseline": {
+          "result": "timeout",
+          "seconds": 60.017816031351686,
+          "verified": false
+        },
+        "candidate": {
+          "result": "sat",
+          "seconds": 28.341042647138238,
+          "verified": true
+        },
+        "z3": {
+          "result": "sat",
+          "seconds": 0.7183803543448448,
+          "verified": true
+        }
+      }
+    },
+    {
+      "index": 58,
+      "input_sha256": "64f223bcde0c40ca731ab7443a27e55abf89d82d240cb58aed03a32ff50b15e8",
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r1257/case-058/report.json",
+      "report_sha256": "9c431fdcbf0d7fe8ed40a80f0e690068c83191a052cb1e9bcc66a5f4311c1af6",
+      "observations": {
+        "candidate": {
+          "result": "timeout",
+          "seconds": 60.00773371942341,
+          "verified": false
+        },
+        "z3": {
+          "result": "unsat",
+          "seconds": 21.220621183514595,
+          "verified": true
+        },
+        "baseline": {
+          "result": "timeout",
+          "seconds": 60.00751790031791,
+          "verified": false
+        }
+      }
+    },
+    {
+      "index": 59,
+      "input_sha256": "e7d41e4ed6b69d1613794e79af7f3ad4a8e22ad90763a9973a2feba93ed58e27",
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r1257/case-059/report.json",
+      "report_sha256": "75aba60da6fc3705fa286bb092fd39687b949097d68977eee54a94be1691a55d",
+      "observations": {
+        "z3": {
+          "result": "sat",
+          "seconds": 0.41779519990086555,
+          "verified": true
+        },
+        "baseline": {
+          "result": "sat",
+          "seconds": 3.324438324198127,
+          "verified": true
+        },
+        "candidate": {
+          "result": "sat",
+          "seconds": 8.236095387488604,
+          "verified": true
+        }
+      }
+    },
+    {
+      "index": 76,
+      "input_sha256": "4de68418bf5f9a161346a531d877b8e3953ec2211c334409727d94991c26fbe9",
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r1257/case-076/report.json",
+      "report_sha256": "c1cad252aebbcd36ea29ba619b4b310d5015226ea0be740ac5354fb1f20edbe5",
+      "observations": {
+        "candidate": {
+          "result": "sat",
+          "seconds": 5.076085427775979,
+          "verified": true
+        },
+        "z3": {
+          "result": "sat",
+          "seconds": 0.5679551642388105,
+          "verified": true
+        },
+        "baseline": {
+          "result": "sat",
+          "seconds": 4.477546848356724,
+          "verified": true
+        }
+      }
+    },
+    {
+      "index": 128,
+      "input_sha256": "718a1e36294547bf1605cbbbcc01dc2bbf4ae1682c8d30fc7f246f6f031d3bdf",
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r1257/case-128/report.json",
+      "report_sha256": "bff10e74544057b01e1b625a8cd82e2c0b2bcb666e57513f3d2c7ed53d6d3883",
+      "observations": {
+        "z3": {
+          "result": "unsat",
+          "seconds": 4.426640514284372,
+          "verified": true
+        },
+        "baseline": {
+          "result": "timeout",
+          "seconds": 60.00619529932737,
+          "verified": false
+        },
+        "candidate": {
+          "result": "timeout",
+          "seconds": 60.005752462893724,
+          "verified": false
+        }
+      }
+    },
+    {
+      "index": 130,
+      "input_sha256": "2606855399c6a9008140acb6c981d3f41d03194cab8075b68f2b198a20b2935a",
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r1257/case-130/report.json",
+      "report_sha256": "37d2f0e1a47aad28105c1dea39ed888260387ae95b50066f7c2e1ededfe94a2e",
+      "observations": {
+        "candidate": {
+          "result": "timeout",
+          "seconds": 60.01343405805528,
+          "verified": false
+        },
+        "z3": {
+          "result": "sat",
+          "seconds": 5.732223704457283,
+          "verified": true
+        },
+        "baseline": {
+          "result": "timeout",
+          "seconds": 60.01373219490051,
+          "verified": false
+        }
+      }
+    },
+    {
+      "index": 131,
+      "input_sha256": "8b660dc1debe27fe09a0eb3ca9e4e3833f075f89a66e71b90dfe102e250bc962",
+      "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r1257/case-131/report.json",
+      "report_sha256": "55d7598bb8d0471b0be4bbc8e3d9792bcb7eb104d2bbecb833beef3a58dbf319",
+      "observations": {
+        "z3": {
+          "result": "sat",
+          "seconds": 0.5673566926270723,
+          "verified": true
+        },
+        "baseline": {
+          "result": "timeout",
+          "seconds": 60.00796356424689,
+          "verified": false
+        },
+        "candidate": {
+          "result": "timeout",
+          "seconds": 60.009001065045595,
+          "verified": false
+        }
+      }
+    }
+  ],
+  "protected_sets_used": false,
+  "boundary": "Twelve original fixed-suite public inputs, fresh frozen three-way formal 60s/single leased physical CPU/16GiB comparison. Candidate adds one independently replayed SAT, case51; case59 slows from 3.324s to 8.236s and case76 from 4.477s to 5.076s. Z3 case50 UNSAT lacks fresh independent confirmation in this pilot and is excluded, irrespective of historical truth evidence. No full160 score or Z3 superiority is claimed. Prototype replays roots to all theories; production implementation must use the new retention protocol to avoid duplicate root admission in preserving theories, requalify and freeze again, then run fresh full160 and server/PR/main CI. Existing LRA/LIA root reset and assignment policies remain unchanged.",
+  "source_stage": "SAT adapter root-prefix replay prototype R1256, followed by the general root-retention contract; the production contract build has not been qualified yet."
+}
