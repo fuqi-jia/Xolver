@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 #include "applications/satisfiability/smt/Solver.h"
 #include "applications/satisfiability/smt/TheoryFactory.h"
+#include "search/coordination/TheoryLemmaDatabase.h"
 #include "applications/verification/pa/Presburger.h"
 #include "applications/verification/sl/Solver.h"
 #include "applications/optimization/omt/Optimize.h"
@@ -68,6 +69,58 @@ TEST_CASE("application dispatch: QF factory rejects binders before constructing 
     auto result = setupSolvers("NRA", features, nullptr, registry, manager, shared, NullSort);
     CHECK_FALSE(result.success);
     CHECK((result.polyKernelRaw == nullptr));
+}
+
+TEST_CASE("application dispatch: factory connects theory model decisions for every arithmetic route") {
+    struct Route {
+        const char* logic;
+        TheoryId owner;
+        bool nonlinear;
+    };
+    for (const auto& route : std::vector<Route>{
+        {"QF_LIA", TheoryId::LIA, false}, {"LIA", TheoryId::LIA, false},
+        {"ALL", TheoryId::LIA, false}, {"", TheoryId::LIA, false},
+        {"QF_LRA", TheoryId::LRA, false}, {"LRA", TheoryId::LRA, false},
+        {"ALL", TheoryId::LRA, false}, {"QF_NIA", TheoryId::LIA, true},
+        {"NIA", TheoryId::LIA, true}, {"QF_NRA", TheoryId::LRA, true},
+        {"NRA", TheoryId::LRA, true}}) {
+        CAPTURE(route.logic);
+        NativeTerms terms;
+        LogicFeatures features;
+        features.hasInt = features.hasIntVar = route.owner == TheoryId::LIA;
+        features.hasReal = features.hasRealVar = route.owner == TheoryId::LRA;
+        features.hasNonlinear = route.nonlinear;
+        TheoryAtomRegistry registry;
+        TheoryManager manager;
+        std::unique_ptr<SharedTermRegistry> shared;
+        const auto result = setupSolvers(route.logic, features, &terms, registry, manager, shared, NullSort);
+        REQUIRE(result.success);
+        auto* arithmetic = manager.solverFor(route.owner);
+        REQUIRE(arithmetic);
+        const mpq_class large(mpz_class("9007199254740992"));
+        const LinearFormKey x{{{"factory-x", 1}}};
+        registry.registerParsedTheoryAtom(1, NullExpr, route.owner,
+            LinearAtomPayload{x, Relation::Eq, RealValue::fromMpq(large)});
+        registry.registerParsedTheoryAtom(2, NullExpr, route.owner,
+            LinearAtomPayload{x, Relation::Eq, RealValue::fromMpq(large + 1)});
+        registry.registerParsedTheoryAtom(3, NullExpr, route.owner,
+            LinearAtomPayload{x, Relation::Lt, RealValue::fromMpq(large + 1)});
+        registry.registerParsedTheoryAtom(4, NullExpr, route.owner,
+            LinearAtomPayload{LinearFormKey{{{"absent-coordinate", 1}}},
+                              Relation::Leq, RealValue::fromInt(1)});
+        manager.assertTheoryLit(*registry.findBySatVar(1), SatLit::positive(1), 0);
+        TheoryLemmaDatabase lemmas;
+        REQUIRE(arithmetic->check(lemmas, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Consistent);
+        const auto count = registry.numAtomVars();
+        const auto unequal = manager.evalTheoryAtom(2);
+        const auto strict = manager.evalTheoryAtom(3);
+        REQUIRE(unequal.has_value());
+        REQUIRE(strict.has_value());
+        CHECK_FALSE(*unequal);
+        CHECK(*strict);
+        CHECK_FALSE(manager.evalTheoryAtom(4).has_value());
+        CHECK(registry.numAtomVars() == count);
+    }
 }
 
 TEST_CASE("application dispatch: independent applications share the typed abstract base") {
