@@ -98,7 +98,11 @@ auxiliary-coordinate lookups. Full numeric equality and coordinate semantics
 remain unchanged. R1284 qualifies a canonical rebuild of every inline-header
 consumer; all39 R1285 acceptance groups pass, including1899 unit cases /987933
 assertions and31 Python tests. Core [CI41205591584](https://github.com/fuqi-jia/Xolver/actions/runs/41205591584)
-passes both jobs. Final delivery CI and merging remain pending.
+passes both jobs. Delivery [CI41211110978](https://github.com/fuqi-jia/Xolver/actions/runs/41211110978)
+passes both jobs; PR90 is merged as main `aeed8704`. Its
+[postmerge CI41213002988](https://github.com/fuqi-jia/Xolver/actions/runs/41213002988)
+passes both jobs. PR90 delivery is complete; documentation reuses the qualified
+implementation without an additional server archive.
 
 R1287 seals fresh fixed160: **104 baseline/106 candidate/117 verified Z3**
 (124 raw Z3 decisions; seven unconfirmed UNSATs12/24/27/42/80/114/159 excluded).
@@ -119,6 +123,39 @@ R1280's isolated lookup benchmark removes524288 GMP allocations per
 configuration and is approximately4–15 times faster; it is not a solver score.
 The controlled QCP matrix above uses the older R1264 worker, not this candidate.
 Both protected sets remain unread and unused; Xolver has not surpassed Z3.
+
+
+The next compact linear trail candidate `cbb6cdcc`, test-call correction
+`c11965e9`, shares lightweight source metadata between LRA/LIA and borrows
+immutable forms from the coordinate manager. Retired per-engine record types
+are removed; source/reason identity, scopes, cache order and assignment policies
+are preserved. R1297 qualifies canonical native rebuilding:192 focused cases,
+1905 full unit cases /987976 assertions and31 Python API tests pass.38 original
+acceptance groups pass. One original5s SAT timeout in the202-case linear group
+is retained as a failure with unresolved cause; complete baseline/candidate
+202-case exact5s repeats each pass with102 checked models, as do three60s
+whole-triad repeats of that input. These observations do not claim the timeout
+was fixed.
+
+R1302 seals fresh fixed160: **106 baseline/106 candidate/116 verified Z3**
+(123 raw Z3 decisions, the same seven unconfirmed UNSATs excluded). Verified
+PAR-2 is6981.355/6949.011/5561.087, approximately0.46% lower for the candidate.
+SAT144 is gained at48.383s, while SAT51 is lost:55.663s baseline versus candidate
+timeout. Both Xolver versions retain2 unknowns and52 timeouts; no opposite
+verdict or invalid model is found. Original triad120's baseline overruns the
+wall budget at608.805s; the whole triad is replaced only after its terminal state
+and absent PID, with the original preserved. See
+[the complete candidate evidence](COMPACT_LINEAR_TRAIL_STAGE_20261031.json).
+
+R1305 repeats51 as23.166/25.074s and144 as55.790/46.503s, with both versions SAT
+and independently checked initial models. Counts at the60s boundary are
+unstable, but51 remains slower in this repeat. The valid original loss/gain
+remain in the formal score. See
+[the candidate repeat evidence](COMPACT_LINEAR_TRAIL_REPLAY_STAGE_20261031.json).
+**Do not promote this candidate yet:** the verified-count gap has not narrowed,
+the PAR-2 gain is small, and the51 regression mechanism is unresolved. Original
+QCP workflow receipts above cover the older R1264 worker, not R1297. Both
+protected sets remain unread and unused.
 
 
 [PR88](https://github.com/fuqi-jia/Xolver/pull/88), core `32d23ec3`, closes the
