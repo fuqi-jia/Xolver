@@ -1,0 +1,753 @@
+{
+  "kind": "integer-polynomial-conjunction-residue-cover",
+  "version": 1,
+  "input_sha256": "a2e8a18b34eea1e35aa00fcf9152efb772cae4dc6b76f0891b8541d843367c4d",
+  "modulus": 3,
+  "variables": [
+    "w",
+    "x",
+    "y",
+    "z"
+  ],
+  "equalities": [
+    {
+      "assertion": 6,
+      "path": []
+    },
+    {
+      "assertion": 7,
+      "path": []
+    }
+  ],
+  "cover": [
+    {
+      "residues": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "violated_equality": 1
+    },
+    {
+      "residues": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "violated_equality": 1
+    },
+    {
+      "residues": [
+        0,
+        0,
+        0,
+        2
+      ],
+      "violated_equality": 1
+    },
+    {
+      "residues": [
+        0,
+        0,
+        1,
+        0
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        0,
+        0,
+        1,
+        1
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        0,
+        0,
+        1,
+        2
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        0,
+        0,
+        2,
+        0
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        0,
+        0,
+        2,
+        1
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        0,
+        0,
+        2,
+        2
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        0,
+        1,
+        0,
+        0
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        0,
+        1,
+        0,
+        1
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        0,
+        1,
+        0,
+        2
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        0,
+        1,
+        1,
+        0
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        0,
+        1,
+        1,
+        1
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        0,
+        1,
+        1,
+        2
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        0,
+        1,
+        2,
+        0
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        0,
+        1,
+        2,
+        1
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        0,
+        1,
+        2,
+        2
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        0,
+        2,
+        0,
+        0
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        0,
+        2,
+        0,
+        1
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        0,
+        2,
+        0,
+        2
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        0,
+        2,
+        1,
+        0
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        0,
+        2,
+        1,
+        1
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        0,
+        2,
+        1,
+        2
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        0,
+        2,
+        2,
+        0
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        0,
+        2,
+        2,
+        1
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        0,
+        2,
+        2,
+        2
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        1,
+        0,
+        0,
+        0
+      ],
+      "violated_equality": 1
+    },
+    {
+      "residues": [
+        1,
+        0,
+        0,
+        1
+      ],
+      "violated_equality": 1
+    },
+    {
+      "residues": [
+        1,
+        0,
+        0,
+        2
+      ],
+      "violated_equality": 1
+    },
+    {
+      "residues": [
+        1,
+        0,
+        1,
+        0
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        1,
+        0,
+        1,
+        1
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        1,
+        0,
+        1,
+        2
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        1,
+        0,
+        2,
+        0
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        1,
+        0,
+        2,
+        1
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        1,
+        0,
+        2,
+        2
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        1,
+        1,
+        0,
+        0
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        1,
+        1,
+        0,
+        1
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        1,
+        1,
+        0,
+        2
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        1,
+        1,
+        1,
+        0
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        1,
+        1,
+        1,
+        2
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        1,
+        1,
+        2,
+        0
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        1,
+        1,
+        2,
+        1
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        1,
+        1,
+        2,
+        2
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        1,
+        2,
+        0,
+        0
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        1,
+        2,
+        0,
+        1
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        1,
+        2,
+        0,
+        2
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        1,
+        2,
+        1,
+        0
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        1,
+        2,
+        1,
+        1
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        1,
+        2,
+        1,
+        2
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        1,
+        2,
+        2,
+        0
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        1,
+        2,
+        2,
+        1
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        1,
+        2,
+        2,
+        2
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        2,
+        0,
+        0,
+        0
+      ],
+      "violated_equality": 1
+    },
+    {
+      "residues": [
+        2,
+        0,
+        0,
+        1
+      ],
+      "violated_equality": 1
+    },
+    {
+      "residues": [
+        2,
+        0,
+        0,
+        2
+      ],
+      "violated_equality": 1
+    },
+    {
+      "residues": [
+        2,
+        0,
+        1,
+        0
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        2,
+        0,
+        1,
+        1
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        2,
+        0,
+        1,
+        2
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        2,
+        0,
+        2,
+        0
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        2,
+        0,
+        2,
+        1
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        2,
+        0,
+        2,
+        2
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        2,
+        1,
+        0,
+        0
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        2,
+        1,
+        0,
+        1
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        2,
+        1,
+        0,
+        2
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        2,
+        1,
+        1,
+        0
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        2,
+        1,
+        1,
+        1
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        2,
+        1,
+        1,
+        2
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        2,
+        1,
+        2,
+        0
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        2,
+        1,
+        2,
+        1
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        2,
+        1,
+        2,
+        2
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        2,
+        2,
+        0,
+        0
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        2,
+        2,
+        0,
+        1
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        2,
+        2,
+        0,
+        2
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        2,
+        2,
+        1,
+        0
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        2,
+        2,
+        1,
+        1
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        2,
+        2,
+        1,
+        2
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        2,
+        2,
+        2,
+        0
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        2,
+        2,
+        2,
+        1
+      ],
+      "violated_equality": 0
+    },
+    {
+      "residues": [
+        2,
+        2,
+        2,
+        2
+      ],
+      "violated_equality": 0
+    }
+  ]
+}

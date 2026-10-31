@@ -699,9 +699,8 @@ TEST_CASE("NIA-Core: 3-var modular refutation — x+y+z=1 ∧ x^2+y^2+z^2=0 -> u
 
 TEST_CASE("NIA-Core: 4-var modular system over mod 3 -> unsat") {
     // x^2 + y^2 ≡ 0 (mod 3) forces x ≡ 0 AND y ≡ 0 mod 3 (squares mod 3 ∈ {0,1}).
-    // z^2 + w^2 = 5 mod 3 = 2; but squares mod 3 sum to at most 2, only via 1+1.
-    // Combined with z+w = 1 mod 3 (no choice of z,w in {1,2} that sums to 1 satisfies both),
-    // ⇒ UNSAT. Exercises the N-var enumeration path (was hardcoded ≤2 var before iter-79).
+    // The second equality requires x+y ≡ 1 mod 3, contradicting x ≡ y ≡ 0.
+    // Quotient variables z and w disappear after coefficient reduction.
     std::string path = writeTempSmt2(
         "(set-logic QF_NIA)\n"
         "(declare-const x Int)\n"
@@ -716,8 +715,7 @@ TEST_CASE("NIA-Core: 4-var modular system over mod 3 -> unsat") {
     solver.setLogic("QF_NIA");
     CHECK(solver.parseFile(path));
     Result r = solver.checkSat();
-    // Either Unsat (modular refuter fires) or Unknown (other reasoners). NEVER Sat.
-    CHECK(static_cast<int>(r) != static_cast<int>(Result::Sat));
+    CHECK((r == Result::Unsat));
 }
 
 TEST_CASE("native eager SAT deadline yields to integer modular refutation") {

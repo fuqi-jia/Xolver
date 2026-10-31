@@ -239,6 +239,7 @@ set(XOLVER_SEARCH_SOURCES
     "search/presolve/UnivariatePolySignAnalyzer.cpp"
     "search/refute/PolynomialBooleanRefutation.cpp"
     "search/refute/PolynomialLinearRefutation.cpp"
+    "search/refute/PolynomialResidueRefutation.cpp"
     "search/refute/PolynomialSignClosure.cpp"
     "search/refute/SignDefinitenessRefuter.cpp"
     "search/sat/CadicalBackend.cpp"
