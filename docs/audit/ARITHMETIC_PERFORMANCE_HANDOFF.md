@@ -98,7 +98,11 @@ auxiliary-coordinate lookups. Full numeric equality and coordinate semantics
 remain unchanged. R1284 qualifies a canonical rebuild of every inline-header
 consumer; all39 R1285 acceptance groups pass, including1899 unit cases /987933
 assertions and31 Python tests. Core [CI41205591584](https://github.com/fuqi-jia/Xolver/actions/runs/41205591584)
-passes both jobs. Final delivery CI and merging remain pending.
+passes both jobs. Delivery [CI41211110978](https://github.com/fuqi-jia/Xolver/actions/runs/41211110978)
+passes both jobs; PR90 is merged as main `aeed8704`. Its
+[postmerge CI41213002988](https://github.com/fuqi-jia/Xolver/actions/runs/41213002988)
+passes both jobs. PR90 delivery is complete; documentation reuses the qualified
+implementation without an additional server archive.
 
 R1287 seals fresh fixed160: **104 baseline/106 candidate/117 verified Z3**
 (124 raw Z3 decisions; seven unconfirmed UNSATs12/24/27/42/80/114/159 excluded).
@@ -119,6 +123,76 @@ R1280's isolated lookup benchmark removes524288 GMP allocations per
 configuration and is approximately4–15 times faster; it is not a solver score.
 The controlled QCP matrix above uses the older R1264 worker, not this candidate.
 Both protected sets remain unread and unused; Xolver has not surpassed Z3.
+
+
+The compact linear trail experiment `cbb6cdcc`, test-call correction
+`c11965e9`, shares lightweight source metadata between LRA/LIA and borrows
+immutable forms from the coordinate manager. Retired per-engine record types
+are removed; source/reason identity, scopes, cache order and assignment policies
+are preserved. R1297 qualifies canonical native rebuilding:192 focused cases,
+1905 full unit cases /987976 assertions and31 Python API tests pass.38 original
+acceptance groups pass. One original5s SAT timeout in the202-case linear group
+is retained as a failure with unresolved cause; complete baseline/candidate
+202-case exact5s repeats each pass with102 checked models, as do three60s
+whole-triad repeats of that input. These observations do not claim the timeout
+was fixed.
+
+R1302 seals fresh fixed160: **106 baseline/106 candidate/116 verified Z3**
+(123 raw Z3 decisions, the same seven unconfirmed UNSATs excluded). Verified
+PAR-2 is6981.355/6949.011/5561.087, approximately0.46% lower for the candidate.
+SAT144 is gained at48.383s, while SAT51 is lost:55.663s baseline versus candidate
+timeout. Both Xolver versions retain2 unknowns and52 timeouts; no opposite
+verdict or invalid model is found. Original triad120's baseline overruns the
+wall budget at608.805s; the whole triad is replaced only after its terminal state
+and absent PID, with the original preserved. See
+[the complete candidate evidence](COMPACT_LINEAR_TRAIL_STAGE_20261031.json).
+
+R1305 repeats51 as23.166/25.074s and144 as55.790/46.503s, with both versions SAT
+and independently checked initial models. Counts at the60s boundary are
+unstable, but51 remains slower in this repeat. The valid original loss/gain
+remain in the formal score. See
+[the candidate repeat evidence](COMPACT_LINEAR_TRAIL_REPLAY_STAGE_20261031.json).
+**Closed without promotion:** the verified-count gap has not narrowed,
+the PAR-2 gain is small, and the51 regression mechanism is unresolved. Runtime
+changes and their dedicated tests have been reverted; the evidence is retained. Original
+QCP workflow receipts above cover the older R1264 worker, not R1297. Both
+protected sets remain unread and unused.
+
+
+[PR91](https://github.com/fuqi-jia/Xolver/pull/91) now follows an independent
+reset-contract correctness defect. R1307 compiles a direct theory API probe
+against one qualified header/library ABI: after asserting an interface `x=1`
+and resetting, a new context containing only `x=0` wrongly returns Conflict;
+old `x!=1` likewise conflicts with a new `x=1`. Both fresh LRA controls and LIA
+reset controls return Consistent. Z3 and cvc5 independently confirm both new
+formulas SAT. Published main and the reproduced candidate have identical
+`LraSolver::onReset` bodies. See
+[the native reproduction](ARITHMETIC_RESET_API_REPRO_20261031.json).
+This establishes a theory-engine reset defect; end-to-end CLI exposure is not
+claimed, and it does not explain the51 timing regression.
+
+The fix shares LRA active-source withdrawal between reset and root backtrack,
+clears stale interface/ordinary disequalities and buffered entailments on reset,
+and retains the existing full-reset Reinitialize / root-backtrack Preserve
+assignment policies. Cross-engine tests check withdrawn equalities/disequalities,
+pending/applied facts, exact models and repeated source reuse. R1311 recompiles
+the published old hook against the same headers/ABI: both new tests fail;
+restoring the fixed source passes188 targeted cases /32242 assertions and31
+Python tests. All39 R1309 groups pass, including1901 full unit cases /988001
+assertions. CLI SHA-256 is
+`0fe81f47d37fa97c0f3f4cbaa515d36a36bbad4200f9a07f55cbcacc41e6b184`.
+
+R1312 seals fresh fixed160: **104 baseline/104 candidate/117 verified Z3**
+(124 raw Z3 decisions; the same seven unconfirmed UNSATs excluded). There are
+no gained/lost solves, opposite verdicts or invalid models. Both Xolver versions
+retain2 unknowns and54 timeouts. Verified PAR-2 is7105.484/7107.417/5451.485;
+this phase makes no performance-gain claim. All160 original triads are budget
+valid, requiring no replacements. See
+[the complete correctness phase](ARITHMETIC_RESET_CONTRACT_STAGE_20261101.json).
+Final delivery PR CI and merging remain pending; keep PR91 draft until both
+jobs pass. Documentation reuses the qualified implementation without an extra
+server archive. Both protected sets remain unread and unused; Xolver has not
+surpassed Z3.
 
 
 [PR88](https://github.com/fuqi-jia/Xolver/pull/88), core `32d23ec3`, closes the

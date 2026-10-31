@@ -1,0 +1,376 @@
+{
+  "schema": "xolver-compact-linear-trail-replay/1",
+  "implementation_commit": "c11965e92254bff1eda671ea38d9b9f97c9834e7",
+  "stage_sha256": "5d3fc753df2e9649615638488c7fd4cd128c5828e070bd502bbc67e0cf92ff79",
+  "rows": [
+    {
+      "index": 51,
+      "experiment": "6913d8612969",
+      "run": "907c30cd5997",
+      "status": "success",
+      "exit_code": 0,
+      "report_sha256": "afa6ee7562bc06a7e3934fee087e57baee0cf4727c0f03eba8664fad933c8f68",
+      "report": {
+        "index": 51,
+        "case": {
+          "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LRA/LassoRanker/CooperatingT2/ludcmp.c.i.ludcmp.pl.t2.fixed.t2.c_Iteration8_Loop_7-phaseTemplate.smt2",
+          "member": "QF_LRA/LassoRanker/CooperatingT2/ludcmp.c.i.ludcmp.pl.t2.fixed.t2.c_Iteration8_Loop_7-phaseTemplate.smt2",
+          "logic": "QF_LRA",
+          "family": "LassoRanker",
+          "bytes": 937621,
+          "sha256": "8fb5c2cfe016233a2f76c3d3b103066448f0f1d3faa1c9d9493c55c304d877cb",
+          "expected": "sat",
+          "shared_archive_member": "non-incremental/QF_LRA/LassoRanker/CooperatingT2/ludcmp.c.i.ludcmp.pl.t2.fixed.t2.c_Iteration8_Loop_7-phaseTemplate.smt2",
+          "shared_archive_sha256": "c594f41da343112c66598ffb4cbf9bd8f8aa8c4c1283cef09d4c79b06fb4504c",
+          "archive_matches_server": true,
+          "archive_member_found": true,
+          "repetitions": 1
+        },
+        "binaries": {
+          "baseline": {
+            "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/exact-linear-hash-r1284/xolver",
+            "sha256": "f8fbb8232f91c7b9ab231db1296fca01730ac00425a58d5a36154104569dd0f7"
+          },
+          "candidate": {
+            "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/compact-linear-trail-r1297/xolver",
+            "sha256": "6b2a9bb6a002a919a8e1c34bdea59e05e4894b70c8ffcb50e0719db9e167a15c"
+          },
+          "z3": {
+            "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+            "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+          }
+        },
+        "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+        "timeout": 60,
+        "memory_bytes": 17179869184,
+        "observations": {
+          "baseline": {
+            "result": "sat",
+            "seconds": 23.166467053815722,
+            "launch_seconds": 0.0023133382201194763,
+            "wait_seconds": 23.164153715595603,
+            "returncode": 0,
+            "timeout_notified_seconds": null,
+            "cleanup_seconds": null,
+            "timed_out": false,
+            "budget_overrun": false,
+            "command": [
+              "prlimit",
+              "--as=17179869184",
+              "--cpu=62:63",
+              "--",
+              "/pub/data/jiafq/xolver/validation/arithmetic-r103/exact-linear-hash-r1284/xolver",
+              "solve",
+              "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LRA/LassoRanker/CooperatingT2/ludcmp.c.i.ludcmp.pl.t2.fixed.t2.c_Iteration8_Loop_7-phaseTemplate.smt2",
+              "--timeout",
+              "60",
+              "--produce-models"
+            ],
+            "cpu": 1,
+            "verified": true,
+            "replay": {
+              "result": "sat",
+              "seconds": 0.11604137159883976,
+              "launch_seconds": 0.002441415563225746,
+              "wait_seconds": 0.11359995603561401,
+              "returncode": 0,
+              "timeout_notified_seconds": null,
+              "cleanup_seconds": null,
+              "timed_out": false,
+              "budget_overrun": false,
+              "command": [
+                "prlimit",
+                "--as=17179869184",
+                "--cpu=62:63",
+                "--",
+                "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+                "-T:60",
+                "validation/arithmetic-r103/fair-r1305/case-051/baseline-replay.smt2"
+              ],
+              "cpu": 1
+            }
+          },
+          "candidate": {
+            "result": "sat",
+            "seconds": 25.073908565565944,
+            "launch_seconds": 0.0025941990315914154,
+            "wait_seconds": 25.071314366534352,
+            "returncode": 0,
+            "timeout_notified_seconds": null,
+            "cleanup_seconds": null,
+            "timed_out": false,
+            "budget_overrun": false,
+            "command": [
+              "prlimit",
+              "--as=17179869184",
+              "--cpu=62:63",
+              "--",
+              "/pub/data/jiafq/xolver/validation/arithmetic-r103/compact-linear-trail-r1297/xolver",
+              "solve",
+              "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LRA/LassoRanker/CooperatingT2/ludcmp.c.i.ludcmp.pl.t2.fixed.t2.c_Iteration8_Loop_7-phaseTemplate.smt2",
+              "--timeout",
+              "60",
+              "--produce-models"
+            ],
+            "cpu": 1,
+            "verified": true,
+            "replay": {
+              "result": "sat",
+              "seconds": 0.11644850857555866,
+              "launch_seconds": 0.0027661044150590897,
+              "wait_seconds": 0.11368240416049957,
+              "returncode": 0,
+              "timeout_notified_seconds": null,
+              "cleanup_seconds": null,
+              "timed_out": false,
+              "budget_overrun": false,
+              "command": [
+                "prlimit",
+                "--as=17179869184",
+                "--cpu=62:63",
+                "--",
+                "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+                "-T:60",
+                "validation/arithmetic-r103/fair-r1305/case-051/candidate-replay.smt2"
+              ],
+              "cpu": 1
+            }
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 0.6170295849442482,
+            "launch_seconds": 0.002572201192378998,
+            "wait_seconds": 0.6144573837518692,
+            "returncode": 0,
+            "timeout_notified_seconds": null,
+            "cleanup_seconds": null,
+            "timed_out": false,
+            "budget_overrun": false,
+            "command": [
+              "prlimit",
+              "--as=17179869184",
+              "--cpu=62:63",
+              "--",
+              "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+              "-T:60",
+              "-model",
+              "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LRA/LassoRanker/CooperatingT2/ludcmp.c.i.ludcmp.pl.t2.fixed.t2.c_Iteration8_Loop_7-phaseTemplate.smt2"
+            ],
+            "cpu": 1,
+            "verified": true,
+            "replay": {
+              "result": "sat",
+              "seconds": 0.2664537187665701,
+              "launch_seconds": 0.0025688055902719498,
+              "wait_seconds": 0.26388491317629814,
+              "returncode": 0,
+              "timeout_notified_seconds": null,
+              "cleanup_seconds": null,
+              "timed_out": false,
+              "budget_overrun": false,
+              "command": [
+                "prlimit",
+                "--as=17179869184",
+                "--cpu=62:63",
+                "--",
+                "/pub/data/jiafq/xolver/dependencies/oracles/cvc5",
+                "--lang=smt2",
+                "--tlimit=60000",
+                "validation/arithmetic-r103/fair-r1305/case-051/z3-replay.smt2"
+              ],
+              "cpu": 1
+            }
+          }
+        },
+        "model_capture": "initial-solve-single-model",
+        "wrong_verdict": false,
+        "protocol_errors": []
+      }
+    },
+    {
+      "index": 144,
+      "experiment": "6913d8612969",
+      "run": "ec26713890cf",
+      "status": "success",
+      "exit_code": 0,
+      "report_sha256": "18413a9cf996463d1349832cd0e30c9fbe1124123cc8fcf53abb7db0fff9843b",
+      "report": {
+        "index": 144,
+        "case": {
+          "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NRA/2019-ezsmt/reverseFolding/31-reverse_folding-0-0.smt2",
+          "member": "QF_NRA/2019-ezsmt/reverseFolding/31-reverse_folding-0-0.smt2",
+          "logic": "QF_NRA",
+          "family": "2019-ezsmt",
+          "bytes": 29119525,
+          "sha256": "d26dd3ac7eb05e598a7b54fe02cb785ae7a85da7ceb1e5fcc95f2e4f8c852c1c",
+          "expected": "unknown",
+          "shared_archive_member": "non-incremental/QF_NRA/2019-ezsmt/reverseFolding/31-reverse_folding-0-0.smt2",
+          "shared_archive_sha256": "fd4a0d330192dc622d1746daef26649f52803dcd197923e4a26c5596e226546c",
+          "archive_matches_server": true,
+          "repetitions": 1
+        },
+        "binaries": {
+          "baseline": {
+            "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/exact-linear-hash-r1284/xolver",
+            "sha256": "f8fbb8232f91c7b9ab231db1296fca01730ac00425a58d5a36154104569dd0f7"
+          },
+          "candidate": {
+            "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/compact-linear-trail-r1297/xolver",
+            "sha256": "6b2a9bb6a002a919a8e1c34bdea59e05e4894b70c8ffcb50e0719db9e167a15c"
+          },
+          "z3": {
+            "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+            "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+          }
+        },
+        "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+        "timeout": 60,
+        "memory_bytes": 17179869184,
+        "observations": {
+          "baseline": {
+            "result": "sat",
+            "seconds": 55.789699794724584,
+            "launch_seconds": 0.0025241579860448837,
+            "wait_seconds": 55.78717563673854,
+            "returncode": 0,
+            "timeout_notified_seconds": null,
+            "cleanup_seconds": null,
+            "timed_out": false,
+            "budget_overrun": false,
+            "command": [
+              "prlimit",
+              "--as=17179869184",
+              "--cpu=62:63",
+              "--",
+              "/pub/data/jiafq/xolver/validation/arithmetic-r103/exact-linear-hash-r1284/xolver",
+              "solve",
+              "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NRA/2019-ezsmt/reverseFolding/31-reverse_folding-0-0.smt2",
+              "--timeout",
+              "60",
+              "--produce-models"
+            ],
+            "cpu": 2,
+            "verified": true,
+            "replay": {
+              "result": "sat",
+              "seconds": 0.9670203030109406,
+              "launch_seconds": 0.002157917246222496,
+              "wait_seconds": 0.9648623857647181,
+              "returncode": 0,
+              "timeout_notified_seconds": null,
+              "cleanup_seconds": null,
+              "timed_out": false,
+              "budget_overrun": false,
+              "command": [
+                "prlimit",
+                "--as=17179869184",
+                "--cpu=62:63",
+                "--",
+                "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+                "-T:60",
+                "validation/arithmetic-r103/fair-r1305/case-144/baseline-replay.smt2"
+              ],
+              "cpu": 2
+            }
+          },
+          "candidate": {
+            "result": "sat",
+            "seconds": 46.50269131921232,
+            "launch_seconds": 0.0025474466383457184,
+            "wait_seconds": 46.50014387257397,
+            "returncode": 0,
+            "timeout_notified_seconds": null,
+            "cleanup_seconds": null,
+            "timed_out": false,
+            "budget_overrun": false,
+            "command": [
+              "prlimit",
+              "--as=17179869184",
+              "--cpu=62:63",
+              "--",
+              "/pub/data/jiafq/xolver/validation/arithmetic-r103/compact-linear-trail-r1297/xolver",
+              "solve",
+              "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NRA/2019-ezsmt/reverseFolding/31-reverse_folding-0-0.smt2",
+              "--timeout",
+              "60",
+              "--produce-models"
+            ],
+            "cpu": 2,
+            "verified": true,
+            "replay": {
+              "result": "sat",
+              "seconds": 0.9675791170448065,
+              "launch_seconds": 0.002760758623480797,
+              "wait_seconds": 0.9648183584213257,
+              "returncode": 0,
+              "timeout_notified_seconds": null,
+              "cleanup_seconds": null,
+              "timed_out": false,
+              "budget_overrun": false,
+              "command": [
+                "prlimit",
+                "--as=17179869184",
+                "--cpu=62:63",
+                "--",
+                "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+                "-T:60",
+                "validation/arithmetic-r103/fair-r1305/case-144/candidate-replay.smt2"
+              ],
+              "cpu": 2
+            }
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 7.178976219147444,
+            "launch_seconds": 0.0019970815628767014,
+            "wait_seconds": 7.176979137584567,
+            "returncode": 0,
+            "timeout_notified_seconds": null,
+            "cleanup_seconds": null,
+            "timed_out": false,
+            "budget_overrun": false,
+            "command": [
+              "prlimit",
+              "--as=17179869184",
+              "--cpu=62:63",
+              "--",
+              "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+              "-T:60",
+              "-model",
+              "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NRA/2019-ezsmt/reverseFolding/31-reverse_folding-0-0.smt2"
+            ],
+            "cpu": 2,
+            "verified": true,
+            "replay": {
+              "result": "sat",
+              "seconds": 2.671217016875744,
+              "launch_seconds": 0.0020840931683778763,
+              "wait_seconds": 2.669132923707366,
+              "returncode": 0,
+              "timeout_notified_seconds": null,
+              "cleanup_seconds": null,
+              "timed_out": false,
+              "budget_overrun": false,
+              "command": [
+                "prlimit",
+                "--as=17179869184",
+                "--cpu=62:63",
+                "--",
+                "/pub/data/jiafq/xolver/dependencies/oracles/cvc5",
+                "--lang=smt2",
+                "--tlimit=60000",
+                "validation/arithmetic-r103/fair-r1305/case-144/z3-replay.smt2"
+              ],
+              "cpu": 2
+            }
+          }
+        },
+        "model_capture": "initial-solve-single-model",
+        "wrong_verdict": false,
+        "protocol_errors": []
+      }
+    }
+  ],
+  "protected_sets_used": false,
+  "boundary": "Separate same-binary60s whole-triad repeats; both Xolver versions solve both SAT inputs with independently replayed initial models.51 baseline/candidate23.166/25.074s,144 baseline/candidate55.790/46.503s. Preserve original full-suite51 loss and144 gain; repeat timings never replace a valid observation. Overall106/106 count is unchanged and PAR-2 gain is small. Candidate remains unpromoted while the51 regression mechanism is investigated."
+}
