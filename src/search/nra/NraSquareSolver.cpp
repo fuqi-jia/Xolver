@@ -2,11 +2,13 @@
 
 #include "algebra/poly/PolynomialKernel.h"
 #include "algebra/poly/RationalPolynomial.h"
+#include "base/WorkBudget.h"
 
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <functional>
+#include <limits>
 #include <map>
 #include <set>
 #include <string>
@@ -162,8 +164,10 @@ int signHintFromBound(PolyId p, Relation rel, PolynomialKernel& kernel, VarId& b
 static bool attemptSquareCascade(const std::vector<std::pair<PolyId, Relation>>& cons,
                       PolynomialKernel& kernel,
                       const std::unordered_map<VarId, mpq_class>& seed,
+                      WorkBudget& work,
                       std::vector<std::pair<VarId, RealValue>>* modelOut,
                       std::unordered_set<VarId>* unresolvedOut = nullptr) {
+    work.tick(cons.size() + seed.size() + 1);
     // --- collect equalities / inequalities / sign hints --------------------------
     std::vector<PolyId> eqs;
     std::unordered_map<VarId, int> signHint;
@@ -239,11 +243,21 @@ static bool attemptSquareCascade(const std::vector<std::pair<PolyId, Relation>>&
     // ORDERING-INDEPENDENT — unlike the kernel's pseudo-remainder, which silently
     // mis-substitutes depending on libpoly's variable order).
     auto substRpDerived = [&](RationalPolynomial rp, VarId var, const RationalPolynomial& val) {
+        work.tick(rp.terms().size() + 1);
+        const int degree = rp.degree(var);
+        if (degree > 0) work.tick(static_cast<size_t>(degree));
         std::vector<RationalPolynomial> co = rp.coefficients(var);
         if (co.size() <= 1) return rp;
         RationalPolynomial result = co.back();
-        for (int i = static_cast<int>(co.size()) - 2; i >= 0; --i)
+        for (int i = static_cast<int>(co.size()) - 2; i >= 0; --i) {
+            const auto left = result.terms().size(), right = val.terms().size();
+            if (right && left > std::numeric_limits<size_t>::max() / right)
+                throw ResourceExhausted("square candidate product allocation overflow");
+            work.tick(left * right);
+            work.tick(co[i].terms().size());
+            work.tick();
             result = result * val + co[i];
+        }
         result.normalize();
         return result;
     };
@@ -256,13 +270,22 @@ static bool attemptSquareCascade(const std::vector<std::pair<PolyId, Relation>>&
         // iterations so a cyclic/mutual definition terminates (leaving a residual var,
         // which the per-constraint validation then bails on — sound).
         for (int iter = 0; iter < 64; ++iter) {
-            for (const auto& [v, val] : rationalVal) rp = rp.substituteRational(v, val);
+            work.tick(rp.terms().size() + 1);
+            const RationalPolynomial previous = rp;
+            for (const auto& [v, val] : rationalVal) {
+                work.tick(rp.terms().size() + 1);
+                rp = rp.substituteRational(v, val);
+            }
             for (const auto& [v, g] : aliasOf) {
                 RationalPolynomial gv; gv.addVar(g, 1, mpq_class(1)); gv.normalize();
                 rp = substRpDerived(rp, v, gv);
             }
             for (const auto& [v, mv] : derivedVal) rp = substRpDerived(rp, v, mv);
             rp.normalize();
+            // A stable canonical polynomial cannot change on a further pass
+            // over the same bindings, including identity aliases and cycles.
+            // Presence of an assigned name alone does not imply progress.
+            if (rp.terms() == previous.terms()) break;
             bool more = false;
             for (VarId v : rp.variables())
                 if (rationalVal.count(v) || aliasOf.count(v) || derivedVal.count(v)) { more = true; break; }
@@ -279,6 +302,7 @@ static bool attemptSquareCascade(const std::vector<std::pair<PolyId, Relation>>&
         progress = false;
         for (size_t j = 0; j < eqs.size(); ++j) {
             if (done[j]) continue;
+            work.tick();
             PolyId p = applySubst(eqs[j]);
             const auto vars = kernel.variables(p);
             if (vars.empty()) {
@@ -317,7 +341,11 @@ static bool attemptSquareCascade(const std::vector<std::pair<PolyId, Relation>>&
                     // block-separable systems spanning Q(sqrt c_1), Q(sqrt c_2), ... solve.
                     bool placed = false;
                     for (const auto& g : gens) {
-                        if (c == g.c && s == g.sign) { aliasOf[x] = g.var; placed = true; break; }
+                        if (c == g.c && s == g.sign) {
+                            if (x != g.var) aliasOf[x] = g.var;
+                            placed = true;
+                            break;
+                        }
                         mpq_class ratio = c / g.c; ratio.canonicalize();
                         mpq_class r;
                         if (rationalSqrt(ratio, r)) {
@@ -342,6 +370,7 @@ static bool attemptSquareCascade(const std::vector<std::pair<PolyId, Relation>>&
     dprogress = false;
     for (size_t j = 0; j < eqs.size(); ++j) {
         if (done[j]) continue;
+        work.tick();
         auto rp0 = RationalPolynomial::fromPolyId(eqs[j], kernel);
         if (!rp0) continue;
         RationalPolynomial rps = applySubstRp(*rp0);   // exact rationals + aliases + derived
@@ -631,6 +660,10 @@ static bool attemptSquareCascade(const std::vector<std::pair<PolyId, Relation>>&
         return true;
     };
     auto mulFieldVal = [&](const FieldVal& a, const FieldVal& b) -> FieldVal {
+        if (!b.empty() && a.size() > std::numeric_limits<size_t>::max() / b.size())
+            throw ResourceExhausted("square candidate field allocation overflow");
+        work.tick(a.size() * b.size());
+        work.tick();
         FieldVal out;
         for (const auto& [ka, ca] : a) for (const auto& [kb, cb] : b) {
             mpq_class coeff = ca * cb;
@@ -647,6 +680,7 @@ static bool attemptSquareCascade(const std::vector<std::pair<PolyId, Relation>>&
         return out;
     };
     std::function<int(const FieldVal&)> signField = [&](const FieldVal& V) -> int {
+        work.tick(V.size() + 1);
         int g = -1;
         for (const auto& [k, c] : V) { if (sgn(c) == 0) continue; for (int gi : k) g = std::max(g, gi); }
         if (g < 0) { auto it = V.find(std::vector<int>{}); return (it == V.end()) ? 0 : sgn(it->second); }
@@ -689,12 +723,6 @@ static bool attemptSquareCascade(const std::vector<std::pair<PolyId, Relation>>&
         }
         if (!ok) return false;                         // model violates a constraint
     }
-
-    // Defer the SIMPLE single-algebraic case (no collapsed alias, no derived var) to
-    // the existing CDCAC path, which already solves it and formats getModel correctly.
-    // The cascade's unique value is the COLLAPSE (equal roots) + DERIVATION that the
-    // ≥2-algebraic Lazard tower bails on (the Geogebra cluster).
-    if (aliasOf.empty() && derivedVal.empty()) return false;
 
     // --- build the complete model (every var) so the Solver's validator accepts it --
     if (modelOut) {
@@ -823,12 +851,14 @@ static bool attemptSquareCascade(const std::vector<std::pair<PolyId, Relation>>&
     return true;
 }
 
-bool trySquareCascade(const std::vector<std::pair<PolyId, Relation>>& cons,
-                      PolynomialKernel& kernel,
-                      std::vector<std::pair<VarId, RealValue>>* modelOut) {
+static bool searchSquareCascade(const std::vector<std::pair<PolyId, Relation>>& cons,
+                                PolynomialKernel& kernel,
+                                std::vector<std::pair<VarId, RealValue>>* modelOut,
+                                WorkBudget& work) {
+    work.tick();
     // First, the un-seeded cascade (pure triangular square systems).
     std::unordered_set<VarId> u0;
-    if (attemptSquareCascade(cons, kernel, {}, modelOut, &u0)) return true;
+    if (attemptSquareCascade(cons, kernel, {}, work, modelOut, &u0)) return true;
 
     // FREE-PARAMETER instantiation. Many geometric sat instances fix every variable
     // to a square root of a LINEAR expression in one free parameter p (e.g. an
@@ -859,13 +889,13 @@ bool trySquareCascade(const std::vector<std::pair<PolyId, Relation>>& cons,
             if (params.size() >= 10) break;
         }
     }
-    int budget = 4000;   // total attempt cap (each attempt is ~microseconds)
+    int budget = 4000;   // Attempt count and polynomial construction share separate bounds.
     for (VarId f1 : params) {
         for (const mpq_class& c1 : kCands) {
-            if (--budget < 0) return false;
+            if (--budget < 0) throw ResourceExhausted("square candidate attempt budget exhausted");
             std::unordered_map<VarId, mpq_class> seed1{{f1, c1}};
             std::unordered_set<VarId> u1;
-            if (attemptSquareCascade(cons, kernel, seed1, modelOut, &u1)) return true;
+            if (attemptSquareCascade(cons, kernel, seed1, work, modelOut, &u1)) return true;
             // Second free parameter (e.g. a coupled construction like RegHexagon: once
             // the base v9 is fixed, v10^2 = 4 v9 - 7 is a square but v11/v13 stay coupled).
             // Only nest when seeding f1 ALSO unlocked solving some other variable
@@ -874,13 +904,29 @@ bool trySquareCascade(const std::vector<std::pair<PolyId, Relation>>& cons,
             for (VarId f2 : params) {
                 if (f2 == f1 || !u1.count(f2)) continue;
                 for (const mpq_class& c2 : kCands) {
-                    if (--budget < 0) return false;
+                    if (--budget < 0) throw ResourceExhausted("square candidate attempt budget exhausted");
                     std::unordered_map<VarId, mpq_class> seed2{{f1, c1}, {f2, c2}};
-                    if (attemptSquareCascade(cons, kernel, seed2, modelOut)) return true;
+                    if (attemptSquareCascade(cons, kernel, seed2, work, modelOut)) return true;
                 }
             }
         }
     }
+    return false;
+}
+
+bool trySquareCascade(const std::vector<std::pair<PolyId, Relation>>& cons,
+                      PolynomialKernel& kernel,
+                      std::vector<std::pair<VarId, RealValue>>* modelOut,
+                      WorkBudget* constructionBudget) {
+    WorkBudget ownedBudget;
+    WorkBudget& work = constructionBudget ? *constructionBudget : ownedBudget;
+    if (modelOut) modelOut->clear();
+    try {
+        if (searchSquareCascade(cons, kernel, modelOut, work)) return true;
+    } catch (const ResourceExhausted&) {
+        // This is an incomplete candidate search, never a refutation.
+    }
+    if (modelOut) modelOut->clear();
     return false;
 }
 

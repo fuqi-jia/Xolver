@@ -45,10 +45,12 @@ void tighten(std::optional<Endpoint>& current, Endpoint next, bool lower) {
 
 std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolve(
     const std::vector<Constraint>& constraints, PolynomialKernel& kernel, bool integerDomain,
-    Statistics* statistics, Allocation allocation) {
+    Statistics* statistics, Allocation allocation, std::optional<RootRefutation>* rootRefutation) {
     Statistics local;
     auto& stats = statistics ? *statistics : local;
     stats = {};
+    if (rootRefutation) rootRefutation->reset();
+    bool rootInfeasible = false;
     try {
         if (allocation.time <= std::chrono::milliseconds::zero()) {
             stats.exhausted = true;
@@ -270,6 +272,8 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
             };
             Model selected, implied;
             std::map<VarId, std::vector<size_t>> impliedReasons;
+            std::map<VarId, std::vector<size_t>> impliedRootPremises;
+            bool rootPhase = true;
             auto known = [&](VarId var) { return selected.contains(var) || implied.contains(var); };
             auto valueOf = [&](VarId var) -> const mpq_class& {
                 if (selected.contains(var)) return selected.at(var);
@@ -302,7 +306,9 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
             std::vector<bool> active(atoms.size(), false);
             size_t activeCount = 0;
             std::vector<std::vector<size_t>> atomDependencies(atoms.size());
+            std::vector<std::vector<size_t>> atomRootPremises(atoms.size());
             std::optional<std::vector<size_t>> directConflict;
+            std::optional<std::vector<size_t>> directRootPremises;
             std::vector<std::vector<size_t>> introduced(parameters.size() + 1);
             std::map<VarId, size_t> parameterDepth;
             for (size_t depth = 0; depth < parameters.size(); ++depth) {
@@ -366,6 +372,26 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
                 }
                 return premiseDependencies(simplex.getConflict());
             };
+            // Translate the affine proof's bound labels back through exact
+            // substitutions. Private parameter labels can never justify an
+            // unconditional refutation. Missing provenance retains all original
+            // premises rather than dropping an assumption.
+            auto originalPremises = [&](const std::vector<GeneralSimplex::BoundReason>& reasons) {
+                if (reasons.empty()) return all;
+                std::set<size_t> premises;
+                for (const auto& bound : reasons) {
+                    tick();
+                    const size_t id = bound.reason.var;
+                    if (!bound.reason.sign || id <= parameters.size()) return all;
+                    const size_t index = id - parameters.size() - 1;
+                    if (index >= atoms.size() || !active[index] || atomRootPremises[index].empty()) return all;
+                    for (const auto premise : atomRootPremises[index]) {
+                        tick();
+                        premises.insert(premise);
+                    }
+                }
+                return std::vector<size_t>(premises.begin(), premises.end());
+            };
             auto activate = [&](const std::vector<size_t>& indices, int level) {
                 for (const auto index : indices) {
                     tick();
@@ -374,17 +400,27 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
                     mpq_class constant = 0;
                     bool affine = true;
                     std::set<size_t> rowDependencies;
+                    std::set<size_t> rowRootPremises;
+                    if (rootPhase) rowRootPremises.insert(index);
                     std::map<Powers, mpq_class> residual;
                     for (const auto& term : atoms[index]) {
                         tick();
                         mpq_class coefficient(term.coefficient);
                         Powers remaining;
                         std::set<size_t> termDependencies;
+                        std::set<size_t> termRootPremises;
                         for (const auto& [var, exponent] : term.powers) {
                             tick();
                             if (coefficient == 0) break;
                             if (known(var)) {
                                 const auto dependencies = knowledgeDependencies(var);
+                                if (rootPhase) {
+                                    if (valueOf(var) == 0) termRootPremises.clear();
+                                    for (const auto premise : impliedRootPremises.at(var)) {
+                                        tick();
+                                        termRootPremises.insert(premise);
+                                    }
+                                }
                                 if (valueOf(var) == 0) {
                                     coefficient = 0;
                                     termDependencies.clear();
@@ -396,6 +432,7 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
                             } else remaining.emplace_back(var, exponent);
                         }
                         rowDependencies.insert(termDependencies.begin(), termDependencies.end());
+                        rowRootPremises.insert(termRootPremises.begin(), termRootPremises.end());
                         if (coefficient == 0) continue;
                         residual[remaining] += coefficient;
                     }
@@ -414,6 +451,8 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
                     introduced[level].push_back(index);
                     auto& dependencies = atomDependencies[index];
                     dependencies.assign(rowDependencies.begin(), rowDependencies.end());
+                    if (rootPhase)
+                        atomRootPremises[index].assign(rowRootPremises.begin(), rowRootPremises.end());
                     const auto reason = SatLit::positive(static_cast<SatVar>(parameters.size() + index + 1));
                     Row row;
                     for (const auto& [column, coefficient] : coefficients)
@@ -422,6 +461,7 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
                     if (row.empty()) {
                         if (!holds(constant, relation)) {
                             directConflict = dependencies;
+                            if (rootPhase) directRootPremises = atomRootPremises[index];
                             return false;
                         }
                         continue;
@@ -446,7 +486,17 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
                 }
                 return true;
             };
-            if (!activate(all, 0) || check() != GeneralSimplex::Result::Sat) return std::nullopt;
+            // No candidate has been selected at level zero. Every active row
+            // is an original affine atom or its substitution by an entailed
+            // exact singleton. A contradiction here refutes the conjunction,
+            // unlike conflicts obtained under later parameter choices.
+            auto refuteRoot = [&]() -> std::optional<Model> {
+                rootInfeasible = true;
+                if (rootRefutation) *rootRefutation = RootRefutation{
+                    directRootPremises ? *directRootPremises : originalPremises(simplex.getConflict())};
+                return std::nullopt;
+            };
+            if (!activate(all, 0) || check() != GeneralSimplex::Result::Sat) return refuteRoot();
 
             auto complete = [&]() -> std::optional<Model> {
                 tick();
@@ -486,6 +536,7 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
                         if (!proof) throw ResourceExhausted("missing local singleton explanation");
                         implied.emplace(var, value->a);
                         impliedReasons.emplace(var, premiseDependencies(proof->second));
+                        if (rootPhase) impliedRootPremises.emplace(var, originalPremises(proof->second));
                         selectedPowers.erase(var);
                         ++stats.propagatedFacts;
                         const auto& indices = variableAtoms.at(var);
@@ -493,6 +544,7 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
                     }
                     if (affectedAtoms.empty()) break;
                     directConflict.reset();
+                    directRootPremises.reset();
                     if (!activate(std::vector<size_t>(affectedAtoms.begin(), affectedAtoms.end()), level)) {
                         if (directConflict) return CandidatePropagation::reject(*directConflict);
                         return CandidatePropagation::reject(conflictDependencies());
@@ -502,9 +554,10 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
             };
             if (auto point = complete()) return point;
             const auto rootProgress = propagateFixed(0);
-            if (rootProgress.conflict) return std::nullopt;
+            if (rootProgress.conflict) return refuteRoot();
             if (rootProgress.completionPossible)
                 if (auto point = complete()) return point;
+            rootPhase = false;
 
             Model rootAnchor;
             const auto rootDelta = simplex.computeSafeDelta();
@@ -645,6 +698,7 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
             stats.exhausted = false;
             try {
                 if (auto model = searchPartition(partitions[index])) return model;
+                if (rootInfeasible) return std::nullopt;
             } catch (const ResourceExhausted&) {
                 stats.exhausted = true;
             }

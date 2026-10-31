@@ -55,8 +55,10 @@ std::optional<TheoryCheckResult> NraSolver::stagePartialLinearModel(
         constraints.push_back({c.poly, c.rel});
     }
     PartialLinearModelSearch::Statistics stats;
+    std::optional<PartialLinearModelSearch::RootRefutation> refutation;
     const auto started = std::chrono::steady_clock::now();
-    auto model = PartialLinearModelSearch::trySolve(constraints, *kernel_, false, &stats);
+    auto model = PartialLinearModelSearch::trySolve(constraints, *kernel_, false, &stats,
+        PartialLinearModelSearch::Allocation(), &refutation);
     const auto profile = config::read<config::ReadKind::ProfilePath>("ARITH_STAGE_PROF", "/tmp/xolver_stageprof.txt");
     if (!profile.empty()) {
         std::ofstream out(profile.string() + ".boundary.log", std::ios::app);
@@ -72,9 +74,21 @@ std::optional<TheoryCheckResult> NraSolver::stagePartialLinearModel(
             << " max_active=" << stats.maxActiveAtoms
             << " refinements=" << stats.refinements
             << " depth=" << stats.maxDepth << " exhausted=" << stats.exhausted
-            << " found=" << bool(model) << " us="
+            << " found=" << bool(model) << " root_conflict=" << bool(refutation)
+            << " root_premises=" << (refutation ? refutation->premises.size() : 0) << " us="
             << std::chrono::duration_cast<std::chrono::microseconds>(
                    std::chrono::steady_clock::now() - started).count() << '\n';
+    }
+    if (refutation) {
+        TheoryConflict conflict;
+        for (const auto index : refutation->premises)
+            conflict.clause.push_back(presolveConstraints_.at(index).reason);
+        std::sort(conflict.clause.begin(), conflict.clause.end(), [](SatLit a, SatLit b) {
+            return a.var != b.var ? a.var < b.var : a.sign < b.sign;
+        });
+        conflict.clause.erase(std::unique(conflict.clause.begin(), conflict.clause.end()),
+                              conflict.clause.end());
+        return TheoryCheckResult::mkConflict(std::move(conflict));
     }
     if (!model) return std::nullopt;
     satFastModel_ = std::move(*model);

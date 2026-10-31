@@ -1,0 +1,209 @@
+{
+  "schema": 1,
+  "status": "native-prototype-verified-no-solving-count-gain",
+  "source_base_commit": "bcd63cf966ecea4b9f26d137c5b754318df9dd8b",
+  "prototype_cli_sha256": "9b9507649a26a5cd747a86e9fc8b2b5075f175a5eddd048022567cd135e788aa",
+  "prototype_qualification_sha256": "66ff25691520a47ff32aa130b7b805b88e17a76c7ef2c78d13401daa8403b5d0",
+  "audit_file": "validation/arithmetic-r103/nra-root-prototype-stage-r1214.json",
+  "audit_sha256": "a48baa071635975ee124dae90529cb4bef84b81c1d1b7afb2a6b5b33043cc7ba",
+  "formal": {
+    "cases": 32,
+    "counts": {
+      "baseline": {
+        "sat": 16,
+        "decided": 22,
+        "verified_decided": 22,
+        "verified_par2": 1210.415328996256,
+        "raw_par2": 1210.415328996256,
+        "unsat": 6,
+        "timeout": 9,
+        "unknown": 1
+      },
+      "candidate": {
+        "sat": 16,
+        "decided": 22,
+        "verified_decided": 22,
+        "verified_par2": 1208.2574307713658,
+        "raw_par2": 1208.2574307713658,
+        "unsat": 6,
+        "timeout": 8,
+        "unknown": 2
+      },
+      "z3": {
+        "sat": 20,
+        "decided": 26,
+        "verified_decided": 25,
+        "verified_par2": 935.0426176264882,
+        "raw_par2": 815.3589756768197,
+        "timeout": 6,
+        "unsat": 6
+      }
+    },
+    "changes": [],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "unverified": [
+      {
+        "index": 159,
+        "case": "QF_NRA/20161105-Sturm-MGC/mgc_07.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      }
+    ],
+    "scoring": "Correct verdicts require a replayed model or an independent UNSAT decision on the identical input hash; unresolved results receive PAR-2 penalty."
+  },
+  "core_unit": {
+    "record_sha256": "72c9c42eb32346794c729d79968961aecb3bf11c1b1bdf1091a4edc39e2f8221",
+    "qualification_sha256": "5a6b3f224a3ef03e862c78e15fbaf18f640004875c28667f479597f1663de6b7",
+    "unit_binary_sha256": "1af06ae246122f84b8c56fcdd904306c14c53bf1dabeaf4cdf86d1f3862a5657",
+    "unit_cases": 1891,
+    "unit_assertions": 986840,
+    "log_sha256": "a6e95da67262b04111291ad4d9a67ee2a644c7f8e6ed4a3b1cb9d1fac0d5edea",
+    "metrics": {
+      "completed": 1,
+      "failures": 0
+    },
+    "protected_sets_used": false
+  },
+  "independently_checked_root_cores": [
+    {
+      "index": 69,
+      "conflicts": 11,
+      "unique_cores": 11,
+      "unique_literal_sets": 11,
+      "record_sha256": "d943f8d3046ad7e92de3342082bcd59362527b98c29bc263392351c6801fca1e",
+      "run": {
+        "experiment": "9e8c8cc99772",
+        "run": "e9f19ae7bd6a",
+        "input": "69",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "0"
+          ]
+        }
+      }
+    },
+    {
+      "index": 146,
+      "conflicts": 22,
+      "unique_cores": 22,
+      "unique_literal_sets": 22,
+      "record_sha256": "eeea7bf010c2dddba7f12660e023359718dcc4d76ac806d3fecce0650dce09b9",
+      "run": {
+        "experiment": "9e8c8cc99772",
+        "run": "a2127b32bc59",
+        "input": "146",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "1"
+          ]
+        }
+      }
+    }
+  ],
+  "python_api": {
+    "qualification_sha256": "5069f2f544e658d3d9f85dc88bcf20c5bf9e7b54a9620e5e7dbdbe45907f0132",
+    "tests": 31,
+    "extension_sha256": "fc21862343cb2c180b2928d7cef0110f745c42b642bbe24d58b208075c626c53"
+  },
+  "observed_controls": [
+    {
+      "index": 65,
+      "input_sha256": "bf86296d7a4a9f4366182360877d75d53dbbd3fda7210dedfdb8a8b882a52a11",
+      "observations": {
+        "z3": {
+          "result": "timeout",
+          "seconds": 60.00598206743598,
+          "verified": false
+        },
+        "baseline": {
+          "result": "unsat",
+          "seconds": 0.06537637300789356,
+          "verified": true
+        },
+        "candidate": {
+          "result": "unsat",
+          "seconds": 0.566411579027772,
+          "verified": true
+        }
+      },
+      "report_sha256": "207ab86b79b163828aea9e4a362f826aabda51ada6de38588063292672770665"
+    },
+    {
+      "index": 76,
+      "input_sha256": "4de68418bf5f9a161346a531d877b8e3953ec2211c334409727d94991c26fbe9",
+      "observations": {
+        "candidate": {
+          "result": "sat",
+          "seconds": 4.423836791887879,
+          "verified": true
+        },
+        "z3": {
+          "result": "sat",
+          "seconds": 0.6610401030629873,
+          "verified": true
+        },
+        "baseline": {
+          "result": "sat",
+          "seconds": 4.673840986564755,
+          "verified": true
+        }
+      },
+      "report_sha256": "eb12f3d2642aa3fc2c39d3131305d68334177660906e8905a06756bb970635c3"
+    },
+    {
+      "index": 150,
+      "input_sha256": "c5f714951dd8d10ec098bef94b650f7226eb4c8c7d2b9be1c2bad1ed00113002",
+      "observations": {
+        "baseline": {
+          "result": "sat",
+          "seconds": 0.4670797027647495,
+          "verified": true
+        },
+        "candidate": {
+          "result": "sat",
+          "seconds": 0.21687902323901653,
+          "verified": true
+        },
+        "z3": {
+          "result": "sat",
+          "seconds": 0.11766316927969456,
+          "verified": true
+        }
+      },
+      "report_sha256": "a69e80f882c3a84ad7ebc28930dd4a7ff2dbfee7b31946996731eb1700cb0fff"
+    },
+    {
+      "index": 157,
+      "input_sha256": "d3941102878489abc44c6b3fafc7671a34c6d229ecf1820b0810e90dc61ef1cc",
+      "observations": {
+        "candidate": {
+          "result": "sat",
+          "seconds": 0.1182105801999569,
+          "verified": true
+        },
+        "z3": {
+          "result": "sat",
+          "seconds": 0.0670132227241993,
+          "verified": true
+        },
+        "baseline": {
+          "result": "sat",
+          "seconds": 1.9214565642178059,
+          "verified": true
+        }
+      },
+      "report_sha256": "444ad3f7e72ffe941c0e6e5183117258539fba5a1dd5b57eb63046de3c8874fd"
+    }
+  ],
+  "protected_sets_used": false,
+  "boundary": "Committed-source qualification is still pending. This prototype contains generic exact root refutation with transitive original-premise explanations, bounded/fixed-point square-model construction, canonical algebraic model API/DSL serialization and partial-affine-before-box scheduling. All32 original fixed160 NRA inputs receive fresh equal60s/one physical CPU/16GiB triads and initial-model replay. Verified counts22/22/25; no solving gain or loss; Z3 UNSAT159 remains unconfirmed and excluded. The1891-case full unit and31 Python tests cover the R1200 core; the additional R1209 order passes80 targeted cases and the complete NRA slice. Thirty-three original root cores are independently refuted by both Z3/cvc5. The observed2.158s single-round PAR-2 difference and local control speedups do not establish whole-suite or QCP superiority. Canonical final-source build, all acceptance groups, full160, exact-head PR CI and postmerge CI remain required. Neither protected set was used."
+}

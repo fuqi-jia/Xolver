@@ -98,11 +98,6 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
         stageWrap("presolve", [this](TheoryLemmaStorage& db, TheoryEffort e) {
             return stagePresolve(db, e);
         }), ReasonerSchedule::CandidateModel));
-    reasoners_.push_back(std::make_unique<CallbackReasoner>(
-        "nra.box-refute",
-        stageWrap("box-refute", [this](TheoryLemmaStorage& db, TheoryEffort e) {
-            return stageBoxRefute(db, e);
-        }), ReasonerSchedule::CandidateModel));
     // Local search constructs complete witnesses, so it shares the candidate
     // scheduling contract with CAC instead of consuming a one-shot attempt on
     // the first partial assignment.
@@ -110,6 +105,13 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
         "nra.partial-linear-model",
         stageWrap("partial-linear-model", [this](TheoryLemmaStorage& db, TheoryEffort e) {
             return stagePartialLinearModel(db, e);
+        }), ReasonerSchedule::CandidateModel));
+    // Exact affine closure can already refute the current candidate. Run it
+    // before interval analysis rebuilds the whole nonlinear box.
+    reasoners_.push_back(std::make_unique<CallbackReasoner>(
+        "nra.box-refute",
+        stageWrap("box-refute", [this](TheoryLemmaStorage& db, TheoryEffort e) {
+            return stageBoxRefute(db, e);
         }), ReasonerSchedule::CandidateModel));
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.local-search",
@@ -429,10 +431,8 @@ std::optional<TheorySolver::TheoryModel> NraSolver::getModel() const {
         for (const auto& [v, rv] : *satCacAlgModel_) {
             std::string name(kernel_->varName(v));
             model.numericAssignments.insert({name, rv});
-            // Legacy string channel: rational => mpq.get_str; algebraic => "alg"
-            // marker (Solver.cpp model-validation reads numericAssignments).
             if (rv.isRational()) model.assignments[std::move(name)] = rv.asRational().get_str();
-            else model.assignments[std::move(name)] = "alg";
+            else model.assignments[std::move(name)] = rv.toSmtLib2();
         }
         return model;
     }
@@ -447,15 +447,9 @@ std::optional<TheorySolver::TheoryModel> NraSolver::getModel() const {
         const auto& val = sample.values[i];
         std::string name(kernel_->varName(v));
         // Typed channel: exact RealValue (rational or algebraic).
-        model.numericAssignments.insert({name, engine_.sampleValueToRealValue(val)});
-        // Legacy string channel (retained during the funnel migration).
-        std::string valueStr;
-        if (val.kind == RealAlg::Kind::Rational) {
-            valueStr = val.rational.get_str();
-        } else {
-            // AlgebraicRoot: strict representation with defining polynomial + isolating interval
-            valueStr = engine_.formatAlgebraicRoot(val.root);
-        }
+        const auto value = engine_.sampleValueToRealValue(val);
+        model.numericAssignments.insert({name, value});
+        const auto valueStr = value.isRational() ? value.asRational().get_str() : value.toSmtLib2();
         model.assignments[std::move(name)] = std::move(valueStr);
     }
     return model;

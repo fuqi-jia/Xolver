@@ -262,9 +262,12 @@ TEST_CASE("API: getModel for NRA algebraic root") {
 
     Model m = s.getModel();
     const std::string* val = m.getValue(x.id());
-    CHECK(val != nullptr);
-    // Should be (AlgebraicNumber (poly 1 0 -2) (lower ...) (upper ...))
-    CHECK(val->find("(AlgebraicNumber (poly") != std::string::npos);
+    REQUIRE(val != nullptr);
+    CHECK(val->find("(root-of-with-interval (coeffs (- 2) 0 1)") == 0);
+    CHECK((s.validateModel() == Solver::ModelValidation::Satisfied));
+    std::ostringstream exported;
+    s.dumpModel(exported);
+    CHECK(exported.str().find(*val) != std::string::npos);
 }
 
 TEST_CASE("API: getModel for NIA") {

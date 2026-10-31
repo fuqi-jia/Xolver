@@ -186,9 +186,50 @@ class AlgebraicNumber:
         return body + (f" ~ {float(a):.9g}" if a is not None else "")
 
 
-_ALG_RE = re.compile(
-    r"\(AlgebraicNumber\s+\(poly\s+([-\d\s]+)\)\s+"
-    r"\(lower\s+(\S+)\)\s+\(upper\s+(\S+)\)\s*\)", re.DOTALL)
+def _parse_algebraic(tok):
+    """Read the exact root format emitted by RealValue, including rational bounds."""
+    forms = []
+    stack = [forms]
+    for token in re.findall(r"\(|\)|[^()\s]+", tok):
+        if token == "(":
+            child = []
+            stack[-1].append(child)
+            stack.append(child)
+        elif token == ")":
+            if len(stack) == 1:
+                return None
+            stack.pop()
+        else:
+            stack[-1].append(token)
+    if len(stack) != 1 or len(forms) != 1:
+        return None
+    form = forms[0]
+    if (not isinstance(form, list) or len(form) != 4
+            or form[0] != "root-of-with-interval"
+            or not isinstance(form[1], list) or len(form[1]) < 4
+            or form[1][0] != "coeffs"):
+        return None
+
+    def rational(node):
+        if isinstance(node, str):
+            return Fraction(node)
+        if len(node) == 2 and node[0] == "-":
+            return -rational(node[1])
+        if len(node) == 3 and node[0] == "/":
+            return rational(node[1]) / rational(node[2])
+        raise ValueError("not a rational model literal")
+
+    try:
+        coefficients = [rational(c) for c in form[1][1:]]
+        lower, upper = rational(form[2]), rational(form[3])
+        if (any(c.denominator != 1 for c in coefficients)
+                or coefficients[-1] == 0 or lower >= upper):
+            return None
+        # RealValue emits ascending coefficients; the Python API keeps the
+        # usual highest-degree-first polynomial convention.
+        return AlgebraicNumber(tok, [int(c) for c in reversed(coefficients)], lower, upper)
+    except (ValueError, ZeroDivisionError, RecursionError):
+        return None
 
 
 def _parse_value(tok):
@@ -200,11 +241,9 @@ def _parse_value(tok):
         return True
     if tok == "false":
         return False
-    # Real-algebraic value: (AlgebraicNumber (poly ...) (lower L) (upper U))
-    m = _ALG_RE.fullmatch(tok)
-    if m:
-        coeffs = [int(c) for c in m.group(1).split()]
-        return AlgebraicNumber(tok, coeffs, _frac(m.group(2)), _frac(m.group(3)))
+    if tok.startswith("(root-of-with-interval"):
+        algebraic = _parse_algebraic(tok)
+        return algebraic if algebraic is not None else tok
     # (- N)
     m = re.fullmatch(r"\(\s*-\s+(.+?)\s*\)", tok, re.DOTALL)
     if m:
