@@ -3316,3 +3316,86 @@ fully green CI41136383267. The development branch retains the qualified native
 commits and bounded receipts; Draco is unchanged. Both protected sets and the
 fresh multi-program QCP comparison remain outstanding. The main fixed160
 reference is still100 verified Xolver versus118 verified/125 raw Z3, not a win.
+
+
+### Indexed candidate preparation and the remaining branch-explanation gap
+
+Core624af3d1 replaces repeated full monomial rescoring with an incident-edge
+weighted greedy cover, preserving the entire score/tie order. The helper accepts
+ordered node types and integral weights without arithmetic-theory dependencies.
+Parameter-to-atom indexing also follows actual support instead of every parameter.
+An independent full-rescan reference, weighted/retained/overflow/cancellation
+cases and a2000-edge work-allocation test pass. R1023 native qualification and all39
+R1026 groups pass,1856 cases/978660 assertions. R1025's12 fresh60s/one physical
+CPU/16GiB triads still verify6 for each Xolver and11 for Z3: no new/lost solve,
+error or unconfirmed input. PAR-2 is721.603/721.604. R1027 seals this negative
+pilot (`7d96f5d797fc0c42a41fe7703d1687f9d722e3883e372e4edd0f87299c064c4f`).
+
+R1028/R1029 and R1030/R1031 separately test LP-seeded rational repair and
+LP-seeded affine prefix completion; each private native binary passes182 cases/
+14928 assertions without changing production source, CLI, archive or unit bytes.
+All six20s public profiles time out. The LP point does improve exact false-atom
+counts versus prepared starts:476→134,36→34,24→11 on69/77/149. On69, however,
+initialization consumes about2.086s of a250ms local allocation before the walk.
+The seed transport is private scaffolding, never a production thread-local API.
+R1032 seals both prototypes and freezes an old-header/old-library initialization
+harness before the next overlay
+(`b22bbd2a96181a40a65e1d26954bae6290cfdb1819d8ee9af3fe337dc8f21fc2`).
+
+Core469baa27 indexes unary bound sources in one pass instead of variable×source
+rescans. Initialization SAT probes stop at the first violated atom instead of
+computing a complete normalized score. Source/variable order and the first
+combined midpoint stay unchanged. Bracket extraction and probe loops now check
+the existing local/global deadline; cheap statistics reset on every call.
+A200-variable coupled test checks exact witnesses, scan/probe counts, reversed
+variable order and repeated calls. R1033 qualifies manifest SHA-256
+`adbc83fe9fc6771133b2eec7bda558c9cc4184fd77230405dc7cc848eb5feaa7`,
+CLI638941b7, SVe398e33f, worker0935ff15;98 targeted cases/15610 assertions pass.
+All39 R1036 groups pass, including1857 unit cases/979070 assertions.
+
+R1038 compares identical harness source linked to frozen old/new native
+libraries, alternating order on the same leased physical CPU,60s/16GiB per arm.
+Both use a250ms local allocation and zero walking rounds. On constructed200-
+variable bounds plus a coupled product, initialization is102195→4515μs; on1217
+variables,4387397→28636μs. Every actual complete model replays SAT with both Z3
+and cvc5. This is an initialization-only result from two constructed inputs,
+not a Z3 timing comparison, fixed160 gain or whole-program QCP claim.
+R1034's12 fresh original-input triads still verify6 for both Xolver arms and11
+for Z3, PAR-2 721.600/721.652/159.215, no gains/losses/errors/unconfirmed inputs.
+Actual Xolver SAT witnesses all replay; the explicit Z3 root-object model
+boundary on148 remains. R1037 seals qualification, full acceptance, fair trials,
+profiles and these model checks
+(`537be04f6fca9bf2ff6ee491352732be38e2209435a59c5e590c4ea1b931cce0`).
+
+R1039/R1040 tests the LP-seeded prefix method with a separate one-second/
+one-million-work allocation on qualified469baa27. It does not change production
+budgets. All three20s profiles still time out:69 reaches50/167 parameters with
+8311 choices;77 remains37/80 after33366 choices;149 reaches70/70 attempted
+choices but never another complete-model check after its initial point. This
+rules out simply extending the20ms preparation allocation as a sufficient fix.
+R1041 seals this experiment
+(`11ee1bb997c920c0104cfa94464c066fcfa97d28abc78ffbee883282fef09a31`).
+See the [combined receipts](CANDIDATE_INITIALIZATION_PILOTS_20261031.json).
+
+The next evidence-backed algorithm target is chronological candidate backtracking
+without usable branch explanations. `searchBoundaryCandidates` receives only a
+boolean feasibility result; private simplex parameter bounds and substituted
+atom bounds currently share one dummy literal. Build a shared explained candidate
+search interface, with conservative parameter dependencies for each private
+linear premise and conflict, then test backjumping on these public gaps. Account
+for candidate-generation dependencies when exhausting a domain: the current
+simplex-derived candidate can depend on the entire active prefix. Do not treat
+finite sampled-domain exhaustion as an original UNSAT proof. Preserve unwind,
+withdrawal and exact original-model validation, and compare against independent
+finite-search/reference checks before accepting any improvement. Repeating the
+closed seed-only or budget-only probes is not the next step.
+
+Both cores are committed and source-qualified but remain unpromoted; this branch
+also retains earlier zero-gain experiments. Do not blindly merge the whole stack
+because the constructed initialization benchmark improves. If delivering the
+initialization fix alone, assemble a focused final diff on the existing development
+branch, retain frozen/history evidence and qualify that actual source before PR
+CI/merge. No extra branches/worktrees, no protected-set tuning, and no
+`validation/current-main.json` requirement. The last full160 reference remains100
+verified Xolver versus118 verified/125 raw Z3; both protected sets and a fresh
+multi-program original QCP comparison remain outstanding.
