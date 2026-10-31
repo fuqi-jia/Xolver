@@ -40,19 +40,27 @@ Older tables describe their own frozen versions and evidence boundaries.
 
 ## Current arithmetic and ASP continuation
 
-The shared polynomial linear refuter now closes over exact fixed-factor identities:
+[PR88](https://github.com/fuqi-jia/Xolver/pull/88), core `32d23ec3`, closes the
+shared real/integer polynomial linear refuter over exact fixed-factor identities:
 entailed `x = c` yields explained `x*y = c*y`. Only unconditional row definitions
-survive between checks; all conditional bounds and their transitive original
-premises are rebuilt after withdrawal. This applies to real and integer clients
-without using sampled model values or integer rounding. R1221/R1224 pass 95
-focused cases and all1893 unit cases /986870 assertions; both new tests fail
-under the same-layout old-algorithm counterfactual. R1226 seals a 12-case fair
-pilot: **5 baseline/7 candidate/8 verified Z3**, independently model-replayed
-SAT gains69 (timeout→19.410s) and146 (timeout→12.893s), no losses/opposites/invalid
-models. Four unconfirmed Z3 UNSATs remain excluded. Canonical source qualification,
-full acceptance, fresh fixed160 and PR/main CI remain pending; this is not a
-whole-suite score or superiority claim. See
-[the phase evidence](FIXED_FACTOR_MONOMIAL_STAGE_20261031.json).
+survive; every check replaces conditional bounds and expands their transitive
+original premises. No sampled model values or integer rounding justify facts.
+R1227 qualifies the canonical source and CLI/SV/worker/Python binaries; all39
+R1228 server groups pass, including1893 units /986870 assertions and31 Python
+API tests. The same-layout old algorithm fails both new focused tests.
+
+R1230 seals fresh fixed160: **101 baseline/103 candidate/118 verified Z3**
+(125 raw Z3 decisions). SAT gains69 (timeout→17.559s) and146 (timeout→16.265s)
+have independently replayed initial models; no losses, opposite verdicts or
+invalid models. Baseline/candidate each have2 unknowns; timeouts57/55. Verified
+PAR-2 is7390.501/7179.970/5398.871; the two gains explain most of the improvement,
+while other single-round timing changes are not an established general speedup.
+All160 original triads are budget-valid; no replacement is needed. Seven
+unconfirmed Z3 UNSATs stay excluded. Exact delivery-head PR CI and postmerge
+main CI remain required. Audit-document delivery updates need no extra server
+archive. See [the phase evidence](FIXED_FACTOR_MONOMIAL_STAGE_20261031.json).
+Both protected sets remain unused; Xolver has not surpassed Z3. The controlled
+current-kernel QCP comparison is running separately and supplies no score yet.
 
 PR87 is merged as main `f5e75646`; exact delivery `dd2e3510` passes both jobs of
 [PR CI41189844465](https://github.com/fuqi-jia/Xolver/actions/runs/41189844465).
