@@ -119,11 +119,11 @@ LiaSolver::assertedVarEqualityReason(SharedTermId a, SharedTermId b) const {
     SatLit loLit{}, upLit{};
     for (const auto& e : theoryTrail_) {
         if (e.isDiseq) continue;
-        const auto form = manager_.auxFormView(e.auxVar);
-        assert(form);
-        if (form->lhs.terms.size() != 2) continue;
-        const auto& t0 = form->lhs.terms[0];
-        const auto& t1 = form->lhs.terms[1];
+        if (!std::holds_alternative<LinearAtomPayload>(e.atom.payload)) continue;
+        const auto& payload = std::get<LinearAtomPayload>(e.atom.payload);
+        if (payload.lhs.terms.size() != 2) continue;
+        const auto& t0 = payload.lhs.terms[0];
+        const auto& t1 = payload.lhs.terms[1];
         if (t0.second == 0 || t0.second != -t1.second) continue;  // form c*x - c*y
         // Orient so that the form reads (na - nb) * c0.
         mpq_class c0;
@@ -132,8 +132,8 @@ LiaSolver::assertedVarEqualityReason(SharedTermId a, SharedTermId b) const {
         else continue;
         // payload: (form) rel rhs, asserted with polarity e.value. Effective
         // relation on the form value F = c0*(na-nb):
-        Relation rel = e.value ? e.relation : negateRelation(e.relation);
-        const mpq_class& rhs = form->rhs;
+        Relation rel = e.value ? payload.rel : negateRelation(payload.rel);
+        const mpq_class& rhs = payload.rhs.asRational();
         // Reduce to bounds on d = na - nb: F = c0*d, F rel rhs  ⟹  d rel' rhs/c0.
         mpq_class bnd = rhs / c0;
         bool flip = (c0 < 0);
@@ -309,19 +309,19 @@ LiaSolver::getDeducedSharedEqualities() {
         std::map<std::pair<std::string, std::string>, std::vector<TwoVarEntry>> twoVarIndex;
         for (const auto& e : theoryTrail_) {
             if (e.isDiseq) continue;
-            const auto form = manager_.auxFormView(e.auxVar);
-            assert(form);
-            if (form->lhs.terms.size() != 2) continue;
-            const auto& t0 = form->lhs.terms[0];
-            const auto& t1 = form->lhs.terms[1];
+            if (!std::holds_alternative<LinearAtomPayload>(e.atom.payload)) continue;
+            const auto& payload = std::get<LinearAtomPayload>(e.atom.payload);
+            if (payload.lhs.terms.size() != 2) continue;
+            const auto& t0 = payload.lhs.terms[0];
+            const auto& t1 = payload.lhs.terms[1];
             if (t0.second == 0 || t0.second != -t1.second) continue;
-            Relation rel = e.value ? e.relation : negateRelation(e.relation);
+            Relation rel = e.value ? payload.rel : negateRelation(payload.rel);
             std::string a = t0.first, b = t1.first;
             if (a > b) {
                 std::swap(a, b);
-                twoVarIndex[{a, b}].push_back({a, b, t1.second, rel, form->rhs, e.lit});
+                twoVarIndex[{a, b}].push_back({a, b, t1.second, rel, payload.rhs.asRational(), e.lit});
             } else {
-                twoVarIndex[{a, b}].push_back({a, b, t0.second, rel, form->rhs, e.lit});
+                twoVarIndex[{a, b}].push_back({a, b, t0.second, rel, payload.rhs.asRational(), e.lit});
             }
         }
 
@@ -403,12 +403,12 @@ LiaSolver::getDeducedSharedEqualities() {
         std::map<std::string, std::vector<std::pair<SharedTermId, SatLit>>> byForm;
         for (const auto& e : theoryTrail_) {
             if (e.isDiseq || !e.value) continue;
-            const auto form = manager_.auxFormView(e.auxVar);
-            assert(form);
-            if (e.relation != Relation::Eq) continue;
-            const auto& terms = form->lhs.terms;  // sorted by var name
+            if (!std::holds_alternative<LinearAtomPayload>(e.atom.payload)) continue;
+            const auto& p = std::get<LinearAtomPayload>(e.atom.payload);
+            if (p.rel != Relation::Eq) continue;
+            const auto& terms = p.lhs.terms;  // sorted by var name
             if (terms.size() < 2) continue;   // 2-var handled above; need >=2 here too
-            const mpq_class& rhs = form->rhs;
+            const mpq_class& rhs = p.rhs.asRational();
             for (size_t vi = 0; vi < terms.size(); ++vi) {
                 auto sit = nameToShared.find(terms[vi].first);
                 if (sit == nameToShared.end()) continue;   // v not shared
@@ -483,13 +483,13 @@ LiaSolver::deduceIndexEqualitiesByGaussian(const std::vector<SharedTermId>& idxT
     std::vector<Row> rows;
     for (const auto& e : theoryTrail_) {
         if (e.isDiseq || !e.value) continue;
-        const auto form = manager_.auxFormView(e.auxVar);
-        assert(form);
-        if (e.relation != Relation::Eq) continue;
+        if (!std::holds_alternative<LinearAtomPayload>(e.atom.payload)) continue;
+        const auto& p = std::get<LinearAtomPayload>(e.atom.payload);
+        if (p.rel != Relation::Eq) continue;
         Row r;
-        for (const auto& t : form->lhs.terms)
+        for (const auto& t : p.lhs.terms)
             if (t.second != 0) r.coeffs[coordOf(t.first)] += t.second;
-        const mpq_class& rhs = form->rhs;
+        const mpq_class& rhs = p.rhs.asRational();
         if (rhs != 0) r.coeffs[0] += -rhs;   // ONE coord
         for (auto it = r.coeffs.begin(); it != r.coeffs.end(); )
             (it->second == 0) ? it = r.coeffs.erase(it) : ++it;

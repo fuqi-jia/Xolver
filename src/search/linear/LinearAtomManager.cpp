@@ -77,17 +77,11 @@ int LinearAtomManager::getOrCreateAuxVar(GeneralSimplex& gs,
     return auxVar;
 }
 
-std::optional<LinearAtomManager::AuxFormView> LinearAtomManager::auxFormView(int aux) const {
-    const auto it = auxToForm_.find(aux);
-    if (it == auxToForm_.end()) return std::nullopt;
-    return AuxFormView{it->second.lhs, it->second.rhs};
-}
-
 bool LinearAtomManager::auxForm(int aux, LinearFormKey& lhsOut, mpq_class& rhsOut) const {
-    const auto form = auxFormView(aux);
-    if (!form) return false;
-    lhsOut = form->lhs;
-    rhsOut = form->rhs;
+    auto it = auxToForm_.find(aux);
+    if (it == auxToForm_.end()) return false;
+    lhsOut = it->second.lhs;
+    rhsOut = it->second.rhs;
     return true;
 }
 

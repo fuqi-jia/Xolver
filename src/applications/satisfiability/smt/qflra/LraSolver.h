@@ -3,7 +3,6 @@
 #include "search/arith/ArithSolverBase.h"
 #include "search/coordination/TheoryAtomRegistry.h"
 #include "search/linear/LinearAtomManager.h"
-#include "search/linear/LinearTrailEntry.h"
 #include "search/combination/SharedTermRegistry.h"
 #include "search/lra/GeneralSimplex.h"
 #include "search/lra/LraPropagationEngine.h"
@@ -88,11 +87,22 @@ private:
     // -------------------------------------------------------------------------
     // Incremental trail (Phase 1)
     // -------------------------------------------------------------------------
-    incremental::IndexedContext<LinearTrailEntry, LinearTrailKey> theoryTrail_;
+    struct LraTrailEntry {
+        int level;
+        SatLit lit;
+        TheoryAtomRecord atom;
+        bool value;
+        int auxVar = -1;  // pre-computed aux var for this linear form
+        bool isDiseq = false;
+    };
+    struct TrailKey {
+        SatVar operator()(const LraTrailEntry& entry) const { return entry.atom.satVar; }
+    };
+    incremental::IndexedContext<LraTrailEntry, TrailKey> theoryTrail_;
     size_t appliedCursor_ = 0;
     std::optional<TheoryCheckResult> pendingConflict_;
 
-    bool applyEntryToSimplex(const LinearTrailEntry& e);
+    bool applyEntryToSimplex(const LraTrailEntry& e);
 
     // -------------------------------------------------------------------------
     // Disequality handling
@@ -152,7 +162,6 @@ private:
     LraPropagationEngine propagationEngine_;
 
     struct ColumnForm {
-        ColumnForm(const LinearFormKey& form, const mpq_class& offset) : lhs(form), rhs(offset) {}
         LinearFormKey lhs;
         mpq_class rhs;
     };

@@ -98,7 +98,7 @@ void LraSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
     // LRA bounds are rational; an algebraic RHS never arises from inputs.
     const mpq_class& rhs = payload.rhs.asRational();
     int auxVar = manager_.getOrCreateAuxVar(gs_, payload.lhs, rhs);
-    columnForms_.try_emplace(auxVar, payload.lhs, rhs);
+    columnForms_[auxVar] = {payload.lhs, rhs};
     Relation effectiveRel = value ? payload.rel : negateRelation(payload.rel);
     bool isDiseq = (effectiveRel == Relation::Neq);
 
@@ -110,14 +110,12 @@ void LraSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
                 [&previous](const auto& d) { return d.lit == previous.lit; });
             activeDisequalities_.erase(it, activeDisequalities_.end());
         }
-        theoryTrail_.replace(*position, {level, assertedLit, atom.satVar, atom.exprId,
-            payload.rel, value, auxVar, isDiseq, false});
+        theoryTrail_.replace(*position, {level, assertedLit, atom, value, auxVar, isDiseq});
         if (isDiseq)
             activeDisequalities_.push_back({auxVar, payload.lhs, rhs, assertedLit, level});
         return;
     }
-    theoryTrail_.append({level, assertedLit, atom.satVar, atom.exprId,
-        payload.rel, value, auxVar, isDiseq, false});
+    theoryTrail_.append({level, assertedLit, atom, value, auxVar, isDiseq});
 
     if (isDiseq) {
         activeDisequalities_.push_back({auxVar, payload.lhs, rhs, assertedLit, level});
@@ -164,15 +162,16 @@ void LraSolver::onBacktrack(int level) {
     pendingConflict_.reset();
 }
 
-bool LraSolver::applyEntryToSimplex(const LinearTrailEntry& e) {
-    Relation effectiveRel = e.value ? e.relation : negateRelation(e.relation);
+bool LraSolver::applyEntryToSimplex(const LraTrailEntry& e) {
+    const auto& payload = std::get<LinearAtomPayload>(e.atom.payload);
+    Relation effectiveRel = e.value ? payload.rel : negateRelation(payload.rel);
 
     if (effectiveRel == Relation::Neq) {
         // Disequalities are handled after simplex check, not as bounds.
         return true;
     }
 
-    return manager_.assertBound(gs_, e.auxVar, e.relation, e.value, e.lit, e.level);
+    return manager_.assertBound(gs_, e.auxVar, payload.rel, e.value, e.lit, e.level);
 }
 
 std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
@@ -535,18 +534,18 @@ LraSolver::assertedVarEqualityReason(SharedTermId a, SharedTermId b) const {
     SatLit loLit{}, upLit{};
     for (const auto& e : theoryTrail_) {
         if (e.isDiseq) continue;
-        const auto form = manager_.auxFormView(e.auxVar);
-        assert(form);
-        if (form->lhs.terms.size() != 2) continue;
-        const auto& t0 = form->lhs.terms[0];
-        const auto& t1 = form->lhs.terms[1];
+        if (!std::holds_alternative<LinearAtomPayload>(e.atom.payload)) continue;
+        const auto& payload = std::get<LinearAtomPayload>(e.atom.payload);
+        if (payload.lhs.terms.size() != 2) continue;
+        const auto& t0 = payload.lhs.terms[0];
+        const auto& t1 = payload.lhs.terms[1];
         if (t0.second == 0 || t0.second != -t1.second) continue;
         mpq_class c0;
         if (t0.first == na && t1.first == nb)      c0 = t0.second;
         else if (t0.first == nb && t1.first == na) c0 = t1.second;
         else continue;
-        Relation rel = e.value ? e.relation : negateRelation(e.relation);
-        const mpq_class& rhs = form->rhs;
+        Relation rel = e.value ? payload.rel : negateRelation(payload.rel);
+        const mpq_class& rhs = payload.rhs.asRational();
         mpq_class bnd = rhs / c0;
         bool flip = (c0 < 0);
         auto addLower = [&](const mpq_class& v, SatLit lit) {
@@ -647,19 +646,19 @@ LraSolver::getDeducedSharedEqualities() {
     std::map<std::pair<std::string, std::string>, std::vector<TwoVarEntry>> twoVarIndex;
     for (const auto& e : theoryTrail_) {
         if (e.isDiseq) continue;
-        const auto form = manager_.auxFormView(e.auxVar);
-        assert(form);
-        if (form->lhs.terms.size() != 2) continue;
-        const auto& t0 = form->lhs.terms[0];
-        const auto& t1 = form->lhs.terms[1];
+        if (!std::holds_alternative<LinearAtomPayload>(e.atom.payload)) continue;
+        const auto& payload = std::get<LinearAtomPayload>(e.atom.payload);
+        if (payload.lhs.terms.size() != 2) continue;
+        const auto& t0 = payload.lhs.terms[0];
+        const auto& t1 = payload.lhs.terms[1];
         if (t0.second == 0 || t0.second != -t1.second) continue;
-        Relation rel = e.value ? e.relation : negateRelation(e.relation);
+        Relation rel = e.value ? payload.rel : negateRelation(payload.rel);
         std::string a = t0.first, b = t1.first;
         if (a > b) {
             std::swap(a, b);
-            twoVarIndex[{a, b}].push_back({a, b, t1.second, rel, form->rhs, e.lit});
+            twoVarIndex[{a, b}].push_back({a, b, t1.second, rel, payload.rhs.asRational(), e.lit});
         } else {
-            twoVarIndex[{a, b}].push_back({a, b, t0.second, rel, form->rhs, e.lit});
+            twoVarIndex[{a, b}].push_back({a, b, t0.second, rel, payload.rhs.asRational(), e.lit});
         }
     }
 
