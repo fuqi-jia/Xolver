@@ -29,6 +29,7 @@ struct CandidateChoices {
     // earlier choices stay fixed. Ordering may vary. Include the entire prefix
     // when a theory cannot explain how its propagated domain was generated.
     std::vector<size_t> dependencies;
+    bool completionPossible = false;
 };
 
 struct CandidatePropagation {
@@ -36,9 +37,12 @@ struct CandidatePropagation {
     // current values already make this branch infeasible; an empty conflict
     // rejects it independently of every choice.
     std::optional<std::vector<size_t>> conflict;
-    static CandidatePropagation accept() { return {}; }
+    bool completionPossible = false;
+    static CandidatePropagation accept(bool completionPossible = false) {
+        return {std::nullopt, completionPossible};
+    }
     static CandidatePropagation reject(std::vector<size_t> dependencies) {
-        return {std::move(dependencies)};
+        return {std::move(dependencies), false};
     }
 };
 
@@ -53,8 +57,10 @@ struct CandidateSearchStatistics {
 // even rejected/partially constructed choices without throwing. Every attempted
 // push gets a matching pop, including on success or an exception. Domain
 // exhaustion resolves rejected choices together with domain-generation reasons.
-// A failed final checker conservatively depends on the entire prefix. Failure
-// only exhausts these candidates; it proves nothing about an original theory.
+// A completion hint asks the checker to finish a feasible partial prefix; only
+// a successful check ends the search. A failed terminal checker conservatively
+// depends on the entire prefix. Failure only exhausts these candidates; it
+// proves nothing about an original theory.
 template <typename Candidates, typename Push, typename Pop, typename Complete>
 auto searchBoundaryCandidates(size_t count, Candidates&& candidates, Push&& push,
                               Pop&& pop, Complete&& complete,
@@ -112,6 +118,12 @@ auto searchBoundaryCandidates(size_t count, Candidates&& candidates, Push&& push
             if (frames.size() == active) {
                 auto choices = candidates(active);
                 choices.dependencies = normalize(std::move(choices.dependencies), active);
+                if (choices.completionPossible) {
+                    if (auto result = complete()) {
+                        unwind();
+                        return result;
+                    }
+                }
                 std::set<size_t> dependencies(choices.dependencies.begin(), choices.dependencies.end());
                 frames.push_back({std::move(choices), 0, std::move(dependencies)});
             }
@@ -129,6 +141,11 @@ auto searchBoundaryCandidates(size_t count, Candidates&& candidates, Push&& push
             if (result.conflict) {
                 ++stats.propagationConflicts;
                 if (!reject(std::move(*result.conflict))) break;
+            } else if (result.completionPossible && active < count) {
+                if (auto completed = complete()) {
+                    unwind();
+                    return completed;
+                }
             }
         }
     } catch (...) {

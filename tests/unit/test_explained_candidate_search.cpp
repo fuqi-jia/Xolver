@@ -1,9 +1,99 @@
 #include <doctest/doctest.h>
 #include "search/candidate/BoundaryCandidates.h"
+#include "search/candidate/CandidateDomains.h"
 #include <random>
 #include <stdexcept>
 
 using namespace xolver;
+
+TEST_CASE("explained candidates: checked partial completions unwind without filling unrelated choices") {
+    for (const bool generationHint : {false, true}) {
+        std::vector<int> prefix;
+        size_t pushes = 0, pops = 0, checks = 0;
+        const auto result = searchBoundaryCandidates(20,
+            [&](size_t depth) { return CandidateChoices<int>{{1}, {}, generationHint && depth == 1}; },
+            [&](size_t, int value) {
+                prefix.push_back(value);
+                ++pushes;
+                return CandidatePropagation::accept(!generationHint);
+            },
+            [&](size_t) { prefix.pop_back(); ++pops; },
+            [&]() -> std::optional<int> {
+                ++checks;
+                REQUIRE(prefix.size() == 1);
+                return 17;
+            });
+        REQUIRE(result.has_value());
+        CHECK(*result == 17);
+        CHECK(pushes == 1);
+        CHECK(pops == pushes);
+        CHECK(checks == 1);
+        CHECK(prefix.empty());
+    }
+}
+
+TEST_CASE("explained candidates: unsuccessful partial completion continues search and interruption unwinds") {
+    std::vector<int> prefix;
+    const auto result = searchBoundaryCandidates(2,
+        [](size_t) { return CandidateChoices<int>{{0, 1}, {}, true}; },
+        [&](size_t, int value) { prefix.push_back(value); return CandidatePropagation::accept(true); },
+        [&](size_t) { prefix.pop_back(); },
+        [&]() -> std::optional<std::vector<int>> {
+            if (prefix == std::vector<int>{1, 0}) return prefix;
+            return std::nullopt;
+        });
+    REQUIRE(result.has_value());
+    CHECK((*result == std::vector<int>{1, 0}));
+    CHECK(prefix.empty());
+    auto interrupted = [&]() {
+        return searchBoundaryCandidates(4,
+            [](size_t depth) { return CandidateChoices<int>{{1}, {}, depth == 1}; },
+            [&](size_t, int value) { prefix.push_back(value); return CandidatePropagation::accept(); },
+            [&](size_t) { prefix.pop_back(); },
+            []() -> std::optional<int> { throw std::runtime_error("partial checker interrupted"); });
+    };
+    CHECK_THROWS_AS(interrupted(), std::runtime_error);
+    CHECK(prefix.empty());
+}
+
+TEST_CASE("candidate domains: snapshots retain finite domains across refinement and owner destruction") {
+    auto tick = []() {};
+    const auto retained = [&]() {
+        CandidateDomains<std::string> pool({{"a"}, {"lower", "upper"}});
+        const auto first = pool.snapshot();
+        CHECK(pool.suggest(0, "b", tick));
+        CHECK_FALSE(pool.suggest(0, "a", tick));
+        CHECK_FALSE(pool.suggest(0, "b", tick));
+        CHECK((pool.snapshot().values(0) == std::vector<std::string>{"a"}));
+        CHECK(pool.refine(tick) == 1);
+        CHECK((first.values(0) == std::vector<std::string>{"a"}));
+        CHECK((pool.snapshot().values(0) == std::vector<std::string>{"a", "b"}));
+        CHECK(pool.refine(tick) == 0);
+        CHECK_THROWS_AS(pool.suggest(2, "c", tick), std::out_of_range);
+        return pool.snapshot();
+    }();
+    CHECK(retained.size() == 2);
+    CHECK((retained.values(0) == std::vector<std::string>{"a", "b"}));
+    CHECK((retained.values(1) == std::vector<std::string>{"lower", "upper"}));
+}
+
+TEST_CASE("candidate domains: interrupted refinement preserves publication and pending suggestions") {
+    CandidateDomains<int> pool({{0}, {1}});
+    auto tick = []() {};
+    REQUIRE(pool.suggest(0, 2, tick));
+    REQUIRE(pool.suggest(1, 3, tick));
+    const auto first = pool.snapshot();
+    int remaining = 3;
+    auto interrupt = [&]() { if (--remaining == 0) throw std::runtime_error("allocation exhausted"); };
+    CHECK_THROWS_AS(pool.refine(interrupt), std::runtime_error);
+    CHECK((pool.snapshot().values(0) == std::vector<int>{0}));
+    CHECK((pool.snapshot().values(1) == std::vector<int>{1}));
+    CHECK_FALSE(pool.suggest(0, 2, tick));
+    CHECK(pool.refine(tick) == 2);
+    CHECK((pool.snapshot().values(0) == std::vector<int>{0, 2}));
+    CHECK((pool.snapshot().values(1) == std::vector<int>{1, 3}));
+    CHECK((first.values(0) == std::vector<int>{0}));
+}
 
 TEST_CASE("explained candidates: resolve an exhausted domain and skip unrelated choices") {
     constexpr size_t count = 20;

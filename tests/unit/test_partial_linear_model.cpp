@@ -279,7 +279,7 @@ TEST_CASE("GeneralSimplex: local model-search deadline leaves ordinary feasibili
     CHECK((simplex.check() == GeneralSimplex::Result::Unsat));
 }
 
-TEST_CASE("partial linear model: private premise dependencies jump over irrelevant nonlinear parameters") {
+TEST_CASE("partial linear model: explained reasoning avoids enumerating unrelated nonlinear parameters") {
     auto kernel = createPolynomialKernel();
     const auto p = kernel->getOrCreateVar("choice");
     const auto pv = kernel->mkVar(p), one = kernel->mkOne();
@@ -312,10 +312,71 @@ TEST_CASE("partial linear model: private premise dependencies jump over irreleva
     CHECK(model->at(q) == 1);
     for (const auto var : independent)
         CHECK((model->at(var) == 0 || model->at(var) == 1));
-    CHECK(statistics.backjumps > 0);
-    CHECK(statistics.skippedLevels >= independent.size());
+    CHECK((statistics.backjumps > 0 || statistics.propagatedFacts > 0));
     CHECK(statistics.choices < 200);
     CHECK(statistics.explanationFallbacks == 0);
+}
+
+TEST_CASE("partial linear model: exact singleton chains are scoped to each call and domain") {
+    auto kernel = createPolynomialKernel();
+    const auto a = kernel->getOrCreateVar("a"), r = kernel->getOrCreateVar("r"),
+               b = kernel->getOrCreateVar("b"), c = kernel->getOrCreateVar("c");
+    const auto av = kernel->mkVar(a), rv = kernel->mkVar(r), bv = kernel->mkVar(b), cv = kernel->mkVar(c);
+    std::vector<PartialLinearModelSearch::Constraint> constraints{
+        {kernel->sub(av, kernel->mkOne()), Relation::Eq},
+        {kernel->sub(kernel->mul(av, rv), kernel->mkOne()), Relation::Eq},
+        {kernel->sub(kernel->mul(bv, rv), kernel->mkConst(2)), Relation::Eq},
+        {kernel->sub(kernel->mul(cv, rv), kernel->mkConst(3)), Relation::Eq},
+        {rv, Relation::Gt}
+    };
+    for (const int anchor : {1, 2, 1}) {
+        constraints[0].poly = kernel->sub(av, kernel->mkConst(anchor));
+        PartialLinearModelSearch::Statistics stats;
+        const auto model = PartialLinearModelSearch::trySolve(constraints, *kernel, false, &stats);
+        REQUIRE(model.has_value());
+        CHECK(model->at(a) == anchor);
+        CHECK(model->at(r) == mpq_class(1, anchor));
+        CHECK(model->at(b) == 2 * anchor);
+        CHECK(model->at(c) == 3 * anchor);
+        CHECK(stats.choices == 0);
+        CHECK(stats.propagatedFacts >= 3);
+        CHECK_FALSE(stats.exhausted);
+        for (const auto& constraint : constraints) {
+            const int sign = kernel->sgnVarId(constraint.poly, *model);
+            CHECK((constraint.rel == Relation::Eq ? sign == 0 : sign > 0));
+        }
+        const auto integral = PartialLinearModelSearch::trySolve(constraints, *kernel, true);
+        CHECK(integral.has_value() == (anchor == 1));
+    }
+}
+
+TEST_CASE("partial linear model: substitution combines cancelling nonlinear residual monomials") {
+    auto kernel = createPolynomialKernel();
+    const auto r = kernel->getOrCreateVar("r"), u = kernel->getOrCreateVar("u"), b = kernel->getOrCreateVar("b");
+    const auto rv = kernel->mkVar(r), uv = kernel->mkVar(u), bv = kernel->mkVar(b);
+    const auto residual = kernel->add(kernel->mul(kernel->sub(rv, kernel->mkOne()), kernel->pow(uv, 2)),
+                                      kernel->sub(bv, kernel->mkConst(2)));
+    const std::vector<PartialLinearModelSearch::Constraint> constraints{
+        {kernel->sub(rv, kernel->mkOne()), Relation::Eq}, {residual, Relation::Eq},
+        {kernel->sub(kernel->pow(bv, 2), kernel->mkConst(4)), Relation::Eq}, {bv, Relation::Gt}
+    };
+    PartialLinearModelSearch::Statistics stats;
+    const auto model = PartialLinearModelSearch::trySolve(constraints, *kernel, false, &stats);
+    REQUIRE(model.has_value());
+    CHECK(model->at(r) == 1);
+    CHECK(model->at(b) == 2);
+    CHECK(stats.choices == 0);
+    CHECK(stats.maxActiveAtoms == constraints.size());
+    for (const auto& constraint : constraints) {
+        const int sign = kernel->sgnVarId(constraint.poly, *model);
+        CHECK((constraint.rel == Relation::Eq ? sign == 0 : sign > 0));
+    }
+    for (const auto allocation : {PartialLinearModelSearch::Allocation(std::chrono::milliseconds(0)),
+                                  PartialLinearModelSearch::Allocation(std::chrono::milliseconds(1000), 1)}) {
+        CHECK_FALSE(PartialLinearModelSearch::trySolve(constraints, *kernel, false, &stats, allocation));
+        CHECK(stats.exhausted);
+    }
+    CHECK(PartialLinearModelSearch::trySolve(constraints, *kernel).has_value());
 }
 
 TEST_CASE("partial linear model: explained substitution and withdrawal preserve independent Boolean witnesses") {

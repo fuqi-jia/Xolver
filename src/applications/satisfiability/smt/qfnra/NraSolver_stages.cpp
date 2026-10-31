@@ -67,8 +67,10 @@ std::optional<TheoryCheckResult> NraSolver::stagePartialLinearModel(
             << " definitions=" << stats.definitions << " models=" << stats.modelChecks
             << " backjumps=" << stats.backjumps << " skipped=" << stats.skippedLevels
             << " explanation_fallbacks=" << stats.explanationFallbacks
-            << " dependent_domains=" << stats.dependentDomains
-            << " fixed_domains=" << stats.fixedDomains
+            << " propagated_facts=" << stats.propagatedFacts
+            << " propagation_rounds=" << stats.propagationRounds
+            << " max_active=" << stats.maxActiveAtoms
+            << " refinements=" << stats.refinements
             << " depth=" << stats.maxDepth << " exhausted=" << stats.exhausted
             << " found=" << bool(model) << " us="
             << std::chrono::duration_cast<std::chrono::microseconds>(

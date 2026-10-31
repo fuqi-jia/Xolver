@@ -1,5 +1,6 @@
 #include "search/candidate/PartialLinearModelSearch.h"
 #include "search/candidate/BoundaryCandidates.h"
+#include "search/candidate/CandidateDomains.h"
 #include "search/candidate/WeightedGreedyCover.h"
 #include "search/lra/GeneralSimplex.h"
 #include "base/WorkBudget.h"
@@ -44,13 +45,20 @@ void tighten(std::optional<Endpoint>& current, Endpoint next, bool lower) {
 
 std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolve(
     const std::vector<Constraint>& constraints, PolynomialKernel& kernel, bool integerDomain,
-    Statistics* statistics) {
+    Statistics* statistics, Allocation allocation) {
     Statistics local;
     auto& stats = statistics ? *statistics : local;
     stats = {};
     try {
-        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(20);
-        WorkBudget budget(100000);
+        if (allocation.time <= std::chrono::milliseconds::zero()) {
+            stats.exhausted = true;
+            return std::nullopt;
+        }
+        auto deadline = std::chrono::steady_clock::now() + allocation.time;
+        if (wall::hasDeadline())
+            deadline = std::min(deadline, std::chrono::steady_clock::now() +
+                std::chrono::milliseconds(wall::remainingMs()));
+        WorkBudget budget(allocation.work);
         auto tick = [&]() {
             budget.tick();
             if ((budget.used() & 63) == 0 && std::chrono::steady_clock::now() >= deadline)
@@ -62,7 +70,7 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
         std::vector<Powers> monomials;
         std::set<VarId> variables;
         std::map<VarId, Interval> intervals;
-        std::map<VarId, size_t> equalityOccurrences, otherOccurrences;
+        std::set<VarId> equalityVariables;
         for (const auto& c : constraints) {
             tick();
             if (c.poly == NullPoly) return std::nullopt;
@@ -94,11 +102,8 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
                     coefficient += term.coefficient;
                 } else linearUnary = false;
             }
-            auto& occurrences = c.rel == Relation::Eq ? equalityOccurrences : otherOccurrences;
-            for (const auto var : support) {
-                tick();
-                ++occurrences[var];
-            }
+            if (c.rel == Relation::Eq)
+                for (const auto var : support) { tick(); equalityVariables.insert(var); }
             if (linearUnary && unary != NullVar && coefficient != 0 && c.rel != Relation::Neq) {
                 const auto relation = coefficient < 0 ? flip(c.rel) : c.rel;
                 const mpq_class value = -constant / coefficient;
@@ -113,55 +118,51 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
         if (monomials.empty()) return std::nullopt;
         stats.variables = variables.size();
 
-        // Keep a jointly affine block of equality unknowns. Pinning a shared
-        // unknown instead samples a finite grid on an exact equality surface:
-        // a*r=1, b*r=2, c*r=3 with fixed a,b,c need not have a sampled r.
-        // Include inequalities in the incidence relation too, so no remaining
-        // atom can contain a product of two retained unknowns. A power above
-        // one always makes its variable a parameter.
+        // Resolve fixed unary domains before choosing the nonlinear cover.
+        // Hard-retaining high-occurrence equality variables can leave a much
+        // larger sampled block and hide useful joint linear completion.
         std::map<VarId, std::vector<size_t>> incidence;
-        std::set<VarId> powers;
         for (size_t index = 0; index < monomials.size(); ++index)
             for (const auto& [var, exponent] : monomials[index]) {
                 tick();
+                (void)exponent;
                 incidence[var].push_back(index);
-                if (exponent > 1) powers.insert(var);
             }
-        std::vector<VarId> equalityUnknowns;
-        for (const auto& [var, count] : equalityOccurrences) {
-            tick();
-            (void)count;
-            if (incidence.contains(var) && !powers.contains(var)) equalityUnknowns.push_back(var);
-        }
-        std::sort(equalityUnknowns.begin(), equalityUnknowns.end(), [&](VarId a, VarId b) {
-            if (equalityOccurrences[a] != equalityOccurrences[b])
-                return equalityOccurrences[a] > equalityOccurrences[b];
-            if (otherOccurrences[a] != otherOccurrences[b])
-                return otherOccurrences[a] < otherOccurrences[b];
-            return a < b;
-        });
         std::set<VarId> retained;
-        std::vector<bool> occupied(monomials.size(), false);
-        for (const auto var : equalityUnknowns) {
-            bool conflict = false;
+        // Singleton domains cost no search branch. Eliminate their incidence
+        // first, then minimize the remaining sampled block by weighted cover.
+        auto remainingMonomials = monomials;
+        std::vector<VarId> parameters;
+        for (const auto& [var, bounds] : intervals) {
+            tick();
+            if (!bounds.lower || !bounds.upper || bounds.lower->strict || bounds.upper->strict ||
+                bounds.lower->value != bounds.upper->value || !incidence.contains(var)) continue;
+            bool needed = false;
             for (const auto index : incidence.at(var)) {
                 tick();
-                if (occupied[index]) { conflict = true; break; }
+                size_t degree = 0;
+                for (const auto& [variable, exponent] : remainingMonomials[index]) {
+                    (void)variable;
+                    degree += exponent;
+                }
+                needed |= degree > 1;
             }
-            if (conflict) continue;
-            retained.insert(var);
+            if (!needed) continue;
+            parameters.push_back(var);
             for (const auto index : incidence.at(var)) {
                 tick();
-                occupied[index] = true;
+                auto& monomial = remainingMonomials[index];
+                if (bounds.lower->value == 0) monomial.clear();
+                else std::erase_if(monomial, [&](const auto& power) { return power.first == var; });
             }
         }
-        stats.retainedEqualityVariables = retained.size();
-
-        // A deterministic greedy cover leaves at most one degree-one variable
-        // in every monomial. Its complement can then be completed by simplex.
-        auto cover = greedyWeightedCover(monomials, retained, tick);
+        auto cover = greedyWeightedCover(remainingMonomials, retained, tick);
         if (!cover) return std::nullopt;
-        const auto& parameters = *cover;
+        parameters.insert(parameters.end(), cover->begin(), cover->end());
+        const std::set<VarId> sampled(parameters.begin(), parameters.end());
+        for (const auto variable : equalityVariables)
+            if (incidence.contains(variable) && !sampled.contains(variable)) retained.insert(variable);
+        stats.retainedEqualityVariables = retained.size();
         stats.parameters = parameters.size();
 
         // Convert endpoints to the client's domain. Open real endpoints are
@@ -226,12 +227,18 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
             return simplex.assertLower(column, bound, level) &&
                    simplex.assertUpper(column, bound, level);
         };
-        Model selected;
+        Model selected, implied;
+        std::map<VarId, std::vector<size_t>> impliedReasons;
+        auto known = [&](VarId var) { return selected.contains(var) || implied.contains(var); };
+        auto valueOf = [&](VarId var) -> const mpq_class& {
+            if (selected.contains(var)) return selected.at(var);
+            return implied.at(var);
+        };
         std::map<VarId, std::map<int, mpq_class>> selectedPowers;
         auto power = [&](VarId var, int exponent) -> mpq_class {
             auto& cache = selectedPowers[var];
             if (auto it = cache.find(exponent); it != cache.end()) return it->second;
-            const auto& value = selected.at(var);
+            const auto& value = valueOf(var);
             mpq_class result;
             if (exponent == 1 || value == 0 || value == 1) result = value;
             else if (value == -1) result = exponent % 2 ? -1 : 1;
@@ -252,15 +259,21 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
         using Row = std::vector<std::pair<int, mpq_class>>;
         std::map<std::pair<Row, mpq_class>, int> definitions;
         std::vector<bool> active(atoms.size(), false);
-        std::vector<std::vector<size_t>> atomParameters(atoms.size()), atomDependencies(atoms.size());
+        size_t activeCount = 0;
+        std::vector<std::vector<size_t>> atomDependencies(atoms.size());
         std::optional<std::vector<size_t>> directConflict;
         std::vector<std::vector<size_t>> introduced(parameters.size() + 1);
-        std::vector<std::vector<size_t>> affected(parameters.size());
         std::map<VarId, size_t> parameterDepth;
         for (size_t depth = 0; depth < parameters.size(); ++depth) {
             tick();
             parameterDepth.emplace(parameters[depth], depth);
         }
+        std::map<VarId, std::vector<size_t>> variableAtoms;
+        auto knowledgeDependencies = [&](VarId var) {
+            if (impliedReasons.contains(var) && (!selected.contains(var) || selected.at(var) == implied.at(var)))
+                return impliedReasons.at(var);
+            return std::vector<size_t>{parameterDepth.at(var)};
+        };
         std::vector<size_t> all;
         for (size_t index = 0; index < atoms.size(); ++index) {
             tick();
@@ -274,10 +287,7 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
                 }
             for (const auto var : support) {
                 tick();
-                if (const auto it = parameterDepth.find(var); it != parameterDepth.end()) {
-                    affected[it->second].push_back(index);
-                    atomParameters[index].push_back(it->second);
-                }
+                variableAtoms[var].push_back(index);
             }
         }
         auto fullPrefix = [&]() {
@@ -322,16 +332,34 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
                 std::map<int, mpq_class> coefficients;
                 mpq_class constant = 0;
                 bool affine = true;
+                std::set<size_t> rowDependencies;
+                std::map<Powers, mpq_class> residual;
                 for (const auto& term : atoms[index]) {
                     tick();
                     mpq_class coefficient(term.coefficient);
                     Powers remaining;
+                    std::set<size_t> termDependencies;
                     for (const auto& [var, exponent] : term.powers) {
                         tick();
                         if (coefficient == 0) break;
-                        if (selected.contains(var)) coefficient *= power(var, exponent);
-                        else remaining.emplace_back(var, exponent);
+                        if (known(var)) {
+                            const auto dependencies = knowledgeDependencies(var);
+                            if (valueOf(var) == 0) {
+                                coefficient = 0;
+                                termDependencies.clear();
+                                termDependencies.insert(dependencies.begin(), dependencies.end());
+                            } else {
+                                coefficient *= power(var, exponent);
+                                termDependencies.insert(dependencies.begin(), dependencies.end());
+                            }
+                        } else remaining.emplace_back(var, exponent);
                     }
+                    rowDependencies.insert(termDependencies.begin(), termDependencies.end());
+                    if (coefficient == 0) continue;
+                    residual[remaining] += coefficient;
+                }
+                for (const auto& [remaining, coefficient] : residual) {
+                    tick();
                     if (coefficient == 0) continue;
                     if (remaining.empty()) constant += coefficient;
                     else if (remaining.size() == 1 && remaining[0].second == 1)
@@ -340,13 +368,11 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
                 }
                 if (!affine) continue;
                 active[index] = true;
+                ++activeCount;
+                stats.maxActiveAtoms = std::max(stats.maxActiveAtoms, activeCount);
                 introduced[level].push_back(index);
                 auto& dependencies = atomDependencies[index];
-                dependencies.clear();
-                for (const auto depth : atomParameters[index]) {
-                    tick();
-                    if (selected.contains(parameters[depth])) dependencies.push_back(depth);
-                }
+                dependencies.assign(rowDependencies.begin(), rowDependencies.end());
                 const auto reason = SatLit::positive(static_cast<SatVar>(parameters.size() + index + 1));
                 Row row;
                 for (const auto& [column, coefficient] : coefficients)
@@ -402,9 +428,51 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
             }
             return point;
         };
+        auto propagateFixed = [&](int level) {
+            for (;;) {
+                tick();
+                ++stats.propagationRounds;
+                if (check() != GeneralSimplex::Result::Sat)
+                    return CandidatePropagation::reject(conflictDependencies());
+                const auto facts = simplex.sharedFixedValueAnalysis();
+                std::set<size_t> affectedAtoms;
+                for (const auto& [var, column] : columns) {
+                    tick();
+                    if (known(var)) continue;
+                    const auto value = facts->fixedValue(column);
+                    if (!value || value->b != 0) continue;
+                    const auto proof = facts->prove(column);
+                    if (!proof) throw ResourceExhausted("missing local singleton explanation");
+                    implied.emplace(var, value->a);
+                    impliedReasons.emplace(var, premiseDependencies(proof->second));
+                    selectedPowers.erase(var);
+                    ++stats.propagatedFacts;
+                    const auto& indices = variableAtoms.at(var);
+                    affectedAtoms.insert(indices.begin(), indices.end());
+                }
+                if (affectedAtoms.empty()) break;
+                directConflict.reset();
+                if (!activate(std::vector<size_t>(affectedAtoms.begin(), affectedAtoms.end()), level)) {
+                    if (directConflict) return CandidatePropagation::reject(*directConflict);
+                    return CandidatePropagation::reject(conflictDependencies());
+                }
+            }
+            return CandidatePropagation::accept(activeCount == atoms.size());
+        };
         if (auto point = complete()) return point;
+        const auto rootProgress = propagateFixed(0);
+        if (rootProgress.conflict) return std::nullopt;
+        if (rootProgress.completionPossible)
+            if (auto point = complete()) return point;
 
-        auto candidates = [&](size_t depth) {
+        Model rootAnchor;
+        const auto rootDelta = simplex.computeSafeDelta();
+        for (const auto& [var, column] : columns) {
+            tick();
+            const auto value = simplex.value(column);
+            rootAnchor.emplace(var, mpq_class(value.a + value.b * rootDelta));
+        }
+        auto buildValues = [&](size_t depth) {
             tick();
             std::vector<mpq_class> values;
             // A retained child assignment can violate its parent's bounds.
@@ -429,19 +497,8 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
             if (b.lower && !b.lower->strict) lower = b.lower->value;
             if (b.upper && !b.upper->strict) upper = b.upper->value;
             for (const auto& endpoint : boundaryCandidates(lower, upper)) add(endpoint);
-            const auto column = columns.at(var);
-            const auto fixed = simplex.proveFixedValue(column);
+            addRounded(rootAnchor.at(var));
             std::vector<size_t> dependencies;
-            if (fixed && fixed->first.b == 0) {
-                addRounded(fixed->first.a);
-                dependencies = premiseDependencies(fixed->second);
-                ++stats.fixedDomains;
-            } else {
-                const auto current = simplex.value(column);
-                addRounded(mpq_class(current.a + current.b * simplex.computeSafeDelta()));
-                ++stats.dependentDomains;
-                dependencies = fullPrefix();
-            }
             if (b.lower && b.upper) addRounded(mpq_class((b.lower->value + b.upper->value) / 2));
             for (const int seed : {0, 1, -1}) {
                 mpq_class q = seed;
@@ -449,27 +506,53 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
                 if (b.lower && q <= b.lower->value) q = b.lower->value + (b.lower->strict ? 1 : 0);
                 add(q);
             }
-            // A sampled point may change after unrelated prefix choices even
-            // when it happens to duplicate a static endpoint now. Only a
-            // certified rational fixed value justifies narrower dependencies.
+            // This domain is frozen before any prefix choice of this pass.
             return CandidateChoices<mpq_class>{std::move(values), std::move(dependencies)};
+        };
+        std::vector<std::vector<mpq_class>> seeds(parameters.size());
+        for (size_t depth = 0; depth < parameters.size(); ++depth)
+            seeds[depth] = buildValues(depth).values;
+        CandidateDomains<mpq_class> domains(std::move(seeds));
+        auto pass = domains.snapshot();
+        auto candidates = [&](size_t depth) {
+            tick();
+            auto propagated = propagateFixed(static_cast<int>(depth));
+            if (propagated.conflict) return CandidateChoices<mpq_class>{{}, std::move(*propagated.conflict)};
+            const auto var = parameters[depth];
+            const auto current = simplex.value(columns.at(var));
+            const mpq_class value = current.a + current.b * simplex.computeSafeDelta();
+            auto suggest = [&](const mpq_class& q) {
+                tick();
+                if (admissible(var, q)) domains.suggest(depth, q, tick);
+            };
+            if (!integerDomain) suggest(value);
+            else {
+                mpz_class floor, ceil;
+                mpz_fdiv_q(floor.get_mpz_t(), value.get_num().get_mpz_t(), value.get_den().get_mpz_t());
+                mpz_cdiv_q(ceil.get_mpz_t(), value.get_num().get_mpz_t(), value.get_den().get_mpz_t());
+                suggest(mpq_class(floor)); suggest(mpq_class(ceil));
+            }
+            return CandidateChoices<mpq_class>{pass.values(depth), {}, propagated.completionPossible};
         };
         auto apply = [&](size_t depth, const mpq_class& value) {
             tick();
             const int level = static_cast<int>(depth) + 1;
-            selected[parameters[depth]] = value;
+            const auto var = parameters[depth];
+            selected[var] = value;
+            if (implied.contains(var) && implied.at(var) != value) {
+                auto dependencies = impliedReasons.at(var);
+                dependencies.push_back(depth);
+                return CandidatePropagation::reject(std::move(dependencies));
+            }
             directConflict.reset();
-            if (!fix(columns.at(parameters[depth]), value, depth))
+            if (!fix(columns.at(var), value, depth) || check() != GeneralSimplex::Result::Sat)
                 return CandidatePropagation::reject(conflictDependencies());
-            if (!activate(affected[depth], level)) {
-                // A constant violation is explained directly; a failed bound
-                // assertion carries the simplex's currently active reasons.
+            if (!activate(variableAtoms.at(var), level)) {
                 if (directConflict) return CandidatePropagation::reject(*directConflict);
                 return CandidatePropagation::reject(conflictDependencies());
             }
-            if (check() != GeneralSimplex::Result::Sat)
-                return CandidatePropagation::reject(conflictDependencies());
-            return CandidatePropagation::accept();
+            auto propagated = propagateFixed(level);
+            return propagated;
         };
         auto push = [&](size_t depth, const mpq_class& value) {
             ++stats.choices;
@@ -482,21 +565,30 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
             simplex.backtrackToLevel(static_cast<int>(depth), GeneralSimplex::AssignmentPolicy::Preserve);
             for (auto index : introduced[depth + 1]) {
                 active[index] = false;
+                --activeCount;
                 atomDependencies[index].clear();
             }
             introduced[depth + 1].clear();
             selected.erase(parameters[depth]);
-            selectedPowers.erase(parameters[depth]);
+            implied.clear();
+            impliedReasons.clear();
+            selectedPowers.clear();
         };
         CandidateSearchStatistics traversal;
         auto recordTraversal = [&]() {
-            stats.backjumps = traversal.backjumps;
-            stats.skippedLevels = traversal.skippedLevels;
+            stats.backjumps += traversal.backjumps;
+            stats.skippedLevels += traversal.skippedLevels;
+            traversal = {};
         };
         try {
-            auto result = searchBoundaryCandidates(parameters.size(), candidates, push, pop, complete, &traversal);
-            recordTraversal();
-            return result;
+            for (;;) {
+                pass = domains.snapshot();
+                auto result = searchBoundaryCandidates(parameters.size(), candidates, push, pop, complete, &traversal);
+                recordTraversal();
+                if (result) return result;
+                if (!domains.refine(tick)) return std::nullopt;
+                ++stats.refinements;
+            }
         } catch (...) {
             recordTraversal();
             throw;
