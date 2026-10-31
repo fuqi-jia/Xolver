@@ -214,9 +214,14 @@ void CandidateModelSearch::deriveAppValues(
     // Unconstrained apps keep their current (default) value. cvc5/z3 model
     // construction: derive, don't enumerate.
     for (int iter = 0; iter < 8; ++iter) {
+        if (std::chrono::steady_clock::now() >= deadline_) return;
         bool changed = false;
         std::map<std::pair<std::string, std::vector<std::string>>, mpq_class> table;
         auto argsOf = [&](const VarRecord& v, std::vector<std::string>& out) -> bool {
+            // Derivation can update full between applications. Only arguments
+            // of this application share an immutable assignment.
+            evalMemo_.clear();
+            if (std::chrono::steady_clock::now() >= deadline_) return false;
             const auto& node = ir_.get(v.exprId);
             for (ExprId c : node.children) {
                 TermResult cr = evalTermTop(c, full);
@@ -250,6 +255,11 @@ void CandidateModelSearch::deriveAppValues(
 bool CandidateModelSearch::functionallyConsistent(
     const std::unordered_map<std::string, mpq_class>& full) const
 {
+    // Start one immutable-assignment evaluation scope. Assertion checks and
+    // function-table export below keep this assignment and can reuse its DAG.
+    // Every new candidate, including candidates without UF applications,
+    // passes here before any assertion can be accepted.
+    evalMemo_.clear();
     // For each function symbol, two applications with equal argument-value
     // tuples must carry equal slot values.
     std::unordered_map<std::string,
@@ -560,9 +570,8 @@ bool CandidateModelSearch::tryAcceptCandidate(
     const std::unordered_map<std::string, mpq_class>& partial,
     const std::string& strategyName)
 {
-    if (++totalCandidatesTried_ % 32 == 0) {
-        if (std::chrono::steady_clock::now() > deadline_) return false;
-    }
+    ++totalCandidatesTried_;
+    if (std::chrono::steady_clock::now() >= deadline_) return false;
     // Extend to all variables.
     std::unordered_map<std::string, mpq_class> full = partial;
     for (const auto& v : vars_) {
@@ -745,6 +754,7 @@ CandidateModelSearch::evaluateAssertions(
 {
     bool anyIndeterminate = false;
     for (ExprId aid : assertionRoots()) {
+        if (std::chrono::steady_clock::now() >= deadline_) return EvalVerdict::Indeterminate;
         TermResult tr = evalTermTop(aid, assignment);
         if (tr.kind == TermVerdict::Indeterminate) {
             anyIndeterminate = true;
@@ -764,11 +774,16 @@ CandidateModelSearch::TermResult CandidateModelSearch::evalTermTop(
     // its parent, so the recursive evalTerm below resolves each child from the
     // memo (recursion bounded to depth 1). evalTerm is pure, so pre-evaluating
     // children the recursion would short-circuit (And/Or/Ite) is harmless.
-    evalMemo_.clear();
+    // The caller owns the assignment scope: derivation clears between
+    // mutations; functional consistency starts the final immutable scope.
+    if (auto found = evalMemo_.find(root); found != evalMemo_.end()) return found->second;
+    if (std::chrono::steady_clock::now() >= deadline_) return {};
     struct Frame { ExprId eid; bool processed; };
     std::vector<Frame> stack;
     stack.push_back({root, false});
+    size_t work = 0;
     while (!stack.empty()) {
+        if ((++work & 0x3FFu) == 0 && std::chrono::steady_clock::now() >= deadline_) return {};
         Frame& fr = stack.back();
         ExprId eid = fr.eid;
         if (eid >= ir_.size() || evalMemo_.find(eid) != evalMemo_.end()) { stack.pop_back(); continue; }

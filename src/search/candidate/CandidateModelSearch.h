@@ -182,7 +182,9 @@ private:
         ExprId eid,
         const std::unordered_map<std::string, mpq_class>& assignment) const;
     // Memo populated by evalTermTop's pre-pass; consulted at evalTerm's entry.
-    // Keyed by ExprId, valid only within one assignment (cleared per top call).
+    // Keyed by ExprId within one candidate assignment. UF derivation clears
+    // before evaluating changed bindings; functional consistency starts the
+    // immutable scope reused by assertion checks and function-table export.
     mutable std::unordered_map<ExprId, TermResult> evalMemo_;
 
     bool detectSymmetry() const;

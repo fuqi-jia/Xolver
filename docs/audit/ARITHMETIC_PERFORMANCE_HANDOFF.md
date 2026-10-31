@@ -3455,9 +3455,64 @@ The immediate next step is to qualify the committed cover-diversity and
 unsupported-operand fixes together on Panda1, freeze the actual final binaries,
 then repeat full acceptance and a fresh fair160 comparison. Do not promote a
 partial-pilot gain or attribute51's timing reversal without further evidence.
-The ongoing original GCD Xolver/Z3 runs `native_gcd_*_r1071-20261031095116`
-have accepted annotation/VC checking and group proofs in progress on the earlier
-frozen d80fb40b worker; they do not yet establish completed program verification
-or qualify a later kernel. Final program-set comparison, both protected sets,
+The original GCD Xolver/Z3 runs `native_gcd_*_r1071-20261031095116` subsequently
+completed all nine original VCs and passed fresh canonical final checks. R1084
+authenticates 296 actual native calls per backend (174 SAT/122 UNSAT), 70 unique
+independently checked formulas, and one persistent solver process each. This
+uses the earlier frozen d80fb40b worker and does not qualify a later kernel.
+The proof scripts differ, and no VC is recorded as discharged by the external
+SMT post-generation checker; Coq proves the original goals. Native backend
+coverage and complete program verification are separately established. Final program-set comparison, both protected sets,
 PR CI and postmerge main CI remain outstanding. No extra branch/worktree or
 `validation/current-main.json` archive is required.
+
+
+### Cover diversity accepted; candidate evaluation reuse is the next stage
+
+PR83 merges source65c9cb8c as main `d3b767af`. Exact-head CI41162240789
+passes proof-gate and build-test. The main push CI41164344182 is running;
+confirm its terminal result before reporting postmerge CI green. R1085 binds
+the actual source manifest (`8240f2b4cbaaf1898caa87b8f333bc0d93fdbc67872957099d36ef8c380f72a4`)
+to CLI `b9f3e3ff68ba8acf5de5a2b5d050b56de88ed71d9a43304c5cbb066cf2367041`,
+SV373a3655 and worker a889508b. All39 R1087 native acceptance groups pass,
+including1873 unit cases/986585 assertions and original-model differentials.
+
+The fresh fixed160 round verifies **100 baseline /102 candidate /117 Z3**
+(124 raw Z3). Verified PAR-2 is7510.892/7304.941/5485.340. All solves use
+60s/one leased physical CPU/16GiB and initial model capture.149 improves from
+a baseline timeout to0.166s SAT;158 is restored to about0.067s.51 is also a
+candidate-only solve this round (28.293s), but its earlier reversals remain a
+timing-sensitivity boundary. There are no lost solves, opposite verdicts or
+invalid exported models. Seven unconfirmed Z3 UNSATs12/24/27/42/80/114/159
+remain excluded.47 is a Z3 timeout this round: the historical125-raw reference
+must not replace the fresh124-raw observation.
+
+Two initial R1086 triads,42/89, suffered later foreign fuzzer occupation of
+their leased CPUs. Actual wall-budget violations were617.720s and639.671s;
+both original jobs terminate failed and remain preserved. R1094 repeats only
+those two COMPLETE triads on newly leased CPUs, with identical frozen binaries
+and valid60s budgets. The158 other valid original triads are retained unchanged.
+No solver-specific result or fastest timing is selected. R1090 checks the actual
+initial Z3 models on108/122 with both Z3 and cvc5;47 has no current SAT model
+and is explicitly skipped. Same-input offline truth50/94 and a fresh checked
+certificate115 affect eligibility only. R1089 seals all39 groups, the160 valid
+triads, excluded infrastructure failures and these truth boundaries:
+`b64f30a4e19d6a6211d6242769ea78ffb51fcdce73a37f3b3e97fd47d38abd55`.
+The final version remains below Z3. Both protected sets remain unused.
+
+R1091 samples public integer gaps47/108/122.47 spends substantial time in
+CandidateModelSearch and repeated NativeTerms materialization;108/122 also
+spend time in eager bit-blast and Boolean search. The next small general fix
+keeps an evaluation memo for one immutable candidate assignment across all
+assertions, invalidates when UF derivation changes assignments, and observes
+the deadline during iterative DAG traversal. The candidate remains SAT-only.
+Private R1092 passes55 selected cases/230 assertions, including assignment
+changes, contradictory shared roots and nested UF derivation. Its identical
+4096-depth/512-root constructed DAG improves2.31713s→0.00777564s; the integer
+witness positively replays with both independent checkers. R1095's three20s
+original-gap profiles ALL still time out. This establishes a local shared-DAG
+improvement and a deadline fix, not an original-input solving gain. Qualify the
+actual committed implementation, run full acceptance and a fresh full160 round
+before considering its merge. Do not repeat the same three profiles as evidence
+of a new gain. A final-kernel original multi-program QCP comparison and both
+independent protected sets remain required for the full goal.
