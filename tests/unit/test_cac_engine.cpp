@@ -180,11 +180,78 @@ TEST_CASE("CAC engine: unsatCore non-empty + in-range on a 2-var UNSAT") {
 }
 
 // ---- Early infeasibility probe (Track 1 #39) -------------------------------
-// every constraint whose mainLevel ≤ current level; a definite-nonzero violation
-// excludes the cell on var without recursing. Soundness: SAT unchanged (the
-// probe only PRUNES); UNSAT verdict matches the baseline; signAt = Zero
-// (nullification) is NOT treated as a violation, it falls through to the
-// existing characterize / Lazard-residual path.
+// Every fully assigned false atom excludes its certified truth cell before
+// recursion. Zero and nullification use original atom truth, never the sign of
+// a Lazard residual. An unsupported optional probe leaves the normal path intact.
+
+TEST_CASE("CAC engine: prefix conflicts avoid unused search dimensions") {
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend backend(kernel.get());
+    const VarId x = kernel->getOrCreateVar("x");
+    const VarId y = kernel->getOrCreateVar("y");
+    const VarId z = kernel->getOrCreateVar("z");
+    auto lower = RationalPolynomial::fromVar(x, 1, 1);
+    lower.addConstant(-5); lower.normalize();
+    auto upper = RationalPolynomial::fromVar(x, 1, 1);
+    upper.addConstant(1); upper.normalize();
+    CacEngine::Config cfg;
+    cfg.maxNodes = 1;
+    CacEngine engine(&backend, kernel.get(), {x, y, z},
+        {{lower, Relation::Gt}, {upper, Relation::Lt}}, cfg);
+    const auto result = engine.solve();
+    REQUIRE(result.status == CacStatus::Unsat);
+    CHECK(result.unsatCore == std::vector<size_t>{0, 1});
+    CHECK(engine.unsatCertified());
+    CHECK(engine.maxDepthReached() == 0);
+}
+
+TEST_CASE("CAC engine: prefix pruning preserves strict zero boundary models") {
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend backend(kernel.get());
+    const VarId x = kernel->getOrCreateVar("x");
+    const VarId y = kernel->getOrCreateVar("y");
+    auto positive = RationalPolynomial::fromVar(x, 1, 1);
+    auto bound = RationalPolynomial::fromVar(y, 2, 1);
+    bound.addConstant(-1); bound.normalize();
+    CacEngine::Config cfg;
+    cfg.maxNodes = 2;
+    CacEngine engine(&backend, kernel.get(), {x, y},
+        {{positive, Relation::Gt}, {bound, Relation::Lt}}, cfg);
+    const auto result = engine.solve();
+    REQUIRE(result.status == CacStatus::Sat);
+    CHECK(result.model.varOrder == std::vector<VarId>{x, y});
+    const auto p = positive.toPrimitiveInteger(*kernel);
+    const auto b = bound.toPrimitiveInteger(*kernel);
+    REQUIRE(p.ok()); REQUIRE(b.ok());
+    CHECK(backend.signAt(p.poly, result.model) == Sign::Pos);
+    CHECK(backend.signAt(b.poly, result.model) == Sign::Neg);
+    CHECK(engine.maxDepthReached() == 1);
+}
+
+TEST_CASE("CAC engine: prefix nullification excludes a false original atom") {
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend backend(kernel.get());
+    const VarId x = kernel->getOrCreateVar("x");
+    const VarId y = kernel->getOrCreateVar("y");
+    const VarId z = kernel->getOrCreateVar("z");
+    const auto xx = RationalPolynomial::fromVar(x, 1, 1);
+    auto product = xx * RationalPolynomial::fromVar(y, 1, 1);
+    product.normalize();
+    for (bool nonzeroConstant : {false, true}) {
+        auto atom = product;
+        if (nonzeroConstant) atom.addConstant(-1);
+        atom.normalize();
+        CacEngine::Config cfg;
+        cfg.maxNodes = 2;
+        CacEngine engine(&backend, kernel.get(), {x, y, z},
+            {{xx, Relation::Eq}, {atom, Relation::Gt}}, cfg);
+        const auto result = engine.solve();
+        REQUIRE(result.status == CacStatus::Unsat);
+        CHECK(result.unsatCore == std::vector<size_t>{0, 1});
+        CHECK(engine.unsatCertified());
+        CHECK(engine.maxDepthReached() == 1);
+    }
+}
 
 TEST_CASE("CAC engine: early-infeas preserves UNSAT verdict + core (2-var)") {
     auto kernel = createPolynomialKernel();

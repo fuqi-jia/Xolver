@@ -25,6 +25,7 @@ class LibpolyBackend;
 //   get_unsat_cover(i, s):                       # s assigns varOrder[0..i-1]
 //     while x_i = covering.sampleUncovered():
 //       s' = s ∪ {x_i}
+//       if a fully assigned atom is false: exclude its exact truth cell;
 //       if i == last: if all constraints hold at s' -> SAT(s');
 //                     else exclude the cell delineated by the violated polys.
 //       else:         (sat?, O) = get_unsat_cover(i+1, s'); if sat -> SAT;
