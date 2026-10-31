@@ -190,6 +190,19 @@ SquarefreeResult gcdTwo(const RationalPolynomial& a, const RationalPolynomial& b
 
 }  // namespace
 
+SquarefreeResult commonFactorWrt(const RationalPolynomial& a,
+                                const RationalPolynomial& b, VarId v,
+                                PolynomialKernel* kernel) {
+    if (kernel) {
+        auto result = gcdTwo(a, b, kernel);
+        if (result.complete) result.poly = normalizeUpToUnit(result.poly);
+        return result;
+    }
+    auto result = GcdEngine::gcdCandidateBySubresultant(a, b, v);
+    if (!result.exact) return {RationalPolynomial::fromConstant(mpq_class(1)), false};
+    return {normalizeUpToUnit(result.gcd), true};
+}
+
 SquarefreeResult contentWrt(const RationalPolynomial& p, VarId v, PolynomialKernel* kernel) {
     if (p.isZero()) return {RationalPolynomial::fromConstant(mpq_class(0)), true};
 

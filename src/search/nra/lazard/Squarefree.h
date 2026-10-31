@@ -42,4 +42,11 @@ SquarefreeResult primitivePartWrt(const RationalPolynomial& p, VarId v,
 SquarefreeResult squarefreePartWrt(const RationalPolynomial& p, VarId v,
                                    PolynomialKernel* kernel = nullptr);
 
+// Exact common-factor refinement for projection bases. The kernel path uses
+// the guarded multivariate gcd; the reference path eliminates the explicit v.
+// Any proposed nonconstant factor is verified by exact division before use.
+SquarefreeResult commonFactorWrt(const RationalPolynomial& a,
+                                const RationalPolynomial& b, VarId v,
+                                PolynomialKernel* kernel = nullptr);
+
 }  // namespace xolver

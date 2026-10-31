@@ -223,6 +223,34 @@ input model/independent checks remain pending. See
 [the root-cause observation](CAC_DUPLICATE_INPUT_PROBE_20261101.json).
 Both protected sets remain unread and unused.
 
+The unit-only input deduplication qualifies in R1322:284 focused cases/44805
+assertions, the complete1904-case native suite and31 Python API tests pass.
+R1323 has eight budget-valid original-input triads with no new/lost solve;
+original106 is budget-invalid and excluded. This preliminary experiment does
+not justify promotion or another full160 run. No replacement is required to
+claim a negative incomplete pilot; the invalid original remains preserved.
+
+R1324 instead reproduces a correctness defect in the shared CAC projection.
+With real b,c in [3,4], x(x-b)<0 and x(x-c)>0 is SAT at b=4,c=3,x=7/2, but the
+direct engine returns UNSAT. The same error occurs over [1,2]; adding the entailed
+b>c makes both native controls SAT. Projection claims completeness while emitting
+only two lower polynomials, neither vanishing at b=c>0. Both original/grounded
+formulas are independently SAT with Z3/cvc5. Frozen main and candidate CLIs
+return SAT through other routes, so this is an engine defect rather than a
+claimed end-to-end CLI wrong verdict. See
+[the exact reproduction](CAC_SHARED_FACTOR_API_REPRO_20261101.json).
+
+The shared Lazard operator now refines zero-resultant pairs by guarded exact gcd
+and verified polynomial quotients, yielding a pairwise-coprime squarefree basis.
+Stable factor identities reuse resultants through refinement; total active
+elimination degree strictly decreases. Common-factor and quotient provenance
+retain both parents. This serves CAC, global Lazard closure and the shared
+projection policy, preserves original signed constraints, and adds the missing
+b=c boundary. Native before/after proof, independent witness checks, performance
+and complete acceptance remain pending. Continue in PR92. Both protected sets
+remain unread and unused.
+
+
 
 [PR88](https://github.com/fuqi-jia/Xolver/pull/88), core `32d23ec3`, closes the
 shared real/integer polynomial linear refuter over exact fixed-factor identities:

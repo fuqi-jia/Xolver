@@ -11,7 +11,7 @@ class PolynomialKernel;
 
 // Lazard projection — provenance + incompleteness types (shared with the
 // closure; see LAZARD.md [H7]). The Lazard projection set for eliminating v
-// over a primitive squarefree basis {f} is:
+// over a primitive, pairwise-coprime squarefree basis {f} is:
 //   per f (deg_v f >= 1): LeadingCoefficient_v(f), TrailingCoefficient_v(f),
 //                          Discriminant_v(f) = res_v(f, f');
 //   per input p:          non-constant Content_v(p);
@@ -27,6 +27,8 @@ enum class LazardProjectionOpKind : uint8_t {
     TrailingCoefficient,   // tc_v(parent1)
     Discriminant,          // res_v(parent1, parent1')   (psc_0 of (f, f'))
     Resultant,             // res_v(parent1, parent2)     (psc_0 of (f, g))
+    CommonFactor,          // verified gcd(parent1, parent2), up to a rational unit
+    ExactQuotient,         // verified parent1 / parent2, up to a rational unit
 };
 
 enum class LazardIncompleteReason : uint8_t {
@@ -73,6 +75,8 @@ struct LazardOpResult {
 };
 
 // Single Lazard elimination step over E (polynomials with mainVar == v).
+// Refine squarefree inputs into a pairwise-coprime basis before projection.
+// Exact gcd and quotient items record this refinement before their dependents.
 // `incomplete` (complete == false) means an exact squarefree/gcd step or a psc
 // submatrix exceeded budget — caller MUST treat the closure as incomplete.
 //

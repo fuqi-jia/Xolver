@@ -49,6 +49,26 @@ TEST_CASE("CAC engine: 1-var UNSAT x^2 < 0") {
     CHECK(eng.solve().status == CacStatus::Unsat);
 }
 
+TEST_CASE("CAC engine: shared-factor projection preserves feasible parameter root order") {
+    for (int lower : {1, 3}) {
+        auto kernel = createPolynomialKernel();
+        LibpolyBackend backend(kernel.get());
+        const VarId b = kernel->getOrCreateVar("b"), c = kernel->getOrCreateVar("c");
+        const VarId x = kernel->getOrCreateVar("x");
+        const auto bv = RationalPolynomial::fromVar(b, 1, 1);
+        const auto cv = RationalPolynomial::fromVar(c, 1, 1);
+        const auto xv = RationalPolynomial::fromVar(x, 1, 1);
+        const auto p = xv * (xv - bv), q = xv * (xv - cv);
+        CacEngine::Config config;
+        config.deadlineMillis = 2000;
+        CacEngine engine(&backend, kernel.get(), {b, c, x}, {
+            {bv + K(-lower), Relation::Geq}, {bv + K(-lower-1), Relation::Leq},
+            {cv + K(-lower), Relation::Geq}, {cv + K(-lower-1), Relation::Leq},
+            {p, Relation::Lt}, {q, Relation::Gt}}, config);
+        CHECK(engine.solve().status == CacStatus::Sat);
+    }
+}
+
 TEST_CASE("CAC engine: 1-var UNSAT  x>2 and x<1") {
     auto kernel = createPolynomialKernel();
     LibpolyBackend backend(kernel.get());

@@ -1,0 +1,396 @@
+{
+  "schema": "xolver-cac-shared-factor-api-reproduction/1",
+  "experiment": "5cf726f0c9f8",
+  "run": "2bf3ae47307d",
+  "original_record_sha256": "8c4e0445dd2382cdd5f7fa0c88657625257149455d0113baffd679ab09c90803",
+  "record": {
+    "qualification_sha256": "b17fb1381c608902d527e7a7456cb0397c5842097aa2db0411eca1ad10e1087e",
+    "source_manifest_sha256": "320a1a48329799fbc4530362ab94e653e53d2ef18aac74e8f8a884db461fc1d2",
+    "probe_source_sha256": "53d1ea9c6f7e18e538a9d9e585a1d9e411a8d79a40e1952f65384072b851d9db",
+    "probe_binary_sha256": "2ae9095b21905f65da27aebb168647755e579359ca7473e0b5dfa3f9187a5e4c",
+    "compile_command": [
+      "/usr/bin/c++",
+      "-DXOLVER_ENABLE_PROOFS",
+      "-DXOLVER_HAS_CADICAL",
+      "-DXOLVER_HAS_LIBPOLY",
+      "-DXOLVER_VERSION_MAJOR=0",
+      "-DXOLVER_VERSION_MINOR=1",
+      "-DXOLVER_VERSION_PATCH=0",
+      "-DXOLVER_WITH_CUDA=0",
+      "-DXOLVER_WITH_DASK=0",
+      "-DXOLVER_WITH_HIP=0",
+      "-DXOLVER_WITH_MPI=0",
+      "-DXOLVER_WITH_OPENACC=0",
+      "-DXOLVER_WITH_SPARK=0",
+      "-I/pub/data/jiafq/xolver/src",
+      "-I/pub/data/jiafq/xolver/include",
+      "-I/pub/data/jiafq/xolver/third_party/libpoly/include",
+      "-I/pub/data/jiafq/xolver/third_party/SOMTParser/include",
+      "-I/pub/data/jiafq/xolver/dependencies/doctest",
+      "-isystem",
+      "/pub/data/jiafq/xolver/dependencies/native/include",
+      "-isystem",
+      "/pub/data/jiafq/xolver/dependencies/json/include",
+      "-isystem",
+      "/pub/data/jiafq/xolver/third_party/cadical/src",
+      "-O3",
+      "-DNDEBUG",
+      "-std=c++20",
+      "-fPIE",
+      "-Wall",
+      "-Wextra",
+      "-Wpedantic",
+      "-Wno-unused-parameter",
+      "-O3",
+      "-c",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/shared-factor-probe-r1324.cpp",
+      "-o",
+      "/pub/data/jiafq/xolver/build/diagnostics/shared-factor-r1324.o"
+    ],
+    "link_command": [
+      "/usr/bin/c++",
+      "/pub/data/jiafq/xolver/build/diagnostics/shared-factor-r1324.o",
+      "-O3",
+      "-DNDEBUG",
+      "-o",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/shared-factor-probe-r1324/probe",
+      "../src/libxolver_core.a",
+      "/pub/data/jiafq/xolver/dependencies/native/lib/libgmp.a",
+      "-lgmpxx",
+      "../third_party/SOMTParser/libsomtparser.a",
+      "/pub/data/jiafq/xolver/dependencies/native/lib/libgmpxx.a",
+      "/pub/data/jiafq/xolver/dependencies/native/lib/libmpfr.a",
+      "/pub/data/jiafq/xolver/dependencies/native/lib/libgmp.a",
+      "../third_party/cadical-build/libcadical.a",
+      "../third_party/libpoly/src/libpolyxx.a",
+      "../third_party/libpoly/src/libpoly.a",
+      "/pub/data/jiafq/xolver/dependencies/native/lib/libmpfr.a",
+      "/pub/data/jiafq/xolver/dependencies/native/lib/libgmp.a"
+    ],
+    "observed": {
+      "range_1_order_0": "unsat ",
+      "range_1_order_1": "sat ",
+      "range_3_order_0": "unsat ",
+      "range_3_order_1": "sat ",
+      "projection_complete": "1",
+      "projection_size": "2",
+      "vanishing_at_equal_positive": "0"
+    },
+    "opposite_api_verdicts": [
+      "range_1_order_0",
+      "range_3_order_0"
+    ],
+    "cli_observations": [
+      {
+        "lower": 1,
+        "solver": "main",
+        "result": "sat",
+        "timing": {
+          "seconds": 0.06618602201342583,
+          "launch_seconds": 0.0020645838230848312,
+          "wait_seconds": 0.064121438190341,
+          "returncode": 0,
+          "timeout_notified_seconds": null,
+          "cleanup_seconds": null,
+          "timed_out": false,
+          "budget_overrun": false
+        },
+        "command": [
+          "prlimit",
+          "--as=17179869184",
+          "--cpu=62:63",
+          "--",
+          "/pub/data/jiafq/xolver/validation/arithmetic-r103/reset-contract-r1311/xolver",
+          "solve",
+          "/pub/data/jiafq/xolver/validation/arithmetic-r103/shared-factor-probe-r1324/range-1.smt2",
+          "--timeout",
+          "60"
+        ],
+        "binary_sha256": "0fe81f47d37fa97c0f3f4cbaa515d36a36bbad4200f9a07f55cbcacc41e6b184",
+        "input_sha256": "a24fdbc5bd979819ba0daeac6541421ad88435140e04945f3650dcb898411147",
+        "stdout_sha256": "d9dbf94b05b8314af9ca7f2034e92685c33447917605a7243b1099c693a12e5e"
+      },
+      {
+        "lower": 1,
+        "solver": "candidate",
+        "result": "sat",
+        "timing": {
+          "seconds": 0.0656592920422554,
+          "launch_seconds": 0.0021560117602348328,
+          "wait_seconds": 0.06350328028202057,
+          "returncode": 0,
+          "timeout_notified_seconds": null,
+          "cleanup_seconds": null,
+          "timed_out": false,
+          "budget_overrun": false
+        },
+        "command": [
+          "prlimit",
+          "--as=17179869184",
+          "--cpu=62:63",
+          "--",
+          "/pub/data/jiafq/xolver/validation/arithmetic-r103/cac-input-dedup-r1322/xolver",
+          "solve",
+          "/pub/data/jiafq/xolver/validation/arithmetic-r103/shared-factor-probe-r1324/range-1.smt2",
+          "--timeout",
+          "60"
+        ],
+        "binary_sha256": "3c3769488aef990ea04f92056f48b1ab465464510126331829ec93b2ed0bd45b",
+        "input_sha256": "a24fdbc5bd979819ba0daeac6541421ad88435140e04945f3650dcb898411147",
+        "stdout_sha256": "d9dbf94b05b8314af9ca7f2034e92685c33447917605a7243b1099c693a12e5e"
+      },
+      {
+        "lower": 1,
+        "solver": "z3",
+        "result": "sat",
+        "timing": {
+          "seconds": 0.03368373215198517,
+          "launch_seconds": 0.0022797510027885437,
+          "wait_seconds": 0.031403981149196625,
+          "returncode": 0,
+          "timeout_notified_seconds": null,
+          "cleanup_seconds": null,
+          "timed_out": false,
+          "budget_overrun": false
+        },
+        "command": [
+          "prlimit",
+          "--as=17179869184",
+          "--cpu=62:63",
+          "--",
+          "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+          "-T:60",
+          "/pub/data/jiafq/xolver/validation/arithmetic-r103/shared-factor-probe-r1324/range-1.smt2"
+        ],
+        "binary_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+        "input_sha256": "a24fdbc5bd979819ba0daeac6541421ad88435140e04945f3650dcb898411147",
+        "stdout_sha256": "d9dbf94b05b8314af9ca7f2034e92685c33447917605a7243b1099c693a12e5e"
+      },
+      {
+        "lower": 1,
+        "solver": "cvc5",
+        "result": "sat",
+        "timing": {
+          "seconds": 0.01808089390397072,
+          "launch_seconds": 0.002727227285504341,
+          "wait_seconds": 0.015353666618466377,
+          "returncode": 0,
+          "timeout_notified_seconds": null,
+          "cleanup_seconds": null,
+          "timed_out": false,
+          "budget_overrun": false
+        },
+        "command": [
+          "prlimit",
+          "--as=17179869184",
+          "--cpu=62:63",
+          "--",
+          "/pub/data/jiafq/xolver/dependencies/oracles/cvc5",
+          "--lang=smt2",
+          "--tlimit=60000",
+          "/pub/data/jiafq/xolver/validation/arithmetic-r103/shared-factor-probe-r1324/range-1.smt2"
+        ],
+        "binary_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+        "input_sha256": "a24fdbc5bd979819ba0daeac6541421ad88435140e04945f3650dcb898411147",
+        "stdout_sha256": "d9dbf94b05b8314af9ca7f2034e92685c33447917605a7243b1099c693a12e5e"
+      },
+      {
+        "lower": 3,
+        "solver": "main",
+        "result": "sat",
+        "timing": {
+          "seconds": 0.06601822935044765,
+          "launch_seconds": 0.0021561384201049805,
+          "wait_seconds": 0.06386209093034267,
+          "returncode": 0,
+          "timeout_notified_seconds": null,
+          "cleanup_seconds": null,
+          "timed_out": false,
+          "budget_overrun": false
+        },
+        "command": [
+          "prlimit",
+          "--as=17179869184",
+          "--cpu=62:63",
+          "--",
+          "/pub/data/jiafq/xolver/validation/arithmetic-r103/reset-contract-r1311/xolver",
+          "solve",
+          "/pub/data/jiafq/xolver/validation/arithmetic-r103/shared-factor-probe-r1324/range-3.smt2",
+          "--timeout",
+          "60"
+        ],
+        "binary_sha256": "0fe81f47d37fa97c0f3f4cbaa515d36a36bbad4200f9a07f55cbcacc41e6b184",
+        "input_sha256": "ccc5502e7d7db6735fc100bb7d5756c0b635383747ec1d94ea4bff04681d1bee",
+        "stdout_sha256": "d9dbf94b05b8314af9ca7f2034e92685c33447917605a7243b1099c693a12e5e"
+      },
+      {
+        "lower": 3,
+        "solver": "candidate",
+        "result": "sat",
+        "timing": {
+          "seconds": 0.06617197580635548,
+          "launch_seconds": 0.002673724666237831,
+          "wait_seconds": 0.06349825114011765,
+          "returncode": 0,
+          "timeout_notified_seconds": null,
+          "cleanup_seconds": null,
+          "timed_out": false,
+          "budget_overrun": false
+        },
+        "command": [
+          "prlimit",
+          "--as=17179869184",
+          "--cpu=62:63",
+          "--",
+          "/pub/data/jiafq/xolver/validation/arithmetic-r103/cac-input-dedup-r1322/xolver",
+          "solve",
+          "/pub/data/jiafq/xolver/validation/arithmetic-r103/shared-factor-probe-r1324/range-3.smt2",
+          "--timeout",
+          "60"
+        ],
+        "binary_sha256": "3c3769488aef990ea04f92056f48b1ab465464510126331829ec93b2ed0bd45b",
+        "input_sha256": "ccc5502e7d7db6735fc100bb7d5756c0b635383747ec1d94ea4bff04681d1bee",
+        "stdout_sha256": "d9dbf94b05b8314af9ca7f2034e92685c33447917605a7243b1099c693a12e5e"
+      },
+      {
+        "lower": 3,
+        "solver": "z3",
+        "result": "sat",
+        "timing": {
+          "seconds": 0.03349348343908787,
+          "launch_seconds": 0.001976657658815384,
+          "wait_seconds": 0.031516825780272484,
+          "returncode": 0,
+          "timeout_notified_seconds": null,
+          "cleanup_seconds": null,
+          "timed_out": false,
+          "budget_overrun": false
+        },
+        "command": [
+          "prlimit",
+          "--as=17179869184",
+          "--cpu=62:63",
+          "--",
+          "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+          "-T:60",
+          "/pub/data/jiafq/xolver/validation/arithmetic-r103/shared-factor-probe-r1324/range-3.smt2"
+        ],
+        "binary_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+        "input_sha256": "ccc5502e7d7db6735fc100bb7d5756c0b635383747ec1d94ea4bff04681d1bee",
+        "stdout_sha256": "d9dbf94b05b8314af9ca7f2034e92685c33447917605a7243b1099c693a12e5e"
+      },
+      {
+        "lower": 3,
+        "solver": "cvc5",
+        "result": "sat",
+        "timing": {
+          "seconds": 0.03422154299914837,
+          "launch_seconds": 0.0027742497622966766,
+          "wait_seconds": 0.03144729323685169,
+          "returncode": 0,
+          "timeout_notified_seconds": null,
+          "cleanup_seconds": null,
+          "timed_out": false,
+          "budget_overrun": false
+        },
+        "command": [
+          "prlimit",
+          "--as=17179869184",
+          "--cpu=62:63",
+          "--",
+          "/pub/data/jiafq/xolver/dependencies/oracles/cvc5",
+          "--lang=smt2",
+          "--tlimit=60000",
+          "/pub/data/jiafq/xolver/validation/arithmetic-r103/shared-factor-probe-r1324/range-3.smt2"
+        ],
+        "binary_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+        "input_sha256": "ccc5502e7d7db6735fc100bb7d5756c0b635383747ec1d94ea4bff04681d1bee",
+        "stdout_sha256": "d9dbf94b05b8314af9ca7f2034e92685c33447917605a7243b1099c693a12e5e"
+      }
+    ],
+    "independent_witnesses": [
+      {
+        "lower": 1,
+        "oracle": "z3",
+        "result": "sat",
+        "timing": {
+          "seconds": 0.03428053297102451,
+          "launch_seconds": 0.0028613638132810593,
+          "wait_seconds": 0.031419169157743454,
+          "returncode": 0,
+          "timeout_notified_seconds": null,
+          "cleanup_seconds": null,
+          "timed_out": false,
+          "budget_overrun": false
+        },
+        "input_sha256": "a24fdbc5bd979819ba0daeac6541421ad88435140e04945f3650dcb898411147",
+        "witness_sha256": "dda030d7629141d704aaa986b5ac7f19cd6fca48d53cda50fd164621fcca9425",
+        "oracle_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      },
+      {
+        "lower": 1,
+        "oracle": "cvc5",
+        "result": "sat",
+        "timing": {
+          "seconds": 0.010014671832323074,
+          "launch_seconds": 0.0027367137372493744,
+          "wait_seconds": 0.0072779580950737,
+          "returncode": 0,
+          "timeout_notified_seconds": null,
+          "cleanup_seconds": null,
+          "timed_out": false,
+          "budget_overrun": false
+        },
+        "input_sha256": "a24fdbc5bd979819ba0daeac6541421ad88435140e04945f3650dcb898411147",
+        "witness_sha256": "dda030d7629141d704aaa986b5ac7f19cd6fca48d53cda50fd164621fcca9425",
+        "oracle_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102"
+      },
+      {
+        "lower": 3,
+        "oracle": "z3",
+        "result": "sat",
+        "timing": {
+          "seconds": 0.03409799560904503,
+          "launch_seconds": 0.0026888400316238403,
+          "wait_seconds": 0.03140915557742119,
+          "returncode": 0,
+          "timeout_notified_seconds": null,
+          "cleanup_seconds": null,
+          "timed_out": false,
+          "budget_overrun": false
+        },
+        "input_sha256": "ccc5502e7d7db6735fc100bb7d5756c0b635383747ec1d94ea4bff04681d1bee",
+        "witness_sha256": "b37cbc7aa46a2b893131d7719791f45b41e76f912160b0400beab623996f1bbf",
+        "oracle_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      },
+      {
+        "lower": 3,
+        "oracle": "cvc5",
+        "result": "sat",
+        "timing": {
+          "seconds": 0.017776796594262123,
+          "launch_seconds": 0.002157917246222496,
+          "wait_seconds": 0.015618879348039627,
+          "returncode": 0,
+          "timeout_notified_seconds": null,
+          "cleanup_seconds": null,
+          "timed_out": false,
+          "budget_overrun": false
+        },
+        "input_sha256": "ccc5502e7d7db6735fc100bb7d5756c0b635383747ec1d94ea4bff04681d1bee",
+        "witness_sha256": "b37cbc7aa46a2b893131d7719791f45b41e76f912160b0400beab623996f1bbf",
+        "oracle_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102"
+      }
+    ],
+    "protected_sets_used": false,
+    "boundary": "Constructed shared-factor correctness diagnosis, not a performance score. All four direct CAC inputs are SAT; b=lower+1,c=lower,x=lower+1/2 is a witness. Independent Z3/cvc5 check original and grounded formulas. Direct engine and frozen CLI outcomes are reported separately. No canonical source, core archive or unit binary changes; no header/object ABI mixing."
+  },
+  "source": "#include \"search/nra/cac/CacEngine.h\"\n#include \"search/nra/cac/SingleCellProjection.h\"\n#include \"search/nra/backend/LibpolyBackend.h\"\n#include \"algebra/poly/PolynomialKernel.h\"\n#include <iostream>\nusing namespace xolver;\n\nstatic const char* status(CacStatus s) {\n    return s == CacStatus::Sat ? \"sat\" : s == CacStatus::Unsat ? \"unsat\" : \"unknown\";\n}\nstatic RationalPolynomial linear(VarId v, int constant) {\n    auto p = RationalPolynomial::fromVar(v, 1, 1);\n    p.addConstant(constant); p.normalize(); return p;\n}\nint main() {\n    for (int lower : {1, 3}) {\n        for (bool explicitOrder : {false, true}) {\n            auto kernel = createPolynomialKernel();\n            LibpolyBackend backend(kernel.get());\n            const VarId b = kernel->getOrCreateVar(\"b\");\n            const VarId c = kernel->getOrCreateVar(\"c\");\n            const VarId x = kernel->getOrCreateVar(\"x\");\n            const auto xx = RationalPolynomial::fromVar(x, 1, 1);\n            auto p = xx * (xx - RationalPolynomial::fromVar(b, 1, 1));\n            auto q = xx * (xx - RationalPolynomial::fromVar(c, 1, 1));\n            p.normalize(); q.normalize();\n            std::vector<CacConstraint> constraints{\n                {linear(b, -lower), Relation::Geq},\n                {linear(b, -lower-1), Relation::Leq},\n                {linear(c, -lower), Relation::Geq},\n                {linear(c, -lower-1), Relation::Leq},\n                {p, Relation::Lt}, {q, Relation::Gt}};\n            if (explicitOrder) {\n                auto order = RationalPolynomial::fromVar(b, 1, 1)\n                    - RationalPolynomial::fromVar(c, 1, 1);\n                order.normalize();\n                constraints.push_back({order, Relation::Gt});\n            }\n            CacEngine::Config cfg; cfg.deadlineMillis = 2000;\n            CacEngine engine(&backend, kernel.get(), {b, c, x}, constraints, cfg);\n            const auto result = engine.solve();\n            std::cout << \"range_\" << lower << \"_order_\" << explicitOrder << ' '\n                      << status(result.status) << ' ' << engine.lastUnknown() << '\\n';\n        }\n    }\n    auto kernel = createPolynomialKernel();\n    const VarId b = kernel->getOrCreateVar(\"b\"), c = kernel->getOrCreateVar(\"c\");\n    const VarId x = kernel->getOrCreateVar(\"x\");\n    const auto xx = RationalPolynomial::fromVar(x, 1, 1);\n    auto p = xx * (xx - RationalPolynomial::fromVar(b, 1, 1));\n    auto q = xx * (xx - RationalPolynomial::fromVar(c, 1, 1));\n    p.normalize(); q.normalize();\n    SamplePoint prefix;\n    prefix.push(b, RealAlg::fromRational(mpq_class(3)));\n    prefix.push(c, RealAlg::fromRational(mpq_class(3)));\n    const auto projected = characterize({p, q}, x, kernel.get(), &prefix);\n    size_t vanishing = 0;\n    for (const auto& polynomial : projected.downwardPolys)\n        vanishing += polynomial.evaluateRational({{b, 3}, {c, 3}}) == 0;\n    std::cout << \"projection_complete \" << projected.complete << '\\n';\n    std::cout << \"projection_size \" << projected.downwardPolys.size() << '\\n';\n    std::cout << \"vanishing_at_equal_positive \" << vanishing << '\\n';\n}\n",
+  "resources": {
+    "cpu_slots": 1,
+    "cpu_ids": [
+      "0"
+    ]
+  },
+  "protected_sets_used": false
+}
