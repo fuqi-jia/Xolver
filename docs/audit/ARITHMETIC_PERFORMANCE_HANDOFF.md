@@ -40,6 +40,16 @@ Older tables describe their own frozen versions and evidence boundaries.
 
 ## Current arithmetic and ASP continuation
 
+The current model-hint candidate is not delivered. R1401 compiles but fails
+the LRA retained-source contract: replacing an already-applied `x >= 1` by
+`x > 1` leaves the old bound installed because the replay cursor is unchanged.
+The next implementation withdraws derived bounds before replaying replacement
+sources, owns API scope snapshots independently of simplex resets, and uses
+the shared incremental context for interior level withdrawals. New contracts
+cover conflict retirement, nested scopes, root replay and non-monotone levels.
+Native qualification and a fresh comparison remain pending; no new PR or
+performance claim follows from this implementation alone.
+
 The consolidated QCP/foundations delivery
 [PR92](https://github.com/fuqi-jia/Xolver/pull/92) is merged as main
 `26aca1b816bdcdd02c070164bf2193c2b3483e56`. Final

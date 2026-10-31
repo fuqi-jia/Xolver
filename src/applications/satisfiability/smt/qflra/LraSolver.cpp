@@ -19,6 +19,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
+#include <stdexcept>
 
 namespace xolver {
 
@@ -69,12 +70,36 @@ void LraSolver::pushLraFarkasCert() {
 #endif
 
 void LraSolver::onPush() {
-    gs_.push();
+    scopes_.push_back({theoryTrail_.snapshot(), interfaceEqualities_, interfaceDisequalities_, currentLevel_});
 }
 
 void LraSolver::onPop(uint32_t n) {
-    for (uint32_t i = 0; i < n; ++i) {
-        gs_.pop();
+    if (n > scopes_.size()) throw std::invalid_argument("LRA pop exceeds scope depth");
+    if (!n) return;
+    auto saved = std::move(scopes_[scopes_.size() - n]);
+    scopes_.resize(scopes_.size() - n);
+    theoryTrail_.restore(std::move(saved.trail));
+    interfaceEqualities_ = std::move(saved.equalities);
+    interfaceDisequalities_ = std::move(saved.disequalities);
+    currentLevel_ = saved.level;
+    rebuildTrailCaches();
+    resetAppliedBounds(GeneralSimplex::AssignmentPolicy::Reinitialize);
+}
+
+void LraSolver::resetAppliedBounds(GeneralSimplex::AssignmentPolicy policy) {
+    gs_.resetActiveBounds(policy);
+    appliedCursor_ = 0;
+    pendingConflict_.reset();
+    entailmentProps_.clear();
+    manager_.invalidateModelHints();
+}
+
+void LraSolver::rebuildTrailCaches() {
+    activeDisequalities_.clear();
+    for (const auto& entry : theoryTrail_) {
+        if (!entry.isDiseq) continue;
+        const auto& payload = std::get<LinearAtomPayload>(entry.atom.payload);
+        activeDisequalities_.push_back({entry.auxVar, payload.lhs, payload.rhs.asRational(), entry.lit, entry.level});
     }
 }
 
@@ -92,12 +117,10 @@ void LraSolver::onReset() {
     }
     profile_.resetForNewSolve();
 #endif
+    scopes_.clear();
     clearActiveSources();
-    appliedCursor_ = 0;
-    pendingConflict_.reset();
     currentLevel_ = 0;
-    entailmentProps_.clear();
-    gs_.resetActiveBounds();
+    resetAppliedBounds(GeneralSimplex::AssignmentPolicy::Reinitialize);
 }
 
 void LraSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit assertedLit) {
@@ -113,6 +136,10 @@ void LraSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
 
     if (const auto position = theoryTrail_.find(atom.satVar)) {
         const auto& previous = theoryTrail_[*position];
+        if (previous.auxVar == auxVar && previous.level == level && previous.lit == assertedLit &&
+            previous.atom.exprId == atom.exprId && previous.value == value &&
+            std::get<LinearAtomPayload>(previous.atom.payload).rel == payload.rel) return;
+        const bool replay = *position < appliedCursor_ || pendingConflict_.has_value();
         if (previous.isDiseq) {
             // Remove stale disequality from incremental cache.
             auto it = std::remove_if(activeDisequalities_.begin(), activeDisequalities_.end(),
@@ -122,6 +149,9 @@ void LraSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
         theoryTrail_.replace(*position, {level, assertedLit, atom, value, auxVar, isDiseq});
         if (isDiseq)
             activeDisequalities_.push_back({auxVar, payload.lhs, rhs, assertedLit, level});
+        // A cursor cannot withdraw the previous source's bounds. Rebuild from
+        // retained sources, including weaker or opposite replacement bounds.
+        if (replay) resetAppliedBounds(GeneralSimplex::AssignmentPolicy::Preserve);
         return;
     }
     theoryTrail_.append({level, assertedLit, atom, value, auxVar, isDiseq});
@@ -143,10 +173,11 @@ void LraSolver::onBacktrack(int level) {
         // Backtrack GeneralSimplex bounds by SAT decision level.
         gs_.backtrackToLevel(level, GeneralSimplex::AssignmentPolicy::Preserve);
 
-        // Synchronize theory trail.
-        size_t retained = theoryTrail_.size();
-        while (retained && theoryTrail_[retained - 1].level > level) --retained;
-        theoryTrail_.truncate(retained);
+        // Replacement can introduce non-monotone levels. The common context
+        // filters interior withdrawals; their derived bounds need full replay.
+        const auto withdrawal = theoryTrail_.backtrack(level);
+        if (withdrawal.kind == TrailContext::Withdrawal::Filtered)
+            resetAppliedBounds(GeneralSimplex::AssignmentPolicy::Preserve);
 
         // Interface equalities / disequalities
         auto ieIt = std::remove_if(interfaceEqualities_.begin(), interfaceEqualities_.end(),
