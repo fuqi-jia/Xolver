@@ -40,6 +40,42 @@ Older tables describe their own frozen versions and evidence boundaries.
 
 ## Current arithmetic and ASP continuation
 
+The consolidated QCP/foundations delivery remains
+[PR92](https://github.com/fuqi-jia/Xolver/pull/92). Its retained runtime is
+`65c21b9b` (documentation head `c9c4243c`): verified coprime nonlinear
+projection and certified shallow-conflict exclusion. R1341 qualifies that
+runtime, all39 R1343 acceptance groups pass, and R1345 binds the native/API
+and actual-model evidence. The PR records the final CI and merge receipts.
+
+**Row propagation caching is closed and removed.** The first cache reused
+still-valid earlier-call theorems, changed bounded propagation prefixes, and
+lost SAT51/131 in R1359 (3 baseline/1 candidate verified solves). Exact current
+endpoint identities fixed those prefix changes in `abb54396`; the old cache
+fails the same-header prefix contract. R1362 passes1918 native cases /
+989214 assertions and31 Python tests. Both independent solvers check all381
+actual implications; all39 R1366 acceptance groups pass. Its R1365 pilot1→3
+gain is confined to already-variable controls51/131, while SAT59 remains slower.
+
+Fresh, same-budget R1367 fixed160 gives **106 main/106 cache/116 verified Z3**,
+with no gained/lost verdicts, opposite verdicts or invalid exported models.
+Verified PAR-2 is6971.790/6996.221/5514.368; the cache is about0.35% slower.
+Both Xolver versions return59 SAT/47 UNSAT; main has2 unknowns/52 timeouts,
+the rejected cache1 unknown/53 timeouts. Input115 is independently confirmed
+by its original-hash modular certificate checked again in R1366; the unmodified
+raw summary had excluded it after the timed oracles failed to confirm it.
+Eight Z3 UNSATs12/24/27/42/50/80/114/159 remain unconfirmed and excluded.
+The checked [closed-trial record](LINEAR_ROW_CACHE_CLOSED_20261101.json)
+has SHA-256 `07e1516f370812f4ad38f7675d202093cd45c828d978fac4f89ffc1b396f7ae7`.
+
+The entire cache, its definition-identity interface, widened row versions and
+cache-only tests are reverted in `cecea9fa`; runtime files again match the
+qualified `65c21b9b` byte for byte. These new scores qualify the rejected cache,
+not the restored prefix runtime. Panda's canonical source/build still contains
+R1362: any next source overlay must use `source-r1362.tar.json` as its preimage
+and restore all seven reverted files. Frozen evidence is retained; no new PR,
+compatibility entry, protected-set run or end-to-end QCP claim is introduced.
+The propagation memory-pool and work-budget-only experiments remain closed.
+
 [PR89](https://github.com/fuqi-jia/Xolver/pull/89), implementation `e0cafba8`,
 restores SAT's retained signed root prefix after a real restart. A shared theory
 contract restores LRA/LIA sources cleared for model reconstruction and avoids
