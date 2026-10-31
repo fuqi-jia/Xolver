@@ -300,10 +300,54 @@ Current frozen CLI SHA-256 is
 R1344's24 short-profile samples now include12 in CdcacCore::buildClosure; CAC
 returns after about2.005s before the fallback. Sample fractions do not establish
 end-to-end speedup. R1346 additionally confirms that x(x-b),x(x-c) are refined
-correctly but both CAC/global Lazard lifting retain five boundary polynomials
-of total degree7, although three linear factors suffice for the same root set.
-Separating active lifting factors from retained provenance is the next concrete
-lead; it is not implemented or claimed as a performance result yet.
+correctly but the CAC characterization output/global Lazard level list each
+retain five boundary polynomials of total degree7, although three linear factors
+suffice for the same root set. This does not prove repeated lifting on the main
+CAC path: CacEngine consumes characterize.downwardPolys, not boundaryPolys.
+
+The active-factor experiment `e0469510` separates the final basis from provenance
+and filters both output lists. R1347 passes301 focused cases/45713 assertions,
+1915 full cases/988933 assertions and31 Python tests; old implementations fail3
+new contracts under identical headers, while the candidate passes all3. The126 exact
+cell comparisons pass758 assertions across nullification/degree drops. R1348
+exports two native models independently replayed by both Z3 and cvc5; boundary
+counts drop5 to3 and degree sum7 to3. R1354 seals nine fresh public triads:
+**4 baseline/4 candidate/7 verified Z3**, zero gains/losses, opposite verdicts,
+invalid models or budget violations. PAR-2 worsens679.615 to681.716. SAT69
+slows19.410 to22.625s;144 improves59.472 to58.357s but is solved by both versions.
+The increase from earlier3-solve pilots is observed in the frozen control too,
+so it is not credited.159 stays unconfirmed. **Closed without promotion**;
+`2d7d68f1` reverts all runtime changes and dedicated tests.39-group acceptance
+specifications were prepared but never launched, and no full160 expansion is
+warranted. See [the complete negative result](CAC_ACTIVE_FACTORS_CLOSED_20261101.json).
+
+R1351 samples public LRA gaps49/58 and reconfirms propagation cost. On public58,
+R1352 observes1199 actual propagation calls: only6 repeat exact bound states and
+none repeat bound/analysis revisions. Median current size is2613 variables/
+2035 rows, with41 variables changed between comparable calls;1862340 row visits
+produce408828 endpoints. Observer copying costs1.567s, so these10s diagnostics
+are not solver performance scores. R1355 uses a lighter effort/target observer:
+all1655 completed calls are Standard effort;1649 return registered SAT targets,
+with552177 derived endpoints and76275 target results. Whole-call memoization and
+skipping Full-effort propagation are unsupported directions. See
+[the state/effort observations](LINEAR_PROPAGATION_DELTA_OBSERVATIONS_20261101.json).
+
+The next implementation lead is retained row arithmetic with explained bounds,
+using existing SparseRow.version plus explicit variable-definition identity and
+source-premise invalidation. Pivot updates already advance row.version. Reuse
+must be invalidated for changed/expired primitive reasons, numeric-bound changes
+under the same literal, backtracking and same-address simplex replacement/reset.
+Keep the fresh local overlay and current output/work budgets; do not confuse a
+cached proof with a currently asserted bound. No allocator-pool rerun or new
+runtime feature gate is warranted. This cache is not implemented yet.
+
+Current local runtime source is identical to retained `65c21b9b` after the revert;
+canonical Panda build/source still contain the closed `e0469510` experiment.
+Use source-r1347.tar.json as the next server-overlay preimage and rebuild every
+consumer after restoration/new changes; do not mix headers and old objects.
+PR92 delivery c9c4243c passes both jobs in
+[CI41232467242](https://github.com/fuqi-jia/Xolver/actions/runs/41232467242).
+The existing PR stays draft; no new PR or main merge is made for these trials.
 
 Existing actual QCP workflow receipts still belong to the older R1264 worker,
 not the R1341 worker. Continue in existing PR92; both protected sets remain
