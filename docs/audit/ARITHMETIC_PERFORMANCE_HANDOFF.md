@@ -196,14 +196,22 @@ LRA/LIA rollback policy is changed. New source/point lifecycle and two-theory
 contracts are pending native qualification, including a same-header old-advice
 negative control and the newly exposed loss cases in the next pilot.
 
-Panda's canonical source remains `source-r1388.tar.json` and its frozen worker
-is the one above. The next R1401 overlay must check those preimages and the
-completed audits before reusing the unique locked build. QCP's existing
-verification-orchestrator skill and immutable original-program references have
-been inspected, but no new original-C workflow is started with the regressing
-R1388 candidate. Both protected sets remain unread and unused. No new PR is
-open; main remains the green PR92 delivery. No additional server archive is a
-new condition for that delivered main.
+R1401's overlay from source`0f2f7d9f` is applied after checking R1388 preimages
+and the completed R1400 audit. Its native ExperimentOS build is`ee861f5d0781`,
+run`e72a25bee194`, and is still compiling at this handoff; qualification and the
+frozen successor are pending. `source-r1401.tar.json` is now the canonical
+preimage for a later overlay, even while this build has not yet qualified.
+Control-plane`launch-current-model-hints-r1405.py` waits for that exact run,
+then dispatches all39 R1402 checks, the13-case R1403 same-budget pilot and five
+short R1404 observers. Pilot selection adds7/11/91 and144 to the prior nine
+public cases. Do not overwrite scripts or restart an experiment because an SSH
+observation expires; inspect EOS status, output records and terminal PID cleanup.
+
+QCP's existing verification-orchestrator skill and immutable original-program
+references have been inspected, but no new original-C workflow is started with
+the regressing R1388 candidate. Both protected sets remain unread and unused.
+No new PR is open; main remains the green PR92 delivery. No additional server
+archive is a new condition for that delivered main.
 
 [PR89](https://github.com/fuqi-jia/Xolver/pull/89), implementation `e0cafba8`,
 restores SAT's retained signed root prefix after a real restart. A shared theory
