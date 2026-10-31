@@ -20,7 +20,7 @@ public:
         size_t retainedEqualityVariables = 0;
         size_t choices = 0, rejectedChoices = 0, definitions = 0, modelChecks = 0, maxDepth = 0;
         size_t backjumps = 0, skippedLevels = 0, explanationFallbacks = 0;
-        size_t dependentDomains = 0;
+        size_t dependentDomains = 0, fixedDomains = 0;
         bool exhausted = false;
     };
 

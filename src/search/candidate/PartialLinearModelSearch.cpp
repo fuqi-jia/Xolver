@@ -280,10 +280,15 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
                 }
             }
         }
-        auto conflictDependencies = [&]() {
+        auto fullPrefix = [&]() {
+            std::vector<size_t> dependencies;
+            for (size_t depth = 0; depth < selected.size(); ++depth) dependencies.push_back(depth);
+            return dependencies;
+        };
+        auto premiseDependencies = [&](const std::vector<GeneralSimplex::BoundReason>& premises) {
             std::set<size_t> dependencies;
-            bool explained = !simplex.getConflict().empty();
-            for (const auto& bound : simplex.getConflict()) {
+            bool explained = true;
+            for (const auto& bound : premises) {
                 tick();
                 const size_t id = bound.reason.var;
                 if (!bound.reason.sign || !id) { explained = false; break; }
@@ -299,13 +304,16 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
             }
             if (!explained) {
                 ++stats.explanationFallbacks;
-                dependencies.clear();
-                for (const auto& [var, value] : selected) {
-                    (void)value;
-                    dependencies.insert(parameterDepth.at(var));
-                }
+                return fullPrefix();
             }
             return std::vector<size_t>(dependencies.begin(), dependencies.end());
+        };
+        auto conflictDependencies = [&]() {
+            if (simplex.getConflict().empty()) {
+                ++stats.explanationFallbacks;
+                return fullPrefix();
+            }
+            return premiseDependencies(simplex.getConflict());
         };
         auto activate = [&](const std::vector<size_t>& indices, int level) {
             for (const auto index : indices) {
@@ -421,7 +429,19 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
             if (b.lower && !b.lower->strict) lower = b.lower->value;
             if (b.upper && !b.upper->strict) upper = b.upper->value;
             for (const auto& endpoint : boundaryCandidates(lower, upper)) add(endpoint);
-            const auto endpointCount = values.size();
+            const auto column = columns.at(var);
+            const auto fixed = simplex.proveFixedValue(column);
+            std::vector<size_t> dependencies;
+            if (fixed && fixed->first.b == 0) {
+                addRounded(fixed->first.a);
+                dependencies = premiseDependencies(fixed->second);
+                ++stats.fixedDomains;
+            } else {
+                const auto current = simplex.value(column);
+                addRounded(mpq_class(current.a + current.b * simplex.computeSafeDelta()));
+                ++stats.dependentDomains;
+                dependencies = fullPrefix();
+            }
             if (b.lower && b.upper) addRounded(mpq_class((b.lower->value + b.upper->value) / 2));
             for (const int seed : {0, 1, -1}) {
                 mpq_class q = seed;
@@ -429,24 +449,10 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
                 if (b.lower && q <= b.lower->value) q = b.lower->value + (b.lower->strict ? 1 : 0);
                 add(q);
             }
-            auto independent = std::move(values);
-            values.assign(independent.begin(), independent.begin() + endpointCount);
-            const auto current = simplex.value(columns.at(var));
-            addRounded(mpq_class(current.a + current.b * simplex.computeSafeDelta()));
-            bool dependent = false;
-            for (const auto& q : values)
-                dependent |= std::find(independent.begin(), independent.end(), q) == independent.end();
-            for (size_t index = endpointCount; index < independent.size(); ++index) add(independent[index]);
-            CandidateChoices<mpq_class> result{std::move(values), {}};
-            if (dependent) {
-                ++stats.dependentDomains;
-                // An arbitrary simplex point can depend on every active bound.
-                // Static endpoints/seeds need no such dependency when they
-                // already cover all of the point-derived candidate values.
-                for (size_t previous = 0; previous < depth; ++previous)
-                    result.dependencies.push_back(previous);
-            }
-            return result;
+            // A sampled point may change after unrelated prefix choices even
+            // when it happens to duplicate a static endpoint now. Only a
+            // certified rational fixed value justifies narrower dependencies.
+            return CandidateChoices<mpq_class>{std::move(values), std::move(dependencies)};
         };
         auto apply = [&](size_t depth, const mpq_class& value) {
             tick();
