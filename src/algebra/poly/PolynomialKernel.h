@@ -39,6 +39,8 @@ public:
     // ------------------------------------------------------------------
     virtual PolyId mkZero() = 0;
     virtual PolyId mkOne()  = 0;
+    // Unsupported constants return NullPoly. Integer-ring backends require
+    // callers to clear denominators; core operations propagate the sentinel.
     virtual PolyId mkConst(const mpq_class& c) = 0;
     virtual PolyId mkVar(VarId v) = 0;
 

@@ -24,11 +24,11 @@ public:
         return 0;
     }
     PolyId mkVar(VarId) override { return 0; }
-    PolyId add(PolyId, PolyId) override { return 0; }
-    PolyId sub(PolyId, PolyId) override { return 0; }
-    PolyId neg(PolyId) override { return 0; }
-    PolyId mul(PolyId, PolyId) override { return 0; }
-    PolyId pow(PolyId, uint32_t) override { return 0; }
+    PolyId add(PolyId a, PolyId b) override { return a == NullPoly || b == NullPoly ? NullPoly : 0; }
+    PolyId sub(PolyId a, PolyId b) override { return a == NullPoly || b == NullPoly ? NullPoly : 0; }
+    PolyId neg(PolyId a) override { return a == NullPoly ? NullPoly : 0; }
+    PolyId mul(PolyId a, PolyId b) override { return a == NullPoly || b == NullPoly ? NullPoly : 0; }
+    PolyId pow(PolyId a, uint32_t) override { return a == NullPoly ? NullPoly : 0; }
     bool isZero(PolyId a) const override { return a == 0; }
     bool isConstant(PolyId a) const override { return a == 0 || a == NullPoly; }
     mpq_class toConstant(PolyId a) const override {
