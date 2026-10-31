@@ -78,6 +78,13 @@ void LraSolver::onPop(uint32_t n) {
     }
 }
 
+void LraSolver::clearActiveSources() {
+    theoryTrail_.clear();
+    activeDisequalities_.clear();
+    interfaceEqualities_.clear();
+    interfaceDisequalities_.clear();
+}
+
 void LraSolver::onReset() {
 #ifdef XOLVER_LRA_PROFILE
     if (profile_.checkCalls > 0) {
@@ -85,9 +92,11 @@ void LraSolver::onReset() {
     }
     profile_.resetForNewSolve();
 #endif
-    theoryTrail_.clear();
+    clearActiveSources();
     appliedCursor_ = 0;
     pendingConflict_.reset();
+    currentLevel_ = 0;
+    entailmentProps_.clear();
     gs_.resetActiveBounds();
 }
 
@@ -128,10 +137,7 @@ void LraSolver::onBacktrack(int level) {
     if (level == 0) {
         // Full reset for modelCheck rebuild or SAT restart to level 0.
         gs_.resetActiveBounds(GeneralSimplex::AssignmentPolicy::Preserve);
-        theoryTrail_.clear();
-        activeDisequalities_.clear();
-        interfaceEqualities_.clear();
-        interfaceDisequalities_.clear();
+        clearActiveSources();
     } else {
         // Backtrack GeneralSimplex bounds by SAT decision level.
         gs_.backtrackToLevel(level, GeneralSimplex::AssignmentPolicy::Preserve);

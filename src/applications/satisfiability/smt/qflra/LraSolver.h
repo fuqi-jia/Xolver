@@ -102,6 +102,7 @@ private:
     size_t appliedCursor_ = 0;
     std::optional<TheoryCheckResult> pendingConflict_;
 
+    void clearActiveSources();
     bool applyEntryToSimplex(const LraTrailEntry& e);
 
     // -------------------------------------------------------------------------

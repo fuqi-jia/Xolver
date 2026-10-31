@@ -125,7 +125,7 @@ The controlled QCP matrix above uses the older R1264 worker, not this candidate.
 Both protected sets remain unread and unused; Xolver has not surpassed Z3.
 
 
-The next compact linear trail candidate `cbb6cdcc`, test-call correction
+The compact linear trail experiment `cbb6cdcc`, test-call correction
 `c11965e9`, shares lightweight source metadata between LRA/LIA and borrows
 immutable forms from the coordinate manager. Retired per-engine record types
 are removed; source/reason identity, scopes, cache order and assignment policies
@@ -152,10 +152,32 @@ and independently checked initial models. Counts at the60s boundary are
 unstable, but51 remains slower in this repeat. The valid original loss/gain
 remain in the formal score. See
 [the candidate repeat evidence](COMPACT_LINEAR_TRAIL_REPLAY_STAGE_20261031.json).
-**Do not promote this candidate yet:** the verified-count gap has not narrowed,
-the PAR-2 gain is small, and the51 regression mechanism is unresolved. Original
+**Closed without promotion:** the verified-count gap has not narrowed,
+the PAR-2 gain is small, and the51 regression mechanism is unresolved. Runtime
+changes and their dedicated tests have been reverted; the evidence is retained. Original
 QCP workflow receipts above cover the older R1264 worker, not R1297. Both
 protected sets remain unread and unused.
+
+
+[PR91](https://github.com/fuqi-jia/Xolver/pull/91) now follows an independent
+reset-contract correctness defect. R1307 compiles a direct theory API probe
+against one qualified header/library ABI: after asserting an interface `x=1`
+and resetting, a new context containing only `x=0` wrongly returns Conflict;
+old `x!=1` likewise conflicts with a new `x=1`. Both fresh LRA controls and LIA
+reset controls return Consistent. Z3 and cvc5 independently confirm both new
+formulas SAT. Published main and the reproduced candidate have identical
+`LraSolver::onReset` bodies. See
+[the native reproduction](ARITHMETIC_RESET_API_REPRO_20261031.json).
+This establishes a theory-engine reset defect; end-to-end CLI exposure is not
+claimed, and it does not explain the51 timing regression.
+
+The fix shares LRA active-source withdrawal between reset and root backtrack,
+clears stale interface/ordinary disequalities and buffered entailments on reset,
+and retains the existing full-reset Reinitialize / root-backtrack Preserve
+assignment policies. Cross-engine tests check withdrawn equalities/disequalities,
+pending/applied facts, exact models and repeated source reuse. Native negative
+control, positive qualification, full acceptance and fresh fixed160 are pending;
+keep PR91 draft. Both protected sets remain unread and unused.
 
 
 [PR88](https://github.com/fuqi-jia/Xolver/pull/88), core `32d23ec3`, closes the
