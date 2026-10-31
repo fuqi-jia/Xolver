@@ -50,6 +50,9 @@ public:
 
     virtual void assertTheoryLit(const TheoryAtomRecord& atom, SatLit lit, int level) = 0;
     virtual void backtrackToLevel(int level) = 0;
+    virtual void restoreRootLiteral(const TheoryAtomRecord& atom, SatLit lit) {
+        assertTheoryLit(atom, lit, 0);
+    }
     virtual void setAssignmentView(TheoryAssignmentView* view) = 0;
     virtual TheoryCheckResult check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) = 0;
 

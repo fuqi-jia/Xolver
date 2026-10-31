@@ -347,6 +347,19 @@ void CadicalTheoryPropagator::notify_backtrack(size_t new_level) {
         varToLevel_.erase(v);
         assignTrail_.pop_back();
     }
+    if (currentLevel_ == 0) {
+        // SAT need not notify retained root literals again after a restart.
+        // Restore this prefix through the theory retention protocol: engines
+        // that clear their root state replay it; engines that retain it avoid
+        // readmitting the same assertions and explanations.
+        for (const auto& [var, level] : assignTrail_) {
+            const auto* atom = registry_.findBySatVar(var);
+            if (!atom) continue;
+            assert(level == 0);
+            tm_.restoreRootLiteral(*atom, SatLit{var, currentAssignment_.at(var)});
+            theoryDirtySinceCheck_ = true;
+        }
+    }
 }
 
 bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model) {
