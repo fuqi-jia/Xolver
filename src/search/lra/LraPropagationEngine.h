@@ -5,7 +5,6 @@
 #include "search/lra/GeneralSimplex.h"
 #include <cstddef>
 #include <functional>
-#include <memory>
 #include <vector>
 
 namespace xolver {
@@ -44,9 +43,6 @@ public:
         std::size_t snapshotHits = 0;
         std::size_t termPairs = 0;
         std::size_t unproductiveSnapshots = 0;
-        std::size_t retainedSnapshotHits = 0;
-        std::size_t changedInputs = 0;
-        std::size_t expiredSources = 0;
     };
 
     // Return false when the consumer has enough conclusions. Consumer time is
@@ -55,12 +51,7 @@ public:
     // callback. Consumers must not mutate the simplex while it is scanned.
     using BoundConsumer = std::function<bool(const ExplainedBound&)>;
 
-    LraPropagationEngine();
-    ~LraPropagationEngine();
-    LraPropagationEngine(const LraPropagationEngine&);
-    LraPropagationEngine& operator=(const LraPropagationEngine&);
-    LraPropagationEngine(LraPropagationEngine&&) noexcept;
-    LraPropagationEngine& operator=(LraPropagationEngine&&) noexcept;
+    LraPropagationEngine() = default;
 
     /** Derive implied bounds until the budget or consumer stops the scan.
      *  Returns vector of newly-derived bounds (not yet asserted).
@@ -72,9 +63,8 @@ public:
         const BoundConsumer& consume = {});
 
 private:
-    struct State;
-    std::unique_ptr<State> state_;
-    // A bounded check resumes the circular row/side scan so
+    // Scheduling hint only: no bounds, explanations or tableau identities
+    // survive a call. A bounded check resumes the circular row/side scan so
     // that a large tableau's prefix cannot permanently starve its suffix.
     std::size_t nextSeed_ = 0;
 };

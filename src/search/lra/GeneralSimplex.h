@@ -249,12 +249,6 @@ public:
 
     const SparseTableau& tableau() const { return tab_; }
 
-    // Retained row proofs refer to this set of variable definitions. Appending
-    // definitions preserves it; reset and copies receive a fresh identity.
-    std::shared_ptr<const void> definitionIdentity() const noexcept {
-        return definitionIdentity_.value;
-    }
-
     struct VarStateView {
         const std::string& name;
         int basicRow;   // -1 if non-basic
@@ -286,20 +280,6 @@ public:
 #endif
 
 private:
-    struct DefinitionIdentity {
-        struct Tag {};
-        std::shared_ptr<const Tag> value = std::make_shared<Tag>();
-        DefinitionIdentity() = default;
-        DefinitionIdentity(const DefinitionIdentity&) {}
-        DefinitionIdentity& operator=(const DefinitionIdentity& other) {
-            if (this != &other) renew();
-            return *this;
-        }
-        DefinitionIdentity(DefinitionIdentity&&) noexcept = default;
-        DefinitionIdentity& operator=(DefinitionIdentity&&) noexcept = default;
-        void renew() { value = std::make_shared<Tag>(); }
-    };
-    DefinitionIdentity definitionIdentity_;
     mutable std::shared_ptr<const FixedValueAnalysis> fixedValueAnalysis_;
     std::unordered_set<int> boundedVars_;
     // Sparse column-to-slot index and reusable owned endpoint storage. Scratch

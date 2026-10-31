@@ -3,10 +3,8 @@
 #include <array>
 #include <chrono>
 #include <deque>
-#include <exception>
 #include <map>
 #include <optional>
-#include <limits>
 
 namespace xolver {
 namespace {
@@ -22,7 +20,6 @@ struct ExplainedEndpoint {
     std::vector<SatLit> reasons;
     // An unconditional derived bound has an empty, valid explanation.
     bool explained = false;
-    uint64_t version = 0;
     bool usable() const { return value.has_value() && explained; }
 };
 
@@ -70,68 +67,13 @@ struct RowAggregate {
     }
 };
 
-struct RowSnapshot {
-    int basic = -1;
-    uint64_t revision = 0, builtCall = 0;
-    bool valid = false, insufficientBounds = false;
-    std::vector<std::array<Contribution, 2>> contributions;
-    RowAggregate minimum, maximum;
-    std::vector<std::array<uint64_t, 2>> inputs;
-    std::size_t weight = 0;
-};
-
 } // namespace
-
-struct LraPropagationEngine::State {
-    const GeneralSimplex* owner = nullptr;
-    std::shared_ptr<const void> identity;
-    std::vector<std::array<BoundInfo, 2>> inputs;
-    std::vector<std::array<uint64_t, 2>> inputVersions;
-    std::vector<std::unique_ptr<RowSnapshot>> rows;
-    uint64_t call = 0, nextVersion = 1;
-    std::size_t weight = 0, evictionCursor = 0;
-    static constexpr std::size_t maxWeight = 32768;
-
-    uint64_t freshVersion() {
-        if (nextVersion == std::numeric_limits<uint64_t>::max()) return nextVersion;
-        return nextVersion++;
-    }
-
-    RowSnapshot* retain(int row, std::size_t needed) {
-        auto& slot = rows[row];
-        if (slot && slot->weight == needed) return slot.get();
-        if (slot) { weight -= slot->weight; slot.reset(); }
-        if (needed > maxWeight) return nullptr;
-        // Evict before exposing any row references. Publishing a bound only
-        // invalidates snapshots; it never destroys the row being evaluated.
-        while (weight + needed > maxWeight) {
-            auto& victim = rows[evictionCursor];
-            if (victim) { weight -= victim->weight; victim.reset(); }
-            if (++evictionCursor == rows.size()) evictionCursor = 0;
-        }
-        slot = std::make_unique<RowSnapshot>();
-        slot->weight = needed;
-        weight += needed;
-        return slot.get();
-    }
-};
-
-LraPropagationEngine::LraPropagationEngine() = default;
-LraPropagationEngine::~LraPropagationEngine() = default;
-LraPropagationEngine::LraPropagationEngine(const LraPropagationEngine& other)
-    : nextSeed_(other.nextSeed_) {}
-LraPropagationEngine& LraPropagationEngine::operator=(const LraPropagationEngine& other) {
-    if (this != &other) { state_.reset(); nextSeed_ = other.nextSeed_; }
-    return *this;
-}
-LraPropagationEngine::LraPropagationEngine(LraPropagationEngine&&) noexcept = default;
-LraPropagationEngine& LraPropagationEngine::operator=(LraPropagationEngine&&) noexcept = default;
 
 std::vector<LraPropagationEngine::ExplainedBound>
 LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
                                   const PropagationBudget& budget,
                                   Statistics* statistics,
-                                  const BoundConsumer& consume) try {
+                                  const BoundConsumer& consume) {
     if (statistics) *statistics = {};
     std::vector<ExplainedBound> accepted;
     if (budget.maxDerivedBounds <= 0 || budget.maxIterations <= 0 ||
@@ -145,70 +87,20 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
                 std::chrono::milliseconds(budget.maxTimeMs);
     };
 
-    const auto identity = gs.definitionIdentity();
-    if (!state_ || !identity || state_->owner != &gs || state_->identity != identity ||
-        state_->inputs.size() > static_cast<std::size_t>(gs.numVars()) ||
-        state_->rows.size() > static_cast<std::size_t>(gs.numRows()) ||
-        state_->call == std::numeric_limits<uint64_t>::max() ||
-        state_->nextVersion == std::numeric_limits<uint64_t>::max()) {
-        state_ = std::make_unique<State>();
-        state_->owner = &gs;
-        state_->identity = identity;
-    }
-    // A consumer may invoke this engine recursively, including on another
-    // simplex. Lease this invocation's cache so nested calls cannot replace
-    // storage while the outer row still holds references into it.
-    struct CacheLease {
-        std::unique_ptr<State>& destination;
-        std::unique_ptr<State> owned;
-        std::size_t& resume;
-        std::size_t nextSeed;
-        int exceptions = std::uncaught_exceptions();
-        ~CacheLease() {
-            if (std::uncaught_exceptions() == exceptions) {
-                destination = std::move(owned);
-                resume = nextSeed;
-            }
-        }
-    } lease{state_, std::move(state_), nextSeed_, nextSeed_};
-    auto& cache = *lease.owned;
-    ++cache.call;
-    const auto oldSize = cache.inputs.size();
-    cache.inputs.resize(gs.numVars());
-    cache.inputVersions.resize(gs.numVars());
-    for (std::size_t var = oldSize; var < cache.inputs.size(); ++var)
-        cache.inputs[var][0] = BoundInfo(BoundValue::negInf());
-    cache.rows.resize(gs.numRows());
-
-    // Primitive inputs retain an identity only while value and reason match.
-    // Local deductions get fresh identities on every invocation: an old, valid
-    // theorem must not silently strengthen this call's overlay or change its
-    // bounded propagation sequence. Zero identifies an unavailable endpoint.
+    // Values and explanations are local to this call. No stale state can
+    // survive a simplex mutation, backtrack or a subsequent propagation run.
     std::vector<std::array<ExplainedEndpoint, 2>> bounds(gs.numVars());
     for (int var = 0; var < gs.numVars(); ++var) {
         const auto state = gs.varState(var);
         const BoundInfo* sources[] = {&state.lower, &state.upper};
-        bool changed = false;
         for (size_t side = 0; side < 2; ++side) {
-            auto& previous = cache.inputs[var][side];
-            const auto& current = *sources[side];
-            if (previous.bound.kind != current.bound.kind || previous.reason != current.reason ||
-                (current.bound.isFinite() && previous.bound.value != current.bound.value)) {
-                cache.inputVersions[var][side] = cache.freshVersion();
-                previous = current;
-                changed = true;
-            }
             if (!sources[side]->bound.isFinite()) continue;
             auto& target = bounds[var][side];
             target.value = sources[side]->bound.value;
             if (sources[side]->reason) {
                 target.reasons.push_back(*sources[side]->reason);
                 target.explained = true;
-                target.version = cache.inputVersions[var][side];
             }
-        }
-        if (changed) {
-            if (statistics) ++statistics->changedInputs;
         }
     }
 
@@ -223,13 +115,28 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
     };
     const auto seedCount = 2 * static_cast<std::size_t>(gs.tableau().numRows());
     if (seedCount != 0) {
-        auto seed = lease.nextSeed % seedCount;
+        auto seed = nextSeed_ % seedCount;
         for (std::size_t count = 0; count < seedCount; ++count) {
             const int basic = gs.tableau().row(static_cast<int>(seed / 2)).basicVar;
             if (basic >= 0) enqueue(basic, seed % 2 == 0);
             if (++seed == seedCount) seed = 0;
         }
     }
+
+    // The tableau is immutable during this call. Only updates to non-basic
+    // endpoints can change a row's input contributions; derived basic bounds
+    // are read separately when propagating backward. Keep just the most recent
+    // row, so adjacent lower/upper visits can share arithmetic and explanations.
+    // Every object here dies before a backtrack or the next theory check.
+    struct RowSnapshot {
+        int basic = -1;
+        std::size_t revision = 0;
+        bool insufficientBounds = false;
+        std::vector<std::array<Contribution, 2>> contributions;
+        RowAggregate minimum, maximum;
+    };
+    std::optional<RowSnapshot> snapshot;
+    std::size_t inputRevision = 0;
 
     auto publish = [&](int var, bool lower, const DeltaRational& value,
                        const RowAggregate& aggregate, const Contribution* excluded,
@@ -241,10 +148,10 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
         // Materialize explanations only for a genuinely stronger bound.
         auto reasons = aggregate.explain(excluded, required, budget.maxReasonSize);
         if (!reasons) return false;
+        if (gs.basicRowOfVar(var) < 0) ++inputRevision;
         target.value = value;
         target.reasons = *reasons;
         target.explained = true;
-        target.version = cache.freshVersion();
         accepted.push_back({var, lower, value, std::move(*reasons)});
         if (consume) {
             const auto beforeConsumer = std::chrono::steady_clock::now();
@@ -265,53 +172,28 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
         // Advance before processing: all budget exits, including a bound-count
         // limit reached mid-row, give the next direction an opportunity on the
         // following check. The current call still uses its own local overlay.
-        lease.nextSeed = 2 * static_cast<std::size_t>(rowIndex) + (item.lower ? 1 : 2);
-        if (lease.nextSeed == seedCount) lease.nextSeed = 0;
+        nextSeed_ = 2 * static_cast<std::size_t>(rowIndex) + (item.lower ? 1 : 2);
+        if (nextSeed_ == seedCount) nextSeed_ = 0;
         const auto& row = gs.tableau().row(rowIndex);
 
         if (statistics) ++statistics->rowVisits;
-        std::optional<RowSnapshot> temporary;
-        RowSnapshot* snapshot = cache.retain(rowIndex, row.entries.size() + 1);
-        if (!snapshot) { temporary.emplace(); snapshot = &*temporary; }
-        if (snapshot->valid && snapshot->basic == item.basic && snapshot->revision == row.version) {
-            for (std::size_t index = 0; index < snapshot->inputs.size(); ++index) {
-                const auto& entry = row.entries[index];
-                const auto& variable = bounds[entry.col];
-                const std::array<uint64_t, 2> inputs = entry.coeff == 0 ?
-                    std::array<uint64_t, 2>{0, 0} :
-                    std::array<uint64_t, 2>{variable[0].version, variable[1].version};
-                if (snapshot->inputs[index] != inputs || inputs[0] == std::numeric_limits<uint64_t>::max() ||
-                    inputs[1] == std::numeric_limits<uint64_t>::max()) {
-                    snapshot->valid = false;
-                    if (statistics) ++statistics->expiredSources;
-                    break;
-                }
-            }
-        }
-        if (!snapshot->valid || snapshot->basic != item.basic || snapshot->revision != row.version ||
-            row.version == std::numeric_limits<uint64_t>::max()) {
-            const auto weight = snapshot->weight;
-            *snapshot = RowSnapshot{};
-            snapshot->weight = weight;
+        if (!snapshot || snapshot->basic != item.basic || snapshot->revision != inputRevision) {
+            snapshot.emplace();
             snapshot->basic = item.basic;
-            snapshot->revision = row.version;
-            snapshot->builtCall = cache.call;
+            snapshot->revision = inputRevision;
             auto& contributions = snapshot->contributions;
             if (statistics) ++statistics->rowSnapshots;
             // A forward bound needs every contribution; a backward bound can
             // omit only its target. Two unavailable endpoints in EACH extremum
             // rule out both directions, regardless of the basic variable's
             // bounds. Detect that before doing rational arithmetic or building
-            // explanations. The inspected prefix alone witnesses both missing
-            // extrema. Its input identities suffice to validate that negative
-            // result; productive snapshots record every term's inputs.
+            // explanations. A new non-basic bound changes inputRevision and
+            // requeues incident rows, so this cannot hide a later deduction.
             int missingMinimum = 0, missingMaximum = 0;
             for (const auto& entry : row.entries) {
                 if (exhausted()) return accepted;
-                const auto& variable = bounds[entry.col];
-                snapshot->inputs.push_back(entry.coeff == 0 ? std::array<uint64_t, 2>{0, 0} :
-                    std::array<uint64_t, 2>{variable[0].version, variable[1].version});
                 if (entry.coeff == 0) continue;
+                const auto& variable = bounds[entry.col];
                 const size_t minSide = entry.coeff > 0 ? 0 : 1;
                 missingMinimum += !variable[minSide].usable();
                 missingMaximum += !variable[1 - minSide].usable();
@@ -334,11 +216,7 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
                     if (statistics) ++statistics->termPairs;
                 }
             }
-            snapshot->valid = true;
-        } else if (statistics) {
-            ++statistics->snapshotHits;
-            if (snapshot->builtCall != cache.call) ++statistics->retainedSnapshotHits;
-        }
+        } else if (statistics) ++statistics->snapshotHits;
         if (snapshot->insufficientBounds) continue;
         const auto& contributions = snapshot->contributions;
         const auto& minimum = snapshot->minimum;
@@ -376,11 +254,6 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
         }
     }
     return accepted;
-} catch (...) {
-    // In particular, a throwing consumer must not leave partially constructed
-    // or partially synchronized proof state available to a subsequent call.
-    state_.reset();
-    throw;
 }
 
 } // namespace xolver

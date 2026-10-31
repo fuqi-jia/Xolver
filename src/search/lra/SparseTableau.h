@@ -3,8 +3,6 @@
 #include <gmpxx.h>
 #include <vector>
 #include <unordered_map>
-#include <cstdint>
-#include <limits>
 
 namespace xolver {
 
@@ -36,10 +34,7 @@ struct SparseRow {
     bool hasIndex = false;
     std::unordered_map<int, int> pos;  // col -> index in entries
 
-    uint64_t version = 0;
-    void noteChange() noexcept {
-        if (version != std::numeric_limits<uint64_t>::max()) ++version;
-    }
+    int version = 0;
 };
 
 struct SparseCol {

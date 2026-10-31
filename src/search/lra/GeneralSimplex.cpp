@@ -47,7 +47,6 @@ GeneralSimplex::GeneralSimplex() {
 // ---------------------------------------------------------------------------
 
 int GeneralSimplex::addVar(const std::string& name) {
-    if (!definitionIdentity_.value) definitionIdentity_.renew();
     noteAnalysisChange();
     int id = static_cast<int>(vars_.size());
     VarState vs;
@@ -837,7 +836,7 @@ void GeneralSimplex::pivot(int leaving, int entering) {
             tab_.addCoeff(row, col, c * coeff);
         }
 
-        tab_.row(row).noteChange();
+        tab_.row(row).version++;
 
         int xb = tab_.row(row).basicVar;
         refreshViolationStatus(xb);
@@ -1047,7 +1046,6 @@ void GeneralSimplex::resetActiveBounds(AssignmentPolicy policy) {
 }
 
 void GeneralSimplex::reset() {
-    definitionIdentity_.renew();
     noteBoundChange();
     vars_.clear();
     boundedVars_.clear();
