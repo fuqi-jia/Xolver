@@ -246,9 +246,28 @@ Stable factor identities reuse resultants through refinement; total active
 elimination degree strictly decreases. Common-factor and quotient provenance
 retain both parents. This serves CAC, global Lazard closure and the shared
 projection policy, preserves original signed constraints, and adds the missing
-b=c boundary. Native before/after proof, independent witness checks, performance
-and complete acceptance remain pending. Continue in PR92. Both protected sets
-remain unread and unused.
+b=c boundary. R1325 initially fails two reference-path contracts; R1327 reduces this to one.
+The reference PRS candidate now removes polynomial coefficient content before
+exact division, and content extraction resolves any nonzero rational unit
+coefficient before attempting a hard symbolic gcd. The corrected implementation
+`887e2a94` qualifies in R1328:294 targeted cases/44857 assertions,1908 full unit
+cases/988077 assertions and31 Python API tests pass. Recompiling the old operator
+against exactly the fixed headers/ABI fails all3 new contracts; restoring the
+fixed operator passes all3. Every native target is rebuilt before freezing.
+
+R1326 exports the actual direct-engine points b=2,c=1,x=3/2 and
+b=4,c=7/2,x=15/4. Both models replay SAT with Z3 and cvc5 on the identical original
+input hashes. Source/CLI/worker hashes and complete checks are in
+[the native qualification](COPRIME_LAZARD_QUALIFICATION_20261101.json).
+CLI SHA-256 is `cc72195531844ea37cb0e3495cb0ebe8c7d1cbedc80f68bc6846a81a4e2fbe55`.
+
+All39 R1329 acceptance groups and fresh R1330 fixed160 are running against the
+unchanged delivered reset-contract baseline, this frozen candidate and the same
+frozen Z3,60s/one leased physical CPU/16GiB. No performance or end-to-end QCP claim
+is made. Existing actual QCP workflow receipts still belong to the older R1264
+worker. Continue in the existing PR92; both protected sets remain unread/unused.
+Delivery documentation reuses the qualified source and binaries without an
+additional server archive.
 
 
 
