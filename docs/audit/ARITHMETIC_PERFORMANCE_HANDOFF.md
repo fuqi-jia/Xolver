@@ -135,19 +135,40 @@ pass. Frozen CLI SHA-256 is
 `f4bfca785b42ea287df7af9f37fa28bf8e3745c8ce46c9b0266dcc74b3a1988b`;
 SV is`af7607aa50c7d7cd4c6845f53871592587876277f49203f8619d7a7845f3a3ec`,
 worker is`bc17dd8b1b33b587e1f4130f8ad4bf7e4663810a20536cc5a0fd3871cfab5182`.
-The source/core hash and failed-fixture recovery are bound in its qualification;
-full native units have not yet been sealed. `source-r1388.tar.json` is now the
-canonical preimage for another source update.
+The source/core hash and failed-fixture recovery are bound in its qualification.
+All39 R1389 groups (`71e1e1834a9e` /`f01f813194f2`) now pass, including1913
+native cases /988274 assertions. `source-r1388.tar.json` remains the canonical
+preimage for another source update; subsequent documentation reuses this frozen
+runtime without another native archive.
 
-All39 R1389 checks are dispatched (`71e1e1834a9e` /`f01f813194f2`). Control-plane
-launcher`launch-theory-routing-r1392.py` waits for six independent groups, then
-dispatches the fixed nine-case R1390 pilot and short R1391 diagnostics. Formal
-budget remains60s/one physical CPU/16GiB, with initial model export and independent
-replay. A complete R1394 comparison is prepared but not registered; inspect the
-pilot and all39 results first. This version and the older R1377 pilot must not
-be mixed. Main CI is already green; no extra server archive is a delivery
-condition. Both protected sets remain unread and unused; no new original-C QCP
-workflow or superiority claim is made. No new PR is open.
+R1390's fixed nine-case pilot (`01dfb114527f`) gives **2 main/4 candidate/9
+verified Z3** decisions, with no lost verdict, wrong verdict, invalid exported
+model or protocol error. New SAT98 (2019-cmodelsdiff, original10.9MB QF_LIA)
+finishes56.274s versus main timeout, and its actual exported model independently
+replays SAT. Earlier cache-only R1379 still timed out on98. SAT51 also improves
+from timeout to17.511s but remains an already-variable control. SAT59 improves
+8.188→2.823s, while131 is58.118→57.823s. Gaps1/13/49/58/89 still time out.
+These are pilot observations, not a complete-suite score or superiority claim.
+
+R1391's short verbose diagnostic (`2df72caac4c6`) confirms the connection on
+real inputs:89 changes from11,668,105 all-null unassigned probes to211,567 model
+probes with no null results;13 obtains38,653 model-based decisions instead of
+zero. Their10-second logged traces are not formal timing scores. The dynamic
+candidate refresh on58 is also active. R1381's earlier suppressed logs are not
+used as absence evidence.
+
+Control-plane`launch-full-r1394.py` checks every acceptance/pilot run is terminal
+and its PID gone, freezes all binary hashes, and dispatches twenty eight-case
+ExperimentOS batches into `fair-r1394`. It is now running; the first batch is
+`0daceb31acd0`. Formal budgets remain60s/one physical CPU/16GiB for each solver,
+with initial model export and independent replay. Record the complete round
+before promotion, including any lost solves or unconfirmed decisions. Keep its
+original raw reports; original115's independently checked modular certificate
+in R1389 may supplement an unconfirmed UNSAT only for the exact matching input.
+This version and the older R1377 pilot must not be mixed. Main CI is already
+green; no extra server archive is a delivery condition. Both protected sets
+remain unread and unused; no new original-C QCP workflow or superiority claim
+is made. No new PR is open.
 
 [PR89](https://github.com/fuqi-jia/Xolver/pull/89), implementation `e0cafba8`,
 restores SAT's retained signed root prefix after a real restart. A shared theory
