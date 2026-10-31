@@ -12,6 +12,18 @@
 
 using namespace xolver;
 
+static std::vector<RationalPolynomial> monicBoundaries(
+        const std::vector<RationalPolynomial>& polynomials) {
+    auto result = polynomials;
+    for (auto& p : result) {
+        p.normalize();
+        REQUIRE_FALSE(p.isZero());
+        p *= mpq_class(1) / p.terms().rbegin()->second;
+        p.normalize();
+    }
+    return result;
+}
+
 static RealValue Q(long n, long d = 1) { return RealValue::fromMpq(mpq_class(n, d)); }
 
 static const VarId VX = VarId{1}, VY = VarId{2};
@@ -66,6 +78,58 @@ TEST_CASE("characterize: empty input is complete and empty") {
     CHECK(r.complete);
     CHECK(r.boundaryPolys.empty());
     CHECK(r.downwardPolys.empty());
+}
+
+TEST_CASE("characterize: repeated rational multiples preserve ordered boundaries") {
+    RationalPolynomial line;
+    line.addVar(VY, 1, 1);
+    line.addConstant(-2);
+    line.normalize();
+    const std::vector<RationalPolynomial> unique{yy_minus_x(), circle(), line};
+    std::vector<RationalPolynomial> repeated;
+    for (const auto& p : unique) {
+        for (const mpq_class scale : {mpq_class(1), mpq_class(-3, 5), mpq_class(7)}) {
+            auto copy = p;
+            copy *= scale;
+            repeated.push_back(std::move(copy));
+        }
+    }
+    auto expected = characterize(unique, VY);
+    auto actual = characterize(repeated, VY);
+    REQUIRE(expected.complete);
+    REQUIRE(actual.complete);
+    for (bool downward : {false, true}) {
+        const auto a = monicBoundaries(downward ? actual.downwardPolys : actual.boundaryPolys);
+        const auto b = monicBoundaries(downward ? expected.downwardPolys : expected.boundaryPolys);
+        REQUIRE(a.size() == b.size());
+        for (size_t i = 0; i < a.size(); ++i) CHECK(a[i].terms() == b[i].terms());
+    }
+}
+
+TEST_CASE("characterize: unit deduplication retains vanishing middle coefficients") {
+    const VarId a = 3, b = 4, x = 6;
+    RationalPolynomial p;
+    p.addTerm({{a, 1}, {x, 2}}, 1);
+    p.addTerm({{b, 1}, {x, 1}}, 1);
+    p.addConstant(1);
+    p.normalize();
+    auto twice = p;
+    twice *= mpq_class(2);
+    auto negative = p;
+    negative *= mpq_class(-3, 5);
+    SamplePoint sample;
+    for (VarId variable : {a, b})
+        sample.push(variable, RealAlg::fromRational(mpq_class(0)));
+    auto result = characterize({p, twice, negative}, x, nullptr, &sample);
+    REQUIRE(result.complete);
+    const auto boundaries = monicBoundaries(result.downwardPolys);
+    for (VarId variable : {a, b}) {
+        const auto expected = RationalPolynomial::fromVar(variable, 1, 1);
+        bool present = false;
+        for (const auto& boundary : boundaries)
+            present |= boundary.terms() == expected.terms();
+        CHECK(present);
+    }
 }
 
 TEST_CASE("characterize: no constants leak into either bucket") {

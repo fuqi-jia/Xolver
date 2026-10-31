@@ -1,0 +1,552 @@
+{
+  "schema": "xolver-active-coprime-lifting-closed-pilot/1",
+  "implementation_commit": "e046951011bbf8884738aba5587169bb95fa1a8f",
+  "qualification": {
+    "native_builder_sha256": "e04272517d4f91336ef9e5086ebfdf697380fe721aa3ee6ba14005b7b4733130",
+    "source_head": "e046951011bbf8884738aba5587169bb95fa1a8f",
+    "source_manifest_sha256": "236298c9873bd24d838b5873f6d900e87cd0142780334af8ca764da13cdd8947",
+    "binaries": {
+      "xolver": "024b1645cda48df3cd363a7e23dacefef0258e52605662b060b08df7786f3d31",
+      "xolver-sv": "5d6562585e79b27924626ee757b91a20e407241ce06fd0dc9763632ca9b6fa75",
+      "xolver-parallel-worker": "953b4138bbc046f2ba6eb3d4785dd8c7e5301054f15b9aa92ea4a2e223a22b5e"
+    },
+    "binary_sha256": "024b1645cda48df3cd363a7e23dacefef0258e52605662b060b08df7786f3d31",
+    "unit_binary_sha256": "98ea273db64ec9282aa370f9136d594b92eabe3371a8b73c49dee7cb37ccaf89",
+    "library_sha256": "7765d68cc00bda03dbc10630a5fb0c2ead5f084aa52a8407c4796daa3fe1fd87",
+    "python_extension_sha256": "ba6ce8aef0543b953d0b02371bcd4f48fc265c89e8d7a980c11a7a2f8ae96dc3",
+    "python_shared_libraries": {
+      "/usr/lib/x86_64-linux-gnu/libmpfr.so.6": "1aed080b3143049fbe016cd82cdc5fb47db386386556cc1bb37cfccc133c0fae",
+      "/usr/lib/x86_64-linux-gnu/libgmp.so.10": "fda9699eef15deda5f1c626e9140377a7f5d88c41516a54278ac02429cb20fa5",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/partial-proof-python-r1208/native-runtime/usr/lib/x86_64-linux-gnu/libgmpxx.so.4.7.0": "c6261b838536ec28a47008433227aaaf2573f408b54bfa79bea8c9c98c4acaa6"
+    },
+    "python_tests": 31,
+    "logs": {
+      "targeted.log": "b78c21988f4556a8bc185f6f3036aedfcc3297f0ea11d5b1799736fbd14d4d26",
+      "python-tests.log": "401531d8e4d5a8feb0f4670686b8d1af841c54a8b7f710acc1962569f3d1bd07",
+      "negative-build.log": "1fbf6d54702e079b5c70221a62b4900ad2f6049c0139d37a2b199ce6b0407bfc",
+      "python-link.log": "7dcc0b3899864f169ca92b4d8a6dc182922336bdb79756cc6d553f9601d23ecb",
+      "build-unit.log": "be4499377b982333cdb5e5bf260d01686f4ece60a846aba8ecea7f2027c5dfa5",
+      "negative-contracts.log": "05f45b857db133231754c7f56e620a70a769b341e95dfb033dcb2c4f567fd3fe",
+      "cell-equivalence.log": "3776aceeff6f48478d1b6964f366a83ef83fe98af4c643e2774eb43f8e0bf045",
+      "architecture.log": "ee2d80a785e3e9e3a4c838efaf85059ad52986f30af4974c3a7b3b9707d0b44c",
+      "build.log": "e0c240502ad8555455165cc4bec4a4c0c00f4f1add0d3759ca0bbc937155239c",
+      "overlay.log": "8a221ec26d819d1238b893799db5e12d3270ef67890c172fcd55f1689cab7df8",
+      "unit.log": "dc5320aa5285e89438bea00cc8f75f0fc67bef5b73e8699a13b35090c4bb782b",
+      "fixed-contracts.log": "202ec1bc87f40767d6d92e0c811d5b351ddbb025e105e673cdf1872bbb24ba87",
+      "configure.log": "565cb4047d79c4688d84df5536673e6b37e61ffd8523d6a3c8370c85e6d906d6"
+    },
+    "metrics": {
+      "completed": 1,
+      "failures": 0
+    },
+    "negative_source_sha256": {
+      "src/search/nra/lazard/LazardProjectionOperator.cpp": "0a4d1c18ba49e72bd4e374b0f1182e7e1f8274ede55c4a84220475e5952cd7a1",
+      "src/search/nra/lazard/LazardProjectionClosure.cpp": "db1755de2c3298e884f7254346ee0f1ce530d5a6a6df6a2bdb7ca2b57e0ed8cd",
+      "src/search/nra/cac/SingleCellProjection.cpp": "9deab9a945659273a95679a8c14e530ad755707d7836303810ac72d71e0c4405"
+    },
+    "negative_unit_exit_code": 1,
+    "negative_same_abi_headers": {
+      "src/search/nra/lazard/LazardProjectionOperator.h": "689301d5dfb038a92d1b382c4f49b667d937b337eacf12256a0633b0814396ff",
+      "src/search/nra/lazard/Squarefree.h": "67ef62749868a52aba1d3c4e560780d7d9aa1663045323213317db1be8cffcb8",
+      "src/search/nra/lazard/LazardProjectionClosure.h": "2af1e296bceddd10892904f826bdc2232410ceeb00fd21938d5eeaf750a9b67e",
+      "src/search/nra/cac/CacEngine.h": "c0b0a791c946bd64224dc86f05761536a6ddab18d0a38887ecdeb5497ecc261f",
+      "src/search/nra/cac/SingleCellProjection.h": "0c582984f56d11f4cd81e70567a6abc2bf99db6ced196a68473fac03e093d6ed",
+      "src/algebra/poly/RationalPolynomial.h": "59f03ec8ad2ab5ff842c0448274d5102a81ce635d69505e6cba34722041ef85f",
+      "src/search/nra/core/CdcacValue.h": "e427496b3a53c65b8a5e9b0905af1aca0fc185167a328ff632aac9b93a070176"
+    },
+    "previous_qualified_source_head": "65c21b9b7946ce025f9c8397d278fc24537c35ed",
+    "root_reproduction_sha256": "f6e0eac1c538c11dc87112ba01e0ca1d66f17ba2a29863c0676a07f7bec96a54",
+    "protected_sets_used": false,
+    "boundary": "The shared Lazard operator exposes final coprime factor item identities separately from complete provenance. CAC and global Lazard lifting isolate those active factors; original products and all parent links remain available for proof replay. All lower projection polynomials and original atom truth are preserved. Three previous implementations are recompiled against identical fixed ABI headers and must fail all3 new active-factor contracts; corrected sources are restored before rebuilding every native target. Exact interval tests cover nullification, factor overlap and leading-degree drops. Full native/Python tests qualify the freeze; original-input model replay and fair public-suite results remain separate. Both protected sets remain unread/unused, with no overall SMT or new original-C QCP superiority claim."
+  },
+  "qualification_sha256": "29f24a69947f9129b5568c9271c45f3dab79fc12c7114c0fa899970a381e3fae",
+  "native_build": [
+    {
+      "experiment": "774469a046e1",
+      "run": "457d4476d571",
+      "input": "run",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "1"
+        ]
+      }
+    }
+  ],
+  "models": {
+    "qualification_sha256": "29f24a69947f9129b5568c9271c45f3dab79fc12c7114c0fa899970a381e3fae",
+    "source_manifest_sha256": "236298c9873bd24d838b5873f6d900e87cd0142780334af8ca764da13cdd8947",
+    "probe_source_sha256": "9d8db721eabaa780621e1d69f741f5c01c8e901413f9350b1fe5a09d3eca066b",
+    "probe_binary_sha256": "5334942f2744fb8fde0984be30c7103936505950bf05703c43ff6dd8d900c323",
+    "compile_command": [
+      "/usr/bin/c++",
+      "-DXOLVER_ENABLE_PROOFS",
+      "-DXOLVER_HAS_CADICAL",
+      "-DXOLVER_HAS_LIBPOLY",
+      "-DXOLVER_VERSION_MAJOR=0",
+      "-DXOLVER_VERSION_MINOR=1",
+      "-DXOLVER_VERSION_PATCH=0",
+      "-DXOLVER_WITH_CUDA=0",
+      "-DXOLVER_WITH_DASK=0",
+      "-DXOLVER_WITH_HIP=0",
+      "-DXOLVER_WITH_MPI=0",
+      "-DXOLVER_WITH_OPENACC=0",
+      "-DXOLVER_WITH_SPARK=0",
+      "-I/pub/data/jiafq/xolver/src",
+      "-I/pub/data/jiafq/xolver/include",
+      "-I/pub/data/jiafq/xolver/third_party/libpoly/include",
+      "-I/pub/data/jiafq/xolver/third_party/SOMTParser/include",
+      "-I/pub/data/jiafq/xolver/dependencies/doctest",
+      "-isystem",
+      "/pub/data/jiafq/xolver/dependencies/native/include",
+      "-isystem",
+      "/pub/data/jiafq/xolver/dependencies/json/include",
+      "-isystem",
+      "/pub/data/jiafq/xolver/third_party/cadical/src",
+      "-O3",
+      "-DNDEBUG",
+      "-std=c++20",
+      "-fPIE",
+      "-Wall",
+      "-Wextra",
+      "-Wpedantic",
+      "-Wno-unused-parameter",
+      "-O3",
+      "-c",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-basis-model-r1348.cpp",
+      "-o",
+      "/pub/data/jiafq/xolver/build/diagnostics/active-basis-model-r1348.o"
+    ],
+    "link_command": [
+      "/usr/bin/c++",
+      "/pub/data/jiafq/xolver/build/diagnostics/active-basis-model-r1348.o",
+      "-O3",
+      "-DNDEBUG",
+      "-o",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-basis-model-r1348/probe",
+      "../src/libxolver_core.a",
+      "/pub/data/jiafq/xolver/dependencies/native/lib/libgmp.a",
+      "-lgmpxx",
+      "../third_party/SOMTParser/libsomtparser.a",
+      "/pub/data/jiafq/xolver/dependencies/native/lib/libgmpxx.a",
+      "/pub/data/jiafq/xolver/dependencies/native/lib/libmpfr.a",
+      "/pub/data/jiafq/xolver/dependencies/native/lib/libgmp.a",
+      "../third_party/cadical-build/libcadical.a",
+      "../third_party/libpoly/src/libpolyxx.a",
+      "../third_party/libpoly/src/libpoly.a",
+      "/pub/data/jiafq/xolver/dependencies/native/lib/libmpfr.a",
+      "/pub/data/jiafq/xolver/dependencies/native/lib/libgmp.a"
+    ],
+    "contract_summaries": {
+      "fixed-contracts.log": {
+        "counts": [
+          3,
+          3,
+          0
+        ],
+        "sha256": "202ec1bc87f40767d6d92e0c811d5b351ddbb025e105e673cdf1872bbb24ba87"
+      },
+      "negative-contracts.log": {
+        "counts": [
+          3,
+          0,
+          3
+        ],
+        "sha256": "05f45b857db133231754c7f56e620a70a769b341e95dfb033dcb2c4f567fd3fe"
+      }
+    },
+    "native_points": {
+      "1": {
+        "b": "2",
+        "c": "3/2",
+        "x": "7/4"
+      },
+      "3": {
+        "b": "4",
+        "c": "7/2",
+        "x": "15/4"
+      }
+    },
+    "independent_model_replays": [
+      {
+        "lower": 1,
+        "oracle": "z3",
+        "result": "sat",
+        "timing": {
+          "seconds": 0.034152643755078316,
+          "launch_seconds": 0.002740379422903061,
+          "wait_seconds": 0.031412264332175255,
+          "returncode": 0,
+          "timeout_notified_seconds": null,
+          "cleanup_seconds": null,
+          "timed_out": false,
+          "budget_overrun": false
+        },
+        "original_input_sha256": "a24fdbc5bd979819ba0daeac6541421ad88435140e04945f3650dcb898411147",
+        "replay_sha256": "893346f325be3bab847311974159f1ae4e82e46553b6e808634b7be1c3626ce9",
+        "oracle_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      },
+      {
+        "lower": 1,
+        "oracle": "cvc5",
+        "result": "sat",
+        "timing": {
+          "seconds": 0.009549686685204506,
+          "launch_seconds": 0.0022282134741544724,
+          "wait_seconds": 0.007321473211050034,
+          "returncode": 0,
+          "timeout_notified_seconds": null,
+          "cleanup_seconds": null,
+          "timed_out": false,
+          "budget_overrun": false
+        },
+        "original_input_sha256": "a24fdbc5bd979819ba0daeac6541421ad88435140e04945f3650dcb898411147",
+        "replay_sha256": "893346f325be3bab847311974159f1ae4e82e46553b6e808634b7be1c3626ce9",
+        "oracle_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102"
+      },
+      {
+        "lower": 3,
+        "oracle": "z3",
+        "result": "sat",
+        "timing": {
+          "seconds": 0.03417709283530712,
+          "launch_seconds": 0.0023308247327804565,
+          "wait_seconds": 0.031846268102526665,
+          "returncode": 0,
+          "timeout_notified_seconds": null,
+          "cleanup_seconds": null,
+          "timed_out": false,
+          "budget_overrun": false
+        },
+        "original_input_sha256": "ccc5502e7d7db6735fc100bb7d5756c0b635383747ec1d94ea4bff04681d1bee",
+        "replay_sha256": "1ffcadb2a75c881c2027a9c01e8ababbe593148c7dad8a2c24cb48ff096bf730",
+        "oracle_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      },
+      {
+        "lower": 3,
+        "oracle": "cvc5",
+        "result": "sat",
+        "timing": {
+          "seconds": 0.01011083647608757,
+          "launch_seconds": 0.0028199609369039536,
+          "wait_seconds": 0.007290875539183617,
+          "returncode": 0,
+          "timeout_notified_seconds": null,
+          "cleanup_seconds": null,
+          "timed_out": false,
+          "budget_overrun": false
+        },
+        "original_input_sha256": "ccc5502e7d7db6735fc100bb7d5756c0b635383747ec1d94ea4bff04681d1bee",
+        "replay_sha256": "1ffcadb2a75c881c2027a9c01e8ababbe593148c7dad8a2c24cb48ff096bf730",
+        "oracle_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102"
+      }
+    ],
+    "active_basis_observed": {
+      "cac_boundaries": "3",
+      "cac_degree_sum": "3",
+      "redundant_products": "0",
+      "closure_boundaries": "3",
+      "complete": "1"
+    },
+    "protected_sets_used": false,
+    "boundary": "The active-factor lifting kernel exports native witnesses for both previously false-UNSAT formulas; Z3 and cvc5 independently replay the actual points on identical original input hashes. Native structural counts change from5 to3 lifting boundaries and degree sum7 to3, while proof provenance is retained. Header-identical old implementations fail3 active-factor contracts and corrected implementations pass3. Exact cell-equivalence checks cover nullification and degree drops. This establishes correctness and removal of duplicated lifting inputs, not a solver performance score. Canonical source/library/unit bytes stay unchanged and both protected sets remain unused."
+  },
+  "model_runs": [
+    {
+      "experiment": "e19c559a4d66",
+      "run": "e0f0108c3ef6",
+      "input": "constructed",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "0"
+        ]
+      }
+    }
+  ],
+  "model_record_sha256": "e597b12b2ab1e48d1fb549d74b9e7baa6e072b07ad14158933331cbe3a2af523",
+  "acceptance_not_launched": true,
+  "pilot": {
+    "cases": 9,
+    "binaries": {
+      "baseline": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/prefix-pruning-r1341/xolver",
+        "sha256": "30965221fc2a3b37177a7e79c771b6fb4d9f738d4a524357aee2448b5b3ba07f"
+      },
+      "candidate": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-basis-r1347/xolver",
+        "sha256": "024b1645cda48df3cd363a7e23dacefef0258e52605662b060b08df7786f3d31"
+      },
+      "z3": {
+        "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+        "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      }
+    },
+    "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+    "timeout": 60,
+    "memory_bytes": 17179869184,
+    "model_capture": "initial-solve-single-model",
+    "counts": {
+      "baseline": {
+        "unsat": 1,
+        "decided": 4,
+        "verified_decided": 4,
+        "verified_par2": 679.6152804419398,
+        "raw_par2": 679.6152804419398,
+        "sat": 3,
+        "timeout": 5
+      },
+      "candidate": {
+        "unsat": 1,
+        "decided": 4,
+        "verified_decided": 4,
+        "verified_par2": 681.7158595416695,
+        "raw_par2": 681.7158595416695,
+        "sat": 3,
+        "timeout": 5
+      },
+      "z3": {
+        "timeout": 1,
+        "decided": 8,
+        "verified_decided": 7,
+        "verified_par2": 259.9065094795078,
+        "raw_par2": 140.2233343515545,
+        "sat": 6,
+        "unsat": 2
+      }
+    },
+    "by_logic": {
+      "QF_NRA": {
+        "baseline": {
+          "unsat": 1,
+          "decided": 4,
+          "verified_decided": 4,
+          "verified_par2": 439.61528044193983,
+          "raw_par2": 439.61528044193983,
+          "sat": 3,
+          "timeout": 3
+        },
+        "candidate": {
+          "unsat": 1,
+          "decided": 4,
+          "verified_decided": 4,
+          "verified_par2": 441.7158595416695,
+          "raw_par2": 441.7158595416695,
+          "sat": 3,
+          "timeout": 3
+        },
+        "z3": {
+          "timeout": 1,
+          "decided": 6,
+          "verified_decided": 5,
+          "verified_par2": 257.66850504651666,
+          "raw_par2": 137.98532991856337,
+          "sat": 5,
+          "unsat": 1
+        }
+      },
+      "QF_NIA": {
+        "baseline": {
+          "timeout": 2,
+          "decided": 0,
+          "verified_decided": 0,
+          "verified_par2": 240,
+          "raw_par2": 240
+        },
+        "candidate": {
+          "timeout": 2,
+          "decided": 0,
+          "verified_decided": 0,
+          "verified_par2": 240,
+          "raw_par2": 240
+        },
+        "z3": {
+          "sat": 1,
+          "decided": 2,
+          "verified_decided": 2,
+          "verified_par2": 2.238004432991147,
+          "raw_par2": 2.238004432991147,
+          "unsat": 1
+        }
+      }
+    },
+    "changes": [],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "unverified": [
+      {
+        "index": 159,
+        "case": "QF_NRA/20161105-Sturm-MGC/mgc_07.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      }
+    ],
+    "scoring": "Correct verdicts require a replayed model or an independent UNSAT decision on the identical input hash; unresolved results receive PAR-2 penalty."
+  },
+  "pilot_runs": [
+    {
+      "experiment": "dc54add5f324",
+      "run": "f9b0ddb509ce",
+      "input": "65",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "1"
+        ]
+      },
+      "report_sha256": "de77466370a7c9a2333c4bc468525940e98531b8e639726fff9bce727c10c5a0"
+    },
+    {
+      "experiment": "dc54add5f324",
+      "run": "5d86e8a2c4ed",
+      "input": "69",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "2"
+        ]
+      },
+      "report_sha256": "2ad0d03ce8ea0187a5059411156f3d0068d52a41d2e30ea3db85195abfa334d7"
+    },
+    {
+      "experiment": "dc54add5f324",
+      "run": "e202070d18d4",
+      "input": "72",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "3"
+        ]
+      },
+      "report_sha256": "1e7718b66f1ce23bc51a5b9e00853a976892fffec5abe5cbb7cf80ea74c02810"
+    },
+    {
+      "experiment": "dc54add5f324",
+      "run": "d0cd2687801a",
+      "input": "77",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "4"
+        ]
+      },
+      "report_sha256": "0e37a601bc06136b3f2b5bd28f789653d39e3a83d01acead07215fb282ca68d2"
+    },
+    {
+      "experiment": "dc54add5f324",
+      "run": "41f7e5437f6d",
+      "input": "106",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "5"
+        ]
+      },
+      "report_sha256": "626e6653803a869281a53080cb4841059bcac9cb1537e927b2095ec326516618"
+    },
+    {
+      "experiment": "dc54add5f324",
+      "run": "f0a5f8c6b918",
+      "input": "116",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "6"
+        ]
+      },
+      "report_sha256": "8cb66dcdef1b943a944936f3e5adc77a80c506cdaf27897c115c12ff82cd7bef"
+    },
+    {
+      "experiment": "dc54add5f324",
+      "run": "60a23f5cff38",
+      "input": "144",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "7"
+        ]
+      },
+      "report_sha256": "8e740f63b936476e0eb04d6396ccfc92a1b2f807037849365e324d384247112a"
+    },
+    {
+      "experiment": "dc54add5f324",
+      "run": "5268bc0ffeca",
+      "input": "149",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "8"
+        ]
+      },
+      "report_sha256": "83e3ad5b3702d873d19a54f4d2286d3fddfd38223e784235a296934969cc1b0e"
+    },
+    {
+      "experiment": "dc54add5f324",
+      "run": "c03f3f6c8c5f",
+      "input": "159",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "9"
+        ]
+      },
+      "report_sha256": "5f44b2b361a2467486dab8c3c030e69901ce38a95f3a39402dc2ae4f0cc1b85a"
+    }
+  ],
+  "unit_cases": 1915,
+  "unit_assertions": 988933,
+  "python_tests": 31,
+  "previous_coprime_full160": {
+    "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/stage-r1339.json",
+    "sha256": "65fb08eb6f70f10826f332f8202177a8c0b7228b6999e7d6e9ef23fd7a1cd55d",
+    "counts": {
+      "baseline": {
+        "unsat": 47,
+        "decided": 105,
+        "verified_decided": 105,
+        "verified_par2": 7001.058532964438,
+        "raw_par2": 7001.058532964438,
+        "timeout": 53,
+        "sat": 58,
+        "unknown": 2
+      },
+      "candidate": {
+        "unsat": 47,
+        "decided": 105,
+        "verified_decided": 105,
+        "verified_par2": 7010.117571042851,
+        "raw_par2": 7010.117571042851,
+        "timeout": 54,
+        "sat": 58,
+        "unknown": 1
+      },
+      "z3": {
+        "unsat": 58,
+        "decided": 123,
+        "verified_decided": 116,
+        "verified_par2": 5551.40453242138,
+        "raw_par2": 4752.968223633245,
+        "sat": 65,
+        "timeout": 37
+      }
+    },
+    "unconfirmed": [
+      12,
+      24,
+      27,
+      42,
+      80,
+      114,
+      159
+    ]
+  },
+  "outcome": "closed_without_promotion_no_verified_solve_gain_and_slower_pilot_par2",
+  "protected_sets_used": false,
+  "boundary": "The active-factor experiment removes replaced products from CAC boundary outputs and global Lazard lifting while retaining provenance. Header-identical old implementations fail3 new contracts; the candidate passes all3 plus758 exact-cell assertions,301 targeted cases,1915 full unit cases/988933 assertions and31 Python tests. Two native models replay with both Z3 and cvc5. Fresh public nine-case frozen-prefix/candidate/Z3 comparison at60s/one leased physical CPU/16GiB gives4/4/7 verified solves with no gain/loss, opposite verdict, invalid model or budget violation. Candidate69 is slower19.410 to22.625s while144 is59.472 to58.357s; overall pilot PAR-2 is worse. SAT144 is solved by both current frozen versions, so the increase from the prior3-solve pilot is not credited to this experiment. Unconfirmed159 stays excluded. Close without promotion and revert runtime changes plus dedicated tests; the39-group acceptance specifications are not launched and no full160 expansion is warranted. Prior full105/105/116 counts belong to an earlier kernel. Old original-C QCP receipts do not qualify this candidate. Both protected sets remain unread and unused; no overall or end-to-end superiority is established."
+}

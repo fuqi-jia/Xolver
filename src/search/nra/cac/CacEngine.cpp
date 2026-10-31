@@ -222,6 +222,35 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
         std::vector<RationalPolynomial> cellBoundaries;
         std::vector<size_t> cellOrigins;   // constraint indices delineating THIS cell
 
+        if (!isLeaf) {
+            // A false atom whose variables are already assigned cannot be
+            // repaired by choosing deeper variables. Exclude its exact truth
+            // cell here instead of descending and projecting it back up.
+            SamplePoint prefix = sample;
+            prefix.pop();
+            bool excluded = false;
+            for (size_t ci = 0; ci < cons_.size(); ++ci) {
+                if (consMainLevel_[ci] > level || consPid_[ci] == NullPoly) continue;
+                const Sign sign = algebra_->signAt(consPid_[ci], sample);
+                if (sign == Sign::Unknown || relationHolds(sign, cons_[ci].rel)) continue;
+                // Original atoms use the truth path, including zero and
+                // nullification. A Lazard residual is only a lifting boundary
+                // and cannot justify the falsity of the original atom.
+                const LeafCellResult cell = characterizeLeafAtom(
+                    algebra_, kernel_, cons_[ci].poly, cons_[ci].rel, prefix, var, s_i);
+                if (!cell.supported || cell.holdsAtSample) continue;
+                cov.add(cell.interval);
+                cellsList.push_back({cell.interval, {cons_[ci].poly}, {ci}});
+                inloopPruneNew();
+                excluded = true;
+                break;
+            }
+            if (excluded) {
+                sample.pop();
+                continue;
+            }
+        }
+
         if (isLeaf) {
             // SPLIT the truth path from the boundary path per leaf atom
             // (characterizeLeafAtom): truth = UniformTrue / UniformFalse /

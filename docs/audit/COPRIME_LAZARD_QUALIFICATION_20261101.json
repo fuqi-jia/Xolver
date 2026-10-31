@@ -1,0 +1,246 @@
+{
+  "schema": "xolver-coprime-lazard-native-qualification/1",
+  "qualification": {
+    "native_builder_sha256": "fd82773a2a0e28b88f1b1010ee12a9f2f4dc985565a115921912eb6ccf7fc46c",
+    "source_head": "887e2a94656231fecb0b46f7e10d7f406b6f1a25",
+    "source_manifest_sha256": "8cb8a3d61334c59f7a61af44d2e41664f870eabb33414e16896ef0a80a6f3577",
+    "binaries": {
+      "xolver": "cc72195531844ea37cb0e3495cb0ebe8c7d1cbedc80f68bc6846a81a4e2fbe55",
+      "xolver-sv": "cb65fe7e69da74caf72b22ec19c8892b374c649978a66718cc54ce68cd85d1a4",
+      "xolver-parallel-worker": "f4ea2c340b246da0071079f0cc4a1a3ea3cb0e79eb98e07a143a09786b530c49"
+    },
+    "binary_sha256": "cc72195531844ea37cb0e3495cb0ebe8c7d1cbedc80f68bc6846a81a4e2fbe55",
+    "unit_binary_sha256": "e8370df0a70475fb5c65d685df855d2a0637dba928dd7b530ea47b9523d3f334",
+    "library_sha256": "134d0c41e98ecb00d03424aae9615898a87ceb4d40161e11a575b73535de55b1",
+    "python_extension_sha256": "d25ffc9278702172ef08d981827aa4b306fe579dd6b60e25a23b222bde6144c9",
+    "python_shared_libraries": {
+      "/usr/lib/x86_64-linux-gnu/libmpfr.so.6": "1aed080b3143049fbe016cd82cdc5fb47db386386556cc1bb37cfccc133c0fae",
+      "/usr/lib/x86_64-linux-gnu/libgmp.so.10": "fda9699eef15deda5f1c626e9140377a7f5d88c41516a54278ac02429cb20fa5",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/partial-proof-python-r1208/native-runtime/usr/lib/x86_64-linux-gnu/libgmpxx.so.4.7.0": "c6261b838536ec28a47008433227aaaf2573f408b54bfa79bea8c9c98c4acaa6"
+    },
+    "python_tests": 31,
+    "logs": {
+      "content-contract.log": "dde96fabc46fbf772cd84d09e81d4783395fc8f444795daf75fe3185c7f64c8f",
+      "targeted.log": "95cb720a3926b7cb427913a18ddeea3ede6d2dc3a156458ca346fcfa0fada1aa",
+      "python-tests.log": "85b325a5d8798fdfc6757a990efcf679b2931c58df26deb1c0d9631e701ae211",
+      "negative-build.log": "1ac713a6876f116c7c1c5c3473a7bca99474847f8009b2084230e6ca2b1075e8",
+      "python-link.log": "7dcc0b3899864f169ca92b4d8a6dc182922336bdb79756cc6d553f9601d23ecb",
+      "build-unit.log": "d04120ad7c3ed0539e7a9e74e1a16c005780c2980bd18290c9cd19a7cce312d8",
+      "negative-contracts.log": "07475fc6802da9f1eeb770081ea4789d605851d90423aa626d0491bf79746dba",
+      "architecture.log": "ee2d80a785e3e9e3a4c838efaf85059ad52986f30af4974c3a7b3b9707d0b44c",
+      "build.log": "8b4bd1538ea0bb8da80faa2bd7428b12adda6c0a4a44209c75feab0ae73bf08c",
+      "overlay.log": "5042c87aab5af8bd1ed60e42feb2ee161fda48541f08a0a51a57a2d4af32885a",
+      "unit.log": "a800fc7c82b1d66963e90061653be441a4a3a010b19bc9d69107287815425ce1",
+      "fixed-contracts.log": "1b1993c4a932687f17023dc5f33b000967ff8b737026ac34911f46047ed41260",
+      "configure.log": "751270c46120b2af7ddf2f53db6c81ddf09d93e96fe51f2dfc1a77336bc29ca7"
+    },
+    "metrics": {
+      "completed": 1,
+      "failures": 0
+    },
+    "negative_operator_sha256": "6d8a6fba4d9e458602f51f2dda0cc342cc7db0ffddd10d2cbe7ece4d699fa086",
+    "negative_unit_exit_code": 1,
+    "negative_same_abi_headers": {
+      "src/search/nra/lazard/LazardProjectionOperator.h": "b64d92b6e75f0155a463b791d24e60c339088068aca0ddb6a00f8884cfc8c919",
+      "src/search/nra/lazard/Squarefree.h": "67ef62749868a52aba1d3c4e560780d7d9aa1663045323213317db1be8cffcb8",
+      "src/search/nra/cac/CacEngine.h": "cdb69f636c9f6773533d78e40b5b856abd8588ec729761e057add1b2b2f6254c",
+      "src/search/nra/cac/SingleCellProjection.h": "0c582984f56d11f4cd81e70567a6abc2bf99db6ced196a68473fac03e093d6ed",
+      "src/algebra/poly/RationalPolynomial.h": "59f03ec8ad2ab5ff842c0448274d5102a81ce635d69505e6cba34722041ef85f",
+      "src/search/nra/core/CdcacValue.h": "e427496b3a53c65b8a5e9b0905af1aca0fc185167a328ff632aac9b93a070176"
+    },
+    "corrected_previous_run": "6a0bae1db68c",
+    "previous_failed_checks_sha256": "76a7b62dff590f44dff96e3562ab0c7298162253bcfce150e00fec12dad29ef3",
+    "protected_sets_used": false,
+    "boundary": "Canonical native qualification of a pairwise-coprime Lazard projection basis. Shared factors are split with guarded exact gcd and independently verified exact quotients; total active elimination degree decreases, cached resultants survive refinement and both provenance parents are retained. The previous operator is recompiled against identical fixed headers/ABI and must fail all3 new contracts before the corrected implementation is restored and every target rebuilt. Focused/full native tests and31 Python tests are checked. Original-input independent decisions/models, complete server acceptance and fair timing remain required. Direct engine wrong-UNSAT reproduction is separate from the already-SAT frozen CLI controls. Both protected sets remain unused."
+  },
+  "qualification_sha256": "a54f682756520b014caaa6742afc34a330550b3185a5827148508025809fac08",
+  "native_build": {
+    "experiment": "116156a290e4",
+    "run": "76a37f0ef5e8",
+    "physical_cpu": 0
+  },
+  "unit_cases": 1908,
+  "unit_assertions": 988077,
+  "python_tests": 31,
+  "targeted_cases": 294,
+  "targeted_assertions": 44857,
+  "model_check": {
+    "experiment": "c2dbfd12880d",
+    "run": "47dedbfc65ca",
+    "record": {
+      "qualification_sha256": "a54f682756520b014caaa6742afc34a330550b3185a5827148508025809fac08",
+      "source_manifest_sha256": "8cb8a3d61334c59f7a61af44d2e41664f870eabb33414e16896ef0a80a6f3577",
+      "probe_source_sha256": "fb0c76b45c9febf6e520fabb221cd6e48b24679294dc673638d6efa6ede4713c",
+      "probe_binary_sha256": "ddb03469300a452e749c58ff6b1cadb62b2363c0f8d333b44dbfdb0650a64e39",
+      "compile_command": [
+        "/usr/bin/c++",
+        "-DXOLVER_ENABLE_PROOFS",
+        "-DXOLVER_HAS_CADICAL",
+        "-DXOLVER_HAS_LIBPOLY",
+        "-DXOLVER_VERSION_MAJOR=0",
+        "-DXOLVER_VERSION_MINOR=1",
+        "-DXOLVER_VERSION_PATCH=0",
+        "-DXOLVER_WITH_CUDA=0",
+        "-DXOLVER_WITH_DASK=0",
+        "-DXOLVER_WITH_HIP=0",
+        "-DXOLVER_WITH_MPI=0",
+        "-DXOLVER_WITH_OPENACC=0",
+        "-DXOLVER_WITH_SPARK=0",
+        "-I/pub/data/jiafq/xolver/src",
+        "-I/pub/data/jiafq/xolver/include",
+        "-I/pub/data/jiafq/xolver/third_party/libpoly/include",
+        "-I/pub/data/jiafq/xolver/third_party/SOMTParser/include",
+        "-I/pub/data/jiafq/xolver/dependencies/doctest",
+        "-isystem",
+        "/pub/data/jiafq/xolver/dependencies/native/include",
+        "-isystem",
+        "/pub/data/jiafq/xolver/dependencies/json/include",
+        "-isystem",
+        "/pub/data/jiafq/xolver/third_party/cadical/src",
+        "-O3",
+        "-DNDEBUG",
+        "-std=c++20",
+        "-fPIE",
+        "-Wall",
+        "-Wextra",
+        "-Wpedantic",
+        "-Wno-unused-parameter",
+        "-O3",
+        "-c",
+        "/pub/data/jiafq/xolver/validation/arithmetic-r103/shared-factor-model-r1326.cpp",
+        "-o",
+        "/pub/data/jiafq/xolver/build/diagnostics/shared-factor-model-r1326.o"
+      ],
+      "link_command": [
+        "/usr/bin/c++",
+        "/pub/data/jiafq/xolver/build/diagnostics/shared-factor-model-r1326.o",
+        "-O3",
+        "-DNDEBUG",
+        "-o",
+        "/pub/data/jiafq/xolver/validation/arithmetic-r103/shared-factor-model-r1326/probe",
+        "../src/libxolver_core.a",
+        "/pub/data/jiafq/xolver/dependencies/native/lib/libgmp.a",
+        "-lgmpxx",
+        "../third_party/SOMTParser/libsomtparser.a",
+        "/pub/data/jiafq/xolver/dependencies/native/lib/libgmpxx.a",
+        "/pub/data/jiafq/xolver/dependencies/native/lib/libmpfr.a",
+        "/pub/data/jiafq/xolver/dependencies/native/lib/libgmp.a",
+        "../third_party/cadical-build/libcadical.a",
+        "../third_party/libpoly/src/libpolyxx.a",
+        "../third_party/libpoly/src/libpoly.a",
+        "/pub/data/jiafq/xolver/dependencies/native/lib/libmpfr.a",
+        "/pub/data/jiafq/xolver/dependencies/native/lib/libgmp.a"
+      ],
+      "contract_summaries": {
+        "fixed-contracts.log": {
+          "counts": [
+            3,
+            3,
+            0
+          ],
+          "sha256": "1b1993c4a932687f17023dc5f33b000967ff8b737026ac34911f46047ed41260"
+        },
+        "negative-contracts.log": {
+          "counts": [
+            3,
+            0,
+            3
+          ],
+          "sha256": "07475fc6802da9f1eeb770081ea4789d605851d90423aa626d0491bf79746dba"
+        }
+      },
+      "native_points": {
+        "1": {
+          "b": "2",
+          "c": "1",
+          "x": "3/2"
+        },
+        "3": {
+          "b": "4",
+          "c": "7/2",
+          "x": "15/4"
+        }
+      },
+      "independent_model_replays": [
+        {
+          "lower": 1,
+          "oracle": "z3",
+          "result": "sat",
+          "timing": {
+            "seconds": 0.03422579728066921,
+            "launch_seconds": 0.0028109941631555557,
+            "wait_seconds": 0.03141480311751366,
+            "returncode": 0,
+            "timeout_notified_seconds": null,
+            "cleanup_seconds": null,
+            "timed_out": false,
+            "budget_overrun": false
+          },
+          "original_input_sha256": "a24fdbc5bd979819ba0daeac6541421ad88435140e04945f3650dcb898411147",
+          "replay_sha256": "a651e56a49d6c4af61be94be354db7f7c1580743c021c5067aefd9420954e1df",
+          "oracle_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+        },
+        {
+          "lower": 1,
+          "oracle": "cvc5",
+          "result": "sat",
+          "timing": {
+            "seconds": 0.01770698092877865,
+            "launch_seconds": 0.002139892429113388,
+            "wait_seconds": 0.01556708849966526,
+            "returncode": 0,
+            "timeout_notified_seconds": null,
+            "cleanup_seconds": null,
+            "timed_out": false,
+            "budget_overrun": false
+          },
+          "original_input_sha256": "a24fdbc5bd979819ba0daeac6541421ad88435140e04945f3650dcb898411147",
+          "replay_sha256": "a651e56a49d6c4af61be94be354db7f7c1580743c021c5067aefd9420954e1df",
+          "oracle_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102"
+        },
+        {
+          "lower": 3,
+          "oracle": "z3",
+          "result": "sat",
+          "timing": {
+            "seconds": 0.03412468917667866,
+            "launch_seconds": 0.002718646079301834,
+            "wait_seconds": 0.03140604309737682,
+            "returncode": 0,
+            "timeout_notified_seconds": null,
+            "cleanup_seconds": null,
+            "timed_out": false,
+            "budget_overrun": false
+          },
+          "original_input_sha256": "ccc5502e7d7db6735fc100bb7d5756c0b635383747ec1d94ea4bff04681d1bee",
+          "replay_sha256": "1ffcadb2a75c881c2027a9c01e8ababbe593148c7dad8a2c24cb48ff096bf730",
+          "oracle_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+        },
+        {
+          "lower": 3,
+          "oracle": "cvc5",
+          "result": "sat",
+          "timing": {
+            "seconds": 0.018284060060977936,
+            "launch_seconds": 0.002660132944583893,
+            "wait_seconds": 0.015623927116394043,
+            "returncode": 0,
+            "timeout_notified_seconds": null,
+            "cleanup_seconds": null,
+            "timed_out": false,
+            "budget_overrun": false
+          },
+          "original_input_sha256": "ccc5502e7d7db6735fc100bb7d5756c0b635383747ec1d94ea4bff04681d1bee",
+          "replay_sha256": "1ffcadb2a75c881c2027a9c01e8ababbe593148c7dad8a2c24cb48ff096bf730",
+          "oracle_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102"
+        }
+      ],
+      "protected_sets_used": false,
+      "boundary": "The corrected direct CAC engine exports exact native witnesses for the two previously false-UNSAT formulas. Both actual models are replayed on the identical original inputs by Z3 and cvc5. Strictly decoded same-ABI contract summaries establish3 fixed passes and3 old-operator failures. Canonical source/library/unit bytes stay unchanged. This is correctness/capability evidence, not a performance score or a claimed old CLI opposite verdict."
+    },
+    "record_sha256": "a7a178d8ab1dc82fe24c2716ba274a1397260e438a0d51c6348b205c877dfc5d",
+    "source": "#include \"search/nra/cac/CacEngine.h\"\n#include \"search/nra/backend/LibpolyBackend.h\"\n#include \"algebra/poly/PolynomialKernel.h\"\n#include <iostream>\nusing namespace xolver;\nint main() {\n    for (int lower : {1, 3}) {\n        auto kernel = createPolynomialKernel();\n        LibpolyBackend backend(kernel.get());\n        const VarId b = kernel->getOrCreateVar(\"b\"), c = kernel->getOrCreateVar(\"c\");\n        const VarId x = kernel->getOrCreateVar(\"x\");\n        const auto bv = RationalPolynomial::fromVar(b, 1, 1);\n        const auto cv = RationalPolynomial::fromVar(c, 1, 1);\n        const auto xv = RationalPolynomial::fromVar(x, 1, 1);\n        const auto k = [](int n) { return RationalPolynomial::fromConstant(mpq_class(n)); };\n        CacEngine::Config config; config.deadlineMillis = 2000;\n        CacEngine engine(&backend, kernel.get(), {b,c,x}, {\n            {bv+k(-lower),Relation::Geq},{bv+k(-lower-1),Relation::Leq},\n            {cv+k(-lower),Relation::Geq},{cv+k(-lower-1),Relation::Leq},\n            {xv*(xv-bv),Relation::Lt},{xv*(xv-cv),Relation::Gt}}, config);\n        const auto result = engine.solve();\n        if (result.status != CacStatus::Sat) return 2;\n        if (result.model.varOrder.size() != 3) return 3;\n        for (size_t i=0;i<result.model.varOrder.size();++i) {\n            if (!result.model.values[i].isRational()) return 4;\n            std::cout << lower << ' ' << kernel->varName(result.model.varOrder[i])\n                      << ' ' << result.model.values[i].rational.get_str() << '\\n';\n        }\n    }\n}\n"
+  },
+  "protected_sets_used": false,
+  "boundary": "The two direct-engine false-UNSAT reproductions now export actual SAT models independently replayed by Z3 and cvc5. Same-ABI old-operator contracts fail3/3, fixed contracts pass3/3. Full native correctness qualification is complete;39-group acceptance and fresh fixed160 comparison are still running. No benchmark or end-to-end QCP superiority claim. Both earlier reference-path qualification failures remain preserved."
+}

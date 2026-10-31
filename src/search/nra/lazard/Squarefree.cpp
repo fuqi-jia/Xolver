@@ -1,6 +1,7 @@
 #include "base/RuntimeConfig.h"
 #include "search/nra/lazard/Squarefree.h"
 #include "search/nra/preprocess/GcdEngine.h"
+#include "search/nra/preprocess/SubresultantEngine.h"
 #include "search/nra/lazard/LocalProjection.h"  // resultant()
 #include "algebra/poly/PolynomialKernel.h"
 #include "base/EnvParam.h"   // XOLVER_NRA_LAZARD_MAX_COEFF_BITS projection firewall
@@ -190,10 +191,37 @@ SquarefreeResult gcdTwo(const RationalPolynomial& a, const RationalPolynomial& b
 
 }  // namespace
 
+SquarefreeResult commonFactorWrt(const RationalPolynomial& a,
+                                const RationalPolynomial& b, VarId v,
+                                PolynomialKernel* kernel) {
+    if (kernel) {
+        auto result = gcdTwo(a, b, kernel);
+        if (result.complete) result.poly = normalizeUpToUnit(result.poly);
+        return result;
+    }
+    auto result = SubresultantEngine::run(a, b, v);
+    if (result.gcdCandidate.isZero())
+        return {RationalPolynomial::fromConstant(mpq_class(1)), false};
+    // A remainder can be (b-c)*(v-b). Its coefficient content is a polynomial
+    // in the lower variables, so rational coefficient-content removal alone
+    // leaves a candidate that does not divide either original input.
+    auto primitive = primitivePartWrt(result.gcdCandidate, v);
+    if (!primitive.complete || !GcdEngine::exactDivide(a, primitive.poly) ||
+        !GcdEngine::exactDivide(b, primitive.poly))
+        return {RationalPolynomial::fromConstant(mpq_class(1)), false};
+    return {normalizeUpToUnit(primitive.poly), true};
+}
+
 SquarefreeResult contentWrt(const RationalPolynomial& p, VarId v, PolynomialKernel* kernel) {
     if (p.isZero()) return {RationalPolynomial::fromConstant(mpq_class(0)), true};
 
     auto coeffs = p.coefficients(v);  // index i = coefficient of v^i
+    // Any nonzero rational coefficient makes the coefficient gcd a unit.
+    // Resolve this before a hard/unsupported symbolic gcd of earlier terms.
+    for (const auto& c : coeffs) {
+        if (!c.isZero() && c.isConstant())
+            return {RationalPolynomial::fromConstant(mpq_class(1)), true};
+    }
     RationalPolynomial acc;
     bool started = false;
     for (auto& c : coeffs) {

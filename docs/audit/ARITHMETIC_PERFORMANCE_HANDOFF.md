@@ -40,6 +40,42 @@ Older tables describe their own frozen versions and evidence boundaries.
 
 ## Current arithmetic and ASP continuation
 
+The consolidated QCP/foundations delivery remains
+[PR92](https://github.com/fuqi-jia/Xolver/pull/92). Its retained runtime is
+`65c21b9b` (documentation head `c9c4243c`): verified coprime nonlinear
+projection and certified shallow-conflict exclusion. R1341 qualifies that
+runtime, all39 R1343 acceptance groups pass, and R1345 binds the native/API
+and actual-model evidence. The PR records the final CI and merge receipts.
+
+**Row propagation caching is closed and removed.** The first cache reused
+still-valid earlier-call theorems, changed bounded propagation prefixes, and
+lost SAT51/131 in R1359 (3 baseline/1 candidate verified solves). Exact current
+endpoint identities fixed those prefix changes in `abb54396`; the old cache
+fails the same-header prefix contract. R1362 passes1918 native cases /
+989214 assertions and31 Python tests. Both independent solvers check all381
+actual implications; all39 R1366 acceptance groups pass. Its R1365 pilot1→3
+gain is confined to already-variable controls51/131, while SAT59 remains slower.
+
+Fresh, same-budget R1367 fixed160 gives **106 main/106 cache/116 verified Z3**,
+with no gained/lost verdicts, opposite verdicts or invalid exported models.
+Verified PAR-2 is6971.790/6996.221/5514.368; the cache is about0.35% slower.
+Both Xolver versions return59 SAT/47 UNSAT; main has2 unknowns/52 timeouts,
+the rejected cache1 unknown/53 timeouts. Input115 is independently confirmed
+by its original-hash modular certificate checked again in R1366; the unmodified
+raw summary had excluded it after the timed oracles failed to confirm it.
+Eight Z3 UNSATs12/24/27/42/50/80/114/159 remain unconfirmed and excluded.
+The checked [closed-trial record](LINEAR_ROW_CACHE_CLOSED_20261101.json)
+has SHA-256 `07e1516f370812f4ad38f7675d202093cd45c828d978fac4f89ffc1b396f7ae7`.
+
+The entire cache, its definition-identity interface, widened row versions and
+cache-only tests are reverted in `cecea9fa`; runtime files again match the
+qualified `65c21b9b` byte for byte. These new scores qualify the rejected cache,
+not the restored prefix runtime. Panda's canonical source/build still contains
+R1362: any next source overlay must use `source-r1362.tar.json` as its preimage
+and restore all seven reverted files. Frozen evidence is retained; no new PR,
+compatibility entry, protected-set run or end-to-end QCP claim is introduced.
+The propagation memory-pool and work-budget-only experiments remain closed.
+
 [PR89](https://github.com/fuqi-jia/Xolver/pull/89), implementation `e0cafba8`,
 restores SAT's retained signed root prefix after a real restart. A shared theory
 contract restores LRA/LIA sources cleared for model reconstruction and avoids
@@ -189,10 +225,172 @@ retain2 unknowns and54 timeouts. Verified PAR-2 is7105.484/7107.417/5451.485;
 this phase makes no performance-gain claim. All160 original triads are budget
 valid, requiring no replacements. See
 [the complete correctness phase](ARITHMETIC_RESET_CONTRACT_STAGE_20261101.json).
-Final delivery PR CI and merging remain pending; keep PR91 draft until both
-jobs pass. Documentation reuses the qualified implementation without an extra
-server archive. Both protected sets remain unread and unused; Xolver has not
-surpassed Z3.
+Final delivery [CI41219285757](https://github.com/fuqi-jia/Xolver/actions/runs/41219285757)
+passes both jobs. PR91 is merged as main `5969e9e9`; its
+[postmerge CI41220826923](https://github.com/fuqi-jia/Xolver/actions/runs/41220826923)
+passes both jobs. Documentation reuses the qualified implementation without an
+extra server archive. Both protected sets remain unread and unused; Xolver has
+not surpassed Z3.
+
+The R1314 batched simplex experiment `ff061b71` is **closed without promotion**.
+All39 R1317 groups pass, including1903 unit cases/1098188 assertions and31
+Python tests. The15-case pilot gains SAT51,4→5 verified solves, but fresh full160
+R1319 verifies **107 baseline/107 candidate/117 Z3**, with no gains, losses,
+opposite verdicts or invalid models. Both Xolver arms have2 unknowns and51
+timeouts. Verified PAR-2 is6892.152/6890.013/5452.822: only about0.03% lower for
+the candidate. Seven unconfirmed Z3 UNSATs remain excluded. Original144's
+baseline violates its wall budget at319.674s; all three frozen versions are
+replayed only after terminal status and absent PID, preserving the invalid
+original. Runtime changes and dedicated tests are reverted. See
+[the complete negative result](BATCH_SIMPLEX_CLOSED_STAGE_20261101.json).
+The shift from earlier104-solve rounds is observed in the unchanged baseline
+as well and is not credited to this experiment.
+
+QCP/foundations work continues in the existing PR92; intermediate experiments
+do not get separate PRs. R1321 observes actual CAC inputs without changing the
+qualified core ABI or projection results. On public SAT77, call10 supplies342
+polynomials containing the eliminated variable, with only115 distinct boundaries
+up to a nonzero rational unit. The corresponding potential pair counts are58311
+versus6555; this is not a measured speedup. Projection inputs are deduplicated
+before Lazard pair generation, while original signed constraints and covering
+origins are retained. Tests cover ordered boundary equivalence, vanishing middle
+coefficients and opposite signed constraints. Subsequent native qualification and original-input comparisons are recorded
+below. See
+[the root-cause observation](CAC_DUPLICATE_INPUT_PROBE_20261101.json).
+Both protected sets remain unread and unused.
+
+The unit-only input deduplication qualifies in R1322:284 focused cases/44805
+assertions, the complete1904-case native suite and31 Python API tests pass.
+R1323 has eight budget-valid original-input triads with no new/lost solve;
+original106 is budget-invalid and excluded. This preliminary experiment does
+not justify promotion or another full160 run. No replacement is required to
+claim a negative incomplete pilot; the invalid original remains preserved.
+
+R1324 instead reproduces a correctness defect in the shared CAC projection.
+With real b,c in [3,4], x(x-b)<0 and x(x-c)>0 is SAT at b=4,c=3,x=7/2, but the
+direct engine returns UNSAT. The same error occurs over [1,2]; adding the entailed
+b>c makes both native controls SAT. Projection claims completeness while emitting
+only two lower polynomials, neither vanishing at b=c>0. Both original/grounded
+formulas are independently SAT with Z3/cvc5. Frozen main and candidate CLIs
+return SAT through other routes, so this is an engine defect rather than a
+claimed end-to-end CLI wrong verdict. See
+[the exact reproduction](CAC_SHARED_FACTOR_API_REPRO_20261101.json).
+
+The shared Lazard operator now refines zero-resultant pairs by guarded exact gcd
+and verified polynomial quotients, yielding a pairwise-coprime squarefree basis.
+Stable factor identities reuse resultants through refinement; total active
+elimination degree strictly decreases. Common-factor and quotient provenance
+retain both parents. This serves CAC, global Lazard closure and the shared
+projection policy, preserves original signed constraints, and adds the missing
+b=c boundary. R1325 initially fails two reference-path contracts; R1327 reduces this to one.
+The reference PRS candidate now removes polynomial coefficient content before
+exact division, and content extraction resolves any nonzero rational unit
+coefficient before attempting a hard symbolic gcd. The corrected implementation
+`887e2a94` qualifies in R1328:294 targeted cases/44857 assertions,1908 full unit
+cases/988077 assertions and31 Python API tests pass. Recompiling the old operator
+against exactly the fixed headers/ABI fails all3 new contracts; restoring the
+fixed operator passes all3. Every native target is rebuilt before freezing.
+
+R1326 exports the actual direct-engine points b=2,c=1,x=3/2 and
+b=4,c=7/2,x=15/4. Both models replay SAT with Z3 and cvc5 on the identical original
+input hashes. Source/CLI/worker hashes and complete checks are in
+[the native qualification](COPRIME_LAZARD_QUALIFICATION_20261101.json).
+CLI SHA-256 is `cc72195531844ea37cb0e3495cb0ebe8c7d1cbedc80f68bc6846a81a4e2fbe55`.
+
+All39 R1329 acceptance groups pass. R1339 seals fresh R1330 fixed160 against
+unchanged delivered main and same-round frozen Z3: **105 baseline/105 candidate/
+116 verified Z3**. Candidate retains58 SAT/47 UNSAT,1 unknown and54 timeouts;
+baseline has2 unknowns/53 timeouts. There are no gained/lost solves, opposite
+verdicts or invalid models. Verified PAR-2 is7001.059/7010.118/5551.405; the
+candidate is about0.13% slower, so this is retained for correctness, not promoted
+as a performance improvement. Seven Z3 UNSATs12/24/27/42/80/114/159 remain
+unconfirmed and excluded. Original triads89/120/133 overrun wall budgets and are
+preserved; whole frozen triads are replayed only after terminal state and absent
+PIDs. R1339 audit is EOS f34deca8ace2/c0ada4798223; full record SHA-256 is
+`65fb08eb6f70f10826f332f8202177a8c0b7228b6999e7d6e9ef23fd7a1cd55d`.
+
+The next change `65c21b9b` excludes certified false original atoms as soon as all
+their variables are assigned, before deeper CAC recursion. It uses atom truth
+for zero/nullification, leaves unsupported probes on the existing path, and
+retains complete projection inputs. R1333 reproduces unnecessary recursion:
+old API returns unknown on a shallow contradiction with1 node and a SAT formula
+with2 nodes. R1341 qualifies the fix:297 focused cases/44876 assertions,
+1911 full cases/988096 assertions and31 Python tests pass. Header-identical
+old-engine controls fail all3 new budget/depth contracts; the fix passes all3.
+An initial R1334 source preflight stops before overlay because inherited deletion
+records are missing; corrected R1341 retains all409 tombstones and uses identical
+runtime source. AGENTS.md remains untouched.
+
+R1338 now proves the contradiction without entering unused dimensions and returns
+SAT at x=1,y=0 within2 nodes. Actual native models replay SAT with both Z3 and
+cvc5. All39 R1343 acceptance groups pass. R1345 seals nine fresh public60s/
+one-physical-CPU/16GiB triads: **3 baseline/3 candidate/7 verified Z3**, with no
+new/lost solves or invalid models;159 stays unconfirmed. This is a verified node-
+budget capability gain without public-pilot solve gain. It does not justify
+another full160 run for this change alone. Previous105/105/116 counts belong to
+the shared-factor version and do not score this prefix candidate. See
+[the complete capability/pilot evidence](CAC_PREFIX_PRUNING_STAGE_20261101.json).
+Current frozen CLI SHA-256 is
+`30965221fc2a3b37177a7e79c771b6fb4d9f738d4a524357aee2448b5b3ba07f`.
+
+R1344's24 short-profile samples now include12 in CdcacCore::buildClosure; CAC
+returns after about2.005s before the fallback. Sample fractions do not establish
+end-to-end speedup. R1346 additionally confirms that x(x-b),x(x-c) are refined
+correctly but the CAC characterization output/global Lazard level list each
+retain five boundary polynomials of total degree7, although three linear factors
+suffice for the same root set. This does not prove repeated lifting on the main
+CAC path: CacEngine consumes characterize.downwardPolys, not boundaryPolys.
+
+The active-factor experiment `e0469510` separates the final basis from provenance
+and filters both output lists. R1347 passes301 focused cases/45713 assertions,
+1915 full cases/988933 assertions and31 Python tests; old implementations fail3
+new contracts under identical headers, while the candidate passes all3. The126 exact
+cell comparisons pass758 assertions across nullification/degree drops. R1348
+exports two native models independently replayed by both Z3 and cvc5; boundary
+counts drop5 to3 and degree sum7 to3. R1354 seals nine fresh public triads:
+**4 baseline/4 candidate/7 verified Z3**, zero gains/losses, opposite verdicts,
+invalid models or budget violations. PAR-2 worsens679.615 to681.716. SAT69
+slows19.410 to22.625s;144 improves59.472 to58.357s but is solved by both versions.
+The increase from earlier3-solve pilots is observed in the frozen control too,
+so it is not credited.159 stays unconfirmed. **Closed without promotion**;
+`2d7d68f1` reverts all runtime changes and dedicated tests.39-group acceptance
+specifications were prepared but never launched, and no full160 expansion is
+warranted. See [the complete negative result](CAC_ACTIVE_FACTORS_CLOSED_20261101.json).
+
+R1351 samples public LRA gaps49/58 and reconfirms propagation cost. On public58,
+R1352 observes1199 actual propagation calls: only6 repeat exact bound states and
+none repeat bound/analysis revisions. Median current size is2613 variables/
+2035 rows, with41 variables changed between comparable calls;1862340 row visits
+produce408828 endpoints. Observer copying costs1.567s, so these10s diagnostics
+are not solver performance scores. R1355 uses a lighter effort/target observer:
+all1655 completed calls are Standard effort;1649 return registered SAT targets,
+with552177 derived endpoints and76275 target results. Whole-call memoization and
+skipping Full-effort propagation are unsupported directions. See
+[the state/effort observations](LINEAR_PROPAGATION_DELTA_OBSERVATIONS_20261101.json).
+
+The next implementation lead is retained row arithmetic with explained bounds,
+using existing SparseRow.version plus explicit variable-definition identity and
+source-premise invalidation. Pivot updates already advance row.version. Reuse
+must be invalidated for changed/expired primitive reasons, numeric-bound changes
+under the same literal, backtracking and same-address simplex replacement/reset.
+Keep the fresh local overlay and current output/work budgets; do not confuse a
+cached proof with a currently asserted bound. No allocator-pool rerun or new
+runtime feature gate is warranted. This cache is not implemented yet.
+
+Current local runtime source is identical to retained `65c21b9b` after the revert;
+canonical Panda build/source still contain the closed `e0469510` experiment.
+Use source-r1347.tar.json as the next server-overlay preimage and rebuild every
+consumer after restoration/new changes; do not mix headers and old objects.
+PR92 delivery c9c4243c passes both jobs in
+[CI41232467242](https://github.com/fuqi-jia/Xolver/actions/runs/41232467242).
+The existing PR stays draft; no new PR or main merge is made for these trials.
+
+Existing actual QCP workflow receipts still belong to the older R1264 worker,
+not the R1341 worker. Continue in existing PR92; both protected sets remain
+unread/unused. No overall SMT or end-to-end QCP superiority is established.
+Delivery documentation reuses qualified source/binaries without an additional
+server archive.
+
 
 
 [PR88](https://github.com/fuqi-jia/Xolver/pull/88), core `32d23ec3`, closes the

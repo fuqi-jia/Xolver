@@ -7,6 +7,7 @@
 #include <gmpxx.h>
 #include "search/nra/lazard/LazardProjectionOperator.h"
 #include "search/nra/lazard/LazardProjectionClosure.h"
+#include "search/nra/preprocess/GcdEngine.h"
 
 using namespace xolver;
 
@@ -86,6 +87,63 @@ TEST_CASE("Lazard op: x*y - 1 eliminate y => LC=x boundary (hyperbola x=0)") {
 }
 
 // ---- Closure --------------------------------------------------------------
+
+TEST_CASE("Lazard op: shared factors retain crossings of the remaining roots") {
+    const VarId a = 1, b = 2, c = 3, x = 4;
+    const auto xv = RationalPolynomial::fromVar(x, 1, 1);
+    const auto xa = xv - RationalPolynomial::fromVar(a, 1, 1);
+    const auto xb = xv - RationalPolynomial::fromVar(b, 1, 1);
+    const auto xc = xv - RationalPolynomial::fromVar(c, 1, 1);
+    auto result = lazardProjectStep({xa * xb, xb * xc, xc * xa}, x);
+    REQUIRE(result.complete);
+    for (auto difference : {xa - xb, xb - xc, xc - xa}) {
+        difference.normalize();
+        bool found = false;
+        for (const auto& item : result.items) {
+            if (item.op == LazardProjectionOpKind::Resultant)
+                found |= sameUpToUnit(item.poly, difference);
+        }
+        CHECK(found);
+    }
+    REQUIRE(countOp(result, LazardProjectionOpKind::CommonFactor) > 0);
+    for (const auto& item : result.items) {
+        if (item.op != LazardProjectionOpKind::CommonFactor &&
+            item.op != LazardProjectionOpKind::ExactQuotient) continue;
+        REQUIRE(item.hasParent1);
+        REQUIRE(item.hasParent2);
+        if (item.op == LazardProjectionOpKind::CommonFactor) {
+            auto division1 = GcdEngine::exactDivide(item.parent1, item.poly);
+            auto division2 = GcdEngine::exactDivide(item.parent2, item.poly);
+            CHECK(division1.has_value());
+            CHECK(division2.has_value());
+        } else {
+            CHECK(sameUpToUnit(item.poly * item.parent2, item.parent1));
+        }
+    }
+}
+
+TEST_CASE("Lazard closure: common-factor refinements retain both provenance parents") {
+    const VarId b = 1, c = 2, x = 3;
+    const auto xv = RationalPolynomial::fromVar(x, 1, 1);
+    const auto xb = xv - RationalPolynomial::fromVar(b, 1, 1);
+    const auto xc = xv - RationalPolynomial::fromVar(c, 1, 1);
+    LazardProjectionClosure closure;
+    REQUIRE(closure.build({xv * xb, xv * xc}, {b, c, x}) == LazardIncompleteReason::None);
+    bool crossing = false;
+    const auto expected = xb - xc;
+    for (size_t i = 0; i < closure.entries().size(); ++i) {
+        const auto& entry = closure.entries()[i];
+        crossing |= sameUpToUnit(entry.poly, expected);
+        if (entry.source.op == LazardProjectionOpKind::CommonFactor ||
+            entry.source.op == LazardProjectionOpKind::ExactQuotient) {
+            CHECK(entry.source.parent1 >= 0);
+            CHECK(entry.source.parent2 >= 0);
+            CHECK(entry.source.parent1 < static_cast<int>(i));
+            CHECK(entry.source.parent2 < static_cast<int>(i));
+        }
+    }
+    CHECK(crossing);
+}
 
 TEST_CASE("Lazard closure: {y^2 - x} over [x,y] => x-boundary, complete") {
     RationalPolynomial p; p.addVar(VY, 2, 1); p.addVar(VX, 1, -1); p.normalize();
