@@ -1,5 +1,6 @@
 #pragma once
 
+#include "base/GmpHash.h"
 #include <gmpxx.h>
 #include <string>
 #include <vector>
@@ -32,7 +33,7 @@ struct LinearFormKeyHash {
         std::size_t h = 0;
         for (const auto& t : f.terms) {
             h ^= std::hash<std::string>{}(t.first) + 0x9e3779b9 + (h << 6) + (h >> 2);
-            h ^= std::hash<std::string>{}(t.second.get_str()) + 0x9e3779b9 + (h << 6) + (h >> 2);
+            h ^= MpqHash{}(t.second) + 0x9e3779b9 + (h << 6) + (h >> 2);
         }
         return h;
     }

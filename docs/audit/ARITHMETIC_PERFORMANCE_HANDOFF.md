@@ -61,19 +61,64 @@ original triads are valid.
 A separate same-binary60s replay R1270 reproduces gains48 (43.088s UNSAT) and131
 (52.532s SAT). SAT51 instead times out, so its performance is explicitly unstable;
 the original valid round is not selectively replaced. SAT59 slows3.027→7.707s;
-SAT76 is4.726→4.724s. Core-head PR CI41199336885 passes both jobs. Final delivery
-CI and postmerge main CI remain pending; document-only evidence updates reuse
-the qualified implementation without another server archive. See
+SAT76 is4.726→4.724s. Core-head PR CI41199336885 and final delivery
+[CI41203445566](https://github.com/fuqi-jia/Xolver/actions/runs/41203445566)
+pass both jobs. PR89 is merged as main `bcccb3fd`; its
+[postmerge CI41204899280](https://github.com/fuqi-jia/Xolver/actions/runs/41204899280)
+passes both jobs. Document-only evidence updates reuse the qualified
+implementation without another server archive. See
 [the phase evidence](ROOT_ASSERTION_RESTORATION_STAGE_20261031.json).
 
 Both protected sets remain unread and unused; Xolver has not surpassed Z3.
 New R1264-worker QCP pairs use initially present, identical accepted libraries
-and proof references for both backends. GCD/max3 current controllers are still
-in progress. Coverage review corrects the older R1142 total:3 original programs
+and proof references for both backends. All six controllers now reach done:
+3 original programs,23 top-level VCs and2340 actual SMT occurrences per backend.
+Queries/verdicts and accepted formal files match across both backends. Executed
+command-time sums are680.973/703.302s; independent final-check C/symexec/SMT/Rocq
+checks total92.262/95.345s. Observed whole-workflow wall-time sums are6920/4665s,
+including unequal owner/orchestration/queue gaps. These single observations do
+not establish end-to-end superiority. See
+[the controlled program evidence](QCP_CONTROLLED_PROGRAMS_STAGE_20261031.json),
+bound to the R1264 worker, not the newer hash candidate. Coverage review also
+corrects the older R1142 total:3 original programs
 contain **3 verified bodies under4 function contracts**, with `abs` assumed by
 its declaration-only contract. Max3 verifies only the frozen upper-bound
 postcondition. The original raw receipt remains immutable; corrected
 [program evidence](QCP_ORIGINAL_PROGRAMS_STAGE_20261031.json) records these scopes.
+
+The work-bounded propagation experiment R1277/R1278 is closed without
+promotion:94 targeted cases pass, but its fresh12-case pilot drops verified
+solves5→3, loses SAT51/131 and slows SAT59 from7.990s to14.201s. Existing local
+propagation time allocation stays intact. Audit SHA-256 is
+`cd30464ee047ae77eff4ed6646ab88fffcc16f5631b794be3a1f883e86a32fba`.
+
+[PR90](https://github.com/fuqi-jia/Xolver/pull/90), implementation `c7d90fa3`,
+hashes exact GMP numerator/denominator limbs in shared linear-form and
+auxiliary-coordinate lookups. Full numeric equality and coordinate semantics
+remain unchanged. R1284 qualifies a canonical rebuild of every inline-header
+consumer; all39 R1285 acceptance groups pass, including1899 unit cases /987933
+assertions and31 Python tests. Core [CI41205591584](https://github.com/fuqi-jia/Xolver/actions/runs/41205591584)
+passes both jobs. Final delivery CI and merging remain pending.
+
+R1287 seals fresh fixed160: **104 baseline/106 candidate/117 verified Z3**
+(124 raw Z3 decisions; seven unconfirmed UNSATs12/24/27/42/80/114/159 excluded).
+Candidate gains131 SAT52.859s and144 SAT58.205s have independently replayed
+initial models; there are no losses, opposite verdicts or invalid models.
+Verified PAR-2 is7119.168/6999.585/5473.577; both Xolver versions retain2
+unknowns, with54/52 timeouts. Four budget-invalid original triads4/11/58/62 are
+preserved and replaced in full only after terminal state and absent PIDs,
+under explicit plans and unchanged binaries/settings. See
+[the complete phase evidence](EXACT_LINEAR_HASH_STAGE_20261031.json).
+
+Separate R1293 repeats solve both gains in both Xolver versions, so the count
+gap is unstable: baseline/candidate131 is43.224/37.250s and144 is58.105/54.423s,
+with independently replayed initial models. The original valid round remains
+unchanged. These repeats support local timing gains, not broad superiority;
+see [the repeat evidence](EXACT_LINEAR_HASH_REPLAY_STAGE_20261031.json).
+R1280's isolated lookup benchmark removes524288 GMP allocations per
+configuration and is approximately4–15 times faster; it is not a solver score.
+The controlled QCP matrix above uses the older R1264 worker, not this candidate.
+Both protected sets remain unread and unused; Xolver has not surpassed Z3.
 
 
 [PR88](https://github.com/fuqi-jia/Xolver/pull/88), core `32d23ec3`, closes the

@@ -1,0 +1,387 @@
+{
+  "schema": "xolver-exact-linear-hash-replay/1",
+  "implementation_commit": "c7d90fa3f0e389f064f25888e096de806b77a0bc",
+  "stage_sha256": "b489fcda16054b6ec6ab807a671bb732818d993f853d0526cd913df87c25263f",
+  "rows": [
+    {
+      "index": 131,
+      "experiment": "b19b060ddcd9",
+      "run": "d8a7c13ea1f8",
+      "status": "success",
+      "exit_code": 0,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "2"
+        ]
+      },
+      "report_sha256": "44714d605347f7f9d9e0e6ebda0df6d00010ce61e6623bc85ee3dea2ee51b425",
+      "report": {
+        "index": 131,
+        "case": {
+          "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LRA/sc/sc-37.induction2.cvc.smt2",
+          "member": "QF_LRA/sc/sc-37.induction2.cvc.smt2",
+          "logic": "QF_LRA",
+          "family": "sc",
+          "bytes": 93763,
+          "sha256": "8b660dc1debe27fe09a0eb3ca9e4e3833f075f89a66e71b90dfe102e250bc962",
+          "expected": "sat",
+          "shared_archive_member": "non-incremental/QF_LRA/sc/sc-37.induction2.cvc.smt2",
+          "shared_archive_sha256": "c594f41da343112c66598ffb4cbf9bd8f8aa8c4c1283cef09d4c79b06fb4504c",
+          "archive_matches_server": true,
+          "repetitions": 1
+        },
+        "binaries": {
+          "baseline": {
+            "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/root-retention-r1264/xolver",
+            "sha256": "ec020dde6329572b62eb8a4d4f012f32cde9d5f30152809b088e7748d110afd4"
+          },
+          "candidate": {
+            "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/exact-linear-hash-r1284/xolver",
+            "sha256": "f8fbb8232f91c7b9ab231db1296fca01730ac00425a58d5a36154104569dd0f7"
+          },
+          "z3": {
+            "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+            "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+          }
+        },
+        "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+        "timeout": 60,
+        "memory_bytes": 17179869184,
+        "observations": {
+          "z3": {
+            "result": "sat",
+            "seconds": 0.4674792233854532,
+            "launch_seconds": 0.003116751089692116,
+            "wait_seconds": 0.4643624722957611,
+            "returncode": 0,
+            "timeout_notified_seconds": null,
+            "cleanup_seconds": null,
+            "timed_out": false,
+            "budget_overrun": false,
+            "command": [
+              "prlimit",
+              "--as=17179869184",
+              "--cpu=62:63",
+              "--",
+              "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+              "-T:60",
+              "-model",
+              "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LRA/sc/sc-37.induction2.cvc.smt2"
+            ],
+            "cpu": 2,
+            "verified": true,
+            "replay": {
+              "result": "sat",
+              "seconds": 0.06536952219903469,
+              "launch_seconds": 0.0016564559191465378,
+              "wait_seconds": 0.06371306627988815,
+              "returncode": 0,
+              "timeout_notified_seconds": null,
+              "cleanup_seconds": null,
+              "timed_out": false,
+              "budget_overrun": false,
+              "command": [
+                "prlimit",
+                "--as=17179869184",
+                "--cpu=62:63",
+                "--",
+                "/pub/data/jiafq/xolver/dependencies/oracles/cvc5",
+                "--lang=smt2",
+                "--tlimit=60000",
+                "validation/arithmetic-r103/fair-r1293/case-131/z3-replay.smt2"
+              ],
+              "cpu": 2
+            }
+          },
+          "baseline": {
+            "result": "sat",
+            "seconds": 43.224259193986654,
+            "launch_seconds": 0.0032840613275766373,
+            "wait_seconds": 43.22097513265908,
+            "returncode": 0,
+            "timeout_notified_seconds": null,
+            "cleanup_seconds": null,
+            "timed_out": false,
+            "budget_overrun": false,
+            "command": [
+              "prlimit",
+              "--as=17179869184",
+              "--cpu=62:63",
+              "--",
+              "/pub/data/jiafq/xolver/validation/arithmetic-r103/root-retention-r1264/xolver",
+              "solve",
+              "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LRA/sc/sc-37.induction2.cvc.smt2",
+              "--timeout",
+              "60",
+              "--produce-models"
+            ],
+            "cpu": 2,
+            "verified": true,
+            "replay": {
+              "result": "sat",
+              "seconds": 0.06523201987147331,
+              "launch_seconds": 0.0018091686069965363,
+              "wait_seconds": 0.06342285126447678,
+              "returncode": 0,
+              "timeout_notified_seconds": null,
+              "cleanup_seconds": null,
+              "timed_out": false,
+              "budget_overrun": false,
+              "command": [
+                "prlimit",
+                "--as=17179869184",
+                "--cpu=62:63",
+                "--",
+                "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+                "-T:60",
+                "validation/arithmetic-r103/fair-r1293/case-131/baseline-replay.smt2"
+              ],
+              "cpu": 2
+            }
+          },
+          "candidate": {
+            "result": "sat",
+            "seconds": 37.250277714803815,
+            "launch_seconds": 0.005784688517451286,
+            "wait_seconds": 37.244493026286364,
+            "returncode": 0,
+            "timeout_notified_seconds": null,
+            "cleanup_seconds": null,
+            "timed_out": false,
+            "budget_overrun": false,
+            "command": [
+              "prlimit",
+              "--as=17179869184",
+              "--cpu=62:63",
+              "--",
+              "/pub/data/jiafq/xolver/validation/arithmetic-r103/exact-linear-hash-r1284/xolver",
+              "solve",
+              "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LRA/sc/sc-37.induction2.cvc.smt2",
+              "--timeout",
+              "60",
+              "--produce-models"
+            ],
+            "cpu": 2,
+            "verified": true,
+            "replay": {
+              "result": "sat",
+              "seconds": 0.06519920565187931,
+              "launch_seconds": 0.0017543304711580276,
+              "wait_seconds": 0.06344487518072128,
+              "returncode": 0,
+              "timeout_notified_seconds": null,
+              "cleanup_seconds": null,
+              "timed_out": false,
+              "budget_overrun": false,
+              "command": [
+                "prlimit",
+                "--as=17179869184",
+                "--cpu=62:63",
+                "--",
+                "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+                "-T:60",
+                "validation/arithmetic-r103/fair-r1293/case-131/candidate-replay.smt2"
+              ],
+              "cpu": 2
+            }
+          }
+        },
+        "model_capture": "initial-solve-single-model",
+        "wrong_verdict": false,
+        "protocol_errors": []
+      }
+    },
+    {
+      "index": 144,
+      "experiment": "b19b060ddcd9",
+      "run": "fa9228841dcb",
+      "status": "success",
+      "exit_code": 0,
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "3"
+        ]
+      },
+      "report_sha256": "2d6083fd0739bfb2b654b47189bf3e74f3a98d86fd54f70090af2a60ef729999",
+      "report": {
+        "index": 144,
+        "case": {
+          "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NRA/2019-ezsmt/reverseFolding/31-reverse_folding-0-0.smt2",
+          "member": "QF_NRA/2019-ezsmt/reverseFolding/31-reverse_folding-0-0.smt2",
+          "logic": "QF_NRA",
+          "family": "2019-ezsmt",
+          "bytes": 29119525,
+          "sha256": "d26dd3ac7eb05e598a7b54fe02cb785ae7a85da7ceb1e5fcc95f2e4f8c852c1c",
+          "expected": "unknown",
+          "shared_archive_member": "non-incremental/QF_NRA/2019-ezsmt/reverseFolding/31-reverse_folding-0-0.smt2",
+          "shared_archive_sha256": "fd4a0d330192dc622d1746daef26649f52803dcd197923e4a26c5596e226546c",
+          "archive_matches_server": true,
+          "repetitions": 1
+        },
+        "binaries": {
+          "baseline": {
+            "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/root-retention-r1264/xolver",
+            "sha256": "ec020dde6329572b62eb8a4d4f012f32cde9d5f30152809b088e7748d110afd4"
+          },
+          "candidate": {
+            "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/exact-linear-hash-r1284/xolver",
+            "sha256": "f8fbb8232f91c7b9ab231db1296fca01730ac00425a58d5a36154104569dd0f7"
+          },
+          "z3": {
+            "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+            "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+          }
+        },
+        "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+        "timeout": 60,
+        "memory_bytes": 17179869184,
+        "observations": {
+          "baseline": {
+            "result": "sat",
+            "seconds": 58.10529691167176,
+            "launch_seconds": 0.0032071229070425034,
+            "wait_seconds": 58.102089788764715,
+            "returncode": 0,
+            "timeout_notified_seconds": null,
+            "cleanup_seconds": null,
+            "timed_out": false,
+            "budget_overrun": false,
+            "command": [
+              "prlimit",
+              "--as=17179869184",
+              "--cpu=62:63",
+              "--",
+              "/pub/data/jiafq/xolver/validation/arithmetic-r103/root-retention-r1264/xolver",
+              "solve",
+              "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NRA/2019-ezsmt/reverseFolding/31-reverse_folding-0-0.smt2",
+              "--timeout",
+              "60",
+              "--produce-models"
+            ],
+            "cpu": 3,
+            "verified": true,
+            "replay": {
+              "result": "sat",
+              "seconds": 1.017085188999772,
+              "launch_seconds": 0.0019082482904195786,
+              "wait_seconds": 1.0151769407093525,
+              "returncode": 0,
+              "timeout_notified_seconds": null,
+              "cleanup_seconds": null,
+              "timed_out": false,
+              "budget_overrun": false,
+              "command": [
+                "prlimit",
+                "--as=17179869184",
+                "--cpu=62:63",
+                "--",
+                "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+                "-T:60",
+                "validation/arithmetic-r103/fair-r1293/case-144/baseline-replay.smt2"
+              ],
+              "cpu": 3
+            }
+          },
+          "candidate": {
+            "result": "sat",
+            "seconds": 54.42326627112925,
+            "launch_seconds": 0.0018633641302585602,
+            "wait_seconds": 54.42140290699899,
+            "returncode": 0,
+            "timeout_notified_seconds": null,
+            "cleanup_seconds": null,
+            "timed_out": false,
+            "budget_overrun": false,
+            "command": [
+              "prlimit",
+              "--as=17179869184",
+              "--cpu=62:63",
+              "--",
+              "/pub/data/jiafq/xolver/validation/arithmetic-r103/exact-linear-hash-r1284/xolver",
+              "solve",
+              "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NRA/2019-ezsmt/reverseFolding/31-reverse_folding-0-0.smt2",
+              "--timeout",
+              "60",
+              "--produce-models"
+            ],
+            "cpu": 3,
+            "verified": true,
+            "replay": {
+              "result": "sat",
+              "seconds": 1.0171852763742208,
+              "launch_seconds": 0.0019137486815452576,
+              "wait_seconds": 1.0152715276926756,
+              "returncode": 0,
+              "timeout_notified_seconds": null,
+              "cleanup_seconds": null,
+              "timed_out": false,
+              "budget_overrun": false,
+              "command": [
+                "prlimit",
+                "--as=17179869184",
+                "--cpu=62:63",
+                "--",
+                "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+                "-T:60",
+                "validation/arithmetic-r103/fair-r1293/case-144/candidate-replay.smt2"
+              ],
+              "cpu": 3
+            }
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 7.182191727682948,
+            "launch_seconds": 0.0018413402140140533,
+            "wait_seconds": 7.180350387468934,
+            "returncode": 0,
+            "timeout_notified_seconds": null,
+            "cleanup_seconds": null,
+            "timed_out": false,
+            "budget_overrun": false,
+            "command": [
+              "prlimit",
+              "--as=17179869184",
+              "--cpu=62:63",
+              "--",
+              "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+              "-T:60",
+              "-model",
+              "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NRA/2019-ezsmt/reverseFolding/31-reverse_folding-0-0.smt2"
+            ],
+            "cpu": 3,
+            "verified": true,
+            "replay": {
+              "result": "sat",
+              "seconds": 2.770207531750202,
+              "launch_seconds": 0.0015436504036188126,
+              "wait_seconds": 2.7686638813465834,
+              "returncode": 0,
+              "timeout_notified_seconds": null,
+              "cleanup_seconds": null,
+              "timed_out": false,
+              "budget_overrun": false,
+              "command": [
+                "prlimit",
+                "--as=17179869184",
+                "--cpu=62:63",
+                "--",
+                "/pub/data/jiafq/xolver/dependencies/oracles/cvc5",
+                "--lang=smt2",
+                "--tlimit=60000",
+                "validation/arithmetic-r103/fair-r1293/case-144/z3-replay.smt2"
+              ],
+              "cpu": 3
+            }
+          }
+        },
+        "model_capture": "initial-solve-single-model",
+        "wrong_verdict": false,
+        "protocol_errors": []
+      }
+    }
+  ],
+  "protected_sets_used": false,
+  "boundary": "Separate frozen-binary60s whole-triad repeats; both Xolver versions solve both cases with independently replayed initial models. Candidate times improve43.224->37.250s and58.105->54.423s. Formal count gains131/144 are not repeated as count differences; retain the original valid round without selective replacement. These two repeats establish local timing improvement, not a whole-suite or end-to-end superiority claim."
+}
