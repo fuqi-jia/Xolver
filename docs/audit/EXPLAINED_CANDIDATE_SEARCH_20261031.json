@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "status": "development_cover_repair_final_source_qualification_pending",
+  "status": "pr83_delivered_next_core_complete_single_export_comparison_no_solve_gain_tool_source_qualification_pending",
   "qualified_source_commit": "d80fb40ba2b517723e61a657e235bc72892987c1",
   "source_manifest_sha256": "a7691670ba6f6b8ee8110ef36d60eb4d4ef4ff6d965a574b55ccfa2c8aff670f",
   "core": "Explained theory-independent finite candidate search with immutable domain snapshots and checked partial completion. Arithmetic clients canonicalize residual polynomials and substitute exact, explained fixed values in private scopes. All candidate models are checked against the original constraints; exhaustion is never an UNSAT proof.",
@@ -369,10 +369,1292 @@
       "native_gcd_z3_r1071-20261031095116"
     ],
     "worker_sha256": "b19220c7aa03f637a814b1f1eb08edc0e20b3159a69df2fcd86297ebcc620bf7",
-    "status": "annotation_and_VC_checking_accepted_group_proofs_in_progress",
+    "status": "both_runs_done_original_goals_checked_native_backends_independently_audited",
     "original_c_sha256": "255cd902a923b5044acdbe6372652e0b422af3a5a723cc37355040e613a8b3a3",
-    "boundary": "Both fresh GCD runs preserve the original source and frozen specifications. Generation/annotation acceptance use actual selected persistent native backends; group, parent, publication and final-check completion are separate requirements. No whole-program or timing advantage is claimed."
+    "boundary": "Both backends verify one unchanged original gcd C program and all nine original VCs. Only the fresh final-check generations are counted: 296 actual native calls and one selected process per backend, 70 unique independently checked inputs, 174 SAT/122 UNSAT. Final checks run sequentially on the same physical CPU and budgets. Their proof scripts and development attempts differ; every canonical final check reconstructs all original obligations. One program/order is insufficient to establish overall QCP superiority or a whole-program-set performance win. This does not alter the fixed160 score."
   },
   "protected_sets_used": false,
-  "delivery_boundary": "Unpromoted development commits only. The first full160 candidate loses two SAT cases and gains one. A repaired final source requires native qualification, fresh fair full160 comparison and PR CI before any merge. Main and its prior green CI remain unchanged; validation/current-main.json is explicitly cancelled and not required."
+  "delivery_boundary": "PR83 and latest main5b8592b0 CI are complete. Core45570429 passes all39 native groups/1877 unit cases and a corrected effective-single-export fixed160 audit:101 main/101 candidate/117 verified Z3(124 raw), no gains/losses/errors. The shared-DAG local improvement and deadline checks are established, not a whole-solver improvement. Commit and qualify the final validation-tool source and require its exact-head PR CI before merging PR84. Neither protected set has been used and Xolver has not surpassed Z3.",
+  "historical_fields_boundary": "Original qualified_source_commit, native_acceptance and full160 fields describe the earlier rejected d80fb40b candidate. final_stage below records the repaired committed 65c9cb8c candidate and its complete fresh comparison.",
+  "final_stage": {
+    "implementation_commit": "65c9cb8c7f8bd5707a6555cc08d8d33137695641",
+    "merge_commit": "d3b767af7cb0b8931bb054d5ed682b197071981e",
+    "pull_request": "https://github.com/fuqi-jia/Xolver/pull/83",
+    "pr_ci": {
+      "run": 41162240789,
+      "status": "success",
+      "jobs": [
+        "proof-gate",
+        "build-test"
+      ]
+    },
+    "main_ci": {
+      "run": 41165659029,
+      "head": "5b8592b0f743caa0e72e370f7593486693f5f8b1",
+      "status": "success",
+      "jobs": [
+        "build-test",
+        "proof-gate"
+      ],
+      "superseded_run": 41164344182,
+      "superseded_status": "cancelled_by_history_only_main_push"
+    },
+    "qualification": {
+      "source_head": "65c9cb8c7f8bd5707a6555cc08d8d33137695641",
+      "source_manifest_sha256": "8240f2b4cbaaf1898caa87b8f333bc0d93fdbc67872957099d36ef8c380f72a4",
+      "binary_sha256": "b9f3e3ff68ba8acf5de5a2b5d050b56de88ed71d9a43304c5cbb066cf2367041",
+      "binaries": {
+        "xolver": "b9f3e3ff68ba8acf5de5a2b5d050b56de88ed71d9a43304c5cbb066cf2367041",
+        "xolver-sv": "373a3655dadf8d0f835e7ff4e83b6008d58732c7170bebb3ca998eff02809090",
+        "xolver-parallel-worker": "a889508b5e43ecac9b460fc95c117ff88cf02bf193287e16651fb06e9fb91fe9"
+      },
+      "unit_binary_sha256": "77cdfcabc3eda76eb42f9e581c8702efc84ddc58b572c1b9744d97803067a6ce",
+      "old_harness": {
+        "binary_sha256": "5a0f72fe3ca46821cb6fd242f97dc78c19b33287723d800590fdea086ccb981e",
+        "source_sha256": "6219c672c4f7a2b0409ea08cfa44bc42e2d4ca361b8354a94f008c71d3ec07c9",
+        "object_sha256": "e891bf5d6476ba9a05ec1334b5efe501918e9f418f19f43d212609f33fff0226",
+        "library_sha256": "700319b24f76bdb9094191540db249cfa3ce1842da941df7a01321a2f766a75c",
+        "source_head": "d80fb40ba2b517723e61a657e235bc72892987c1",
+        "source_manifest_sha256": "a7691670ba6f6b8ee8110ef36d60eb4d4ef4ff6d965a574b55ccfa2c8aff670f"
+      },
+      "new_harness": {
+        "binary_sha256": "112e9bbd439ce82f9220172b189faf9226ba5f4a428f39b73ffd773294d210eb",
+        "source_sha256": "6219c672c4f7a2b0409ea08cfa44bc42e2d4ca361b8354a94f008c71d3ec07c9",
+        "object_sha256": "e891bf5d6476ba9a05ec1334b5efe501918e9f418f19f43d212609f33fff0226",
+        "library_sha256": "95f8ddb2eda2a63745fca1cfaa4d3cdbd7522cd9688eb37e2c59d89a4db68bd2"
+      },
+      "logs": {
+        "targeted.log": "15634d98f0eb05053cf60ad1a5a9cc0edba92ca3204609ba36795c1520dbd936",
+        "compile-harness-new.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "link-harness-new.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "build.log": "5e1344a07db28770380b9841814b7b3f4c058f2163c597c7d1b7e0b78b894de5",
+        "overlay.log": "f8ef05d99b77798cc05a5f7ff808dae26da49a1a692dbab8fb5d59dbec786573",
+        "configure.log": "552a4f0dd3cf0ca69c7a7d5dfdd8e7ff606588498e6ada29637792b65949ffcb"
+      },
+      "metrics": {
+        "completed": 1,
+        "failures": 0
+      },
+      "library_sha256": "95f8ddb2eda2a63745fca1cfaa4d3cdbd7522cd9688eb37e2c59d89a4db68bd2",
+      "protected_sets_used": false
+    },
+    "acceptance_groups": 39,
+    "unit_cases": 1873,
+    "unit_assertions": 986585,
+    "formal": {
+      "cases": 160,
+      "counts": {
+        "baseline": {
+          "unsat": 46,
+          "decided": 100,
+          "verified_decided": 100,
+          "verified_par2": 7510.892328210175,
+          "raw_par2": 7510.892328210175,
+          "timeout": 59,
+          "sat": 54,
+          "unknown": 1
+        },
+        "candidate": {
+          "unsat": 46,
+          "decided": 102,
+          "verified_decided": 102,
+          "verified_par2": 7304.941438619047,
+          "raw_par2": 7304.941438619047,
+          "timeout": 57,
+          "sat": 56,
+          "unknown": 1
+        },
+        "z3": {
+          "unsat": 58,
+          "decided": 124,
+          "verified_decided": 117,
+          "verified_par2": 5485.339503709227,
+          "raw_par2": 4685.565568236634,
+          "sat": 66,
+          "timeout": 36
+        }
+      },
+      "changes": [
+        {
+          "index": 51,
+          "case": "QF_LRA/LassoRanker/CooperatingT2/ludcmp.c.i.ludcmp.pl.t2.fixed.t2.c_Iteration8_Loop_7-phaseTemplate.smt2",
+          "kind": "gained",
+          "truth": "sat",
+          "evidence": [
+            "candidate-exported-model-replay",
+            "z3-exported-model-replay"
+          ],
+          "observations": {
+            "baseline": {
+              "result": "timeout",
+              "seconds": 60.01817201450467
+            },
+            "candidate": {
+              "result": "sat",
+              "seconds": 28.293373592197895
+            },
+            "z3": {
+              "result": "sat",
+              "seconds": 0.61723099835217
+            }
+          }
+        },
+        {
+          "index": 149,
+          "case": "QF_NRA/UltimateAutomizer/InVarSynth_agroce_minmax.c_Iteration2_0.smt2",
+          "kind": "gained",
+          "truth": "sat",
+          "evidence": [
+            "z3-exported-model-replay",
+            "candidate-exported-model-replay"
+          ],
+          "observations": {
+            "z3": {
+              "result": "sat",
+              "seconds": 0.21835689432919025
+            },
+            "baseline": {
+              "result": "timeout",
+              "seconds": 60.09413456916809
+            },
+            "candidate": {
+              "result": "sat",
+              "seconds": 0.16607133112847805
+            }
+          }
+        }
+      ],
+      "unverified": [
+        {
+          "index": 12,
+          "case": "QF_LIA/fft/Sz128_2823.smt2",
+          "results": {
+            "baseline": "timeout",
+            "candidate": "timeout",
+            "z3": "unsat"
+          },
+          "reasons": {
+            "z3": "no independent confirmation within budget"
+          }
+        },
+        {
+          "index": 24,
+          "case": "QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+          "results": {
+            "baseline": "timeout",
+            "candidate": "timeout",
+            "z3": "unsat"
+          },
+          "reasons": {
+            "z3": "no independent confirmation within budget"
+          }
+        },
+        {
+          "index": 27,
+          "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+          "results": {
+            "baseline": "timeout",
+            "candidate": "timeout",
+            "z3": "unsat"
+          },
+          "reasons": {
+            "z3": "no independent confirmation within budget"
+          }
+        },
+        {
+          "index": 42,
+          "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep2a.smt2",
+          "results": {
+            "baseline": "timeout",
+            "candidate": "timeout",
+            "z3": "unsat"
+          },
+          "reasons": {
+            "z3": "no independent confirmation within budget"
+          }
+        },
+        {
+          "index": 80,
+          "case": "QF_LIA/cut_lemmas/20-vars/cut_lemma_03_004.smt2",
+          "results": {
+            "z3": "unsat",
+            "baseline": "timeout",
+            "candidate": "timeout"
+          },
+          "reasons": {
+            "z3": "no independent confirmation within budget"
+          }
+        },
+        {
+          "index": 114,
+          "case": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+          "results": {
+            "baseline": "timeout",
+            "candidate": "timeout",
+            "z3": "unsat"
+          },
+          "reasons": {
+            "z3": "no independent confirmation within budget"
+          }
+        },
+        {
+          "index": 159,
+          "case": "QF_NRA/20161105-Sturm-MGC/mgc_07.smt2",
+          "results": {
+            "baseline": "timeout",
+            "candidate": "timeout",
+            "z3": "unsat"
+          },
+          "reasons": {
+            "z3": "no independent confirmation within budget"
+          }
+        }
+      ],
+      "timeout": 60,
+      "memory_bytes": 17179869184,
+      "model_capture": "initial-solve",
+      "binaries": {
+        "baseline": {
+          "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/indexed-trails-r978/xolver",
+          "sha256": "4d459fa5acfcf9c95d31bc7117d14701156f411439139904b1d58e00ffd1aec3"
+        },
+        "candidate": {
+          "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/cover-diversity-search-r1085/xolver",
+          "sha256": "b9f3e3ff68ba8acf5de5a2b5d050b56de88ed71d9a43304c5cbb066cf2367041"
+        },
+        "z3": {
+          "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+          "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+        }
+      }
+    },
+    "invalid_original_triads": [
+      {
+        "experiment": "1b73c2a053e5",
+        "run": "d0a629d576f7",
+        "input": "42",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "70"
+          ]
+        },
+        "status": "failed",
+        "exit_code": 1,
+        "files": {
+          "baseline.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "z3-unsat-check.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "progress.json": "f2461003f0e51a452050f4f1c13a190c13a797744fe357eaedef64eec0b41af5",
+          "candidate.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "report.json": "81e06a75f4adf37ef5ad6554d4dd5834ac4bafca5f6fc12d750963303a39f8bf",
+          "baseline.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "candidate.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "z3.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "metrics.json": "b44ded111f64db2789b8a1896f3a6c2a085e05e1ed1f6ce211b46b81c8410e6e",
+          "z3-unsat-check.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "z3.stdout": "5c17dfcc2a8f1f30d9e96df6a9825a5030ade046d560332c19de74d93d591a18"
+        },
+        "observation_sha256": "6d3cf779bc77e795a01d54df204ebbe60b73626b4d4529ac69fa09bd161cfd06",
+        "boundary": "Original complete triad is excluded because of observed CPU contention and a violated wall budget. No favorable decision or timing is selected from this attempt."
+      },
+      {
+        "experiment": "04e5543f8a94",
+        "run": "418fac26c59a",
+        "input": "89",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "72"
+          ]
+        },
+        "status": "failed",
+        "exit_code": 1,
+        "files": {
+          "baseline.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "progress.json": "0d3ce0ccce368609114cb0c3426977cb01eb7bef9b96d47e1783e116088c5dae",
+          "candidate.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "report.json": "436c4d54771a8ef0080c5ece305f63dbbeac5750f3df14bfb5b4cf7536124cc6",
+          "baseline.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "candidate.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "z3-replay.stdout": "d9dbf94b05b8314af9ca7f2034e92685c33447917605a7243b1099c693a12e5e",
+          "z3.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "z3-replay.smt2": "9ac98c287b8b34ea9d1e6c43375d6e93a05c931bfb9c7c488cdb939d73c82157",
+          "metrics.json": "b44ded111f64db2789b8a1896f3a6c2a085e05e1ed1f6ce211b46b81c8410e6e",
+          "z3-replay.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "z3.stdout": "7c933b07d5b184ea9c73b1141a0c95e1efebbba64cd0c983665a0af8af673ad0"
+        },
+        "observation_sha256": "6d3cf779bc77e795a01d54df204ebbe60b73626b4d4529ac69fa09bd161cfd06",
+        "boundary": "Original complete triad is excluded because of observed CPU contention and a violated wall budget. No favorable decision or timing is selected from this attempt."
+      }
+    ],
+    "supplementary_truth": [
+      {
+        "index": 115,
+        "truth": "unsat",
+        "input_sha256": "02a58b11df8951543940a1090a140592e24de41dcaeb6470e7a50d42e804be64",
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r1087/certificate-115/0.log",
+        "sha256": "823672e87696cac914fac33d8d0027db15a21b566e700a65300cdca704cf910e",
+        "boundary": "Fresh original-input checked modular certificate."
+      },
+      {
+        "index": 108,
+        "truth": "sat",
+        "input_sha256": "26d6012f717dec2f43e57be63e8638d1a13b6bc9cb5fcc963c08476793385786",
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/current-model-replay-r1090/108/record.json",
+        "sha256": "db78db1c3466bd8299cbe10a77974770286045e573a6d54333b8660492284fb2",
+        "boundary": "Current initial model independently replayed with Z3 and cvc5; eligibility only, unchanged original solve timing."
+      },
+      {
+        "index": 122,
+        "truth": "sat",
+        "input_sha256": "c88289f0453a6bbe098b4c5f092dfc50cd9e0ac21d799c6ccfc0a61b5a974389",
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/current-model-replay-r1090/122/record.json",
+        "sha256": "65f369d91112088317119fb1a955b57bbeb70f6545c18e62dc7e09d10e1ca804",
+        "boundary": "Current initial model independently replayed with Z3 and cvc5; eligibility only, unchanged original solve timing."
+      },
+      {
+        "index": 50,
+        "truth": "unsat",
+        "input_sha256": "7e71a151d917978f1b5afc2791abf589e30c8ff97e930979df6ef82ad72dcdc0",
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/independent-truth-r761/case-050/record.json",
+        "sha256": "13a20b8e90bb8a8fff028fd665ee4ef661ae88e851766af64ed9b83ee255175c",
+        "boundary": "Existing independently checked 300s offline UNSAT on identical input hash; eligibility only, original timed budgets remain 60s."
+      },
+      {
+        "index": 94,
+        "truth": "sat",
+        "input_sha256": "a6b68604187a341c570d8bd76135552ece1bbf958a1d7e9d4ff7f3eae998fd8f",
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/model-replay-r732/case-094/record.json",
+        "sha256": "251f695441367d616c3ee7b69b8f5bccce1df0b9322a47138f2804e032301a0a",
+        "boundary": "Existing independently checked ground witness on identical input hash; eligibility only, no historical timing substitution."
+      }
+    ],
+    "remaining_gaps": [
+      {
+        "index": 1,
+        "logic": "QF_LIA",
+        "family": "convert",
+        "member": "QF_LIA/convert/convert-jpg2gif-query-1470.smt2",
+        "input_sha256": "df42f9cdbe66be22d8b5f55d904ae308677681d21cf6ba13801a6c1bcc7d712b",
+        "xolver": "timeout",
+        "z3": "sat",
+        "z3_seconds": 0.8178978879004717,
+        "unconfirmed": false
+      },
+      {
+        "index": 12,
+        "logic": "QF_LIA",
+        "family": "fft",
+        "member": "QF_LIA/fft/Sz128_2823.smt2",
+        "input_sha256": "e62aa48a7ec4ae656514927d79b4f34f7b05e187e4bf8eb43cb1eda0cdbc6a54",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "z3_seconds": 39.078189957886934,
+        "unconfirmed": true
+      },
+      {
+        "index": 13,
+        "logic": "QF_LIA",
+        "family": "tropical-matrix",
+        "member": "QF_LIA/tropical-matrix/constraint-517804.smt2",
+        "input_sha256": "d9c546291b74c1b0021e19bff6aa4e9fbbb220fdcd253de67479375572f913f6",
+        "xolver": "timeout",
+        "z3": "sat",
+        "z3_seconds": 0.8176013324409723,
+        "unconfirmed": false
+      },
+      {
+        "index": 24,
+        "logic": "QF_NIA",
+        "family": "LassoRanker",
+        "member": "QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+        "input_sha256": "68798a8ba5809648e09994276b2bc1fed413b743b8fce6d21d9de3a4865aa057",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "z3_seconds": 0.4670715592801571,
+        "unconfirmed": true
+      },
+      {
+        "index": 27,
+        "logic": "QF_NIA",
+        "family": "20230328-sqrtmodinv-hoenicke",
+        "member": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+        "input_sha256": "4be4382761af8ae34ba468d292dedbbce60a1adbce104d03ebecaf9217d020d8",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "z3_seconds": 0.06588908098638058,
+        "unconfirmed": true
+      },
+      {
+        "index": 29,
+        "logic": "QF_NIA",
+        "family": "UltimateLassoRanker",
+        "member": "QF_NIA/UltimateLassoRanker/CookSeeZuleger-2013TACAS-Fig7a-alloca_true-termination.c.i_Iteration8_Lasso+nonterminationTemplate.smt2",
+        "input_sha256": "0d5e3d04305e393bfd392b8652ba33f37220c4ff420054acffb70d61df5c89e7",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "z3_seconds": 0.2669252008199692,
+        "unconfirmed": false
+      },
+      {
+        "index": 34,
+        "logic": "QF_NIA",
+        "family": "20210219-Dartagnan",
+        "member": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/ps6-ll_valuebound5-O0.smt2",
+        "input_sha256": "ecf140bb267be14f595da4be5a54940f0a71fc7e4348aaa027bff1d7166f1ec3",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "z3_seconds": 0.968844847753644,
+        "unconfirmed": false
+      },
+      {
+        "index": 42,
+        "logic": "QF_NIA",
+        "family": "20230328-sqrtmodinv-hoenicke",
+        "member": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep2a.smt2",
+        "input_sha256": "a6848324353b5f5c15ba7135e0aad06acb838ac38e020c5e0cced695ece5e33a",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "z3_seconds": 0.06583070009946823,
+        "unconfirmed": true
+      },
+      {
+        "index": 48,
+        "logic": "QF_LRA",
+        "family": "sal",
+        "member": "QF_LRA/sal/pursuit/pursuit-safety-20.smt2",
+        "input_sha256": "1db0853aaa0f355969a8b7e17778b10137081d30ee7f98e6ff8d94039a55b85b",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "z3_seconds": 0.11549299955368042,
+        "unconfirmed": false
+      },
+      {
+        "index": 49,
+        "logic": "QF_LRA",
+        "family": "2019-ezsmt",
+        "member": "QF_LRA/2019-ezsmt/travellingSalesperson/rand_80_340_1159656267_16.lp.smt2",
+        "input_sha256": "d4baea957f7fe792713edbaf3edc6769274ab0aafe5e86182d023e858037d615",
+        "xolver": "timeout",
+        "z3": "sat",
+        "z3_seconds": 1.7704055476933718,
+        "unconfirmed": false
+      },
+      {
+        "index": 50,
+        "logic": "QF_LRA",
+        "family": "2017-Heizmann-UltimateInvariantSynthesis",
+        "member": "QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_jain_5.i_2_4_3.bpl_7.smt2",
+        "input_sha256": "7e71a151d917978f1b5afc2791abf589e30c8ff97e930979df6ef82ad72dcdc0",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "z3_seconds": 53.34300139546394,
+        "unconfirmed": false
+      },
+      {
+        "index": 56,
+        "logic": "QF_LRA",
+        "family": "miplib",
+        "member": "QF_LRA/miplib/pp08a-3000.smt2",
+        "input_sha256": "49761967d8071fc4d32d82165bcd7ef4fcdfe436b7634da8d42a9be673087218",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "z3_seconds": 4.375628272071481,
+        "unconfirmed": false
+      },
+      {
+        "index": 58,
+        "logic": "QF_LRA",
+        "family": "uart",
+        "member": "QF_LRA/uart/uart-26.base.cvc.smt2",
+        "input_sha256": "64f223bcde0c40ca731ab7443a27e55abf89d82d240cb58aed03a32ff50b15e8",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "z3_seconds": 21.125020314007998,
+        "unconfirmed": false
+      },
+      {
+        "index": 69,
+        "logic": "QF_NRA",
+        "family": "LassoRanker",
+        "member": "QF_NRA/LassoRanker/CooperatingT2/byron-2.t2.c_Iteration3_Loop_4-pieceTemplate.smt2",
+        "input_sha256": "72e580ee3a690b54865e129f44529a71d81112f35193cbc93775236ea62a0f13",
+        "xolver": "timeout",
+        "z3": "sat",
+        "z3_seconds": 0.6175720877945423,
+        "unconfirmed": false
+      },
+      {
+        "index": 72,
+        "logic": "QF_NRA",
+        "family": "2019-ezsmt",
+        "member": "QF_NRA/2019-ezsmt/reverseFolding/39-reverse_folding-0-0.smt2",
+        "input_sha256": "cc66abe5f5716404298fd97cb383e65487d9277ea2611ee41add8e324e7eb2c4",
+        "xolver": "timeout",
+        "z3": "sat",
+        "z3_seconds": 9.238649003207684,
+        "unconfirmed": false
+      },
+      {
+        "index": 77,
+        "logic": "QF_NRA",
+        "family": "UltimateAutomizer",
+        "member": "QF_NRA/UltimateAutomizer/InVarSynth_InvariantSynthesis_Disjunctive02.bpl_Iteration1_0.smt2",
+        "input_sha256": "7511fd4d07cdce648daf4ac76fc32c90af91cf9d9576d4e955a51d0dbd4534b7",
+        "xolver": "timeout",
+        "z3": "sat",
+        "z3_seconds": 0.367002684623003,
+        "unconfirmed": false
+      },
+      {
+        "index": 80,
+        "logic": "QF_LIA",
+        "family": "cut_lemmas",
+        "member": "QF_LIA/cut_lemmas/20-vars/cut_lemma_03_004.smt2",
+        "input_sha256": "1bcb3b052ef1f9ebe04cf76147f19dc54fb0678342d72b829a38a936c56959fe",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "z3_seconds": 0.16648905724287033,
+        "unconfirmed": true
+      },
+      {
+        "index": 89,
+        "logic": "QF_LIA",
+        "family": "RWS",
+        "member": "QF_LIA/RWS/Example_16.txt.smt2",
+        "input_sha256": "5b983ea0194c5b7fcdee4a87c0de44da99828561d82d288a89fd99da128f4c5f",
+        "xolver": "timeout",
+        "z3": "sat",
+        "z3_seconds": 0.7685348968952894,
+        "unconfirmed": false
+      },
+      {
+        "index": 94,
+        "logic": "QF_LIA",
+        "family": "20210219-Dartagnan",
+        "member": "QF_LIA/20210219-Dartagnan/ConcurrencySafety-Main/fib_bench_longer-2-O0.smt2",
+        "input_sha256": "a6b68604187a341c570d8bd76135552ece1bbf958a1d7e9d4ff7f3eae998fd8f",
+        "xolver": "timeout",
+        "z3": "sat",
+        "z3_seconds": 54.50645658373833,
+        "unconfirmed": false
+      },
+      {
+        "index": 98,
+        "logic": "QF_LIA",
+        "family": "2019-cmodelsdiff",
+        "member": "QF_LIA/2019-cmodelsdiff/labyrinth/0003-labyrinth-11-0.smt2",
+        "input_sha256": "41b0d2ff3be911992bc3a0d8996bb79b2daedd9e66d0b274081fcadeb9ecf27d",
+        "xolver": "timeout",
+        "z3": "sat",
+        "z3_seconds": 6.592559723183513,
+        "unconfirmed": false
+      },
+      {
+        "index": 106,
+        "logic": "QF_NIA",
+        "family": "20170427-VeryMax",
+        "member": "QF_NIA/20170427-VeryMax/ITS/From_AProVE_2014__juLinkedListCreateAddAllAt.jar-obl-17__p9090_safety_0.smt2",
+        "input_sha256": "c96b35bb3cae604115b99477562c4059c6e78ad16658f50d9dbb9ed8abad0a25",
+        "xolver": "timeout",
+        "z3": "sat",
+        "z3_seconds": 0.7178099192678928,
+        "unconfirmed": false
+      },
+      {
+        "index": 108,
+        "logic": "QF_NIA",
+        "family": "20250331-elster",
+        "member": "QF_NIA/20250331-elster/B_2.smt2",
+        "input_sha256": "26d6012f717dec2f43e57be63e8638d1a13b6bc9cb5fcc963c08476793385786",
+        "xolver": "timeout",
+        "z3": "sat",
+        "z3_seconds": 4.879113024100661,
+        "unconfirmed": false
+      },
+      {
+        "index": 114,
+        "logic": "QF_NIA",
+        "family": "20210219-Dartagnan",
+        "member": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+        "input_sha256": "1aea29b746e949da62b784ed14b262444d87c36051a63e0aa197d313fd3f8d99",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "z3_seconds": 0.0661659799516201,
+        "unconfirmed": true
+      },
+      {
+        "index": 116,
+        "logic": "QF_NIA",
+        "family": "AProVE",
+        "member": "QF_NIA/AProVE/aproveSMT5381466618694630101.smt2",
+        "input_sha256": "f6e90d9f987771e1dd41731a7fedef9cb83d38cd6c3e8131ac254e47e5c57cdc",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "z3_seconds": 1.6198390778154135,
+        "unconfirmed": false
+      },
+      {
+        "index": 122,
+        "logic": "QF_NIA",
+        "family": "20250331-elster",
+        "member": "QF_NIA/20250331-elster/D_1.smt2",
+        "input_sha256": "c88289f0453a6bbe098b4c5f092dfc50cd9e0ac21d799c6ccfc0a61b5a974389",
+        "xolver": "timeout",
+        "z3": "sat",
+        "z3_seconds": 17.958680665120482,
+        "unconfirmed": false
+      },
+      {
+        "index": 128,
+        "logic": "QF_LRA",
+        "family": "uart",
+        "member": "QF_LRA/uart/uart-19.base.cvc.smt2",
+        "input_sha256": "718a1e36294547bf1605cbbbcc01dc2bbf4ae1682c8d30fc7f246f6f031d3bdf",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "z3_seconds": 4.377183236181736,
+        "unconfirmed": false
+      },
+      {
+        "index": 129,
+        "logic": "QF_LRA",
+        "family": "LassoRanker",
+        "member": "QF_LRA/LassoRanker/CooperatingT2/polyrank4.t2.c_Iteration8_Loop_4-pieceTemplate.smt2",
+        "input_sha256": "a7dc84671c8b4907afe99c6e0156f36462f3a89a666b25926d92511f963fe476",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "z3_seconds": 6.185548523440957,
+        "unconfirmed": false
+      },
+      {
+        "index": 130,
+        "logic": "QF_LRA",
+        "family": "TM",
+        "member": "QF_LRA/TM/p-3-bucket_s10.smt2",
+        "input_sha256": "2606855399c6a9008140acb6c981d3f41d03194cab8075b68f2b198a20b2935a",
+        "xolver": "timeout",
+        "z3": "sat",
+        "z3_seconds": 5.679516587406397,
+        "unconfirmed": false
+      },
+      {
+        "index": 131,
+        "logic": "QF_LRA",
+        "family": "sc",
+        "member": "QF_LRA/sc/sc-37.induction2.cvc.smt2",
+        "input_sha256": "8b660dc1debe27fe09a0eb3ca9e4e3833f075f89a66e71b90dfe102e250bc962",
+        "xolver": "timeout",
+        "z3": "sat",
+        "z3_seconds": 0.517573919147253,
+        "unconfirmed": false
+      },
+      {
+        "index": 144,
+        "logic": "QF_NRA",
+        "family": "2019-ezsmt",
+        "member": "QF_NRA/2019-ezsmt/reverseFolding/31-reverse_folding-0-0.smt2",
+        "input_sha256": "d26dd3ac7eb05e598a7b54fe02cb785ae7a85da7ceb1e5fcc95f2e4f8c852c1c",
+        "xolver": "timeout",
+        "z3": "sat",
+        "z3_seconds": 8.685320196673274,
+        "unconfirmed": false
+      },
+      {
+        "index": 146,
+        "logic": "QF_NRA",
+        "family": "LassoRanker",
+        "member": "QF_NRA/LassoRanker/CooperatingT2/consts1.t2.c_Iteration1_Lasso_4-pieceTemplate.smt2",
+        "input_sha256": "2e27203a3ec975510dab64d149ae5f2bd8de47c8128725d04985555880240dc1",
+        "xolver": "timeout",
+        "z3": "sat",
+        "z3_seconds": 21.514074482023716,
+        "unconfirmed": false
+      },
+      {
+        "index": 159,
+        "logic": "QF_NRA",
+        "family": "20161105-Sturm-MGC",
+        "member": "QF_NRA/20161105-Sturm-MGC/mgc_07.smt2",
+        "input_sha256": "3b3f35580e39c21659d09f507edd67f5c0d5271a2957125d9e99cca86db44033",
+        "xolver": "timeout",
+        "z3": "unsat",
+        "z3_seconds": 0.31642819195985794,
+        "unconfirmed": true
+      }
+    ],
+    "sealed_audit": {
+      "path": "validation/arithmetic-r103/stage-r1089.json",
+      "sha256": "b64f30a4e19d6a6211d6242769ea78ffb51fcdce73a37f3b3e97fd47d38abd55",
+      "experiment": "a64920085ba7",
+      "run": "ff3b2adf3eaa"
+    },
+    "boundary": "Final committed core, all 39 native acceptance groups, and all 160 fresh original inputs with frozen solvers, initial model capture, 60s/one leased physical CPU/16GiB per solve. The first 158 valid original triads are preserved. Two original triads with observed foreign CPU contention and violated wall budgets are retained as invalid evidence and replaced by two complete fresh triads; no solver-specific result or fastest timing is selected. Independent witnesses and certificates establish truth eligibility only; no historical solve timings are substituted. Retain raw and verified counts, unresolved decisions and all gains/losses. Case 51 is timing-sensitive in earlier rounds and requires cautious attribution. The separate completed original GCD pair uses the earlier d80fb40b worker and does not qualify final-kernel program performance. Neither protected set has been used and no overall advantage is inferred from a local or one-round gain.",
+    "z3_timing_boundary": "The legacy command always adds -model. Four original inputs (32,47,108,122) already request get-model, so their Z3 runs can export twice. Retain the recorded counts and times as evidence for those exact commands, not a final uniform single-export Z3 comparison. The Xolver-versus-Xolver NRA149 gain and source/model correctness evidence are unaffected."
+  },
+  "completed_original_gcd_pair": {
+    "backends": {
+      "xolver": {
+        "programs": 1,
+        "original_vcs": 9,
+        "original_c_sha256": "255cd902a923b5044acdbe6372652e0b422af3a5a723cc37355040e613a8b3a3",
+        "solver_sha256": "b19220c7aa03f637a814b1f1eb08edc0e20b3159a69df2fcd86297ebcc620bf7",
+        "final_check_seconds": 35.59628199413419,
+        "native_calls": 296,
+        "native_results": {
+          "sat": 174,
+          "unsat": 122
+        },
+        "unique_native_formulas": 70,
+        "native_backend_qualified": true,
+        "external_smt_discharged_vcs": 0,
+        "unconfirmed_native_results": 0
+      },
+      "z3": {
+        "programs": 1,
+        "original_vcs": 9,
+        "original_c_sha256": "255cd902a923b5044acdbe6372652e0b422af3a5a723cc37355040e613a8b3a3",
+        "solver_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+        "final_check_seconds": 35.70234543271363,
+        "native_calls": 296,
+        "native_results": {
+          "sat": 174,
+          "unsat": 122
+        },
+        "unique_native_formulas": 70,
+        "native_backend_qualified": true,
+        "external_smt_discharged_vcs": 0,
+        "unconfirmed_native_results": 0
+      }
+    },
+    "receipt_sha256": "843b795c1c03531044ee59cb41e298c35adf3e519e42300cd86eb4a474431eee",
+    "boundary": "Both backends verify one unchanged original gcd C program and all nine original VCs. Only the fresh final-check generations are counted: 296 actual native calls and one selected process per backend, 70 unique independently checked inputs, 174 SAT/122 UNSAT. Final checks run sequentially on the same physical CPU and budgets. Their proof scripts and development attempts differ; every canonical final check reconstructs all original obligations. One program/order is insufficient to establish overall QCP superiority or a whole-program-set performance win. This does not alter the fixed160 score."
+  },
+  "next_candidate_evaluation_prototype": {
+    "status": "committed_core_all39_native_groups_and_effective_single_export_full160_complete_no_solve_gain",
+    "base_commit": "65c9cb8c7f8bd5707a6555cc08d8d33137695641",
+    "private_qualification_sha256": "c7b53ebea8209cad80c8d4f78aed8a6f68b89135991abc286cf42d278ab15ee2",
+    "transform_sha256": "c771bc9221b8dd929c14228295ade702c5483fa2e1fcfb0eadb686fd0882cb57",
+    "diagnostic_binary_sha256": "0bc1366e6d36f38ef7836bb2d90dbbba5048b4f9a115350b53f38620ec9e30dd",
+    "targeted_cases": 55,
+    "targeted_assertions": 230,
+    "shared_dag": {
+      "old": {
+        "binary_sha256": "f847040799042d913273e51f325466d7f4721e21b9aa458370e55b4d05d17e3c",
+        "result": {
+          "found": true,
+          "checked": true,
+          "seconds": 2.31713,
+          "depth": 4096,
+          "roots": 512
+        },
+        "witness_sha256": "6eb2dd46256acb54ed452c088ee4ca21258afcbd1daddf8ee49285208cc343da"
+      },
+      "new": {
+        "binary_sha256": "167cb67ae4ee581f3928ea1ef59047304533335a114d6524cf658d2a88f16601",
+        "result": {
+          "found": true,
+          "checked": true,
+          "seconds": 0.00777564,
+          "depth": 4096,
+          "roots": 512
+        },
+        "witness_sha256": "6eb2dd46256acb54ed452c088ee4ca21258afcbd1daddf8ee49285208cc343da"
+      }
+    },
+    "original_gap_profiles": {
+      "indices": [
+        47,
+        108,
+        122
+      ],
+      "budget_seconds": 20,
+      "all_results": "timeout",
+      "fixed160_score_effect": "none"
+    },
+    "boundary": "One candidate assignment owns its evaluation memo across assertions and function export. UF derivation invalidates before evaluating changed bindings. Deadline checks occur inside iterative DAG evaluation. The identical 4096-depth/512-root constructed assertions improve from 2.31713s to 0.00777564s and have a witness checked by Z3 and cvc5. This is not an original-input solving gain, full qualification, or a Z3 comparison. Committed-source native qualification and a fresh full160 round remain required.",
+    "committed_source": {
+      "head": "455704292bd5ee70520a2c4ac195619addb2490f",
+      "manifest_sha256": "ba83e47d41975d3dfc038501edb4bef6ebf54dfeea4e0ccb5651bc52e78b2684",
+      "binaries": {
+        "xolver": "aab07fcc078c31c3aaf25b38cab9219b9cc750213357db0f0cd9cac39553e12a",
+        "xolver-sv": "034ce53ed529987788e7ac6976d633cd8f262e5dbc3628f343eb46c502df6e17",
+        "xolver-parallel-worker": "4f23f4c6642103dca8fe1e0543281d35ae9290bc9615bfac5369847733e1e04a"
+      },
+      "unit_binary_sha256": "daf240edb52986dfff5dafc09767085360575a2bb5f5a648ada1808bd1f3de50",
+      "native_acceptance_groups": 39,
+      "unit_cases": 1877,
+      "unit_assertions": 986592,
+      "targeted_cases": 243,
+      "targeted_assertions": 23553
+    }
+  },
+  "single_model_protocol_repair": {
+    "status": "native16_tool_tests_and160_effective_single_export_audit_complete",
+    "native_check_metrics": {
+      "completed": 1,
+      "failures": 0,
+      "tests": 16
+    },
+    "native_check_receipt_sha256": "3b3aac79d6cb23e8ded13e71af7782ce6ef2fc2f2b0f6e526f83494687ad4175",
+    "exports": [
+      {
+        "explicit_model": false,
+        "policy": "legacy",
+        "models": 1
+      },
+      {
+        "explicit_model": false,
+        "policy": "single",
+        "models": 1
+      },
+      {
+        "explicit_model": true,
+        "policy": "legacy",
+        "models": 2
+      },
+      {
+        "explicit_model": true,
+        "policy": "single",
+        "models": 1
+      }
+    ],
+    "source_inventory_sha256": "2ace1f7672e733fa71a5224a3f974249dc4c4ebe6d87eecac061e40e450730fc",
+    "explicit_model_indices": [
+      32,
+      47,
+      108,
+      122
+    ],
+    "budget_invalid_indices": [
+      93,
+      114,
+      118,
+      119,
+      128,
+      138
+    ],
+    "boundary": "150 original triads already have commands matching the single-model policy and valid budgets. Six complete budget-invalid triads and four complete redundant-export triads are replaced; raw observations remain preserved, and selection precedes replacement outcomes. Aggregate model_capture metadata may be refined only after checking actual CLI flags against the original hashed commands on every input. No valid timing or solver-specific result is selected by speed. Native isolation attempt R1102 failed before CLI checks because its moved copy lacked the fuzz module import path; R1105 fixes the test runner path and passes all16 tests plus four real CLI checks."
+  },
+  "candidate_evaluation_complete_comparison": {
+    "implementation_commit": "455704292bd5ee70520a2c4ac195619addb2490f",
+    "solver_binaries": {
+      "baseline": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/cover-diversity-search-r1085/xolver",
+        "sha256": "b9f3e3ff68ba8acf5de5a2b5d050b56de88ed71d9a43304c5cbb066cf2367041"
+      },
+      "candidate": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/candidate-evaluation-r1096/xolver",
+        "sha256": "aab07fcc078c31c3aaf25b38cab9219b9cc750213357db0f0cd9cac39553e12a"
+      },
+      "z3": {
+        "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+        "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      }
+    },
+    "unit_cases": 1877,
+    "unit_assertions": 986592,
+    "acceptance_groups": 39,
+    "formal": {
+      "cases": 160,
+      "counts": {
+        "baseline": {
+          "unsat": 46,
+          "decided": 101,
+          "verified_decided": 101,
+          "verified_par2": 7398.655537610874,
+          "raw_par2": 7398.655537610874,
+          "timeout": 58,
+          "sat": 55,
+          "unknown": 1
+        },
+        "candidate": {
+          "unsat": 46,
+          "decided": 101,
+          "verified_decided": 101,
+          "verified_par2": 7394.498430069536,
+          "raw_par2": 7394.498430069536,
+          "timeout": 58,
+          "sat": 55,
+          "unknown": 1
+        },
+        "z3": {
+          "unsat": 58,
+          "decided": 124,
+          "verified_decided": 117,
+          "verified_par2": 5515.1094531565905,
+          "raw_par2": 4716.834060302004,
+          "sat": 66,
+          "timeout": 36
+        }
+      },
+      "changes": [],
+      "unverified": [
+        {
+          "index": 12,
+          "case": "QF_LIA/fft/Sz128_2823.smt2",
+          "results": {
+            "baseline": "timeout",
+            "candidate": "timeout",
+            "z3": "unsat"
+          },
+          "reasons": {
+            "z3": "no independent confirmation within budget"
+          }
+        },
+        {
+          "index": 24,
+          "case": "QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+          "results": {
+            "baseline": "timeout",
+            "candidate": "timeout",
+            "z3": "unsat"
+          },
+          "reasons": {
+            "z3": "no independent confirmation within budget"
+          }
+        },
+        {
+          "index": 27,
+          "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+          "results": {
+            "baseline": "timeout",
+            "candidate": "timeout",
+            "z3": "unsat"
+          },
+          "reasons": {
+            "z3": "no independent confirmation within budget"
+          }
+        },
+        {
+          "index": 42,
+          "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep2a.smt2",
+          "results": {
+            "baseline": "timeout",
+            "candidate": "timeout",
+            "z3": "unsat"
+          },
+          "reasons": {
+            "z3": "no independent confirmation within budget"
+          }
+        },
+        {
+          "index": 80,
+          "case": "QF_LIA/cut_lemmas/20-vars/cut_lemma_03_004.smt2",
+          "results": {
+            "z3": "unsat",
+            "baseline": "timeout",
+            "candidate": "timeout"
+          },
+          "reasons": {
+            "z3": "no independent confirmation within budget"
+          }
+        },
+        {
+          "index": 114,
+          "case": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+          "results": {
+            "baseline": "timeout",
+            "candidate": "timeout",
+            "z3": "unsat"
+          },
+          "reasons": {
+            "z3": "no independent confirmation within budget"
+          }
+        },
+        {
+          "index": 159,
+          "case": "QF_NRA/20161105-Sturm-MGC/mgc_07.smt2",
+          "results": {
+            "baseline": "timeout",
+            "candidate": "timeout",
+            "z3": "unsat"
+          },
+          "reasons": {
+            "z3": "no independent confirmation within budget"
+          }
+        }
+      ],
+      "model_capture": "initial-solve-single-model",
+      "timeout": 60,
+      "memory_bytes": 17179869184
+    },
+    "excluded_original_triads": [
+      {
+        "experiment": "dbeaa181cf4c",
+        "run": "bacd56368965",
+        "input": "32",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "3"
+          ]
+        },
+        "status": "success",
+        "exit_code": 0,
+        "reason": "extra_Z3_export_already_requested_by_original_input",
+        "files": {
+          "baseline.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "progress.json": "08239731de7ae65d393e4c73b5c2359215e0ab2c1d56dc1b2b38b1f2dee4d7aa",
+          "candidate.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "report.json": "5f1927328de6d085577947e0df7d2a34458ccb8ea1138fa2ebf4139b97a414b3",
+          "baseline.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "candidate.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "z3.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "metrics.json": "4e04dbdd6575548e537a546239dbe46a8a5332fe1f733c14a78c3abc681cfe00",
+          "z3.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "boundary": "The whole triad is excluded by its observed budget violation or objectively redundant model request, independently of its decisions or timings. Raw artifacts are unchanged."
+      },
+      {
+        "experiment": "dbeaa181cf4c",
+        "run": "a1a1e9d88672",
+        "input": "47",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "42"
+          ]
+        },
+        "status": "success",
+        "exit_code": 0,
+        "reason": "extra_Z3_export_already_requested_by_original_input",
+        "files": {
+          "baseline.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "progress.json": "6981f7be5c76ae23c292ce8ee2ebdc70a3950b052c2133190d2e0942af326a58",
+          "candidate.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "report.json": "13b82eca4661190c3440765b45ad9a09c0632a611da8a7c7f07cb192d4a76bb0",
+          "baseline.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "candidate.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "z3.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "metrics.json": "4e04dbdd6575548e537a546239dbe46a8a5332fe1f733c14a78c3abc681cfe00",
+          "z3.stdout": "d2deae2d7ff05762dd2d74549a352e294d2c382ff516394968f3ce1a5b7d831f"
+        },
+        "boundary": "The whole triad is excluded by its observed budget violation or objectively redundant model request, independently of its decisions or timings. Raw artifacts are unchanged."
+      },
+      {
+        "experiment": "06641ce2293b",
+        "run": "2339db816ba3",
+        "input": "93",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "41"
+          ]
+        },
+        "status": "failed",
+        "exit_code": 1,
+        "reason": "wall_budget_violated",
+        "files": {
+          "baseline.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "progress.json": "f3b3995b14f631ed9838bd6702753f793f0b5b636898ef4ba056d8100d50ca44",
+          "candidate.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "report.json": "8504f96b0b5d4205ff09a7ebb25c7c63531d99e74594809f557461807367b466",
+          "baseline.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "candidate.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "z3.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "metrics.json": "b44ded111f64db2789b8a1896f3a6c2a085e05e1ed1f6ce211b46b81c8410e6e",
+          "z3.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "boundary": "The whole triad is excluded by its observed budget violation or objectively redundant model request, independently of its decisions or timings. Raw artifacts are unchanged."
+      },
+      {
+        "experiment": "8e7ae748522b",
+        "run": "40e6daa63d82",
+        "input": "108",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "67"
+          ]
+        },
+        "status": "success",
+        "exit_code": 0,
+        "reason": "extra_Z3_export_already_requested_by_original_input",
+        "files": {
+          "baseline.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "progress.json": "2c2173f0f90eac0eefc0d7a7b59275816e3d120def0be9f8b89c7eed5c9d8b89",
+          "candidate.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "report.json": "9237ab08686cf32dc1a319ee412c8e83e96da5a0fd47b6004e3d9b9ca99cff91",
+          "baseline.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "candidate.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "z3.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "metrics.json": "4e04dbdd6575548e537a546239dbe46a8a5332fe1f733c14a78c3abc681cfe00",
+          "z3.stdout": "0b9ed024503a23cac6edcbdf5bb5f0aed68ae8894d3cf03ab547368df29b11fd"
+        },
+        "boundary": "The whole triad is excluded by its observed budget violation or objectively redundant model request, independently of its decisions or timings. Raw artifacts are unchanged."
+      },
+      {
+        "experiment": "ddf5029ccd5f",
+        "run": "a8f5cb7700bc",
+        "input": "114",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "6"
+          ]
+        },
+        "status": "failed",
+        "exit_code": 1,
+        "reason": "wall_budget_violated",
+        "files": {
+          "baseline.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "z3-unsat-check.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "progress.json": "e6f3616abeaf7bc9c9377baff4af8ceafd9ab8903d81c4be6145414a98724f39",
+          "candidate.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "report.json": "77d165df56d557bd2169e42055ca9b0b2466dbef1e082abf1bb636de13113562",
+          "baseline.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "candidate.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "z3.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "metrics.json": "b44ded111f64db2789b8a1896f3a6c2a085e05e1ed1f6ce211b46b81c8410e6e",
+          "z3-unsat-check.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "z3.stdout": "5c17dfcc2a8f1f30d9e96df6a9825a5030ade046d560332c19de74d93d591a18"
+        },
+        "boundary": "The whole triad is excluded by its observed budget violation or objectively redundant model request, independently of its decisions or timings. Raw artifacts are unchanged."
+      },
+      {
+        "experiment": "ddf5029ccd5f",
+        "run": "4d41016b974e",
+        "input": "118",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "16"
+          ]
+        },
+        "status": "failed",
+        "exit_code": 1,
+        "reason": "wall_budget_violated",
+        "files": {
+          "baseline.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "progress.json": "c1ef181f5510b81a111164e226f73bf4fe8d8a1625e17c7eb8bdb0b40f9bcaf5",
+          "candidate.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "report.json": "cbbacbe718f89f0875255c7f9187093438411e4a521692984528dc37b77e993c",
+          "baseline.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "candidate.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "z3.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "metrics.json": "b44ded111f64db2789b8a1896f3a6c2a085e05e1ed1f6ce211b46b81c8410e6e",
+          "z3.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "boundary": "The whole triad is excluded by its observed budget violation or objectively redundant model request, independently of its decisions or timings. Raw artifacts are unchanged."
+      },
+      {
+        "experiment": "ddf5029ccd5f",
+        "run": "17b6ac102374",
+        "input": "119",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "20"
+          ]
+        },
+        "status": "failed",
+        "exit_code": 1,
+        "reason": "wall_budget_violated",
+        "files": {
+          "baseline.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "progress.json": "17b5381805b090afd73c5ef09a0b760eb86bfc80d1a67d02484ce3b53515fe8d",
+          "candidate.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "report.json": "09ea7983f4071baa3ef66870cb56bf52228be793d8939eb3b09bfb1a7bbda0d1",
+          "candidate-replay.smt2": "a92471ba3aa649c4de090e4e904d753d1534dba06398dde1604ec5c44ef6b024",
+          "baseline.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "candidate.stdout": "642592d13045c1cb6fb59d9957153e99f8f96f26088aba3bca2362f79df0e2a8",
+          "z3.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "metrics.json": "6515e8bf30204fd3b7f813b813eee656fd090f46916e231f45bcac9951ed9832",
+          "candidate-replay.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "candidate-replay.stdout": "d9dbf94b05b8314af9ca7f2034e92685c33447917605a7243b1099c693a12e5e",
+          "z3.stdout": "7ed6120912d915f6ba8ef82ba3ec0b703265a0979bc0a243e0144580ad0c0b6b"
+        },
+        "boundary": "The whole triad is excluded by its observed budget violation or objectively redundant model request, independently of its decisions or timings. Raw artifacts are unchanged."
+      },
+      {
+        "experiment": "ddf5029ccd5f",
+        "run": "f347c1b97b3c",
+        "input": "122",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "34"
+          ]
+        },
+        "status": "success",
+        "exit_code": 0,
+        "reason": "extra_Z3_export_already_requested_by_original_input",
+        "files": {
+          "baseline.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "progress.json": "a8b74939fb07bd4b8a57f81ca9ac01f78b6497b8558e8f4342c5c2ef334d45f9",
+          "candidate.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "report.json": "43a60cd303986325126924568bf677c44256228a1a38d475a4cee9056f8d4c55",
+          "baseline.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "candidate.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "z3.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "metrics.json": "4e04dbdd6575548e537a546239dbe46a8a5332fe1f733c14a78c3abc681cfe00",
+          "z3.stdout": "a1764b04db86118c2d6fc2007339024b1b2aebea4c8f3a38946cbf4cdc39dcfb"
+        },
+        "boundary": "The whole triad is excluded by its observed budget violation or objectively redundant model request, independently of its decisions or timings. Raw artifacts are unchanged."
+      },
+      {
+        "experiment": "6db974c1e31e",
+        "run": "4837c0557d02",
+        "input": "128",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "2"
+          ]
+        },
+        "status": "failed",
+        "exit_code": 1,
+        "reason": "wall_budget_violated",
+        "files": {
+          "baseline.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "z3-unsat-check.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "progress.json": "87e62fa171cf8e5753eb8065647af4f4fa2349d2c2930f867bee527cfa4a735d",
+          "candidate.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "report.json": "536a32bd5ca5bcc0a69d07f75b7e9bb05a03a82062700ed34274c5463b9f501d",
+          "baseline.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "candidate.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "z3.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "metrics.json": "b44ded111f64db2789b8a1896f3a6c2a085e05e1ed1f6ce211b46b81c8410e6e",
+          "z3-unsat-check.stdout": "5c17dfcc2a8f1f30d9e96df6a9825a5030ade046d560332c19de74d93d591a18",
+          "z3.stdout": "5c17dfcc2a8f1f30d9e96df6a9825a5030ade046d560332c19de74d93d591a18"
+        },
+        "boundary": "The whole triad is excluded by its observed budget violation or objectively redundant model request, independently of its decisions or timings. Raw artifacts are unchanged."
+      },
+      {
+        "experiment": "6db974c1e31e",
+        "run": "42b96d529458",
+        "input": "138",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "39"
+          ]
+        },
+        "status": "failed",
+        "exit_code": 1,
+        "reason": "wall_budget_violated",
+        "files": {
+          "baseline.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "progress.json": "e39a9d29c5438ccd2e4fcce61278c5fd29006981bca53161c91db40ea430388e",
+          "candidate.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "report.json": "2e50ff2a4fe8a448539aade821137d0d5b945e834f56e6d6c1fce02eeeb7ba66",
+          "baseline.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "candidate.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "z3.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "metrics.json": "b44ded111f64db2789b8a1896f3a6c2a085e05e1ed1f6ce211b46b81c8410e6e",
+          "z3.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "boundary": "The whole triad is excluded by its observed budget violation or objectively redundant model request, independently of its decisions or timings. Raw artifacts are unchanged."
+      }
+    ],
+    "audit": {
+      "path": "validation/arithmetic-r103/stage-r1099.json",
+      "sha256": "08b4ef8437da387c2df7dcd7201a681110f1f6ee439a41fa4d763b455677673b",
+      "experiment": "ec75da8e68be",
+      "run": "4174c0f88e61"
+    },
+    "boundary": "Committed source45570429, all39 native acceptance groups and1877 unit cases, plus a uniform effective single-model fixed160 round with frozen main/candidate/Z3 binaries,60s/one leased physical CPU/16GiB per solve.150 valid original triads have no explicit get-model and their recorded commands already match the single-export policy. Six complete triads with actual wall-budget violations and four complete triads with redundant Z3 model exports are retained as excluded artifacts and replaced as whole triads, selected by budget/command facts before replacement decisions. The aggregate refines only model_capture metadata after checking actual CLI flags on every selected input; raw reports and every decision, timing and resource field remain unchanged. Independent evidence establishes truth eligibility only, never historical timing substitution. Case51 remains timing-sensitive. No protected set or final-kernel whole-program QCP result is claimed.",
+    "interpretation": "Zero original-input solve gains or losses. The4.157-second PAR-2 difference in one round does not establish aggregate speed improvement. Keep the demonstrated shared-DAG evaluation/resource fix separate from whole-solver performance; final validation-tool source qualification and exact delivery-head CI are pending."
+  }
 }

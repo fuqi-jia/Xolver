@@ -15,40 +15,24 @@ namespace xolver {
 /**
  * CandidateModelSearch (Capability 10 of the close-all-known-fails plan).
  *
- * SAT-only validated witness search. Last resort after every legacy
- * complete engine returns Unknown.
+ * SAT-only validated witness search, used in bounded pre-passes, model
+ * repair, and recovery after complete engines return Unknown.
  *
- * **Soundness contract**: this class never produces UNSAT, Conflict, or
- * Lemma. It generates candidate assignments using a small set of
- * deterministic strategies, then accepts a candidate only if a complete
- * arithmetic evaluator over the original assertions reports that every
- * assertion holds.
+ * Soundness contract: never produce UNSAT, Conflict, or Lemma. Accept a
+ * candidate only when its complete assignment satisfies every assertion and
+ * all numeric UF applications have consistent interpretations.
  *
  * Strategies (executed in this order):
  *
- *   10a. Low-height rational enumeration over a per-variable priority
- *        list (0, 1, -1, 1/2, -1/2, 2, -2, ...). The Cartesian product
- *        is explored in increasing total-height order so simple
- *        witnesses (e.g. (1, 0, 0)) appear within the per-strategy
- *        budget.
+ *   10d. Try uniform assignments x = y = ... = c for c in {0, 1, -1, 2, -2}.
+ *   10c. Try active interval endpoints and unit offsets.
+ *   10a. Enumerate per-variable priority lists in increasing total height.
  *
- *   10d. Symmetric diagonal: detect syntactic permutation symmetry over
- *        the variables and try x = y = ... = c for c in
- *        {-2, -1, 0, 1, 2}.
- *
- *   10c. Boundary points: for each integer variable with an active
- *        interval [L, U] (detected by a lightweight syntactic scan
- *        of the assertions), try L, L+1, U, U-1.
- *
- *   10b. Linear-skeleton feasibility witness (delegated to
- *        GeneralSimplex if available; otherwise the strategy yields
- *        no candidate).
- *
- * Budgets:
- *   - candidates per strategy:        200
+ * Default budgets:
+ *   - candidates per strategy:        5000
  *   - rational denominator bound:     12
  *   - absolute numerator bound:       10
- *   - wall-clock per invocation:      50 ms
+ *   - wall-clock per invocation:      200 ms
  *
  * Validation:
  *   - Construct a complete assignment over every free numeric variable
@@ -182,7 +166,9 @@ private:
         ExprId eid,
         const std::unordered_map<std::string, mpq_class>& assignment) const;
     // Memo populated by evalTermTop's pre-pass; consulted at evalTerm's entry.
-    // Keyed by ExprId, valid only within one assignment (cleared per top call).
+    // Keyed by ExprId within one candidate assignment. UF derivation clears
+    // before evaluating changed bindings; functional consistency starts the
+    // immutable scope reused by assertion checks and function-table export.
     mutable std::unordered_map<ExprId, TermResult> evalMemo_;
 
     bool detectSymmetry() const;

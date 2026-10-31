@@ -16,6 +16,21 @@ def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def model_arguments(name, source):
+    if name != 'z3':
+        return ['--produce-models']
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'tools/proof'))
+    from isabelle_pa import Atom, parse
+    requests = sum(isinstance(command, list) and bool(command)
+                   and isinstance(command[0], Atom) and command[0].kind == 'symbol'
+                   and command[0].text == 'get-model' for command in parse(source))
+    if requests > 1:
+        raise ValueError('comparison requires at most one explicit get-model request')
+    # Z3 -model adds an export to check-sat. An existing get-model already
+    # exports the timed witness; requesting both pays for two model outputs.
+    return [] if requests else ['-model']
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('manifest', 'baseline', 'candidate', 'z3', 'output'):
@@ -44,6 +59,9 @@ def main():
     controls = Path(__file__).resolve().parents[2] / 'src/base/controls.json'
     names = {c['name'] for c in json.loads(controls.read_text())['controls']}
     environment = {k: v for k, v in os.environ.items() if k not in names}
+    source = Path(case['path']).read_text() if args.validate_models else ''
+    model_flags = {name: model_arguments(name, source) if args.validate_models else []
+                   for name in commands}
 
     protocol_errors = []
 
@@ -71,7 +89,7 @@ def main():
     report = dict(index=args.index, case=case, binaries=binaries,
                   manifest_sha256=digest(args.manifest), timeout=args.timeout,
                   memory_bytes=args.memory_gib * 1024**3, observations={},
-                  model_capture='initial-solve' if args.validate_models else None)
+                  model_capture='initial-solve-single-model' if args.validate_models else None)
     # Rotate version/oracle order on the same physical CPU. Historical oracle
     # rows never substitute for a fresh timed invocation.
     order = list(commands)
@@ -79,10 +97,10 @@ def main():
     for name in order[offset:] + order[:offset]:
         tail = ('--timeout', str(args.timeout)) if name != 'z3' else ()
         if args.validate_models and name != 'z3':
-            tail += ('--produce-models',)
+            tail += tuple(model_flags[name])
         cmd = commands[name] + (['-T:' + str(args.timeout)] if name == 'z3' else [])
         if args.validate_models and name == 'z3':
-            cmd.append('-model')
+            cmd.extend(model_flags[name])
         report['observations'][name] = invoke(name, cmd, case['path'], tail)
         (out / 'progress.json').write_text(json.dumps(report, indent=2) + '\n')
     verdicts = {o['result'] for o in report['observations'].values() if o['result'] in ('sat', 'unsat')}
