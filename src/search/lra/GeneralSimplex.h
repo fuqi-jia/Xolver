@@ -207,6 +207,12 @@ public:
         if (analysisRevision_ == std::numeric_limits<uint64_t>::max()) return std::nullopt;
         return analysisRevision_;
     }
+    // Coordinate changes, including reinitialization without a bound change.
+    std::optional<uint64_t> pointRevision() const noexcept {
+        if (pointRevision_ == std::numeric_limits<uint64_t>::max()) return std::nullopt;
+        return pointRevision_;
+    }
+    bool hasCoherentPoint() const noexcept { return !betaDirty_; }
     int numVars() const { return static_cast<int>(vars_.size()); }
     int numRows() const { return tab_.numRows(); }
     bool isBasic(int var) const;
@@ -288,6 +294,10 @@ private:
     std::vector<int> boundMergeViolations_, boundMergeChanged_;
     std::vector<std::array<BoundInfo, 2>> boundMergeValues_;
     uint64_t analysisRevision_ = 0;
+    uint64_t pointRevision_ = 0;
+    void notePointChange() noexcept {
+        if (pointRevision_ != std::numeric_limits<uint64_t>::max()) ++pointRevision_;
+    }
     void noteAnalysisChange() noexcept {
         fixedValueAnalysis_.reset();
         if (analysisRevision_ != std::numeric_limits<uint64_t>::max()) ++analysisRevision_;

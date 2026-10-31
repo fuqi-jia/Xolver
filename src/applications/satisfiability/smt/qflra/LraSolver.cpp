@@ -132,6 +132,7 @@ void LraSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
 }
 
 void LraSolver::onBacktrack(int level) {
+    const auto previousInterfaces = interfaceEqualities_.size() + interfaceDisequalities_.size();
     currentLevel_ = level;
 
     if (level == 0) {
@@ -166,6 +167,8 @@ void LraSolver::onBacktrack(int level) {
     }
 
     pendingConflict_.reset();
+    if (previousInterfaces != interfaceEqualities_.size() + interfaceDisequalities_.size())
+        manager_.invalidateModelHints();
 }
 
 bool LraSolver::applyEntryToSimplex(const LraTrailEntry& e) {
@@ -578,6 +581,7 @@ LraSolver::assertedVarEqualityReason(SharedTermId a, SharedTermId b) const {
 
 TheoryCheckResult LraSolver::assertInterfaceEquality(
     SharedTermId a, SharedTermId b, SatLit reason, int level) {
+    manager_.invalidateModelHints();
 
     int aux = getOrCreateInterfaceEqAuxVar(a, b);
     if (aux == -2) {
@@ -596,6 +600,7 @@ TheoryCheckResult LraSolver::assertInterfaceEquality(
 
 TheoryCheckResult LraSolver::assertInterfaceDisequality(
     SharedTermId a, SharedTermId b, SatLit reason, int level) {
+    manager_.invalidateModelHints();
 
     int aux = getOrCreateInterfaceEqAuxVar(a, b);
     if (aux == -2) {
@@ -838,7 +843,19 @@ std::optional<bool> LraSolver::evalAtomAtModel(SatVar v) {
     const auto* record = registry_ ? registry_->findBySatVar(v) : nullptr;
     if (!record) return std::nullopt;
     const auto* atom = std::get_if<LinearAtomPayload>(&record->payload);
-    return atom ? manager_.evaluateAtModel(gs_, *atom) : std::nullopt;
+    if (!atom) return std::nullopt;
+    auto interfacesHold = [this]() {
+        auto valueOf = [this](SharedTermId term) -> std::optional<DeltaRational> {
+            if (sharedTermRegistry_)
+                if (auto constant = sharedTermRegistry_->constValue(term)) return DeltaRational(*constant);
+            const int column = manager_.findVarIndex(getVarNameForSharedTerm(term));
+            if (column < 0 || column >= gs_.numVars()) return std::nullopt;
+            return gs_.value(column);
+        };
+        return LinearAtomManager::sharedRelationsHold(interfaceEqualities_, interfaceDisequalities_, valueOf);
+    };
+    if (!manager_.currentPointSatisfies(gs_, theoryTrail_, SortKind::Real, interfacesHold)) return std::nullopt;
+    return manager_.evaluateAtModel(gs_, *atom, SortKind::Real);
 }
 
 std::optional<RealValue> LraSolver::sharedTermArithValue(SharedTermId s) const {

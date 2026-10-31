@@ -32,13 +32,16 @@ int LinearAtomManager::findVarIndex(const std::string& name) const {
 }
 
 std::optional<bool> LinearAtomManager::evaluateAtModel(
-    const GeneralSimplex& gs, const LinearAtomPayload& atom) const {
+    const GeneralSimplex& gs, const LinearAtomPayload& atom, SortKind domain) const {
+    if (domain != SortKind::Int && domain != SortKind::Real) return std::nullopt;
     if (!atom.rhs.isRational()) return std::nullopt;
     DeltaRational value;
     for (const auto& [name, coefficient] : atom.lhs.terms) {
         const int index = findVarIndex(name);
         if (index < 0 || index >= gs.numVars()) return std::nullopt;
-        value += coefficient * gs.value(index);
+        const auto coordinate = gs.value(index);
+        if (domain == SortKind::Int && (coordinate.b != 0 || coordinate.a.get_den() != 1)) return std::nullopt;
+        value += coefficient * coordinate;
     }
     const DeltaRational rhs(atom.rhs.asRational());
     switch (atom.rel) {
@@ -50,6 +53,19 @@ std::optional<bool> LinearAtomManager::evaluateAtModel(
         case Relation::Geq: return value >= rhs;
     }
     return std::nullopt;
+}
+
+bool LinearAtomManager::relationHolds(const DeltaRational& difference, Relation relation) {
+    static const DeltaRational zero;
+    switch (relation) {
+        case Relation::Eq: return difference == zero;
+        case Relation::Neq: return difference != zero;
+        case Relation::Lt: return difference < zero;
+        case Relation::Leq: return difference <= zero;
+        case Relation::Gt: return difference > zero;
+        case Relation::Geq: return difference >= zero;
+    }
+    return false;
 }
 
 int LinearAtomManager::getOrCreateAuxVar(GeneralSimplex& gs,

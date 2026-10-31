@@ -167,6 +167,7 @@ LiaSolver::assertedVarEqualityReason(SharedTermId a, SharedTermId b) const {
 
 TheoryCheckResult LiaSolver::assertInterfaceEquality(
     SharedTermId a, SharedTermId b, SatLit reason, int level) {
+    manager_.invalidateModelHints();
 
     int aux = getOrCreateInterfaceEqAuxVar(a, b);
     if (aux < 0) return TheoryCheckResult::consistent();
@@ -182,6 +183,7 @@ TheoryCheckResult LiaSolver::assertInterfaceEquality(
 
 TheoryCheckResult LiaSolver::assertInterfaceDisequality(
     SharedTermId a, SharedTermId b, SatLit reason, int level) {
+    manager_.invalidateModelHints();
 
     int aux = getOrCreateInterfaceEqAuxVar(a, b);
     if (aux < 0) return TheoryCheckResult::consistent();

@@ -157,18 +157,53 @@ zero. Their10-second logged traces are not formal timing scores. The dynamic
 candidate refresh on58 is also active. R1381's earlier suppressed logs are not
 used as absence evidence.
 
-Control-plane`launch-full-r1394.py` checks every acceptance/pilot run is terminal
-and its PID gone, freezes all binary hashes, and dispatches twenty eight-case
-ExperimentOS batches into `fair-r1394`. It is now running; the first batch is
-`0daceb31acd0`. Formal budgets remain60s/one physical CPU/16GiB for each solver,
-with initial model export and independent replay. Record the complete round
-before promotion, including any lost solves or unconfirmed decisions. Keep its
-original raw reports; original115's independently checked modular certificate
-in R1389 may supplement an unconfirmed UNSAT only for the exact matching input.
-This version and the older R1377 pilot must not be mixed. Main CI is already
-green; no extra server archive is a delivery condition. Both protected sets
-remain unread and unused; no new original-C QCP workflow or superiority claim
-is made. No new PR is open.
+R1394's fresh fixed160 round is complete with **106 main/105 candidate/118
+verified Z3**. Candidate gains SAT98 (57.514s) and SAT144 (54.959s), but loses
+LIA7 UNSAT17.568s, SAT11 at5.882s and SAT91 at3.326s. Both versions have1 unknown;
+timeouts53/54. Verified PAR-2 is6953.423/7123.523/5356.975. No opposite verdict or
+invalid exported Xolver model occurs. The candidate is not promoted. Raw reports
+and raw105/104/117 counts remain unchanged: R1389's original-input115 modular
+certificate confirms both Xolver UNSATs, and R1399 independently replays the
+actual timed Z3 model94 after omitting247 unused universe forms while retaining
+all47343 closed original interpretations. Eight unconfirmed Z3 UNSATs remain
+excluded. R1400 (`994170403b9a`, run`d570a8a474a3`) checks the complete chain; see
+[the integration trial](THEORY_DECISION_INTEGRATION_TRIAL_20261101.json), SHA-256
+`7a1d34d783938efada617407e9b44d5c859209ba8006ee2f4113f74747d159aa`.
+R1395's earlier read-only audit failed on a nonexistent old experiment name;
+its failure is preserved and R1400 corrects that lookup.
+
+R1397's same-core public-policy observer (`357b808bb3d5`, SHA-256
+`673a96dd8a7d88d38a5ec03b12d37a72706488286b818e5f3fc3240369b23958`)
+and all four R1398 cases (`dbee9a69eb83`) pass. With SatActivity,7 returns UNSAT
+14.951s,11 SAT5.027s and91 SAT1.921s; their model-source checks reach30 seconds.
+Every decided result has an independent original-input or exported-model check.
+These instrumented runs use30-second checks plus parsing, so they are causal
+diagnostics, not replacements for the formal60-second records. LIA model-source
+samples on7 violate current active constraints99/120 times;11/91's initial
+samples are both fractional and source-inconsistent. On98,31/65 samples violate
+active constraints. The integration made an existing model-advice validity
+problem visible rather than establishing a beneficial default search policy.
+
+Development now validates model hints against their actual retained sources and
+coordinate domain. The common LinearAtomManager handles LRA/LIA signed
+relations and shared relations; LIA additionally rejects fractional/infinitesimal
+integer coordinates, while LRA retains exact infinitesimals. A point revision
+covers coordinate reconstruction even without bound changes. The generic
+incremental context distinguishes appended sources from replaced/withdrawn/
+restored prefixes, allowing an unchanged feasible point to check only appended
+sources. No decision-source enum, explicit-user priority, theory deductions or
+LRA/LIA rollback policy is changed. New source/point lifecycle and two-theory
+contracts are pending native qualification, including a same-header old-advice
+negative control and the newly exposed loss cases in the next pilot.
+
+Panda's canonical source remains `source-r1388.tar.json` and its frozen worker
+is the one above. The next R1401 overlay must check those preimages and the
+completed audits before reusing the unique locked build. QCP's existing
+verification-orchestrator skill and immutable original-program references have
+been inspected, but no new original-C workflow is started with the regressing
+R1388 candidate. Both protected sets remain unread and unused. No new PR is
+open; main remains the green PR92 delivery. No additional server archive is a
+new condition for that delivered main.
 
 [PR89](https://github.com/fuqi-jia/Xolver/pull/89), implementation `e0cafba8`,
 restores SAT's retained signed root prefix after a real restart. A shared theory

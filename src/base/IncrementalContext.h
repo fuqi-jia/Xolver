@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
+#include <limits>
 #include <optional>
 #include <stdexcept>
 #include <type_traits>
@@ -25,6 +27,10 @@ class Context {
     static auto levelOf(const Entry& entry) { return LevelOf{}(entry); }
     std::vector<Entry> entries_;
     bool ordered_ = true;
+    uint64_t prefixRevision_ = 0;
+    void invalidatePrefix() noexcept {
+        if (prefixRevision_ != std::numeric_limits<uint64_t>::max()) ++prefixRevision_;
+    }
 
     bool orderedLevels() const {
         return std::is_sorted(entries_.begin(), entries_.end(),
@@ -32,6 +38,31 @@ class Context {
     }
 
 public:
+    Context() = default;
+    Context(const Context& other) : entries_(other.entries_), ordered_(other.ordered_) {}
+    Context(Context&& other) noexcept
+        : entries_(std::move(other.entries_)), ordered_(other.ordered_) { other.invalidatePrefix(); }
+    Context& operator=(const Context& other) {
+        if (this != &other) {
+            invalidatePrefix(); ordered_ = false;
+            entries_ = other.entries_; ordered_ = other.ordered_;
+        }
+        return *this;
+    }
+    Context& operator=(Context&& other) noexcept {
+        if (this != &other) {
+            invalidatePrefix(); other.invalidatePrefix();
+            entries_ = std::move(other.entries_); ordered_ = other.ordered_;
+        }
+        return *this;
+    }
+    // Appends preserve every previous entry. All other source mutations,
+    // including assignment/restore and moving out, invalidate prefix reuse.
+    // Saturation disables reuse rather than allowing a generation to alias.
+    std::optional<uint64_t> retainedPrefixRevision() const noexcept {
+        if (prefixRevision_ == std::numeric_limits<uint64_t>::max()) return std::nullopt;
+        return prefixRevision_;
+    }
     enum class Withdrawal { None, Suffix, Filtered };
     struct BacktrackResult {
         Withdrawal kind;
@@ -64,6 +95,7 @@ public:
     }
     void replace(size_t index, Entry entry) {
         auto& previous = entries_.at(index);
+        invalidatePrefix();
         const bool ordered = ordered_ &&
             (index == 0 || levelOf(entries_[index - 1]) <= levelOf(entry)) &&
             (index + 1 == size() || levelOf(entry) <= levelOf(entries_[index + 1]));
@@ -71,12 +103,13 @@ public:
         previous = std::move(entry);
         ordered_ = ordered;
     }
-    void clear() { entries_.clear(); ordered_ = true; }
+    void clear() { invalidatePrefix(); entries_.clear(); ordered_ = true; }
 
     // Explicit prefix retention also supports clients whose withdrawal policy
     // deliberately differs from level filtering.
     void truncate(size_t count) {
         if (count > size()) throw std::out_of_range("context prefix exceeds size");
+        if (count != size()) invalidatePrefix();
         while (size() > count) entries_.pop_back();
     }
 
@@ -84,6 +117,7 @@ public:
     // replacement. Ordinary decision backtracking never copies retained entries.
     Snapshot snapshot() const { return Snapshot(entries_, ordered_); }
     void restore(Snapshot saved) {
+        invalidatePrefix();
         entries_.swap(saved.entries_);
         ordered_ = saved.ordered_;
     }
@@ -101,6 +135,7 @@ public:
             : std::find_if(entries_.begin(), entries_.end(), withdrawn);
         const size_t retained = static_cast<size_t>(first - entries_.begin());
         if (first == entries_.end()) return {Withdrawal::None, retained, 0};
+        invalidatePrefix();
         const size_t previous = size();
         if (ordered_ || std::all_of(first, entries_.end(), withdrawn)) {
             while (size() > retained) {
@@ -152,6 +187,9 @@ public:
     using Withdrawal = typename Sources::Withdrawal;
     using BacktrackResult = typename Sources::BacktrackResult;
     using Snapshot = typename Sources::Snapshot;
+    std::optional<uint64_t> retainedPrefixRevision() const noexcept {
+        return sources_.retainedPrefixRevision();
+    }
 
     const std::vector<Entry>& entries() const { return sources_.entries(); }
     auto begin() const { return sources_.begin(); }

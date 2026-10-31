@@ -22,6 +22,44 @@ struct CountedEntryKey {
 };
 }
 
+TEST_CASE("incremental context: retained prefix revisions distinguish append from replacement and ownership changes") {
+    using Context = incremental::IndexedContext<Entry, EntryKey>;
+    Context sources;
+    const auto empty = sources.retainedPrefixRevision();
+    sources.append({0, 1, "parent"});
+    CHECK(sources.retainedPrefixRevision() == empty);
+    const auto saved = sources.snapshot();
+    sources.append({1, 2, "child"});
+    CHECK(sources.retainedPrefixRevision() == empty);
+    CHECK_FALSE(sources.backtrack(2).changed());
+    CHECK(sources.retainedPrefixRevision() == empty);
+    CHECK(sources.backtrack(0).changed());
+    const auto withdrawn = sources.retainedPrefixRevision();
+    CHECK(withdrawn != empty);
+    sources.replace(0, {0, 3, "replacement"});
+    const auto replaced = sources.retainedPrefixRevision();
+    CHECK(replaced != withdrawn);
+    sources.restore(saved);
+    CHECK(sources.retainedPrefixRevision() != replaced);
+    CHECK(sources[0].id == 1);
+    const auto restored = sources.retainedPrefixRevision();
+    sources.truncate(sources.size());
+    CHECK(sources.retainedPrefixRevision() == restored);
+    CHECK_THROWS_AS(sources.replace(9, {0, 9, "invalid"}), std::out_of_range);
+    CHECK(sources.retainedPrefixRevision() == restored);
+    Context other;
+    other.append({0, 8, "different same-sized prefix"});
+    sources = other;
+    CHECK(sources.retainedPrefixRevision() != restored);
+    REQUIRE(sources.find(8).has_value());
+    const auto beforeMove = other.retainedPrefixRevision();
+    Context moved(std::move(other));
+    CHECK(other.retainedPrefixRevision() != beforeMove);
+    REQUIRE(moved.find(8).has_value());
+    other.append({0, 4, "new moved-from source"});
+    CHECK(other[0].id == 4);
+}
+
 TEST_CASE("incremental context: arbitrary replacements and nested snapshots agree with independent level filtering") {
     using Context = incremental::Context<Entry>;
     Context context;

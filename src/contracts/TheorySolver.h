@@ -51,10 +51,9 @@ public:
     // lemmas. Default: none. Must never return Guess/branch lemmas.
     virtual std::vector<TheoryLemma> takeEntailmentPropagations() { return {}; }
 
-    // Heuristic eval of a bound atom at the current theory model
-    // (cb_decide). Default: no value.
-    // Heuristic eval of a bound atom at the current theory model (see
-    // TheoryPropagationCallbacks::evalTheoryAtom). Default: no value.
+    // Heuristic eval at a current candidate for this theory. Uninitialized,
+    // source-inconsistent or wrong-domain points may decline with no value.
+    // A phase hint is neither an entailment nor a satisfiability verdict.
     virtual std::optional<bool> evalAtomAtModel(SatVar v) { (void)v; return std::nullopt; }
 
     // -----------------------------------------------------------------------
