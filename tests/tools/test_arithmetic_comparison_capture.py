@@ -12,12 +12,14 @@ import compare_arithmetic_case as comparison
 
 
 class ArithmeticComparisonCapture(unittest.TestCase):
-    def run_comparison(self, *, invalid_model=False, missing_model=False, validate=True):
+    def run_comparison(self, *, invalid_model=False, missing_model=False, validate=True,
+                       explicit_model=False):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source = root / 'original.smt2'
             source.write_text('(set-logic QF_LRA)\n(declare-const x Real)\n'
-                              '(assert (= x 1))\n(check-sat)\n')
+                              '(assert (= x 1))\n(check-sat)\n'
+                              + ('(get-model)\n' if explicit_model else ''))
             original = source.read_bytes()
             manifest = root / 'manifest.json'
             manifest.write_text(json.dumps(dict(cases=[dict(path=str(source),
@@ -50,7 +52,10 @@ class ArithmeticComparisonCapture(unittest.TestCase):
                     if not validate:
                         self.assertNotIn(flag, arguments)
                         return b'sat\n', b'', timing
-                    self.assertIn(flag, arguments)
+                    if name == 'z3' and explicit_model:
+                        self.assertNotIn(flag, arguments)
+                    else:
+                        self.assertIn(flag, arguments)
                     if missing_model and name == 'candidate':
                         return b'sat\n', b'', timing
                     value = '(- 1)' if invalid_model and name == 'candidate' else '1'
@@ -77,11 +82,29 @@ class ArithmeticComparisonCapture(unittest.TestCase):
         status, report, metrics, replays = self.run_comparison()
         self.assertEqual(status, 0)
         self.assertEqual(metrics['errors'], 0)
-        self.assertEqual(report['model_capture'], 'initial-solve')
+        self.assertEqual(report['model_capture'], 'initial-solve-single-model')
         self.assertEqual(len(replays), 3)
         for observation in report['observations'].values():
             self.assertTrue(observation['verified'])
             self.assertNotIn('model', observation)
+
+    def test_an_explicit_model_request_is_not_duplicated(self):
+        status, report, metrics, replays = self.run_comparison(explicit_model=True)
+        self.assertEqual(status, 0)
+        self.assertEqual(metrics['errors'], 0)
+        self.assertEqual(len(replays), 3)
+        self.assertTrue(all(row['verified'] for row in report['observations'].values()))
+
+    def test_comments_strings_and_quoted_symbols_do_not_request_a_model(self):
+        source = '; (get-model)\n(set-info :notes "(get-model)")\n' \
+                 '(declare-const |get-model| Int)\n(assert (= |get-model| 1))\n(check-sat)\n'
+        self.assertEqual(comparison.model_arguments('z3', source), ['-model'])
+        self.assertEqual(comparison.model_arguments('z3', source + '(get-model)\n'), [])
+        self.assertEqual(comparison.model_arguments('baseline', source), ['--produce-models'])
+
+    def test_multiple_explicit_requests_require_a_separate_protocol(self):
+        with self.assertRaisesRegex(ValueError, 'at most one explicit'):
+            comparison.model_arguments('z3', '(check-sat)(get-model)(get-model)')
 
     def test_an_invalid_initial_model_fails_despite_agreeing_sat_verdicts(self):
         status, report, metrics, _ = self.run_comparison(invalid_model=True)

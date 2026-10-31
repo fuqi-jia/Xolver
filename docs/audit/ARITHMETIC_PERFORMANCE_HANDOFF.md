@@ -40,29 +40,52 @@ Older tables describe their own frozen versions and evidence boundaries.
 
 ## Current arithmetic and ASP continuation
 
-The latest delivered arithmetic stage is
-[distinct explained linear consequences](#qualified-saturation-of-linear-consequences-r926r933):
-**100/160**, versus **116 verified /123 raw** same-round Z3 decisions.
-[PR79](https://github.com/fuqi-jia/Xolver/pull/79) is merged as main
-`51c0e641488f966384cb82b05091e75c64132cd0`. Both exact-head
-[PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/41099839678) and fresh
-[main CI](https://github.com/fuqi-jia/Xolver/actions/runs/41103752206) are fully green.
-Verified solves remain100→100 with no gained/lost result; PAR-2 improves
-7534.598→7498.860 (about0.47%). Case59 improves39.692s→2.823s with its actual
-SAT model checked. Seven unconfirmed Z3 UNSATs remain excluded. This is not an
-overall solver-superiority result. Earlier rounds retain their own frozen
-versions, timings and evidence boundaries. No extra current-main archive is
-required after green CI.
+The latest delivered arithmetic stage is [PR83](https://github.com/fuqi-jia/Xolver/pull/83):
+core `65c9cb8c`, merged as `d3b767af`. Current main `5b8592b0` only merges the
+already-delivered Draco history and has the same source tree. Exact-head
+[PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/41162240789) and latest
+[main CI](https://github.com/fuqi-jia/Xolver/actions/runs/41165659029) both pass
+build-test and proof-gate. The earlier main run41164344182 was cancelled by
+the newer history-only push; it is not a functional failure. All39 native
+groups pass, with1873 unit cases/986585 assertions.
 
-The next server-qualified candidate retains active ITE child lists and cursors
-(commit `d85eac566e29329e0f25e18a7e364429544305b7`). Its fresh R951/R953/R954
-round verifies **99 baseline → 100 candidate**, versus **118 verified /125 raw**
-same-round Z3, with one gain and no losses. The delivered stage above already
-reached100 in its earlier round; this is not a new historical coverage record.
-The [ITE receipt](ITERATIVE_ITE_TRAVERSAL_STAGE_20261031.json) binds the full
-1832-case server acceptance, three rejected budget-overrun triads and their
-valid replacements, independently checked models and remaining seven
-unconfirmed UNSATs. This candidate has not yet passed its own PR/main CI.
+R1089 records100 baseline→102 candidate verified results.149 improves from a
+baseline timeout to0.166s SAT;51 is timing-sensitive and is not a stable attributed
+gain. There are no lost solves, opposite verdicts or invalid exported models.
+Its recorded Z3 score is117 verified/124 raw, with seven unconfirmed UNSATs
+excluded. A subsequent protocol audit found that original inputs32/47/108/122
+already request get-model while the legacy runner also adds -model, causing
+extra Z3 model exports. Preserve those exact-command observations; they are not
+a final uniform single-export Z3 timing comparison. Xolver has not surpassed Z3.
+
+The next core `45570429`, in [draft PR84](https://github.com/fuqi-jia/Xolver/pull/84),
+reuses candidate evaluation across one immutable assignment and checks deadlines
+inside DAG traversal. Native R1096 qualification passes243 targeted cases/23553
+assertions; all39 R1097 groups pass, including1877 unit cases/986592 assertions.
+The frozen CLI is `aab07fcc078c31c3aaf25b38cab9219b9cc750213357db0f0cd9cac39553e12a`;
+the comparison baseline is the delivered CLI b9f3e3ff. The constructed shared-DAG
+speedup remains a local result; original47/108/122 profiles still time out.
+
+The single-model protocol fix passes16 tool tests and actual pinned-Z3 checks:
+with an explicit get-model, legacy -model exports twice and the corrected request
+exports once. Original input hashes and assertions are preserved. Current round
+R1098 has150 valid triads whose commands already match this policy. Six budget
+violations (93/114/118/119/128/138) and four redundant-export triads are replaced
+as COMPLETE triads, using the same frozen binaries and60s/one leased physical
+CPU/16GiB per solver.128's R1101 replacement passes; R1107/R1108 handle the others.
+R1099 checks every selected command before refining capture metadata; raw
+decisions and times are unchanged. The completed effective-single-export round
+verifies101 main/101 candidate/117 Z3 (124 raw), no gains/losses/errors.
+PAR-2 is7398.656/7394.498/5515.109. The4.157s difference in one round does not
+establish aggregate improvement. The local shared-DAG/resource fix is retained;
+final validation-tool source qualification and exact delivery-head CI remain
+pending. Seven unconfirmed Z3 UNSATs stay excluded.
+
+The completed original GCD pair on the earlier d80fb40b worker verifies all nine
+original VCs with each backend and audits296 actual native calls/70 unique
+formulas per backend. It does not qualify a final-kernel program-set comparison.
+Both independent protected sets remain unused. Earlier named rounds and receipts
+below describe their own frozen source snapshots and protocol boundaries.
 
 The retained branches are `main`, `feat/qcp-foundations` (QCP and solver
 foundations), and `feat/draco-asp`. Historical branch tips are archived in
@@ -3516,3 +3539,57 @@ actual committed implementation, run full acceptance and a fresh full160 round
 before considering its merge. Do not repeat the same three profiles as evidence
 of a new gain. A final-kernel original multi-program QCP comparison and both
 independent protected sets remain required for the full goal.
+
+
+### Single-model capture and postmerge main CI
+
+PR83's latest main CI41165659029 is fully green on5b8592b0. That commit merges
+the retained Draco history without changing the d3b767af source tree; the older
+main run was cancelled by the workflow concurrency rule. The frozen baseline
+code therefore remains unchanged. No additional current-main archive is needed.
+
+The current candidate has completed all39 native groups and1877 unit cases.
+The original R1098 comparison detects six real budget violations, not solver
+counterexamples; all excluded reports remain available. The source-only command
+inventory R1109 identifies exactly four explicit get-model inputs32/47/108/122.
+Native check R1105 and16 tool tests establish one export for the corrected
+policy; R1102's earlier isolated import-path failure remains preserved and did
+not execute the native CLI probes. Do not overwrite live canonical runners or
+mix capture policies without verifying actual recorded commands. The current
+correction plan retains150 valid triads, replaces six complete budget-invalid
+triads (R1101/R1107) and four complete redundant-export triads (R1108), and keeps
+all solver hashes/budgets fixed. R1099's final effective-policy audit and the
+updated runner's committed-source qualification are pending. Both protected
+sets and the final-kernel original multi-program QCP comparison remain unused
+or outstanding; this is not the full goal's completion.
+
+
+### Candidate evaluation full160 closure (R1099)
+
+All39 R1097 native groups pass,1877 unit cases/986592 assertions. R1099 seals
+150 unchanged valid original triads, six complete replacements for actual wall
+budget violations, and four complete replacements for redundant Z3 model
+exports identified solely from the original input commands. Actual flags are
+checked on every selected input before refining capture metadata; original raw
+reports, decisions, times and resources are unchanged. All solver versions stay
+frozen: delivered b9f3e3ff, candidate aab07fcc, and Z3 44d6ba3c.
+
+Verified counts are101/101/117; Z3 has124 raw decisions and the same seven
+unconfirmed UNSATs. There are no gains/losses, opposite verdicts or invalid
+exported models. Verified PAR-2 is7398.656/7394.498/5515.109. The small single-round
+difference is not an established whole-solver speedup. The shared-DAG/resource
+contract fix has a demonstrated local benefit, but the attempt to close original
+integer gaps by this change yields no solve gain. R1099 receipt:
+`08b4ef8437da387c2df7dcd7201a681110f1f6ee439a41fa4d763b455677673b`.
+Do not repeat the closed47/108/122 profiles as a new optimization experiment.
+Next work must target a different measured algorithmic failure mechanism.
+
+The final tool change avoids automatically adding -model when the original
+script already requests a model and records the new capture policy explicitly.
+Its16 tests and native Z3 checks pass. Source32/47/108/122 each has exactly one
+explicit request; all other fixed inputs have none. Comments, strings and quoted
+symbols cannot masquerade as commands. Mixed capture metadata is rejected by
+the summary tests; the R1099 aggregation is permitted only by its independent
+per-input command-equivalence check. Final source qualification and PR84 exact
+head CI remain required. Both protected sets are untouched, and the final-kernel
+original multi-program QCP comparison remains outstanding.

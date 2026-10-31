@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "status": "pr83_merged_main_ci_in_progress_next_evaluation_fix_in_development",
+  "status": "pr83_delivered_next_core_complete_single_export_comparison_no_solve_gain_tool_source_qualification_pending",
   "qualified_source_commit": "d80fb40ba2b517723e61a657e235bc72892987c1",
   "source_manifest_sha256": "a7691670ba6f6b8ee8110ef36d60eb4d4ef4ff6d965a574b55ccfa2c8aff670f",
   "core": "Explained theory-independent finite candidate search with immutable domain snapshots and checked partial completion. Arithmetic clients canonicalize residual polynomials and substitute exact, explained fixed values in private scopes. All candidate models are checked against the original constraints; exhaustion is never an UNSAT proof.",
@@ -374,7 +374,7 @@
     "boundary": "Both backends verify one unchanged original gcd C program and all nine original VCs. Only the fresh final-check generations are counted: 296 actual native calls and one selected process per backend, 70 unique independently checked inputs, 174 SAT/122 UNSAT. Final checks run sequentially on the same physical CPU and budgets. Their proof scripts and development attempts differ; every canonical final check reconstructs all original obligations. One program/order is insufficient to establish overall QCP superiority or a whole-program-set performance win. This does not alter the fixed160 score."
   },
   "protected_sets_used": false,
-  "delivery_boundary": "PR83 is merged after all39 native groups, a complete valid160 comparison and exact-head PR CI. Main push CI41164344182 is in progress at this snapshot. The new candidate-evaluation implementation is separate and still requires committed-source full qualification before promotion. Neither protected set has been used and Xolver has not surpassed Z3.",
+  "delivery_boundary": "PR83 and latest main5b8592b0 CI are complete. Core45570429 passes all39 native groups/1877 unit cases and a corrected effective-single-export fixed160 audit:101 main/101 candidate/117 verified Z3(124 raw), no gains/losses/errors. The shared-DAG local improvement and deadline checks are established, not a whole-solver improvement. Commit and qualify the final validation-tool source and require its exact-head PR CI before merging PR84. Neither protected set has been used and Xolver has not surpassed Z3.",
   "historical_fields_boundary": "Original qualified_source_commit, native_acceptance and full160 fields describe the earlier rejected d80fb40b candidate. final_stage below records the repaired committed 65c9cb8c candidate and its complete fresh comparison.",
   "final_stage": {
     "implementation_commit": "65c9cb8c7f8bd5707a6555cc08d8d33137695641",
@@ -389,8 +389,15 @@
       ]
     },
     "main_ci": {
-      "run": 41164344182,
-      "status": "in_progress"
+      "run": 41165659029,
+      "head": "5b8592b0f743caa0e72e370f7593486693f5f8b1",
+      "status": "success",
+      "jobs": [
+        "build-test",
+        "proof-gate"
+      ],
+      "superseded_run": 41164344182,
+      "superseded_status": "cancelled_by_history_only_main_push"
     },
     "qualification": {
       "source_head": "65c9cb8c7f8bd5707a6555cc08d8d33137695641",
@@ -1082,7 +1089,8 @@
       "experiment": "a64920085ba7",
       "run": "ff3b2adf3eaa"
     },
-    "boundary": "Final committed core, all 39 native acceptance groups, and all 160 fresh original inputs with frozen solvers, initial model capture, 60s/one leased physical CPU/16GiB per solve. The first 158 valid original triads are preserved. Two original triads with observed foreign CPU contention and violated wall budgets are retained as invalid evidence and replaced by two complete fresh triads; no solver-specific result or fastest timing is selected. Independent witnesses and certificates establish truth eligibility only; no historical solve timings are substituted. Retain raw and verified counts, unresolved decisions and all gains/losses. Case 51 is timing-sensitive in earlier rounds and requires cautious attribution. The separate completed original GCD pair uses the earlier d80fb40b worker and does not qualify final-kernel program performance. Neither protected set has been used and no overall advantage is inferred from a local or one-round gain."
+    "boundary": "Final committed core, all 39 native acceptance groups, and all 160 fresh original inputs with frozen solvers, initial model capture, 60s/one leased physical CPU/16GiB per solve. The first 158 valid original triads are preserved. Two original triads with observed foreign CPU contention and violated wall budgets are retained as invalid evidence and replaced by two complete fresh triads; no solver-specific result or fastest timing is selected. Independent witnesses and certificates establish truth eligibility only; no historical solve timings are substituted. Retain raw and verified counts, unresolved decisions and all gains/losses. Case 51 is timing-sensitive in earlier rounds and requires cautious attribution. The separate completed original GCD pair uses the earlier d80fb40b worker and does not qualify final-kernel program performance. Neither protected set has been used and no overall advantage is inferred from a local or one-round gain.",
+    "z3_timing_boundary": "The legacy command always adds -model. Four original inputs (32,47,108,122) already request get-model, so their Z3 runs can export twice. Retain the recorded counts and times as evidence for those exact commands, not a final uniform single-export Z3 comparison. The Xolver-versus-Xolver NRA149 gain and source/model correctness evidence are unaffected."
   },
   "completed_original_gcd_pair": {
     "backends": {
@@ -1123,7 +1131,7 @@
     "boundary": "Both backends verify one unchanged original gcd C program and all nine original VCs. Only the fresh final-check generations are counted: 296 actual native calls and one selected process per backend, 70 unique independently checked inputs, 174 SAT/122 UNSAT. Final checks run sequentially on the same physical CPU and budgets. Their proof scripts and development attempts differ; every canonical final check reconstructs all original obligations. One program/order is insufficient to establish overall QCP superiority or a whole-program-set performance win. This does not alter the fixed160 score."
   },
   "next_candidate_evaluation_prototype": {
-    "status": "private_targeted_checks_pass_original_gap_profiles_still_timeout",
+    "status": "committed_core_all39_native_groups_and_effective_single_export_full160_complete_no_solve_gain",
     "base_commit": "65c9cb8c7f8bd5707a6555cc08d8d33137695641",
     "private_qualification_sha256": "c7b53ebea8209cad80c8d4f78aed8a6f68b89135991abc286cf42d278ab15ee2",
     "transform_sha256": "c771bc9221b8dd929c14228295ade702c5483fa2e1fcfb0eadb686fd0882cb57",
@@ -1164,6 +1172,489 @@
       "all_results": "timeout",
       "fixed160_score_effect": "none"
     },
-    "boundary": "One candidate assignment owns its evaluation memo across assertions and function export. UF derivation invalidates before evaluating changed bindings. Deadline checks occur inside iterative DAG evaluation. The identical 4096-depth/512-root constructed assertions improve from 2.31713s to 0.00777564s and have a witness checked by Z3 and cvc5. This is not an original-input solving gain, full qualification, or a Z3 comparison. Committed-source native qualification and a fresh full160 round remain required."
+    "boundary": "One candidate assignment owns its evaluation memo across assertions and function export. UF derivation invalidates before evaluating changed bindings. Deadline checks occur inside iterative DAG evaluation. The identical 4096-depth/512-root constructed assertions improve from 2.31713s to 0.00777564s and have a witness checked by Z3 and cvc5. This is not an original-input solving gain, full qualification, or a Z3 comparison. Committed-source native qualification and a fresh full160 round remain required.",
+    "committed_source": {
+      "head": "455704292bd5ee70520a2c4ac195619addb2490f",
+      "manifest_sha256": "ba83e47d41975d3dfc038501edb4bef6ebf54dfeea4e0ccb5651bc52e78b2684",
+      "binaries": {
+        "xolver": "aab07fcc078c31c3aaf25b38cab9219b9cc750213357db0f0cd9cac39553e12a",
+        "xolver-sv": "034ce53ed529987788e7ac6976d633cd8f262e5dbc3628f343eb46c502df6e17",
+        "xolver-parallel-worker": "4f23f4c6642103dca8fe1e0543281d35ae9290bc9615bfac5369847733e1e04a"
+      },
+      "unit_binary_sha256": "daf240edb52986dfff5dafc09767085360575a2bb5f5a648ada1808bd1f3de50",
+      "native_acceptance_groups": 39,
+      "unit_cases": 1877,
+      "unit_assertions": 986592,
+      "targeted_cases": 243,
+      "targeted_assertions": 23553
+    }
+  },
+  "single_model_protocol_repair": {
+    "status": "native16_tool_tests_and160_effective_single_export_audit_complete",
+    "native_check_metrics": {
+      "completed": 1,
+      "failures": 0,
+      "tests": 16
+    },
+    "native_check_receipt_sha256": "3b3aac79d6cb23e8ded13e71af7782ce6ef2fc2f2b0f6e526f83494687ad4175",
+    "exports": [
+      {
+        "explicit_model": false,
+        "policy": "legacy",
+        "models": 1
+      },
+      {
+        "explicit_model": false,
+        "policy": "single",
+        "models": 1
+      },
+      {
+        "explicit_model": true,
+        "policy": "legacy",
+        "models": 2
+      },
+      {
+        "explicit_model": true,
+        "policy": "single",
+        "models": 1
+      }
+    ],
+    "source_inventory_sha256": "2ace1f7672e733fa71a5224a3f974249dc4c4ebe6d87eecac061e40e450730fc",
+    "explicit_model_indices": [
+      32,
+      47,
+      108,
+      122
+    ],
+    "budget_invalid_indices": [
+      93,
+      114,
+      118,
+      119,
+      128,
+      138
+    ],
+    "boundary": "150 original triads already have commands matching the single-model policy and valid budgets. Six complete budget-invalid triads and four complete redundant-export triads are replaced; raw observations remain preserved, and selection precedes replacement outcomes. Aggregate model_capture metadata may be refined only after checking actual CLI flags against the original hashed commands on every input. No valid timing or solver-specific result is selected by speed. Native isolation attempt R1102 failed before CLI checks because its moved copy lacked the fuzz module import path; R1105 fixes the test runner path and passes all16 tests plus four real CLI checks."
+  },
+  "candidate_evaluation_complete_comparison": {
+    "implementation_commit": "455704292bd5ee70520a2c4ac195619addb2490f",
+    "solver_binaries": {
+      "baseline": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/cover-diversity-search-r1085/xolver",
+        "sha256": "b9f3e3ff68ba8acf5de5a2b5d050b56de88ed71d9a43304c5cbb066cf2367041"
+      },
+      "candidate": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/candidate-evaluation-r1096/xolver",
+        "sha256": "aab07fcc078c31c3aaf25b38cab9219b9cc750213357db0f0cd9cac39553e12a"
+      },
+      "z3": {
+        "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+        "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      }
+    },
+    "unit_cases": 1877,
+    "unit_assertions": 986592,
+    "acceptance_groups": 39,
+    "formal": {
+      "cases": 160,
+      "counts": {
+        "baseline": {
+          "unsat": 46,
+          "decided": 101,
+          "verified_decided": 101,
+          "verified_par2": 7398.655537610874,
+          "raw_par2": 7398.655537610874,
+          "timeout": 58,
+          "sat": 55,
+          "unknown": 1
+        },
+        "candidate": {
+          "unsat": 46,
+          "decided": 101,
+          "verified_decided": 101,
+          "verified_par2": 7394.498430069536,
+          "raw_par2": 7394.498430069536,
+          "timeout": 58,
+          "sat": 55,
+          "unknown": 1
+        },
+        "z3": {
+          "unsat": 58,
+          "decided": 124,
+          "verified_decided": 117,
+          "verified_par2": 5515.1094531565905,
+          "raw_par2": 4716.834060302004,
+          "sat": 66,
+          "timeout": 36
+        }
+      },
+      "changes": [],
+      "unverified": [
+        {
+          "index": 12,
+          "case": "QF_LIA/fft/Sz128_2823.smt2",
+          "results": {
+            "baseline": "timeout",
+            "candidate": "timeout",
+            "z3": "unsat"
+          },
+          "reasons": {
+            "z3": "no independent confirmation within budget"
+          }
+        },
+        {
+          "index": 24,
+          "case": "QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+          "results": {
+            "baseline": "timeout",
+            "candidate": "timeout",
+            "z3": "unsat"
+          },
+          "reasons": {
+            "z3": "no independent confirmation within budget"
+          }
+        },
+        {
+          "index": 27,
+          "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+          "results": {
+            "baseline": "timeout",
+            "candidate": "timeout",
+            "z3": "unsat"
+          },
+          "reasons": {
+            "z3": "no independent confirmation within budget"
+          }
+        },
+        {
+          "index": 42,
+          "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep2a.smt2",
+          "results": {
+            "baseline": "timeout",
+            "candidate": "timeout",
+            "z3": "unsat"
+          },
+          "reasons": {
+            "z3": "no independent confirmation within budget"
+          }
+        },
+        {
+          "index": 80,
+          "case": "QF_LIA/cut_lemmas/20-vars/cut_lemma_03_004.smt2",
+          "results": {
+            "z3": "unsat",
+            "baseline": "timeout",
+            "candidate": "timeout"
+          },
+          "reasons": {
+            "z3": "no independent confirmation within budget"
+          }
+        },
+        {
+          "index": 114,
+          "case": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+          "results": {
+            "baseline": "timeout",
+            "candidate": "timeout",
+            "z3": "unsat"
+          },
+          "reasons": {
+            "z3": "no independent confirmation within budget"
+          }
+        },
+        {
+          "index": 159,
+          "case": "QF_NRA/20161105-Sturm-MGC/mgc_07.smt2",
+          "results": {
+            "baseline": "timeout",
+            "candidate": "timeout",
+            "z3": "unsat"
+          },
+          "reasons": {
+            "z3": "no independent confirmation within budget"
+          }
+        }
+      ],
+      "model_capture": "initial-solve-single-model",
+      "timeout": 60,
+      "memory_bytes": 17179869184
+    },
+    "excluded_original_triads": [
+      {
+        "experiment": "dbeaa181cf4c",
+        "run": "bacd56368965",
+        "input": "32",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "3"
+          ]
+        },
+        "status": "success",
+        "exit_code": 0,
+        "reason": "extra_Z3_export_already_requested_by_original_input",
+        "files": {
+          "baseline.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "progress.json": "08239731de7ae65d393e4c73b5c2359215e0ab2c1d56dc1b2b38b1f2dee4d7aa",
+          "candidate.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "report.json": "5f1927328de6d085577947e0df7d2a34458ccb8ea1138fa2ebf4139b97a414b3",
+          "baseline.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "candidate.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "z3.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "metrics.json": "4e04dbdd6575548e537a546239dbe46a8a5332fe1f733c14a78c3abc681cfe00",
+          "z3.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "boundary": "The whole triad is excluded by its observed budget violation or objectively redundant model request, independently of its decisions or timings. Raw artifacts are unchanged."
+      },
+      {
+        "experiment": "dbeaa181cf4c",
+        "run": "a1a1e9d88672",
+        "input": "47",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "42"
+          ]
+        },
+        "status": "success",
+        "exit_code": 0,
+        "reason": "extra_Z3_export_already_requested_by_original_input",
+        "files": {
+          "baseline.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "progress.json": "6981f7be5c76ae23c292ce8ee2ebdc70a3950b052c2133190d2e0942af326a58",
+          "candidate.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "report.json": "13b82eca4661190c3440765b45ad9a09c0632a611da8a7c7f07cb192d4a76bb0",
+          "baseline.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "candidate.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "z3.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "metrics.json": "4e04dbdd6575548e537a546239dbe46a8a5332fe1f733c14a78c3abc681cfe00",
+          "z3.stdout": "d2deae2d7ff05762dd2d74549a352e294d2c382ff516394968f3ce1a5b7d831f"
+        },
+        "boundary": "The whole triad is excluded by its observed budget violation or objectively redundant model request, independently of its decisions or timings. Raw artifacts are unchanged."
+      },
+      {
+        "experiment": "06641ce2293b",
+        "run": "2339db816ba3",
+        "input": "93",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "41"
+          ]
+        },
+        "status": "failed",
+        "exit_code": 1,
+        "reason": "wall_budget_violated",
+        "files": {
+          "baseline.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "progress.json": "f3b3995b14f631ed9838bd6702753f793f0b5b636898ef4ba056d8100d50ca44",
+          "candidate.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "report.json": "8504f96b0b5d4205ff09a7ebb25c7c63531d99e74594809f557461807367b466",
+          "baseline.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "candidate.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "z3.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "metrics.json": "b44ded111f64db2789b8a1896f3a6c2a085e05e1ed1f6ce211b46b81c8410e6e",
+          "z3.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "boundary": "The whole triad is excluded by its observed budget violation or objectively redundant model request, independently of its decisions or timings. Raw artifacts are unchanged."
+      },
+      {
+        "experiment": "8e7ae748522b",
+        "run": "40e6daa63d82",
+        "input": "108",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "67"
+          ]
+        },
+        "status": "success",
+        "exit_code": 0,
+        "reason": "extra_Z3_export_already_requested_by_original_input",
+        "files": {
+          "baseline.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "progress.json": "2c2173f0f90eac0eefc0d7a7b59275816e3d120def0be9f8b89c7eed5c9d8b89",
+          "candidate.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "report.json": "9237ab08686cf32dc1a319ee412c8e83e96da5a0fd47b6004e3d9b9ca99cff91",
+          "baseline.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "candidate.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "z3.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "metrics.json": "4e04dbdd6575548e537a546239dbe46a8a5332fe1f733c14a78c3abc681cfe00",
+          "z3.stdout": "0b9ed024503a23cac6edcbdf5bb5f0aed68ae8894d3cf03ab547368df29b11fd"
+        },
+        "boundary": "The whole triad is excluded by its observed budget violation or objectively redundant model request, independently of its decisions or timings. Raw artifacts are unchanged."
+      },
+      {
+        "experiment": "ddf5029ccd5f",
+        "run": "a8f5cb7700bc",
+        "input": "114",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "6"
+          ]
+        },
+        "status": "failed",
+        "exit_code": 1,
+        "reason": "wall_budget_violated",
+        "files": {
+          "baseline.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "z3-unsat-check.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "progress.json": "e6f3616abeaf7bc9c9377baff4af8ceafd9ab8903d81c4be6145414a98724f39",
+          "candidate.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "report.json": "77d165df56d557bd2169e42055ca9b0b2466dbef1e082abf1bb636de13113562",
+          "baseline.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "candidate.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "z3.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "metrics.json": "b44ded111f64db2789b8a1896f3a6c2a085e05e1ed1f6ce211b46b81c8410e6e",
+          "z3-unsat-check.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "z3.stdout": "5c17dfcc2a8f1f30d9e96df6a9825a5030ade046d560332c19de74d93d591a18"
+        },
+        "boundary": "The whole triad is excluded by its observed budget violation or objectively redundant model request, independently of its decisions or timings. Raw artifacts are unchanged."
+      },
+      {
+        "experiment": "ddf5029ccd5f",
+        "run": "4d41016b974e",
+        "input": "118",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "16"
+          ]
+        },
+        "status": "failed",
+        "exit_code": 1,
+        "reason": "wall_budget_violated",
+        "files": {
+          "baseline.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "progress.json": "c1ef181f5510b81a111164e226f73bf4fe8d8a1625e17c7eb8bdb0b40f9bcaf5",
+          "candidate.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "report.json": "cbbacbe718f89f0875255c7f9187093438411e4a521692984528dc37b77e993c",
+          "baseline.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "candidate.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "z3.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "metrics.json": "b44ded111f64db2789b8a1896f3a6c2a085e05e1ed1f6ce211b46b81c8410e6e",
+          "z3.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "boundary": "The whole triad is excluded by its observed budget violation or objectively redundant model request, independently of its decisions or timings. Raw artifacts are unchanged."
+      },
+      {
+        "experiment": "ddf5029ccd5f",
+        "run": "17b6ac102374",
+        "input": "119",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "20"
+          ]
+        },
+        "status": "failed",
+        "exit_code": 1,
+        "reason": "wall_budget_violated",
+        "files": {
+          "baseline.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "progress.json": "17b5381805b090afd73c5ef09a0b760eb86bfc80d1a67d02484ce3b53515fe8d",
+          "candidate.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "report.json": "09ea7983f4071baa3ef66870cb56bf52228be793d8939eb3b09bfb1a7bbda0d1",
+          "candidate-replay.smt2": "a92471ba3aa649c4de090e4e904d753d1534dba06398dde1604ec5c44ef6b024",
+          "baseline.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "candidate.stdout": "642592d13045c1cb6fb59d9957153e99f8f96f26088aba3bca2362f79df0e2a8",
+          "z3.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "metrics.json": "6515e8bf30204fd3b7f813b813eee656fd090f46916e231f45bcac9951ed9832",
+          "candidate-replay.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "candidate-replay.stdout": "d9dbf94b05b8314af9ca7f2034e92685c33447917605a7243b1099c693a12e5e",
+          "z3.stdout": "7ed6120912d915f6ba8ef82ba3ec0b703265a0979bc0a243e0144580ad0c0b6b"
+        },
+        "boundary": "The whole triad is excluded by its observed budget violation or objectively redundant model request, independently of its decisions or timings. Raw artifacts are unchanged."
+      },
+      {
+        "experiment": "ddf5029ccd5f",
+        "run": "f347c1b97b3c",
+        "input": "122",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "34"
+          ]
+        },
+        "status": "success",
+        "exit_code": 0,
+        "reason": "extra_Z3_export_already_requested_by_original_input",
+        "files": {
+          "baseline.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "progress.json": "a8b74939fb07bd4b8a57f81ca9ac01f78b6497b8558e8f4342c5c2ef334d45f9",
+          "candidate.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "report.json": "43a60cd303986325126924568bf677c44256228a1a38d475a4cee9056f8d4c55",
+          "baseline.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "candidate.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "z3.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "metrics.json": "4e04dbdd6575548e537a546239dbe46a8a5332fe1f733c14a78c3abc681cfe00",
+          "z3.stdout": "a1764b04db86118c2d6fc2007339024b1b2aebea4c8f3a38946cbf4cdc39dcfb"
+        },
+        "boundary": "The whole triad is excluded by its observed budget violation or objectively redundant model request, independently of its decisions or timings. Raw artifacts are unchanged."
+      },
+      {
+        "experiment": "6db974c1e31e",
+        "run": "4837c0557d02",
+        "input": "128",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "2"
+          ]
+        },
+        "status": "failed",
+        "exit_code": 1,
+        "reason": "wall_budget_violated",
+        "files": {
+          "baseline.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "z3-unsat-check.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "progress.json": "87e62fa171cf8e5753eb8065647af4f4fa2349d2c2930f867bee527cfa4a735d",
+          "candidate.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "report.json": "536a32bd5ca5bcc0a69d07f75b7e9bb05a03a82062700ed34274c5463b9f501d",
+          "baseline.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "candidate.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "z3.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "metrics.json": "b44ded111f64db2789b8a1896f3a6c2a085e05e1ed1f6ce211b46b81c8410e6e",
+          "z3-unsat-check.stdout": "5c17dfcc2a8f1f30d9e96df6a9825a5030ade046d560332c19de74d93d591a18",
+          "z3.stdout": "5c17dfcc2a8f1f30d9e96df6a9825a5030ade046d560332c19de74d93d591a18"
+        },
+        "boundary": "The whole triad is excluded by its observed budget violation or objectively redundant model request, independently of its decisions or timings. Raw artifacts are unchanged."
+      },
+      {
+        "experiment": "6db974c1e31e",
+        "run": "42b96d529458",
+        "input": "138",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "39"
+          ]
+        },
+        "status": "failed",
+        "exit_code": 1,
+        "reason": "wall_budget_violated",
+        "files": {
+          "baseline.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "progress.json": "e39a9d29c5438ccd2e4fcce61278c5fd29006981bca53161c91db40ea430388e",
+          "candidate.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "report.json": "2e50ff2a4fe8a448539aade821137d0d5b945e834f56e6d6c1fce02eeeb7ba66",
+          "baseline.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "candidate.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "z3.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "metrics.json": "b44ded111f64db2789b8a1896f3a6c2a085e05e1ed1f6ce211b46b81c8410e6e",
+          "z3.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "boundary": "The whole triad is excluded by its observed budget violation or objectively redundant model request, independently of its decisions or timings. Raw artifacts are unchanged."
+      }
+    ],
+    "audit": {
+      "path": "validation/arithmetic-r103/stage-r1099.json",
+      "sha256": "08b4ef8437da387c2df7dcd7201a681110f1f6ee439a41fa4d763b455677673b",
+      "experiment": "ec75da8e68be",
+      "run": "4174c0f88e61"
+    },
+    "boundary": "Committed source45570429, all39 native acceptance groups and1877 unit cases, plus a uniform effective single-model fixed160 round with frozen main/candidate/Z3 binaries,60s/one leased physical CPU/16GiB per solve.150 valid original triads have no explicit get-model and their recorded commands already match the single-export policy. Six complete triads with actual wall-budget violations and four complete triads with redundant Z3 model exports are retained as excluded artifacts and replaced as whole triads, selected by budget/command facts before replacement decisions. The aggregate refines only model_capture metadata after checking actual CLI flags on every selected input; raw reports and every decision, timing and resource field remain unchanged. Independent evidence establishes truth eligibility only, never historical timing substitution. Case51 remains timing-sensitive. No protected set or final-kernel whole-program QCP result is claimed.",
+    "interpretation": "Zero original-input solve gains or losses. The4.157-second PAR-2 difference in one round does not establish aggregate speed improvement. Keep the demonstrated shared-DAG evaluation/resource fix separate from whole-solver performance; final validation-tool source qualification and exact delivery-head CI are pending."
   }
 }

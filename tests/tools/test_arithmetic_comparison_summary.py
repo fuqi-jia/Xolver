@@ -77,6 +77,13 @@ class ArithmeticComparisonSummary(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'mixed protocol.*model_capture'):
             self.report([first, second])
 
+    def test_single_model_and_legacy_duplicate_capture_cannot_be_combined(self):
+        first, second = self.row(), self.row(1)
+        first['model_capture'] = 'initial-solve'
+        second['model_capture'] = 'initial-solve-single-model'
+        with self.assertRaisesRegex(ValueError, 'mixed protocol.*model_capture'):
+            self.report([first, second])
+
     def test_invalid_exported_model_is_not_hidden_by_an_agreeing_verdict(self):
         row = self.row()
         row['observations']['candidate']['replay'] = dict(result='unsat')
