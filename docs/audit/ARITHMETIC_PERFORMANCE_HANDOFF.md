@@ -3597,7 +3597,7 @@ per-input command-equivalence check. Final source qualification and PR84 exact
 head CI remain required. Both protected sets are untouched, and the final-kernel
 original multi-program QCP comparison remains outstanding.
 
-### Shared integer residue components (R1115–R1121)
+### Shared integer residue components (R1115–R1125)
 
 The measured root cause is starvation of exact modular reasoning behind a
 SAT-only portfolio, plus collecting irrelevant quotient and disconnected
@@ -3621,7 +3621,7 @@ tests. Reproduction from the repository root:
 python3 tools/soundness/polynomial_residue_certificate.py check tests/regression/nia/coupled_square_residues_unsat.smt2 docs/audit/COUPLED_SQUARE_RESIDUE_CERTIFICATE.json
 ```
 
-R1121 must validate that public checker and confirm every native executable,
+R1125 must validate that public checker and confirm every native executable,
 library and solver source is unchanged before reusing R1120's acceptance and
 comparison. Exact final-head PR CI remains a promotion gate. The next capability
 work must target original gaps or real QCP validation; the closed early-quadratic

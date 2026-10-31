@@ -216,7 +216,7 @@
   "reproduction": [
     "python3 tools/soundness/polynomial_residue_certificate.py check tests/regression/nia/coupled_square_residues_unsat.smt2 docs/audit/COUPLED_SQUARE_RESIDUE_CERTIFICATE.json"
   ],
-  "final_source_qualification": "validation/arithmetic-r103/residue-certificate-r1121/qualification.json",
+  "final_source_qualification": "validation/arithmetic-r103/residue-certificate-r1125/qualification.json",
   "protected_sets_used": false,
   "boundary": "The full160 round has no solving gain or loss; its12.965s PAR-2 decrease in one round is not an established aggregate improvement. The81-class certificate verifies only the separate coupled-square regression. Final checker-source qualification must prove unchanged solver artifacts before reusing the native acceptance and comparison. PR85 and postmerge main CI remain delivery gates; no whole-solver or real-program-set superiority is claimed.",
   "delivered_baseline_main_ci": {
@@ -224,5 +224,6 @@
     "head_sha": "b9a15a256569067f21561678ae2b4df4f446baca",
     "status": "in_progress",
     "conclusion": null
-  }
+  },
+  "qualification_runner_boundary": "R1121 stopped before source application because its guard rejected the unchanged407-path historical migration deletion list. R1125 verifies that list equals the qualified parent and every retired path is already absent; no new deletion is permitted."
 }
