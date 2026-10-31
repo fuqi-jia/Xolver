@@ -832,7 +832,9 @@ void GeneralSimplex::pivot(int leaving, int entering) {
         tab_.row(row).rhs += c * newRhs;
 
         // row += c * newEntries
-        tab_.addScaledRow(row, newEntries, std::move(c));
+        for (const auto& [col, coeff] : newEntries) {
+            tab_.addCoeff(row, col, c * coeff);
+        }
 
         tab_.row(row).version++;
 

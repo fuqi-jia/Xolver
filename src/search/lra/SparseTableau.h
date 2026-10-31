@@ -3,7 +3,6 @@
 #include <gmpxx.h>
 #include <vector>
 #include <unordered_map>
-#include <cstdint>
 
 namespace xolver {
 
@@ -66,10 +65,6 @@ public:
     const mpq_class& getCoeff(int row, int col) const;
     void setCoeff(int row, int col, const mpq_class& value);
     void addCoeff(int row, int col, const mpq_class& delta);
-    // Accumulate a complete elimination row in input order. The destination
-    // row and column links retain the same order as individual addCoeff calls.
-    void addScaledRow(int row, const std::vector<std::pair<int, mpq_class>>& entries,
-                      mpq_class scale);
     void eraseCoeff(int row, int col);
 
     // Replace an entire row (clear old entries, insert new ones)
@@ -91,22 +86,11 @@ private:
     std::vector<SparseRow> rows_;
     std::vector<SparseCol> cols_;
 
-    // One reusable sparse-set lookup for a batch, rather than a dense index
-    // for every row. Epochs avoid clearing all columns between eliminations.
-    struct BatchPosition {
-        int position = -1;
-        std::uint32_t epoch = 0;
-    };
-    std::vector<BatchPosition> batchPositions_;
-    std::uint32_t batchEpoch_ = 0;
-
     // -----------------------------------------------------------------------
     // Row lookup helpers
     // -----------------------------------------------------------------------
     int findRowPos(SparseRow& row, int col);
     void maybeBuildRowIndex(SparseRow& row);
-    void insertCoeff(int row, int col, const mpq_class& value);
-    void eraseCoeffAt(int row, int col, int rowPos);
 };
 
 } // namespace xolver

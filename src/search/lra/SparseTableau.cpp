@@ -1,6 +1,5 @@
 #include "search/lra/SparseTableau.h"
 #include <cassert>
-#include <algorithm>
 
 namespace xolver {
 
@@ -61,12 +60,6 @@ void SparseTableau::setCoeff(int row, int col, const mpq_class& value) {
 
     if (value == 0) return;
 
-    insertCoeff(row, col, value);
-}
-
-void SparseTableau::insertCoeff(int row, int col, const mpq_class& value) {
-    auto& r = rows_[row];
-
     auto& c = cols_[col];
     int newRowPos = static_cast<int>(r.entries.size());
     int newColPos = static_cast<int>(c.entries.size());
@@ -95,68 +88,22 @@ void SparseTableau::addCoeff(int row, int col, const mpq_class& delta) {
         if (r.entries[rowPos].coeff == 0) eraseCoeff(row, col);
         return;
     }
-    insertCoeff(row, col, delta);
-}
-
-void SparseTableau::addScaledRow(int row,
-        const std::vector<std::pair<int, mpq_class>>& entries, mpq_class scale) {
-    if (scale == 0 || entries.empty()) return;
-    auto& r = rows_[row];
-    mpq_class delta;
-
-    // A sparse set amortizes its row scan over a sufficiently broad update.
-    // Narrow updates to an indexed row keep its existing O(1) lookups.
-    const bool useBatchIndex = r.hasIndex
-        ? entries.size() >= r.entries.size() : entries.size() > 1;
-    if (!useBatchIndex) {
-        for (const auto& [col, coefficient] : entries) {
-            delta = scale * coefficient;
-            addCoeff(row, col, delta);
-        }
-        return;
+    // Absent: insert delta (mirror setCoeff's insert path).
+    auto& c = cols_[col];
+    int newRowPos = static_cast<int>(r.entries.size());
+    int newColPos = static_cast<int>(c.entries.size());
+    r.entries.push_back(RowEntry{col, delta, newColPos});
+    c.entries.push_back(ColEntry{row, newRowPos});
+    if (r.hasIndex) {
+        r.pos[col] = newRowPos;
     }
-
-    batchPositions_.resize(cols_.size());
-    if (++batchEpoch_ == 0) {
-        std::fill(batchPositions_.begin(), batchPositions_.end(), BatchPosition{});
-        ++batchEpoch_;
-    }
-    for (int i = 0; i < static_cast<int>(r.entries.size()); ++i) {
-        batchPositions_[r.entries[i].col] = {i, batchEpoch_};
-    }
-    for (const auto& [col, coefficient] : entries) {
-        delta = scale * coefficient;
-        if (delta == 0) continue;
-        auto& position = batchPositions_[col];
-        const int rowPos = position.epoch == batchEpoch_ ? position.position : -1;
-        if (rowPos == -1) {
-            const int newPos = static_cast<int>(r.entries.size());
-            insertCoeff(row, col, delta);
-            position = {newPos, batchEpoch_};
-        } else {
-            r.entries[rowPos].coeff += delta;
-            if (r.entries[rowPos].coeff == 0) {
-                const int movedCol = r.entries.back().col;
-                eraseCoeffAt(row, col, rowPos);
-                if (rowPos < static_cast<int>(r.entries.size())) {
-                    batchPositions_[movedCol] = {rowPos, batchEpoch_};
-                }
-                position = {-1, batchEpoch_};
-            }
-        }
-    }
+    maybeBuildRowIndex(r);
 }
 
 void SparseTableau::eraseCoeff(int row, int col) {
     auto& r = rows_[row];
     int rowPos = findRowPos(r, col);
     if (rowPos == -1) return;
-
-    eraseCoeffAt(row, col, rowPos);
-}
-
-void SparseTableau::eraseCoeffAt(int row, int col, int rowPos) {
-    auto& r = rows_[row];
 
     int colPos = r.entries[rowPos].colPos;
     auto& c = cols_[col];
@@ -166,8 +113,8 @@ void SparseTableau::eraseCoeffAt(int row, int col, int rowPos) {
 
     // Remove from row by swap-pop
     if (rowPos != lastRowPos) {
-        r.entries[rowPos] = std::move(r.entries[lastRowPos]);
-        const auto& moved = r.entries[rowPos];
+        RowEntry moved = r.entries[lastRowPos];
+        r.entries[rowPos] = moved;
 
         // Fix column back-pointer of moved entry
         cols_[moved.col].entries[moved.colPos].rowPos = rowPos;
