@@ -126,15 +126,28 @@ SAT backend and theory adapter, allocates observed variables, and checks signed
 decisions through the adapter too. The failure and its original source/archive
 remain preserved; R1387 stops before dispatching any dependent native check.
 
-The next R1388 build uses `source-r1383.tar.json` preimages and checks the failed
-run is terminal with no live PID before the unique locked build is reused.
-After application, `source-r1388.tar.json` is the next canonical preimage.
-All39 R1389 groups, fixed nine-case R1390 pilot and short R1391 diagnostics are
-planned after successful qualification. Formal budget remains60s/one physical
-CPU/16GiB, with initial model export and independent replay. Main CI is already
-green; no extra server archive is a delivery condition. Both protected sets
-remain unread and unused; no new original-C QCP workflow or superiority claim
-is made. No new PR is open.
+R1388 (`72c980afd63f`, run`32d734d495d8`) succeeds from source`de0aea14`,
+using `source-r1383.tar.json` preimages only after the failed run is terminal and
+its PID gone. The corrected factory/manager/real-adapter test passes165
+assertions across eleven routes; the same-header old factory fails at LIA model
+evaluation. All218 targeted native cases /177765 assertions and31 Python tests
+pass. Frozen CLI SHA-256 is
+`f4bfca785b42ea287df7af9f37fa28bf8e3745c8ce46c9b0266dcc74b3a1988b`;
+SV is`af7607aa50c7d7cd4c6845f53871592587876277f49203f8619d7a7845f3a3ec`,
+worker is`bc17dd8b1b33b587e1f4130f8ad4bf7e4663810a20536cc5a0fd3871cfab5182`.
+The source/core hash and failed-fixture recovery are bound in its qualification;
+full native units have not yet been sealed. `source-r1388.tar.json` is now the
+canonical preimage for another source update.
+
+All39 R1389 checks are dispatched (`71e1e1834a9e` /`f01f813194f2`). Control-plane
+launcher`launch-theory-routing-r1392.py` waits for six independent groups, then
+dispatches the fixed nine-case R1390 pilot and short R1391 diagnostics. Formal
+budget remains60s/one physical CPU/16GiB, with initial model export and independent
+replay. A complete R1394 comparison is prepared but not registered; inspect the
+pilot and all39 results first. This version and the older R1377 pilot must not
+be mixed. Main CI is already green; no extra server archive is a delivery
+condition. Both protected sets remain unread and unused; no new original-C QCP
+workflow or superiority claim is made. No new PR is open.
 
 [PR89](https://github.com/fuqi-jia/Xolver/pull/89), implementation `e0cafba8`,
 restores SAT's retained signed root prefix after a real restart. A shared theory
