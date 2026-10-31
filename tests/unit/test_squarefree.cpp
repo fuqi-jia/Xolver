@@ -8,6 +8,22 @@
 
 using namespace xolver;
 
+TEST_CASE("contentWrt: a nonzero rational coefficient resolves symbolic content before gcd") {
+    const VarId a = 1, b = 2, x = 3;
+    for (const mpq_class unit : {mpq_class(1), mpq_class(7, 3), mpq_class(-3, 7)}) {
+        RationalPolynomial p;
+        p.addTerm({{a, 1}, {b, 1}}, 1);
+        p.addTerm({{a, 1}, {x, 1}}, -1);
+        p.addTerm({{b, 1}, {x, 1}}, -1);
+        p.addVar(x, 2, unit);
+        p.normalize();
+        const auto content = contentWrt(p, x);
+        REQUIRE(content.complete);
+        REQUIRE(content.poly.isConstant());
+        CHECK(content.poly.constantValue() == 1);
+    }
+}
+
 static VarId VX = VarId{1}, VY = VarId{2};
 
 static RationalPolynomial monic(const RationalPolynomial& p) {

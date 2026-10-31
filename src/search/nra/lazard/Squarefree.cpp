@@ -216,6 +216,12 @@ SquarefreeResult contentWrt(const RationalPolynomial& p, VarId v, PolynomialKern
     if (p.isZero()) return {RationalPolynomial::fromConstant(mpq_class(0)), true};
 
     auto coeffs = p.coefficients(v);  // index i = coefficient of v^i
+    // Any nonzero rational coefficient makes the coefficient gcd a unit.
+    // Resolve this before a hard/unsupported symbolic gcd of earlier terms.
+    for (const auto& c : coeffs) {
+        if (!c.isZero() && c.isConstant())
+            return {RationalPolynomial::fromConstant(mpq_class(1)), true};
+    }
     RationalPolynomial acc;
     bool started = false;
     for (auto& c : coeffs) {
