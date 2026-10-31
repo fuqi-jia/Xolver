@@ -14,6 +14,7 @@ namespace xolver {
 // problem. Candidate domains are immutable during each explained traversal;
 // newly observed LP points refine a fresh traversal. Every original polynomial
 // is checked at the complete point.
+// Alternative covers share one call allocation and own independent contexts.
 // Failure has no refutation meaning. No state or local conflict escapes a call.
 class PartialLinearModelSearch {
 public:
@@ -26,6 +27,8 @@ public:
                             size_t work = 1000000) : time(time), work(work) {}
     };
     struct Statistics {
+        // Parameter counts describe the last partition; work counters and
+        // maximum depth include all partitions in the shared allocation.
         size_t variables = 0, parameters = 0, contexts = 0, linearChecks = 0;
         size_t retainedEqualityVariables = 0;
         size_t choices = 0, rejectedChoices = 0, definitions = 0, modelChecks = 0, maxDepth = 0;

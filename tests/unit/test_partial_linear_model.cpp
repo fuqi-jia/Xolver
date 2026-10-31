@@ -379,6 +379,41 @@ TEST_CASE("partial linear model: substitution combines cancelling nonlinear resi
     CHECK(PartialLinearModelSearch::trySolve(constraints, *kernel).has_value());
 }
 
+TEST_CASE("partial linear model: alternate covers preserve a jointly affine off-grid unknown") {
+    auto kernel = createPolynomialKernel();
+    const auto r = kernel->getOrCreateVar("r");
+    const auto rv = kernel->mkVar(r);
+    std::vector<PartialLinearModelSearch::Constraint> constraints{
+        {kernel->sub(kernel->mul(kernel->mkConst(6), rv), kernel->mkOne()), Relation::Gt},
+        {kernel->sub(kernel->mul(kernel->mkConst(4), rv), kernel->mkOne()), Relation::Lt}
+    };
+    for (int i = 1; i <= 3; ++i) {
+        const auto leaf = kernel->getOrCreateVar("leaf_" + std::to_string(i));
+        const auto poly = kernel->mkVar(leaf);
+        constraints.push_back({kernel->sub(poly, kernel->mkConst(5 * i)), Relation::Geq});
+        constraints.push_back({kernel->sub(kernel->mul(kernel->mkConst(100), poly),
+                                           kernel->mkConst(500 * i + 1)), Relation::Leq});
+        constraints.push_back({kernel->sub(kernel->mul(poly, rv), kernel->mkConst(i)), Relation::Eq});
+    }
+    PartialLinearModelSearch::Statistics stats;
+    const auto model = PartialLinearModelSearch::trySolve(constraints, *kernel, false, &stats);
+    REQUIRE(model.has_value());
+    CHECK(model->at(r) == mpq_class(1, 5));
+    CHECK(stats.retainedEqualityVariables == 1);
+    CHECK(stats.parameters == 3);
+    CHECK(stats.contexts == 1);
+    CHECK_FALSE(stats.exhausted);
+    for (const auto& constraint : constraints) {
+        const int sign = kernel->sgnVarId(constraint.poly, *model);
+        if (constraint.rel == Relation::Eq) CHECK(sign == 0);
+        else if (constraint.rel == Relation::Gt) CHECK(sign > 0);
+        else if (constraint.rel == Relation::Lt) CHECK(sign < 0);
+        else if (constraint.rel == Relation::Geq) CHECK(sign >= 0);
+        else CHECK(sign <= 0);
+    }
+    CHECK_FALSE(PartialLinearModelSearch::trySolve(constraints, *kernel, true));
+}
+
 TEST_CASE("partial linear model: explained substitution and withdrawal preserve independent Boolean witnesses") {
     std::mt19937 random(3197);
     for (int trial = 0; trial < 70; ++trial) {

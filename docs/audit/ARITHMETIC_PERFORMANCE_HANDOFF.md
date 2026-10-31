@@ -3399,3 +3399,65 @@ CI/merge. No extra branches/worktrees, no protected-set tuning, and no
 `validation/current-main.json` requirement. The last full160 reference remains100
 verified Xolver versus118 verified/125 raw Z3; both protected sets and a fresh
 multi-program original QCP comparison remain outstanding.
+
+
+### Explained candidate completion, full-suite regression and cover diversity
+
+Core `d80fb40b` combines immutable candidate-domain passes, explained rational
+singleton substitution and canonical residual monomials. The generic finite
+search accepts checked partial completions and backjumps using premise and
+candidate-generation dependencies. Each arithmetic attempt owns its simplex
+facts, domains and explanations; every returned point passes exact original
+polynomial validation. Neither failed candidates nor exhausted samples prove
+UNSAT. R1064 native qualification passes207 targeted cases/23359 assertions;
+all39 R1067 acceptance groups pass,1871 unit cases/986540 assertions. R1068
+seals that source and the actual timed149 model, positively replayed by both
+Z3 and cvc5 (`a378d6724fe6172ba1d8e633de7aa25a5bfc9865ea97ffe3a30f29556bc50138`).
+
+R1065 plus148 disjoint R1069 inputs form a fresh full160 round with unchanged
+60s/one physical CPU/16GiB budgets and initial model capture. Verified counts
+are101 main-baseline,100 candidate and118 Z3 (125 raw); PAR-2 is7427.055,
+7509.512 and5386.910. Candidate gains149 (baseline timeout, candidate0.165s
+SAT), but loses51 and158, so it is not promoted. All actual Xolver SAT models
+replay, with no opposite verdict or invalid exported model. Current duplicate
+Z3 models on47/108/122 positively replay with both checkers;50/94 retain their
+same-hash offline truth evidence and115 has a freshly checked modular
+certificate. This affects eligibility only; no old solver timing is substituted.
+Seven unconfirmed Z3 UNSATs12/24/27/42/80/114/159 remain excluded. R1070 seals
+this negative full-suite result
+(`e36bbd0b948b8051ba29d6d83b892d8fc664146e6717e883322d04f093cf41dc`).
+
+158 exposes a general decomposition tradeoff: the baseline samples12 parameters
+and retains3 joint equality unknowns, finding a model in about1.1ms. The first
+candidate samples only9, but its finite grid misses a needed joint completion.
+The repair gives an equality-block cover a short attempt, then tries a smaller
+cover using the SAME total time/work allocation and search implementation.
+Each cover gets fresh contexts and explanations. Private R1073 passes197
+selected cases/22808 assertions. Fresh R1076 restores158 (about0.066s SAT)
+and preserves149 (about0.166s SAT); both actual initial models replay with
+Z3 and cvc5.51 reverses to a28.125s candidate SAT against a baseline timeout,
+despite unchanged LRA critical-path source. Treat51 as timing-sensitive; this
+reversal is not a stable cover-search gain or a full-suite conclusion.
+
+A new off-grid unit test initially constructed a fractional polynomial constant
+without clearing its denominator. The integer-ring backend returned NullPoly,
+then subtraction dereferenced it before model search began. The test now uses
+an equivalent integer-coefficient inequality. Core `81291b5d` propagates unsupported
+operands through add/subtract/multiply/negate/power in both polynomial backends,
+without caching an invalid handle as a valid expression. Private R1083 passes
+224 selected cases/22986 assertions, including the corrected off-grid completion
+and sentinel/cache-isolation tests. R1079 authenticates both repair prototypes,
+actual model replays and the failed diagnostic attempts; these remain distinct
+from final-source native qualification. See the
+[bounded receipts](EXPLAINED_CANDIDATE_SEARCH_20261031.json).
+
+The immediate next step is to qualify the committed cover-diversity and
+unsupported-operand fixes together on Panda1, freeze the actual final binaries,
+then repeat full acceptance and a fresh fair160 comparison. Do not promote a
+partial-pilot gain or attribute51's timing reversal without further evidence.
+The ongoing original GCD Xolver/Z3 runs `native_gcd_*_r1071-20261031095116`
+have accepted annotation/VC checking and group proofs in progress on the earlier
+frozen d80fb40b worker; they do not yet establish completed program verification
+or qualify a later kernel. Final program-set comparison, both protected sets,
+PR CI and postmerge main CI remain outstanding. No extra branch/worktree or
+`validation/current-main.json` archive is required.
