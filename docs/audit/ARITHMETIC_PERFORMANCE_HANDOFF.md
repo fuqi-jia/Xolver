@@ -40,6 +40,42 @@ Older tables describe their own frozen versions and evidence boundaries.
 
 ## Current arithmetic and ASP continuation
 
+[PR89](https://github.com/fuqi-jia/Xolver/pull/89), implementation `e0cafba8`,
+restores SAT's retained signed root prefix after a real restart. A shared theory
+contract restores LRA/LIA sources cleared for model reconstruction and avoids
+readmitting assertions to preserving theories. Existing root reset, assignment
+and public solver semantics remain unchanged. R1264 qualifies the canonical
+native source and frozen CLI/SV/worker/Python binaries. All39 R1265 groups pass,
+including1896 unit cases /987040 assertions and31 Python API tests. Recompiling
+the old adapter against the same new interface ABI reproduces all four failures.
+
+R1268 seals fresh fixed160: **103 baseline/106 candidate/119 verified Z3**
+(126 raw Z3 decisions; seven unconfirmed UNSATs excluded). Gains48 UNSAT47.652s,
+51 SAT25.585s and131 SAT51.750s have independent evidence; there are no losses,
+opposite verdicts or invalid exported models. Both Xolver versions have2
+unknowns; timeouts55/52. Verified PAR-2 is7167.885/6951.115/5309.111. Original
+triad4 violates wall budgets and is retained; its complete replacement runs
+only after the original task terminates and PID disappears. All other159
+original triads are valid.
+
+A separate same-binary60s replay R1270 reproduces gains48 (43.088s UNSAT) and131
+(52.532s SAT). SAT51 instead times out, so its performance is explicitly unstable;
+the original valid round is not selectively replaced. SAT59 slows3.027→7.707s;
+SAT76 is4.726→4.724s. Core-head PR CI41199336885 passes both jobs. Final delivery
+CI and postmerge main CI remain pending; document-only evidence updates reuse
+the qualified implementation without another server archive. See
+[the phase evidence](ROOT_ASSERTION_RESTORATION_STAGE_20261031.json).
+
+Both protected sets remain unread and unused; Xolver has not surpassed Z3.
+New R1264-worker QCP pairs use initially present, identical accepted libraries
+and proof references for both backends. GCD/max3 current controllers are still
+in progress. Coverage review corrects the older R1142 total:3 original programs
+contain **3 verified bodies under4 function contracts**, with `abs` assumed by
+its declaration-only contract. Max3 verifies only the frozen upper-bound
+postcondition. The original raw receipt remains immutable; corrected
+[program evidence](QCP_ORIGINAL_PROGRAMS_STAGE_20261031.json) records these scopes.
+
+
 [PR88](https://github.com/fuqi-jia/Xolver/pull/88), core `32d23ec3`, closes the
 shared real/integer polynomial linear refuter over exact fixed-factor identities:
 entailed `x = c` yields explained `x*y = c*y`. Only unconditional row definitions
@@ -73,25 +109,11 @@ the PR88 delivery is complete. No extra server archive is needed.
 
 Both protected sets remain unused; Xolver has not surpassed Z3.
 
-The new root-assertion stage fixes a general SAT/theory synchronization gap:
-SAT retains root assignments after `notify_backtrack(0)`, while LRA/LIA clear
-their active sources for reconstruction. Four signed real/integer callback
-reproductions miss the contradiction `x>=1, x<=y, y<1` with the old adapter.
-Ten-second public-gap traces show17–100 root backtracks without root replay
-in all four sampled cases. Preserve each solver's root reset and assignment
-policy; a shared `restoreRootLiteral` protocol restores cleared engines and
-avoids readmitting sources to theories that already retain them. No feature
-gate or external oracle is added.
-
-R1256's private all-theory replay prototype passes1894 units /986906 assertions.
-Its fresh12-case60s pilot R1257/R1260 verifies **2 baseline/3 candidate/10 Z3**,
-with new SAT51 (timeout→28.341s), an independently replayed initial model, and
-no losses, opposite verdicts or invalid models. SAT59 slows3.324→8.236s and
-SAT76 slows4.477→5.076s; these regressions are recorded. Z3's unconfirmed UNSAT50
-is excluded. The new production retention protocol has additional tests and
-still needs canonical native qualification, full server acceptance, a new
-freeze/full160 comparison and exact-head PR/main CI. This pilot is not a new
-full-suite score. See [the pilot evidence](ROOT_ASSERTION_REPLAY_PILOT_20261031.json).
+The initial R1256 private all-theory replay pilot passes1894 units /986906
+assertions and verifies2 baseline/3 candidate/10 Z3 on12 public cases. Its
+SAT51 gain and SAT59/76 timing changes precede the production retention
+protocol and the full R1268 stage above. It establishes no full-suite score;
+see [the pilot evidence](ROOT_ASSERTION_REPLAY_PILOT_20261031.json).
 
 The R1227-worker controlled QCP branch pair R1231/R1259 has completed both
 controllers through `done`, final native symexec and full Rocq checking. Each
@@ -145,8 +167,8 @@ executables and library; acceptance and comparison reuse follows byte identity.
 Both delivery-head and postmerge CI pass; no extra server archive is required.
 
 R1142 separately audits the preceding delivered residue kernel on the original
-branch, GCD and max3 programs: each backend verifies 3 programs, 4 functions,
-23 top-level VCs and 780 actual SMT queries, with identical occurrence inputs
+branch, GCD and max3 programs: each backend verifies 3 programs and 3 function
+bodies under 4 function contracts, with 23 top-level VCs and 780 final-check SMT calls, with identical occurrence inputs
 and verdicts. Full current Rocq checks pass. Final-check sums are 91.840s for
 Xolver and 100.234s for Z3; proof bodies differ and one sample does not establish
 whole-workflow superiority. [Program evidence](QCP_ORIGINAL_PROGRAMS_STAGE_20261031.json)
@@ -3778,8 +3800,8 @@ All six fresh R1124 original-program runs now reach actual controller `done`:
 branch, GCD and max3 with each backend, using the frozen residue worker/Z3 and
 original annotated C files. Each passes current obligation regeneration and
 complete Rocq final checks. GCD proofs preserve C signed remainder (`Z.rem`),
-including negative inputs. R1142 seals3 original programs,4 functions,23
-top-level VCs and780 actual queries per backend. Paired query occurrence
+including negative inputs. R1142 seals3 original programs and3 verified bodies
+under4 function contracts,23 top-level VCs and780 final-check queries per backend. Paired query occurrence
 sequences and verdicts match; there are no opposite verdicts. Final-check
 time sums are91.840s/100.234s; proof bodies/grouping differ and this one sample
 is not a controlled whole-workflow speedup. See [the program evidence](QCP_ORIGINAL_PROGRAMS_STAGE_20261031.json).

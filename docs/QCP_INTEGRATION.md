@@ -1,8 +1,16 @@
 # QCP SMT integration
 
-`tools/integration/qcp_backend.py` discharges pending Rocq verification
-conditions using a selectable Xolver or Z3 binary. The pinned QCP symbolic
-executor remains common to both backends; its internal SMT calls are opaque.
+`tools/integration/qcp_native_backend.py` wraps the pinned QCP executable and
+routes its actual SAT-entry calls through a hash-checked execution guard and
+preload library. QCP performs parsing and symbolic execution; the adapter
+translates the captured formulas for a frozen Xolver worker or Z3 process.
+Each occurrence has a fresh SMT context, including repeated formulas. Native
+records bind the executable, bridge, solver, formula and query bytes.
+
+`tools/integration/qcp_backend.py` also discharges typed pending Rocq conditions
+using a selected backend. Its supported conditions and sufficient-obligation
+translation are described below. A complete native workflow still follows the
+QCP controller through final symexec replay and Rocq checks.
 
 ## Supported conditions
 
@@ -41,3 +49,19 @@ candidate, using the same Rocq reconstruction for both backends. Follow QCP's
 final checks. A query answer or candidate alone never verifies a C program.
 `audit_qcp_program.py` audits complete witnesses and authentic controller results;
 its query-time sum is not an end-to-end performance measurement.
+
+## Program coverage and timing
+
+Count verified function bodies separately from function contracts. The original
+`gcd.c` contains one body (`gcd`) and an external `abs` declaration whose contract
+is assumed. The original `max3` postcondition guarantees an upper bound of all
+three inputs; it does not state membership in the inputs. Verification results
+refer to these frozen properties.
+
+Count actual native SMT occurrences across the full workflow when reporting a
+workflow total. The older R1142 total of780 covers final-check sessions only;
+the controlled branch workflow R1231 performs564 calls per backend across three
+symexec sessions. Bridge-only receipts do not certify the program. Completed
+controller state, original-source hashes and full Rocq checks provide that link.
+Report executed-stage time and orchestration wall time separately; a single pair
+with different initial library policies does not establish end-to-end speedup.

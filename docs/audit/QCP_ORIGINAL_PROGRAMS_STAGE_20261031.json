@@ -1,5 +1,5 @@
 {
-  "schema": 1,
+  "schema": 2,
   "status": "verified-original-regression-programs",
   "solver_implementation_commit": "243a267fa8fbeb39e3bd796b32dc28de31148b99",
   "qualified_delivery_main": "cb4eb07bfccc54a7968e5f88231b3847a20b0ff8",
@@ -9,19 +9,10 @@
       "backend": "xolver",
       "run": "native_branch_xolver_r1124-20261031133524",
       "program_sha256": "4d81aabd16ceb9d402fa0f1a3621dd8a6bf0ad28659bcb6cf60eedebec69e22d",
-      "functions": [
-        "example"
-      ],
       "program_verified": true,
       "top_level_vcs": 10,
       "proof_modes": {
         "LLM_pre_process": 10
-      },
-      "queries": 188,
-      "unique_queries": 44,
-      "verdicts": {
-        "sat": 74,
-        "unsat": 114
       },
       "final_check_seconds": 28.38486990518868,
       "native_callback_seconds": 1.7171926309999996,
@@ -42,26 +33,30 @@
         "Rocq/examples/QCP_demos_tutorial/native_branch_xolver_r1124_proof_manual.v": "a4e183e8c449baf5c373238627bd4294bc1300c2ae40a0c2031feb7f129d70a4",
         "Rocq/examples/QCP_demos_tutorial/native_branch_xolver_r1124_lib.v": "1f8a54afaa392924392567aef82ee5ba89cdf1a63d87dffd441a01e206123963"
       },
-      "sequence_sha256": "595069db4c90230b9fac396c3c5f224c4046f3ed2b57ffe750dd30beabeec975"
+      "sequence_sha256": "595069db4c90230b9fac396c3c5f224c4046f3ed2b57ffe750dd30beabeec975",
+      "function_contracts": [
+        "example"
+      ],
+      "verified_function_bodies": [
+        "example"
+      ],
+      "assumed_external_contracts": [],
+      "final_check_smt_calls": 188,
+      "unique_final_check_smt_queries": 44,
+      "final_check_verdicts": {
+        "sat": 74,
+        "unsat": 114
+      }
     },
     {
       "program": "branch",
       "backend": "z3",
       "run": "native_branch_z3_r1124-20261031133524",
       "program_sha256": "4d81aabd16ceb9d402fa0f1a3621dd8a6bf0ad28659bcb6cf60eedebec69e22d",
-      "functions": [
-        "example"
-      ],
       "program_verified": true,
       "top_level_vcs": 10,
       "proof_modes": {
         "LLM_pre_process": 10
-      },
-      "queries": 188,
-      "unique_queries": 44,
-      "verdicts": {
-        "sat": 74,
-        "unsat": 114
       },
       "final_check_seconds": 34.98467964306474,
       "native_callback_seconds": 4.347729507999996,
@@ -82,28 +77,31 @@
         "Rocq/examples/QCP_demos_tutorial/native_branch_z3_r1124_proof_manual.v": "20bfcfc67e1f6d57fd8d8f075a2d1c2482e6f7ced76b884f13a312241cc9fa52",
         "Rocq/examples/QCP_demos_tutorial/native_branch_z3_r1124_lib.v": "1f8a54afaa392924392567aef82ee5ba89cdf1a63d87dffd441a01e206123963"
       },
-      "sequence_sha256": "595069db4c90230b9fac396c3c5f224c4046f3ed2b57ffe750dd30beabeec975"
+      "sequence_sha256": "595069db4c90230b9fac396c3c5f224c4046f3ed2b57ffe750dd30beabeec975",
+      "function_contracts": [
+        "example"
+      ],
+      "verified_function_bodies": [
+        "example"
+      ],
+      "assumed_external_contracts": [],
+      "final_check_smt_calls": 188,
+      "unique_final_check_smt_queries": 44,
+      "final_check_verdicts": {
+        "sat": 74,
+        "unsat": 114
+      }
     },
     {
       "program": "gcd",
       "backend": "xolver",
       "run": "native_gcd_xolver_r1124-20261031133524",
       "program_sha256": "255cd902a923b5044acdbe6372652e0b422af3a5a723cc37355040e613a8b3a3",
-      "functions": [
-        "abs",
-        "gcd"
-      ],
       "program_verified": true,
       "top_level_vcs": 9,
       "proof_modes": {
         "LLM_pre_process": 6,
         "aggressive_pre_process": 3
-      },
-      "queries": 296,
-      "unique_queries": 70,
-      "verdicts": {
-        "sat": 174,
-        "unsat": 122
       },
       "final_check_seconds": 33.557813758030534,
       "native_callback_seconds": 2.315694791,
@@ -124,28 +122,34 @@
         "Rocq/examples/QCP_demos_human/simple_arith/native_gcd_xolver_r1124_proof_manual.v": "fac251d14f084b4814ea8cdc7a0ee2ecca965deafa30916968f897b08a3e5139",
         "Rocq/examples/QCP_demos_human/simple_arith/native_gcd_xolver_r1124_lib.v": "1f8a54afaa392924392567aef82ee5ba89cdf1a63d87dffd441a01e206123963"
       },
-      "sequence_sha256": "7eeb0ef77ac9a0490d414897ac113f0952f2995a63c81d50bafac2bc68a509e2"
+      "sequence_sha256": "7eeb0ef77ac9a0490d414897ac113f0952f2995a63c81d50bafac2bc68a509e2",
+      "function_contracts": [
+        "abs",
+        "gcd"
+      ],
+      "verified_function_bodies": [
+        "gcd"
+      ],
+      "assumed_external_contracts": [
+        "abs"
+      ],
+      "final_check_smt_calls": 296,
+      "unique_final_check_smt_queries": 70,
+      "final_check_verdicts": {
+        "sat": 174,
+        "unsat": 122
+      }
     },
     {
       "program": "gcd",
       "backend": "z3",
       "run": "native_gcd_z3_r1124-20261031133524",
       "program_sha256": "255cd902a923b5044acdbe6372652e0b422af3a5a723cc37355040e613a8b3a3",
-      "functions": [
-        "abs",
-        "gcd"
-      ],
       "program_verified": true,
       "top_level_vcs": 9,
       "proof_modes": {
         "LLM_pre_process": 6,
         "aggressive_pre_process": 3
-      },
-      "queries": 296,
-      "unique_queries": 70,
-      "verdicts": {
-        "sat": 174,
-        "unsat": 122
       },
       "final_check_seconds": 35.154704136773944,
       "native_callback_seconds": 2.8245360440000025,
@@ -166,26 +170,33 @@
         "Rocq/examples/QCP_demos_human/simple_arith/native_gcd_z3_r1124_proof_manual.v": "e4677b3574ce62e112c5941ff111d2cf99f957fb23bd743caf8122bbdcedc377",
         "Rocq/examples/QCP_demos_human/simple_arith/native_gcd_z3_r1124_lib.v": "0e414a32e879e438726937f13f1bc37ea18efa460c1bc1205b963d3d7f782f4b"
       },
-      "sequence_sha256": "7eeb0ef77ac9a0490d414897ac113f0952f2995a63c81d50bafac2bc68a509e2"
+      "sequence_sha256": "7eeb0ef77ac9a0490d414897ac113f0952f2995a63c81d50bafac2bc68a509e2",
+      "function_contracts": [
+        "abs",
+        "gcd"
+      ],
+      "verified_function_bodies": [
+        "gcd"
+      ],
+      "assumed_external_contracts": [
+        "abs"
+      ],
+      "final_check_smt_calls": 296,
+      "unique_final_check_smt_queries": 70,
+      "final_check_verdicts": {
+        "sat": 174,
+        "unsat": 122
+      }
     },
     {
       "program": "max3",
       "backend": "xolver",
       "run": "native_max3_xolver_r1124-20261031133524",
       "program_sha256": "7ddaa9f590cd9c37d3dd644ea280ecd3fa6cee084441c82caf9c0e1afb6dde5d",
-      "functions": [
-        "max3"
-      ],
       "program_verified": true,
       "top_level_vcs": 4,
       "proof_modes": {
         "LLM_pre_process": 4
-      },
-      "queries": 296,
-      "unique_queries": 60,
-      "verdicts": {
-        "sat": 148,
-        "unsat": 148
       },
       "final_check_seconds": 29.897356681525707,
       "native_callback_seconds": 2.6225613810000015,
@@ -206,26 +217,31 @@
         "Rocq/examples/QCP_demos_human/simple_arith/native_max3_xolver_r1124_proof_manual.v": "86d96e98e1d9c87ae810f1841f1591c88bd104cba8c8ae10edabebacaf112ff7",
         "Rocq/examples/QCP_demos_human/simple_arith/native_max3_xolver_r1124_lib.v": "1f8a54afaa392924392567aef82ee5ba89cdf1a63d87dffd441a01e206123963"
       },
-      "sequence_sha256": "ab2bcc135d83a079668e78402be4848c952dd2ab2925c1053c75b1e6b9bbcce8"
+      "sequence_sha256": "ab2bcc135d83a079668e78402be4848c952dd2ab2925c1053c75b1e6b9bbcce8",
+      "function_contracts": [
+        "max3"
+      ],
+      "verified_function_bodies": [
+        "max3"
+      ],
+      "assumed_external_contracts": [],
+      "final_check_smt_calls": 296,
+      "unique_final_check_smt_queries": 60,
+      "final_check_verdicts": {
+        "sat": 148,
+        "unsat": 148
+      },
+      "proved_property": "Return value is an upper bound of all three inputs; membership is absent from the frozen postcondition."
     },
     {
       "program": "max3",
       "backend": "z3",
       "run": "native_max3_z3_r1124-20261031133524",
       "program_sha256": "7ddaa9f590cd9c37d3dd644ea280ecd3fa6cee084441c82caf9c0e1afb6dde5d",
-      "functions": [
-        "max3"
-      ],
       "program_verified": true,
       "top_level_vcs": 4,
       "proof_modes": {
         "LLM_pre_process": 4
-      },
-      "queries": 296,
-      "unique_queries": 60,
-      "verdicts": {
-        "sat": 148,
-        "unsat": 148
       },
       "final_check_seconds": 30.094877706840634,
       "native_callback_seconds": 3.0048887249999994,
@@ -246,31 +262,96 @@
         "Rocq/examples/QCP_demos_human/simple_arith/native_max3_z3_r1124_proof_manual.v": "32b414400cbdaa791cb08653d6088ea677661cf8db815681da607208f39f4121",
         "Rocq/examples/QCP_demos_human/simple_arith/native_max3_z3_r1124_lib.v": "1f8a54afaa392924392567aef82ee5ba89cdf1a63d87dffd441a01e206123963"
       },
-      "sequence_sha256": "ab2bcc135d83a079668e78402be4848c952dd2ab2925c1053c75b1e6b9bbcce8"
+      "sequence_sha256": "ab2bcc135d83a079668e78402be4848c952dd2ab2925c1053c75b1e6b9bbcce8",
+      "function_contracts": [
+        "max3"
+      ],
+      "verified_function_bodies": [
+        "max3"
+      ],
+      "assumed_external_contracts": [],
+      "final_check_smt_calls": 296,
+      "unique_final_check_smt_queries": 60,
+      "final_check_verdicts": {
+        "sat": 148,
+        "unsat": 148
+      },
+      "proved_property": "Return value is an upper bound of all three inputs; membership is absent from the frozen postcondition."
     }
   ],
   "totals": {
     "xolver": {
       "programs": 3,
-      "functions": 4,
       "top_level_vcs": 23,
-      "queries": 780,
       "final_check_seconds": 91.84004034474492,
-      "native_callback_seconds": 6.6554488030000005
+      "native_callback_seconds": 6.6554488030000005,
+      "function_contracts": 4,
+      "verified_function_bodies": 3,
+      "final_check_smt_calls": 780
     },
     "z3": {
       "programs": 3,
-      "functions": 4,
       "top_level_vcs": 23,
-      "queries": 780,
       "final_check_seconds": 100.23426148667932,
-      "native_callback_seconds": 10.177154276999998
+      "native_callback_seconds": 10.177154276999998,
+      "function_contracts": 4,
+      "verified_function_bodies": 3,
+      "final_check_smt_calls": 780
     }
   },
   "paired_occurrences_equal": true,
   "opposite_verdicts": 0,
   "protected_sets_used": false,
-  "boundary": "Three existing original C regression programs, complete current controller done/Rocq final checks, not extracted SMT alone. Native bridge program_verified remains false because the bridge alone cannot certify a program; this audit derives program verification from the full controller evidence. Identical original C, QCP binary, query occurrence sequences, proof modes, solver versions and per-query budgets. Grouping and proof bodies differ; one observed final-check timing sum is not a controlled whole-workflow or statistically established solver speedup. This is the delivered residue kernel, not the later NIA state candidate or an independent protected-program result.",
-  "audit_file": "validation/arithmetic-r103/qcp-original-programs-r1142.json",
-  "audit_sha256": "03d29c54f6d2c68b04cd783dbe97eca5f58f474482051808f09f37c005b92562"
+  "boundary": "Three existing original C regression programs, complete current controller done/Rocq final checks, not extracted SMT alone. Native bridge program_verified remains false because the bridge alone cannot certify a program; this audit derives program verification from the full controller evidence. Identical original C, QCP binary, query occurrence sequences, proof modes, solver versions and per-query budgets. Grouping and proof bodies differ; one observed final-check timing sum is not a controlled whole-workflow or statistically established solver speedup. This is the delivered residue kernel, not the later NIA state candidate or an independent protected-program result. Coverage correction: the original raw function count4 includes abs, whose source is only a contract declaration. There are3 verified function bodies under4 function contracts per backend. Max3 proves its stated upper-bound property, not membership in the input set. The780 SMT calls count final-check sessions only; no whole-workflow query count is inferred. The original raw audit receipt remains immutable.",
+  "original_audit_file": "validation/arithmetic-r103/qcp-original-programs-r1142.json",
+  "original_audit_sha256": "03d29c54f6d2c68b04cd783dbe97eca5f58f474482051808f09f37c005b92562",
+  "coverage_correction": {
+    "status": "coverage-scope-correction-from-frozen-original-inputs",
+    "original_audit_sha256": "03d29c54f6d2c68b04cd783dbe97eca5f58f474482051808f09f37c005b92562",
+    "gcd": {
+      "source": "/pub/data/jiafq/xolver/dependencies/qcp-08cc7a0f/QCP_examples/QCP_demos_human/simple_arith/gcd.c",
+      "source_sha256": "255cd902a923b5044acdbe6372652e0b422af3a5a723cc37355040e613a8b3a3",
+      "function_contracts": [
+        "abs",
+        "gcd"
+      ],
+      "verified_function_bodies": [
+        "gcd"
+      ],
+      "assumed_external_contracts": [
+        "abs"
+      ],
+      "current_vc_names": [
+        "proof_of_gcd_partial_solve_wit_2",
+        "proof_of_gcd_partial_solve_wit_2_pure",
+        "proof_of_gcd_return_wit_1",
+        "proof_of_gcd_return_wit_2",
+        "proof_of_gcd_safety_wit_1",
+        "proof_of_gcd_safety_wit_2",
+        "proof_of_gcd_entail_wit_1",
+        "proof_of_gcd_partial_solve_wit_1_pure",
+        "proof_of_gcd_partial_solve_wit_1"
+      ],
+      "current_plan_sha256": "a9529fc6b040ba71bac2df4f38037fe3c31183e370978d2b25a56ce37ca78bcd"
+    },
+    "max3": {
+      "source": "/pub/data/jiafq/xolver/dependencies/qcp-08cc7a0f/QCP_examples/QCP_demos_human/simple_arith/max3.c",
+      "source_sha256": "7ddaa9f590cd9c37d3dd644ea280ecd3fa6cee084441c82caf9c0e1afb6dde5d",
+      "verified_function_bodies": [
+        "max3"
+      ],
+      "proved_property": "return >= x and return >= y and return >= z; membership in the inputs is absent from the frozen Ensure"
+    },
+    "corrected_prior_totals_per_backend": {
+      "programs": 3,
+      "function_contracts": 4,
+      "verified_function_bodies": 3,
+      "top_level_vcs": 23,
+      "final_check_smt_calls": 780
+    },
+    "source_modified": false,
+    "protected_sets_used": false,
+    "boundary": "Metadata correction, not a new proof or a modified specification. Historical R1142 raw receipt remains immutable; its function count4 includes the abs contract declaration. The original GCD example verifies one body under the abs contract assumption. Max3 proves only its stated upper-bound postcondition. New paired program verification is still subject to its actual controller/Rocq completion."
+  },
+  "coverage_correction_sha256": "3e874728c6c720640f9457663e6e424e5182be635e10185eaeabd1fd5daab8dd"
 }
