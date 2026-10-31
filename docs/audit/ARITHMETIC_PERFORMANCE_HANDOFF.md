@@ -218,8 +218,8 @@ up to a nonzero rational unit. The corresponding potential pair counts are58311
 versus6555; this is not a measured speedup. Projection inputs are deduplicated
 before Lazard pair generation, while original signed constraints and covering
 origins are retained. Tests cover ordered boundary equivalence, vanishing middle
-coefficients and opposite signed constraints. Native qualification and original
-input model/independent checks remain pending. See
+coefficients and opposite signed constraints. Subsequent native qualification and original-input comparisons are recorded
+below. See
 [the root-cause observation](CAC_DUPLICATE_INPUT_PROBE_20261101.json).
 Both protected sets remain unread and unused.
 
@@ -261,13 +261,55 @@ input hashes. Source/CLI/worker hashes and complete checks are in
 [the native qualification](COPRIME_LAZARD_QUALIFICATION_20261101.json).
 CLI SHA-256 is `cc72195531844ea37cb0e3495cb0ebe8c7d1cbedc80f68bc6846a81a4e2fbe55`.
 
-All39 R1329 acceptance groups and fresh R1330 fixed160 are running against the
-unchanged delivered reset-contract baseline, this frozen candidate and the same
-frozen Z3,60s/one leased physical CPU/16GiB. No performance or end-to-end QCP claim
-is made. Existing actual QCP workflow receipts still belong to the older R1264
-worker. Continue in the existing PR92; both protected sets remain unread/unused.
-Delivery documentation reuses the qualified source and binaries without an
-additional server archive.
+All39 R1329 acceptance groups pass. R1339 seals fresh R1330 fixed160 against
+unchanged delivered main and same-round frozen Z3: **105 baseline/105 candidate/
+116 verified Z3**. Candidate retains58 SAT/47 UNSAT,1 unknown and54 timeouts;
+baseline has2 unknowns/53 timeouts. There are no gained/lost solves, opposite
+verdicts or invalid models. Verified PAR-2 is7001.059/7010.118/5551.405; the
+candidate is about0.13% slower, so this is retained for correctness, not promoted
+as a performance improvement. Seven Z3 UNSATs12/24/27/42/80/114/159 remain
+unconfirmed and excluded. Original triads89/120/133 overrun wall budgets and are
+preserved; whole frozen triads are replayed only after terminal state and absent
+PIDs. R1339 audit is EOS f34deca8ace2/c0ada4798223; full record SHA-256 is
+`65fb08eb6f70f10826f332f8202177a8c0b7228b6999e7d6e9ef23fd7a1cd55d`.
+
+The next change `65c21b9b` excludes certified false original atoms as soon as all
+their variables are assigned, before deeper CAC recursion. It uses atom truth
+for zero/nullification, leaves unsupported probes on the existing path, and
+retains complete projection inputs. R1333 reproduces unnecessary recursion:
+old API returns unknown on a shallow contradiction with1 node and a SAT formula
+with2 nodes. R1341 qualifies the fix:297 focused cases/44876 assertions,
+1911 full cases/988096 assertions and31 Python tests pass. Header-identical
+old-engine controls fail all3 new budget/depth contracts; the fix passes all3.
+An initial R1334 source preflight stops before overlay because inherited deletion
+records are missing; corrected R1341 retains all409 tombstones and uses identical
+runtime source. AGENTS.md remains untouched.
+
+R1338 now proves the contradiction without entering unused dimensions and returns
+SAT at x=1,y=0 within2 nodes. Actual native models replay SAT with both Z3 and
+cvc5. All39 R1343 acceptance groups pass. R1345 seals nine fresh public60s/
+one-physical-CPU/16GiB triads: **3 baseline/3 candidate/7 verified Z3**, with no
+new/lost solves or invalid models;159 stays unconfirmed. This is a verified node-
+budget capability gain without public-pilot solve gain. It does not justify
+another full160 run for this change alone. Previous105/105/116 counts belong to
+the shared-factor version and do not score this prefix candidate. See
+[the complete capability/pilot evidence](CAC_PREFIX_PRUNING_STAGE_20261101.json).
+Current frozen CLI SHA-256 is
+`30965221fc2a3b37177a7e79c771b6fb4d9f738d4a524357aee2448b5b3ba07f`.
+
+R1344's24 short-profile samples now include12 in CdcacCore::buildClosure; CAC
+returns after about2.005s before the fallback. Sample fractions do not establish
+end-to-end speedup. R1346 additionally confirms that x(x-b),x(x-c) are refined
+correctly but both CAC/global Lazard lifting retain five boundary polynomials
+of total degree7, although three linear factors suffice for the same root set.
+Separating active lifting factors from retained provenance is the next concrete
+lead; it is not implemented or claimed as a performance result yet.
+
+Existing actual QCP workflow receipts still belong to the older R1264 worker,
+not the R1341 worker. Continue in existing PR92; both protected sets remain
+unread/unused. No overall SMT or end-to-end QCP superiority is established.
+Delivery documentation reuses qualified source/binaries without an additional
+server archive.
 
 
 
