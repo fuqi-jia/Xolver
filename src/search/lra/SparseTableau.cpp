@@ -152,7 +152,7 @@ void SparseTableau::replaceRow(int row, int basicVar, const mpq_class& rhs,
 
     r.basicVar = basicVar;
     r.rhs = rhs;
-    r.version++;
+    r.noteChange();
 
     if (r.hasIndex) {
         r.pos.clear();

@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <chrono>
 #include <thread>
+#include <stdexcept>
+#include <utility>
 
 using namespace xolver;
 
@@ -32,6 +34,159 @@ static int countBounds(const std::vector<LraPropagationEngine::ExplainedBound>& 
         if (b.var == var && b.isLower == isLower) ++c;
     }
     return c;
+}
+
+static void checkPropagationPoint(const std::vector<LraPropagationEngine::ExplainedBound>& bounds,
+                                  const std::vector<mpq_class>& point) {
+    for (const auto& bound : bounds) {
+        REQUIRE(bound.var >= 0);
+        REQUIRE(static_cast<std::size_t>(bound.var) < point.size());
+        const DeltaRational value(point[bound.var]);
+        CHECK((bound.isLower ? value >= bound.value : value <= bound.value));
+    }
+}
+
+TEST_CASE("LraPropagationEngine: retained rows reuse arithmetic after unrelated changes") {
+    GeneralSimplex gs;
+    const int x = gs.addVar("reuse-x"), y = gs.addVar("reuse-y"), z = gs.addVar("reuse-z");
+    const int s = gs.addConstraint({{x, 1}, {y, 1}}, 0);
+    const int t = gs.addConstraint({{z, 2}}, 0);
+    REQUIRE(gs.assertLower(x, mkBound(1, 1)));
+    REQUIRE(gs.assertLower(y, mkBound(2, 2)));
+    REQUIRE(gs.assertLower(z, mkBound(4, 3)));
+    LraPropagationEngine engine;
+    LraPropagationEngine::Statistics first, repeated, changed;
+    const PropagationBudget budget{64, 256, 12, 1000};
+    CHECK(hasBound(engine.propagateAll(gs, budget, &first), s, true, 3));
+    CHECK(first.termPairs > 0);
+    CHECK(hasBound(engine.propagateAll(gs, budget, &repeated), s, true, 3));
+    CHECK(repeated.retainedSnapshotHits > 0);
+    CHECK(repeated.termPairs == 0);
+    CHECK(repeated.changedInputs == 0);
+    REQUIRE(gs.assertLower(z, mkBound(5, 4)));
+    const auto result = engine.propagateAll(gs, budget, &changed);
+    CHECK(hasBound(result, s, true, 3));
+    CHECK(hasBound(result, t, true, 10));
+    CHECK(changed.changedInputs == 1);
+    CHECK(changed.retainedSnapshotHits > 0);
+    CHECK(changed.termPairs < first.termPairs);
+    checkPropagationPoint(result, {1, 2, 5, 3, 10});
+    auto copied = engine;
+    LraPropagationEngine::Statistics copyWork;
+    CHECK(hasBound(copied.propagateAll(gs, budget, &copyWork), s, true, 3));
+    CHECK(copyWork.retainedSnapshotHits == 0);
+    auto moved = std::move(copied);
+    CHECK(hasBound(moved.propagateAll(gs, budget), t, true, 10));
+    CHECK(hasBound(copied.propagateAll(gs, budget), t, true, 10));
+}
+
+TEST_CASE("LraPropagationEngine: retained rows expire transitive premises with reused literals") {
+    GeneralSimplex gs;
+    const int x = gs.addVar("premise-x"), y = gs.addVar("premise-y"), z = gs.addVar("premise-z");
+    const int s = gs.addConstraint({{x, 1}, {y, -1}}, 0);
+    const int t = gs.addConstraint({{y, 1}, {z, 1}}, 0);
+    auto install = [&](int lower) {
+        gs.resetActiveBounds();
+        REQUIRE(gs.assertLower(s, mkBound(lower, 1)));
+        REQUIRE(gs.assertUpper(x, mkBound(2, 2)));
+        REQUIRE(gs.assertUpper(z, mkBound(3, 3)));
+    };
+    LraPropagationEngine engine;
+    const PropagationBudget budget{64, 256, 12, 1000};
+    install(1);
+    CHECK(hasBound(engine.propagateAll(gs, budget), t, false, 4));
+    CHECK(hasBound(engine.propagateAll(gs, budget), t, false, 4));
+    // s has an empty column: invalidating only incident rows misses t's cached
+    // y <= 1 contribution, whose premise came from another row.
+    REQUIRE(gs.tableau().col(s).entries.empty());
+    install(-10);
+    const auto weakened = engine.propagateAll(gs, budget);
+    CHECK(hasBound(weakened, y, false, 12));
+    CHECK(hasBound(weakened, t, false, 15));
+    CHECK_FALSE(hasBound(weakened, t, false, 4));
+    checkPropagationPoint(weakened, {2, 12, 3, -10, 15});
+    gs.resetActiveBounds();
+    REQUIRE(gs.assertUpper(x, mkBound(2, 2)));
+    REQUIRE(gs.assertUpper(z, mkBound(3, 3)));
+    const auto removed = engine.propagateAll(gs, budget);
+    CHECK_FALSE(hasBound(removed, y, false, 12));
+    checkPropagationPoint(removed, {2, 100, 3, -98, 103});
+}
+
+TEST_CASE("LraPropagationEngine: retained rows cannot cross reset or simplex assignment") {
+    GeneralSimplex gs;
+    auto install = [](GeneralSimplex& target, int coefficient) {
+        const int x = target.addVar("identity-x"), y = target.addVar("identity-y");
+        const int s = target.addConstraint({{x, 1}, {y, coefficient}}, 0);
+        REQUIRE(s == 2);
+        REQUIRE(target.assertLower(x, mkBound(1, 1)));
+        REQUIRE(target.assertLower(y, mkBound(2, 2)));
+    };
+    install(gs, 1);
+    LraPropagationEngine engine;
+    const PropagationBudget budget{64, 256, 12, 1000};
+    CHECK(hasBound(engine.propagateAll(gs, budget), 2, true, 3));
+    const auto before = gs.definitionIdentity();
+    gs.reset();
+    install(gs, -1);
+    CHECK(gs.definitionIdentity() != before);
+    checkPropagationPoint(engine.propagateAll(gs, budget), {1, 100, -99});
+    GeneralSimplex replacement;
+    install(replacement, 1);
+    gs = replacement;
+    CHECK(gs.definitionIdentity() != replacement.definitionIdentity());
+    CHECK(hasBound(engine.propagateAll(gs, budget), 2, true, 3));
+    replacement.reset();
+    install(replacement, -1);
+    gs = std::move(replacement);
+    checkPropagationPoint(engine.propagateAll(gs, budget), {1, 100, -99});
+}
+
+TEST_CASE("LraPropagationEngine: retained rows survive pivots and append definitions safely") {
+    GeneralSimplex gs;
+    const int x = gs.addVar("pivot-cache-x"), y = gs.addVar("pivot-cache-y");
+    const int s = gs.addConstraint({{x, 1}, {y, 1}}, 0);
+    REQUIRE(gs.assertLower(x, mkBound(0, 1)));
+    REQUIRE(gs.assertLower(y, mkBound(0, 2)));
+    LraPropagationEngine engine;
+    const PropagationBudget budget{64, 256, 12, 1000};
+    CHECK(hasBound(engine.propagateAll(gs, budget), s, true, 0));
+    gs.push();
+    REQUIRE(gs.assertLower(s, mkBound(5, 3), 1));
+    REQUIRE(gs.check() == GeneralSimplex::Result::Sat);
+    CHECK(gs.basicRowOfVar(s) < 0);
+    checkPropagationPoint(engine.propagateAll(gs, budget), {2, 3, 5});
+    gs.pop();
+    checkPropagationPoint(engine.propagateAll(gs, budget), {0, 0, 0});
+    const auto identity = gs.definitionIdentity();
+    const int t = gs.addConstraint({{x, 2}, {y, -1}}, 0);
+    CHECK(gs.definitionIdentity() == identity);
+    CHECK(t == 3);
+    checkPropagationPoint(engine.propagateAll(gs, budget), {0, 0, 0, 0});
+    SparseRow saturated;
+    saturated.version = std::numeric_limits<uint64_t>::max();
+    saturated.noteChange();
+    CHECK(saturated.version == std::numeric_limits<uint64_t>::max());
+}
+
+TEST_CASE("LraPropagationEngine: retained rows obey budgets and discard throwing consumers") {
+    GeneralSimplex gs;
+    const int x = gs.addVar("throw-cache-x");
+    const int s = gs.addConstraint({{x, 2}}, 0);
+    REQUIRE(gs.assertLower(x, mkBound(1, 1)));
+    LraPropagationEngine engine;
+    const PropagationBudget budget{64, 256, 12, 1000};
+    CHECK(hasBound(engine.propagateAll(gs, budget), s, true, 2));
+    CHECK(engine.propagateAll(gs, {0, 256, 12, 1000}).empty());
+    CHECK(engine.propagateAll(gs, {64, 0, 12, 1000}).empty());
+    CHECK(engine.propagateAll(gs, {64, 256, 12, 0}).empty());
+    CHECK(engine.propagateAll(gs, {64, 256, 0, 1000}).empty());
+    CHECK_THROWS_AS(engine.propagateAll(gs, budget, nullptr,
+        [](const auto&) -> bool { throw std::runtime_error("consumer failure"); }), std::runtime_error);
+    LraPropagationEngine::Statistics after;
+    CHECK(hasBound(engine.propagateAll(gs, {1, 256, 12, 1000}, &after), s, true, 2));
+    CHECK(after.retainedSnapshotHits == 0);
+    CHECK(after.rowSnapshots == 1);
 }
 
 TEST_CASE("LraPropagationEngine: unavailable extrema skip arithmetic until bounds arrive") {
