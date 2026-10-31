@@ -1,0 +1,159 @@
+{
+  "schema": 1,
+  "status": "not_promoted_no_verified_gain",
+  "kind": "private_box_projection_cache",
+  "audit_sha256": "1aeebefa1a034b290c0aa605343fd098e712a5e4690740a335210189f98ac002",
+  "formal": {
+    "counts": {
+      "baseline": {
+        "unsat": 2,
+        "decided": 2,
+        "verified_decided": 2,
+        "verified_par2": 720.1815264523029,
+        "raw_par2": 720.1815264523029,
+        "timeout": 6
+      },
+      "candidate": {
+        "unsat": 2,
+        "decided": 2,
+        "verified_decided": 2,
+        "verified_par2": 720.1828996110708,
+        "raw_par2": 720.1828996110708,
+        "timeout": 6
+      },
+      "z3": {
+        "unsat": 1,
+        "decided": 7,
+        "verified_decided": 7,
+        "verified_par2": 158.8467535339296,
+        "raw_par2": 158.8467535339296,
+        "timeout": 1,
+        "sat": 6
+      }
+    },
+    "changes": [],
+    "unverified": []
+  },
+  "diagnostics": [
+    {
+      "experiment": "7cc88f9d6496",
+      "run": "4896e7227305",
+      "input": "69",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "0"
+        ]
+      },
+      "record_sha256": "ab9a2a771b5e6d20c6be7f98e71c5875df963a4d7de2edbc2bdd0e27988c5962",
+      "input_sha256": "72e580ee3a690b54865e129f44529a71d81112f35193cbc93775236ea62a0f13"
+    },
+    {
+      "experiment": "7cc88f9d6496",
+      "run": "6b0e905bbfec",
+      "input": "77",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "2"
+        ]
+      },
+      "record_sha256": "01d7af7cef6d5a8da827fb5235f6af49924e842c3bb364c8a8dcaac2a1a17e5f",
+      "input_sha256": "7511fd4d07cdce648daf4ac76fc32c90af91cf9d9576d4e955a51d0dbd4534b7"
+    },
+    {
+      "experiment": "7cc88f9d6496",
+      "run": "1419ce3577a7",
+      "input": "149",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "13"
+        ]
+      },
+      "record_sha256": "2561341664b5e8be224ed0be0dacab07a50c128ceb79648437c8cbeb47561559",
+      "input_sha256": "fa38407f1095afff71b84b3c7be9da57614d7cbdb6800672ef7d85a6dfc2412d"
+    },
+    {
+      "experiment": "0cb9cd148a63",
+      "run": "3312dc699bc8",
+      "input": "69",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "0"
+        ]
+      },
+      "record_sha256": "785d8e9bdfe8ecb3686007441a1a3e8bfc880f0ebf4f4f9a76630475bbbb8c5d",
+      "input_sha256": "72e580ee3a690b54865e129f44529a71d81112f35193cbc93775236ea62a0f13"
+    },
+    {
+      "experiment": "0cb9cd148a63",
+      "run": "d89037317220",
+      "input": "77",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "1"
+        ]
+      },
+      "record_sha256": "26f7163c62429771bc271ca24c54c586f9703d000f10c90c62983d38f3a47a30",
+      "input_sha256": "7511fd4d07cdce648daf4ac76fc32c90af91cf9d9576d4e955a51d0dbd4534b7"
+    },
+    {
+      "experiment": "0cb9cd148a63",
+      "run": "41487bf8e72d",
+      "input": "149",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "2"
+        ]
+      },
+      "record_sha256": "06472710d94c261f395614b473dced464490c1a90040c9a25c39e5b79c0df60a",
+      "input_sha256": "fa38407f1095afff71b84b3c7be9da57614d7cbdb6800672ef7d85a6dfc2412d"
+    }
+  ],
+  "protected_sets_used": false,
+  "parent_source": "c921c75c322d1de8d2fe64e6ed88328cd18300ad",
+  "parent_audit_sha256": "0a58168460fa14f9b975ae41dc614621847804c6c2dcfb99b3b517b5892667c5",
+  "prototype_source_sha256": "6d7d95defaa8693cc409c12d03e0e70c164b43e54b1fa52d242e7e2f91b60488",
+  "prototype_binary_sha256": "c89be9858a22303fd2a28bffabe622c56dc5991076f2b6f3b09aa84c60233d1b",
+  "prototype_qualification": {
+    "diagnostic_binary_sha256": "c89be9858a22303fd2a28bffabe622c56dc5991076f2b6f3b09aa84c60233d1b",
+    "diagnostic_source_sha256": "6d7d95defaa8693cc409c12d03e0e70c164b43e54b1fa52d242e7e2f91b60488",
+    "diagnostic_object_sha256": "c4168075a48c2cbf634467a5091fed0f2b5ed0e400be9091a5b3bedfc9289410",
+    "diagnostic_unit_sha256": "3733d1b4422ea5922ed07815f2bb1f4a38a68a93f13d30c38f3ee6b8dc88ffd8",
+    "source_manifest_sha256": "a1efeb22dbf5de54fc67ac2663c8265ae8bee841aebc54b11235c442f4029393",
+    "unmodified": {
+      "/pub/data/jiafq/xolver/src/search/nra/core/CdcacCore.cpp": "18e083a1d92044468bd042b8c1747f77aa64716571dc5ba623ddbb949d35a22f",
+      "/pub/data/jiafq/xolver/build/bin/xolver": "9648db596d2b6b44bbbd1ba018fa384dd448c78290a73d333c09b91ffaa88092",
+      "/pub/data/jiafq/xolver/build/src/libxolver_core.a": "877fd8bd1e84f04889c1d11f49d4f7c97798e8edd9d50a6edcc875d747831aae",
+      "/pub/data/jiafq/xolver/build/tests/xolver_unit_tests": "46a14929b60b32fc90ea638c3ee7037732d8ade5d8cb4b24dbd0487b97b0e1b0"
+    },
+    "logs": {
+      "unit.log": "2f3938cf1b87a890027d6067890b87defca0b702cdba836ba020f67d7af504db",
+      "link-unit.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "metrics": {
+      "completed": 1,
+      "failures": 0
+    },
+    "original_build_run": "213e1da5b402",
+    "repair": "Set the native GMP library search path and complete the previously failed unit link. Reuse the successful frozen object and CLI; do not repeat compilation or solver timings.",
+    "protected_sets_used": false
+  },
+  "prototype_unit_cases": 99,
+  "prototype_unit_assertions": 287,
+  "failed_original_build": {
+    "run": "213e1da5b402",
+    "status": "failed",
+    "ended_at": "2026-10-30T22:44:54+00:00",
+    "reason": "The unit link omitted the native GMP library search path; compilation and CLI linking had succeeded. R1009 reuses their frozen outputs and completes only the missing checks."
+  },
+  "audit": {
+    "experiment": "3118bf55a5cc",
+    "run": "9116c580d55b"
+  },
+  "boundary": "Private exact-order projection caching on the sparse parent, not production source. Eight fresh triads verify2/8 for each Xolver arm and7/8 for same-round Z3; no gains/losses/errors/unconfirmed verdicts. Both arms have six timeouts. The component has99 tests/287 assertions; the full39 acceptance belongs to its unchanged parent. No private production qualification, full160 or whole-program QCP claim. The experiment is not promoted."
+}

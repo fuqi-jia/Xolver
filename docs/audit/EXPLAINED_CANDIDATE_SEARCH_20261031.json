@@ -1,0 +1,378 @@
+{
+  "schema": 1,
+  "status": "development_cover_repair_final_source_qualification_pending",
+  "qualified_source_commit": "d80fb40ba2b517723e61a657e235bc72892987c1",
+  "source_manifest_sha256": "a7691670ba6f6b8ee8110ef36d60eb4d4ef4ff6d965a574b55ccfa2c8aff670f",
+  "core": "Explained theory-independent finite candidate search with immutable domain snapshots and checked partial completion. Arithmetic clients canonicalize residual polynomials and substitute exact, explained fixed values in private scopes. All candidate models are checked against the original constraints; exhaustion is never an UNSAT proof.",
+  "native_acceptance": {
+    "groups": 39,
+    "unit_cases": 1871,
+    "unit_assertions": 986540,
+    "targeted_cases": 207,
+    "targeted_assertions": 23359
+  },
+  "full160": {
+    "cases": 160,
+    "seconds": 60,
+    "physical_cpus": 1,
+    "memory_gib": 16,
+    "model_capture": "initial-solve",
+    "counts": {
+      "baseline": {
+        "unsat": 46,
+        "decided": 101,
+        "verified_decided": 101,
+        "verified_par2": 7427.054817005992,
+        "raw_par2": 7427.054817005992,
+        "timeout": 58,
+        "sat": 55,
+        "unknown": 1
+      },
+      "candidate": {
+        "unsat": 46,
+        "decided": 100,
+        "verified_decided": 100,
+        "verified_par2": 7509.512296676636,
+        "raw_par2": 7509.512296676636,
+        "timeout": 59,
+        "sat": 54,
+        "unknown": 1
+      },
+      "z3": {
+        "unsat": 58,
+        "decided": 125,
+        "verified_decided": 118,
+        "verified_par2": 5386.909684367478,
+        "raw_par2": 4588.019082471728,
+        "sat": 67,
+        "timeout": 35
+      }
+    },
+    "changes": [
+      {
+        "index": 51,
+        "case": "QF_LRA/LassoRanker/CooperatingT2/ludcmp.c.i.ludcmp.pl.t2.fixed.t2.c_Iteration8_Loop_7-phaseTemplate.smt2",
+        "kind": "lost",
+        "truth": "sat",
+        "evidence": [
+          "baseline-exported-model-replay",
+          "z3-exported-model-replay"
+        ],
+        "observations": {
+          "baseline": {
+            "result": "sat",
+            "seconds": 39.515403712168336
+          },
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.0224819406867
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 0.7176521103829145
+          }
+        }
+      },
+      {
+        "index": 149,
+        "case": "QF_NRA/UltimateAutomizer/InVarSynth_agroce_minmax.c_Iteration2_0.smt2",
+        "kind": "gained",
+        "truth": "sat",
+        "evidence": [
+          "z3-exported-model-replay",
+          "candidate-exported-model-replay"
+        ],
+        "observations": {
+          "z3": {
+            "result": "sat",
+            "seconds": 0.1665972452610731
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.071853175759315
+          },
+          "candidate": {
+            "result": "sat",
+            "seconds": 0.1653592549264431
+          }
+        }
+      },
+      {
+        "index": 158,
+        "case": "QF_NRA/20180501-Economics-Mulligan/MulliganEconomicsModel0054a.smt2",
+        "kind": "lost",
+        "truth": "sat",
+        "evidence": [
+          "z3-exported-model-replay",
+          "baseline-exported-model-replay"
+        ],
+        "observations": {
+          "z3": {
+            "result": "sat",
+            "seconds": 0.06676722690463066
+          },
+          "baseline": {
+            "result": "sat",
+            "seconds": 0.06687360443174839
+          },
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.009798692539334
+          }
+        }
+      }
+    ],
+    "unconfirmed": [
+      12,
+      24,
+      27,
+      42,
+      80,
+      114,
+      159
+    ],
+    "supplementary_truth": [
+      {
+        "index": 115,
+        "truth": "unsat",
+        "input_sha256": "02a58b11df8951543940a1090a140592e24de41dcaeb6470e7a50d42e804be64",
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/acceptance-r1067/certificate-115/0.log",
+        "sha256": "823672e87696cac914fac33d8d0027db15a21b566e700a65300cdca704cf910e",
+        "boundary": "Fresh original-input checked modular certificate."
+      },
+      {
+        "index": 47,
+        "truth": "sat",
+        "input_sha256": "2c37069c8324458e8f3ad46cc6dbe0cc3a6c2f31012ed504123e660bfdf7aba4",
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/current-model-replay-r1077/47/record.json",
+        "sha256": "da39ada6f83d999162c44ce29701016901f85fd3e094bdb305b293f21d93d07e",
+        "boundary": "Two identical models from the current original timed output, positively replayed by both checkers; eligibility only, no timing replacement."
+      },
+      {
+        "index": 108,
+        "truth": "sat",
+        "input_sha256": "26d6012f717dec2f43e57be63e8638d1a13b6bc9cb5fcc963c08476793385786",
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/current-model-replay-r1077/108/record.json",
+        "sha256": "154f4f0d934bbf4b4f1a110a3bf9c61c5c3c06762bf4fc90697ba2c8b836f737",
+        "boundary": "Two identical models from the current original timed output, positively replayed by both checkers; eligibility only, no timing replacement."
+      },
+      {
+        "index": 122,
+        "truth": "sat",
+        "input_sha256": "c88289f0453a6bbe098b4c5f092dfc50cd9e0ac21d799c6ccfc0a61b5a974389",
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/current-model-replay-r1077/122/record.json",
+        "sha256": "3db7a86dd255b1d5617bddf4abaf88aa9bf7f781c51fa0a01b3579f9cef2078c",
+        "boundary": "Two identical models from the current original timed output, positively replayed by both checkers; eligibility only, no timing replacement."
+      },
+      {
+        "index": 50,
+        "truth": "unsat",
+        "input_sha256": "7e71a151d917978f1b5afc2791abf589e30c8ff97e930979df6ef82ad72dcdc0",
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/independent-truth-r761/case-050/record.json",
+        "sha256": "13a20b8e90bb8a8fff028fd665ee4ef661ae88e851766af64ed9b83ee255175c",
+        "boundary": "Existing independently checked 300s offline UNSAT; eligibility only, all original timed budgets stay 60s."
+      },
+      {
+        "index": 94,
+        "truth": "sat",
+        "input_sha256": "a6b68604187a341c570d8bd76135552ece1bbf958a1d7e9d4ff7f3eae998fd8f",
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/model-replay-r732/case-094/record.json",
+        "sha256": "251f695441367d616c3ee7b69b8f5bccce1df0b9322a47138f2804e032301a0a",
+        "boundary": "Existing independently checked ground witness; eligibility only, no old timing substitution."
+      }
+    ],
+    "wrong_verdicts": [],
+    "invalid_models": [],
+    "boundary": "A fresh frozen 160-case round formed from 12 pilot plus 148 disjoint remaining inputs, with identical 60s/one leased physical CPU/16GiB budgets and initial model capture. Current duplicate SAT models are positively replayed by both independent checkers. Existing same-hash offline evidence for 50 and 94 and a freshly checked certificate for 115 establish truth eligibility only; no historical solver timing is substituted. This candidate gains 149 but loses 51 and 158, so it is not promoted. LRA 51 has unchanged critical-path source and remains a timing-sensitivity investigation, not a proven algorithmic cause. No final protected or whole-program QCP result is claimed."
+  },
+  "cover_repair": {
+    "source": "Shared-allocation alternatives use the same model-search implementation with fresh contexts. A short jointly affine equality-block attempt precedes a smaller parameter cover; both share the one-second/one-million-work allocation.",
+    "prototype_qualification_sha256": "52968e006313e4ce397ebc4551cd5f29e451b8aa67cc0dec624a207093b78b98",
+    "formal_cases": 3,
+    "counts": {
+      "baseline": {
+        "timeout": 2,
+        "decided": 1,
+        "verified_decided": 1,
+        "verified_par2": 240.0658999402076,
+        "raw_par2": 240.0658999402076,
+        "sat": 1
+      },
+      "candidate": {
+        "sat": 3,
+        "decided": 3,
+        "verified_decided": 3,
+        "verified_par2": 28.356560042127967,
+        "raw_par2": 28.356560042127967
+      },
+      "z3": {
+        "sat": 3,
+        "decided": 3,
+        "verified_decided": 3,
+        "verified_par2": 0.8006049990653992,
+        "raw_par2": 0.8006049990653992
+      }
+    },
+    "changes": [
+      {
+        "index": 51,
+        "case": "QF_LRA/LassoRanker/CooperatingT2/ludcmp.c.i.ludcmp.pl.t2.fixed.t2.c_Iteration8_Loop_7-phaseTemplate.smt2",
+        "kind": "gained",
+        "truth": "sat",
+        "evidence": [
+          "candidate-exported-model-replay",
+          "z3-exported-model-replay"
+        ],
+        "observations": {
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.02121023833752
+          },
+          "candidate": {
+            "result": "sat",
+            "seconds": 28.124849708750844
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 0.5676005091518164
+          }
+        }
+      },
+      {
+        "index": 149,
+        "case": "QF_NRA/UltimateAutomizer/InVarSynth_agroce_minmax.c_Iteration2_0.smt2",
+        "kind": "gained",
+        "truth": "sat",
+        "evidence": [
+          "z3-exported-model-replay",
+          "candidate-exported-model-replay"
+        ],
+        "observations": {
+          "z3": {
+            "result": "sat",
+            "seconds": 0.16711114719510078
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.09049088507891
+          },
+          "candidate": {
+            "result": "sat",
+            "seconds": 0.1657672431319952
+          }
+        }
+      }
+    ],
+    "profiles": [
+      {
+        "index": 149,
+        "record_sha256": "5591d2012b1e0625c4a6429b850c3a053e6f5deafa9edfb7e96223f6d7216bff",
+        "boundary": "variables=135 parameters=28 retained_equalities=60 contexts=2 checks=745 choices=225 rejected=74 definitions=318 models=3 backjumps=11 skipped=48 explanation_fallbacks=0 propagated_facts=198 propagation_rounds=420 max_active=167 refinements=0 depth=45 exhausted=0 found=1 us=58575\n"
+      },
+      {
+        "index": 158,
+        "record_sha256": "c400386e0f7323bc58a3be15722a764e4a2b82a0039279dcd49f8ea6f9bbf570",
+        "boundary": "variables=17 parameters=12 retained_equalities=3 contexts=1 checks=54 choices=15 rejected=3 definitions=21 models=2 backjumps=0 skipped=0 explanation_fallbacks=0 propagated_facts=3 propagation_rounds=26 max_active=22 refinements=0 depth=12 exhausted=0 found=1 us=1685\n"
+      }
+    ],
+    "actual_models_cvc5": [
+      {
+        "index": 51,
+        "report_sha256": "d5f935e5da41612e75850faa3042641419ad4b3c28e813735b031341e51b6a6c",
+        "input_sha256": "8fb5c2cfe016233a2f76c3d3b103066448f0f1d3faa1c9d9493c55c304d877cb",
+        "model_sha256": "4a6606959f9436da9119152ac9d753504fec2ce559843fce9704e80940235a92",
+        "timing": {
+          "seconds": 0.2670103646814823,
+          "launch_seconds": 0.003151277080178261,
+          "wait_seconds": 0.26385908760130405,
+          "returncode": 0,
+          "timeout_notified_seconds": null,
+          "cleanup_seconds": null,
+          "timed_out": false,
+          "budget_overrun": false
+        },
+        "stdout_sha256": "d9dbf94b05b8314af9ca7f2034e92685c33447917605a7243b1099c693a12e5e",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "index": 149,
+        "report_sha256": "de68dac1b47e6cbcb258100d8b485019c8ef65d22635deaa7885a3ca69bbeaa6",
+        "input_sha256": "fa38407f1095afff71b84b3c7be9da57614d7cbdb6800672ef7d85a6dfc2412d",
+        "model_sha256": "e9a06d68c4b576ab26c2dec606eb8f3049ea92837d68b8b5e8e94a2f4a0f7b09",
+        "timing": {
+          "seconds": 0.017835261300206184,
+          "launch_seconds": 0.002475786954164505,
+          "wait_seconds": 0.01535947434604168,
+          "returncode": 0,
+          "timeout_notified_seconds": null,
+          "cleanup_seconds": null,
+          "timed_out": false,
+          "budget_overrun": false
+        },
+        "stdout_sha256": "d9dbf94b05b8314af9ca7f2034e92685c33447917605a7243b1099c693a12e5e",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "index": 158,
+        "report_sha256": "0104799c84a33049ed9cffe06be4cab590b15a02a928ab620973f91a917b6d92",
+        "input_sha256": "476e246b4551d79bee7d8652558696ee943ce1c35d814ed47b021f27797e56ed",
+        "model_sha256": "f125702af9ebdcd29fca7ee2e16a1be43c36d05aae0346c47dca40f9fe580228",
+        "timing": {
+          "seconds": 0.009232614189386368,
+          "launch_seconds": 0.001980958506464958,
+          "wait_seconds": 0.00725165568292141,
+          "returncode": 0,
+          "timeout_notified_seconds": null,
+          "cleanup_seconds": null,
+          "timed_out": false,
+          "budget_overrun": false
+        },
+        "stdout_sha256": "d9dbf94b05b8314af9ca7f2034e92685c33447917605a7243b1099c693a12e5e",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ],
+    "stability_boundary": "Only case149 is a repeated new solve, and158 is a reproduced regression repaired. LRA51 changes from a loss to a gain with unchanged LRA source, so it is not attributed to this arithmetic decomposition algorithm. These three cases cannot establish a full160 gain or superiority over Z3."
+  },
+  "unsupported_operands": {
+    "implementation_commit": "81291b5d",
+    "qualification_sha256": "cfa8d141605e90568cbc6878f944c08e880b0a790ebc0753bade4f5503d4be70",
+    "selected_cases": 224,
+    "assertions": 22986,
+    "root_cause": "A new test used a fractional coefficient with an integer-ring polynomial factory. The unsupported sentinel was then dereferenced by arithmetic operations. The test now clears denominators; arithmetic operations in both backends propagate the sentinel without cache aliasing.",
+    "boundary": "Private native source reconstruction and tests are qualified. The committed final source still needs rebuilding and complete acceptance."
+  },
+  "receipts": [
+    {
+      "path": "validation/arithmetic-r103/stage-r1046.json",
+      "sha256": "14d0724203e89235137233e12cfac2421b2b10bfde423c5033165a9aa845d32d"
+    },
+    {
+      "path": "validation/arithmetic-r103/stage-r1061.json",
+      "sha256": "f7b3bf438ebd503eb915f35271700fb560cc437c5e4abf20dacde4b640316721"
+    },
+    {
+      "path": "validation/arithmetic-r103/stage-r1068.json",
+      "sha256": "a378d6724fe6172ba1d8e633de7aa25a5bfc9865ea97ffe3a30f29556bc50138"
+    },
+    {
+      "path": "validation/arithmetic-r103/stage-r1070.json",
+      "sha256": "e36bbd0b948b8051ba29d6d83b892d8fc664146e6717e883322d04f093cf41dc"
+    },
+    {
+      "path": "validation/arithmetic-r103/stage-r1079.json",
+      "sha256": "292c27ae3f78d3f179bad54a7da71a3b6d4a51ab1d1e2169e7d44c7056eda2eb"
+    }
+  ],
+  "qcp": {
+    "runs": [
+      "native_gcd_xolver_r1071-20261031095116",
+      "native_gcd_z3_r1071-20261031095116"
+    ],
+    "worker_sha256": "b19220c7aa03f637a814b1f1eb08edc0e20b3159a69df2fcd86297ebcc620bf7",
+    "status": "annotation_and_VC_checking_accepted_group_proofs_in_progress",
+    "original_c_sha256": "255cd902a923b5044acdbe6372652e0b422af3a5a723cc37355040e613a8b3a3",
+    "boundary": "Both fresh GCD runs preserve the original source and frozen specifications. Generation/annotation acceptance use actual selected persistent native backends; group, parent, publication and final-check completion are separate requirements. No whole-program or timing advantage is claimed."
+  },
+  "protected_sets_used": false,
+  "delivery_boundary": "Unpromoted development commits only. The first full160 candidate loses two SAT cases and gains one. A repaired final source requires native qualification, fresh fair full160 comparison and PR CI before any merge. Main and its prior green CI remain unchanged; validation/current-main.json is explicitly cancelled and not required."
+}

@@ -1,0 +1,183 @@
+{
+  "schema": 1,
+  "status": "not_promoted_no_verified_gain",
+  "implementation_commit": "63ba37b5a4ae8ea2516f21ee221d75c9edf428b3",
+  "problem": "Univariate analysis scanned all atoms for every root, including exact rational roots that cannot consume refinement cuts.",
+  "implementation": "Build rational cuts indexed by variable, lazily once per sweep and only when algebraic endpoints need refinement. Keep current bound cuts and exact root/reason semantics.",
+  "source": {
+    "source_head": "63ba37b5a4ae8ea2516f21ee221d75c9edf428b3",
+    "source_manifest_sha256": "9dc65dd5b90ab0ef2db72ded3a9bbffeed997a91100b79b49a9c799b221bbca9",
+    "binary_sha256": "95b84a0423b3c652415344162ff052a1595320769407c3f80151a23847f18a56",
+    "sv_binary_sha256": "1c0099cbc2de1118c9ff282945e543c12560275f0185d3d6ed918dc38d3eb1cc",
+    "binaries": {
+      "xolver": "95b84a0423b3c652415344162ff052a1595320769407c3f80151a23847f18a56",
+      "xolver-sv": "1c0099cbc2de1118c9ff282945e543c12560275f0185d3d6ed918dc38d3eb1cc",
+      "xolver-parallel-worker": "e1e3ea6c7197fbd20ab61ee2ed24f8f5067efa62f356ca1ed6c9b9d346608655"
+    },
+    "unit_binary_sha256": "aaca9d16deb771ad834524841e5a2fc74ce42e3a5c41d28194d7e239332fe17e",
+    "logs": {
+      "regression-nra.log": "9daeee7b6149fccdaea41fbc4b664056e61bfc44a50eae43401a432a07c98ead",
+      "targeted.log": "d6bb88a72141793f6bd781108cdd7ac62e19367fabf60b300a37a1c76ff57680",
+      "regression-lia.log": "1eef56b48936522d28c28fcc699234c60ff4cb975bd3b78304b861b1e405b3f0",
+      "regression-nia.log": "fa595c41467cd8e80f6cb6e6f5747bd65fecd59b22f007c39b2eed4337d5b15b",
+      "parallel-ctest.log": "15decf7fc8fa8243d497181fe9ba5abf4f1542ea1a0a9f6be9cdb34bad6102c2",
+      "qcp-tools.log": "454677b22b98436f7c17de0d12133c893a04abe301a0e3a97f3c346419aae450",
+      "build.log": "efa3b776d7f3b7f6ccc1de833c32707403a534e7f918e67a662715b9e36bb507",
+      "transport-tools.log": "04446ab8e98ec0e2f8ec010a2bb7e047b3b1a318c03ca3c8ceb983d777109427",
+      "overlay.log": "ed9587b820d35c3f60c19638eb6f7a076a70fa916dc03addf52cb01a5ae9715b",
+      "regression-lra.log": "cfa506c80bb11a10bfc64b06bfcbea963f4b7ba5e444b0284df6c2b6b5e35d49",
+      "configure.log": "751270c46120b2af7ddf2f53db6c81ddf09d93e96fe51f2dfc1a77336bc29ca7"
+    },
+    "metrics": {
+      "completed": 1,
+      "failures": 0
+    },
+    "protected_sets_used": false
+  },
+  "unit_cases": 1846,
+  "unit_assertions": 969873,
+  "acceptance_groups": 39,
+  "formal": {
+    "cases": 16,
+    "counts": {
+      "baseline": {
+        "sat": 4,
+        "decided": 7,
+        "verified_decided": 7,
+        "verified_par2": 1081.76755602099,
+        "raw_par2": 1081.76755602099,
+        "timeout": 9,
+        "unsat": 3
+      },
+      "candidate": {
+        "sat": 4,
+        "decided": 7,
+        "verified_decided": 7,
+        "verified_par2": 1081.7690232973546,
+        "raw_par2": 1081.7690232973546,
+        "timeout": 9,
+        "unsat": 3
+      },
+      "z3": {
+        "sat": 7,
+        "decided": 14,
+        "verified_decided": 12,
+        "verified_par2": 484.7060986775905,
+        "raw_par2": 245.23876548185945,
+        "timeout": 2,
+        "unsat": 7
+      }
+    },
+    "changes": [],
+    "unconfirmed": [
+      24,
+      27
+    ]
+  },
+  "audit": {
+    "experiment": "164deccc4830",
+    "run": "286a1019fd8f",
+    "sha256": "a8dc06076b5c89f7c840b19de59ea142039a691f02f1e403e06bb754b01ed0f4"
+  },
+  "root_cause": {
+    "observer_build": "f990e2cc7fa7",
+    "observer_run": "769322ccfa03",
+    "observer_profiles": "a49960868124",
+    "case69": {
+      "atoms": 2385,
+      "univariate": 1163,
+      "cut_scans": 2773755,
+      "microseconds": 377982
+    },
+    "identical_previous_stage_inputs": 0
+  },
+  "diagnostics": [
+    {
+      "experiment": "a49960868124",
+      "run": "5933246424a1",
+      "name": "xolver-analysis-context-profile-r996-public-diagnostic-20261031",
+      "input": "69",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "0"
+        ]
+      },
+      "record_sha256": "dea6b6f4076bb9d10cf4c5bdc09097b5358d1edfcc46c7c48f136d1bdc975476",
+      "input_sha256": "72e580ee3a690b54865e129f44529a71d81112f35193cbc93775236ea62a0f13"
+    },
+    {
+      "experiment": "a49960868124",
+      "run": "5b2007397056",
+      "name": "xolver-analysis-context-profile-r996-public-diagnostic-20261031",
+      "input": "77",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "1"
+        ]
+      },
+      "record_sha256": "2948556d99afc17a6c513b583115dece5ecdc0e44acd6147e35c1e0164ff94b3",
+      "input_sha256": "7511fd4d07cdce648daf4ac76fc32c90af91cf9d9576d4e955a51d0dbd4534b7"
+    },
+    {
+      "experiment": "a49960868124",
+      "run": "84f9cfb08c68",
+      "name": "xolver-analysis-context-profile-r996-public-diagnostic-20261031",
+      "input": "149",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "2"
+        ]
+      },
+      "record_sha256": "9c81cad31b33bbbe772a7070f871b66f46fa1148ddd875990d787d100528374a",
+      "input_sha256": "fa38407f1095afff71b84b3c7be9da57614d7cbdb6800672ef7d85a6dfc2412d"
+    },
+    {
+      "experiment": "60887f6e8ccc",
+      "run": "b7c390b63947",
+      "name": "xolver-indexed-rational-cuts-profile-r1000-public-diagnostic-20261031",
+      "input": "69",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "0"
+        ]
+      },
+      "record_sha256": "3fdf7e3b45e8d49998e34e89c6bb09795ef2d71b9b3297c64338c22fe48a2133",
+      "input_sha256": "72e580ee3a690b54865e129f44529a71d81112f35193cbc93775236ea62a0f13"
+    },
+    {
+      "experiment": "60887f6e8ccc",
+      "run": "2645bcc92983",
+      "name": "xolver-indexed-rational-cuts-profile-r1000-public-diagnostic-20261031",
+      "input": "77",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "2"
+        ]
+      },
+      "record_sha256": "4452f9302dd410fd3b4f96af829e7de4221a1293f5515d8f9ae02beb37931936",
+      "input_sha256": "7511fd4d07cdce648daf4ac76fc32c90af91cf9d9576d4e955a51d0dbd4534b7"
+    },
+    {
+      "experiment": "60887f6e8ccc",
+      "run": "a3513edc849c",
+      "name": "xolver-indexed-rational-cuts-profile-r1000-public-diagnostic-20261031",
+      "input": "149",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "12"
+        ]
+      },
+      "record_sha256": "0474fac766414ae9b3c6587e116776220b032b485c3e50431ee23fbcb1c52127",
+      "input_sha256": "fa38407f1095afff71b84b3c7be9da57614d7cbdb6800672ef7d85a6dfc2412d"
+    }
+  ],
+  "next_bottleneck": "R1000 case69: 12/24 samples in PolynomialEqualityCombination::run; presolve now spends about1.1s/call after reaching its dense elimination. Replace dense nullspace construction with sparse exact row elimination and honor the existing deadline inside that work.",
+  "protected_sets_used": false,
+  "boundary": "All39 acceptance groups and actual timed SAT-model checks pass. Both Xolver versions verify7/16, with no gains or losses; PAR-2 is1081.768 versus1081.769, not a meaningful solver improvement. Z3 verifies12/14 raw; unconfirmed UNSAT24/27 stay excluded. No full160 expansion or protected-set run. This standalone candidate is not promoted; the sparse-elimination follow-up remains unqualified."
+}

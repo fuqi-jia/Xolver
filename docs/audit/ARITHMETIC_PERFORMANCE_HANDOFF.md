@@ -3118,3 +3118,346 @@ absent variables, without changing production source/library/CLI/unit bytes.
 R989 still times out after10s on both inputs;77 reaches the next stage after
 6.801s in square-cascade,149 does not. There is no verified new witness or formal
 score change. This exploratory prototype is not promoted on that evidence.
+
+
+### Incremental monomial relaxation: qualified, no pilot gain
+
+Commits85a6e063/f97e63bd replace repeated relaxation reconstruction with a
+persistent PolynomialLinearRefuter shared by NRA and polynomial Boolean
+refutation. Reused auxiliary rows retain no asserted bounds; every check
+replaces the complete current explained bound set and validates conflict
+premise membership. Cache identity compares full polynomial contents. Reset,
+withdrawal, polarity changes, changed polynomials and constant disequalities
+are covered, including160 branch contexts against a fresh independent tableau.
+R990 freezes CLI1bd8aa16 and matching SV/worker; R993 passes all39 server groups,
+including1844 unit cases/969857 assertions. R991 runs16 fresh original-input
+triads at60s/one leased physical CPU/16GiB: both Xolver arms verify7, with no
+new or lost solves and PAR-2 difference below1ms. Z3 verifies12/14 raw;
+unconfirmed UNSAT24/27 stay excluded. R994 seals all source/binary/acceptance/
+model/lease evidence (SHA-25610d72b7be8a64fff2340c2ffc72b61d7498ec220f78f0cccb6a0c5bc2f82141e).
+This standalone version is not promoted; no full160 expansion, protected-set
+run or whole-program QCP claim follows. See the
+[bounded pilot receipt](INCREMENTAL_MONOMIAL_RELAXATION_PILOT_20261031.json).
+
+R995 privately observes exact stage inputs and univariate operation counts,
+without modifying production source or binaries; R996 profiles public69/77/149
+for10s each. None of the observed presolve/box inputs equals its predecessor.
+On69, one UnivariatePolySignAnalyzer run visits1163 univariate atoms, performs
+2773755 full-input cut scans and takes377982us. The atom count is2385; later
+runs grow with the assignment. Rational roots do not consume those cuts at all.
+The next core candidate builds a variable-indexed rational-cut table lazily,
+once per sweep, only when an algebraic root actually needs refinement. This
+shared PresolveEngine capability serves NIA/NIRA/NRA. It retains exact rational
+endpoints, current-domain cuts, root refinement and original reason semantics;
+new tests mix rational/irrational roots and independent variable bounds. Native
+qualification and solver-level benefits remain unproven for that candidate.
+
+PR81's exact-merge main CI41132389466 has passed both jobs and every step.
+PR82 is merged as48054c2d after PR CI41133766183 passed both jobs and every step;
+its exact-merge main CI41136383267 is currently running. No extra server archive
+is a delivery prerequisite.
+
+
+### Indexed rational cuts: qualified pilot, no solver gain
+
+Commit63ba37b5 is frozen by R997 as CLI95b84a04, SV1c0099cb and
+workere1e3ea6c. All39 R999 server acceptance groups pass, including1846 unit
+cases/969873 assertions; targeted53/1432 and NRA231/NIA134/LIA80/LRA61 pass.
+R998's16 fresh original-input triads verify7 for each Xolver arm, no gained/lost
+solves, invalid models, opposite verdicts or protocol errors. PAR-2 is1081.768
+versus1081.769; same-round Z3 verifies12/14 raw, with unconfirmed UNSAT24/27
+excluded. R1001 seals source, logs, binaries, leases and model checks (SHA-256
+`a8dc06076b5c89f7c840b19de59ea142039a691f02f1e403e06bb754b01ed0f4`).
+This standalone candidate is not promoted or expanded to full160. Neither
+protected set was used. See the
+[cut-index pilot receipt](INDEXED_RATIONAL_CUTS_PILOT_20261031.json).
+
+R1000's public profiles show why the local improvement does not suffice: on69,
+presolve can now enter PolynomialEqualityCombination;12/24 samples land there,
+and individual presolve calls take about1.1s despite the existing50ms allocation.
+Its dense transpose includes zero columns for every affine equality and forms
+all null vectors before publishing any consequence. The follow-up replaces that
+matrix with sparse exact elimination of nonlinear monomials, retaining exact
+source coefficients (and removing canceled premises). Completed affine facts
+are published incrementally; partial work is local and observes the existing
+presolve/global deadlines. Affine inputs are retained, rather than recombined.
+Tests compare resulting consequence spans and reason-restricted membership with
+an independent dense solver on80 satisfiable integer/real rational-coefficient
+systems, plus expired/resumed work and a256-affine-premise control. This next
+source candidate still requires native qualification and a fresh fair pilot.
+
+
+### Sparse cancellation and interval projection pilots: no solve gain
+
+R1002 qualifies commitc921c75c as CLI9648db59, SV3af543ac and workeraca97b72.
+Targeted56 cases/4494 assertions, NRA231/NIA134/LIA80/LRA61 and all39 R1005
+acceptance groups pass, including1849 unit cases/972935 assertions. R1003's16
+fresh original triads still verify7 for each Xolver arm; no gained/lost solves,
+opposite verdicts, invalid models or protocol errors. PAR-2 is1081.720 versus
+1081.774; Z3 verifies12/14 raw, unconfirmed UNSAT24/27 excluded. R1006 seals the
+source, binaries, complete acceptance and timing/model/lease records (SHA-256
+`0a58168460fa14f9b975ae41dc614621847804c6c2dcfb99b3b517b5892667c5`).
+The standalone sparse stage is not promoted or expanded to full160; see the
+[sparse pilot receipt](SPARSE_POLYNOMIAL_ELIMINATION_PILOT_20261031.json).
+
+R1004 public69 records presolve at59–61ms/call, versus about1.1s after the cut
+index alone; pipeline snapshots increase from11 to56 calls in the10s window.
+The remaining box contraction costs about290ms/call. R1007 privately caches
+immutable degree-one/two projections only for incident unassigned variables,
+retaining original constraint/variable/round order and the noContract proof
+path. The initial unit link fails solely because the experimental script omits
+LIBRARY_PATH for native GMP. R1009 completes that link and99 component cases/
+287 assertions, reusing the already compiled object and CLI without rerunning
+successful work; original source/CLI/archive/unit bytes are unchanged.
+R1008 lowers69's observed box calls to130–140ms, but all three10s diagnostics
+still time out. R1010 tests eight fresh original-input triads (22/65/69/72/77/
+144/146/149),60s/one physical CPU/16GiB: both Xolver arms verify2 and time out6;
+Z3 verifies7, with no unconfirmed result. There are no gains, losses or errors.
+R1011 seals these records (SHA-256
+`1aeebefa1a034b290c0aa605343fd098e712a5e4690740a335210189f98ac002`).
+This private projection-cache experiment is not promoted; its99 checks do not
+stand in for a full production acceptance. See the
+[projection-cache receipt](BOX_PROJECTION_CACHE_PILOT_20261031.json).
+
+R1012 is a new private bounded-state experiment: two owned source-and-domain
+frames, reused only after exact full polynomial/relation/reason prefix checks.
+A retained ancestor box is valid under still-active premises; changed prefixes
+start fresh. It records source-prefix hits. Private thread-local ownership is
+not a production API: promotion requires solver-instance ownership, reset and
+withdrawal tests. No result or score is yet claimed for that experiment.
+The existing IcpEngineQ has a watcher worklist but its ReasonedBoxQ/IntervalQ
+contract requires finite initial domains; do not invent finite bounds or wire
+an empty box as the whole real line. These components are not currently called
+from production solving despite retained includes.
+
+PR82's exact-merge main CI41136383267 has passed both jobs and every step.
+Neither protected set was read or run. The current full160 reference remains
+R986's100 verified Xolver versus118 verified/125 raw same-round Z3. No new
+whole-program QCP result belongs to these kernels.
+
+
+### Candidate scheduling pilot and projected-point follow-up
+
+R1012's private prefix reuse passes99 cases/287 assertions. R1013 confirms
+exact prefix hits (e.g.2391 retained sources and1217 domain variables on69),
+but box calls remain about150ms and all three10s diagnostics time out. This
+isolated state-reuse prototype is not promoted; no production thread-local
+state was added. The next scheduling experiment returns to the qualified sparse
+parent, without either private interval-cache prototype.
+
+R1014 moves whole-input presolve/box stages to the existing CandidateModel
+schedule and passes165 cases/9065 assertions. R1015 public69 reaches a full
+candidate after441 linear-relaxation calls; its boundary search exhausts20ms
+in preparation (1217 variables,252 retained equality unknowns,0 contexts/checks/
+models). Other public profiles still reach square-cascade and time out. R1016's
+eight fresh formal triads verify2 for both Xolver arms and7 for Z3, no gains,
+losses, errors or unconfirmed verdicts. R1017b seals this and the prefix experiment
+(SHA-256`7d77b3bfd8b0e7626352c028d4bed4f1f92208acdfb9f800c3a2fc0ac756577c`).
+The original R1017 audit fails only because it expected a source-manifest field
+absent from the private qualification schema; the repair verifies the exact
+original-source hash/transformation, native outputs and parent manifest. No
+successful solver/test/timing run is repeated. See the
+[scheduling receipt](NRA_CANDIDATE_SCHEDULING_PILOT_20261031.json).
+
+The new core follow-up projects the existing monomial-relaxation assignment
+onto original variables, preserving exact infinitesimals and completing
+variables without degree-one columns with zero. The shared projection API
+explicitly returns an untrusted point. NRA tries it only at full effort, outside
+interface-combination mode, and accepts it only after checking every original
+polynomial/interface constraint exactly. Projection can therefore reuse a point
+after an inconclusive relaxation without inferring SAT from relaxation
+feasibility. Other stages remain available on rejection. Tests cover a2^-256
+open interval, current-source withdrawal, exhausted work and a feasible
+relaxation whose projection violates x²=2. Two new NRA regressions cover exact
+open bounds and rejection of a non-original model. The stage schedule is an
+unqualified dependency of this new combined candidate; none of these changes
+has a new verified fixed160 gain or whole-program QCP claim yet. Next: native
+source qualification, constructed-model replay, full acceptance and fresh pilot.
+
+
+### Projected relaxation candidate: complete negative pilot
+
+R1018 qualifies sourcee02dd31d (manifest SHA-256
+`bf04b005fb43ca9eebab321629917561f9828e027f39b1bd323c7b27a1afe0e4`),
+CLIef801757, SV798c913c and worker2dca37d8.58 targeted cases/4510 assertions,
+NRA233/NIA134/LIA80/LRA61 and all39 R1021 acceptance groups pass, including1851
+unit cases/972951 assertions. The2^-256 open-bound SAT witness is replayed
+independently; the non-original relaxation assignment case is independently
+UNSAT. The long4-variable modular unit case takes120.030s on both the prior
+sparse unit run and this run; it is not a new hang/regression.
+
+R1019's12 fresh original-input triads (20/22/65/69/70/72/73/77/144/146/148/149)
+retain60s/one leased physical CPU/16GiB and initial-model capture. Both Xolver
+arms verify6 (4 SAT,2 UNSAT) and time out6, with no gains/losses/errors or
+unconfirmed verdicts. PAR-2 is721.599 versus721.653; Z3 verifies11, PAR-2 159.561.
+Every actual Xolver SAT model replays positively. Z3's148 root-object replay
+boundary remains explicit; independently verified Xolver witnesses establish
+input truth. No valid trial is repeated. R1022 seals source, binaries, all39
+acceptance groups, constructed diagnostics and original timing/model/lease
+records (SHA-256
+`60de05a7afbb0e5e9ab142d3584788a29842c452a5b8876013db3a07f66943cf`).
+This combined candidate is not promoted or expanded to full160; see the
+[projection receipt](PROJECTED_RELAXATION_CANDIDATE_PILOT_20261031.json).
+
+R1020 rejects the projected point on all three public gaps:69 has1217 variables
+and spends6890us on projection/validation;77 has132/940us,149 has135/1372us.
+All three10s diagnostics still time out. On69, the existing boundary search
+still expires during parameter preparation without building a linear context;
+on77/149 it reaches only37/66 of80/70 parameters before its20ms allocation,
+then square-cascade dominates. There is no validated new model from the point
+projection alone. The next investigation should measure candidate repair from
+the existing LP point versus the current local-search start, or eliminate
+repeated full rescoring in the greedy monomial cover. Keep exact original
+validation, scoped state and the fair final suite. Do not repeat the closed
+interval-cache, prefix-value-only or standalone projection experiments.
+
+No new PR is open for these zero-gain candidates, and main remains48054c2d with
+fully green CI41136383267. The development branch retains the qualified native
+commits and bounded receipts; Draco is unchanged. Both protected sets and the
+fresh multi-program QCP comparison remain outstanding. The main fixed160
+reference is still100 verified Xolver versus118 verified/125 raw Z3, not a win.
+
+
+### Indexed candidate preparation and the remaining branch-explanation gap
+
+Core624af3d1 replaces repeated full monomial rescoring with an incident-edge
+weighted greedy cover, preserving the entire score/tie order. The helper accepts
+ordered node types and integral weights without arithmetic-theory dependencies.
+Parameter-to-atom indexing also follows actual support instead of every parameter.
+An independent full-rescan reference, weighted/retained/overflow/cancellation
+cases and a2000-edge work-allocation test pass. R1023 native qualification and all39
+R1026 groups pass,1856 cases/978660 assertions. R1025's12 fresh60s/one physical
+CPU/16GiB triads still verify6 for each Xolver and11 for Z3: no new/lost solve,
+error or unconfirmed input. PAR-2 is721.603/721.604. R1027 seals this negative
+pilot (`7d96f5d797fc0c42a41fe7703d1687f9d722e3883e372e4edd0f87299c064c4f`).
+
+R1028/R1029 and R1030/R1031 separately test LP-seeded rational repair and
+LP-seeded affine prefix completion; each private native binary passes182 cases/
+14928 assertions without changing production source, CLI, archive or unit bytes.
+All six20s public profiles time out. The LP point does improve exact false-atom
+counts versus prepared starts:476→134,36→34,24→11 on69/77/149. On69, however,
+initialization consumes about2.086s of a250ms local allocation before the walk.
+The seed transport is private scaffolding, never a production thread-local API.
+R1032 seals both prototypes and freezes an old-header/old-library initialization
+harness before the next overlay
+(`b22bbd2a96181a40a65e1d26954bae6290cfdb1819d8ee9af3fe337dc8f21fc2`).
+
+Core469baa27 indexes unary bound sources in one pass instead of variable×source
+rescans. Initialization SAT probes stop at the first violated atom instead of
+computing a complete normalized score. Source/variable order and the first
+combined midpoint stay unchanged. Bracket extraction and probe loops now check
+the existing local/global deadline; cheap statistics reset on every call.
+A200-variable coupled test checks exact witnesses, scan/probe counts, reversed
+variable order and repeated calls. R1033 qualifies manifest SHA-256
+`adbc83fe9fc6771133b2eec7bda558c9cc4184fd77230405dc7cc848eb5feaa7`,
+CLI638941b7, SVe398e33f, worker0935ff15;98 targeted cases/15610 assertions pass.
+All39 R1036 groups pass, including1857 unit cases/979070 assertions.
+
+R1038 compares identical harness source linked to frozen old/new native
+libraries, alternating order on the same leased physical CPU,60s/16GiB per arm.
+Both use a250ms local allocation and zero walking rounds. On constructed200-
+variable bounds plus a coupled product, initialization is102195→4515μs; on1217
+variables,4387397→28636μs. Every actual complete model replays SAT with both Z3
+and cvc5. This is an initialization-only result from two constructed inputs,
+not a Z3 timing comparison, fixed160 gain or whole-program QCP claim.
+R1034's12 fresh original-input triads still verify6 for both Xolver arms and11
+for Z3, PAR-2 721.600/721.652/159.215, no gains/losses/errors/unconfirmed inputs.
+Actual Xolver SAT witnesses all replay; the explicit Z3 root-object model
+boundary on148 remains. R1037 seals qualification, full acceptance, fair trials,
+profiles and these model checks
+(`537be04f6fca9bf2ff6ee491352732be38e2209435a59c5e590c4ea1b931cce0`).
+
+R1039/R1040 tests the LP-seeded prefix method with a separate one-second/
+one-million-work allocation on qualified469baa27. It does not change production
+budgets. All three20s profiles still time out:69 reaches50/167 parameters with
+8311 choices;77 remains37/80 after33366 choices;149 reaches70/70 attempted
+choices but never another complete-model check after its initial point. This
+rules out simply extending the20ms preparation allocation as a sufficient fix.
+R1041 seals this experiment
+(`11ee1bb997c920c0104cfa94464c066fcfa97d28abc78ffbee883282fef09a31`).
+See the [combined receipts](CANDIDATE_INITIALIZATION_PILOTS_20261031.json).
+
+The next evidence-backed algorithm target is chronological candidate backtracking
+without usable branch explanations. `searchBoundaryCandidates` receives only a
+boolean feasibility result; private simplex parameter bounds and substituted
+atom bounds currently share one dummy literal. Build a shared explained candidate
+search interface, with conservative parameter dependencies for each private
+linear premise and conflict, then test backjumping on these public gaps. Account
+for candidate-generation dependencies when exhausting a domain: the current
+simplex-derived candidate can depend on the entire active prefix. Do not treat
+finite sampled-domain exhaustion as an original UNSAT proof. Preserve unwind,
+withdrawal and exact original-model validation, and compare against independent
+finite-search/reference checks before accepting any improvement. Repeating the
+closed seed-only or budget-only probes is not the next step.
+
+Both cores are committed and source-qualified but remain unpromoted; this branch
+also retains earlier zero-gain experiments. Do not blindly merge the whole stack
+because the constructed initialization benchmark improves. If delivering the
+initialization fix alone, assemble a focused final diff on the existing development
+branch, retain frozen/history evidence and qualify that actual source before PR
+CI/merge. No extra branches/worktrees, no protected-set tuning, and no
+`validation/current-main.json` requirement. The last full160 reference remains100
+verified Xolver versus118 verified/125 raw Z3; both protected sets and a fresh
+multi-program original QCP comparison remain outstanding.
+
+
+### Explained candidate completion, full-suite regression and cover diversity
+
+Core `d80fb40b` combines immutable candidate-domain passes, explained rational
+singleton substitution and canonical residual monomials. The generic finite
+search accepts checked partial completions and backjumps using premise and
+candidate-generation dependencies. Each arithmetic attempt owns its simplex
+facts, domains and explanations; every returned point passes exact original
+polynomial validation. Neither failed candidates nor exhausted samples prove
+UNSAT. R1064 native qualification passes207 targeted cases/23359 assertions;
+all39 R1067 acceptance groups pass,1871 unit cases/986540 assertions. R1068
+seals that source and the actual timed149 model, positively replayed by both
+Z3 and cvc5 (`a378d6724fe6172ba1d8e633de7aa25a5bfc9865ea97ffe3a30f29556bc50138`).
+
+R1065 plus148 disjoint R1069 inputs form a fresh full160 round with unchanged
+60s/one physical CPU/16GiB budgets and initial model capture. Verified counts
+are101 main-baseline,100 candidate and118 Z3 (125 raw); PAR-2 is7427.055,
+7509.512 and5386.910. Candidate gains149 (baseline timeout, candidate0.165s
+SAT), but loses51 and158, so it is not promoted. All actual Xolver SAT models
+replay, with no opposite verdict or invalid exported model. Current duplicate
+Z3 models on47/108/122 positively replay with both checkers;50/94 retain their
+same-hash offline truth evidence and115 has a freshly checked modular
+certificate. This affects eligibility only; no old solver timing is substituted.
+Seven unconfirmed Z3 UNSATs12/24/27/42/80/114/159 remain excluded. R1070 seals
+this negative full-suite result
+(`e36bbd0b948b8051ba29d6d83b892d8fc664146e6717e883322d04f093cf41dc`).
+
+158 exposes a general decomposition tradeoff: the baseline samples12 parameters
+and retains3 joint equality unknowns, finding a model in about1.1ms. The first
+candidate samples only9, but its finite grid misses a needed joint completion.
+The repair gives an equality-block cover a short attempt, then tries a smaller
+cover using the SAME total time/work allocation and search implementation.
+Each cover gets fresh contexts and explanations. Private R1073 passes197
+selected cases/22808 assertions. Fresh R1076 restores158 (about0.066s SAT)
+and preserves149 (about0.166s SAT); both actual initial models replay with
+Z3 and cvc5.51 reverses to a28.125s candidate SAT against a baseline timeout,
+despite unchanged LRA critical-path source. Treat51 as timing-sensitive; this
+reversal is not a stable cover-search gain or a full-suite conclusion.
+
+A new off-grid unit test initially constructed a fractional polynomial constant
+without clearing its denominator. The integer-ring backend returned NullPoly,
+then subtraction dereferenced it before model search began. The test now uses
+an equivalent integer-coefficient inequality. Core `81291b5d` propagates unsupported
+operands through add/subtract/multiply/negate/power in both polynomial backends,
+without caching an invalid handle as a valid expression. Private R1083 passes
+224 selected cases/22986 assertions, including the corrected off-grid completion
+and sentinel/cache-isolation tests. R1079 authenticates both repair prototypes,
+actual model replays and the failed diagnostic attempts; these remain distinct
+from final-source native qualification. See the
+[bounded receipts](EXPLAINED_CANDIDATE_SEARCH_20261031.json).
+
+The immediate next step is to qualify the committed cover-diversity and
+unsupported-operand fixes together on Panda1, freeze the actual final binaries,
+then repeat full acceptance and a fresh fair160 comparison. Do not promote a
+partial-pilot gain or attribute51's timing reversal without further evidence.
+The ongoing original GCD Xolver/Z3 runs `native_gcd_*_r1071-20261031095116`
+have accepted annotation/VC checking and group proofs in progress on the earlier
+frozen d80fb40b worker; they do not yet establish completed program verification
+or qualify a later kernel. Final program-set comparison, both protected sets,
+PR CI and postmerge main CI remain outstanding. No extra branch/worktree or
+`validation/current-main.json` archive is required.

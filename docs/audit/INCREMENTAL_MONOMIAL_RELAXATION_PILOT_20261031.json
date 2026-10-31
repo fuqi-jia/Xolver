@@ -1,0 +1,146 @@
+{
+  "schema": 1,
+  "status": "standalone_not_promoted_no_new_solves",
+  "implementation_commit": "f97e63bd5284ee9a4c37c300a59d3cc10a689735",
+  "problem": "The polynomial monomial relaxation rebuilt its columns and simplex tableau on every theory or Boolean check.",
+  "implementation": "Own persistent monomial columns and immutable auxiliary row definitions. Replace all explained bounds on each check, compare full polynomial contents before row reuse, reject non-current conflict premises, and reset at solver reset. Share the refuter between NRA and polynomial Boolean clients. Retain constant disequality refutations.",
+  "binaries": {
+    "xolver": "1bd8aa16af7e6a30cb1832c715c8b1a78821a7790de8fdf8ffc6628cdd965bf1",
+    "xolver-sv": "eb94dcaab2a3b40ff828860d64385b3a21f091f098bf5659fa9a93fbf8574b38",
+    "xolver-parallel-worker": "f008af30a7c96a404124465d0895fff61d293ebf3cc6ac7a8b737adece5cc7d2"
+  },
+  "source_manifest_sha256": "a9fa91c86bb4b0d9c9147120cb49cb791b2a7dfe7bde1e79a2d434abe2fe459f",
+  "unit_cases": 1844,
+  "unit_assertions": 969857,
+  "acceptance_groups": 39,
+  "formal": {
+    "cases": 16,
+    "counts": {
+      "baseline": {
+        "sat": 4,
+        "decided": 7,
+        "verified_decided": 7,
+        "verified_par2": 1081.7720122430474,
+        "raw_par2": 1081.7720122430474,
+        "timeout": 9,
+        "unsat": 3
+      },
+      "candidate": {
+        "sat": 4,
+        "decided": 7,
+        "verified_decided": 7,
+        "verified_par2": 1081.771313207224,
+        "raw_par2": 1081.771313207224,
+        "timeout": 9,
+        "unsat": 3
+      },
+      "z3": {
+        "sat": 7,
+        "decided": 14,
+        "verified_decided": 12,
+        "verified_par2": 484.60757802054286,
+        "raw_par2": 245.1911312211305,
+        "timeout": 2,
+        "unsat": 7
+      }
+    },
+    "changes": [],
+    "unconfirmed": [
+      24,
+      27
+    ]
+  },
+  "audit": {
+    "experiment": "9075c1a00f07",
+    "run": "58acc1debed9",
+    "sha256": "10d72b7be8a64fff2340c2ffc72b61d7498ec220f78f0cccb6a0c5bc2f82141e"
+  },
+  "diagnostics": [
+    {
+      "experiment": "ece89d9774ae",
+      "run": "654607f5ea99",
+      "name": "xolver-nra-gap-profile-r985-public-diagnostic-20261031",
+      "input": "69",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "0"
+        ]
+      },
+      "record_sha256": "d2aa98f098a6f8da33a1d37d5f3cab0b1a2dc956fbd8b4d1d0fc41a6468ad406",
+      "input_sha256": "72e580ee3a690b54865e129f44529a71d81112f35193cbc93775236ea62a0f13"
+    },
+    {
+      "experiment": "ece89d9774ae",
+      "run": "a21b5a2cd916",
+      "name": "xolver-nra-gap-profile-r985-public-diagnostic-20261031",
+      "input": "77",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "1"
+        ]
+      },
+      "record_sha256": "f4a5c00077191f359a5e5beec08a4aee8a4596cdce5a7acaeef1da046d9b73ec",
+      "input_sha256": "7511fd4d07cdce648daf4ac76fc32c90af91cf9d9576d4e955a51d0dbd4534b7"
+    },
+    {
+      "experiment": "ece89d9774ae",
+      "run": "eea9c0545d38",
+      "name": "xolver-nra-gap-profile-r985-public-diagnostic-20261031",
+      "input": "149",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "2"
+        ]
+      },
+      "record_sha256": "d8d9d1337f34dd9de7a428721ad27cfeaa000e72e4f7f972bc9240be07f76725",
+      "input_sha256": "fa38407f1095afff71b84b3c7be9da57614d7cbdb6800672ef7d85a6dfc2412d"
+    },
+    {
+      "experiment": "d8b256aec282",
+      "run": "d5304ea54dcf",
+      "name": "xolver-incremental-relaxation-profile-r992-public-diagnostic-20261031",
+      "input": "69",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "0"
+        ]
+      },
+      "record_sha256": "4d5fe4fede7a01aca3f56b35c005fc50cc3017f643772ac9d24c9e2d0bc8581b",
+      "input_sha256": "72e580ee3a690b54865e129f44529a71d81112f35193cbc93775236ea62a0f13"
+    },
+    {
+      "experiment": "d8b256aec282",
+      "run": "d6dcfbc4b5d2",
+      "name": "xolver-incremental-relaxation-profile-r992-public-diagnostic-20261031",
+      "input": "77",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "2"
+        ]
+      },
+      "record_sha256": "c9fb7c5ea9f4a9aa16b0d934758315bcb5f5cf9ce7c9abbf9512a1fa07c9d426",
+      "input_sha256": "7511fd4d07cdce648daf4ac76fc32c90af91cf9d9576d4e955a51d0dbd4534b7"
+    },
+    {
+      "experiment": "d8b256aec282",
+      "run": "6dc5b0f39f9c",
+      "name": "xolver-incremental-relaxation-profile-r992-public-diagnostic-20261031",
+      "input": "149",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "12"
+        ]
+      },
+      "record_sha256": "ecc9c3929794d813982d05f680a1cdc96f5d0950856bd70d74fb6281ce2d25d5",
+      "input_sha256": "fa38407f1095afff71b84b3c7be9da57614d7cbdb6800672ef7d85a6dfc2412d"
+    }
+  ],
+  "protected_sets_used": false,
+  "boundary": "Sixteen fresh original-input triads only, 60s/one leased physical CPU/16GiB each, initial model capture. Both Xolver arms verify seven, no gains or losses, PAR-2 difference below one millisecond. Two unconfirmed Z3 UNSATs remain excluded. No full160 expansion or valid-trial rerun. All 39 server groups pass, but this standalone version is not promoted without a verified solver-level benefit. No protected or full-program QCP result is claimed."
+}

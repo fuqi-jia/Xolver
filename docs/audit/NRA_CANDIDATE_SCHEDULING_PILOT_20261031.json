@@ -1,0 +1,218 @@
+{
+  "schema": 1,
+  "status": "standalone_not_promoted_no_verified_gain",
+  "parent_source": "c921c75c322d1de8d2fe64e6ed88328cd18300ad",
+  "prototype_qualification": {
+    "source_sha256": "df0bb5ce3af9c0a2db57c96a9fe93d7c194d45412ade318bf2605fa38c79457c",
+    "diagnostic_source_sha256": "9188e7429678d625bdf075108a2c3427abaad3847d06ff0b062b862e7d3cb3cf",
+    "diagnostic_binary_sha256": "8d980bbbac171d14d3330e2972d6c13c3c9c47c7e10bac61b805e4ae6d34ca75",
+    "diagnostic_unit_sha256": "ac660f30623f5787ddd6d03b8235d82777c4660803e98360219f65e66678709c",
+    "unmodified": {
+      "/pub/data/jiafq/xolver/build/bin/xolver": "9648db596d2b6b44bbbd1ba018fa384dd448c78290a73d333c09b91ffaa88092",
+      "/pub/data/jiafq/xolver/build/src/libxolver_core.a": "877fd8bd1e84f04889c1d11f49d4f7c97798e8edd9d50a6edcc875d747831aae",
+      "/pub/data/jiafq/xolver/build/tests/xolver_unit_tests": "46a14929b60b32fc90ea638c3ee7037732d8ade5d8cb4b24dbd0487b97b0e1b0"
+    },
+    "metrics": {
+      "completed": 1,
+      "failures": 0
+    },
+    "protected_sets_used": false,
+    "boundary": "Private scheduling experiment on qualified sparse source. Use the existing CandidateModel schedule for global presolve and box refutation. Partial checks retain incremental monomial relaxation; full candidates retain all stages and validation. Production source, CLI, archive and unit bytes remain unchanged."
+  },
+  "prototype_unit_cases": 165,
+  "prototype_unit_assertions": 9065,
+  "formal": {
+    "counts": {
+      "baseline": {
+        "unsat": 2,
+        "decided": 2,
+        "verified_decided": 2,
+        "verified_par2": 720.1824886891991,
+        "raw_par2": 720.1824886891991,
+        "timeout": 6
+      },
+      "candidate": {
+        "unsat": 2,
+        "decided": 2,
+        "verified_decided": 2,
+        "verified_par2": 720.1815357096493,
+        "raw_par2": 720.1815357096493,
+        "timeout": 6
+      },
+      "z3": {
+        "unsat": 1,
+        "decided": 7,
+        "verified_decided": 7,
+        "verified_par2": 159.00173374824226,
+        "raw_par2": 159.00173374824226,
+        "timeout": 1,
+        "sat": 6
+      }
+    },
+    "changes": [],
+    "unverified": []
+  },
+  "audit": {
+    "experiment": "0ce14c6ca776",
+    "run": "2324c438f046",
+    "sha256": "7d77b3bfd8b0e7626352c028d4bed4f1f92208acdfb9f800c3a2fc0ac756577c"
+  },
+  "prior_failed_audit": {
+    "run": "ae1b589e46e3",
+    "reason": "The audit expected a source_manifest_sha256 field absent from the private qualification schema. The repaired audit checks its original-source hash, exact transformation, frozen binary/unit hashes and the parent manifest directly. No solver or successful trial is rerun."
+  },
+  "prefix_experiment": {
+    "qualification": {
+      "source_sha256": "18e083a1d92044468bd042b8c1747f77aa64716571dc5ba623ddbb949d35a22f",
+      "diagnostic_source_sha256": "9356673e66b8c9e63af4be052660af37a3db0cfef25f341dcee20f9a0b14a4dd",
+      "diagnostic_binary_sha256": "2617c5fbb127104df0a83e6134a99f6d587705a691e9a10358131c097cb41fa4",
+      "diagnostic_unit_sha256": "a4408a71f5615952ddaf1db2cc47305c4872254d70a94f7820495ce97d3f3c05",
+      "unmodified": {
+        "/pub/data/jiafq/xolver/build/bin/xolver": "9648db596d2b6b44bbbd1ba018fa384dd448c78290a73d333c09b91ffaa88092",
+        "/pub/data/jiafq/xolver/build/src/libxolver_core.a": "877fd8bd1e84f04889c1d11f49d4f7c97798e8edd9d50a6edcc875d747831aae",
+        "/pub/data/jiafq/xolver/build/tests/xolver_unit_tests": "46a14929b60b32fc90ea638c3ee7037732d8ade5d8cb4b24dbd0487b97b0e1b0"
+      },
+      "metrics": {
+        "completed": 1,
+        "failures": 0
+      },
+      "protected_sets_used": false,
+      "boundary": "Private prefix-reuse experiment on the qualified sparse parent. Retain only two owned source-and-box frames; reuse a domain only after exact full polynomial/relation/reason prefix checks. An ancestor domain is an over-approximation under premises still present. This private thread-local ownership is not a production API; promotion requires instance ownership and explicit reset. Production source and binaries unchanged."
+    },
+    "runs": [
+      {
+        "experiment": "5c06ed428620",
+        "run": "44e2f5aa2f6d",
+        "input": "build",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "0"
+          ]
+        }
+      },
+      {
+        "experiment": "227ba659b61c",
+        "run": "e0763af55967",
+        "input": "69",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "0"
+          ]
+        },
+        "record_sha256": "c04d604d6f6be598f80a2b9f12a5519c07ca31da2f005fb87734562adcbd37ce",
+        "input_sha256": "72e580ee3a690b54865e129f44529a71d81112f35193cbc93775236ea62a0f13"
+      },
+      {
+        "experiment": "227ba659b61c",
+        "run": "98647b2c6de2",
+        "input": "77",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "1"
+          ]
+        },
+        "record_sha256": "e5778201684f18cb60bd5ab0c8963b86a3fdcf14ba05d98f3d225202d012ea2a",
+        "input_sha256": "7511fd4d07cdce648daf4ac76fc32c90af91cf9d9576d4e955a51d0dbd4534b7"
+      },
+      {
+        "experiment": "227ba659b61c",
+        "run": "af2fa09a51a1",
+        "input": "149",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "2"
+          ]
+        },
+        "record_sha256": "0424adf6a5fb2bf06eea60218321edcece1808578d7bc12abdb1c9b90337eada",
+        "input_sha256": "fa38407f1095afff71b84b3c7be9da57614d7cbdb6800672ef7d85a6dfc2412d"
+      }
+    ],
+    "boundary": "Exact prefix hits are observed, including reuse of1217 domains on69. All three ten-second profiles still time out;69 box calls remain about150ms. This isolated private state-reuse prototype is not promoted or expanded."
+  },
+  "diagnostics": [
+    {
+      "experiment": "7cc88f9d6496",
+      "run": "4896e7227305",
+      "input": "69",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "0"
+        ]
+      },
+      "record_sha256": "ab9a2a771b5e6d20c6be7f98e71c5875df963a4d7de2edbc2bdd0e27988c5962",
+      "input_sha256": "72e580ee3a690b54865e129f44529a71d81112f35193cbc93775236ea62a0f13"
+    },
+    {
+      "experiment": "7cc88f9d6496",
+      "run": "6b0e905bbfec",
+      "input": "77",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "2"
+        ]
+      },
+      "record_sha256": "01d7af7cef6d5a8da827fb5235f6af49924e842c3bb364c8a8dcaac2a1a17e5f",
+      "input_sha256": "7511fd4d07cdce648daf4ac76fc32c90af91cf9d9576d4e955a51d0dbd4534b7"
+    },
+    {
+      "experiment": "7cc88f9d6496",
+      "run": "1419ce3577a7",
+      "input": "149",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "13"
+        ]
+      },
+      "record_sha256": "2561341664b5e8be224ed0be0dacab07a50c128ceb79648437c8cbeb47561559",
+      "input_sha256": "fa38407f1095afff71b84b3c7be9da57614d7cbdb6800672ef7d85a6dfc2412d"
+    },
+    {
+      "experiment": "98f78b55ccf2",
+      "run": "0751731f5ff2",
+      "input": "69",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "0"
+        ]
+      },
+      "record_sha256": "2ac0710add221d18a30536b4ed70ce35e6dd04baecd54d0db5af617ecc89c328",
+      "input_sha256": "72e580ee3a690b54865e129f44529a71d81112f35193cbc93775236ea62a0f13"
+    },
+    {
+      "experiment": "98f78b55ccf2",
+      "run": "a7e5b2f92ba7",
+      "input": "77",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "1"
+        ]
+      },
+      "record_sha256": "ff3e0af5cc76f97898219ac7f4ad8ada2acdcc3ede2b35543033f0b2056346a9",
+      "input_sha256": "7511fd4d07cdce648daf4ac76fc32c90af91cf9d9576d4e955a51d0dbd4534b7"
+    },
+    {
+      "experiment": "98f78b55ccf2",
+      "run": "149168d2a29a",
+      "input": "149",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "2"
+        ]
+      },
+      "record_sha256": "60871ab6246c74a3385754272f8b97845ed38375997459caa5e49239b1d73106",
+      "input_sha256": "fa38407f1095afff71b84b3c7be9da57614d7cbdb6800672ef7d85a6dfc2412d"
+    }
+  ],
+  "protected_sets_used": false,
+  "boundary": "Private stage scheduling moves whole-input presolve and box analysis to the existing CandidateModel phase. Full candidates retain all checks.165 component tests pass. Eight fresh60s/one physical CPU/16GiB triads verify2 for each Xolver arm versus7 for Z3, with no gains/losses/errors/unconfirmed verdicts. No full production qualification or whole-program QCP claim. Scheduling is retained only as an unqualified prerequisite of the projected-candidate follow-up, not promoted alone."
+}

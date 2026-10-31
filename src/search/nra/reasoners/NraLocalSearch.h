@@ -21,6 +21,7 @@
 #include "algebra/poly/RationalPolynomial.h"
 #include "contracts/TheoryAtomTypes.h"
 #include <gmpxx.h>
+#include <chrono>
 #include <optional>
 #include <unordered_map>
 #include <vector>
@@ -31,6 +32,10 @@ class PolynomialKernel;
 
 class NraLocalSearch {
 public:
+    struct Statistics {
+        size_t bracketSourceScans = 0;
+        size_t initialProbeAtoms = 0;
+    };
     struct Constraint {
         PolyId poly;          // (poly REL 0) form, rhs already subtracted
         Relation rel;
@@ -44,6 +49,7 @@ public:
     void setBudgetMs(long ms) { budgetMs_ = ms; }
     // Max search rounds — a coarse iteration cap; the real budget is wall-clock.
     void setMaxRounds(int n)  { maxRounds_ = n; }
+    const Statistics& statistics() const { return statistics_; }
     // Positive penalty for strict inequalities and disequalities.
     void setEpsilon(mpq_class q) {
         if (q != epsilon_) {
@@ -62,6 +68,7 @@ public:
 
 private:
     PolynomialKernel& kernel_;
+    mutable Statistics statistics_;
     long budgetMs_ = 50;      // Task D-derisked default (raised from 10 → 50ms after the
                               // local 14-case sweep showed 0 regression and the broad atan-problem-1
                               // cluster showed identical pass + bounded overhead). Env var
@@ -201,7 +208,8 @@ private:
     std::vector<std::pair<VarId, mpq_class>>
     bracketMidpointCandidates(const std::vector<Constraint>& cs,
                               const std::vector<VarId>& vars,
-                              std::unordered_map<VarId, int>* boundDir = nullptr) const;
+                              std::unordered_map<VarId, int>* boundDir,
+                              std::chrono::steady_clock::time_point deadline) const;
 
     // Walk one round: pick a violated constraint, try every var × every
     // candidate value, accept the strictly-best move (lowest total violation).

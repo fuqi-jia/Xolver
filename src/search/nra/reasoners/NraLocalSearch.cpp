@@ -233,7 +233,8 @@ std::vector<std::pair<VarId, mpq_class>>
 NraLocalSearch::bracketMidpointCandidates(
         const std::vector<Constraint>& cs,
         const std::vector<VarId>& vars,
-        std::unordered_map<VarId, int>* boundDir) const {
+        std::unordered_map<VarId, int>* boundDir,
+        std::chrono::steady_clock::time_point deadline) const {
     // For each var, collect lower bounds (root with > / ≥ orientation) and
     // upper bounds (with < / ≤ orientation) coming from LINEAR atoms in
     // that var. For each (lower, upper) pair, push the midpoint AND a
@@ -243,54 +244,70 @@ NraLocalSearch::bracketMidpointCandidates(
     // bracketMidpoint candidates are TARGETED: a single satisfier per
     // narrow interval, not a search-space explosion.
     std::vector<std::pair<VarId, mpq_class>> out;
-    for (VarId v : vars) {
-        std::vector<mpq_class> lowers;   // values t such that q(v) requires v > t (or v ≥ t)
-        std::vector<mpq_class> uppers;   // q(v) requires v < t (or v ≤ t)
-        for (const auto& c : cs) {
-            const auto* rpOpt = rationalPolynomial(c.poly);
-            if (!rpOpt) continue;
-            // poly must be LINEAR in v and constant in all other vars (after
-            // substituting their assignments — but here we just check the
-            // raw polynomial: linear in v, no other var).
-            auto varSet = rpOpt->variables();
-            if (varSet.size() != 1) continue;
-            if (varSet.find(v) == varSet.end()) continue;
-            if (rpOpt->degree(v) != 1) continue;
-            // poly = a·v + b. Compute a, b: a = (q(1) - q(0)), b = q(0).
-            auto b_opt = [&]() -> std::optional<mpq_class> {
-                RationalPolynomial t = rpOpt->substituteRational(v, mpq_class{0});
-                if (!t.isConstant()) return std::nullopt;
-                return t.constantValue();
-            }();
-            auto v1_opt = [&]() -> std::optional<mpq_class> {
-                RationalPolynomial t = rpOpt->substituteRational(v, mpq_class{1});
-                if (!t.isConstant()) return std::nullopt;
-                return t.constantValue();
-            }();
-            if (!b_opt || !v1_opt) continue;
-            const mpq_class a = *v1_opt - *b_opt;
-            if (a == 0) continue;
-            const mpq_class root = -*b_opt / a;   // poly = 0 at v = root
-            // Direction: a > 0 means poly grows with v.
-            //   poly > 0 ⇒ v > root (lower bound)
-            //   poly < 0 ⇒ v < root (upper bound)
-            //   poly ≥ 0 / ≤ 0 same with non-strict
-            //   poly == 0 ⇒ v == root (skip — yields no interval)
-            const bool aPos = a > 0;
-            switch (c.rel) {
-                case Relation::Gt:  case Relation::Geq:
-                    if (aPos) lowers.push_back(root); else uppers.push_back(root);
-                    break;
-                case Relation::Lt:  case Relation::Leq:
-                    if (aPos) uppers.push_back(root); else lowers.push_back(root);
-                    break;
-                default: break;   // Eq / Neq: not a useful bracket source
-            }
+    struct Bounds { std::vector<mpq_class> lowers, uppers; };
+    std::unordered_map<VarId, Bounds> bounds;
+    const std::unordered_set<VarId> requested(vars.begin(), vars.end());
+    size_t work = 0;
+    auto expired = [&]() {
+        return (++work & 63) == 0 && std::chrono::steady_clock::now() >= deadline;
+    };
+    // Index each source once. Preserve source order within each variable and
+    // the caller's variable order when emitting candidates and restart hints.
+    for (const auto& c : cs) {
+        if (expired()) return out;
+        ++statistics_.bracketSourceScans;
+        const auto* rpOpt = rationalPolynomial(c.poly);
+        if (!rpOpt) continue;
+        // poly must be LINEAR in v and constant in all other vars (after
+        // substituting their assignments — but here we just check the
+        // raw polynomial: linear in v, no other var).
+        auto varSet = rpOpt->variables();
+        if (varSet.size() != 1) continue;
+        const auto v = *varSet.begin();
+        if (!requested.contains(v)) continue;
+        if (rpOpt->degree(v) != 1) continue;
+        // poly = a·v + b. Compute a, b: a = (q(1) - q(0)), b = q(0).
+        auto b_opt = [&]() -> std::optional<mpq_class> {
+            RationalPolynomial t = rpOpt->substituteRational(v, mpq_class{0});
+            if (!t.isConstant()) return std::nullopt;
+            return t.constantValue();
+        }();
+        auto v1_opt = [&]() -> std::optional<mpq_class> {
+            RationalPolynomial t = rpOpt->substituteRational(v, mpq_class{1});
+            if (!t.isConstant()) return std::nullopt;
+            return t.constantValue();
+        }();
+        if (!b_opt || !v1_opt) continue;
+        const mpq_class a = *v1_opt - *b_opt;
+        if (a == 0) continue;
+        const mpq_class root = -*b_opt / a;   // poly = 0 at v = root
+        // Direction: a > 0 means poly grows with v.
+        //   poly > 0 ⇒ v > root (lower bound)
+        //   poly < 0 ⇒ v < root (upper bound)
+        //   poly ≥ 0 / ≤ 0 same with non-strict
+        //   poly == 0 ⇒ v == root (skip — yields no interval)
+        const bool aPos = a > 0;
+        auto& [lowers, uppers] = bounds[v];
+        switch (c.rel) {
+            case Relation::Gt:  case Relation::Geq:
+                if (aPos) lowers.push_back(root); else uppers.push_back(root);
+                break;
+            case Relation::Lt:  case Relation::Leq:
+                if (aPos) uppers.push_back(root); else lowers.push_back(root);
+                break;
+            default: break;   // Eq / Neq: not a useful bracket source
         }
+    }
+    for (VarId v : vars) {
+        if (expired()) return out;
+        const auto it = bounds.find(v);
+        if (it == bounds.end()) continue;
+        const auto& [lowers, uppers] = it->second;
         // Pair each lower with each upper, push midpoint + a few interior
         // offsets so the candidate sits comfortably inside the interval.
         for (const auto& lo : lowers) {
             for (const auto& hi : uppers) {
+                if (expired()) return out;
                 if (lo >= hi) continue;
                 const mpq_class mid = (lo + hi) / 2;
                 out.emplace_back(v, mid);
@@ -679,6 +696,7 @@ NraLocalSearch::walkOneRound(const std::vector<Constraint>& cs,
 std::optional<std::unordered_map<VarId, mpq_class>>
 NraLocalSearch::tryFindModel(const std::vector<Constraint>& constraints,
                               const std::vector<VarId>& vars) {
+    statistics_ = {};
     if (constraints.empty() || vars.empty()) return std::nullopt;
 
     // Initial assignment: all-zero (cheap canonical start).
@@ -690,12 +708,12 @@ NraLocalSearch::tryFindModel(const std::vector<Constraint>& constraints,
     std::vector<int> weights(constraints.size(), 1);
 
     auto t0 = std::chrono::steady_clock::now();
+    auto deadline = budgetMs_ > 0 ? t0 + std::chrono::milliseconds(budgetMs_) :
+                                   std::chrono::steady_clock::time_point::max();
+    if (wall::hasDeadline())
+        deadline = std::min(deadline, t0 + std::chrono::milliseconds(wall::remainingMs()));
     auto budgetExpired = [&]() {
-        if (budgetMs_ <= 0) return false;
-        const auto now = std::chrono::steady_clock::now();
-        const long elapsedMs =
-            std::chrono::duration_cast<std::chrono::milliseconds>(now - t0).count();
-        return elapsedMs >= budgetMs_;
+        return std::chrono::steady_clock::now() >= deadline;
     };
 
     Score score = totalScore(constraints, weights, asg);
@@ -706,11 +724,21 @@ NraLocalSearch::tryFindModel(const std::vector<Constraint>& constraints,
     // These are special: denom cap bypassed, fixed-count probe BEFORE the
     // walking loop. If any individual probe satisfies all atoms, return it.
     std::unordered_map<VarId, int> boundDir;   // +1 lower-only, -1 upper-only (for restart diversity)
-    auto bracketMids = bracketMidpointCandidates(constraints, vars, &boundDir);
+    auto bracketMids = bracketMidpointCandidates(constraints, vars, &boundDir, deadline);
+    if (budgetExpired()) return std::nullopt;
+    auto satisfiesAll = [&]() {
+        for (const auto& constraint : constraints) {
+            ++statistics_.initialProbeAtoms;
+            if ((statistics_.initialProbeAtoms & 63) == 0 && budgetExpired()) return false;
+            if (atomViolation(constraint, asg) > 0) return false;
+        }
+        return true;
+    };
     for (const auto& [v, q] : bracketMids) {
+        if (budgetExpired()) return std::nullopt;
         const mpq_class saved = asg.count(v) ? asg[v] : mpq_class{0};
         asg[v] = q;
-        if (totalScore(constraints, weights, asg).isSat()) return asg;
+        if (satisfiesAll()) return asg;
         // Restore for the next probe so the assignment doesn't accumulate
         // stale per-pair changes; the walking loop picks up from the
         // unchanged baseline.
@@ -724,6 +752,7 @@ NraLocalSearch::tryFindModel(const std::vector<Constraint>& constraints,
     std::unordered_map<VarId, mpq_class> seenFirst;
     for (const auto& [v, q] : bracketMids) seenFirst.try_emplace(v, q);
     for (const auto& [v, q] : seenFirst) asg[v] = q;
+    if (budgetExpired()) return std::nullopt;
     score = totalScore(constraints, weights, asg);
     if (score.isSat()) return asg;
 

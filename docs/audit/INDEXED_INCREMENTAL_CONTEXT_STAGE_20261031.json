@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "status": "server_qualified_pr_ci_pending",
+  "status": "merged_main_ci_passed",
   "implementation_commit": "2d3d1de90f1faddc5f67e6e029176a42cb9e0e62",
   "source_manifest_sha256": "03920335ad30631eb68f709948dcc3213c5171a5c1f5954c08f4c68373f47f46",
   "binaries": {
@@ -264,5 +264,14 @@
   },
   "protected_sets_used": false,
   "qcp_boundary": "QCP arithmetic, fixtures, generated conditions and transport tests pass. Original max3 whole-program qualification belongs to the earlier worker; this kernel has no fresh full-program performance claim.",
-  "delivery_boundary": "Native source, binaries, all 39 acceptance groups and every fresh timing/model/lease record are sealed. This stage still needs its own PR CI and post-merge main CI. No current-main server archive is required."
+  "delivery_boundary": "PR82 is merged after its exact-head PR CI passed both jobs and every step. Exact-merge main CI41136383267 also passed both jobs and every step. No additional current-main server archive is required.",
+  "delivery": {
+    "pr": 82,
+    "head_commit": "107b52078d5ec9f13f10bec36e4f4a25fc059154",
+    "merge_commit": "48054c2db9cd353d275a7b48841607909d4f4024",
+    "pr_ci": 41133766183,
+    "pr_ci_conclusion": "success",
+    "main_ci": 41136383267,
+    "main_ci_conclusion": "success"
+  }
 }

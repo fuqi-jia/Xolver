@@ -18,6 +18,7 @@ namespace xolver {
 
 class TheoryAtomRegistry;
 class LibpolyBackend;  // Algebra backend for cylindrical coverings.
+class PolynomialLinearRefuter;
 
 /**
  * NRA (Nonlinear Real Arithmetic) theory solver.
@@ -30,7 +31,7 @@ class LibpolyBackend;  // Algebra backend for cylindrical coverings.
 class NraSolver : public ArithSolverBase {
 public:
     explicit NraSolver(std::unique_ptr<PolynomialKernel> kernel);
-    ~NraSolver() override;  // out-of-line: NraLinearizationAdapter is incomplete here
+    ~NraSolver() override;  // out-of-line: backend and refuter types are incomplete here
 
     TheoryId id() const override { return TheoryId::NRA; }
 
@@ -70,7 +71,8 @@ private:
     // Reasoner pipeline stages (Phase 2). nullopt = continue.
     std::optional<TheoryCheckResult> stagePresolve(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
     // Refute the affine relaxation over independent monomial values before
-    // algebraic search. A feasible relaxation never establishes NRA SAT.
+    // algebraic search. A projected full candidate requires exact original-
+    // constraint validation; feasible relaxation alone never establishes SAT.
     std::optional<TheoryCheckResult> stageLinearRelaxation(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
     // Positive-orthant sign-definiteness
     // refuter. From single-variable bounds, fix each var's sign; if some
@@ -113,6 +115,7 @@ private:
     std::unique_ptr<PolynomialKernel> kernel_;
     std::unique_ptr<PolynomialConverter> converter_;
     CdcacSolver engine_;
+    std::unique_ptr<PolynomialLinearRefuter> linearRefuter_;
     // libpoly hardening: decline the CDCAC path (→ unknown, sound) on inputs above
     // these thresholds, preventing libpoly blowup/OOM on pathological systems.
     // 0 = disabled (default ⇒ no corpus impact); tuned on the benchmark set.

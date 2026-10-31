@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "status": "merged_main_ci_pending",
+  "status": "merged_main_ci_passed",
   "implementation_commit": "d85eac566e29329e0f25e18a7e364429544305b7",
   "problem": "Iterative ITE postorder traversal rescans completed siblings and rematerializes the same wide parent after each child. NativeTerms.get returns a value containing the child list.",
   "implementation": "Keep the child list and next-child cursor in each active DFS frame. Preserve root iteration, visitation, postorder, generated assertions and incremental ITE definitions across roots.",
@@ -225,6 +225,6 @@
     "pr_ci": 41129059624,
     "pr_ci_conclusion": "success",
     "main_ci": 41132389466,
-    "main_ci_conclusion": "in_progress"
+    "main_ci_conclusion": "success"
   }
 }

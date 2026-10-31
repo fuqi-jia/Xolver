@@ -1,0 +1,190 @@
+{
+  "schema": 1,
+  "status": "not_promoted_no_verified_gain",
+  "kind": "sparse_polynomial_elimination",
+  "audit_sha256": "0a58168460fa14f9b975ae41dc614621847804c6c2dcfb99b3b517b5892667c5",
+  "formal": {
+    "counts": {
+      "baseline": {
+        "sat": 4,
+        "decided": 7,
+        "verified_decided": 7,
+        "verified_par2": 1081.720039088279,
+        "raw_par2": 1081.720039088279,
+        "timeout": 9,
+        "unsat": 3
+      },
+      "candidate": {
+        "sat": 4,
+        "decided": 7,
+        "verified_decided": 7,
+        "verified_par2": 1081.7737348321825,
+        "raw_par2": 1081.7737348321825,
+        "timeout": 9,
+        "unsat": 3
+      },
+      "z3": {
+        "sat": 7,
+        "decided": 14,
+        "verified_decided": 12,
+        "verified_par2": 484.40529304742813,
+        "raw_par2": 244.93831067718565,
+        "timeout": 2,
+        "unsat": 7
+      }
+    },
+    "changes": [],
+    "unverified": [
+      {
+        "index": 24,
+        "case": "QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 27,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      }
+    ]
+  },
+  "diagnostics": [
+    {
+      "experiment": "60887f6e8ccc",
+      "run": "b7c390b63947",
+      "name": "xolver-indexed-rational-cuts-profile-r1000-public-diagnostic-20261031",
+      "input": "69",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "0"
+        ]
+      },
+      "record_sha256": "3fdf7e3b45e8d49998e34e89c6bb09795ef2d71b9b3297c64338c22fe48a2133",
+      "input_sha256": "72e580ee3a690b54865e129f44529a71d81112f35193cbc93775236ea62a0f13"
+    },
+    {
+      "experiment": "60887f6e8ccc",
+      "run": "2645bcc92983",
+      "name": "xolver-indexed-rational-cuts-profile-r1000-public-diagnostic-20261031",
+      "input": "77",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "2"
+        ]
+      },
+      "record_sha256": "4452f9302dd410fd3b4f96af829e7de4221a1293f5515d8f9ae02beb37931936",
+      "input_sha256": "7511fd4d07cdce648daf4ac76fc32c90af91cf9d9576d4e955a51d0dbd4534b7"
+    },
+    {
+      "experiment": "60887f6e8ccc",
+      "run": "a3513edc849c",
+      "name": "xolver-indexed-rational-cuts-profile-r1000-public-diagnostic-20261031",
+      "input": "149",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "12"
+        ]
+      },
+      "record_sha256": "0474fac766414ae9b3c6587e116776220b032b485c3e50431ee23fbcb1c52127",
+      "input_sha256": "fa38407f1095afff71b84b3c7be9da57614d7cbdb6800672ef7d85a6dfc2412d"
+    },
+    {
+      "experiment": "7cc88f9d6496",
+      "run": "4896e7227305",
+      "name": "xolver-sparse-polynomial-elimination-profile-r1004-public-diagnostic-20261031",
+      "input": "69",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "0"
+        ]
+      },
+      "record_sha256": "ab9a2a771b5e6d20c6be7f98e71c5875df963a4d7de2edbc2bdd0e27988c5962",
+      "input_sha256": "72e580ee3a690b54865e129f44529a71d81112f35193cbc93775236ea62a0f13"
+    },
+    {
+      "experiment": "7cc88f9d6496",
+      "run": "6b0e905bbfec",
+      "name": "xolver-sparse-polynomial-elimination-profile-r1004-public-diagnostic-20261031",
+      "input": "77",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "2"
+        ]
+      },
+      "record_sha256": "01d7af7cef6d5a8da827fb5235f6af49924e842c3bb364c8a8dcaac2a1a17e5f",
+      "input_sha256": "7511fd4d07cdce648daf4ac76fc32c90af91cf9d9576d4e955a51d0dbd4534b7"
+    },
+    {
+      "experiment": "7cc88f9d6496",
+      "run": "1419ce3577a7",
+      "name": "xolver-sparse-polynomial-elimination-profile-r1004-public-diagnostic-20261031",
+      "input": "149",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "13"
+        ]
+      },
+      "record_sha256": "2561341664b5e8be224ed0be0dacab07a50c128ceb79648437c8cbeb47561559",
+      "input_sha256": "fa38407f1095afff71b84b3c7be9da57614d7cbdb6800672ef7d85a6dfc2412d"
+    }
+  ],
+  "protected_sets_used": false,
+  "implementation_commit": "c921c75c322d1de8d2fe64e6ed88328cd18300ad",
+  "implementation_source": {
+    "source_head": "c921c75c322d1de8d2fe64e6ed88328cd18300ad",
+    "source_manifest_sha256": "a1efeb22dbf5de54fc67ac2663c8265ae8bee841aebc54b11235c442f4029393",
+    "binary_sha256": "9648db596d2b6b44bbbd1ba018fa384dd448c78290a73d333c09b91ffaa88092",
+    "sv_binary_sha256": "3af543ac29820abd18c1b86825cb9e6d1e1b991bb5c8332a0042bf692e33692a",
+    "binaries": {
+      "xolver": "9648db596d2b6b44bbbd1ba018fa384dd448c78290a73d333c09b91ffaa88092",
+      "xolver-sv": "3af543ac29820abd18c1b86825cb9e6d1e1b991bb5c8332a0042bf692e33692a",
+      "xolver-parallel-worker": "aca97b721c9fb37fba301754e85b602237bbfd77fa835f8fe28ed9d7c9b373de"
+    },
+    "unit_binary_sha256": "46a14929b60b32fc90ea638c3ee7037732d8ade5d8cb4b24dbd0487b97b0e1b0",
+    "logs": {
+      "regression-nra.log": "9daeee7b6149fccdaea41fbc4b664056e61bfc44a50eae43401a432a07c98ead",
+      "targeted.log": "06825f248aad9ced5c6684a65ed1dff4d72082d145e3d26652f6458952e8d410",
+      "regression-lia.log": "1eef56b48936522d28c28fcc699234c60ff4cb975bd3b78304b861b1e405b3f0",
+      "regression-nia.log": "fa595c41467cd8e80f6cb6e6f5747bd65fecd59b22f007c39b2eed4337d5b15b",
+      "parallel-ctest.log": "f6ac9268424c178fa863b6630e673b854943aac03b1d2c89e38d894718ff93d5",
+      "qcp-tools.log": "151602c5a4879f9bce58af781914293a7df184677a8b4565bfa80782614401e9",
+      "build.log": "998df119ce315c4cee575c1c5c17f556f8589a539260f5a20e54ffccb2847d21",
+      "transport-tools.log": "be460b912ff31349ef9d3e0aea83a45d1bfd3727ebe5de0da450e9ee33fbf512",
+      "overlay.log": "ead71dce9b02d68daae45a367fc641f12467ad5495fcdceea6756955592bb7d7",
+      "regression-lra.log": "cfa506c80bb11a10bfc64b06bfcbea963f4b7ba5e444b0284df6c2b6b5e35d49",
+      "configure.log": "552a4f0dd3cf0ca69c7a7d5dfdd8e7ff606588498e6ada29637792b65949ffcb"
+    },
+    "metrics": {
+      "completed": 1,
+      "failures": 0
+    },
+    "protected_sets_used": false
+  },
+  "unit_cases": 1849,
+  "unit_assertions": 972935,
+  "acceptance_groups": 39,
+  "audit": {
+    "experiment": "b9fa7a1b1c0d",
+    "run": "96f7238d315c"
+  },
+  "boundary": "Full39 server acceptance and16 fresh original-input triads pass. Both Xolver arms verify7/16, no gains or losses. PAR-2 is1081.720 versus1081.774. The sparse elimination is soundly qualified but is not promoted on this zero-gain pilot. No full160 expansion or protected set."
+}

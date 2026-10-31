@@ -2,11 +2,11 @@
 
 // Capability 3 — Polynomial Equality Combination.
 //
-// Given a set of active polynomial equalities {p₁=0,…,pₖ=0}, builds the
-// coefficient submatrix E_high over the degree-≥2 monomials, computes the LEFT
-// null-space basis over Q (vectors λ with λᵀ E_high = 0), and for each basis
-// vector emits the linear consequence Σ λᵢ pᵢ (guaranteed degree ≤ 1) as a new
-// equality atom for Cap. 5 / Cap. 1.  Sound because each pᵢ = 0.
+// Stream active polynomial equalities through exact sparse row elimination on
+// degree-2-or-higher monomials. A row whose nonlinear part vanishes supplies an
+// affine consequence (or a constant conflict). Exact source coefficients retain
+// the original premises; affine inputs already present are not recombined.
+// The shared presolve deadline interrupts only unpublished work.
 
 #include "search/presolve/Presolve.h"
 

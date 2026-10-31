@@ -1,0 +1,220 @@
+{
+  "schema": 1,
+  "status": "not_promoted_no_verified_gain",
+  "implementation_commit": "e02dd31d3093d95559349e773e0133c129a36252",
+  "implementation_source": {
+    "source_head": "e02dd31d3093d95559349e773e0133c129a36252",
+    "source_manifest_sha256": "bf04b005fb43ca9eebab321629917561f9828e027f39b1bd323c7b27a1afe0e4",
+    "binary_sha256": "ef80175732c0ff000b946ea9b92d1de52dd560a87c34cde157ecad48295c4197",
+    "sv_binary_sha256": "798c913ca7fe1641b339b4d9b7c0026422d30240ca36e4b272face23eff76ede",
+    "binaries": {
+      "xolver": "ef80175732c0ff000b946ea9b92d1de52dd560a87c34cde157ecad48295c4197",
+      "xolver-sv": "798c913ca7fe1641b339b4d9b7c0026422d30240ca36e4b272face23eff76ede",
+      "xolver-parallel-worker": "2dca37d87c62a2c2a460e05f2767e0e5182911f86d44196954ff8dc6b1cee30c"
+    },
+    "unit_binary_sha256": "9b42696fb81566302ad11e98d6ecb92a8a36b96d04c2af73897e8c7a5f2be122",
+    "logs": {
+      "regression-nra.log": "20ea3d65e0264425d31810cf0af6a314074b91daa0ef1954973de8fbeb32013b",
+      "targeted.log": "8032367ecadb84655c75fa72f722e227cde25274fdde554907b7e22b55617018",
+      "regression-lia.log": "1eef56b48936522d28c28fcc699234c60ff4cb975bd3b78304b861b1e405b3f0",
+      "constructed-1.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "regression-nia.log": "fa595c41467cd8e80f6cb6e6f5747bd65fecd59b22f007c39b2eed4337d5b15b",
+      "parallel-ctest.log": "e2e7af2fb5a5c504cdda84b0a51881a50c4318bcbb1f0042d941b98855fa3b84",
+      "constructed-0.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "qcp-tools.log": "454677b22b98436f7c17de0d12133c893a04abe301a0e3a97f3c346419aae450",
+      "build.log": "cd4248cf0c290100ff8053ccd2419a86c15dbb1adddc5cc30094645f16c1b2bc",
+      "transport-tools.log": "04446ab8e98ec0e2f8ec010a2bb7e047b3b1a318c03ca3c8ceb983d777109427",
+      "overlay.log": "2c5decfc67155ced999e55c929ec75e05a8b147393c13ec7779f1c3a563f33ea",
+      "regression-lra.log": "cfa506c80bb11a10bfc64b06bfcbea963f4b7ba5e444b0284df6c2b6b5e35d49",
+      "configure.log": "565cb4047d79c4688d84df5536673e6b37e61ffd8523d6a3c8370c85e6d906d6"
+    },
+    "metrics": {
+      "completed": 1,
+      "failures": 0
+    },
+    "protected_sets_used": false
+  },
+  "unit_cases": 1851,
+  "unit_assertions": 972951,
+  "acceptance_groups": 39,
+  "constructed_model_checks": [
+    {
+      "index": 0,
+      "expected": "sat",
+      "report_sha256": "e59ab5093120fb98ad50cb42c415ec72bc7b8b7a35c1089d67344aa6fb7dc85b",
+      "logs": {
+        "baseline-replay.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "baseline.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "progress.json": "bda364bd2af70eda1e4c014281cd51f6bb0d2eb3ca1f4cd532753fc6560a0690",
+        "candidate.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "report.json": "e59ab5093120fb98ad50cb42c415ec72bc7b8b7a35c1089d67344aa6fb7dc85b",
+        "candidate-replay.smt2": "498c082ec7e6bdcf7febaf47d85c524360474e34bfd16f8259426d9cdfe49730",
+        "baseline.stdout": "d699221f7a1d6eb2fcdb07f765ef8ecb54e8b76c04bea46021500cd40ec335a5",
+        "candidate.stdout": "d699221f7a1d6eb2fcdb07f765ef8ecb54e8b76c04bea46021500cd40ec335a5",
+        "baseline-replay.smt2": "498c082ec7e6bdcf7febaf47d85c524360474e34bfd16f8259426d9cdfe49730",
+        "z3-replay.stdout": "d9dbf94b05b8314af9ca7f2034e92685c33447917605a7243b1099c693a12e5e",
+        "z3.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "z3-replay.smt2": "2e97a53e30efabb577d140b856d3cff3b8cb066e2707f3eb98c468b8e8ed6ab7",
+        "metrics.json": "4e04dbdd6575548e537a546239dbe46a8a5332fe1f733c14a78c3abc681cfe00",
+        "candidate-replay.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "candidate-replay.stdout": "d9dbf94b05b8314af9ca7f2034e92685c33447917605a7243b1099c693a12e5e",
+        "baseline-replay.stdout": "d9dbf94b05b8314af9ca7f2034e92685c33447917605a7243b1099c693a12e5e",
+        "z3-replay.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "z3.stdout": "3f8f645ce158a59eeb0e7fde00aeaa6d984ac7c1cb13766e79846973a54086c8"
+      }
+    },
+    {
+      "index": 1,
+      "expected": "unsat",
+      "report_sha256": "903ca72bceee47de5210ad3929ec164f412edaa941a03700f59116689d918e1e",
+      "logs": {
+        "baseline.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "progress.json": "bcf2ffbef7aa93b3567cf8d856ac4d3ab96a268abeafc57f10bcc521dec94c1c",
+        "candidate.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "report.json": "903ca72bceee47de5210ad3929ec164f412edaa941a03700f59116689d918e1e",
+        "baseline.stdout": "5c17dfcc2a8f1f30d9e96df6a9825a5030ade046d560332c19de74d93d591a18",
+        "candidate.stdout": "5c17dfcc2a8f1f30d9e96df6a9825a5030ade046d560332c19de74d93d591a18",
+        "z3.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "metrics.json": "4e04dbdd6575548e537a546239dbe46a8a5332fe1f733c14a78c3abc681cfe00",
+        "z3.stdout": "5c17dfcc2a8f1f30d9e96df6a9825a5030ade046d560332c19de74d93d591a18"
+      }
+    }
+  ],
+  "formal": {
+    "cases": 12,
+    "counts": {
+      "baseline": {
+        "sat": 4,
+        "decided": 6,
+        "verified_decided": 6,
+        "verified_par2": 721.5987820737064,
+        "raw_par2": 721.5987820737064,
+        "unsat": 2,
+        "timeout": 6
+      },
+      "candidate": {
+        "sat": 4,
+        "decided": 6,
+        "verified_decided": 6,
+        "verified_par2": 721.652711795643,
+        "raw_par2": 721.652711795643,
+        "unsat": 2,
+        "timeout": 6
+      },
+      "z3": {
+        "sat": 10,
+        "decided": 11,
+        "verified_decided": 11,
+        "verified_par2": 159.56108158826828,
+        "raw_par2": 159.56108158826828,
+        "unsat": 1,
+        "timeout": 1
+      }
+    },
+    "changes": [],
+    "unverified": [],
+    "model_evidence_boundaries": [
+      {
+        "index": 148,
+        "solver": "z3",
+        "result": "sat",
+        "replay": "error",
+        "error": null,
+        "input_sha256": "4f9ef64958113d079eca3adc2023c206c8bc2a42b7f02e6acb0f11ce0a2af4be"
+      }
+    ]
+  },
+  "diagnostics": [
+    {
+      "experiment": "98f78b55ccf2",
+      "run": "0751731f5ff2",
+      "name": "xolver-nra-stage-schedule-profile-r1015-public-diagnostic-20261031",
+      "input": "69",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "0"
+        ]
+      },
+      "record_sha256": "2ac0710add221d18a30536b4ed70ce35e6dd04baecd54d0db5af617ecc89c328",
+      "input_sha256": "72e580ee3a690b54865e129f44529a71d81112f35193cbc93775236ea62a0f13"
+    },
+    {
+      "experiment": "98f78b55ccf2",
+      "run": "a7e5b2f92ba7",
+      "name": "xolver-nra-stage-schedule-profile-r1015-public-diagnostic-20261031",
+      "input": "77",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "1"
+        ]
+      },
+      "record_sha256": "ff3e0af5cc76f97898219ac7f4ad8ada2acdcc3ede2b35543033f0b2056346a9",
+      "input_sha256": "7511fd4d07cdce648daf4ac76fc32c90af91cf9d9576d4e955a51d0dbd4534b7"
+    },
+    {
+      "experiment": "98f78b55ccf2",
+      "run": "149168d2a29a",
+      "name": "xolver-nra-stage-schedule-profile-r1015-public-diagnostic-20261031",
+      "input": "149",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "2"
+        ]
+      },
+      "record_sha256": "60871ab6246c74a3385754272f8b97845ed38375997459caa5e49239b1d73106",
+      "input_sha256": "fa38407f1095afff71b84b3c7be9da57614d7cbdb6800672ef7d85a6dfc2412d"
+    },
+    {
+      "experiment": "18c5e429513f",
+      "run": "a963a07a8f40",
+      "name": "xolver-projected-relaxation-model-profile-r1020-public-diagnostic-20261031",
+      "input": "69",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "0"
+        ]
+      },
+      "record_sha256": "516450c47d423f5a2908ec7552115ffc2fb67fe77d9f75b072cca25cccbbc670",
+      "input_sha256": "72e580ee3a690b54865e129f44529a71d81112f35193cbc93775236ea62a0f13"
+    },
+    {
+      "experiment": "18c5e429513f",
+      "run": "91e87bbb585c",
+      "name": "xolver-projected-relaxation-model-profile-r1020-public-diagnostic-20261031",
+      "input": "77",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "1"
+        ]
+      },
+      "record_sha256": "ddebc89bf9d5cff4eaabc4ae3ae3fb550b39daa19b67b1a620f1d80aca20d1f2",
+      "input_sha256": "7511fd4d07cdce648daf4ac76fc32c90af91cf9d9576d4e955a51d0dbd4534b7"
+    },
+    {
+      "experiment": "18c5e429513f",
+      "run": "1b56df0c8482",
+      "name": "xolver-projected-relaxation-model-profile-r1020-public-diagnostic-20261031",
+      "input": "149",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "5"
+        ]
+      },
+      "record_sha256": "2f7c69161370200f37f58ac55d4700b707b372f78d6134820a0230279e8c6b97",
+      "input_sha256": "fa38407f1095afff71b84b3c7be9da57614d7cbdb6800672ef7d85a6dfc2412d"
+    }
+  ],
+  "audit": {
+    "experiment": "e03caa6090ac",
+    "run": "8bca10f058ca",
+    "sha256": "60de05a7afbb0e5e9ab142d3584788a29842c452a5b8876013db3a07f66943cf"
+  },
+  "protected_sets_used": false,
+  "boundary": "Native58 targeted cases/4510 assertions,233 NRA regressions and all39 server groups pass, including1851 unit cases/972951 assertions. Constructed strict-bound SAT models are independently replayed; the invalid-relaxation case is independently UNSAT. Twelve fresh original triads at60s/one physical CPU/16GiB verify6 for both Xolver arms versus11 for Z3. No gains/losses/errors/unconfirmed verdicts. All actual timed Xolver SAT models replay positively. Z3 input148 retains its root-object model-checking boundary, while independent Xolver witnesses establish input truth. No full160 expansion, protected-set or whole-program QCP claim. This candidate is not promoted without a verified solver benefit."
+}

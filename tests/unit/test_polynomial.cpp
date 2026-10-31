@@ -564,3 +564,27 @@ TEST_CASE("LibPolyKernel: substituteRational with rational result") {
     REQUIRE(valOpt2.has_value());
     CHECK(*valOpt2 == 2);
 }
+
+TEST_CASE("Polynomial kernel: unsupported operands propagate without aliasing valid cache entries") {
+    auto kernel = createPolynomialKernel();
+    const auto x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    const auto one = kernel->mkOne();
+    const auto unsupported = kernel->mkConst(mpq_class(3, 2));
+    REQUIRE(unsupported == NullPoly);
+    for (const auto valid : {x, one, kernel->mkZero()}) {
+        CHECK(kernel->add(valid, unsupported) == NullPoly);
+        CHECK(kernel->add(unsupported, valid) == NullPoly);
+        CHECK(kernel->sub(valid, unsupported) == NullPoly);
+        CHECK(kernel->sub(unsupported, valid) == NullPoly);
+        CHECK(kernel->mul(valid, unsupported) == NullPoly);
+        CHECK(kernel->mul(unsupported, valid) == NullPoly);
+    }
+    CHECK(kernel->neg(unsupported) == NullPoly);
+    CHECK(kernel->pow(unsupported, 0) == NullPoly);
+    CHECK(kernel->pow(unsupported, 2) == NullPoly);
+    CHECK(kernel->sub(kernel->mul(one, unsupported), one) == NullPoly);
+    CHECK(kernel->eq(kernel->add(one, one), kernel->mkConst(2)));
+    CHECK(kernel->eq(kernel->sub(x, x), kernel->mkZero()));
+    CHECK(kernel->eq(kernel->mul(x, one), x));
+    CHECK(kernel->eq(kernel->pow(x, 2), kernel->mul(x, x)));
+}

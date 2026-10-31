@@ -4,6 +4,7 @@
 #include "base/SolveClock.h"
 #include <chrono>
 #include "search/arith/Reasoner.h"
+#include "search/refute/PolynomialLinearRefutation.h"
 #include "algebra/linear/LinearExpr.h"
 #include "search/presolve/Presolve.h"
 #include "base/RealValue.h"                                // validated rational witness model
@@ -38,7 +39,8 @@ namespace xolver {
 NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     : kernel_(std::move(kernel)),
       converter_(std::make_unique<PolynomialConverter>(*kernel_)),
-      engine_(kernel_.get()) {
+      engine_(kernel_.get()),
+      linearRefuter_(std::make_unique<PolynomialLinearRefuter>(0)) {
     cdcacMaxVars_ = xolver::config::read<xolver::config::ReadKind::Int>("XOLVER_NRA_CDCAC_MAX_VARS", 0);
     cdcacMaxDeg_  = xolver::config::read<xolver::config::ReadKind::Int>("XOLVER_NRA_CDCAC_MAX_DEGREE", 0);
     // Phase 2 reasoner pipeline: presolve fixpoint, then CDCAC.
@@ -89,16 +91,18 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
         "nra.linear-relaxation",
         stageWrap("linear-relaxation",
                   [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageLinearRelaxation(db, e); })));
+    // Whole-input presolve and interval analysis follow incremental partial
+    // checks. Full candidates retain both analyses and exact model validation.
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.presolve",
-        stageWrap("presolve", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stagePresolve(db, e); })));
-    // Step 2.1 GLOBAL box-consistency refutation, EARLY (right after presolve, before
-    // the covering engines): decides bound-contradiction families (hong) in ~ms,
-    // short-circuiting the covering-tree blowup that stageCac would otherwise spend
-    // 10s+ on. Sound (interval over-approximation). Default-on, no flag/budget.
+        stageWrap("presolve", [this](TheoryLemmaStorage& db, TheoryEffort e) {
+            return stagePresolve(db, e);
+        }), ReasonerSchedule::CandidateModel));
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.box-refute",
-        stageWrap("box-refute", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageBoxRefute(db, e); })));
+        stageWrap("box-refute", [this](TheoryLemmaStorage& db, TheoryEffort e) {
+            return stageBoxRefute(db, e);
+        }), ReasonerSchedule::CandidateModel));
     // Local search constructs complete witnesses, so it shares the candidate
     // scheduling contract with CAC instead of consuming a one-shot attempt on
     // the first partial assignment.
@@ -186,6 +190,7 @@ void NraSolver::onPop(uint32_t n) {
 }
 
 void NraSolver::onReset() {
+    linearRefuter_->reset();
     engine_.reset();
     activeLits_.clear();
     trail_.clear();

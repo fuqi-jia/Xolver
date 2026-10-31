@@ -1,0 +1,4469 @@
+{
+  "schema": "xolver-candidate-initialization-pilots/1",
+  "sealed": [
+    {
+      "server_path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/stage-r1027.json",
+      "sha256": "7d96f5d797fc0c42a41fe7703d1687f9d722e3883e372e4edd0f87299c064c4f",
+      "record": {
+        "constructed_model_checks": [],
+        "status": "pilot_assessed_fresh_full160_pending_if_promoted",
+        "diagnostic_records": [
+          {
+            "experiment": "18c5e429513f",
+            "run": "a963a07a8f40",
+            "name": "xolver-projected-relaxation-model-profile-r1020-public-diagnostic-20261031",
+            "input": "69",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "0"
+              ]
+            },
+            "record_sha256": "516450c47d423f5a2908ec7552115ffc2fb67fe77d9f75b072cca25cccbbc670",
+            "input_sha256": "72e580ee3a690b54865e129f44529a71d81112f35193cbc93775236ea62a0f13"
+          },
+          {
+            "experiment": "18c5e429513f",
+            "run": "91e87bbb585c",
+            "name": "xolver-projected-relaxation-model-profile-r1020-public-diagnostic-20261031",
+            "input": "77",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "1"
+              ]
+            },
+            "record_sha256": "ddebc89bf9d5cff4eaabc4ae3ae3fb550b39daa19b67b1a620f1d80aca20d1f2",
+            "input_sha256": "7511fd4d07cdce648daf4ac76fc32c90af91cf9d9576d4e955a51d0dbd4534b7"
+          },
+          {
+            "experiment": "18c5e429513f",
+            "run": "1b56df0c8482",
+            "name": "xolver-projected-relaxation-model-profile-r1020-public-diagnostic-20261031",
+            "input": "149",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "5"
+              ]
+            },
+            "record_sha256": "2f7c69161370200f37f58ac55d4700b707b372f78d6134820a0230279e8c6b97",
+            "input_sha256": "fa38407f1095afff71b84b3c7be9da57614d7cbdb6800672ef7d85a6dfc2412d"
+          },
+          {
+            "experiment": "5df30187ee44",
+            "run": "7d2a64876274",
+            "name": "xolver-incremental-candidate-cover-profile-r1024-public-diagnostic-20261031",
+            "input": "69",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "0"
+              ]
+            },
+            "record_sha256": "701bb839dd929d127c2e17c2923b35f99b91c978a8af5ed86baa2649991e52ad",
+            "input_sha256": "72e580ee3a690b54865e129f44529a71d81112f35193cbc93775236ea62a0f13"
+          },
+          {
+            "experiment": "5df30187ee44",
+            "run": "99ed9b09dbc1",
+            "name": "xolver-incremental-candidate-cover-profile-r1024-public-diagnostic-20261031",
+            "input": "77",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "1"
+              ]
+            },
+            "record_sha256": "7de68752f67dc62dfd17a69c51803e3b88c032939e2ee604258edc24def4a3af",
+            "input_sha256": "7511fd4d07cdce648daf4ac76fc32c90af91cf9d9576d4e955a51d0dbd4534b7"
+          },
+          {
+            "experiment": "5df30187ee44",
+            "run": "2d5cc85313a7",
+            "name": "xolver-incremental-candidate-cover-profile-r1024-public-diagnostic-20261031",
+            "input": "149",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "4"
+              ]
+            },
+            "record_sha256": "df897e984f8e05413d85a048704496756aa33a98d5b587403a4b35fa68aeba76",
+            "input_sha256": "fa38407f1095afff71b84b3c7be9da57614d7cbdb6800672ef7d85a6dfc2412d"
+          }
+        ],
+        "diagnostic_boundary": "Ten-second profiles on three public gaps. R1020 profiles the parent and R1024 the sparse incremental cover. Both use three public gaps only. Profiles never substitute for formal same-budget solves.",
+        "implementation_commit": "624af3d1cd58075fd4c5a7b6ce6516c53b931b29",
+        "model_evidence_boundaries": [
+          {
+            "index": 148,
+            "solver": "z3",
+            "result": "sat",
+            "replay": "error",
+            "error": null,
+            "input_sha256": "4f9ef64958113d079eca3adc2023c206c8bc2a42b7f02e6acb0f11ce0a2af4be"
+          }
+        ],
+        "schema": "xolver-incremental-candidate-cover-pilot/1",
+        "implementation_source": {
+          "source_head": "624af3d1cd58075fd4c5a7b6ce6516c53b931b29",
+          "source_manifest_sha256": "e1a232b5a91b7d13bfe461c18fe3e45c1ca13f78cc6fa1133dc38c88b03ce425",
+          "binary_sha256": "8bf636b0a6777427f7147d3bbf972f1429e81c60b1d15e4aff0080821eb264f4",
+          "sv_binary_sha256": "6000a10216d2253a3eb8618fc89b7715f55f22266071d7247d2b9dba02c7df2b",
+          "binaries": {
+            "xolver": "8bf636b0a6777427f7147d3bbf972f1429e81c60b1d15e4aff0080821eb264f4",
+            "xolver-sv": "6000a10216d2253a3eb8618fc89b7715f55f22266071d7247d2b9dba02c7df2b",
+            "xolver-parallel-worker": "e3ba471b7f7aad0ee19533f903a460d954fed9c9d228f48cb9e57941b0e7cdd2"
+          },
+          "unit_binary_sha256": "128aab15813617fff7adf4dc6c3cf4a84e945abd597667e37531203193f44049",
+          "logs": {
+            "targeted.log": "c1261c0f40516cb2ddcec903057683eb44e3849080af300bfd06415c59b0049e",
+            "build.log": "181941656ebb8360f21613c6212b163998c29eb9ad6890f0cb5fd1ceff9ad668",
+            "overlay.log": "0a137540aa499e19cec9aacfd45bfe756077d9600ff3509f2e9dccd0d12f8a0a",
+            "configure.log": "565cb4047d79c4688d84df5536673e6b37e61ffd8523d6a3c8370c85e6d906d6"
+          },
+          "metrics": {
+            "completed": 1,
+            "failures": 0
+          },
+          "protected_sets_used": false
+        },
+        "acceptance": [
+          {
+            "experiment": "884448ba1078",
+            "run": "32eab2759e86",
+            "name": "acceptance-r1026",
+            "input": "unit",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "8"
+              ]
+            },
+            "commands_sha256": "2cf4b98f5751b9e71d14645bc05b43e8360f8cfac9160c27278748f4121f44e2",
+            "logs": {
+              "0.log": "2c6bfbc3f7d28d13c01391c7f5c90b98a100e61c2bebd0df87f9decf378479e4"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "3474afb20071",
+            "name": "acceptance-r1026",
+            "input": "regression-lra",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "12"
+              ]
+            },
+            "commands_sha256": "c5abc53687b43f7e5d9f17a9ccfcea7f151618e6f1a2a2c30505fb49a7232e4c",
+            "logs": {
+              "0.log": "8b371270171cdbbe88ae015d48da54a2e652eb12e71912e7b9eea8c14f5a4cef"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "f56f6b1618b8",
+            "name": "acceptance-r1026",
+            "input": "regression-lia",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "14"
+              ]
+            },
+            "commands_sha256": "f9d18a71a5f3fda322a326c56921917e07f6d9608f2082a2db9933bf5520466b",
+            "logs": {
+              "0.log": "4d6c1b60d03d73740add66e21d041850a203b05acff7dd63b7ede585c86a3e19"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "ca199b957806",
+            "name": "acceptance-r1026",
+            "input": "linear",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "15"
+              ]
+            },
+            "commands_sha256": "dbff7bbf34f2a74d8c0edf5f917a9cc40433a0738728935bfd719e48da92bee4",
+            "logs": {
+              "0.log": "5de62500d2c1f76f4488424a6fca8927edfcfbd93b6bbe2a4449e1bdd2d60b5b"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "ebe3b834b382",
+            "name": "acceptance-r1026",
+            "input": "qcp",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "16"
+              ]
+            },
+            "commands_sha256": "c793f5da22339f705dbf1c903935a0b7f2ac3cc926f70222e5d0d2b0700b55c5",
+            "logs": {
+              "1.log": "1196a2fb1ec866ea852df829e152b5b7a76b3ee5b9beadf9137487f8d6605d0a",
+              "2.log": "1ebf29e2ee650e0e1d8af1a912d856dae3eb16ee75239a9f6268af9f077c4677",
+              "0.log": "2faae61434fd857e5f3078e58092d027f1ad0afa28896460fcbd7bef3b7e058b"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "f65f0e3bb781",
+            "name": "acceptance-r1026",
+            "input": "tools",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "17"
+              ]
+            },
+            "commands_sha256": "e69fd6f315334038fb84bb37987cece9b224ca1721f4ef9184accfd4b99c62ff",
+            "logs": {
+              "0.log": "914e1b1941ed852650fcfb5a4ae336ea2e0bdd9c5a8d64c17442a63d9b6a4938"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "64ca78181d57",
+            "name": "acceptance-r1026",
+            "input": "root-regressions",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "18"
+              ]
+            },
+            "commands_sha256": "4c3bd083788816ff18c1a7c357bd6531b11094126546de9d60e2a0d9a670ec7c",
+            "logs": {
+              "0.log": "faf6b1a73d4e05b2f9476830ebcae511627dc279ec2a097980798e19efbd5c66"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "1b6d2c7f7d24",
+            "name": "acceptance-r1026",
+            "input": "architecture",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "19"
+              ]
+            },
+            "commands_sha256": "da9dbad5a54568422ea0bcca9afa671be604f0de3682e6f599fe474a6c9f3ac3",
+            "logs": {
+              "0.log": "5e3057c303ca89148f82f43c797e82c74d91e6764fc2a17f9e705add03bb28e4"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "15b83fbe44e1",
+            "name": "acceptance-r1026",
+            "input": "known-gaps",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "20"
+              ]
+            },
+            "commands_sha256": "443b1c6b18b1a30561d792cdd40b013e621b3d1a515060deff96c1b2ea84c0ca",
+            "logs": {
+              "0.log": "c9ca23a38b8e30df7a717bb68005fe69c25e06665df120ac38a8d9dbf894123d"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "c91d4a279137",
+            "name": "acceptance-r1026",
+            "input": "affine",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "23"
+              ]
+            },
+            "commands_sha256": "7f83c31f51ea3bab255c9b37327f4847dac1def6af37c1546d89f659d4d75838",
+            "logs": {
+              "0.log": "36a7e7eb3e3130f16e23c6420e4c9af4bdedf15ef267dc016ca9e3967004d95f"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "c223a08e6f44",
+            "name": "acceptance-r1026",
+            "input": "partial",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "24"
+              ]
+            },
+            "commands_sha256": "1867f89b7e66c8bc176ceaa74c04db9c6744254f31bce86815e0ae167ca1b18a",
+            "logs": {
+              "0.log": "84a036d96f04b24b3a6c3ed462bf03b1c69c4eb1db44e3f8b6815d24335f2890"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "92edf2a30ba3",
+            "name": "acceptance-r1026",
+            "input": "intervals",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "25"
+              ]
+            },
+            "commands_sha256": "1339fef946689fd36715dbe9ac71c32ebf059744bfd765795b9ff6a0140e0b92",
+            "logs": {
+              "0.log": "511936860ce07b821fb87fa3131de7380956b3c2858e18d70bd98c1f0f4c58ba"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "99a46ad97dac",
+            "name": "acceptance-r1026",
+            "input": "quick",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "26"
+              ]
+            },
+            "commands_sha256": "7136df613db30e2ac94cb30451d5c0972438e1348c4d96ac0f93d900af827290",
+            "logs": {
+              "1.log": "661f9c857107969ffe76aae87465303144444805777eabb47dea40aa81e5ce68",
+              "2.log": "19008f1fda5c8f66bce381289a2b4013e41a29139abecf0046fc59e52580f9eb",
+              "0.log": "42f723b04f79ad36d320facbb7e6be82af16fdc7936fa9e06b861afc8bb384eb"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "39d96845ff4d",
+            "name": "acceptance-r1026",
+            "input": "regression-alia",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "27"
+              ]
+            },
+            "commands_sha256": "6e124e54acefde3c176bc7228ff00b0138ae4e81964191147907e791da32c17d",
+            "logs": {
+              "0.log": "bc7222a8076aea0dc5c68cb8f7c4f86a332fe8572f296dccb2fdd10e7a85d4ec"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "f9d62547d8c6",
+            "name": "acceptance-r1026",
+            "input": "regression-alra",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "28"
+              ]
+            },
+            "commands_sha256": "93d91f965b21f035747f608c48f86946b7085f24263c0c25cd9275be462e3b8b",
+            "logs": {
+              "0.log": "d1c641546a862b311c5bac1bbd8316602d66c0f1107f752627ef96d1b6827b9f"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "49d447d61866",
+            "name": "acceptance-r1026",
+            "input": "regression-ania",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "29"
+              ]
+            },
+            "commands_sha256": "7b5f99872acc925ff7478b5ccb98b9fac60deec84b3f9f70222ad5e383e93d00",
+            "logs": {
+              "0.log": "ac6516640c608a98644ff5b3a0ce01110519e216fcb11b833ca23b386ebff346"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "8cf22d36e919",
+            "name": "acceptance-r1026",
+            "input": "regression-auflia",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "30"
+              ]
+            },
+            "commands_sha256": "bd4ba1768bac11e78ceb4fb1cb9609f2813c8f26f7961195a31e74782c003fe7",
+            "logs": {
+              "0.log": "ac6516640c608a98644ff5b3a0ce01110519e216fcb11b833ca23b386ebff346"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "3abbfb05e1fc",
+            "name": "acceptance-r1026",
+            "input": "regression-auflra",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "34"
+              ]
+            },
+            "commands_sha256": "a222c932ddcc019309ed000e6c1cb13590f628d534823d90705ad0d0f075fa7f",
+            "logs": {
+              "0.log": "697467ae8b63f8774656bdbf2547629c734b9fa850fa4be5e2dcb0cba50b5228"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "4e8aba231b37",
+            "name": "acceptance-r1026",
+            "input": "regression-aufnia",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "35"
+              ]
+            },
+            "commands_sha256": "0632ed604c8814b8fca99532278a2f652899de4270c33f9daf841e346cc8aa94",
+            "logs": {
+              "0.log": "ac6516640c608a98644ff5b3a0ce01110519e216fcb11b833ca23b386ebff346"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "2dada04135ca",
+            "name": "acceptance-r1026",
+            "input": "regression-ax",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "36"
+              ]
+            },
+            "commands_sha256": "c14e08f585f8cdfbe2452fe8b837e332c1fce9028fb1289abe0772c3864bf887",
+            "logs": {
+              "0.log": "696ee23bd626a3bc14f3106fd4a0b2b14042aab4090e54cdfb1e3167daa48494"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "5c060a6343ff",
+            "name": "acceptance-r1026",
+            "input": "regression-bool",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "0"
+              ]
+            },
+            "commands_sha256": "2c67eaf7162850fe0befee99721b265c311d4668af29bd4d5d32c28a89c199fa",
+            "logs": {
+              "0.log": "3ef409066bdef9d0249e8a0cc8a31e1814c643d5c16159a1c8610d137d03a524"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "a3cf82a6e3ef",
+            "name": "acceptance-r1026",
+            "input": "regression-dt",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "1"
+              ]
+            },
+            "commands_sha256": "1558db89e977a00f794fc873ebefca744fbaed39ed44574f3f5a2b3a3bcf43a2",
+            "logs": {
+              "0.log": "0129dc8224057fdd2c74837d5db36ebd18b23176187ce0ff515c109a4e717f8e"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "528566353ea2",
+            "name": "acceptance-r1026",
+            "input": "regression-euf",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "4"
+              ]
+            },
+            "commands_sha256": "04cf4b59738226530955b36ba2c9077ed652925cac9e3849f322d29976b2009a",
+            "logs": {
+              "0.log": "5059ac64be4efc714b4c7733d4257541a75e608c39272c237cc76ad2dc85ba20"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "d94b70c6b5c4",
+            "name": "acceptance-r1026",
+            "input": "regression-idl",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "12"
+              ]
+            },
+            "commands_sha256": "bf9a765348c529dbeef7af7ca6854a0592558055f172640216c6849a5dd06d66",
+            "logs": {
+              "0.log": "94623b8f5c8cfbe16d2e017758a6504327f38e08fa8c30ec54cbb1bc5bfae1ff"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "24b7a198cb88",
+            "name": "acceptance-r1026",
+            "input": "regression-lira",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "14"
+              ]
+            },
+            "commands_sha256": "4f69600a8f15ceea4c85f49c69c46cc6c313e4f691feab0484d7528a1de06d15",
+            "logs": {
+              "0.log": "2005d6526cb7094adc12361c4bb90669446e3a483c13b915337326f2128626b0"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "9df6d69eb488",
+            "name": "acceptance-r1026",
+            "input": "regression-nira",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "18"
+              ]
+            },
+            "commands_sha256": "8c42a88e5c7bdfcb0a66916c6043c1ca64673258c875efc7cd5730e391f5cabe",
+            "logs": {
+              "0.log": "246b6eae9ce51776f89490a468de348ea03a3a2960422db0bc77c70de4bedb86"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "eb79b1e2311c",
+            "name": "acceptance-r1026",
+            "input": "regression-nra",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "19"
+              ]
+            },
+            "commands_sha256": "d24d42b79f5ffd61079cfc79aedbb5d7acca1bfba30b1c0627da0e5e0e58e4b6",
+            "logs": {
+              "0.log": "4a70bdc7d626994ed1a3f70042e39e168089d902070f26d865c99d33a37982ad"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "c4dc3ecf41b0",
+            "name": "acceptance-r1026",
+            "input": "regression-quantifiers",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "20"
+              ]
+            },
+            "commands_sha256": "b6df0a2989ef58669e3586dfad3033a8d241eaea8d628b2880de5297653b2fd4",
+            "logs": {
+              "0.log": "f90a2f5622626a11163b822b75c0cdc956019558033c06244285b204b4a28f64"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "53192d84778d",
+            "name": "acceptance-r1026",
+            "input": "regression-rdl",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "24"
+              ]
+            },
+            "commands_sha256": "8edf477c4a1018141a0e66bd99406e8bfdd3173c78ccce9125d2e5f145e4687f",
+            "logs": {
+              "0.log": "bc7222a8076aea0dc5c68cb8f7c4f86a332fe8572f296dccb2fdd10e7a85d4ec"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "316310e5d5a5",
+            "name": "acceptance-r1026",
+            "input": "regression-sl",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "26"
+              ]
+            },
+            "commands_sha256": "c51eab73004e4d698668d65395280ad5a98c0e2130194c1b28aa0677799b2a81",
+            "logs": {
+              "0.log": "c022f77e6a95af8830aa03e82710c3b0f1ff1010c737d2d308561ecb23dbd5d4"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "c2340cce9f09",
+            "name": "acceptance-r1026",
+            "input": "regression-ufdtlia",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "27"
+              ]
+            },
+            "commands_sha256": "1a32c0f67252131c166c6690db32da4398df9eb2e55c1c18f09fc1710ec3f2cc",
+            "logs": {
+              "0.log": "b4c67d708e388ee067600f271f5d4253e086b90eaabf0ecba50d5b2a4f2b5c4b"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "681f713f10f4",
+            "name": "acceptance-r1026",
+            "input": "regression-ufdtnia",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "28"
+              ]
+            },
+            "commands_sha256": "37ff6333509f5455841eb97b62ad6a79bd19b347f63404d2f9117c513659812d",
+            "logs": {
+              "0.log": "c1817975306d08a91eaf120f129970d2faa0edbff615074bbe0ebd8217d0198c"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "4d3bf2181d6d",
+            "name": "acceptance-r1026",
+            "input": "regression-uflia",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "29"
+              ]
+            },
+            "commands_sha256": "45c49798f72f1fd1de4d1f4db927503e819a21ac6d835a027ad6d58758a88cb6",
+            "logs": {
+              "0.log": "13c4cceb1fcc2b55f1c653c15165acd6065f8a5e0b2170ca531b9f3301c09476"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "deb7ff9199a2",
+            "name": "acceptance-r1026",
+            "input": "regression-uflra",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "30"
+              ]
+            },
+            "commands_sha256": "546a2b4f91dc893c176dd4e0d1b03a9d1064a34253a3d8be25831493f9fcd9b3",
+            "logs": {
+              "0.log": "696ee23bd626a3bc14f3106fd4a0b2b14042aab4090e54cdfb1e3167daa48494"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "181227f72c21",
+            "name": "acceptance-r1026",
+            "input": "regression-ufnia",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "34"
+              ]
+            },
+            "commands_sha256": "5753df1746118085c4195dc11e3db2ecd8e2dbab1cceadaff8bc699d5505d6e4",
+            "logs": {
+              "0.log": "94623b8f5c8cfbe16d2e017758a6504327f38e08fa8c30ec54cbb1bc5bfae1ff"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "48d4aa4b746f",
+            "name": "acceptance-r1026",
+            "input": "regression-ufnra",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "35"
+              ]
+            },
+            "commands_sha256": "5fe823ccc99481c389bc3dfbfb7a9814021ebd89003a29aceb200b97361d43ae",
+            "logs": {
+              "0.log": "d1c641546a862b311c5bac1bbd8316602d66c0f1107f752627ef96d1b6827b9f"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "659238bb4f6e",
+            "name": "acceptance-r1026",
+            "input": "theory-models",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "36"
+              ]
+            },
+            "commands_sha256": "d24f7cfea71d3247ff8ec2db2de93088cda7f6ad964bd22a4d0ad97411d0903b",
+            "logs": {
+              "0.log": "7b751b5a07e6af4ca0f60f24a7413fdc6ee976a59c363215206e61fff842eee5"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "f3000615c31d",
+            "name": "acceptance-r1026",
+            "input": "regression-nia",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "37"
+              ]
+            },
+            "commands_sha256": "280291f43a577e6eb717a6349add7c169a4630dc0edfeb68cdfb7731dc44febe",
+            "logs": {
+              "0.log": "baa77ec074da77b10ee6d35a426da972a55a84be9df319925fe7babd3c7d1539"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "562ee5abc0ca",
+            "name": "acceptance-r1026",
+            "input": "certificate-115",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "40"
+              ]
+            },
+            "commands_sha256": "cc263842dd2733a80804e85a28f31ee9945b1d727f4730b6ba82e15d2dcc2521",
+            "logs": {
+              "0.log": "823672e87696cac914fac33d8d0027db15a21b566e700a65300cdca704cf910e"
+            }
+          }
+        ],
+        "unit_cases": 1856,
+        "unit_assertions": 978660,
+        "formal": {
+          "cases": 12,
+          "binaries": {
+            "baseline": {
+              "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/indexed-trails-r978/xolver",
+              "sha256": "4d459fa5acfcf9c95d31bc7117d14701156f411439139904b1d58e00ffd1aec3"
+            },
+            "candidate": {
+              "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/incremental-candidate-cover-r1023/xolver",
+              "sha256": "8bf636b0a6777427f7147d3bbf972f1429e81c60b1d15e4aff0080821eb264f4"
+            },
+            "z3": {
+              "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+              "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+            }
+          },
+          "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+          "timeout": 60,
+          "memory_bytes": 17179869184,
+          "model_capture": "initial-solve",
+          "counts": {
+            "baseline": {
+              "sat": 4,
+              "decided": 6,
+              "verified_decided": 6,
+              "verified_par2": 721.6029892470688,
+              "raw_par2": 721.6029892470688,
+              "unsat": 2,
+              "timeout": 6
+            },
+            "candidate": {
+              "sat": 4,
+              "decided": 6,
+              "verified_decided": 6,
+              "verified_par2": 721.6035129055381,
+              "raw_par2": 721.6035129055381,
+              "unsat": 2,
+              "timeout": 6
+            },
+            "z3": {
+              "sat": 10,
+              "decided": 11,
+              "verified_decided": 11,
+              "verified_par2": 160.46261197701097,
+              "raw_par2": 160.46261197701097,
+              "unsat": 1,
+              "timeout": 1
+            }
+          },
+          "by_logic": {
+            "QF_LIA": {
+              "baseline": {
+                "sat": 1,
+                "decided": 2,
+                "verified_decided": 2,
+                "verified_par2": 1.0353177897632122,
+                "raw_par2": 1.0353177897632122,
+                "unsat": 1
+              },
+              "candidate": {
+                "sat": 1,
+                "decided": 2,
+                "verified_decided": 2,
+                "verified_par2": 1.0341658424586058,
+                "raw_par2": 1.0341658424586058,
+                "unsat": 1
+              },
+              "z3": {
+                "sat": 1,
+                "decided": 2,
+                "verified_decided": 2,
+                "verified_par2": 0.2325399201363325,
+                "raw_par2": 0.2325399201363325,
+                "unsat": 1
+              }
+            },
+            "QF_NRA": {
+              "baseline": {
+                "unsat": 1,
+                "decided": 4,
+                "verified_decided": 4,
+                "verified_par2": 720.5676714573056,
+                "raw_par2": 720.5676714573056,
+                "timeout": 6,
+                "sat": 3
+              },
+              "candidate": {
+                "unsat": 1,
+                "decided": 4,
+                "verified_decided": 4,
+                "verified_par2": 720.5693470630795,
+                "raw_par2": 720.5693470630795,
+                "timeout": 6,
+                "sat": 3
+              },
+              "z3": {
+                "timeout": 1,
+                "decided": 9,
+                "verified_decided": 9,
+                "verified_par2": 160.23007205687463,
+                "raw_par2": 160.23007205687463,
+                "sat": 9
+              }
+            }
+          },
+          "changes": [],
+          "wrong_verdicts": [],
+          "invalid_exported_models": [],
+          "unverified": [],
+          "scoring": "Correct verdicts require a replayed model or an independent UNSAT decision on the identical input hash; unresolved results receive PAR-2 penalty."
+        },
+        "runs": [
+          {
+            "experiment": "447ad56b6fa8",
+            "run": "6ecf235b8061",
+            "name": "native-build-r1023",
+            "input": "build",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "0"
+              ]
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "32eab2759e86",
+            "name": "acceptance-r1026",
+            "input": "unit",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "8"
+              ]
+            },
+            "commands_sha256": "2cf4b98f5751b9e71d14645bc05b43e8360f8cfac9160c27278748f4121f44e2",
+            "logs": {
+              "0.log": "2c6bfbc3f7d28d13c01391c7f5c90b98a100e61c2bebd0df87f9decf378479e4"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "3474afb20071",
+            "name": "acceptance-r1026",
+            "input": "regression-lra",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "12"
+              ]
+            },
+            "commands_sha256": "c5abc53687b43f7e5d9f17a9ccfcea7f151618e6f1a2a2c30505fb49a7232e4c",
+            "logs": {
+              "0.log": "8b371270171cdbbe88ae015d48da54a2e652eb12e71912e7b9eea8c14f5a4cef"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "f56f6b1618b8",
+            "name": "acceptance-r1026",
+            "input": "regression-lia",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "14"
+              ]
+            },
+            "commands_sha256": "f9d18a71a5f3fda322a326c56921917e07f6d9608f2082a2db9933bf5520466b",
+            "logs": {
+              "0.log": "4d6c1b60d03d73740add66e21d041850a203b05acff7dd63b7ede585c86a3e19"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "ca199b957806",
+            "name": "acceptance-r1026",
+            "input": "linear",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "15"
+              ]
+            },
+            "commands_sha256": "dbff7bbf34f2a74d8c0edf5f917a9cc40433a0738728935bfd719e48da92bee4",
+            "logs": {
+              "0.log": "5de62500d2c1f76f4488424a6fca8927edfcfbd93b6bbe2a4449e1bdd2d60b5b"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "ebe3b834b382",
+            "name": "acceptance-r1026",
+            "input": "qcp",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "16"
+              ]
+            },
+            "commands_sha256": "c793f5da22339f705dbf1c903935a0b7f2ac3cc926f70222e5d0d2b0700b55c5",
+            "logs": {
+              "1.log": "1196a2fb1ec866ea852df829e152b5b7a76b3ee5b9beadf9137487f8d6605d0a",
+              "2.log": "1ebf29e2ee650e0e1d8af1a912d856dae3eb16ee75239a9f6268af9f077c4677",
+              "0.log": "2faae61434fd857e5f3078e58092d027f1ad0afa28896460fcbd7bef3b7e058b"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "f65f0e3bb781",
+            "name": "acceptance-r1026",
+            "input": "tools",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "17"
+              ]
+            },
+            "commands_sha256": "e69fd6f315334038fb84bb37987cece9b224ca1721f4ef9184accfd4b99c62ff",
+            "logs": {
+              "0.log": "914e1b1941ed852650fcfb5a4ae336ea2e0bdd9c5a8d64c17442a63d9b6a4938"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "64ca78181d57",
+            "name": "acceptance-r1026",
+            "input": "root-regressions",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "18"
+              ]
+            },
+            "commands_sha256": "4c3bd083788816ff18c1a7c357bd6531b11094126546de9d60e2a0d9a670ec7c",
+            "logs": {
+              "0.log": "faf6b1a73d4e05b2f9476830ebcae511627dc279ec2a097980798e19efbd5c66"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "1b6d2c7f7d24",
+            "name": "acceptance-r1026",
+            "input": "architecture",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "19"
+              ]
+            },
+            "commands_sha256": "da9dbad5a54568422ea0bcca9afa671be604f0de3682e6f599fe474a6c9f3ac3",
+            "logs": {
+              "0.log": "5e3057c303ca89148f82f43c797e82c74d91e6764fc2a17f9e705add03bb28e4"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "15b83fbe44e1",
+            "name": "acceptance-r1026",
+            "input": "known-gaps",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "20"
+              ]
+            },
+            "commands_sha256": "443b1c6b18b1a30561d792cdd40b013e621b3d1a515060deff96c1b2ea84c0ca",
+            "logs": {
+              "0.log": "c9ca23a38b8e30df7a717bb68005fe69c25e06665df120ac38a8d9dbf894123d"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "c91d4a279137",
+            "name": "acceptance-r1026",
+            "input": "affine",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "23"
+              ]
+            },
+            "commands_sha256": "7f83c31f51ea3bab255c9b37327f4847dac1def6af37c1546d89f659d4d75838",
+            "logs": {
+              "0.log": "36a7e7eb3e3130f16e23c6420e4c9af4bdedf15ef267dc016ca9e3967004d95f"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "c223a08e6f44",
+            "name": "acceptance-r1026",
+            "input": "partial",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "24"
+              ]
+            },
+            "commands_sha256": "1867f89b7e66c8bc176ceaa74c04db9c6744254f31bce86815e0ae167ca1b18a",
+            "logs": {
+              "0.log": "84a036d96f04b24b3a6c3ed462bf03b1c69c4eb1db44e3f8b6815d24335f2890"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "92edf2a30ba3",
+            "name": "acceptance-r1026",
+            "input": "intervals",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "25"
+              ]
+            },
+            "commands_sha256": "1339fef946689fd36715dbe9ac71c32ebf059744bfd765795b9ff6a0140e0b92",
+            "logs": {
+              "0.log": "511936860ce07b821fb87fa3131de7380956b3c2858e18d70bd98c1f0f4c58ba"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "99a46ad97dac",
+            "name": "acceptance-r1026",
+            "input": "quick",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "26"
+              ]
+            },
+            "commands_sha256": "7136df613db30e2ac94cb30451d5c0972438e1348c4d96ac0f93d900af827290",
+            "logs": {
+              "1.log": "661f9c857107969ffe76aae87465303144444805777eabb47dea40aa81e5ce68",
+              "2.log": "19008f1fda5c8f66bce381289a2b4013e41a29139abecf0046fc59e52580f9eb",
+              "0.log": "42f723b04f79ad36d320facbb7e6be82af16fdc7936fa9e06b861afc8bb384eb"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "39d96845ff4d",
+            "name": "acceptance-r1026",
+            "input": "regression-alia",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "27"
+              ]
+            },
+            "commands_sha256": "6e124e54acefde3c176bc7228ff00b0138ae4e81964191147907e791da32c17d",
+            "logs": {
+              "0.log": "bc7222a8076aea0dc5c68cb8f7c4f86a332fe8572f296dccb2fdd10e7a85d4ec"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "f9d62547d8c6",
+            "name": "acceptance-r1026",
+            "input": "regression-alra",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "28"
+              ]
+            },
+            "commands_sha256": "93d91f965b21f035747f608c48f86946b7085f24263c0c25cd9275be462e3b8b",
+            "logs": {
+              "0.log": "d1c641546a862b311c5bac1bbd8316602d66c0f1107f752627ef96d1b6827b9f"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "49d447d61866",
+            "name": "acceptance-r1026",
+            "input": "regression-ania",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "29"
+              ]
+            },
+            "commands_sha256": "7b5f99872acc925ff7478b5ccb98b9fac60deec84b3f9f70222ad5e383e93d00",
+            "logs": {
+              "0.log": "ac6516640c608a98644ff5b3a0ce01110519e216fcb11b833ca23b386ebff346"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "8cf22d36e919",
+            "name": "acceptance-r1026",
+            "input": "regression-auflia",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "30"
+              ]
+            },
+            "commands_sha256": "bd4ba1768bac11e78ceb4fb1cb9609f2813c8f26f7961195a31e74782c003fe7",
+            "logs": {
+              "0.log": "ac6516640c608a98644ff5b3a0ce01110519e216fcb11b833ca23b386ebff346"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "3abbfb05e1fc",
+            "name": "acceptance-r1026",
+            "input": "regression-auflra",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "34"
+              ]
+            },
+            "commands_sha256": "a222c932ddcc019309ed000e6c1cb13590f628d534823d90705ad0d0f075fa7f",
+            "logs": {
+              "0.log": "697467ae8b63f8774656bdbf2547629c734b9fa850fa4be5e2dcb0cba50b5228"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "4e8aba231b37",
+            "name": "acceptance-r1026",
+            "input": "regression-aufnia",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "35"
+              ]
+            },
+            "commands_sha256": "0632ed604c8814b8fca99532278a2f652899de4270c33f9daf841e346cc8aa94",
+            "logs": {
+              "0.log": "ac6516640c608a98644ff5b3a0ce01110519e216fcb11b833ca23b386ebff346"
+            }
+          },
+          {
+            "experiment": "884448ba1078",
+            "run": "2dada04135ca",
+            "name": "acceptance-r1026",
+            "input": "regression-ax",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "36"
+              ]
+            },
+            "commands_sha256": "c14e08f585f8cdfbe2452fe8b837e332c1fce9028fb1289abe0772c3864bf887",
+            "logs": {
+              "0.log": "696ee23bd626a3bc14f3106fd4a0b2b14042aab4090e54cdfb1e3167daa48494"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "5c060a6343ff",
+            "name": "acceptance-r1026",
+            "input": "regression-bool",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "0"
+              ]
+            },
+            "commands_sha256": "2c67eaf7162850fe0befee99721b265c311d4668af29bd4d5d32c28a89c199fa",
+            "logs": {
+              "0.log": "3ef409066bdef9d0249e8a0cc8a31e1814c643d5c16159a1c8610d137d03a524"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "a3cf82a6e3ef",
+            "name": "acceptance-r1026",
+            "input": "regression-dt",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "1"
+              ]
+            },
+            "commands_sha256": "1558db89e977a00f794fc873ebefca744fbaed39ed44574f3f5a2b3a3bcf43a2",
+            "logs": {
+              "0.log": "0129dc8224057fdd2c74837d5db36ebd18b23176187ce0ff515c109a4e717f8e"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "528566353ea2",
+            "name": "acceptance-r1026",
+            "input": "regression-euf",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "4"
+              ]
+            },
+            "commands_sha256": "04cf4b59738226530955b36ba2c9077ed652925cac9e3849f322d29976b2009a",
+            "logs": {
+              "0.log": "5059ac64be4efc714b4c7733d4257541a75e608c39272c237cc76ad2dc85ba20"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "d94b70c6b5c4",
+            "name": "acceptance-r1026",
+            "input": "regression-idl",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "12"
+              ]
+            },
+            "commands_sha256": "bf9a765348c529dbeef7af7ca6854a0592558055f172640216c6849a5dd06d66",
+            "logs": {
+              "0.log": "94623b8f5c8cfbe16d2e017758a6504327f38e08fa8c30ec54cbb1bc5bfae1ff"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "24b7a198cb88",
+            "name": "acceptance-r1026",
+            "input": "regression-lira",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "14"
+              ]
+            },
+            "commands_sha256": "4f69600a8f15ceea4c85f49c69c46cc6c313e4f691feab0484d7528a1de06d15",
+            "logs": {
+              "0.log": "2005d6526cb7094adc12361c4bb90669446e3a483c13b915337326f2128626b0"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "9df6d69eb488",
+            "name": "acceptance-r1026",
+            "input": "regression-nira",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "18"
+              ]
+            },
+            "commands_sha256": "8c42a88e5c7bdfcb0a66916c6043c1ca64673258c875efc7cd5730e391f5cabe",
+            "logs": {
+              "0.log": "246b6eae9ce51776f89490a468de348ea03a3a2960422db0bc77c70de4bedb86"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "eb79b1e2311c",
+            "name": "acceptance-r1026",
+            "input": "regression-nra",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "19"
+              ]
+            },
+            "commands_sha256": "d24d42b79f5ffd61079cfc79aedbb5d7acca1bfba30b1c0627da0e5e0e58e4b6",
+            "logs": {
+              "0.log": "4a70bdc7d626994ed1a3f70042e39e168089d902070f26d865c99d33a37982ad"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "c4dc3ecf41b0",
+            "name": "acceptance-r1026",
+            "input": "regression-quantifiers",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "20"
+              ]
+            },
+            "commands_sha256": "b6df0a2989ef58669e3586dfad3033a8d241eaea8d628b2880de5297653b2fd4",
+            "logs": {
+              "0.log": "f90a2f5622626a11163b822b75c0cdc956019558033c06244285b204b4a28f64"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "53192d84778d",
+            "name": "acceptance-r1026",
+            "input": "regression-rdl",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "24"
+              ]
+            },
+            "commands_sha256": "8edf477c4a1018141a0e66bd99406e8bfdd3173c78ccce9125d2e5f145e4687f",
+            "logs": {
+              "0.log": "bc7222a8076aea0dc5c68cb8f7c4f86a332fe8572f296dccb2fdd10e7a85d4ec"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "316310e5d5a5",
+            "name": "acceptance-r1026",
+            "input": "regression-sl",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "26"
+              ]
+            },
+            "commands_sha256": "c51eab73004e4d698668d65395280ad5a98c0e2130194c1b28aa0677799b2a81",
+            "logs": {
+              "0.log": "c022f77e6a95af8830aa03e82710c3b0f1ff1010c737d2d308561ecb23dbd5d4"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "c2340cce9f09",
+            "name": "acceptance-r1026",
+            "input": "regression-ufdtlia",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "27"
+              ]
+            },
+            "commands_sha256": "1a32c0f67252131c166c6690db32da4398df9eb2e55c1c18f09fc1710ec3f2cc",
+            "logs": {
+              "0.log": "b4c67d708e388ee067600f271f5d4253e086b90eaabf0ecba50d5b2a4f2b5c4b"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "681f713f10f4",
+            "name": "acceptance-r1026",
+            "input": "regression-ufdtnia",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "28"
+              ]
+            },
+            "commands_sha256": "37ff6333509f5455841eb97b62ad6a79bd19b347f63404d2f9117c513659812d",
+            "logs": {
+              "0.log": "c1817975306d08a91eaf120f129970d2faa0edbff615074bbe0ebd8217d0198c"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "4d3bf2181d6d",
+            "name": "acceptance-r1026",
+            "input": "regression-uflia",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "29"
+              ]
+            },
+            "commands_sha256": "45c49798f72f1fd1de4d1f4db927503e819a21ac6d835a027ad6d58758a88cb6",
+            "logs": {
+              "0.log": "13c4cceb1fcc2b55f1c653c15165acd6065f8a5e0b2170ca531b9f3301c09476"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "deb7ff9199a2",
+            "name": "acceptance-r1026",
+            "input": "regression-uflra",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "30"
+              ]
+            },
+            "commands_sha256": "546a2b4f91dc893c176dd4e0d1b03a9d1064a34253a3d8be25831493f9fcd9b3",
+            "logs": {
+              "0.log": "696ee23bd626a3bc14f3106fd4a0b2b14042aab4090e54cdfb1e3167daa48494"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "181227f72c21",
+            "name": "acceptance-r1026",
+            "input": "regression-ufnia",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "34"
+              ]
+            },
+            "commands_sha256": "5753df1746118085c4195dc11e3db2ecd8e2dbab1cceadaff8bc699d5505d6e4",
+            "logs": {
+              "0.log": "94623b8f5c8cfbe16d2e017758a6504327f38e08fa8c30ec54cbb1bc5bfae1ff"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "48d4aa4b746f",
+            "name": "acceptance-r1026",
+            "input": "regression-ufnra",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "35"
+              ]
+            },
+            "commands_sha256": "5fe823ccc99481c389bc3dfbfb7a9814021ebd89003a29aceb200b97361d43ae",
+            "logs": {
+              "0.log": "d1c641546a862b311c5bac1bbd8316602d66c0f1107f752627ef96d1b6827b9f"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "659238bb4f6e",
+            "name": "acceptance-r1026",
+            "input": "theory-models",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "36"
+              ]
+            },
+            "commands_sha256": "d24f7cfea71d3247ff8ec2db2de93088cda7f6ad964bd22a4d0ad97411d0903b",
+            "logs": {
+              "0.log": "7b751b5a07e6af4ca0f60f24a7413fdc6ee976a59c363215206e61fff842eee5"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "f3000615c31d",
+            "name": "acceptance-r1026",
+            "input": "regression-nia",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "37"
+              ]
+            },
+            "commands_sha256": "280291f43a577e6eb717a6349add7c169a4630dc0edfeb68cdfb7731dc44febe",
+            "logs": {
+              "0.log": "baa77ec074da77b10ee6d35a426da972a55a84be9df319925fe7babd3c7d1539"
+            }
+          },
+          {
+            "experiment": "53b0a8d1df48",
+            "run": "562ee5abc0ca",
+            "name": "acceptance-r1026",
+            "input": "certificate-115",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "40"
+              ]
+            },
+            "commands_sha256": "cc263842dd2733a80804e85a28f31ee9945b1d727f4730b6ba82e15d2dcc2521",
+            "logs": {
+              "0.log": "823672e87696cac914fac33d8d0027db15a21b566e700a65300cdca704cf910e"
+            }
+          },
+          {
+            "experiment": "f19697d7298a",
+            "run": "0e5374cdbadd",
+            "name": "xolver-incremental-candidate-cover-r1025-formal-pilot-20261031",
+            "input": "20",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "0"
+              ]
+            },
+            "report_sha256": "b757749b7708de411d871c66c364f7a74b2b5fffcd9548218c87f899d75f3d3c",
+            "input_sha256": "6b7f045865d2b9b8e2aec04acc1f5aa9e45f4dd39266d07ac00f1f18f13ae27c"
+          },
+          {
+            "experiment": "f19697d7298a",
+            "run": "3e18e041185b",
+            "name": "xolver-incremental-candidate-cover-r1025-formal-pilot-20261031",
+            "input": "22",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "1"
+              ]
+            },
+            "report_sha256": "101ec4c8870ef593b7e782d3557bda1fcacf4062e00d32e87e8fd0e9130de3f2",
+            "input_sha256": "ccbe9de2da7a0afa1c094e7c9caaaff2b4cdffd927cd7f42b75fa95d21d8e8ca"
+          },
+          {
+            "experiment": "f19697d7298a",
+            "run": "0670d1fa645e",
+            "name": "xolver-incremental-candidate-cover-r1025-formal-pilot-20261031",
+            "input": "65",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "2"
+              ]
+            },
+            "report_sha256": "6f3bc64f9e9fe941fdc9d7e26e869635e4a316f6de1e2a70d2076ffe2be94aff",
+            "input_sha256": "bf86296d7a4a9f4366182360877d75d53dbbd3fda7210dedfdb8a8b882a52a11"
+          },
+          {
+            "experiment": "f19697d7298a",
+            "run": "f71c59b8129c",
+            "name": "xolver-incremental-candidate-cover-r1025-formal-pilot-20261031",
+            "input": "69",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "3"
+              ]
+            },
+            "report_sha256": "54ed6c10b155e55228d68a7d2c7089751e2871c4be9b29a906aee674a4325e22",
+            "input_sha256": "72e580ee3a690b54865e129f44529a71d81112f35193cbc93775236ea62a0f13"
+          },
+          {
+            "experiment": "f19697d7298a",
+            "run": "04b2cd886e1d",
+            "name": "xolver-incremental-candidate-cover-r1025-formal-pilot-20261031",
+            "input": "70",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "4"
+              ]
+            },
+            "report_sha256": "5938bcd2357dcf9190385879be38edd10a0ceaa7cb5033b2361ef26211125510",
+            "input_sha256": "e9a9345ed7fb27a4b00c5ecafb3c544c1d2d8ea432cac1890154337bd5c018fa"
+          },
+          {
+            "experiment": "f19697d7298a",
+            "run": "9dcf9d714f0c",
+            "name": "xolver-incremental-candidate-cover-r1025-formal-pilot-20261031",
+            "input": "72",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "6"
+              ]
+            },
+            "report_sha256": "aa17965c1c424fe10c7cef393d34261079865b28733bf8b5a1a9bbdb6072ff9f",
+            "input_sha256": "cc66abe5f5716404298fd97cb383e65487d9277ea2611ee41add8e324e7eb2c4"
+          },
+          {
+            "experiment": "f19697d7298a",
+            "run": "cb8c4a683f48",
+            "name": "xolver-incremental-candidate-cover-r1025-formal-pilot-20261031",
+            "input": "73",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "8"
+              ]
+            },
+            "report_sha256": "2949caf382dd801911139329290a96f201c8fd2bf01f4cb01c4947548ced09cb",
+            "input_sha256": "7b9c5af8d53042348da3918b47d329d79868512f9d3e65d88b43b1b4dac2cf92"
+          },
+          {
+            "experiment": "f19697d7298a",
+            "run": "b1fe7da579b8",
+            "name": "xolver-incremental-candidate-cover-r1025-formal-pilot-20261031",
+            "input": "77",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "9"
+              ]
+            },
+            "report_sha256": "42f7efc6ddbdd4f365e5c8bb5eb7270a5519963f5284e996ff07f9b08ae0a6e2",
+            "input_sha256": "7511fd4d07cdce648daf4ac76fc32c90af91cf9d9576d4e955a51d0dbd4534b7"
+          },
+          {
+            "experiment": "f19697d7298a",
+            "run": "4abceabef1fb",
+            "name": "xolver-incremental-candidate-cover-r1025-formal-pilot-20261031",
+            "input": "144",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "10"
+              ]
+            },
+            "report_sha256": "ed4bac4ef2f6de151e41e4933668785ab5657610ea7135864b57b54cd6043114",
+            "input_sha256": "d26dd3ac7eb05e598a7b54fe02cb785ae7a85da7ceb1e5fcc95f2e4f8c852c1c"
+          },
+          {
+            "experiment": "f19697d7298a",
+            "run": "7719bf856a12",
+            "name": "xolver-incremental-candidate-cover-r1025-formal-pilot-20261031",
+            "input": "146",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "11"
+              ]
+            },
+            "report_sha256": "162a78a3d884374ac5a93f0c27f85e7a080397b6bdbdbb6a64b10ca019998ec1",
+            "input_sha256": "2e27203a3ec975510dab64d149ae5f2bd8de47c8128725d04985555880240dc1"
+          },
+          {
+            "experiment": "f19697d7298a",
+            "run": "4a9d6b06956c",
+            "name": "xolver-incremental-candidate-cover-r1025-formal-pilot-20261031",
+            "input": "148",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "12"
+              ]
+            },
+            "report_sha256": "9764761efe3476682cf8e1e971e6ae56009e2033350c14f3ee2bb1b522b3c31d",
+            "input_sha256": "4f9ef64958113d079eca3adc2023c206c8bc2a42b7f02e6acb0f11ce0a2af4be"
+          },
+          {
+            "experiment": "f19697d7298a",
+            "run": "9b297c33cdfc",
+            "name": "xolver-incremental-candidate-cover-r1025-formal-pilot-20261031",
+            "input": "149",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "13"
+              ]
+            },
+            "report_sha256": "9eb18643ab43cbc95e4e88513c9c1ffd0eb966d1f6adaed03b0767f599a02a1e",
+            "input_sha256": "fa38407f1095afff71b84b3c7be9da57614d7cbdb6800672ef7d85a6dfc2412d"
+          },
+          {
+            "experiment": "18c5e429513f",
+            "run": "a963a07a8f40",
+            "name": "xolver-projected-relaxation-model-profile-r1020-public-diagnostic-20261031",
+            "input": "69",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "0"
+              ]
+            },
+            "record_sha256": "516450c47d423f5a2908ec7552115ffc2fb67fe77d9f75b072cca25cccbbc670",
+            "input_sha256": "72e580ee3a690b54865e129f44529a71d81112f35193cbc93775236ea62a0f13"
+          },
+          {
+            "experiment": "18c5e429513f",
+            "run": "91e87bbb585c",
+            "name": "xolver-projected-relaxation-model-profile-r1020-public-diagnostic-20261031",
+            "input": "77",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "1"
+              ]
+            },
+            "record_sha256": "ddebc89bf9d5cff4eaabc4ae3ae3fb550b39daa19b67b1a620f1d80aca20d1f2",
+            "input_sha256": "7511fd4d07cdce648daf4ac76fc32c90af91cf9d9576d4e955a51d0dbd4534b7"
+          },
+          {
+            "experiment": "18c5e429513f",
+            "run": "1b56df0c8482",
+            "name": "xolver-projected-relaxation-model-profile-r1020-public-diagnostic-20261031",
+            "input": "149",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "5"
+              ]
+            },
+            "record_sha256": "2f7c69161370200f37f58ac55d4700b707b372f78d6134820a0230279e8c6b97",
+            "input_sha256": "fa38407f1095afff71b84b3c7be9da57614d7cbdb6800672ef7d85a6dfc2412d"
+          },
+          {
+            "experiment": "5df30187ee44",
+            "run": "7d2a64876274",
+            "name": "xolver-incremental-candidate-cover-profile-r1024-public-diagnostic-20261031",
+            "input": "69",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "0"
+              ]
+            },
+            "record_sha256": "701bb839dd929d127c2e17c2923b35f99b91c978a8af5ed86baa2649991e52ad",
+            "input_sha256": "72e580ee3a690b54865e129f44529a71d81112f35193cbc93775236ea62a0f13"
+          },
+          {
+            "experiment": "5df30187ee44",
+            "run": "99ed9b09dbc1",
+            "name": "xolver-incremental-candidate-cover-profile-r1024-public-diagnostic-20261031",
+            "input": "77",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "1"
+              ]
+            },
+            "record_sha256": "7de68752f67dc62dfd17a69c51803e3b88c032939e2ee604258edc24def4a3af",
+            "input_sha256": "7511fd4d07cdce648daf4ac76fc32c90af91cf9d9576d4e955a51d0dbd4534b7"
+          },
+          {
+            "experiment": "5df30187ee44",
+            "run": "2d5cc85313a7",
+            "name": "xolver-incremental-candidate-cover-profile-r1024-public-diagnostic-20261031",
+            "input": "149",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "4"
+              ]
+            },
+            "record_sha256": "df897e984f8e05413d85a048704496756aa33a98d5b587403a4b35fa68aeba76",
+            "input_sha256": "fa38407f1095afff71b84b3c7be9da57614d7cbdb6800672ef7d85a6dfc2412d"
+          }
+        ],
+        "timing_changes": [],
+        "remaining_gaps": [
+          {
+            "index": 69,
+            "logic": "QF_NRA",
+            "family": "LassoRanker",
+            "input_sha256": "72e580ee3a690b54865e129f44529a71d81112f35193cbc93775236ea62a0f13",
+            "member": "QF_NRA/LassoRanker/CooperatingT2/byron-2.t2.c_Iteration3_Loop_4-pieceTemplate.smt2",
+            "xolver": "timeout",
+            "z3": "sat",
+            "z3_seconds": 0.7670031134039164,
+            "unconfirmed": false
+          },
+          {
+            "index": 72,
+            "logic": "QF_NRA",
+            "family": "2019-ezsmt",
+            "input_sha256": "cc66abe5f5716404298fd97cb383e65487d9277ea2611ee41add8e324e7eb2c4",
+            "member": "QF_NRA/2019-ezsmt/reverseFolding/39-reverse_folding-0-0.smt2",
+            "xolver": "timeout",
+            "z3": "sat",
+            "z3_seconds": 9.336607821285725,
+            "unconfirmed": false
+          },
+          {
+            "index": 77,
+            "logic": "QF_NRA",
+            "family": "UltimateAutomizer",
+            "input_sha256": "7511fd4d07cdce648daf4ac76fc32c90af91cf9d9576d4e955a51d0dbd4534b7",
+            "member": "QF_NRA/UltimateAutomizer/InVarSynth_InvariantSynthesis_Disjunctive02.bpl_Iteration1_0.smt2",
+            "xolver": "timeout",
+            "z3": "sat",
+            "z3_seconds": 0.3663684017956257,
+            "unconfirmed": false
+          },
+          {
+            "index": 144,
+            "logic": "QF_NRA",
+            "family": "2019-ezsmt",
+            "input_sha256": "d26dd3ac7eb05e598a7b54fe02cb785ae7a85da7ceb1e5fcc95f2e4f8c852c1c",
+            "member": "QF_NRA/2019-ezsmt/reverseFolding/31-reverse_folding-0-0.smt2",
+            "xolver": "timeout",
+            "z3": "sat",
+            "z3_seconds": 7.93380730599165,
+            "unconfirmed": false
+          },
+          {
+            "index": 146,
+            "logic": "QF_NRA",
+            "family": "LassoRanker",
+            "input_sha256": "2e27203a3ec975510dab64d149ae5f2bd8de47c8128725d04985555880240dc1",
+            "member": "QF_NRA/LassoRanker/CooperatingT2/consts1.t2.c_Iteration1_Lasso_4-pieceTemplate.smt2",
+            "xolver": "timeout",
+            "z3": "sat",
+            "z3_seconds": 21.460822872817516,
+            "unconfirmed": false
+          },
+          {
+            "index": 149,
+            "logic": "QF_NRA",
+            "family": "UltimateAutomizer",
+            "input_sha256": "fa38407f1095afff71b84b3c7be9da57614d7cbdb6800672ef7d85a6dfc2412d",
+            "member": "QF_NRA/UltimateAutomizer/InVarSynth_agroce_minmax.c_Iteration2_0.smt2",
+            "xolver": "timeout",
+            "z3": "sat",
+            "z3_seconds": 0.1665108408778906,
+            "unconfirmed": false
+          }
+        ],
+        "invalid_original_triads": [],
+        "protected_sets_used": false,
+        "boundary": "Incremental weighted cover plus sparse parameter-to-constraint indexing; exact old selection/tie order is checked against an independent full-rescan reference. Twelve fresh original-input triads, 60s/one leased physical CPU/16GiB each, initial model capture. Raw and independently verified solves are separated. No protected or full-program QCP result is claimed. Full160 promotion still requires the remaining disjoint inputs and exact CI qualification."
+      }
+    },
+    {
+      "server_path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/nra-seed-diagnostics-r1032/record.json",
+      "sha256": "b22bbd2a96181a40a65e1d26954bae6290cfdb1819d8ee9af3fe337dc8f21fc2",
+      "record": {
+        "source_head": "624af3d1cd58075fd4c5a7b6ce6516c53b931b29",
+        "parent_audit_sha256": "7d96f5d797fc0c42a41fe7703d1687f9d722e3883e372e4edd0f87299c064c4f",
+        "experiments": [
+          {
+            "folder": "nra-lp-seed-r1028",
+            "qualification": {
+              "source_head": "624af3d1cd58075fd4c5a7b6ce6516c53b931b29",
+              "source_manifest_sha256": "e1a232b5a91b7d13bfe461c18fe3e45c1ca13f78cc6fa1133dc38c88b03ce425",
+              "transform_sha256": "55b60b9237f07cc453fff4435fbea2646fc2ab9044483d78f16b2e4590412492",
+              "originals": {
+                "src/applications/satisfiability/smt/qfnra/NraSolver.cpp": "2139c956966137d3ad6cd4772272edf92a41cc9cbc140c00a4bcd9efda623d27",
+                "src/search/nra/reasoners/NraLocalSearch.cpp": "d7ff85c43c9a931d636c9698ed3394ab0bc799cb8e0af6f51178acdb07a161bf"
+              },
+              "diagnostic_sources": {
+                "/pub/data/jiafq/xolver/build/nra-lp-seed-r1028-0.cpp": "6002706383f813b1d260927e0ead933c880a9ba7b5f4a17dad93236065ede8bf",
+                "/pub/data/jiafq/xolver/build/nra-lp-seed-r1028-1.cpp": "6058496c56df5f816234f882c6e920c544e51a8f98bec2b53ba501bfe6938811"
+              },
+              "objects": {
+                "/pub/data/jiafq/xolver/build/nra-lp-seed-r1028-0.o": "1cb31d1d45462163f14252b130364472f6764b9ff35aa70f2f4231393f3f3fd7",
+                "/pub/data/jiafq/xolver/build/nra-lp-seed-r1028-1.o": "5bb20fbf3124bdc27f095c0ce292f269a0aa636e8d63d6edf5a64a0009bb7c62"
+              },
+              "diagnostic_binary_sha256": "9b63ccb4faeb46c01ae0561f5c3573520012851ffca3e2336486a8d1faf6f3ac",
+              "diagnostic_unit_sha256": "f7ac03e599dc41627343e7a000a5b5b282c6f3b436c0e9890b0f0e71f0c56765",
+              "unmodified": {
+                "/pub/data/jiafq/xolver/build/bin/xolver": "8bf636b0a6777427f7147d3bbf972f1429e81c60b1d15e4aff0080821eb264f4",
+                "/pub/data/jiafq/xolver/build/src/libxolver_core.a": "4e118e2766f65aedd0254a2b3f4db5d19f6e1285456c2b3334b0989d2ddd4f47",
+                "/pub/data/jiafq/xolver/build/tests/xolver_unit_tests": "128aab15813617fff7adf4dc6c3cf4a84e945abd597667e37531203193f44049"
+              },
+              "logs": {
+                "link-xolver.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "compile-0.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "unit.log": "ad797ccc59d723f21fb77a58fd6e64c31377291d727b3941e132d2202e1b9c81",
+                "compile-1.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "link-unit.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+              },
+              "metrics": {
+                "completed": 1,
+                "failures": 0
+              },
+              "protected_sets_used": false,
+              "boundary": "Private LP-seeded rational repair. Exact existing score selects the projected point only if it improves the prepared start. The original owner validates all models. Thread-local transport is private diagnostic scaffolding; a production change requires explicit per-call seed input and lifecycle tests. Production source, CLI, archive and unit remain unchanged."
+            },
+            "qualification_sha256": "1dc5ccdada652889ad83e5ff0b93ec76069ea83ea40583c301eb5c0f5d1f7e08",
+            "profiles": [
+              {
+                "index": 69,
+                "result": "timeout",
+                "record_sha256": "f4ece5d9956974d8e1648f6e7587996770265c42d8140c4a4152aa7f5f9a5032",
+                "seed_log": "phase=zero default_false=504 seed_false=134 default_magnitude=76.8428 seed_magnitude=5.73754 chosen=0 us=15474\nphase=prepared default_false=476 seed_false=134 default_magnitude=150.536 seed_magnitude=5.73754 chosen=1 us=2085893\n",
+                "boundary_log": "variables=1217 parameters=167 retained_equalities=252 contexts=1 checks=0 choices=0 rejected=0 definitions=404 models=0 depth=0 exhausted=1 found=0 us=23179\n"
+              },
+              {
+                "index": 77,
+                "result": "timeout",
+                "record_sha256": "761888b42aea37264bacced774c579aea7bf595292a3dca09f4df5c46978407e",
+                "seed_log": "phase=zero default_false=60 seed_false=34 default_magnitude=0.0585938 seed_magnitude=4.02539 chosen=0 us=1217\nphase=prepared default_false=36 seed_false=34 default_magnitude=18 seed_magnitude=4.02539 chosen=1 us=18875\n",
+                "boundary_log": "variables=132 parameters=80 retained_equalities=16 contexts=1 checks=896 choices=549 rejected=182 definitions=234 models=1 depth=37 exhausted=1 found=0 us=20978\n"
+              },
+              {
+                "index": 149,
+                "result": "timeout",
+                "record_sha256": "c929b115035dc821a45706d095586f6794396067ead4f1d205172da01f7ba1b4",
+                "seed_log": "phase=zero default_false=21 seed_false=11 default_magnitude=0.0205078 seed_magnitude=0.259766 chosen=0 us=834\nphase=prepared default_false=24 seed_false=11 default_magnitude=8.00406 seed_magnitude=0.259766 chosen=1 us=9643\n",
+                "boundary_log": "variables=135 parameters=70 retained_equalities=28 contexts=1 checks=864 choices=644 rejected=403 definitions=192 models=1 depth=66 exhausted=1 found=0 us=20942\n"
+              }
+            ]
+          },
+          {
+            "folder": "boundary-lp-seed-r1030",
+            "qualification": {
+              "source_head": "624af3d1cd58075fd4c5a7b6ce6516c53b931b29",
+              "source_manifest_sha256": "e1a232b5a91b7d13bfe461c18fe3e45c1ca13f78cc6fa1133dc38c88b03ce425",
+              "transform_sha256": "3e21d1809574ebd3c38fa24d356ef87d5edaac94f0614c00835f6faaaba6e627",
+              "originals": {
+                "src/search/candidate/PartialLinearModelSearch.cpp": "593dc4a95c2d0cfeca344684a097b2fb908814ead37f400cb5c4c282177aa5bc",
+                "src/applications/satisfiability/smt/qfnra/NraSolver_stages.cpp": "91c6d329c9d2ebfa44ee942f31363ac101e3be6a93212a4df3db304f3927adfe"
+              },
+              "diagnostic_sources": {
+                "/pub/data/jiafq/xolver/build/boundary-lp-seed-r1030-0.cpp": "8742a9a63fc89ba970a32d54414d51ddaeaba3f6b05b8e71ec12d5a14d545bb9",
+                "/pub/data/jiafq/xolver/build/boundary-lp-seed-r1030-1.cpp": "3cb87e533a1fcd5f7ecd84fa63190a92ed22db8524361bc9d8b020e40c250324"
+              },
+              "objects": {
+                "/pub/data/jiafq/xolver/build/boundary-lp-seed-r1030-0.o": "a4951386b39215af9f85a9306f4e9c75a86b187581efdfd32b28f91f5db632c5",
+                "/pub/data/jiafq/xolver/build/boundary-lp-seed-r1030-1.o": "f48c0273561307e5087aa134918dfd0c171019f68269d2312fc43038681e29cc"
+              },
+              "diagnostic_binary_sha256": "898012b81e040ed5ce1cdbeb2d0483dc740142c6281fb702dfc44abfb399f8be",
+              "diagnostic_unit_sha256": "a6c977d15c847721e814cebf723c47dd19e2f7cc62b521ee87d02b3d7d10451b",
+              "unmodified": {
+                "/pub/data/jiafq/xolver/build/bin/xolver": "8bf636b0a6777427f7147d3bbf972f1429e81c60b1d15e4aff0080821eb264f4",
+                "/pub/data/jiafq/xolver/build/src/libxolver_core.a": "4e118e2766f65aedd0254a2b3f4db5d19f6e1285456c2b3334b0989d2ddd4f47",
+                "/pub/data/jiafq/xolver/build/tests/xolver_unit_tests": "128aab15813617fff7adf4dc6c3cf4a84e945abd597667e37531203193f44049"
+              },
+              "logs": {
+                "link-xolver.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "compile-0.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "unit.log": "e1733e361c7d67db04b984ad43d4bb59b0dac60dfb58edba809897b871f14059",
+                "compile-1.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "link-unit.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+              },
+              "metrics": {
+                "completed": 1,
+                "failures": 0
+              },
+              "protected_sets_used": false,
+              "boundary": "Private LP-seeded partial linear completion. Closed upper endpoints retain precedence; projected parameter coordinates precede the default simplex point. Every completed model is checked against every original polynomial. The local prefix remains reversible and no conflict escapes. Thread-local transport is private diagnostic scaffolding; a production change requires explicit per-call seed input and lifecycle tests. Production source, CLI, archive and unit remain unchanged."
+            },
+            "qualification_sha256": "d6395cca8278ec8ddf3215c6beb3702110d398394b9138311ecfd900633df75e",
+            "profiles": [
+              {
+                "index": 69,
+                "result": "timeout",
+                "record_sha256": "2be60e4a8e0b642b5cf84fe09d371d89bedd30164103d4f16b277ab21eb91590",
+                "seed_log": null,
+                "boundary_log": "variables=1217 parameters=167 retained_equalities=252 contexts=1 checks=0 choices=0 rejected=0 definitions=489 models=0 depth=0 exhausted=1 found=0 us=35851\n"
+              },
+              {
+                "index": 77,
+                "result": "timeout",
+                "record_sha256": "6384328da552652b27c63100e6d6f0668713b690f93b0d1c5b0580e79d12dcf6",
+                "seed_log": null,
+                "boundary_log": "variables=132 parameters=80 retained_equalities=16 contexts=1 checks=845 choices=583 rejected=295 definitions=209 models=1 depth=31 exhausted=1 found=0 us=21484\n"
+              },
+              {
+                "index": 149,
+                "result": "timeout",
+                "record_sha256": "c123ba9cfd6bb6509a3f5cefa274f1282130938d2c75c873efdafd9be1a9b4db",
+                "seed_log": null,
+                "boundary_log": "variables=135 parameters=70 retained_equalities=28 contexts=1 checks=781 choices=581 rejected=359 definitions=194 models=1 depth=66 exhausted=1 found=0 us=21209\n"
+              }
+            ]
+          }
+        ],
+        "runs": [
+          {
+            "run": "9c1548015a36",
+            "experiment": "7086592cffe5",
+            "input": "build",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "0"
+              ]
+            }
+          },
+          {
+            "run": "7fc8561bf814",
+            "experiment": "133a2466c6d9",
+            "input": "69",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "0"
+              ]
+            }
+          },
+          {
+            "run": "00d92a6997e7",
+            "experiment": "133a2466c6d9",
+            "input": "77",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "1"
+              ]
+            }
+          },
+          {
+            "run": "e88e0293d69c",
+            "experiment": "133a2466c6d9",
+            "input": "149",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "2"
+              ]
+            }
+          },
+          {
+            "run": "26e5d7795dd5",
+            "experiment": "80a7f3b01412",
+            "input": "build",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "0"
+              ]
+            }
+          },
+          {
+            "run": "8413fb42e812",
+            "experiment": "a1ab2319ca9f",
+            "input": "69",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "0"
+              ]
+            }
+          },
+          {
+            "run": "ce7d904478cf",
+            "experiment": "a1ab2319ca9f",
+            "input": "77",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "1"
+              ]
+            }
+          },
+          {
+            "run": "4a5062a90ab6",
+            "experiment": "a1ab2319ca9f",
+            "input": "149",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "2"
+              ]
+            }
+          }
+        ],
+        "harness_source_sha256": "8a98d5a0117db13d5c51eda56b9d6a7ec16c56313130e7eb9fc206f2e9a95216",
+        "old_harness_sha256": "8fbe32690685d74206e714e3b34c306a40112b6bee61fa0b045f60c8f956def0",
+        "original_manifest_sha256": "e1a232b5a91b7d13bfe461c18fe3e45c1ca13f78cc6fa1133dc38c88b03ce425",
+        "metrics": {
+          "completed": 1,
+          "failures": 0
+        },
+        "protected_sets_used": false,
+        "boundary": "Two private candidate-repair diagnostics, each qualified against the unchanged native parent and three 20-second public profiles. These are not formal scores or whole-program QCP results. The old harness is frozen without a timing run; it is for a future fresh same-core comparison of bracket initialization and independently replayed models."
+      }
+    },
+    {
+      "server_path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/stage-r1037.json",
+      "sha256": "537be04f6fca9bf2ff6ee491352732be38e2209435a59c5e590c4ea1b931cce0",
+      "record": {
+        "constructed_model_checks": [],
+        "status": "pilot_assessed_fresh_full160_pending_if_promoted",
+        "diagnostic_records": [
+          {
+            "experiment": "5df30187ee44",
+            "run": "7d2a64876274",
+            "name": "xolver-incremental-candidate-cover-profile-r1024-public-diagnostic-20261031",
+            "input": "69",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "0"
+              ]
+            },
+            "record_sha256": "701bb839dd929d127c2e17c2923b35f99b91c978a8af5ed86baa2649991e52ad",
+            "input_sha256": "72e580ee3a690b54865e129f44529a71d81112f35193cbc93775236ea62a0f13"
+          },
+          {
+            "experiment": "5df30187ee44",
+            "run": "99ed9b09dbc1",
+            "name": "xolver-incremental-candidate-cover-profile-r1024-public-diagnostic-20261031",
+            "input": "77",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "1"
+              ]
+            },
+            "record_sha256": "7de68752f67dc62dfd17a69c51803e3b88c032939e2ee604258edc24def4a3af",
+            "input_sha256": "7511fd4d07cdce648daf4ac76fc32c90af91cf9d9576d4e955a51d0dbd4534b7"
+          },
+          {
+            "experiment": "5df30187ee44",
+            "run": "2d5cc85313a7",
+            "name": "xolver-incremental-candidate-cover-profile-r1024-public-diagnostic-20261031",
+            "input": "149",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "4"
+              ]
+            },
+            "record_sha256": "df897e984f8e05413d85a048704496756aa33a98d5b587403a4b35fa68aeba76",
+            "input_sha256": "fa38407f1095afff71b84b3c7be9da57614d7cbdb6800672ef7d85a6dfc2412d"
+          },
+          {
+            "experiment": "dea7adafda22",
+            "run": "a25c1fdfa724",
+            "name": "xolver-bounded-local-initialization-profile-r1035-public-diagnostic-20261031",
+            "input": "69",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "1"
+              ]
+            },
+            "record_sha256": "e77c4b08646956e396dbf8e50309d9924be4a4bb4dc29519d47e191de4776d04",
+            "input_sha256": "72e580ee3a690b54865e129f44529a71d81112f35193cbc93775236ea62a0f13"
+          },
+          {
+            "experiment": "dea7adafda22",
+            "run": "0601efe48101",
+            "name": "xolver-bounded-local-initialization-profile-r1035-public-diagnostic-20261031",
+            "input": "77",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "4"
+              ]
+            },
+            "record_sha256": "7a10b5395bcc76909f38c9878fba91155aa88a795984326240d7b4fa50ccd2f2",
+            "input_sha256": "7511fd4d07cdce648daf4ac76fc32c90af91cf9d9576d4e955a51d0dbd4534b7"
+          },
+          {
+            "experiment": "dea7adafda22",
+            "run": "11c3b87e8820",
+            "name": "xolver-bounded-local-initialization-profile-r1035-public-diagnostic-20261031",
+            "input": "149",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "6"
+              ]
+            },
+            "record_sha256": "b2049f39bb398704406b3eadc01be14a5c9083a9ba7f6440d8e87d9f3560ea5c",
+            "input_sha256": "fa38407f1095afff71b84b3c7be9da57614d7cbdb6800672ef7d85a6dfc2412d"
+          }
+        ],
+        "diagnostic_boundary": "Ten-second profiles on three public gaps. R1024 profiles the parent and R1035 the indexed, bounded local initialization. Both use three public gaps only. Profiles never substitute for formal same-budget solves.",
+        "implementation_commit": "469baa2776439c7ece9d15ee2f302ce344a96b4b",
+        "model_evidence_boundaries": [
+          {
+            "index": 148,
+            "solver": "z3",
+            "result": "sat",
+            "replay": "error",
+            "error": null,
+            "input_sha256": "4f9ef64958113d079eca3adc2023c206c8bc2a42b7f02e6acb0f11ce0a2af4be"
+          }
+        ],
+        "schema": "xolver-bounded-local-initialization-pilot/1",
+        "implementation_source": {
+          "source_head": "469baa2776439c7ece9d15ee2f302ce344a96b4b",
+          "source_manifest_sha256": "adbc83fe9fc6771133b2eec7bda558c9cc4184fd77230405dc7cc848eb5feaa7",
+          "binary_sha256": "638941b7a04b4c4713a93e7da2aec79bce13b0bf56d6242d26dff6861ca91671",
+          "sv_binary_sha256": "e398e33f428421d3087788a605314229536dc97035b1a53ccc4ecfd3dc22da87",
+          "binaries": {
+            "xolver": "638941b7a04b4c4713a93e7da2aec79bce13b0bf56d6242d26dff6861ca91671",
+            "xolver-sv": "e398e33f428421d3087788a605314229536dc97035b1a53ccc4ecfd3dc22da87",
+            "xolver-parallel-worker": "0935ff15f858c0f90b88bd7307408f482abd7f05571fb096afbee6aaa0a34f3d"
+          },
+          "unit_binary_sha256": "dceee6bd62c852d4b80249b4cf1a31c65aecfceb7cf89b4cdb5d4fce96c53adb",
+          "harness_sha256": "550c30fff6360e3f342e6aef2d256793b0872d6070f8ab262d299042751c3494",
+          "harness_source_sha256": "8a98d5a0117db13d5c51eda56b9d6a7ec16c56313130e7eb9fc206f2e9a95216",
+          "logs": {
+            "targeted.log": "8a8a9819571ae0efffa0f63ab326bca04684d86567d857c3d2eadb980f1c7bee",
+            "compile-harness.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "build.log": "b356cde8f991ce816d653a708fde9a32a39e8c320b835e14487d30a495f49ce8",
+            "overlay.log": "720c78964b0579489598b6e460c9a5aa222b4507d88b549226493e00ec7e63d0",
+            "link-harness.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "configure.log": "565cb4047d79c4688d84df5536673e6b37e61ffd8523d6a3c8370c85e6d906d6"
+          },
+          "metrics": {
+            "completed": 1,
+            "failures": 0
+          },
+          "protected_sets_used": false
+        },
+        "acceptance": [
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "9fa34e39b924",
+            "name": "acceptance-r1036",
+            "input": "unit",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "0"
+              ]
+            },
+            "commands_sha256": "25d31709e22030f76027eeaa322bdf428f647cc4796cae256bae566e1bf3d3e3",
+            "logs": {
+              "0.log": "c7653f3d79cb2afc91e1228786f403521131c138de9e84cd4b97e286de1e8362"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "1de5098686da",
+            "name": "acceptance-r1036",
+            "input": "regression-lra",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "12"
+              ]
+            },
+            "commands_sha256": "b948445c1a352189a79552b94b47b835414d2552d6dfe182704a0f96092e8065",
+            "logs": {
+              "0.log": "4edeaa4dd7007d75063551d705f540107b7b32336eaa93bc1352596a00006d47"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "5c25693f3833",
+            "name": "acceptance-r1036",
+            "input": "regression-lia",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "15"
+              ]
+            },
+            "commands_sha256": "fd5275873b73bdc4a68c1c31655f4ad1d1bd32435eedae6a16fa695d973c0d42",
+            "logs": {
+              "0.log": "d64539e939cca2332526f974ce3defab290462b32b36ad1662d26bae1849059b"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "e6471a86b131",
+            "name": "acceptance-r1036",
+            "input": "linear",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "16"
+              ]
+            },
+            "commands_sha256": "1bf4e13111fdf5b9d1a55fba6f10629b1797d4d7bf2dc77cc352ee2696ac0a13",
+            "logs": {
+              "0.log": "5de62500d2c1f76f4488424a6fca8927edfcfbd93b6bbe2a4449e1bdd2d60b5b"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "a1a94d93421e",
+            "name": "acceptance-r1036",
+            "input": "qcp",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "19"
+              ]
+            },
+            "commands_sha256": "9b6f0a93c40663bad56968f349dcc66a84eaf2419c1f7f49d4d6c5501120ca0e",
+            "logs": {
+              "1.log": "1196a2fb1ec866ea852df829e152b5b7a76b3ee5b9beadf9137487f8d6605d0a",
+              "2.log": "1ebf29e2ee650e0e1d8af1a912d856dae3eb16ee75239a9f6268af9f077c4677",
+              "0.log": "2faae61434fd857e5f3078e58092d027f1ad0afa28896460fcbd7bef3b7e058b"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "ee5a38c99331",
+            "name": "acceptance-r1036",
+            "input": "tools",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "22"
+              ]
+            },
+            "commands_sha256": "e4c32728f6176ccb752bc4ebee25e5d5543893b38e3dfc43ae22b2cb4ab222b1",
+            "logs": {
+              "0.log": "2179535d402e11172b6023ad178b8e75c0d66d98f0af085af816dfac1170c957"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "bfa33d29e012",
+            "name": "acceptance-r1036",
+            "input": "root-regressions",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "23"
+              ]
+            },
+            "commands_sha256": "a4269f012045eb4d09fcad30a21129bfa321327bc7e8d33b555067e4ade2b2dd",
+            "logs": {
+              "0.log": "59d0b050c7c80859ea3a79c54148bdf12270d57b4d2ed2d07bdbc29f48422ce1"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "349e7d7dce21",
+            "name": "acceptance-r1036",
+            "input": "architecture",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "24"
+              ]
+            },
+            "commands_sha256": "fc66bbd35a5f4581133114f0e7734ffef20e1439674ac76c88d5b0e91bde55b3",
+            "logs": {
+              "0.log": "5e3057c303ca89148f82f43c797e82c74d91e6764fc2a17f9e705add03bb28e4"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "d0a098ad71b7",
+            "name": "acceptance-r1036",
+            "input": "known-gaps",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "25"
+              ]
+            },
+            "commands_sha256": "2221d5a4c80c5e2e0d5697b7cd34561f5c9d7ca2688b2c1e9e447c943ce304d3",
+            "logs": {
+              "0.log": "497540a137201d75665f8c54d3320d56d39570e91b027c453c230cf53ac86613"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "c600df976b42",
+            "name": "acceptance-r1036",
+            "input": "affine",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "26"
+              ]
+            },
+            "commands_sha256": "d4e8445c72d70387529696fe1c2e0d01c9d91109b3baabcddfdd7e202b36f543",
+            "logs": {
+              "0.log": "36a7e7eb3e3130f16e23c6420e4c9af4bdedf15ef267dc016ca9e3967004d95f"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "7e03c74e71ab",
+            "name": "acceptance-r1036",
+            "input": "partial",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "27"
+              ]
+            },
+            "commands_sha256": "f2ec1ca9ed327de7a09faeec7243a4e065af21517ab18d0638b898237180268c",
+            "logs": {
+              "0.log": "84a036d96f04b24b3a6c3ed462bf03b1c69c4eb1db44e3f8b6815d24335f2890"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "8c41d2795508",
+            "name": "acceptance-r1036",
+            "input": "intervals",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "29"
+              ]
+            },
+            "commands_sha256": "c36d248985f3533dbf41b8f1d4a9f961814f1bea84b06383e26918ab8a613902",
+            "logs": {
+              "0.log": "511936860ce07b821fb87fa3131de7380956b3c2858e18d70bd98c1f0f4c58ba"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "5d835e7b4148",
+            "name": "acceptance-r1036",
+            "input": "quick",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "30"
+              ]
+            },
+            "commands_sha256": "a84ea829912040bd2bd091601f5d6886d3356d443d73f46baab9443179dfdfe2",
+            "logs": {
+              "1.log": "31caf7e6dcd9c573aecfb97192d7e7f79ff7d1148ee9918ab0e9416d374f68f7",
+              "2.log": "0a5d92c5c3b7d6cae73c66c69173ecefe73f3d05a06fea32ca1189fc9d0c3f5a",
+              "0.log": "4a4eeed5b32dad48086ff06f5b7e68c2db53ab67878f6e66c722de5a108dbde7"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "df8cc7c90c8d",
+            "name": "acceptance-r1036",
+            "input": "regression-alia",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "31"
+              ]
+            },
+            "commands_sha256": "576cf0f5ba7e3ac063d50b110cc37a673cadc13cfdad344136cc9c73a3dd84b0",
+            "logs": {
+              "0.log": "defbf21a2c5ec609095907ddef39d31fd5da02b7ed845254cb01ed2b174af734"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "2fda7fffb3a8",
+            "name": "acceptance-r1036",
+            "input": "regression-alra",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "32"
+              ]
+            },
+            "commands_sha256": "4c81cd36aced3fea410810e3967943a0909f81fd3e51988e474a314c2c8cc3b1",
+            "logs": {
+              "0.log": "2eca4651d4d942ec2bcc0c75e0cc4c5f9085c01a5d20d8242e6cd9264f800c47"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "782ebcf329f2",
+            "name": "acceptance-r1036",
+            "input": "regression-ania",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "33"
+              ]
+            },
+            "commands_sha256": "d12d5e590235103d093a332b4670351c519f288535f0fd2e54963d6a041f6710",
+            "logs": {
+              "0.log": "fa4be0325b8f7b67ade20df6979bc3b275a1952b03a60f0c34dd8e845fd2a023"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "ce189b242ca4",
+            "name": "acceptance-r1036",
+            "input": "regression-auflia",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "38"
+              ]
+            },
+            "commands_sha256": "c299e2720f2a7bf7d0d81305e6b31bda81498891f694afed96d74c120f193738",
+            "logs": {
+              "0.log": "fa4be0325b8f7b67ade20df6979bc3b275a1952b03a60f0c34dd8e845fd2a023"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "888622d17f81",
+            "name": "acceptance-r1036",
+            "input": "regression-auflra",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "40"
+              ]
+            },
+            "commands_sha256": "77d04d9a37d6c78ebf8dd5f88fa5181821f45b0a58de19482c3b023cd5dadfb4",
+            "logs": {
+              "0.log": "e3abf0ed6547897eaba1bb858b98056a596361c89abc49682345aafb27f1dc8f"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "11668aeb9324",
+            "name": "acceptance-r1036",
+            "input": "regression-aufnia",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "42"
+              ]
+            },
+            "commands_sha256": "a7074ec866e22133ce66d3b7979c33c9c2fa6cc59e797d09c636d55347cd4527",
+            "logs": {
+              "0.log": "fa4be0325b8f7b67ade20df6979bc3b275a1952b03a60f0c34dd8e845fd2a023"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "d88c0e365d2f",
+            "name": "acceptance-r1036",
+            "input": "regression-ax",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "43"
+              ]
+            },
+            "commands_sha256": "0b2d1fae1f607998cd2df7fbbfb819493cf26379c2cf85704cec279aa1782dfc",
+            "logs": {
+              "0.log": "24364fb31624be890c00bf99006ab4b1eaa60fb2d75bb8384bc3400f58b29c55"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "f49502c356b6",
+            "name": "acceptance-r1036",
+            "input": "regression-bool",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "1"
+              ]
+            },
+            "commands_sha256": "93fd52edfe3f03700274569f566de6cc35885a4b89eb8aa8a57d24eced018a08",
+            "logs": {
+              "0.log": "2fadf2b62b7a3b13786865dbdc38f1dc4bbf773828c8ba646b16885b3e002902"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "e3266012ff94",
+            "name": "acceptance-r1036",
+            "input": "regression-dt",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "4"
+              ]
+            },
+            "commands_sha256": "54fce75d53fa2c9f15d11206e7c3a042d5c3ec3628ccf8c93d0cf6e49ef126e1",
+            "logs": {
+              "0.log": "f9bb4f0b883a64e45f15a08270438a0095fe29aa18c3efc5c8837430572c2a77"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "a31fb14c6986",
+            "name": "acceptance-r1036",
+            "input": "regression-euf",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "6"
+              ]
+            },
+            "commands_sha256": "3e5d26c54065e4b1e413abfc6254cab0518b11d6b345b1d8a6e0b7dd7f40d8d4",
+            "logs": {
+              "0.log": "23253c993e0134e277256fb296b5f5012b4f5aacda08c77781e2532f773d0bdd"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "62117431dadd",
+            "name": "acceptance-r1036",
+            "input": "regression-idl",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "12"
+              ]
+            },
+            "commands_sha256": "f7d744ab0a8caff3e42d9cac0eddb3ceef6c249c0fc82fb9c3f1fc5b79f8ae56",
+            "logs": {
+              "0.log": "a8c4d9ffd24f99be5b89668b5e475ca8dfb3ae772c00dd79e3f24b9dd16d4304"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "22f9ea856bd8",
+            "name": "acceptance-r1036",
+            "input": "regression-lira",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "15"
+              ]
+            },
+            "commands_sha256": "8d7651f1244ce5018ec97d917eebe1ddca298d5a5b38bfe59d66a313908afe79",
+            "logs": {
+              "0.log": "b81bcc658c904718b88a75ef8b11d9c44a5b3ce0bcb3d92af0ab8feed8cbd58e"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "c1c9efbb0997",
+            "name": "acceptance-r1036",
+            "input": "regression-nira",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "23"
+              ]
+            },
+            "commands_sha256": "9496fb7335fdf9a64683d321c6af1ff4d3a7b3f26269367edeab01ba29db3a7b",
+            "logs": {
+              "0.log": "c22f744a651d7e58fb70a89f454a7f01b57a91e3e925d8b72145275a040fac2c"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "be9ae36c8c53",
+            "name": "acceptance-r1036",
+            "input": "regression-nra",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "24"
+              ]
+            },
+            "commands_sha256": "a07127a7cf08c430e4f7783486fdadb50314e87eb98bff5c7e04a12391057525",
+            "logs": {
+              "0.log": "2a186742b8b7f46851efa0c018c590888267790d2489ce31d9c7bb155b384374"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "1b8a4b1a0dc1",
+            "name": "acceptance-r1036",
+            "input": "regression-quantifiers",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "25"
+              ]
+            },
+            "commands_sha256": "5b49aa96ccd37cd35f80164d2485117fafab6e5f65439409d73504bd56049611",
+            "logs": {
+              "0.log": "a4f5c18ebdebca7a76fca6538a570b92a0ba11ae3ca69c314914d48bb7a37b9a"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "8b18f7612c39",
+            "name": "acceptance-r1036",
+            "input": "regression-rdl",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "27"
+              ]
+            },
+            "commands_sha256": "6a20e9aee199be8ce2a2aeed1d640722d1ed9c7370399c4a97f4c9403b9f6aa5",
+            "logs": {
+              "0.log": "defbf21a2c5ec609095907ddef39d31fd5da02b7ed845254cb01ed2b174af734"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "b4c52edd89bc",
+            "name": "acceptance-r1036",
+            "input": "regression-sl",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "30"
+              ]
+            },
+            "commands_sha256": "ca17e0d2b2d90745402e46db2519b527d45f360f990faac9b2b0a63c3cb263f6",
+            "logs": {
+              "0.log": "15ec1e782ace2dc8e9c8b6698bd57e026ab8be76ab0b35afbef618cb45b98f54"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "8d593c06647d",
+            "name": "acceptance-r1036",
+            "input": "regression-ufdtlia",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "31"
+              ]
+            },
+            "commands_sha256": "251c762dacd0840c0d8fb751caae26e242cd939ecf910b20a0b88e77d855714d",
+            "logs": {
+              "0.log": "99c473e8f9272a601f1b5441af13b3f40b935f3ac9eae64f6f5c2321ce54dfc4"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "2e84add10810",
+            "name": "acceptance-r1036",
+            "input": "regression-ufdtnia",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "32"
+              ]
+            },
+            "commands_sha256": "0b55d7a412614c97d9502a8fd06cd33f43359aace3d44496596c620941ecc33f",
+            "logs": {
+              "0.log": "8bf2ed9ff362fbc380b93232f0ac634223a679360197a1377d985486f1b5fcf7"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "4ef629ba715f",
+            "name": "acceptance-r1036",
+            "input": "regression-uflia",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "33"
+              ]
+            },
+            "commands_sha256": "aa8107c408bef03bf491e707eb4b3d7939c827cff0ab3731056460b69d1c3e07",
+            "logs": {
+              "0.log": "4ec7c02a15c4a02c422c4926e1f24a518afaa88f92c2078331ea7038c8457c7b"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "4c99312cf08e",
+            "name": "acceptance-r1036",
+            "input": "regression-uflra",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "38"
+              ]
+            },
+            "commands_sha256": "01d0ab0a12462c5e302200117c71c6e116de68f2876d3086d21920877943b34c",
+            "logs": {
+              "0.log": "24364fb31624be890c00bf99006ab4b1eaa60fb2d75bb8384bc3400f58b29c55"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "bf35d8f7ea97",
+            "name": "acceptance-r1036",
+            "input": "regression-ufnia",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "40"
+              ]
+            },
+            "commands_sha256": "0de657ad948c3518ead41b57b1bdec0a423f55d3ff1594df363c3fe4ee503abe",
+            "logs": {
+              "0.log": "a8c4d9ffd24f99be5b89668b5e475ca8dfb3ae772c00dd79e3f24b9dd16d4304"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "19960aa8aecf",
+            "name": "acceptance-r1036",
+            "input": "regression-ufnra",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "42"
+              ]
+            },
+            "commands_sha256": "6ed66dbbaa6c66d67114bb124fa4662d06428ec1f7a5dcf4654518649bbe3d16",
+            "logs": {
+              "0.log": "2eca4651d4d942ec2bcc0c75e0cc4c5f9085c01a5d20d8242e6cd9264f800c47"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "49abca8261bd",
+            "name": "acceptance-r1036",
+            "input": "theory-models",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "43"
+              ]
+            },
+            "commands_sha256": "cba1097a0eee13261e8f4c88df8d07dd6ac68776721800d52f6f5ca7c99033d9",
+            "logs": {
+              "0.log": "5311e7170e7028d1e874e3674f27c82a0d344966865a0680abd72b7fac7a6b80"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "95c95cfe7966",
+            "name": "acceptance-r1036",
+            "input": "regression-nia",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "45"
+              ]
+            },
+            "commands_sha256": "f8379211365da2a3c2d55b1215cff5597a2339d671b52849ce8d30ab4c980d87",
+            "logs": {
+              "0.log": "0d23447cfad8b7396c540fb072bd9083b98d54fe5363e873708b02ed54ebee16"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "a7eb3fba5311",
+            "name": "acceptance-r1036",
+            "input": "certificate-115",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "46"
+              ]
+            },
+            "commands_sha256": "e67eeb17b5d2ce1b51cdadadbbb80d90fe1473fffade383c5c77f8cf310340cc",
+            "logs": {
+              "0.log": "823672e87696cac914fac33d8d0027db15a21b566e700a65300cdca704cf910e"
+            }
+          }
+        ],
+        "unit_cases": 1857,
+        "unit_assertions": 979070,
+        "formal": {
+          "cases": 12,
+          "binaries": {
+            "baseline": {
+              "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/indexed-trails-r978/xolver",
+              "sha256": "4d459fa5acfcf9c95d31bc7117d14701156f411439139904b1d58e00ffd1aec3"
+            },
+            "candidate": {
+              "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/bounded-local-initialization-r1033/xolver",
+              "sha256": "638941b7a04b4c4713a93e7da2aec79bce13b0bf56d6242d26dff6861ca91671"
+            },
+            "z3": {
+              "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+              "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+            }
+          },
+          "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+          "timeout": 60,
+          "memory_bytes": 17179869184,
+          "model_capture": "initial-solve",
+          "counts": {
+            "baseline": {
+              "sat": 4,
+              "decided": 6,
+              "verified_decided": 6,
+              "verified_par2": 721.600232116878,
+              "raw_par2": 721.600232116878,
+              "unsat": 2,
+              "timeout": 6
+            },
+            "candidate": {
+              "sat": 4,
+              "decided": 6,
+              "verified_decided": 6,
+              "verified_par2": 721.6518841031939,
+              "raw_par2": 721.6518841031939,
+              "unsat": 2,
+              "timeout": 6
+            },
+            "z3": {
+              "sat": 10,
+              "decided": 11,
+              "verified_decided": 11,
+              "verified_par2": 159.2153979409486,
+              "raw_par2": 159.2153979409486,
+              "unsat": 1,
+              "timeout": 1
+            }
+          },
+          "by_logic": {
+            "QF_LIA": {
+              "baseline": {
+                "sat": 1,
+                "decided": 2,
+                "verified_decided": 2,
+                "verified_par2": 1.034237191081047,
+                "raw_par2": 1.034237191081047,
+                "unsat": 1
+              },
+              "candidate": {
+                "sat": 1,
+                "decided": 2,
+                "verified_decided": 2,
+                "verified_par2": 1.0856825206428766,
+                "raw_par2": 1.0856825206428766,
+                "unsat": 1
+              },
+              "z3": {
+                "sat": 1,
+                "decided": 2,
+                "verified_decided": 2,
+                "verified_par2": 0.23216586373746395,
+                "raw_par2": 0.23216586373746395,
+                "unsat": 1
+              }
+            },
+            "QF_NRA": {
+              "baseline": {
+                "unsat": 1,
+                "decided": 4,
+                "verified_decided": 4,
+                "verified_par2": 720.565994925797,
+                "raw_par2": 720.565994925797,
+                "timeout": 6,
+                "sat": 3
+              },
+              "candidate": {
+                "unsat": 1,
+                "decided": 4,
+                "verified_decided": 4,
+                "verified_par2": 720.566201582551,
+                "raw_par2": 720.566201582551,
+                "timeout": 6,
+                "sat": 3
+              },
+              "z3": {
+                "timeout": 1,
+                "decided": 9,
+                "verified_decided": 9,
+                "verified_par2": 158.98323207721114,
+                "raw_par2": 158.98323207721114,
+                "sat": 9
+              }
+            }
+          },
+          "changes": [],
+          "wrong_verdicts": [],
+          "invalid_exported_models": [],
+          "unverified": [],
+          "scoring": "Correct verdicts require a replayed model or an independent UNSAT decision on the identical input hash; unresolved results receive PAR-2 penalty."
+        },
+        "runs": [
+          {
+            "experiment": "87704c6f2f97",
+            "run": "908fd79f342e",
+            "name": "native-build-r1033",
+            "input": "build",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "0"
+              ]
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "9fa34e39b924",
+            "name": "acceptance-r1036",
+            "input": "unit",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "0"
+              ]
+            },
+            "commands_sha256": "25d31709e22030f76027eeaa322bdf428f647cc4796cae256bae566e1bf3d3e3",
+            "logs": {
+              "0.log": "c7653f3d79cb2afc91e1228786f403521131c138de9e84cd4b97e286de1e8362"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "1de5098686da",
+            "name": "acceptance-r1036",
+            "input": "regression-lra",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "12"
+              ]
+            },
+            "commands_sha256": "b948445c1a352189a79552b94b47b835414d2552d6dfe182704a0f96092e8065",
+            "logs": {
+              "0.log": "4edeaa4dd7007d75063551d705f540107b7b32336eaa93bc1352596a00006d47"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "5c25693f3833",
+            "name": "acceptance-r1036",
+            "input": "regression-lia",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "15"
+              ]
+            },
+            "commands_sha256": "fd5275873b73bdc4a68c1c31655f4ad1d1bd32435eedae6a16fa695d973c0d42",
+            "logs": {
+              "0.log": "d64539e939cca2332526f974ce3defab290462b32b36ad1662d26bae1849059b"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "e6471a86b131",
+            "name": "acceptance-r1036",
+            "input": "linear",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "16"
+              ]
+            },
+            "commands_sha256": "1bf4e13111fdf5b9d1a55fba6f10629b1797d4d7bf2dc77cc352ee2696ac0a13",
+            "logs": {
+              "0.log": "5de62500d2c1f76f4488424a6fca8927edfcfbd93b6bbe2a4449e1bdd2d60b5b"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "a1a94d93421e",
+            "name": "acceptance-r1036",
+            "input": "qcp",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "19"
+              ]
+            },
+            "commands_sha256": "9b6f0a93c40663bad56968f349dcc66a84eaf2419c1f7f49d4d6c5501120ca0e",
+            "logs": {
+              "1.log": "1196a2fb1ec866ea852df829e152b5b7a76b3ee5b9beadf9137487f8d6605d0a",
+              "2.log": "1ebf29e2ee650e0e1d8af1a912d856dae3eb16ee75239a9f6268af9f077c4677",
+              "0.log": "2faae61434fd857e5f3078e58092d027f1ad0afa28896460fcbd7bef3b7e058b"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "ee5a38c99331",
+            "name": "acceptance-r1036",
+            "input": "tools",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "22"
+              ]
+            },
+            "commands_sha256": "e4c32728f6176ccb752bc4ebee25e5d5543893b38e3dfc43ae22b2cb4ab222b1",
+            "logs": {
+              "0.log": "2179535d402e11172b6023ad178b8e75c0d66d98f0af085af816dfac1170c957"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "bfa33d29e012",
+            "name": "acceptance-r1036",
+            "input": "root-regressions",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "23"
+              ]
+            },
+            "commands_sha256": "a4269f012045eb4d09fcad30a21129bfa321327bc7e8d33b555067e4ade2b2dd",
+            "logs": {
+              "0.log": "59d0b050c7c80859ea3a79c54148bdf12270d57b4d2ed2d07bdbc29f48422ce1"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "349e7d7dce21",
+            "name": "acceptance-r1036",
+            "input": "architecture",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "24"
+              ]
+            },
+            "commands_sha256": "fc66bbd35a5f4581133114f0e7734ffef20e1439674ac76c88d5b0e91bde55b3",
+            "logs": {
+              "0.log": "5e3057c303ca89148f82f43c797e82c74d91e6764fc2a17f9e705add03bb28e4"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "d0a098ad71b7",
+            "name": "acceptance-r1036",
+            "input": "known-gaps",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "25"
+              ]
+            },
+            "commands_sha256": "2221d5a4c80c5e2e0d5697b7cd34561f5c9d7ca2688b2c1e9e447c943ce304d3",
+            "logs": {
+              "0.log": "497540a137201d75665f8c54d3320d56d39570e91b027c453c230cf53ac86613"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "c600df976b42",
+            "name": "acceptance-r1036",
+            "input": "affine",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "26"
+              ]
+            },
+            "commands_sha256": "d4e8445c72d70387529696fe1c2e0d01c9d91109b3baabcddfdd7e202b36f543",
+            "logs": {
+              "0.log": "36a7e7eb3e3130f16e23c6420e4c9af4bdedf15ef267dc016ca9e3967004d95f"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "7e03c74e71ab",
+            "name": "acceptance-r1036",
+            "input": "partial",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "27"
+              ]
+            },
+            "commands_sha256": "f2ec1ca9ed327de7a09faeec7243a4e065af21517ab18d0638b898237180268c",
+            "logs": {
+              "0.log": "84a036d96f04b24b3a6c3ed462bf03b1c69c4eb1db44e3f8b6815d24335f2890"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "8c41d2795508",
+            "name": "acceptance-r1036",
+            "input": "intervals",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "29"
+              ]
+            },
+            "commands_sha256": "c36d248985f3533dbf41b8f1d4a9f961814f1bea84b06383e26918ab8a613902",
+            "logs": {
+              "0.log": "511936860ce07b821fb87fa3131de7380956b3c2858e18d70bd98c1f0f4c58ba"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "5d835e7b4148",
+            "name": "acceptance-r1036",
+            "input": "quick",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "30"
+              ]
+            },
+            "commands_sha256": "a84ea829912040bd2bd091601f5d6886d3356d443d73f46baab9443179dfdfe2",
+            "logs": {
+              "1.log": "31caf7e6dcd9c573aecfb97192d7e7f79ff7d1148ee9918ab0e9416d374f68f7",
+              "2.log": "0a5d92c5c3b7d6cae73c66c69173ecefe73f3d05a06fea32ca1189fc9d0c3f5a",
+              "0.log": "4a4eeed5b32dad48086ff06f5b7e68c2db53ab67878f6e66c722de5a108dbde7"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "df8cc7c90c8d",
+            "name": "acceptance-r1036",
+            "input": "regression-alia",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "31"
+              ]
+            },
+            "commands_sha256": "576cf0f5ba7e3ac063d50b110cc37a673cadc13cfdad344136cc9c73a3dd84b0",
+            "logs": {
+              "0.log": "defbf21a2c5ec609095907ddef39d31fd5da02b7ed845254cb01ed2b174af734"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "2fda7fffb3a8",
+            "name": "acceptance-r1036",
+            "input": "regression-alra",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "32"
+              ]
+            },
+            "commands_sha256": "4c81cd36aced3fea410810e3967943a0909f81fd3e51988e474a314c2c8cc3b1",
+            "logs": {
+              "0.log": "2eca4651d4d942ec2bcc0c75e0cc4c5f9085c01a5d20d8242e6cd9264f800c47"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "782ebcf329f2",
+            "name": "acceptance-r1036",
+            "input": "regression-ania",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "33"
+              ]
+            },
+            "commands_sha256": "d12d5e590235103d093a332b4670351c519f288535f0fd2e54963d6a041f6710",
+            "logs": {
+              "0.log": "fa4be0325b8f7b67ade20df6979bc3b275a1952b03a60f0c34dd8e845fd2a023"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "ce189b242ca4",
+            "name": "acceptance-r1036",
+            "input": "regression-auflia",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "38"
+              ]
+            },
+            "commands_sha256": "c299e2720f2a7bf7d0d81305e6b31bda81498891f694afed96d74c120f193738",
+            "logs": {
+              "0.log": "fa4be0325b8f7b67ade20df6979bc3b275a1952b03a60f0c34dd8e845fd2a023"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "888622d17f81",
+            "name": "acceptance-r1036",
+            "input": "regression-auflra",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "40"
+              ]
+            },
+            "commands_sha256": "77d04d9a37d6c78ebf8dd5f88fa5181821f45b0a58de19482c3b023cd5dadfb4",
+            "logs": {
+              "0.log": "e3abf0ed6547897eaba1bb858b98056a596361c89abc49682345aafb27f1dc8f"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "11668aeb9324",
+            "name": "acceptance-r1036",
+            "input": "regression-aufnia",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "42"
+              ]
+            },
+            "commands_sha256": "a7074ec866e22133ce66d3b7979c33c9c2fa6cc59e797d09c636d55347cd4527",
+            "logs": {
+              "0.log": "fa4be0325b8f7b67ade20df6979bc3b275a1952b03a60f0c34dd8e845fd2a023"
+            }
+          },
+          {
+            "experiment": "00c4a73c50ca",
+            "run": "d88c0e365d2f",
+            "name": "acceptance-r1036",
+            "input": "regression-ax",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "43"
+              ]
+            },
+            "commands_sha256": "0b2d1fae1f607998cd2df7fbbfb819493cf26379c2cf85704cec279aa1782dfc",
+            "logs": {
+              "0.log": "24364fb31624be890c00bf99006ab4b1eaa60fb2d75bb8384bc3400f58b29c55"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "f49502c356b6",
+            "name": "acceptance-r1036",
+            "input": "regression-bool",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "1"
+              ]
+            },
+            "commands_sha256": "93fd52edfe3f03700274569f566de6cc35885a4b89eb8aa8a57d24eced018a08",
+            "logs": {
+              "0.log": "2fadf2b62b7a3b13786865dbdc38f1dc4bbf773828c8ba646b16885b3e002902"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "e3266012ff94",
+            "name": "acceptance-r1036",
+            "input": "regression-dt",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "4"
+              ]
+            },
+            "commands_sha256": "54fce75d53fa2c9f15d11206e7c3a042d5c3ec3628ccf8c93d0cf6e49ef126e1",
+            "logs": {
+              "0.log": "f9bb4f0b883a64e45f15a08270438a0095fe29aa18c3efc5c8837430572c2a77"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "a31fb14c6986",
+            "name": "acceptance-r1036",
+            "input": "regression-euf",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "6"
+              ]
+            },
+            "commands_sha256": "3e5d26c54065e4b1e413abfc6254cab0518b11d6b345b1d8a6e0b7dd7f40d8d4",
+            "logs": {
+              "0.log": "23253c993e0134e277256fb296b5f5012b4f5aacda08c77781e2532f773d0bdd"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "62117431dadd",
+            "name": "acceptance-r1036",
+            "input": "regression-idl",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "12"
+              ]
+            },
+            "commands_sha256": "f7d744ab0a8caff3e42d9cac0eddb3ceef6c249c0fc82fb9c3f1fc5b79f8ae56",
+            "logs": {
+              "0.log": "a8c4d9ffd24f99be5b89668b5e475ca8dfb3ae772c00dd79e3f24b9dd16d4304"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "22f9ea856bd8",
+            "name": "acceptance-r1036",
+            "input": "regression-lira",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "15"
+              ]
+            },
+            "commands_sha256": "8d7651f1244ce5018ec97d917eebe1ddca298d5a5b38bfe59d66a313908afe79",
+            "logs": {
+              "0.log": "b81bcc658c904718b88a75ef8b11d9c44a5b3ce0bcb3d92af0ab8feed8cbd58e"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "c1c9efbb0997",
+            "name": "acceptance-r1036",
+            "input": "regression-nira",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "23"
+              ]
+            },
+            "commands_sha256": "9496fb7335fdf9a64683d321c6af1ff4d3a7b3f26269367edeab01ba29db3a7b",
+            "logs": {
+              "0.log": "c22f744a651d7e58fb70a89f454a7f01b57a91e3e925d8b72145275a040fac2c"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "be9ae36c8c53",
+            "name": "acceptance-r1036",
+            "input": "regression-nra",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "24"
+              ]
+            },
+            "commands_sha256": "a07127a7cf08c430e4f7783486fdadb50314e87eb98bff5c7e04a12391057525",
+            "logs": {
+              "0.log": "2a186742b8b7f46851efa0c018c590888267790d2489ce31d9c7bb155b384374"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "1b8a4b1a0dc1",
+            "name": "acceptance-r1036",
+            "input": "regression-quantifiers",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "25"
+              ]
+            },
+            "commands_sha256": "5b49aa96ccd37cd35f80164d2485117fafab6e5f65439409d73504bd56049611",
+            "logs": {
+              "0.log": "a4f5c18ebdebca7a76fca6538a570b92a0ba11ae3ca69c314914d48bb7a37b9a"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "8b18f7612c39",
+            "name": "acceptance-r1036",
+            "input": "regression-rdl",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "27"
+              ]
+            },
+            "commands_sha256": "6a20e9aee199be8ce2a2aeed1d640722d1ed9c7370399c4a97f4c9403b9f6aa5",
+            "logs": {
+              "0.log": "defbf21a2c5ec609095907ddef39d31fd5da02b7ed845254cb01ed2b174af734"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "b4c52edd89bc",
+            "name": "acceptance-r1036",
+            "input": "regression-sl",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "30"
+              ]
+            },
+            "commands_sha256": "ca17e0d2b2d90745402e46db2519b527d45f360f990faac9b2b0a63c3cb263f6",
+            "logs": {
+              "0.log": "15ec1e782ace2dc8e9c8b6698bd57e026ab8be76ab0b35afbef618cb45b98f54"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "8d593c06647d",
+            "name": "acceptance-r1036",
+            "input": "regression-ufdtlia",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "31"
+              ]
+            },
+            "commands_sha256": "251c762dacd0840c0d8fb751caae26e242cd939ecf910b20a0b88e77d855714d",
+            "logs": {
+              "0.log": "99c473e8f9272a601f1b5441af13b3f40b935f3ac9eae64f6f5c2321ce54dfc4"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "2e84add10810",
+            "name": "acceptance-r1036",
+            "input": "regression-ufdtnia",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "32"
+              ]
+            },
+            "commands_sha256": "0b55d7a412614c97d9502a8fd06cd33f43359aace3d44496596c620941ecc33f",
+            "logs": {
+              "0.log": "8bf2ed9ff362fbc380b93232f0ac634223a679360197a1377d985486f1b5fcf7"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "4ef629ba715f",
+            "name": "acceptance-r1036",
+            "input": "regression-uflia",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "33"
+              ]
+            },
+            "commands_sha256": "aa8107c408bef03bf491e707eb4b3d7939c827cff0ab3731056460b69d1c3e07",
+            "logs": {
+              "0.log": "4ec7c02a15c4a02c422c4926e1f24a518afaa88f92c2078331ea7038c8457c7b"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "4c99312cf08e",
+            "name": "acceptance-r1036",
+            "input": "regression-uflra",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "38"
+              ]
+            },
+            "commands_sha256": "01d0ab0a12462c5e302200117c71c6e116de68f2876d3086d21920877943b34c",
+            "logs": {
+              "0.log": "24364fb31624be890c00bf99006ab4b1eaa60fb2d75bb8384bc3400f58b29c55"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "bf35d8f7ea97",
+            "name": "acceptance-r1036",
+            "input": "regression-ufnia",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "40"
+              ]
+            },
+            "commands_sha256": "0de657ad948c3518ead41b57b1bdec0a423f55d3ff1594df363c3fe4ee503abe",
+            "logs": {
+              "0.log": "a8c4d9ffd24f99be5b89668b5e475ca8dfb3ae772c00dd79e3f24b9dd16d4304"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "19960aa8aecf",
+            "name": "acceptance-r1036",
+            "input": "regression-ufnra",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "42"
+              ]
+            },
+            "commands_sha256": "6ed66dbbaa6c66d67114bb124fa4662d06428ec1f7a5dcf4654518649bbe3d16",
+            "logs": {
+              "0.log": "2eca4651d4d942ec2bcc0c75e0cc4c5f9085c01a5d20d8242e6cd9264f800c47"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "49abca8261bd",
+            "name": "acceptance-r1036",
+            "input": "theory-models",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "43"
+              ]
+            },
+            "commands_sha256": "cba1097a0eee13261e8f4c88df8d07dd6ac68776721800d52f6f5ca7c99033d9",
+            "logs": {
+              "0.log": "5311e7170e7028d1e874e3674f27c82a0d344966865a0680abd72b7fac7a6b80"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "95c95cfe7966",
+            "name": "acceptance-r1036",
+            "input": "regression-nia",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "45"
+              ]
+            },
+            "commands_sha256": "f8379211365da2a3c2d55b1215cff5597a2339d671b52849ce8d30ab4c980d87",
+            "logs": {
+              "0.log": "0d23447cfad8b7396c540fb072bd9083b98d54fe5363e873708b02ed54ebee16"
+            }
+          },
+          {
+            "experiment": "8092bac6cfe2",
+            "run": "a7eb3fba5311",
+            "name": "acceptance-r1036",
+            "input": "certificate-115",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "46"
+              ]
+            },
+            "commands_sha256": "e67eeb17b5d2ce1b51cdadadbbb80d90fe1473fffade383c5c77f8cf310340cc",
+            "logs": {
+              "0.log": "823672e87696cac914fac33d8d0027db15a21b566e700a65300cdca704cf910e"
+            }
+          },
+          {
+            "experiment": "f495af7648f2",
+            "run": "dd1ec9ee501d",
+            "name": "xolver-bounded-local-initialization-r1034-formal-pilot-20261031",
+            "input": "20",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "0"
+              ]
+            },
+            "report_sha256": "7f91ce57d6b3a3db960177e41897bbb438338f000b5d281bd83b13338e95cb73",
+            "input_sha256": "6b7f045865d2b9b8e2aec04acc1f5aa9e45f4dd39266d07ac00f1f18f13ae27c"
+          },
+          {
+            "experiment": "f495af7648f2",
+            "run": "e4cd3341bbf7",
+            "name": "xolver-bounded-local-initialization-r1034-formal-pilot-20261031",
+            "input": "22",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "1"
+              ]
+            },
+            "report_sha256": "0746d85aca2b58a1a9ad0f2aae90af57ae742fbc82043107a49c7a8f42b6a656",
+            "input_sha256": "ccbe9de2da7a0afa1c094e7c9caaaff2b4cdffd927cd7f42b75fa95d21d8e8ca"
+          },
+          {
+            "experiment": "f495af7648f2",
+            "run": "4b8ce5c33223",
+            "name": "xolver-bounded-local-initialization-r1034-formal-pilot-20261031",
+            "input": "65",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "2"
+              ]
+            },
+            "report_sha256": "5bda4db7694cf5dd37d62d91dcd96230b742746133dd09c8221f26eb8d9c3256",
+            "input_sha256": "bf86296d7a4a9f4366182360877d75d53dbbd3fda7210dedfdb8a8b882a52a11"
+          },
+          {
+            "experiment": "f495af7648f2",
+            "run": "4332324baf11",
+            "name": "xolver-bounded-local-initialization-r1034-formal-pilot-20261031",
+            "input": "69",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "3"
+              ]
+            },
+            "report_sha256": "5b9b8ee4a855d174d61fadd35e6773bf73dbfc4f0d6e591981a93c1eadc52c9b",
+            "input_sha256": "72e580ee3a690b54865e129f44529a71d81112f35193cbc93775236ea62a0f13"
+          },
+          {
+            "experiment": "f495af7648f2",
+            "run": "ec9243c93aaf",
+            "name": "xolver-bounded-local-initialization-r1034-formal-pilot-20261031",
+            "input": "70",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "4"
+              ]
+            },
+            "report_sha256": "6979e207fe19b82ab52174dbdc93019401e5cb8be1c8af881ce0f8dd050a8348",
+            "input_sha256": "e9a9345ed7fb27a4b00c5ecafb3c544c1d2d8ea432cac1890154337bd5c018fa"
+          },
+          {
+            "experiment": "f495af7648f2",
+            "run": "e4f9e92d7d09",
+            "name": "xolver-bounded-local-initialization-r1034-formal-pilot-20261031",
+            "input": "72",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "5"
+              ]
+            },
+            "report_sha256": "6a445d664e46699d90caf9c6873a39227e45b00fa0994de337897f7b719c5999",
+            "input_sha256": "cc66abe5f5716404298fd97cb383e65487d9277ea2611ee41add8e324e7eb2c4"
+          },
+          {
+            "experiment": "f495af7648f2",
+            "run": "cc38c64b0a8f",
+            "name": "xolver-bounded-local-initialization-r1034-formal-pilot-20261031",
+            "input": "73",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "6"
+              ]
+            },
+            "report_sha256": "6ea2194445736cb5ec45c3d364502538d4cf7e2c4d11be32822261e1d448013c",
+            "input_sha256": "7b9c5af8d53042348da3918b47d329d79868512f9d3e65d88b43b1b4dac2cf92"
+          },
+          {
+            "experiment": "f495af7648f2",
+            "run": "6a24ca4eab9e",
+            "name": "xolver-bounded-local-initialization-r1034-formal-pilot-20261031",
+            "input": "77",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "7"
+              ]
+            },
+            "report_sha256": "4004314f00e9707a02600bda0d1d144f7ba8429d1bed1313fcda8c85efd6b60e",
+            "input_sha256": "7511fd4d07cdce648daf4ac76fc32c90af91cf9d9576d4e955a51d0dbd4534b7"
+          },
+          {
+            "experiment": "f495af7648f2",
+            "run": "716cb06c60bf",
+            "name": "xolver-bounded-local-initialization-r1034-formal-pilot-20261031",
+            "input": "144",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "10"
+              ]
+            },
+            "report_sha256": "0a593251971485a5a285227814d99f8988d44774b999543beb76f22cef91d32d",
+            "input_sha256": "d26dd3ac7eb05e598a7b54fe02cb785ae7a85da7ceb1e5fcc95f2e4f8c852c1c"
+          },
+          {
+            "experiment": "f495af7648f2",
+            "run": "da065af92b47",
+            "name": "xolver-bounded-local-initialization-r1034-formal-pilot-20261031",
+            "input": "146",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "11"
+              ]
+            },
+            "report_sha256": "92cd656032a29165201813e869fb2fb1b1e86d575c6e60788145185cd1db14f4",
+            "input_sha256": "2e27203a3ec975510dab64d149ae5f2bd8de47c8128725d04985555880240dc1"
+          },
+          {
+            "experiment": "f495af7648f2",
+            "run": "fdd683761bee",
+            "name": "xolver-bounded-local-initialization-r1034-formal-pilot-20261031",
+            "input": "148",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "12"
+              ]
+            },
+            "report_sha256": "8fbcafd88977936b6c9b574d626caacec406675256dbaafac29f1f46754d49e6",
+            "input_sha256": "4f9ef64958113d079eca3adc2023c206c8bc2a42b7f02e6acb0f11ce0a2af4be"
+          },
+          {
+            "experiment": "f495af7648f2",
+            "run": "22bd9382ab77",
+            "name": "xolver-bounded-local-initialization-r1034-formal-pilot-20261031",
+            "input": "149",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "13"
+              ]
+            },
+            "report_sha256": "62402c008fd0f18c8ab226ad042ad026abda0a5eacddb4a6a71c7853cb169a79",
+            "input_sha256": "fa38407f1095afff71b84b3c7be9da57614d7cbdb6800672ef7d85a6dfc2412d"
+          },
+          {
+            "experiment": "5df30187ee44",
+            "run": "7d2a64876274",
+            "name": "xolver-incremental-candidate-cover-profile-r1024-public-diagnostic-20261031",
+            "input": "69",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "0"
+              ]
+            },
+            "record_sha256": "701bb839dd929d127c2e17c2923b35f99b91c978a8af5ed86baa2649991e52ad",
+            "input_sha256": "72e580ee3a690b54865e129f44529a71d81112f35193cbc93775236ea62a0f13"
+          },
+          {
+            "experiment": "5df30187ee44",
+            "run": "99ed9b09dbc1",
+            "name": "xolver-incremental-candidate-cover-profile-r1024-public-diagnostic-20261031",
+            "input": "77",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "1"
+              ]
+            },
+            "record_sha256": "7de68752f67dc62dfd17a69c51803e3b88c032939e2ee604258edc24def4a3af",
+            "input_sha256": "7511fd4d07cdce648daf4ac76fc32c90af91cf9d9576d4e955a51d0dbd4534b7"
+          },
+          {
+            "experiment": "5df30187ee44",
+            "run": "2d5cc85313a7",
+            "name": "xolver-incremental-candidate-cover-profile-r1024-public-diagnostic-20261031",
+            "input": "149",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "4"
+              ]
+            },
+            "record_sha256": "df897e984f8e05413d85a048704496756aa33a98d5b587403a4b35fa68aeba76",
+            "input_sha256": "fa38407f1095afff71b84b3c7be9da57614d7cbdb6800672ef7d85a6dfc2412d"
+          },
+          {
+            "experiment": "dea7adafda22",
+            "run": "a25c1fdfa724",
+            "name": "xolver-bounded-local-initialization-profile-r1035-public-diagnostic-20261031",
+            "input": "69",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "1"
+              ]
+            },
+            "record_sha256": "e77c4b08646956e396dbf8e50309d9924be4a4bb4dc29519d47e191de4776d04",
+            "input_sha256": "72e580ee3a690b54865e129f44529a71d81112f35193cbc93775236ea62a0f13"
+          },
+          {
+            "experiment": "dea7adafda22",
+            "run": "0601efe48101",
+            "name": "xolver-bounded-local-initialization-profile-r1035-public-diagnostic-20261031",
+            "input": "77",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "4"
+              ]
+            },
+            "record_sha256": "7a10b5395bcc76909f38c9878fba91155aa88a795984326240d7b4fa50ccd2f2",
+            "input_sha256": "7511fd4d07cdce648daf4ac76fc32c90af91cf9d9576d4e955a51d0dbd4534b7"
+          },
+          {
+            "experiment": "dea7adafda22",
+            "run": "11c3b87e8820",
+            "name": "xolver-bounded-local-initialization-profile-r1035-public-diagnostic-20261031",
+            "input": "149",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "6"
+              ]
+            },
+            "record_sha256": "b2049f39bb398704406b3eadc01be14a5c9083a9ba7f6440d8e87d9f3560ea5c",
+            "input_sha256": "fa38407f1095afff71b84b3c7be9da57614d7cbdb6800672ef7d85a6dfc2412d"
+          },
+          {
+            "experiment": "bc2e59f46d41",
+            "run": "f564a8643b4f",
+            "name": "bracket-initialization-r1038",
+            "input": "200",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "1"
+              ]
+            },
+            "record_sha256": "b2475fdb77515b053fd6d00eb57584a02e272d9370889e967851441c841de8b2",
+            "observations": {
+              "baseline": {
+                "result": {
+                  "result": "sat",
+                  "microseconds": 102195,
+                  "variables": 200
+                },
+                "timing": {
+                  "seconds": 0.11610461957752705,
+                  "launch_seconds": 0.0024607814848423004,
+                  "wait_seconds": 0.11364383809268475,
+                  "returncode": 0,
+                  "timeout_notified_seconds": null,
+                  "cleanup_seconds": null,
+                  "timed_out": false,
+                  "budget_overrun": false
+                },
+                "command": [
+                  "prlimit",
+                  "--as=17179869184",
+                  "--cpu=62:63",
+                  "--",
+                  "/pub/data/jiafq/xolver/validation/arithmetic-r103/nra-seed-diagnostics-r1032/old-harness",
+                  "200",
+                  "/pub/data/jiafq/xolver/validation/arithmetic-r103/bracket-initialization-r1038/200/baseline"
+                ],
+                "binary_sha256": "8fbe32690685d74206e714e3b34c306a40112b6bee61fa0b045f60c8f956def0",
+                "input_sha256": "5ba7dbca3a660dcdd539c6494298b017fc609e479a7349db7cd9362b07e4b9a8",
+                "model_sha256": "ea0ba6ab62b977b4db3981e809896169d03e706ac54358e74bafe2ab9ba2a986"
+              },
+              "candidate": {
+                "result": {
+                  "result": "sat",
+                  "microseconds": 4515,
+                  "variables": 200
+                },
+                "timing": {
+                  "seconds": 0.017343591898679733,
+                  "launch_seconds": 0.0019578468054533005,
+                  "wait_seconds": 0.015385745093226433,
+                  "returncode": 0,
+                  "timeout_notified_seconds": null,
+                  "cleanup_seconds": null,
+                  "timed_out": false,
+                  "budget_overrun": false
+                },
+                "command": [
+                  "prlimit",
+                  "--as=17179869184",
+                  "--cpu=62:63",
+                  "--",
+                  "/pub/data/jiafq/xolver/validation/arithmetic-r103/bounded-local-initialization-r1033/new-harness",
+                  "200",
+                  "/pub/data/jiafq/xolver/validation/arithmetic-r103/bracket-initialization-r1038/200/candidate"
+                ],
+                "binary_sha256": "550c30fff6360e3f342e6aef2d256793b0872d6070f8ab262d299042751c3494",
+                "input_sha256": "5ba7dbca3a660dcdd539c6494298b017fc609e479a7349db7cd9362b07e4b9a8",
+                "model_sha256": "ea0ba6ab62b977b4db3981e809896169d03e706ac54358e74bafe2ab9ba2a986"
+              }
+            },
+            "model_checks": [
+              {
+                "arm": "baseline",
+                "oracle": "z3-5.3.2",
+                "oracle_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+                "witness_sha256": "ea0ba6ab62b977b4db3981e809896169d03e706ac54358e74bafe2ab9ba2a986",
+                "result": "sat"
+              },
+              {
+                "arm": "baseline",
+                "oracle": "cvc5",
+                "oracle_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+                "witness_sha256": "ea0ba6ab62b977b4db3981e809896169d03e706ac54358e74bafe2ab9ba2a986",
+                "result": "sat"
+              },
+              {
+                "arm": "candidate",
+                "oracle": "z3-5.3.2",
+                "oracle_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+                "witness_sha256": "ea0ba6ab62b977b4db3981e809896169d03e706ac54358e74bafe2ab9ba2a986",
+                "result": "sat"
+              },
+              {
+                "arm": "candidate",
+                "oracle": "cvc5",
+                "oracle_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+                "witness_sha256": "ea0ba6ab62b977b4db3981e809896169d03e706ac54358e74bafe2ab9ba2a986",
+                "result": "sat"
+              }
+            ]
+          },
+          {
+            "experiment": "bc2e59f46d41",
+            "run": "55a07be0fa1a",
+            "name": "bracket-initialization-r1038",
+            "input": "1217",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "4"
+              ]
+            },
+            "record_sha256": "2f3973ef4f19dbb0297b1dc54794a8a9600192bed3d3d3ef51ef269ba0e2dde1",
+            "observations": {
+              "candidate": {
+                "result": {
+                  "result": "sat",
+                  "microseconds": 28636,
+                  "variables": 1217
+                },
+                "timing": {
+                  "seconds": 0.06644348800182343,
+                  "launch_seconds": 0.002862008288502693,
+                  "wait_seconds": 0.06358147971332073,
+                  "returncode": 0,
+                  "timeout_notified_seconds": null,
+                  "cleanup_seconds": null,
+                  "timed_out": false,
+                  "budget_overrun": false
+                },
+                "command": [
+                  "prlimit",
+                  "--as=17179869184",
+                  "--cpu=62:63",
+                  "--",
+                  "/pub/data/jiafq/xolver/validation/arithmetic-r103/bounded-local-initialization-r1033/new-harness",
+                  "1217",
+                  "/pub/data/jiafq/xolver/validation/arithmetic-r103/bracket-initialization-r1038/1217/candidate"
+                ],
+                "binary_sha256": "550c30fff6360e3f342e6aef2d256793b0872d6070f8ab262d299042751c3494",
+                "input_sha256": "a111fd095f888aeabf2b5d6002a66284346cf27eacc5a6299dbd90006ec6a948",
+                "model_sha256": "9b5da57d96146ee5b85ec6cf35ee651b5f8b3b8b120758796bad02324ced72da"
+              },
+              "baseline": {
+                "result": {
+                  "result": "sat",
+                  "microseconds": 4387397,
+                  "variables": 1217
+                },
+                "timing": {
+                  "seconds": 4.424587903544307,
+                  "launch_seconds": 0.0024309176951646805,
+                  "wait_seconds": 4.422156985849142,
+                  "returncode": 0,
+                  "timeout_notified_seconds": null,
+                  "cleanup_seconds": null,
+                  "timed_out": false,
+                  "budget_overrun": false
+                },
+                "command": [
+                  "prlimit",
+                  "--as=17179869184",
+                  "--cpu=62:63",
+                  "--",
+                  "/pub/data/jiafq/xolver/validation/arithmetic-r103/nra-seed-diagnostics-r1032/old-harness",
+                  "1217",
+                  "/pub/data/jiafq/xolver/validation/arithmetic-r103/bracket-initialization-r1038/1217/baseline"
+                ],
+                "binary_sha256": "8fbe32690685d74206e714e3b34c306a40112b6bee61fa0b045f60c8f956def0",
+                "input_sha256": "a111fd095f888aeabf2b5d6002a66284346cf27eacc5a6299dbd90006ec6a948",
+                "model_sha256": "9b5da57d96146ee5b85ec6cf35ee651b5f8b3b8b120758796bad02324ced72da"
+              }
+            },
+            "model_checks": [
+              {
+                "arm": "candidate",
+                "oracle": "z3-5.3.2",
+                "oracle_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+                "witness_sha256": "9b5da57d96146ee5b85ec6cf35ee651b5f8b3b8b120758796bad02324ced72da",
+                "result": "sat"
+              },
+              {
+                "arm": "candidate",
+                "oracle": "cvc5",
+                "oracle_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+                "witness_sha256": "9b5da57d96146ee5b85ec6cf35ee651b5f8b3b8b120758796bad02324ced72da",
+                "result": "sat"
+              },
+              {
+                "arm": "baseline",
+                "oracle": "z3-5.3.2",
+                "oracle_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+                "witness_sha256": "9b5da57d96146ee5b85ec6cf35ee651b5f8b3b8b120758796bad02324ced72da",
+                "result": "sat"
+              },
+              {
+                "arm": "baseline",
+                "oracle": "cvc5",
+                "oracle_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+                "witness_sha256": "9b5da57d96146ee5b85ec6cf35ee651b5f8b3b8b120758796bad02324ced72da",
+                "result": "sat"
+              }
+            ]
+          }
+        ],
+        "timing_changes": [],
+        "remaining_gaps": [
+          {
+            "index": 69,
+            "logic": "QF_NRA",
+            "family": "LassoRanker",
+            "input_sha256": "72e580ee3a690b54865e129f44529a71d81112f35193cbc93775236ea62a0f13",
+            "member": "QF_NRA/LassoRanker/CooperatingT2/byron-2.t2.c_Iteration3_Loop_4-pieceTemplate.smt2",
+            "xolver": "timeout",
+            "z3": "sat",
+            "z3_seconds": 0.6168004870414734,
+            "unconfirmed": false
+          },
+          {
+            "index": 72,
+            "logic": "QF_NRA",
+            "family": "2019-ezsmt",
+            "input_sha256": "cc66abe5f5716404298fd97cb383e65487d9277ea2611ee41add8e324e7eb2c4",
+            "member": "QF_NRA/2019-ezsmt/reverseFolding/39-reverse_folding-0-0.smt2",
+            "xolver": "timeout",
+            "z3": "sat",
+            "z3_seconds": 8.884408727288246,
+            "unconfirmed": false
+          },
+          {
+            "index": 77,
+            "logic": "QF_NRA",
+            "family": "UltimateAutomizer",
+            "input_sha256": "7511fd4d07cdce648daf4ac76fc32c90af91cf9d9576d4e955a51d0dbd4534b7",
+            "member": "QF_NRA/UltimateAutomizer/InVarSynth_InvariantSynthesis_Disjunctive02.bpl_Iteration1_0.smt2",
+            "xolver": "timeout",
+            "z3": "sat",
+            "z3_seconds": 0.3667640443891287,
+            "unconfirmed": false
+          },
+          {
+            "index": 144,
+            "logic": "QF_NRA",
+            "family": "2019-ezsmt",
+            "input_sha256": "d26dd3ac7eb05e598a7b54fe02cb785ae7a85da7ceb1e5fcc95f2e4f8c852c1c",
+            "member": "QF_NRA/2019-ezsmt/reverseFolding/31-reverse_folding-0-0.smt2",
+            "xolver": "timeout",
+            "z3": "sat",
+            "z3_seconds": 7.534686392173171,
+            "unconfirmed": false
+          },
+          {
+            "index": 146,
+            "logic": "QF_NRA",
+            "family": "LassoRanker",
+            "input_sha256": "2e27203a3ec975510dab64d149ae5f2bd8de47c8128725d04985555880240dc1",
+            "member": "QF_NRA/LassoRanker/CooperatingT2/consts1.t2.c_Iteration1_Lasso_4-pieceTemplate.smt2",
+            "xolver": "timeout",
+            "z3": "sat",
+            "z3_seconds": 21.211629308760166,
+            "unconfirmed": false
+          },
+          {
+            "index": 149,
+            "logic": "QF_NRA",
+            "family": "UltimateAutomizer",
+            "input_sha256": "fa38407f1095afff71b84b3c7be9da57614d7cbdb6800672ef7d85a6dfc2412d",
+            "member": "QF_NRA/UltimateAutomizer/InVarSynth_agroce_minmax.c_Iteration2_0.smt2",
+            "xolver": "timeout",
+            "z3": "sat",
+            "z3_seconds": 0.16660165041685104,
+            "unconfirmed": false
+          }
+        ],
+        "invalid_original_triads": [],
+        "protected_sets_used": false,
+        "boundary": "Index unary sources once and short circuit rejected initialization probes; preserve constraint order, variable order and complete exact score semantics. Check the existing local/global deadline during bracket extraction and initialization probes. Twelve fresh original-input triads, 60s/one leased physical CPU/16GiB each, initial model capture. Raw and independently verified solves are separated. No protected or full-program QCP result is claimed. Full160 promotion still requires the remaining disjoint inputs and exact CI qualification.",
+        "initialization_benchmarks": [
+          {
+            "experiment": "bc2e59f46d41",
+            "run": "f564a8643b4f",
+            "name": "bracket-initialization-r1038",
+            "input": "200",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "1"
+              ]
+            },
+            "record_sha256": "b2475fdb77515b053fd6d00eb57584a02e272d9370889e967851441c841de8b2",
+            "observations": {
+              "baseline": {
+                "result": {
+                  "result": "sat",
+                  "microseconds": 102195,
+                  "variables": 200
+                },
+                "timing": {
+                  "seconds": 0.11610461957752705,
+                  "launch_seconds": 0.0024607814848423004,
+                  "wait_seconds": 0.11364383809268475,
+                  "returncode": 0,
+                  "timeout_notified_seconds": null,
+                  "cleanup_seconds": null,
+                  "timed_out": false,
+                  "budget_overrun": false
+                },
+                "command": [
+                  "prlimit",
+                  "--as=17179869184",
+                  "--cpu=62:63",
+                  "--",
+                  "/pub/data/jiafq/xolver/validation/arithmetic-r103/nra-seed-diagnostics-r1032/old-harness",
+                  "200",
+                  "/pub/data/jiafq/xolver/validation/arithmetic-r103/bracket-initialization-r1038/200/baseline"
+                ],
+                "binary_sha256": "8fbe32690685d74206e714e3b34c306a40112b6bee61fa0b045f60c8f956def0",
+                "input_sha256": "5ba7dbca3a660dcdd539c6494298b017fc609e479a7349db7cd9362b07e4b9a8",
+                "model_sha256": "ea0ba6ab62b977b4db3981e809896169d03e706ac54358e74bafe2ab9ba2a986"
+              },
+              "candidate": {
+                "result": {
+                  "result": "sat",
+                  "microseconds": 4515,
+                  "variables": 200
+                },
+                "timing": {
+                  "seconds": 0.017343591898679733,
+                  "launch_seconds": 0.0019578468054533005,
+                  "wait_seconds": 0.015385745093226433,
+                  "returncode": 0,
+                  "timeout_notified_seconds": null,
+                  "cleanup_seconds": null,
+                  "timed_out": false,
+                  "budget_overrun": false
+                },
+                "command": [
+                  "prlimit",
+                  "--as=17179869184",
+                  "--cpu=62:63",
+                  "--",
+                  "/pub/data/jiafq/xolver/validation/arithmetic-r103/bounded-local-initialization-r1033/new-harness",
+                  "200",
+                  "/pub/data/jiafq/xolver/validation/arithmetic-r103/bracket-initialization-r1038/200/candidate"
+                ],
+                "binary_sha256": "550c30fff6360e3f342e6aef2d256793b0872d6070f8ab262d299042751c3494",
+                "input_sha256": "5ba7dbca3a660dcdd539c6494298b017fc609e479a7349db7cd9362b07e4b9a8",
+                "model_sha256": "ea0ba6ab62b977b4db3981e809896169d03e706ac54358e74bafe2ab9ba2a986"
+              }
+            },
+            "model_checks": [
+              {
+                "arm": "baseline",
+                "oracle": "z3-5.3.2",
+                "oracle_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+                "witness_sha256": "ea0ba6ab62b977b4db3981e809896169d03e706ac54358e74bafe2ab9ba2a986",
+                "result": "sat"
+              },
+              {
+                "arm": "baseline",
+                "oracle": "cvc5",
+                "oracle_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+                "witness_sha256": "ea0ba6ab62b977b4db3981e809896169d03e706ac54358e74bafe2ab9ba2a986",
+                "result": "sat"
+              },
+              {
+                "arm": "candidate",
+                "oracle": "z3-5.3.2",
+                "oracle_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+                "witness_sha256": "ea0ba6ab62b977b4db3981e809896169d03e706ac54358e74bafe2ab9ba2a986",
+                "result": "sat"
+              },
+              {
+                "arm": "candidate",
+                "oracle": "cvc5",
+                "oracle_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+                "witness_sha256": "ea0ba6ab62b977b4db3981e809896169d03e706ac54358e74bafe2ab9ba2a986",
+                "result": "sat"
+              }
+            ]
+          },
+          {
+            "experiment": "bc2e59f46d41",
+            "run": "55a07be0fa1a",
+            "name": "bracket-initialization-r1038",
+            "input": "1217",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "4"
+              ]
+            },
+            "record_sha256": "2f3973ef4f19dbb0297b1dc54794a8a9600192bed3d3d3ef51ef269ba0e2dde1",
+            "observations": {
+              "candidate": {
+                "result": {
+                  "result": "sat",
+                  "microseconds": 28636,
+                  "variables": 1217
+                },
+                "timing": {
+                  "seconds": 0.06644348800182343,
+                  "launch_seconds": 0.002862008288502693,
+                  "wait_seconds": 0.06358147971332073,
+                  "returncode": 0,
+                  "timeout_notified_seconds": null,
+                  "cleanup_seconds": null,
+                  "timed_out": false,
+                  "budget_overrun": false
+                },
+                "command": [
+                  "prlimit",
+                  "--as=17179869184",
+                  "--cpu=62:63",
+                  "--",
+                  "/pub/data/jiafq/xolver/validation/arithmetic-r103/bounded-local-initialization-r1033/new-harness",
+                  "1217",
+                  "/pub/data/jiafq/xolver/validation/arithmetic-r103/bracket-initialization-r1038/1217/candidate"
+                ],
+                "binary_sha256": "550c30fff6360e3f342e6aef2d256793b0872d6070f8ab262d299042751c3494",
+                "input_sha256": "a111fd095f888aeabf2b5d6002a66284346cf27eacc5a6299dbd90006ec6a948",
+                "model_sha256": "9b5da57d96146ee5b85ec6cf35ee651b5f8b3b8b120758796bad02324ced72da"
+              },
+              "baseline": {
+                "result": {
+                  "result": "sat",
+                  "microseconds": 4387397,
+                  "variables": 1217
+                },
+                "timing": {
+                  "seconds": 4.424587903544307,
+                  "launch_seconds": 0.0024309176951646805,
+                  "wait_seconds": 4.422156985849142,
+                  "returncode": 0,
+                  "timeout_notified_seconds": null,
+                  "cleanup_seconds": null,
+                  "timed_out": false,
+                  "budget_overrun": false
+                },
+                "command": [
+                  "prlimit",
+                  "--as=17179869184",
+                  "--cpu=62:63",
+                  "--",
+                  "/pub/data/jiafq/xolver/validation/arithmetic-r103/nra-seed-diagnostics-r1032/old-harness",
+                  "1217",
+                  "/pub/data/jiafq/xolver/validation/arithmetic-r103/bracket-initialization-r1038/1217/baseline"
+                ],
+                "binary_sha256": "8fbe32690685d74206e714e3b34c306a40112b6bee61fa0b045f60c8f956def0",
+                "input_sha256": "a111fd095f888aeabf2b5d6002a66284346cf27eacc5a6299dbd90006ec6a948",
+                "model_sha256": "9b5da57d96146ee5b85ec6cf35ee651b5f8b3b8b120758796bad02324ced72da"
+              }
+            },
+            "model_checks": [
+              {
+                "arm": "candidate",
+                "oracle": "z3-5.3.2",
+                "oracle_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+                "witness_sha256": "9b5da57d96146ee5b85ec6cf35ee651b5f8b3b8b120758796bad02324ced72da",
+                "result": "sat"
+              },
+              {
+                "arm": "candidate",
+                "oracle": "cvc5",
+                "oracle_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+                "witness_sha256": "9b5da57d96146ee5b85ec6cf35ee651b5f8b3b8b120758796bad02324ced72da",
+                "result": "sat"
+              },
+              {
+                "arm": "baseline",
+                "oracle": "z3-5.3.2",
+                "oracle_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+                "witness_sha256": "9b5da57d96146ee5b85ec6cf35ee651b5f8b3b8b120758796bad02324ced72da",
+                "result": "sat"
+              },
+              {
+                "arm": "baseline",
+                "oracle": "cvc5",
+                "oracle_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+                "witness_sha256": "9b5da57d96146ee5b85ec6cf35ee651b5f8b3b8b120758796bad02324ced72da",
+                "result": "sat"
+              }
+            ]
+          }
+        ],
+        "initialization_boundary": "Identical frozen API harnesses on constructed bracketed systems only; each actual model is independently replayed. This is not a Z3 timing comparison, fixed160 score increase or whole-program QCP win.",
+        "prior_pilot_sha256": "7d96f5d797fc0c42a41fe7703d1687f9d722e3883e372e4edd0f87299c064c4f"
+      }
+    },
+    {
+      "server_path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/boundary-seed-budget-r1041/record.json",
+      "sha256": "11ee1bb997c920c0104cfa94464c066fcfa97d28abc78ffbee883282fef09a31",
+      "record": {
+        "source_head": "469baa2776439c7ece9d15ee2f302ce344a96b4b",
+        "parent_audit_sha256": "537be04f6fca9bf2ff6ee491352732be38e2209435a59c5e590c4ea1b931cce0",
+        "experiments": [
+          {
+            "folder": "boundary-lp-seed-budget-r1039",
+            "qualification": {
+              "source_head": "469baa2776439c7ece9d15ee2f302ce344a96b4b",
+              "source_manifest_sha256": "adbc83fe9fc6771133b2eec7bda558c9cc4184fd77230405dc7cc848eb5feaa7",
+              "transform_sha256": "3916170b18bbc45a07dd5916d67350b99b0ff005827be7986ddd2a31fda0ad42",
+              "originals": {
+                "src/search/candidate/PartialLinearModelSearch.cpp": "593dc4a95c2d0cfeca344684a097b2fb908814ead37f400cb5c4c282177aa5bc",
+                "src/applications/satisfiability/smt/qfnra/NraSolver_stages.cpp": "91c6d329c9d2ebfa44ee942f31363ac101e3be6a93212a4df3db304f3927adfe"
+              },
+              "diagnostic_sources": {
+                "/pub/data/jiafq/xolver/build/boundary-lp-seed-budget-r1039-0.cpp": "340065aa26f4509c0c6d3b8f29ca220e16007da808185d0ac4a24dc9caa4b899",
+                "/pub/data/jiafq/xolver/build/boundary-lp-seed-budget-r1039-1.cpp": "3cb87e533a1fcd5f7ecd84fa63190a92ed22db8524361bc9d8b020e40c250324"
+              },
+              "objects": {
+                "/pub/data/jiafq/xolver/build/boundary-lp-seed-budget-r1039-0.o": "fdb721c39a8f1bc0db17c84f798e906ec2c9042a219fd7a74aac6c98ab50eef7",
+                "/pub/data/jiafq/xolver/build/boundary-lp-seed-budget-r1039-1.o": "7e9b6133028b5a14adffad433a699379663e3a352bab182e8b18bb8412333137"
+              },
+              "diagnostic_binary_sha256": "5e7145622ff0175066d2e3250a08e686de936b2db76b84b20807e0ee9a42d03a",
+              "diagnostic_unit_sha256": "b8285c0ce0b272dfe0752e15fa96076a4036382fd2fd402e1f21f345f4b074f8",
+              "unmodified": {
+                "/pub/data/jiafq/xolver/build/bin/xolver": "638941b7a04b4c4713a93e7da2aec79bce13b0bf56d6242d26dff6861ca91671",
+                "/pub/data/jiafq/xolver/build/src/libxolver_core.a": "f8ccc97c0f4fd4a8d2cc729717fe6535fc23e9b36cb9994b857519abb597e565",
+                "/pub/data/jiafq/xolver/build/tests/xolver_unit_tests": "dceee6bd62c852d4b80249b4cf1a31c65aecfceb7cf89b4cdb5d4fce96c53adb"
+              },
+              "logs": {
+                "link-xolver.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "compile-0.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "unit.log": "5d76d2edd9f94e169e6402081523c73dfa8b8eb2fe4a1a4dd1051120c2524c5d",
+                "compile-1.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "link-unit.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+              },
+              "metrics": {
+                "completed": 1,
+                "failures": 0
+              },
+              "protected_sets_used": false,
+              "boundary": "Private one-second/one-million-work LP-seeded partial linear completion. The budget experiment tests whether preparation and chronological prefix choices are the barrier; it is not a production scheduling policy. Closed upper endpoints retain precedence; projected parameter coordinates precede the default simplex point. Every completed model is checked against every original polynomial. The local prefix remains reversible and no conflict escapes. Thread-local transport is private diagnostic scaffolding; a production change requires explicit per-call seed input and lifecycle tests. Production source, CLI, archive and unit remain unchanged."
+            },
+            "qualification_sha256": "f14158ffac83917a88e7264659d296b69dac5b5e659bcb8bcba737e9d79a0136",
+            "profiles": [
+              {
+                "index": 69,
+                "result": "timeout",
+                "record_sha256": "aa7e79ac44ba12de76b83b46c4c3ad1c06499421d11872e925adb5e38085cca3",
+                "seed_log": null,
+                "boundary_log": "variables=1217 parameters=167 retained_equalities=252 contexts=1 checks=11109 choices=8311 rejected=5513 definitions=1741 models=1 depth=50 exhausted=1 found=0 us=1016024\n"
+              },
+              {
+                "index": 77,
+                "result": "timeout",
+                "record_sha256": "97a2381be08fbf25d24e7d478bb62488a4a1872dc32f717e7e7bc77f2fc86324",
+                "seed_log": null,
+                "boundary_log": "variables=132 parameters=80 retained_equalities=16 contexts=1 checks=49988 choices=33366 rejected=16704 definitions=246 models=1 depth=37 exhausted=1 found=0 us=1002007\n"
+              },
+              {
+                "index": 149,
+                "result": "timeout",
+                "record_sha256": "7813a923d11027a0cf1ce01dde1dbf4b5a93c04b497f47179d751eb40e39d92f",
+                "seed_log": null,
+                "boundary_log": "variables=135 parameters=70 retained_equalities=28 contexts=1 checks=46805 choices=37182 rejected=24757 definitions=277 models=1 depth=70 exhausted=1 found=0 us=1001780\n"
+              }
+            ]
+          }
+        ],
+        "runs": [
+          {
+            "run": "8dfba5fe35a5",
+            "experiment": "278e35d75ea2",
+            "input": "build",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "1"
+              ]
+            }
+          },
+          {
+            "run": "42cc0651029a",
+            "experiment": "f1b4feebe691",
+            "input": "69",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "0"
+              ]
+            }
+          },
+          {
+            "run": "4952827ca8bc",
+            "experiment": "f1b4feebe691",
+            "input": "77",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "1"
+              ]
+            }
+          },
+          {
+            "run": "b78c4ef36532",
+            "experiment": "f1b4feebe691",
+            "input": "149",
+            "resources": {
+              "cpu_slots": 1,
+              "cpu_ids": [
+                "2"
+              ]
+            }
+          }
+        ],
+        "original_manifest_sha256": "adbc83fe9fc6771133b2eec7bda558c9cc4184fd77230405dc7cc848eb5feaa7",
+        "metrics": {
+          "completed": 1,
+          "failures": 0
+        },
+        "protected_sets_used": false,
+        "boundary": "One private LP-seeded partial completion diagnostic with a one-second/one-million-work allocation and three public 20-second profiles. It tests whether preparation and chronological branch exhaustion prevent model discovery. All models still require exact original validation. It supplies no formal fixed160 score or whole-program QCP result; neither protected set is used."
+      }
+    }
+  ],
+  "protected_sets_used": false,
+  "boundary": "All sealed stages retain source/binary/lease/model evidence. Sparse cover has no fresh fixed-subset gain; both 20ms LP-seeded prototypes and the separate one-second prefix-completion probe find no checked model on their three public diagnostics. Indexed bracket initialization has native source qualification, full 39-group acceptance and actual-model-replayed constructed speedups; twelve fresh fixed-input triads still verify six for both Xolver arms, eleven for Z3. No full160 improvement, protected-set result, whole-program QCP win or main promotion is claimed."
+}
