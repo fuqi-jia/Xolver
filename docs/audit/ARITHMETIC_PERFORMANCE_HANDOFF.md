@@ -40,6 +40,23 @@ Older tables describe their own frozen versions and evidence boundaries.
 
 ## Current arithmetic and ASP continuation
 
+[PR87](https://github.com/fuqi-jia/Xolver/pull/87) implements generic exact root
+refutations, complete square models and canonical algebraic model/DSL output,
+core `ffa78765`. R1215 qualifies the canonical source, CLI/SV/worker and native
+Python extension; all39 R1217 server groups pass, including1891 unit cases /
+986840 assertions and31 Python API tests. R1220 seals fresh fixed160:
+**101 baseline/101 candidate/117 verified Z3**, no solving gain/loss,
+opposite verdict or invalid model. Single-round verified PAR-2 is
+7386.707/7382.464/5452.788; the4.243s difference is not an established whole-suite
+speedup. Unknowns are1/2 for baseline/candidate; neither protected set was used.
+One budget-invalid original triad144 is retained and fully replaced after
+termination. Seven unconfirmed Z3 UNSATs remain excluded. See
+[the phase evidence](NRA_ROOT_REFUTATION_STAGE_20261031.json). Delivery uses the
+qualified code commit, Git/CI and binary hashes; document-only updates need no
+extra server current-main archive. Verify exact delivery-head PR CI before
+merge and postmerge main CI afterward.
+
+
 [PR86](https://github.com/fuqi-jia/Xolver/pull/86) is merged as main `bcd63cf9`.
 Its delivery head `5e9f1c3b` passes both jobs of
 [PR CI41180597606](https://github.com/fuqi-jia/Xolver/actions/runs/41180597606),
@@ -3748,7 +3765,14 @@ models. Z3 UNSAT159 remains unconfirmed and excluded. Single-round PAR-2 is
 65 slows0.065s/0.566s. These observations do not establish a whole-suite speedup
 or superiority. See [prototype evidence](NRA_ROOT_REFUTATION_STAGE_20261031.json).
 
-Canonical committed-source qualification, all server acceptance groups,
-fresh full160 and exact-head PR/main CI remain required before merging.
-Neither protected set was used; the accepted main remains bcd63cf9 with
-101/160 verified solves versus117 verified Z3 in its last full comparison.
+R1215 then qualifies committed coreffa78765; all39 R1217 server groups pass,
+including1891 cases/986840 assertions and31 same-core Python tests. R1220 seals
+fresh full160: verified101/101/117, no solving gain/loss or wrong/invalid model,
+PAR-27386.707/7382.464/5452.788. Baseline/candidate unknowns are1/2;156 changes
+from timeout to unknown and remains unsolved. Original triad144 is excluded
+solely for a measured389.735s baseline wall-budget violation after its run
+terminates; a complete valid replacement is selected. The raw original remains
+immutable. Seven unconfirmed Z3 UNSATs remain excluded. Both protected sets and
+a current-kernel controlled original-program QCP comparison remain outstanding.
+PR87 exact delivery-head CI and postmerge main CI complete the merge checks;
+no extra server current-main archive is required.
