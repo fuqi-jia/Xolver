@@ -1,0 +1,175 @@
+{
+  "schema": 1,
+  "status": "pilot-qualified-canonical-acceptance-pending",
+  "parent_main": "f5e75646adaeacd4eb49e4b1212b57a34de8fbaf",
+  "parent_pull_request": "https://github.com/fuqi-jia/Xolver/pull/87",
+  "parent_pr_ci": "https://github.com/fuqi-jia/Xolver/actions/runs/41189844465",
+  "parent_main_ci": "https://github.com/fuqi-jia/Xolver/actions/runs/41191532259",
+  "root_cause": "The monomial relaxation treats products as independent columns even after proving exact factor values; useful nonlinear consequences never return to the incremental linear engine.",
+  "implementation": "Iterate entailed exact fixed-factor identities and simplex checks to closure in the shared real/integer polynomial refuter. Expand local derived-bound labels to current original SAT premises. Retain only unconditional row definitions across checks; rebuild the complete bound base after withdrawal. Cap optional exact power construction even when the base work limit is unlimited. Candidate feasibility remains untrusted.",
+  "pilot_audit_file": "validation/arithmetic-r103/monomial-pilot-r1226.json",
+  "pilot_audit_sha256": "d05f80851d488f163157ca0ad4c1aa38395996af9d78d80d3d9a2c4f3fd5f4a7",
+  "qualification_sha256": "9fc9211739b0708a8bf6526c3cf5c1270f5b9c993f832b2b9afc75b8915fdce8",
+  "prototype_binary_sha256": "9cace3db53f5fa0a8f1c06fd990850a7c6bba743556268d35afae321844156c1",
+  "unit_cases": 1893,
+  "unit_assertions": 986870,
+  "targeted_cases": 95,
+  "counterfactual": "Both new tests fail under the old algorithm with the same class layout and all direct consumers recompiled.",
+  "formal_pilot": {
+    "cases": 12,
+    "binaries": {
+      "baseline": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/nra-root-r1215/xolver",
+        "sha256": "f66e4fb37d1e0566ed83afa7b9e83589b494d8a743c4fa6d2de05203248d1b8b"
+      },
+      "candidate": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/monomial-fold-r1221/xolver",
+        "sha256": "9cace3db53f5fa0a8f1c06fd990850a7c6bba743556268d35afae321844156c1"
+      },
+      "z3": {
+        "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+        "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      }
+    },
+    "timeout": 60,
+    "memory_bytes": 17179869184,
+    "counts": {
+      "baseline": {
+        "timeout": 7,
+        "decided": 5,
+        "verified_decided": 5,
+        "verified_par2": 845.1912034135312,
+        "raw_par2": 845.1912034135312,
+        "sat": 4,
+        "unsat": 1
+      },
+      "candidate": {
+        "timeout": 5,
+        "decided": 7,
+        "verified_decided": 7,
+        "verified_par2": 637.7442895248532,
+        "raw_par2": 637.7442895248532,
+        "sat": 6,
+        "unsat": 1
+      },
+      "z3": {
+        "unsat": 5,
+        "decided": 12,
+        "verified_decided": 8,
+        "verified_par2": 503.03107041306794,
+        "raw_par2": 23.693400310352445,
+        "sat": 7
+      }
+    },
+    "changes": [
+      {
+        "index": 69,
+        "case": "QF_NRA/LassoRanker/CooperatingT2/byron-2.t2.c_Iteration3_Loop_4-pieceTemplate.smt2",
+        "kind": "gained",
+        "truth": "sat",
+        "evidence": [
+          "candidate-exported-model-replay",
+          "z3-exported-model-replay"
+        ],
+        "observations": {
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.0079209189862
+          },
+          "candidate": {
+            "result": "sat",
+            "seconds": 19.410136602818966
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 0.6166874915361404
+          }
+        }
+      },
+      {
+        "index": 146,
+        "case": "QF_NRA/LassoRanker/CooperatingT2/consts1.t2.c_Iteration1_Lasso_4-pieceTemplate.smt2",
+        "kind": "gained",
+        "truth": "sat",
+        "evidence": [
+          "z3-exported-model-replay",
+          "candidate-exported-model-replay"
+        ],
+        "observations": {
+          "z3": {
+            "result": "sat",
+            "seconds": 21.26308178715408
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.00636876933277
+          },
+          "candidate": {
+            "result": "sat",
+            "seconds": 12.893310660496354
+          }
+        }
+      }
+    ],
+    "unverified": [
+      {
+        "index": 24,
+        "case": "QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 27,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 42,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep2a.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 114,
+        "case": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      }
+    ],
+    "wrong_verdicts": [],
+    "invalid_exported_models": []
+  },
+  "source_overrides": {
+    "src/search/refute/PolynomialLinearRefutation.cpp": "f6db5c523a8c79784d112d6fb3a1d6cb459e0592500a09034dbb921d27ec0566",
+    "src/search/refute/PolynomialLinearRefutation.h": "6dc374f9408e16682cb32e8434229600f0e7d5db6766bd049f914a7091000ee7",
+    "src/applications/satisfiability/smt/qfnra/NraSolver_stages.cpp": "dd7006322361e4d4eb94d98562121ee1da9d6b3b94e3f55c527441f2b73f3fb0",
+    "tests/unit/test_polynomial_linear_refutation.cpp": "d3d7e3f2b96d6a0099ba05a1dab3511fa61deed30da2015bf717a86063a388a3"
+  },
+  "protected_sets_used": false,
+  "boundary": "Twelve-case pilot only: two independently replayed original-input SAT gains (69,146), no loss. Four unconfirmed Z3 UNSATs remain excluded. Not a full160 score or superiority over Z3. Committed canonical build, complete server acceptance, fresh full160 and exact-head PR/main CI remain pending."
+}

@@ -161,7 +161,9 @@ std::optional<TheoryCheckResult> NraSolver::stageLinearRelaxation(
         std::ofstream out(profile.string() + ".linear-relaxation.log", std::ios::app);
         out << "constraints=" << statistics.constraints << " variables=" << statistics.variables
             << " new_rows=" << statistics.newRows << " reused_rows=" << statistics.reusedRows
-            << " retained_rows=" << statistics.retainedRows << " exhausted=" << statistics.exhausted << '\n';
+            << " retained_rows=" << statistics.retainedRows << " exhausted=" << statistics.exhausted
+            << " product_facts=" << statistics.productFacts << " reused_products=" << statistics.reusedProductRows
+            << " closure_checks=" << statistics.closureChecks << '\n';
     }
     if (!reasons) {
         if (effort == TheoryEffort::Full && interfaceEqualities_.empty() &&
