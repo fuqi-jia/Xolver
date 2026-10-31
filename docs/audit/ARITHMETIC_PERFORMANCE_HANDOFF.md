@@ -40,6 +40,26 @@ Older tables describe their own frozen versions and evidence boundaries.
 
 ## Current arithmetic and ASP continuation
 
+[PR86](https://github.com/fuqi-jia/Xolver/pull/86) repairs NIA model invalidation
+and publication of refinements at complete candidate checks, core `46049166`.
+R1141 qualifies the canonical source and binaries; all 39 R1143 native groups
+pass, including 1886 unit cases / 986763 assertions. R1145 seals the fresh
+fixed160 comparison: **101 delivered main / 101 candidate / 117 verified Z3**,
+with no gained/lost solves, opposite verdicts or invalid exported models.
+Seven unconfirmed Z3 UNSATs remain excluded. This is a correctness repair;
+the 1.874s single-round PAR-2 difference does not establish a speedup.
+[Phase evidence](NIA_MODEL_STATE_STAGE_20261031.json) binds the source, frozen
+binaries, acceptance and replacement of two terminal budget-invalid triads.
+Exact delivery-head PR CI and postmerge main CI remain required.
+
+R1142 separately audits the preceding delivered residue kernel on the original
+branch, GCD and max3 programs: each backend verifies 3 programs, 4 functions,
+23 top-level VCs and 780 actual SMT queries, with identical occurrence inputs
+and verdicts. Full current Rocq checks pass. Final-check sums are 91.840s for
+Xolver and 100.234s for Z3; proof bodies differ and one sample does not establish
+whole-workflow superiority. [Program evidence](QCP_ORIGINAL_PROGRAMS_STAGE_20261031.json)
+states the version and timing limits. Neither protected set has been used.
+
 [PR84](https://github.com/fuqi-jia/Xolver/pull/84) is merged as main `b9a15a25`.
 Its exact delivery head `d753bfa5` passes both jobs of
 [PR CI41169407864](https://github.com/fuqi-jia/Xolver/actions/runs/41169407864).
@@ -3652,14 +3672,31 @@ R1137 passes58 targeted native cases/1493 assertions. R1138 runs the same three
 new regression bodies against the delivered archive: all three fail, with21
 failed assertions; its fixed prototype passes all1886 native unit cases. The
 final source also schedules the linearization producer/queue together and
-extends that regression; it requires fresh canonical-source qualification,
-full acceptance, fixed160 comparison and exact-head CI before promotion.
+extends that regression. R1141 qualifies committed source46049166; all39 R1143
+acceptance groups pass,1886 cases/986763 assertions. R1145 seals160 valid fresh
+triads: verified101/101/117, no gains/losses/opposites/invalid models. Two
+complete triads4/10 replace terminal wall-budget failures; all originals remain.
+Verified PAR-2 is7386.098/7384.224/5484.627. This is a correctness repair with no
+established whole-suite speedup. Seven unconfirmed Z3 UNSATs remain excluded.
+See [the phase evidence](NIA_MODEL_STATE_STAGE_20261031.json). Exact delivery-head
+PR86 CI and postmerge main CI remain delivery gates at this snapshot.
 
 All six fresh R1124 original-program runs now reach actual controller `done`:
 branch, GCD and max3 with each backend, using the frozen residue worker/Z3 and
 original annotated C files. Each passes current obligation regeneration and
 complete Rocq final checks. GCD proofs preserve C signed remainder (`Z.rem`),
-including negative inputs. These are three regression programs per backend;
-the per-program/query audit is still being sealed. They do not establish a
-new final-source comparison or protected-program result. Both protected sets
-remain unused; the full SMT goal is still unmet.
+including negative inputs. R1142 seals3 original programs,4 functions,23
+top-level VCs and780 actual queries per backend. Paired query occurrence
+sequences and verdicts match; there are no opposite verdicts. Final-check
+time sums are91.840s/100.234s; proof bodies/grouping differ and this one sample
+is not a controlled whole-workflow speedup. See [the program evidence](QCP_ORIGINAL_PROGRAMS_STAGE_20261031.json).
+These runs use the preceding delivered residue kernel, not the NIA-state
+candidate or either protected set. The full SMT goal remains unmet.
+
+R1148/R1149 close the incoming-bound overshoot hypothesis: public13/56/128
+have1/2076,0/9815,2/10484 overshooting pivots, respectively, with0 incoming
+variables already invalid. Such moves account for78/7540091,0/16387442 and
+160/1940714 estimated coefficient updates. No decision or production source
+changed. This does not explain the dense exact-arithmetic cost and must not
+be promoted as an optimization. The next observer measures pivot coefficient
+widths and eligible unit alternatives before choosing a new algorithm.
