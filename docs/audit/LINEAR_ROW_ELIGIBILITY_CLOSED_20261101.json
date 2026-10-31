@@ -1,0 +1,1032 @@
+{
+  "schema": "xolver-row-deduction-eligibility-closed/1",
+  "implementation_commit": "d88eaf45189a67f4fedb7931f6e4988b01130e0a",
+  "qualification": {
+    "native_builder_sha256": "75de376cc7b6383c1b8f8193f032080dfcb3b332c13dd983fb907f2f45b55764",
+    "source_head": "d88eaf45189a67f4fedb7931f6e4988b01130e0a",
+    "source_manifest_sha256": "4f6faca4343003b7aa4e53917cca6e6cbc1166ee4251974b85aa9848dc19b300",
+    "binaries": {
+      "xolver": "1c4292d285016c0fde95f25fe59b44898ba175ce9eb42e1b458d8f70ae56b3e0",
+      "xolver-sv": "031406c1be8bd8d99d212eb8a54fa5ffcdab311bf135c9ee6d5228c24613b88f",
+      "xolver-parallel-worker": "11800addcce157c26f6ebd6d126b5fdcceb7e991a9f7323d5701817ddb6afc98"
+    },
+    "binary_sha256": "1c4292d285016c0fde95f25fe59b44898ba175ce9eb42e1b458d8f70ae56b3e0",
+    "unit_binary_sha256": "577302a04687758f126caf6be8da9ed19bf1794a6f735ec4f06bb0a5b95b7de8",
+    "full_unit_tests_pending": true,
+    "library_sha256": "bf9730d9452ef885dc75940c2be0be7b1c8793f7fb278c503dccd8c269476443",
+    "python_extension_sha256": "6c72ca945c8aa85330ee0e4545cc56f569c380fb43b0fcc61a924e7784472a76",
+    "python_shared_libraries": {
+      "/usr/lib/x86_64-linux-gnu/libmpfr.so.6": "1aed080b3143049fbe016cd82cdc5fb47db386386556cc1bb37cfccc133c0fae",
+      "/usr/lib/x86_64-linux-gnu/libgmp.so.10": "fda9699eef15deda5f1c626e9140377a7f5d88c41516a54278ac02429cb20fa5",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/partial-proof-python-r1208/native-runtime/usr/lib/x86_64-linux-gnu/libgmpxx.so.4.7.0": "c6261b838536ec28a47008433227aaaf2573f408b54bfa79bea8c9c98c4acaa6"
+    },
+    "python_tests": 31,
+    "logs": {
+      "targeted.log": "5c45f66d0d19b0db4bac14926800423b2a8e36d07be5f118059c46e647b03a35",
+      "python-tests.log": "028d901b94555688bab493a27817fb19c21f61c1445b3f0669214523843db2f1",
+      "eligibility-contracts.log": "83779bb7f1add533636b4197f4e9079275454cf920ab1abd5480bab4b154e180",
+      "negative-contract.log": "5ee9e2a46ae2bef22d9178b392216dddc30c59f1c8892c52c00245ecf974b64c",
+      "negative-build.log": "c51ce9411307a989afbfd03b135aaadda0ff35ff1b53b22ef2ae6286ce7b25db",
+      "python-link.log": "7dcc0b3899864f169ca92b4d8a6dc182922336bdb79756cc6d553f9601d23ecb",
+      "build-unit.log": "71695f419905afee292a3ddc78907cad1d35dea67f3db13d91e906ab5ba36bba",
+      "architecture.log": "ee2d80a785e3e9e3a4c838efaf85059ad52986f30af4974c3a7b3b9707d0b44c",
+      "build.log": "623fee5796ec0a8ff7396189624f97c81f9e4a3f93b35a6c04277de4fdfe8112",
+      "overlay.log": "c90185184878152a048ac0fa14981b3a2e4a8e8e5c0aed62e87e73ff665bc0d7",
+      "configure.log": "b41782f6ba165b45154cc787ceda821892e46578af8d6ec83bff7d828667f054"
+    },
+    "metrics": {
+      "completed": 1,
+      "failures": 0
+    },
+    "negative_source_sha256": "78b40d9318da2ac7ca9a6704e14b8aaef8d8fd6a956b205a2c4529587d2de340",
+    "negative_unit_exit_code": 1,
+    "negative_same_abi_headers": {
+      "src/search/lra/GeneralSimplex.h": "2c00a3cfe6b05e636fbdff9ba817cdb81bf8178bf35b195ce8a28a31fdc9c5f9",
+      "src/search/lra/SparseTableau.h": "74aead630f54dedde68e7e7fe950fa48150ea07ac6a76d58953d3e6a2975a517",
+      "src/search/lra/LraPropagationEngine.h": "6c68343f70ffccc5688c15d2721d52b8613f0ad3c95d7fdff26344911c49d012"
+    },
+    "previous_qualified_source_head": "abb54396dd4c6fce89f45915ec23efddfa5ab74f",
+    "protected_sets_used": false,
+    "boundary": "A row snapshot skips arithmetic only when its inspected inputs rule out both forward conclusions and both backward conclusions using explained basic endpoints. No persistent cache, new interface, bound mutation or scheduling change is retained. Same-header previous propagation fails all3 new work/semantics contracts. Targeted native tests and31 Python tests qualify this build freeze. Full native unit tests run once in the unit group of the parallel39-group acceptance; full-unit acceptance, independent implications and fair timing remain pending. Protected sets are unused and no solver superiority claim is made."
+  },
+  "qualification_sha256": "69b6640a3a9293743fe5d264b39eba02b5624abec1b15c3a7b827ee6c9380f57",
+  "native_build": [
+    {
+      "experiment": "341d1096128b",
+      "run": "e88cd306b2bc",
+      "input": "run",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "0"
+        ]
+      }
+    }
+  ],
+  "proof_checks": {
+    "source_head": "d88eaf45189a67f4fedb7931f6e4988b01130e0a",
+    "qualification_sha256": "69b6640a3a9293743fe5d264b39eba02b5624abec1b15c3a7b827ee6c9380f57",
+    "source_manifest_sha256": "4f6faca4343003b7aa4e53917cca6e6cbc1166ee4251974b85aa9848dc19b300",
+    "probe_source_sha256": "ad44892c9434a52a6e33713f0dcc7a8c41fa4969d2100c2c58bee8cdca625f54",
+    "probe_binary_sha256": "0422311b571b978a342e1be4f4189a88906842c264fda497417651522b026848",
+    "implications_sha256": "105366eea4a4e57644616ae68ec5385cf9ab37173fcc5833928e271bc14ccf37",
+    "observed": {
+      "checks": 381,
+      "calls": 96,
+      "skipped_rows": 0
+    },
+    "independent_replays": [
+      {
+        "solver": "z3",
+        "binary_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+        "checks": 381,
+        "result": "unsat"
+      },
+      {
+        "solver": "cvc5",
+        "binary_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+        "checks": 381,
+        "result": "unsat"
+      }
+    ],
+    "logs": {
+      "probe.log": "f17535ad88c2eba1f6930a57cbaf77bfba7944b8f79072bc8173b3fea0314d73",
+      "link.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compile.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "protected_sets_used": false,
+    "boundary": "Every actual emitted bound, with only its flattened original SAT premises and the original row equalities, is negated and checked UNSAT by both frozen independent solvers. Exact rational and symbolic positive delta arithmetic, repeated calls, relaxed/deleted premises, reused signed literals and basis changes are included. These implication checks establish explanation entailment on these probes; they are not whole-suite performance scores or original-C QCP coverage."
+  },
+  "proof_runs": [
+    {
+      "experiment": "451fb7ab3146",
+      "run": "17b760d50d42",
+      "input": "run",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "0"
+        ]
+      }
+    }
+  ],
+  "acceptance": [
+    {
+      "experiment": "d10299924c98",
+      "run": "65489117b285",
+      "input": "unit",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "11"
+        ]
+      },
+      "commands_sha256": "8eb9d4e1468787061f3a5fe057e5ffa8cc110d08f210df948fee7528f08951ea"
+    },
+    {
+      "experiment": "d10299924c98",
+      "run": "e26c5d375bbb",
+      "input": "regression-lra",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "12"
+        ]
+      },
+      "commands_sha256": "3d58e9e44d96e0f4339f1fd8ab4e840439bdcbcf83c1132909ade81785c23e7c"
+    },
+    {
+      "experiment": "d10299924c98",
+      "run": "c7efe4fbf25e",
+      "input": "regression-lia",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "13"
+        ]
+      },
+      "commands_sha256": "dac3eddf4c92710e110e0733e40c8c1532319f9392df2609ca52d2696db66afb"
+    },
+    {
+      "experiment": "d10299924c98",
+      "run": "0822f51d2475",
+      "input": "linear",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "14"
+        ]
+      },
+      "commands_sha256": "b19901aad325cf60f8ed5e6eef3e03534075edf82dd406bbb47053b16de270de"
+    },
+    {
+      "experiment": "d10299924c98",
+      "run": "45400b0f250d",
+      "input": "qcp",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "15"
+        ]
+      },
+      "commands_sha256": "52f3062802bf708dfdf3e538e2d426710047ffced344bce10c6a3a53d7750d7b"
+    },
+    {
+      "experiment": "d10299924c98",
+      "run": "3dc864fdb43e",
+      "input": "tools",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "16"
+        ]
+      },
+      "commands_sha256": "90f71bfdeb9cf84511544bdf6984b7ea0e80aa3ce76721bea68d002db02d2057"
+    },
+    {
+      "experiment": "d10299924c98",
+      "run": "6d96c382d395",
+      "input": "root-regressions",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "17"
+        ]
+      },
+      "commands_sha256": "076d94891b659920b07a7bfdb6fa165c7fcbde3997d324dd18e7035c76b04c90"
+    },
+    {
+      "experiment": "d10299924c98",
+      "run": "7ec9bc50658a",
+      "input": "architecture",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "18"
+        ]
+      },
+      "commands_sha256": "5db187a9a714041ceabd63a68e255fdc7d53c0307f81b98ce6c4271fc70af1c7"
+    },
+    {
+      "experiment": "d10299924c98",
+      "run": "6100298c6eb8",
+      "input": "known-gaps",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "19"
+        ]
+      },
+      "commands_sha256": "68c305bb695ce1f2b0d1ec3599488e3216c420393cc2f9644318b88a61c08a12"
+    },
+    {
+      "experiment": "d10299924c98",
+      "run": "422361b5ccd9",
+      "input": "affine",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "20"
+        ]
+      },
+      "commands_sha256": "69e0535f659e3f9e1b13edaf6e1931aa83cb89e09c9b85d66dd718052b9531ab"
+    },
+    {
+      "experiment": "d10299924c98",
+      "run": "8fcfb65eb033",
+      "input": "partial",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "21"
+        ]
+      },
+      "commands_sha256": "95f3e57571d2772becbbf8d12ac0e33d97a270909c77039f3b80ff68e2134ad9"
+    },
+    {
+      "experiment": "d10299924c98",
+      "run": "be00b1cd1e35",
+      "input": "intervals",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "22"
+        ]
+      },
+      "commands_sha256": "fadda84a378c0d500c147c760a2c6428f26adf989fec52a2f87c18b2cbe6043a"
+    },
+    {
+      "experiment": "d10299924c98",
+      "run": "2652680dbdf7",
+      "input": "quick",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "23"
+        ]
+      },
+      "commands_sha256": "5f158619ac0c49821565ad7e5682f14c77c30cdde72801cecfed8cf5b02d7189"
+    },
+    {
+      "experiment": "d10299924c98",
+      "run": "9ae4263c9599",
+      "input": "regression-alia",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "24"
+        ]
+      },
+      "commands_sha256": "0f0944eaf62862dd742a0b048fb3a6c89fe81604eca05eca1cec9632a8549edf"
+    },
+    {
+      "experiment": "d10299924c98",
+      "run": "7bd47b082a04",
+      "input": "regression-alra",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "25"
+        ]
+      },
+      "commands_sha256": "2fc20d862013cb7072aec1ea21a35fb44dfebba5d2f78f48427d02f6604e6720"
+    },
+    {
+      "experiment": "d10299924c98",
+      "run": "ec2d7efab8d9",
+      "input": "regression-ania",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "26"
+        ]
+      },
+      "commands_sha256": "63c2d5d1191e4898545a8d2ec5d6ed04ae9dbe08abb800aafb024574ea62e8bd"
+    },
+    {
+      "experiment": "d10299924c98",
+      "run": "701f0b80f06f",
+      "input": "regression-auflia",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "27"
+        ]
+      },
+      "commands_sha256": "9265f3684a70588d31da101ffc7d7f67ff0fbeed09edb5273d03ae32ecab202a"
+    },
+    {
+      "experiment": "d10299924c98",
+      "run": "3b6dc9bfdcba",
+      "input": "regression-auflra",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "28"
+        ]
+      },
+      "commands_sha256": "2989081bba53084decfacab96df36749cf41fbe2400604064b6574994d547300"
+    },
+    {
+      "experiment": "d10299924c98",
+      "run": "88ef146f61e3",
+      "input": "regression-aufnia",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "29"
+        ]
+      },
+      "commands_sha256": "31934a0dec26e0da10fde8e7969cdaa3000414cff2f15b3a651204019db9d721"
+    },
+    {
+      "experiment": "d10299924c98",
+      "run": "3f3db91737ac",
+      "input": "regression-ax",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "30"
+        ]
+      },
+      "commands_sha256": "799bc3319d27b34b8f3fcf196825f2f51e8ec75d7316d427043c3bd2fb8aa28a"
+    },
+    {
+      "experiment": "cad961b3f92c",
+      "run": "f20a6a2fb908",
+      "input": "regression-bool",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "12"
+        ]
+      },
+      "commands_sha256": "34783900b3f32b216f973bfd18d37b03d7f13be3489624f39ea43a13fb398b89"
+    },
+    {
+      "experiment": "cad961b3f92c",
+      "run": "e434601cbc6e",
+      "input": "regression-dt",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "13"
+        ]
+      },
+      "commands_sha256": "a39c89bd80e54164d3d5e50121442371d179f005cf9d7203280131abd344f282"
+    },
+    {
+      "experiment": "cad961b3f92c",
+      "run": "bfc942e619d0",
+      "input": "regression-euf",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "17"
+        ]
+      },
+      "commands_sha256": "9132f23e9813dece10cf91dda7c38edbfa73868f3f86bc443d2b3e9d850bd3f0"
+    },
+    {
+      "experiment": "cad961b3f92c",
+      "run": "824a0873f774",
+      "input": "regression-idl",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "18"
+        ]
+      },
+      "commands_sha256": "913f6e604f079eeb944730eea1bb78d5096622e9d6a462b6d865870ad23f4e93"
+    },
+    {
+      "experiment": "cad961b3f92c",
+      "run": "aee30f8ca859",
+      "input": "regression-lira",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "19"
+        ]
+      },
+      "commands_sha256": "c1c018f99a1b92dfe9f416e98b9ed09d091ccdfcfcb60573424ef4ba829428b9"
+    },
+    {
+      "experiment": "cad961b3f92c",
+      "run": "035000bc8900",
+      "input": "regression-nira",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "21"
+        ]
+      },
+      "commands_sha256": "9c4b363964fde7a75e6a57910ace67f8fa15891fbe6c77784aad30c884fb6391"
+    },
+    {
+      "experiment": "cad961b3f92c",
+      "run": "3b83e42bd27b",
+      "input": "regression-nra",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "23"
+        ]
+      },
+      "commands_sha256": "ac608d2682beee59cec9c1d08556b8c33ccc670a324f7488d919009a10abcf24"
+    },
+    {
+      "experiment": "cad961b3f92c",
+      "run": "edb4fc7fa432",
+      "input": "regression-quantifiers",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "24"
+        ]
+      },
+      "commands_sha256": "4dee0973dbd888b9c6d03f0f24c2e5634ac11971508c18be7ed0af92d56a51e6"
+    },
+    {
+      "experiment": "cad961b3f92c",
+      "run": "cce4e7ea0106",
+      "input": "regression-rdl",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "25"
+        ]
+      },
+      "commands_sha256": "e64e98a479785ee73424744d128f77f446ee46b6fde2ec4a95ee49dbfdd6378a"
+    },
+    {
+      "experiment": "cad961b3f92c",
+      "run": "8e5c3469c7ae",
+      "input": "regression-sl",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "26"
+        ]
+      },
+      "commands_sha256": "cc7ae8f7ca44af5da15be59021c1e0a8afd570116f97bbf30cb27b72c9d3bf7f"
+    },
+    {
+      "experiment": "cad961b3f92c",
+      "run": "c727f3d9df8e",
+      "input": "regression-ufdtlia",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "27"
+        ]
+      },
+      "commands_sha256": "9474327efb7d6e89e1a310f6045948d561d148a1f2c103e38ecc72fc69ea2237"
+    },
+    {
+      "experiment": "cad961b3f92c",
+      "run": "d4166626465a",
+      "input": "regression-ufdtnia",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "28"
+        ]
+      },
+      "commands_sha256": "9da60d0b31a8bc9ab5cfee5c78c5d370c284d7356abc82ad9a7d370fdd69b22e"
+    },
+    {
+      "experiment": "cad961b3f92c",
+      "run": "177e429578c7",
+      "input": "regression-uflia",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "29"
+        ]
+      },
+      "commands_sha256": "ca6a12e6c3feda042dd43c1834036183b1752499765568ce50164791556a491f"
+    },
+    {
+      "experiment": "cad961b3f92c",
+      "run": "5b8a41c3f5ae",
+      "input": "regression-uflra",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "30"
+        ]
+      },
+      "commands_sha256": "f5db1bdfb29e6e3a3f16f2a5486780224d25c9a44546508bc1462626199f0b38"
+    },
+    {
+      "experiment": "cad961b3f92c",
+      "run": "36a8a561af82",
+      "input": "regression-ufnia",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "31"
+        ]
+      },
+      "commands_sha256": "454f85982e9efdc5b3dde07f238a635dcf1a2907c202caf7513cec9e01641240"
+    },
+    {
+      "experiment": "cad961b3f92c",
+      "run": "5298ab7db2af",
+      "input": "regression-ufnra",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "32"
+        ]
+      },
+      "commands_sha256": "2efbd3c7c5cb641d1a7b765931c10a8581a91bc579ca5f060eec52dffe395d77"
+    },
+    {
+      "experiment": "cad961b3f92c",
+      "run": "bcbb9b4830ae",
+      "input": "theory-models",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "33"
+        ]
+      },
+      "commands_sha256": "aa99e4e355b8fbe7462cd39fa402ae6b5c0b65be1b53b4dc29e679f2e8c756a7"
+    },
+    {
+      "experiment": "cad961b3f92c",
+      "run": "0be215f21b67",
+      "input": "regression-nia",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "36"
+        ]
+      },
+      "commands_sha256": "1bfec5efc842c338df87274bb8abb00c8da491e10763ad322b3d17114e369071"
+    },
+    {
+      "experiment": "cad961b3f92c",
+      "run": "39273ac14297",
+      "input": "certificate-115",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "37"
+        ]
+      },
+      "commands_sha256": "8eb2de209726d57fe247370798a73cc37373dead4b9165719a882d040e11d554"
+    }
+  ],
+  "full_unit_receipt": {
+    "experiment": "d10299924c98",
+    "run": "65489117b285",
+    "input": "unit",
+    "resources": {
+      "cpu_slots": 1,
+      "cpu_ids": [
+        "11"
+      ]
+    },
+    "commands_sha256": "8eb9d4e1468787061f3a5fe057e5ffa8cc110d08f210df948fee7528f08951ea"
+  },
+  "full_unit_log_sha256": "cea66cc8d1ccc72f4e3c12b35146efffcaa320d725718e8f3cdebaa58589972f",
+  "pilot": {
+    "cases": 11,
+    "binaries": {
+      "baseline": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/prefix-pruning-r1341/xolver",
+        "sha256": "30965221fc2a3b37177a7e79c771b6fb4d9f738d4a524357aee2448b5b3ba07f"
+      },
+      "candidate": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/row-eligibility-r1372/xolver",
+        "sha256": "1c4292d285016c0fde95f25fe59b44898ba175ce9eb42e1b458d8f70ae56b3e0"
+      },
+      "z3": {
+        "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+        "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      }
+    },
+    "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+    "timeout": 60,
+    "memory_bytes": 17179869184,
+    "model_capture": "initial-solve-single-model",
+    "counts": {
+      "baseline": {
+        "timeout": 8,
+        "decided": 3,
+        "verified_decided": 3,
+        "verified_par2": 1050.3784846346825,
+        "raw_par2": 1050.3784846346825,
+        "sat": 3
+      },
+      "candidate": {
+        "timeout": 10,
+        "decided": 1,
+        "verified_decided": 1,
+        "verified_par2": 1207.886146215722,
+        "raw_par2": 1207.886146215722,
+        "sat": 1
+      },
+      "z3": {
+        "sat": 6,
+        "decided": 11,
+        "verified_decided": 10,
+        "verified_par2": 165.98252633213997,
+        "raw_par2": 99.83593660220504,
+        "unsat": 5
+      }
+    },
+    "by_logic": {
+      "QF_LIA": {
+        "baseline": {
+          "timeout": 1,
+          "decided": 0,
+          "verified_decided": 0,
+          "verified_par2": 120,
+          "raw_par2": 120
+        },
+        "candidate": {
+          "timeout": 1,
+          "decided": 0,
+          "verified_decided": 0,
+          "verified_par2": 120,
+          "raw_par2": 120
+        },
+        "z3": {
+          "sat": 1,
+          "decided": 1,
+          "verified_decided": 1,
+          "verified_par2": 1.169641898944974,
+          "raw_par2": 1.169641898944974
+        }
+      },
+      "QF_LRA": {
+        "baseline": {
+          "timeout": 7,
+          "decided": 3,
+          "verified_decided": 3,
+          "verified_par2": 930.3784846346825,
+          "raw_par2": 930.3784846346825,
+          "sat": 3
+        },
+        "candidate": {
+          "timeout": 9,
+          "decided": 1,
+          "verified_decided": 1,
+          "verified_par2": 1087.886146215722,
+          "raw_par2": 1087.886146215722,
+          "sat": 1
+        },
+        "z3": {
+          "sat": 5,
+          "decided": 10,
+          "verified_decided": 9,
+          "verified_par2": 164.812884433195,
+          "raw_par2": 98.66629470326006,
+          "unsat": 5
+        }
+      }
+    },
+    "changes": [
+      {
+        "index": 51,
+        "case": "QF_LRA/LassoRanker/CooperatingT2/ludcmp.c.i.ludcmp.pl.t2.fixed.t2.c_Iteration8_Loop_7-phaseTemplate.smt2",
+        "kind": "lost",
+        "truth": "sat",
+        "evidence": [
+          "baseline-exported-model-replay",
+          "z3-exported-model-replay"
+        ],
+        "observations": {
+          "baseline": {
+            "result": "sat",
+            "seconds": 19.51388267427683
+          },
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.021982967853546
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 0.7175851762294769
+          }
+        }
+      },
+      {
+        "index": 131,
+        "case": "QF_LRA/sc/sc-37.induction2.cvc.smt2",
+        "kind": "lost",
+        "truth": "sat",
+        "evidence": [
+          "z3-exported-model-replay",
+          "baseline-exported-model-replay"
+        ],
+        "observations": {
+          "z3": {
+            "result": "sat",
+            "seconds": 0.517547195777297
+          },
+          "baseline": {
+            "result": "sat",
+            "seconds": 56.759917141869664
+          },
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.009825037792325
+          }
+        }
+      }
+    ],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "unverified": [
+      {
+        "index": 50,
+        "case": "QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_jain_5.i_2_4_3.bpl_7.smt2",
+        "results": {
+          "z3": "unsat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      }
+    ],
+    "scoring": "Correct verdicts require a replayed model or an independent UNSAT decision on the identical input hash; unresolved results receive PAR-2 penalty."
+  },
+  "pilot_runs": [
+    {
+      "experiment": "65733df2641d",
+      "run": "75067223508f",
+      "input": "13",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "0"
+        ]
+      },
+      "report_sha256": "f65f59fd7d9cacd1214165100923222aee4b54496456c665f23efefeacd546c8"
+    },
+    {
+      "experiment": "65733df2641d",
+      "run": "4576c40a1ad8",
+      "input": "49",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "1"
+        ]
+      },
+      "report_sha256": "f4b65e20ad1e49d9c08b28a854a56e7d25680f62b0a2cd51ba058d6e51b09d7b"
+    },
+    {
+      "experiment": "65733df2641d",
+      "run": "87079ad0da05",
+      "input": "50",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "2"
+        ]
+      },
+      "report_sha256": "fed8151f5a75d4b9261fdc320afe2bfeb6ae3c6114452048c6dd5a906c7c69e8"
+    },
+    {
+      "experiment": "65733df2641d",
+      "run": "6e9ec8414fe0",
+      "input": "51",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "3"
+        ]
+      },
+      "report_sha256": "f02665c36fb9c13f616c2fbb3d9244f0b9f649ce12db026555dbae9f2075d0c4"
+    },
+    {
+      "experiment": "65733df2641d",
+      "run": "aefd09396083",
+      "input": "56",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "4"
+        ]
+      },
+      "report_sha256": "a49da251c6e51a9f0950cd4189c6d673c23f7acd8deb6da1451440362554072c"
+    },
+    {
+      "experiment": "65733df2641d",
+      "run": "b467683d495f",
+      "input": "58",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "5"
+        ]
+      },
+      "report_sha256": "37b3498d6361a103b48354f3ad2c822e99a077143467214ae8aea06cbb0fe0a3"
+    },
+    {
+      "experiment": "65733df2641d",
+      "run": "28a56ba3fda1",
+      "input": "59",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "6"
+        ]
+      },
+      "report_sha256": "08cc0a86275975a50d32e3e9d17284bf62b59346e5dab01e5a8268bc5a0040c9"
+    },
+    {
+      "experiment": "65733df2641d",
+      "run": "a7151e3f0a5e",
+      "input": "128",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "7"
+        ]
+      },
+      "report_sha256": "6c74e3814884d55932d3bb5958942e442581be6803a1dfcd5d0706d401baec71"
+    },
+    {
+      "experiment": "65733df2641d",
+      "run": "5aaaeaea738d",
+      "input": "129",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "8"
+        ]
+      },
+      "report_sha256": "6eeaa8fc83d8b4637906ffc8adc5aa306b9afe4d617cbbd3d1d199f9e6422e53"
+    },
+    {
+      "experiment": "65733df2641d",
+      "run": "0d98867a8319",
+      "input": "130",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "9"
+        ]
+      },
+      "report_sha256": "5b2ec683cbfa2193864ef9ec56847f7569408dcff6fd44985a33c1d5b84df717"
+    },
+    {
+      "experiment": "65733df2641d",
+      "run": "a08fe738df91",
+      "input": "131",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "10"
+        ]
+      },
+      "report_sha256": "04cf788e34a444f0d38bb2a6bd4d6ac8ac3ada1f989e2f17c8fb835c31435ebf"
+    }
+  ],
+  "observed_work": [
+    {
+      "receipt": {
+        "experiment": "0e992905afe4",
+        "run": "4af0a58a9511",
+        "input": "49",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "0"
+          ]
+        }
+      },
+      "record_sha256": "8dfe7a48dada00677e1f43a8de8b17a35389281c55d26d78733401e7cfc41cf2",
+      "fragment": {
+        "index": 49,
+        "original_failed_run": "f9aafac18752",
+        "original_status": "failed",
+        "original_resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "0"
+          ]
+        },
+        "raw_path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/row-eligibility-r1370/49/rows.jsonl",
+        "raw_sha256": "5dbadaa7a42360be5e028afeb3999c3498314266b54e721fbba8c8789416cc2c",
+        "complete_entries": 72,
+        "totals": {
+          "visits": 51984,
+          "snapshots": 29957,
+          "old_skip": 7347,
+          "term_pairs": 28719,
+          "avoidable_rows": 1290,
+          "avoidable_pairs": 4817
+        },
+        "avoidable_pair_fraction": 0.16772868136077163,
+        "omitted_stage_text": [
+          "[STAGE-PROF] pipeline-calls=740",
+          "  lra.core  ms=2927 calls=739"
+        ],
+        "protected_sets_used": false,
+        "diagnostic_qualification_sha256": "4e649ae717a9bf5a6de320f46e51ff2686c5edb15138042a5b1fe8556f5fde38",
+        "boundary": "The original observer wrote into the existing stage profiler destination; that profiler overwrote earlier data with its periodic text header, and the strict JSON consumer failed. The failed EOS tasks and original raw files are unchanged. This new audit recovers only complete counter lines in the retained late fragment, not the entire10s history. It proves observed avoidable arithmetic in these completed calls; no timing, solver-score or full-run coverage claim is made. No solver process is rerun."
+      }
+    },
+    {
+      "receipt": {
+        "experiment": "0e992905afe4",
+        "run": "e1d60570766b",
+        "input": "58",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "1"
+          ]
+        }
+      },
+      "record_sha256": "94cecf39c41f19d6a387ecff7e090b19a8e1363826cd6a47c57da332a548f8ba",
+      "fragment": {
+        "index": 58,
+        "original_failed_run": "0b09ff5b7c26",
+        "original_status": "failed",
+        "original_resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "1"
+          ]
+        },
+        "raw_path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/row-eligibility-r1370/58/rows.jsonl",
+        "raw_sha256": "675a0c3c1c332a8897174c8e4a73b33acca409de27022a788ea805763f4b3cd6",
+        "complete_entries": 239,
+        "totals": {
+          "visits": 355597,
+          "snapshots": 186591,
+          "old_skip": 75395,
+          "term_pairs": 201576,
+          "avoidable_rows": 55021,
+          "avoidable_pairs": 83499
+        },
+        "avoidable_pair_fraction": 0.4142308608167639,
+        "omitted_stage_text": [
+          "[STAGE-PROF] pipeline-calls=2915",
+          "  lra.core  ms=6502 calls=2914"
+        ],
+        "protected_sets_used": false,
+        "diagnostic_qualification_sha256": "4e649ae717a9bf5a6de320f46e51ff2686c5edb15138042a5b1fe8556f5fde38",
+        "boundary": "The original observer wrote into the existing stage profiler destination; that profiler overwrote earlier data with its periodic text header, and the strict JSON consumer failed. The failed EOS tasks and original raw files are unchanged. This new audit recovers only complete counter lines in the retained late fragment, not the entire10s history. It proves observed avoidable arithmetic in these completed calls; no timing, solver-score or full-run coverage claim is made. No solver process is rerun."
+      }
+    },
+    {
+      "receipt": {
+        "experiment": "0e992905afe4",
+        "run": "6fb49bddb96d",
+        "input": "59",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "2"
+          ]
+        }
+      },
+      "record_sha256": "416faf9c2b56b426d6b310ce4c36ce67356f69369a38e16798ef64131b16d2c9",
+      "fragment": {
+        "index": 59,
+        "original_failed_run": "70d7e954f53e",
+        "original_status": "failed",
+        "original_resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "3"
+          ]
+        },
+        "raw_path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/row-eligibility-r1370/59/rows.jsonl",
+        "raw_sha256": "4bc4bd4e28d5fe7a878c965be34ab8847d588df0e07892ebc82699ad7d4ecd30",
+        "complete_entries": 86,
+        "totals": {
+          "visits": 65848,
+          "snapshots": 33593,
+          "old_skip": 12192,
+          "term_pairs": 103884,
+          "avoidable_rows": 6744,
+          "avoidable_pairs": 37657
+        },
+        "avoidable_pair_fraction": 0.36249085518462903,
+        "omitted_stage_text": [
+          "[STAGE-PROF] pipeline-calls=1640",
+          "  lra.core  ms=4938 calls=1639"
+        ],
+        "protected_sets_used": false,
+        "diagnostic_qualification_sha256": "4e649ae717a9bf5a6de320f46e51ff2686c5edb15138042a5b1fe8556f5fde38",
+        "boundary": "The original observer wrote into the existing stage profiler destination; that profiler overwrote earlier data with its periodic text header, and the strict JSON consumer failed. The failed EOS tasks and original raw files are unchanged. This new audit recovers only complete counter lines in the retained late fragment, not the entire10s history. It proves observed avoidable arithmetic in these completed calls; no timing, solver-score or full-run coverage claim is made. No solver process is rerun."
+      }
+    }
+  ],
+  "protected_sets_used": false,
+  "outcome": "close_and_revert_negative_pilot_without_full160_expansion",
+  "boundary": "An inspected row prefix rules out both forward deductions and both backward deductions when the required explained basic endpoints or contribution extrema are unavailable. Three same-header old controls fail the new work contracts; fixed contracts pass. Recovered late observer fragments contain17/41/36 percent avoidable arithmetic pairs, with original parser-failed tasks and raw files preserved. All1914 native units,31 Python tests,381 independently replayed implications and all39 acceptance groups pass. The11-case same-budget pilot loses SAT51/131, gains no solved inputs, and improves SAT59 from14.105s to7.886s. These variable controls remain losses in the valid original pilot. No full160 expansion or promotion is justified; the arithmetic shortcut and its tests will be removed. This is a negative performance pilot, not a soundness failure or an overall score. Retained nonlinear fixes are delivered separately through PR92. Both protected sets remain unused and the general SMT/QCP superiority goal remains unmet."
+}

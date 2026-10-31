@@ -284,9 +284,10 @@ const TheoryAtomRecord* TheoryAtomRegistry::findBySatVar(SatVar v) const {
     return nullptr;
 }
 
-std::vector<SatVar> TheoryAtomRegistry::linearAtomVars() const {
+std::vector<SatVar> TheoryAtomRegistry::linearAtomVars(size_t firstRecord) const {
     std::vector<SatVar> out;
-    for (const auto& rec : records_) {
+    for (size_t i = firstRecord; i < records_.size(); ++i) {
+        const auto& rec = records_[i];
         if (std::holds_alternative<LinearAtomPayload>(rec.payload)) {
             out.push_back(rec.satVar);
         }

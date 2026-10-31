@@ -40,9 +40,13 @@ Older tables describe their own frozen versions and evidence boundaries.
 
 ## Current arithmetic and ASP continuation
 
-The consolidated QCP/foundations delivery remains
-[PR92](https://github.com/fuqi-jia/Xolver/pull/92). Its retained runtime is
-`65c21b9b` (documentation head `c9c4243c`): verified coprime nonlinear
+The consolidated QCP/foundations delivery
+[PR92](https://github.com/fuqi-jia/Xolver/pull/92) is merged as main
+`26aca1b816bdcdd02c070164bf2193c2b3483e56`. Final
+[PR CI41242293854](https://github.com/fuqi-jia/Xolver/actions/runs/41242293854)
+and [main CI41244346132](https://github.com/fuqi-jia/Xolver/actions/runs/41244346132)
+pass build-test and proof-gate. Its retained runtime is
+`65c21b9b` (consolidated documentation head `253e70c0`): verified coprime nonlinear
 projection and certified shallow-conflict exclusion. R1341 qualifies that
 runtime, all39 R1343 acceptance groups pass, and R1345 binds the native/API
 and actual-model evidence. The PR records the final CI and merge receipts.
@@ -70,11 +74,40 @@ has SHA-256 `07e1516f370812f4ad38f7675d202093cd45c828d978fac4f89ffc1b396f7ae7`.
 The entire cache, its definition-identity interface, widened row versions and
 cache-only tests are reverted in `cecea9fa`; runtime files again match the
 qualified `65c21b9b` byte for byte. These new scores qualify the rejected cache,
-not the restored prefix runtime. Panda's canonical source/build still contains
-R1362: any next source overlay must use `source-r1362.tar.json` as its preimage
-and restore all seven reverted files. Frozen evidence is retained; no new PR,
+not the restored prefix runtime. At closure Panda contained R1362; the subsequent
+R1372 overlay restored all seven reverted files. Frozen evidence is retained; no new PR,
 compatibility entry, protected-set run or end-to-end QCP claim is introduced.
 The propagation memory-pool and work-budget-only experiments remain closed.
+
+The row-deduction eligibility shortcut `d88eaf45` is also closed and removed in
+`4949df12`. Its1914 native cases,31 Python tests,381 independent implications
+and all39 R1375 groups pass, but R1374 drops verified solves3→1, loses51/131,
+and gains no input. SAT59 improves14.105→7.886s; that does not compensate for
+the losses. No full160 expansion is performed. See
+[the closed shortcut evidence](LINEAR_ROW_ELIGIBILITY_CLOSED_20261101.json),
+SHA-256 `d2ea00e4eba84c970276fd793bb481940d26b009cad59d83953f2720119c8a12`.
+R1370's original diagnostic tasks fail because stage text overwrites the shared
+JSON log; R1371 preserves those failures and recovers only complete late-fragment
+counters. The observed17/41/36% avoidable-pair fractions on49/58/59 are fragment
+measurements, not whole-run savings or solver scores.
+
+Current development targets a different functional defect: the SAT decision
+adapter builds its linear-atom candidates once, while theory cuts/branches add
+atoms later. The existing count contract now detects registration growth and
+the canonical owned-snapshot query accepts an offset into all registration
+records, so updates scan only the appended suffix. A late-registration test
+covers empty/nonempty caches, mixed atom kinds, user decision priority,
+SatActivity, model polarity and backtracking. This change is pending native
+qualification; it has no solve-count or QCP claim yet and no new PR.
+
+Panda's last completed qualification is R1372, CLI SHA-256
+`1c4292d285016c0fde95f25fe59b44898ba175ce9eb42e1b458d8f70ae56b3e0`.
+That rejected shortcut still occupies the canonical source/build. The planned
+R1377 overlay uses `source-r1372.tar.json` preimages and restores its two changed
+propagation/test files alongside the decision-cache fix. Check R1377's EOS
+status and actual source before another write: if it has applied, its manifest
+becomes the next preimage. Main CI is already green; no extra server archive is
+a new delivery condition. Both protected sets remain unread and unused.
 
 [PR89](https://github.com/fuqi-jia/Xolver/pull/89), implementation `e0cafba8`,
 restores SAT's retained signed root prefix after a real restart. A shared theory
