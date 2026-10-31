@@ -24,9 +24,9 @@ class PolynomialKernel;
 // coefficient list + PSC chain.
 //
 // SOUNDNESS CONTRACT: if build() returns a reason != None the closure is
-// INCOMPLETE and no UNSAT may rest on it (caller => Unknown). A zero
-// resultant/discriminant (common/repeated factor) is SKIPPED, not bailed (the
-// shared factor's roots are roots of the source polynomials, already boundaries).
+// INCOMPLETE and no UNSAT may rest on it (caller => Unknown). Shared factors
+// are refined into a pairwise-coprime basis. Replaced products remain in entries
+// for provenance; projected levels contain only the final factors for lifting.
 // closureId keys a cache that must NOT be reused across a different active set.
 // ---------------------------------------------------------------------------
 

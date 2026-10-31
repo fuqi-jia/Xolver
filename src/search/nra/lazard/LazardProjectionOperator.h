@@ -2,6 +2,7 @@
 
 #include "algebra/poly/RationalPolynomial.h"
 #include "ir/types.h"
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -57,8 +58,8 @@ struct LazardProjectionSource {
 
 // One generated projection polynomial with its provenance parents (by value;
 // the closure resolves them to interned entry indices). Output polynomials are
-// in lower variables (do not contain v); the SquarefreeFactor items remain in v
-// (they are the current-level boundary polynomials).
+// in lower variables, or record squarefree/common factors and quotients in v.
+// Replaced factors remain as provenance; activeFactors selects the lifting basis.
 struct LazardItem {
     RationalPolynomial poly;
     LazardProjectionOpKind op = LazardProjectionOpKind::Input;
@@ -72,6 +73,9 @@ struct LazardOpResult {
     bool complete = true;
     LazardIncompleteReason reason = LazardIncompleteReason::None;
     std::vector<LazardItem> items;   // in emission order; parents precede dependents
+    // Indices into items of the final pairwise-coprime basis. Valid only when
+    // complete; provenance products replaced during refinement are excluded.
+    std::vector<std::size_t> activeFactors;
 };
 
 // Single Lazard elimination step over E (polynomials with mainVar == v).

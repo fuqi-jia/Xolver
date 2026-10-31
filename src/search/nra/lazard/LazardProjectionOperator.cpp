@@ -84,12 +84,14 @@ LazardOpResult lazardProjectStep(const std::vector<RationalPolynomial>& E, VarId
         if (p1) { it.parent1 = *p1; it.hasParent1 = true; }
         if (p2) { it.parent2 = *p2; it.hasParent2 = true; }
         r.items.push_back(std::move(it));
+        return r.items.size() - 1;
     };
 
     // Immutable identities let already computed resultants survive refinement
     // of the active basis. An identically zero resultant signals a shared
     // factor; dropping it would lose crossings between the remaining factors.
     std::vector<RationalPolynomial> factors;
+    std::vector<size_t> factorItems;
     std::unordered_map<std::string, int> factorIds;
     std::vector<int> active;
     std::vector<bool> membership;
@@ -109,7 +111,7 @@ LazardOpResult lazardProjectStep(const std::vector<RationalPolynomial>& E, VarId
         auto found = factorIds.find(key);
         if (found != factorIds.end()) return found->second;
         const int id = static_cast<int>(factors.size());
-        emit(poly, op, p1, p2);
+        factorItems.push_back(emit(poly, op, p1, p2));
         factors.push_back(std::move(poly));
         factorIds.emplace(std::move(key), id);
         membership.push_back(false);
@@ -244,6 +246,8 @@ LazardOpResult lazardProjectStep(const std::vector<RationalPolynomial>& E, VarId
         }
     }
 
+    r.activeFactors.reserve(active.size());
+    for (int id : active) r.activeFactors.push_back(factorItems[id]);
     return r;
 }
 

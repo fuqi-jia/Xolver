@@ -139,11 +139,18 @@ CharacterizationResult characterize(const std::vector<RationalPolynomial>& cellP
             RationalPolynomial p = item.poly;
             p.normalize();
             if (p.isZero() || p.isConstant()) continue;
-            if (p.degree(elimVar) >= 1) {
-                if (seenBoundary.insert(unitKey(p)).second) out.boundaryPolys.push_back(std::move(p));
-            } else if (seenDownward.insert(unitKey(p)).second) {
+            if (p.degree(elimVar) >= 1) continue;
+            if (seenDownward.insert(unitKey(p)).second) {
                 out.downwardPolys.push_back(std::move(p));
             }
+        }
+        // Retain refinement provenance in the operator result, but isolate only
+        // the final coprime factors. Replaced products have the same root union
+        // and would repeat isolation, specialization and Lazard valuation work.
+        for (size_t index : r.activeFactors) {
+            RationalPolynomial p = r.items[index].poly;
+            if (seenBoundary.insert(unitKey(p)).second)
+                out.boundaryPolys.push_back(std::move(p));
         }
         // McCallum required coefficients (sample-aware): completes the projection
         // for nullification — the LC/TC the Lazard step emits is insufficient

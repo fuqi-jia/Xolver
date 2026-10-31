@@ -81,17 +81,32 @@ void LazardProjectionClosure::projectLevel(const std::vector<int>& inputIds, Var
 
     // Items are emitted parents-before-dependents, so lookupIndex resolves each
     // parent (already interned) to its entry index.
+    std::vector<int> itemIds;
+    itemIds.reserve(op.items.size());
     for (const auto& item : op.items) {
         LazardProjectionSource src;
         src.op = item.op;
         src.eliminatedVar = elimVar;
         src.parent1 = item.hasParent1 ? lookupIndex(item.parent1) : -1;
         src.parent2 = item.hasParent2 ? lookupIndex(item.parent2) : -1;
-        intern(item.poly, src);
+        itemIds.push_back(intern(item.poly, src));
         if (entries_.size() > cfg_.maxPolys) {
             reason_ = LazardIncompleteReason::ProjectionBudgetExceeded;
             return;
         }
+    }
+    // Entry identities and parents remain available for proof replay. Lifting
+    // this level needs only the final factors, not the products they replaced.
+    const int level = entries_[inputIds.front()].mainVarLevel;
+    auto& boundaries = levelPolys_[level];
+    boundaries.clear();
+    for (size_t index : op.activeFactors) {
+        const int id = itemIds[index];
+        if (id < 0 || entries_[id].mainVarLevel != level) {
+            reason_ = LazardIncompleteReason::ProjectionKernelFailure;
+            return;
+        }
+        boundaries.push_back(id);
     }
 }
 
