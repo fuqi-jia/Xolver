@@ -1,6 +1,7 @@
 #include "base/RuntimeConfig.h"
 #include "search/nra/lazard/Squarefree.h"
 #include "search/nra/preprocess/GcdEngine.h"
+#include "search/nra/preprocess/SubresultantEngine.h"
 #include "search/nra/lazard/LocalProjection.h"  // resultant()
 #include "algebra/poly/PolynomialKernel.h"
 #include "base/EnvParam.h"   // XOLVER_NRA_LAZARD_MAX_COEFF_BITS projection firewall
@@ -198,9 +199,17 @@ SquarefreeResult commonFactorWrt(const RationalPolynomial& a,
         if (result.complete) result.poly = normalizeUpToUnit(result.poly);
         return result;
     }
-    auto result = GcdEngine::gcdCandidateBySubresultant(a, b, v);
-    if (!result.exact) return {RationalPolynomial::fromConstant(mpq_class(1)), false};
-    return {normalizeUpToUnit(result.gcd), true};
+    auto result = SubresultantEngine::run(a, b, v);
+    if (result.gcdCandidate.isZero())
+        return {RationalPolynomial::fromConstant(mpq_class(1)), false};
+    // A remainder can be (b-c)*(v-b). Its coefficient content is a polynomial
+    // in the lower variables, so rational coefficient-content removal alone
+    // leaves a candidate that does not divide either original input.
+    auto primitive = primitivePartWrt(result.gcdCandidate, v);
+    if (!primitive.complete || !GcdEngine::exactDivide(a, primitive.poly) ||
+        !GcdEngine::exactDivide(b, primitive.poly))
+        return {RationalPolynomial::fromConstant(mpq_class(1)), false};
+    return {normalizeUpToUnit(primitive.poly), true};
 }
 
 SquarefreeResult contentWrt(const RationalPolynomial& p, VarId v, PolynomialKernel* kernel) {
