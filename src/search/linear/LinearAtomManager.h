@@ -115,7 +115,7 @@ private:
         }
         std::size_t operator()(FormKeyView k) const {
             std::size_t h = LinearFormKeyHash{}(k.lhs);
-            h ^= std::hash<std::string>{}(k.rhs.get_str()) + 0x9e3779b9 + (h << 6) + (h >> 2);
+            h ^= MpqHash{}(k.rhs) + 0x9e3779b9 + (h << 6) + (h >> 2);
             return h;
         }
     };
