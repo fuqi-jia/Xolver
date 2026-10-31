@@ -95,6 +95,15 @@ public:
     // by Gomory-cut generation to re-express a cut over original variables.
     bool auxForm(int aux, LinearFormKey& lhsOut, mpq_class& rhsOut) const;
 
+    struct AuxFormView {
+        const LinearFormKey& lhs;
+        const mpq_class& rhs;
+    };
+    // References remain valid until this manager is destroyed, including after
+    // auxiliary registrations and solver backtracks. Definitions are never
+    // erased or modified; callers must keep the manager alive.
+    std::optional<AuxFormView> auxFormView(int aux) const;
+
 private:
     // Canonical (lhs, rhs) -> aux var (solver-local)
     struct FormKey {
