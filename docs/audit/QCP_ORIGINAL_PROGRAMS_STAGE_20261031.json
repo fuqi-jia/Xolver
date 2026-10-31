@@ -1,0 +1,276 @@
+{
+  "schema": 1,
+  "status": "verified-original-regression-programs",
+  "solver_implementation_commit": "243a267fa8fbeb39e3bd796b32dc28de31148b99",
+  "qualified_delivery_main": "cb4eb07bfccc54a7968e5f88231b3847a20b0ff8",
+  "rows": [
+    {
+      "program": "branch",
+      "backend": "xolver",
+      "run": "native_branch_xolver_r1124-20261031133524",
+      "program_sha256": "4d81aabd16ceb9d402fa0f1a3621dd8a6bf0ad28659bcb6cf60eedebec69e22d",
+      "functions": [
+        "example"
+      ],
+      "program_verified": true,
+      "top_level_vcs": 10,
+      "proof_modes": {
+        "LLM_pre_process": 10
+      },
+      "queries": 188,
+      "unique_queries": 44,
+      "verdicts": {
+        "sat": 74,
+        "unsat": 114
+      },
+      "final_check_seconds": 28.38486990518868,
+      "native_callback_seconds": 1.7171926309999996,
+      "cpu": "1",
+      "wall_seconds_per_query": 60,
+      "memory_bytes": 17179869184,
+      "solver_sha256": "86e868a97338665c4c427d58afc71c02a025ad47e939e1a8bbe3b50d6d370275",
+      "bridge": {
+        "/pub/data/jiafq/xolver/dependencies/qcp-08cc7a0f/linux-binary/symexec": "0e74c446cebca8c804ff9b838f07c67f23e31a093630675bc720b25c986e1032",
+        "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-backend-r814/qcp-backend-exec": "cb03a83b0c8c59b22825322ab51d8394178ed3e7bed490804c4d56b73278d883",
+        "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-backend-r814/qcp-native-backend.so": "6458a4368cf43a16c696ac9355a001a2feacdaab95dc29cd74939b83edd54686"
+      },
+      "final_result_sha256": "adcf092ad1db73fc7fe7cf718f35ab5c8c81028f524cabf46407ead403679e33",
+      "native_launch_sha256": "61b06f16f2be33b1ca60038a0dab7ff2fc71f33fa141af5432396afcfac11418",
+      "session_sha256": "42709c733905ac3181ed782daf3aa118c614838d62d076a0be8bec1e0dd90938",
+      "plan_sha256": "e76580baffde8ab079803519ec8bbc16d419019f03bb745419ad87f942aca925",
+      "formal_files": {
+        "Rocq/examples/QCP_demos_tutorial/native_branch_xolver_r1124_proof_manual.v": "a4e183e8c449baf5c373238627bd4294bc1300c2ae40a0c2031feb7f129d70a4",
+        "Rocq/examples/QCP_demos_tutorial/native_branch_xolver_r1124_lib.v": "1f8a54afaa392924392567aef82ee5ba89cdf1a63d87dffd441a01e206123963"
+      },
+      "sequence_sha256": "595069db4c90230b9fac396c3c5f224c4046f3ed2b57ffe750dd30beabeec975"
+    },
+    {
+      "program": "branch",
+      "backend": "z3",
+      "run": "native_branch_z3_r1124-20261031133524",
+      "program_sha256": "4d81aabd16ceb9d402fa0f1a3621dd8a6bf0ad28659bcb6cf60eedebec69e22d",
+      "functions": [
+        "example"
+      ],
+      "program_verified": true,
+      "top_level_vcs": 10,
+      "proof_modes": {
+        "LLM_pre_process": 10
+      },
+      "queries": 188,
+      "unique_queries": 44,
+      "verdicts": {
+        "sat": 74,
+        "unsat": 114
+      },
+      "final_check_seconds": 34.98467964306474,
+      "native_callback_seconds": 4.347729507999996,
+      "cpu": "0",
+      "wall_seconds_per_query": 60,
+      "memory_bytes": 17179869184,
+      "solver_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+      "bridge": {
+        "/pub/data/jiafq/xolver/dependencies/qcp-08cc7a0f/linux-binary/symexec": "0e74c446cebca8c804ff9b838f07c67f23e31a093630675bc720b25c986e1032",
+        "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-backend-r814/qcp-backend-exec": "cb03a83b0c8c59b22825322ab51d8394178ed3e7bed490804c4d56b73278d883",
+        "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-backend-r814/qcp-native-backend.so": "6458a4368cf43a16c696ac9355a001a2feacdaab95dc29cd74939b83edd54686"
+      },
+      "final_result_sha256": "697dcd1a410ccbf0480f04fcdd7244fe7ecd85d0c4b2bc6bd943e1e8a0f8a901",
+      "native_launch_sha256": "829c9960c07ab28682819bc8eb76e06097d76c598f436f07d6a2476643d2355f",
+      "session_sha256": "a745fcdfb3ef17e062d89e2c268776f02e2c1c07f3d2b93b06ab3c0c8af45306",
+      "plan_sha256": "377724e867c173d0fbf53658d8f1f57be7be931575447bec22aedc2dc05091ce",
+      "formal_files": {
+        "Rocq/examples/QCP_demos_tutorial/native_branch_z3_r1124_proof_manual.v": "20bfcfc67e1f6d57fd8d8f075a2d1c2482e6f7ced76b884f13a312241cc9fa52",
+        "Rocq/examples/QCP_demos_tutorial/native_branch_z3_r1124_lib.v": "1f8a54afaa392924392567aef82ee5ba89cdf1a63d87dffd441a01e206123963"
+      },
+      "sequence_sha256": "595069db4c90230b9fac396c3c5f224c4046f3ed2b57ffe750dd30beabeec975"
+    },
+    {
+      "program": "gcd",
+      "backend": "xolver",
+      "run": "native_gcd_xolver_r1124-20261031133524",
+      "program_sha256": "255cd902a923b5044acdbe6372652e0b422af3a5a723cc37355040e613a8b3a3",
+      "functions": [
+        "abs",
+        "gcd"
+      ],
+      "program_verified": true,
+      "top_level_vcs": 9,
+      "proof_modes": {
+        "LLM_pre_process": 6,
+        "aggressive_pre_process": 3
+      },
+      "queries": 296,
+      "unique_queries": 70,
+      "verdicts": {
+        "sat": 174,
+        "unsat": 122
+      },
+      "final_check_seconds": 33.557813758030534,
+      "native_callback_seconds": 2.315694791,
+      "cpu": "0",
+      "wall_seconds_per_query": 60,
+      "memory_bytes": 17179869184,
+      "solver_sha256": "86e868a97338665c4c427d58afc71c02a025ad47e939e1a8bbe3b50d6d370275",
+      "bridge": {
+        "/pub/data/jiafq/xolver/dependencies/qcp-08cc7a0f/linux-binary/symexec": "0e74c446cebca8c804ff9b838f07c67f23e31a093630675bc720b25c986e1032",
+        "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-backend-r814/qcp-backend-exec": "cb03a83b0c8c59b22825322ab51d8394178ed3e7bed490804c4d56b73278d883",
+        "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-backend-r814/qcp-native-backend.so": "6458a4368cf43a16c696ac9355a001a2feacdaab95dc29cd74939b83edd54686"
+      },
+      "final_result_sha256": "010d9f32d37a905e9a7db430831dd1970022efe98f056426cf7f252b80e6834d",
+      "native_launch_sha256": "5d0fe1c7df1330ac954cde61cb932460d194b693235fdfc6d69c32e104f538d4",
+      "session_sha256": "d4a4ab9f0874c0a9fa8b2415dc7b676a80a49561c934cb38ad0d5311b919c5e6",
+      "plan_sha256": "ee0fc5123975794fd683d963eca95d0f9abdc46c611b5bbe9b8d2d65f67ed0a5",
+      "formal_files": {
+        "Rocq/examples/QCP_demos_human/simple_arith/native_gcd_xolver_r1124_proof_manual.v": "fac251d14f084b4814ea8cdc7a0ee2ecca965deafa30916968f897b08a3e5139",
+        "Rocq/examples/QCP_demos_human/simple_arith/native_gcd_xolver_r1124_lib.v": "1f8a54afaa392924392567aef82ee5ba89cdf1a63d87dffd441a01e206123963"
+      },
+      "sequence_sha256": "7eeb0ef77ac9a0490d414897ac113f0952f2995a63c81d50bafac2bc68a509e2"
+    },
+    {
+      "program": "gcd",
+      "backend": "z3",
+      "run": "native_gcd_z3_r1124-20261031133524",
+      "program_sha256": "255cd902a923b5044acdbe6372652e0b422af3a5a723cc37355040e613a8b3a3",
+      "functions": [
+        "abs",
+        "gcd"
+      ],
+      "program_verified": true,
+      "top_level_vcs": 9,
+      "proof_modes": {
+        "LLM_pre_process": 6,
+        "aggressive_pre_process": 3
+      },
+      "queries": 296,
+      "unique_queries": 70,
+      "verdicts": {
+        "sat": 174,
+        "unsat": 122
+      },
+      "final_check_seconds": 35.154704136773944,
+      "native_callback_seconds": 2.8245360440000025,
+      "cpu": "1",
+      "wall_seconds_per_query": 60,
+      "memory_bytes": 17179869184,
+      "solver_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+      "bridge": {
+        "/pub/data/jiafq/xolver/dependencies/qcp-08cc7a0f/linux-binary/symexec": "0e74c446cebca8c804ff9b838f07c67f23e31a093630675bc720b25c986e1032",
+        "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-backend-r814/qcp-backend-exec": "cb03a83b0c8c59b22825322ab51d8394178ed3e7bed490804c4d56b73278d883",
+        "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-backend-r814/qcp-native-backend.so": "6458a4368cf43a16c696ac9355a001a2feacdaab95dc29cd74939b83edd54686"
+      },
+      "final_result_sha256": "4ec42a0752c08bed2db4b6f83f608d4ab36383f82abe658f31ab4c5a45de53ee",
+      "native_launch_sha256": "ad4ffa3f99eecd5600e99f55d68e993b14b625e20fc9e3427e2fb0da0bba2512",
+      "session_sha256": "1638684d9883285c81851595083ca59d18e4c69087f36c44dccbe70c9362760c",
+      "plan_sha256": "8b245f436c59b8a1158e9cd8d804634413d01415217bae15e869e3011ccf84ce",
+      "formal_files": {
+        "Rocq/examples/QCP_demos_human/simple_arith/native_gcd_z3_r1124_proof_manual.v": "e4677b3574ce62e112c5941ff111d2cf99f957fb23bd743caf8122bbdcedc377",
+        "Rocq/examples/QCP_demos_human/simple_arith/native_gcd_z3_r1124_lib.v": "0e414a32e879e438726937f13f1bc37ea18efa460c1bc1205b963d3d7f782f4b"
+      },
+      "sequence_sha256": "7eeb0ef77ac9a0490d414897ac113f0952f2995a63c81d50bafac2bc68a509e2"
+    },
+    {
+      "program": "max3",
+      "backend": "xolver",
+      "run": "native_max3_xolver_r1124-20261031133524",
+      "program_sha256": "7ddaa9f590cd9c37d3dd644ea280ecd3fa6cee084441c82caf9c0e1afb6dde5d",
+      "functions": [
+        "max3"
+      ],
+      "program_verified": true,
+      "top_level_vcs": 4,
+      "proof_modes": {
+        "LLM_pre_process": 4
+      },
+      "queries": 296,
+      "unique_queries": 60,
+      "verdicts": {
+        "sat": 148,
+        "unsat": 148
+      },
+      "final_check_seconds": 29.897356681525707,
+      "native_callback_seconds": 2.6225613810000015,
+      "cpu": "0",
+      "wall_seconds_per_query": 60,
+      "memory_bytes": 17179869184,
+      "solver_sha256": "86e868a97338665c4c427d58afc71c02a025ad47e939e1a8bbe3b50d6d370275",
+      "bridge": {
+        "/pub/data/jiafq/xolver/dependencies/qcp-08cc7a0f/linux-binary/symexec": "0e74c446cebca8c804ff9b838f07c67f23e31a093630675bc720b25c986e1032",
+        "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-backend-r814/qcp-backend-exec": "cb03a83b0c8c59b22825322ab51d8394178ed3e7bed490804c4d56b73278d883",
+        "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-backend-r814/qcp-native-backend.so": "6458a4368cf43a16c696ac9355a001a2feacdaab95dc29cd74939b83edd54686"
+      },
+      "final_result_sha256": "53c31e47480b62164df6439c4dc752c0ada1a77863a6a121ee5564e44a9f66fa",
+      "native_launch_sha256": "9a1a5aac54ca82f95c207e83564725952b61bde5e3c3234e9f27040047587fcf",
+      "session_sha256": "130cdd2eff667df96818a54b9aaf54e28167f8fcac9fcdd5be81fd6c49f15617",
+      "plan_sha256": "13e9dd4e0b2088daff8d2ace54bbfe225baaadb009e025faba878fe1d2dfe91f",
+      "formal_files": {
+        "Rocq/examples/QCP_demos_human/simple_arith/native_max3_xolver_r1124_proof_manual.v": "86d96e98e1d9c87ae810f1841f1591c88bd104cba8c8ae10edabebacaf112ff7",
+        "Rocq/examples/QCP_demos_human/simple_arith/native_max3_xolver_r1124_lib.v": "1f8a54afaa392924392567aef82ee5ba89cdf1a63d87dffd441a01e206123963"
+      },
+      "sequence_sha256": "ab2bcc135d83a079668e78402be4848c952dd2ab2925c1053c75b1e6b9bbcce8"
+    },
+    {
+      "program": "max3",
+      "backend": "z3",
+      "run": "native_max3_z3_r1124-20261031133524",
+      "program_sha256": "7ddaa9f590cd9c37d3dd644ea280ecd3fa6cee084441c82caf9c0e1afb6dde5d",
+      "functions": [
+        "max3"
+      ],
+      "program_verified": true,
+      "top_level_vcs": 4,
+      "proof_modes": {
+        "LLM_pre_process": 4
+      },
+      "queries": 296,
+      "unique_queries": 60,
+      "verdicts": {
+        "sat": 148,
+        "unsat": 148
+      },
+      "final_check_seconds": 30.094877706840634,
+      "native_callback_seconds": 3.0048887249999994,
+      "cpu": "2",
+      "wall_seconds_per_query": 60,
+      "memory_bytes": 17179869184,
+      "solver_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+      "bridge": {
+        "/pub/data/jiafq/xolver/dependencies/qcp-08cc7a0f/linux-binary/symexec": "0e74c446cebca8c804ff9b838f07c67f23e31a093630675bc720b25c986e1032",
+        "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-backend-r814/qcp-backend-exec": "cb03a83b0c8c59b22825322ab51d8394178ed3e7bed490804c4d56b73278d883",
+        "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-backend-r814/qcp-native-backend.so": "6458a4368cf43a16c696ac9355a001a2feacdaab95dc29cd74939b83edd54686"
+      },
+      "final_result_sha256": "81755711e4f1deef9333daede16b447942c79554cb5c11daaf5916513251c65d",
+      "native_launch_sha256": "ee725e859e86fe01edf87b886f38db3c4db5c2c1c2b75f1d8d42172714add2ee",
+      "session_sha256": "7c1f5b9cac27a17dd703b8aa05acfe7fd641145a7e6aefbb1f8a121f5a4d270a",
+      "plan_sha256": "ab7ef40f2e889e934fc388df9478977bc9338bec8ca2837f8f88a7d840711a40",
+      "formal_files": {
+        "Rocq/examples/QCP_demos_human/simple_arith/native_max3_z3_r1124_proof_manual.v": "32b414400cbdaa791cb08653d6088ea677661cf8db815681da607208f39f4121",
+        "Rocq/examples/QCP_demos_human/simple_arith/native_max3_z3_r1124_lib.v": "1f8a54afaa392924392567aef82ee5ba89cdf1a63d87dffd441a01e206123963"
+      },
+      "sequence_sha256": "ab2bcc135d83a079668e78402be4848c952dd2ab2925c1053c75b1e6b9bbcce8"
+    }
+  ],
+  "totals": {
+    "xolver": {
+      "programs": 3,
+      "functions": 4,
+      "top_level_vcs": 23,
+      "queries": 780,
+      "final_check_seconds": 91.84004034474492,
+      "native_callback_seconds": 6.6554488030000005
+    },
+    "z3": {
+      "programs": 3,
+      "functions": 4,
+      "top_level_vcs": 23,
+      "queries": 780,
+      "final_check_seconds": 100.23426148667932,
+      "native_callback_seconds": 10.177154276999998
+    }
+  },
+  "paired_occurrences_equal": true,
+  "opposite_verdicts": 0,
+  "protected_sets_used": false,
+  "boundary": "Three existing original C regression programs, complete current controller done/Rocq final checks, not extracted SMT alone. Native bridge program_verified remains false because the bridge alone cannot certify a program; this audit derives program verification from the full controller evidence. Identical original C, QCP binary, query occurrence sequences, proof modes, solver versions and per-query budgets. Grouping and proof bodies differ; one observed final-check timing sum is not a controlled whole-workflow or statistically established solver speedup. This is the delivered residue kernel, not the later NIA state candidate or an independent protected-program result.",
+  "audit_file": "validation/arithmetic-r103/qcp-original-programs-r1142.json",
+  "audit_sha256": "03d29c54f6d2c68b04cd783dbe97eca5f58f474482051808f09f37c005b92562"
+}

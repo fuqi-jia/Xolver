@@ -148,7 +148,9 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     add("nia.gcd",            &NiaSolver::stageGcdDivisibility);
     add("nia.icp",            &NiaSolver::stageIcp);
     add("nia.interval",       &NiaSolver::stageInterval);
-    add("nia.linearize",      &NiaSolver::stageLinearization);
+    // Keep refinement production and queue consumption at the effort where
+    // the SAT adapter installs their clauses.
+    addFull("nia.linearize",  &NiaSolver::stageLinearization);
     add("nia.bounded",        &NiaSolver::stageBounded);
     // L3 modular residue refutation (default-ON). Sound
     // UNSAT-only (invariant 7). Full-effort only — the bounded residue
@@ -181,8 +183,11 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // cb_check_found_model), so the streak-3 Unknown bail terminates
     // SAT and lets Cap. 10 promote the validated model.
     add("nia.farkas-or", &NiaSolver::stageFarkasOr);
-    add("nia.pending-lemma",  &NiaSolver::stagePendingLemma);
-    add("nia.branch",         &NiaSolver::stageBranch);
+    addFull("nia.pending-lemma", &NiaSolver::stagePendingLemma);
+    // The propagation callback does not install refinement lemmas. Registering
+    // their atoms here would consume split identities and branch quotas before
+    // a complete model check can actually publish the corresponding clauses.
+    addFull("nia.branch",     &NiaSolver::stageBranch);
 
 }
 
@@ -212,6 +217,10 @@ void NiaSolver::assertLit(const TheoryAtomRecord& atom, bool value,
     if (r == ActiveLiteralSet::InsertResult::Duplicate) {
         return;
     }
+    // A witness for the old conjunction may violate this new assignment.
+    // Preserve the separately validated whole-formula Farkas witness, but do
+    // not expose a stale local point to model-based theory combination.
+    currentModel_.reset();
     if (r == ActiveLiteralSet::InsertResult::OppositePolarity) {
         const bool oppDiag = xolver::config::read<xolver::config::ReadKind::Presence>("NIA_OPP_DIAG");
         if (oppDiag) {

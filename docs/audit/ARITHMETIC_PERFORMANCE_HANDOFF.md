@@ -40,6 +40,26 @@ Older tables describe their own frozen versions and evidence boundaries.
 
 ## Current arithmetic and ASP continuation
 
+[PR86](https://github.com/fuqi-jia/Xolver/pull/86) repairs NIA model invalidation
+and publication of refinements at complete candidate checks, core `46049166`.
+R1141 qualifies the canonical source and binaries; all 39 R1143 native groups
+pass, including 1886 unit cases / 986763 assertions. R1145 seals the fresh
+fixed160 comparison: **101 delivered main / 101 candidate / 117 verified Z3**,
+with no gained/lost solves, opposite verdicts or invalid exported models.
+Seven unconfirmed Z3 UNSATs remain excluded. This is a correctness repair;
+the 1.874s single-round PAR-2 difference does not establish a speedup.
+[Phase evidence](NIA_MODEL_STATE_STAGE_20261031.json) binds the source, frozen
+binaries, acceptance and replacement of two terminal budget-invalid triads.
+Exact delivery-head PR CI and postmerge main CI remain required.
+
+R1142 separately audits the preceding delivered residue kernel on the original
+branch, GCD and max3 programs: each backend verifies 3 programs, 4 functions,
+23 top-level VCs and 780 actual SMT queries, with identical occurrence inputs
+and verdicts. Full current Rocq checks pass. Final-check sums are 91.840s for
+Xolver and 100.234s for Z3; proof bodies differ and one sample does not establish
+whole-workflow superiority. [Program evidence](QCP_ORIGINAL_PROGRAMS_STAGE_20261031.json)
+states the version and timing limits. Neither protected set has been used.
+
 [PR84](https://github.com/fuqi-jia/Xolver/pull/84) is merged as main `b9a15a25`.
 Its exact delivery head `d753bfa5` passes both jobs of
 [PR CI41169407864](https://github.com/fuqi-jia/Xolver/actions/runs/41169407864).
@@ -48,10 +68,13 @@ and 243 targeted native cases pass; CLI/SV/worker/unit hashes match the 1877-cas
 solver qualification. Frozen delivered CLI:
 `aab07fcc078c31c3aaf25b38cab9219b9cc750213357db0f0cd9cac39553e12a`.
 The postmerge [main CI41170953772](https://github.com/fuqi-jia/Xolver/actions/runs/41170953772)
-is still running at this evidence snapshot; its proof gate passes.
+passes both jobs on the merged revision.
 
-[PR85](https://github.com/fuqi-jia/Xolver/pull/85) develops shared integer
-polynomial residue refutation, core `243a267f`. Reduce coefficients before
+[PR85](https://github.com/fuqi-jia/Xolver/pull/85) is merged as main `cb4eb07b`.
+Exact delivery head `c7436e2f` passes both jobs of
+[PR CI41173329985](https://github.com/fuqi-jia/Xolver/actions/runs/41173329985),
+and [main CI41175337390](https://github.com/fuqi-jia/Xolver/actions/runs/41175337390)
+is fully green. It delivers shared integer polynomial residue refutation, core `243a267f`. Reduce coefficients before
 collecting variables, enumerate independent components, and retain original
 SAT premises for every conflict. The bounded Boolean prepass checks explicit
 integer sorts and shares the same implementation with NIA algebraic reasoning.
@@ -74,8 +97,9 @@ same budgets, while Z3 and cvc5 time out. An independent direct-AST checker
 validates all 81 original residue classes, proving UNSAT without using Xolver
 arithmetic. The unit test changes 120.034762s→0.018012s. These are local results
 outside fixed160. The published certificate and reproducible checker are
-[recorded here](POLYNOMIAL_RESIDUE_STAGE_20261031.json). Final offline-checker
-source qualification and exact delivery-head CI gate PR85 promotion.
+[recorded here](POLYNOMIAL_RESIDUE_STAGE_20261031.json). R1125 qualifies the final offline checker and confirms all native executables,
+solver sources and the library are unchanged, permitting the recorded acceptance
+and comparison reuse. Both delivery-head and postmerge CI pass.
 
 R1099's preceding candidate-cache round also verifies 101/101/117 with no solving
 gain. Earlier R1089 records 100→102 and legacy duplicate Z3 model exports on
@@ -3621,8 +3645,58 @@ tests. Reproduction from the repository root:
 python3 tools/soundness/polynomial_residue_certificate.py check tests/regression/nia/coupled_square_residues_unsat.smt2 docs/audit/COUPLED_SQUARE_RESIDUE_CERTIFICATE.json
 ```
 
-R1125 must validate that public checker and confirm every native executable,
-library and solver source is unchanged before reusing R1120's acceptance and
-comparison. Exact final-head PR CI remains a promotion gate. The next capability
+R1125 validates the public checker and confirms every native executable,
+library and solver source is unchanged, qualifying reuse of R1120's acceptance
+and comparison. Final-head PR CI41173329985 and postmerge main CI41175337390
+both pass. The next capability
 work must target original gaps or real QCP validation; the closed early-quadratic
 and candidate-cache gap profiles must not be repeated as new experiments.
+
+### NIA model and refinement state follow-up
+
+R1127 samples public gaps13/106 with the delivered residue CLI. On106,
+16/24 stack samples are inside partial-assignment bit-blast; three completed
+early calls consume5282ms in the ten-second diagnostic. The R1131 experiment
+tries complete-candidate bit-blast scheduling and reuses the integer mode of
+the shared polynomial candidate search. Its six fresh R1132 triads24/29/34/106/
+114/116 have no solved Xolver result in either arm under60s/one leased physical
+CPU/16GiB. This experiment is closed and its scheduling/search changes are
+removed from production. It is not an original-gap gain.
+
+The follow-up fixes actual state errors: newly asserted ordinary/interface
+constraints invalidate NIA's old local model; partial propagation no longer
+consumes branch identities, branch quotas or unpublished linearization lemmas.
+It uses the existing shared `ReasonerSchedule::CandidateModel` contract. The
+separately original-formula-validated Farkas witness and LRA/LIA policies remain.
+R1137 passes58 targeted native cases/1493 assertions. R1138 runs the same three
+new regression bodies against the delivered archive: all three fail, with21
+failed assertions; its fixed prototype passes all1886 native unit cases. The
+final source also schedules the linearization producer/queue together and
+extends that regression. R1141 qualifies committed source46049166; all39 R1143
+acceptance groups pass,1886 cases/986763 assertions. R1145 seals160 valid fresh
+triads: verified101/101/117, no gains/losses/opposites/invalid models. Two
+complete triads4/10 replace terminal wall-budget failures; all originals remain.
+Verified PAR-2 is7386.098/7384.224/5484.627. This is a correctness repair with no
+established whole-suite speedup. Seven unconfirmed Z3 UNSATs remain excluded.
+See [the phase evidence](NIA_MODEL_STATE_STAGE_20261031.json). Exact delivery-head
+PR86 CI and postmerge main CI remain delivery gates at this snapshot.
+
+All six fresh R1124 original-program runs now reach actual controller `done`:
+branch, GCD and max3 with each backend, using the frozen residue worker/Z3 and
+original annotated C files. Each passes current obligation regeneration and
+complete Rocq final checks. GCD proofs preserve C signed remainder (`Z.rem`),
+including negative inputs. R1142 seals3 original programs,4 functions,23
+top-level VCs and780 actual queries per backend. Paired query occurrence
+sequences and verdicts match; there are no opposite verdicts. Final-check
+time sums are91.840s/100.234s; proof bodies/grouping differ and this one sample
+is not a controlled whole-workflow speedup. See [the program evidence](QCP_ORIGINAL_PROGRAMS_STAGE_20261031.json).
+These runs use the preceding delivered residue kernel, not the NIA-state
+candidate or either protected set. The full SMT goal remains unmet.
+
+R1148/R1149 close the incoming-bound overshoot hypothesis: public13/56/128
+have1/2076,0/9815,2/10484 overshooting pivots, respectively, with0 incoming
+variables already invalid. Such moves account for78/7540091,0/16387442 and
+160/1940714 estimated coefficient updates. No decision or production source
+changed. This does not explain the dense exact-arithmetic cost and must not
+be promoted as an optimization. The next observer measures pivot coefficient
+widths and eligible unit alternatives before choosing a new algorithm.

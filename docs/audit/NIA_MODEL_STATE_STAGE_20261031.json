@@ -1,0 +1,954 @@
+{
+  "schema": "xolver-nia-model-state-stage/1",
+  "implementation_commit": "46049166ab06473415cbaec5bb4485e7b6cf69db",
+  "source_manifest_sha256": "64365d9f4fc9fbdf0f93414c955bc4975b4db9049d83dc4a5b5a6579b3c97f3b",
+  "native_qualification_sha256": "ddc241361fdba6c9dce497387c005b408cff457770f8d94afe40b320e7c00bf8",
+  "binaries": {
+    "xolver": "f879c16727c64a6f65646238d4433e6a8d8b7565d7f415aba443db65cdbcaf25",
+    "xolver-sv": "d0ce6fa5f828fb849632b931dfa9fc2520b1c6271e5d432098db53570343d64e",
+    "xolver-parallel-worker": "f269e366285dc2c4944e2339f1d1a0895dae98aaa3af10be01c9e48a5c41b506"
+  },
+  "unit_binary_sha256": "9e9ae953ed8cf7f9e1583eed9ea7834e7a94752898cc9f442a032af241a8ef74",
+  "library_sha256": "4cd105d719515a7e52e8a94e769fb8d1d1f983a665584db86ed9669002c3d0f7",
+  "native_build_runs": [
+    {
+      "experiment": "a5407f2c17eb",
+      "run": "152720c1d601",
+      "input": "run",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "0"
+        ]
+      }
+    }
+  ],
+  "acceptance_groups": 39,
+  "unit_cases": 1886,
+  "unit_assertions": 986763,
+  "audit_file": "validation/arithmetic-r103/stage-r1145.json",
+  "audit_sha256": "11bd614a02b8fd8a63250a8a47e2d824fd0363fca8f56ef5a2725a691acfcd01",
+  "formal": {
+    "cases": 160,
+    "binaries": {
+      "baseline": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/polynomial-residues-r1115/xolver",
+        "sha256": "8dc1884e8ac2b43d3d1da45d581e42c6fd9a91df6c71a64efbad8b2bca5fbf07"
+      },
+      "candidate": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-state-r1141/xolver",
+        "sha256": "f879c16727c64a6f65646238d4433e6a8d8b7565d7f415aba443db65cdbcaf25"
+      },
+      "z3": {
+        "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+        "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      }
+    },
+    "timeout": 60,
+    "memory_bytes": 17179869184,
+    "model_capture": "initial-solve-single-model",
+    "counts": {
+      "baseline": {
+        "unsat": 46,
+        "decided": 101,
+        "verified_decided": 101,
+        "verified_par2": 7386.098327443004,
+        "raw_par2": 7386.098327443004,
+        "timeout": 58,
+        "sat": 55,
+        "unknown": 1
+      },
+      "candidate": {
+        "unsat": 46,
+        "decided": 101,
+        "verified_decided": 101,
+        "verified_par2": 7384.224445771426,
+        "raw_par2": 7384.224445771426,
+        "timeout": 58,
+        "sat": 55,
+        "unknown": 1
+      },
+      "z3": {
+        "unsat": 58,
+        "decided": 124,
+        "verified_decided": 117,
+        "verified_par2": 5484.627132805064,
+        "raw_par2": 4686.705146417022,
+        "sat": 66,
+        "timeout": 36
+      }
+    },
+    "by_logic": {
+      "QF_LIA": {
+        "baseline": {
+          "unsat": 15,
+          "decided": 34,
+          "verified_decided": 34,
+          "verified_par2": 1904.605221947655,
+          "raw_par2": 1904.605221947655,
+          "timeout": 14,
+          "sat": 19
+        },
+        "candidate": {
+          "unsat": 15,
+          "decided": 34,
+          "verified_decided": 34,
+          "verified_par2": 1901.6721951812506,
+          "raw_par2": 1901.6721951812506,
+          "timeout": 14,
+          "sat": 19
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 38,
+          "verified_decided": 36,
+          "verified_par2": 1481.110195249319,
+          "raw_par2": 1281.8032742030919,
+          "sat": 23,
+          "timeout": 10
+        }
+      },
+      "QF_NIA": {
+        "baseline": {
+          "timeout": 19,
+          "decided": 29,
+          "verified_decided": 29,
+          "verified_par2": 2328.492502119392,
+          "raw_par2": 2328.492502119392,
+          "unsat": 16,
+          "sat": 13
+        },
+        "candidate": {
+          "timeout": 19,
+          "decided": 29,
+          "verified_decided": 29,
+          "verified_par2": 2329.880399879068,
+          "raw_par2": 2329.880399879068,
+          "unsat": 16,
+          "sat": 13
+        },
+        "z3": {
+          "unsat": 22,
+          "decided": 34,
+          "verified_decided": 30,
+          "verified_par2": 2240.758766785264,
+          "raw_par2": 1761.8777491822839,
+          "sat": 12,
+          "timeout": 14
+        }
+      },
+      "QF_LRA": {
+        "baseline": {
+          "timeout": 16,
+          "decided": 16,
+          "verified_decided": 16,
+          "verified_par2": 1941.653878575191,
+          "raw_par2": 1941.653878575191,
+          "sat": 7,
+          "unsat": 9
+        },
+        "candidate": {
+          "timeout": 16,
+          "decided": 16,
+          "verified_decided": 16,
+          "verified_par2": 1941.5807993058115,
+          "raw_par2": 1941.5807993058115,
+          "sat": 7,
+          "unsat": 9
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 26,
+          "verified_decided": 26,
+          "verified_par2": 824.9140325412154,
+          "raw_par2": 824.9140325412154,
+          "sat": 11,
+          "timeout": 6
+        }
+      },
+      "QF_NRA": {
+        "baseline": {
+          "sat": 16,
+          "decided": 22,
+          "verified_decided": 22,
+          "verified_par2": 1211.3467248007655,
+          "raw_par2": 1211.3467248007655,
+          "unsat": 6,
+          "timeout": 9,
+          "unknown": 1
+        },
+        "candidate": {
+          "sat": 16,
+          "decided": 22,
+          "verified_decided": 22,
+          "verified_par2": 1211.0910514052957,
+          "raw_par2": 1211.0910514052957,
+          "unsat": 6,
+          "timeout": 9,
+          "unknown": 1
+        },
+        "z3": {
+          "sat": 20,
+          "decided": 26,
+          "verified_decided": 25,
+          "verified_par2": 937.8441382292658,
+          "raw_par2": 818.1100904904306,
+          "timeout": 6,
+          "unsat": 6
+        }
+      }
+    },
+    "changes": [],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "unverified": [
+      {
+        "index": 12,
+        "case": "QF_LIA/fft/Sz128_2823.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 24,
+        "case": "QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 27,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 42,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep2a.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 80,
+        "case": "QF_LIA/cut_lemmas/20-vars/cut_lemma_03_004.smt2",
+        "results": {
+          "z3": "unsat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 114,
+        "case": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 159,
+        "case": "QF_NRA/20161105-Sturm-MGC/mgc_07.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      }
+    ]
+  },
+  "invalid_original_triads": [
+    {
+      "index": 4,
+      "run": "a9567701f521",
+      "reason": "observed_wall_budget_violation",
+      "report_sha256": "3135fbb313d05ae43d9fbeec5b4f8e925f4bc828cbb4d63e09d8714b6f1faccc"
+    },
+    {
+      "index": 10,
+      "run": "b24216721d31",
+      "reason": "observed_wall_budget_violation",
+      "report_sha256": "ae103c38d56a2835085ddc71c0e5222b8357415125e3c25b84da873ef1d60aff"
+    }
+  ],
+  "remaining_gaps": [
+    {
+      "index": 1,
+      "case": {
+        "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LIA/convert/convert-jpg2gif-query-1470.smt2",
+        "member": "QF_LIA/convert/convert-jpg2gif-query-1470.smt2",
+        "logic": "QF_LIA",
+        "family": "convert",
+        "bytes": 140073,
+        "sha256": "df42f9cdbe66be22d8b5f55d904ae308677681d21cf6ba13801a6c1bcc7d712b",
+        "expected": "sat",
+        "shared_archive_member": "non-incremental/QF_LIA/convert/convert-jpg2gif-query-1470.smt2",
+        "shared_archive_sha256": "47f34fff3323f52e04ee33e611b80fd31b8f7f0177b7a9891b2499b259da69cf",
+        "archive_matches_server": true,
+        "archive_member_found": true,
+        "repetitions": 1
+      },
+      "z3_result": "sat",
+      "candidate_result": "timeout",
+      "truth_confirmed": true
+    },
+    {
+      "index": 12,
+      "case": {
+        "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LIA/fft/Sz128_2823.smt2",
+        "member": "QF_LIA/fft/Sz128_2823.smt2",
+        "logic": "QF_LIA",
+        "family": "fft",
+        "bytes": 20672,
+        "sha256": "e62aa48a7ec4ae656514927d79b4f34f7b05e187e4bf8eb43cb1eda0cdbc6a54",
+        "expected": "unsat",
+        "shared_archive_member": "non-incremental/QF_LIA/fft/Sz128_2823.smt2",
+        "shared_archive_sha256": "47f34fff3323f52e04ee33e611b80fd31b8f7f0177b7a9891b2499b259da69cf",
+        "archive_matches_server": true,
+        "archive_member_found": true,
+        "repetitions": 1
+      },
+      "z3_result": "unsat",
+      "candidate_result": "timeout",
+      "truth_confirmed": false
+    },
+    {
+      "index": 13,
+      "case": {
+        "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LIA/tropical-matrix/constraint-517804.smt2",
+        "member": "QF_LIA/tropical-matrix/constraint-517804.smt2",
+        "logic": "QF_LIA",
+        "family": "tropical-matrix",
+        "bytes": 420540,
+        "sha256": "d9c546291b74c1b0021e19bff6aa4e9fbbb220fdcd253de67479375572f913f6",
+        "expected": "sat",
+        "shared_archive_member": "non-incremental/QF_LIA/tropical-matrix/constraint-517804.smt2",
+        "shared_archive_sha256": "47f34fff3323f52e04ee33e611b80fd31b8f7f0177b7a9891b2499b259da69cf",
+        "archive_matches_server": true,
+        "archive_member_found": true,
+        "repetitions": 1
+      },
+      "z3_result": "sat",
+      "candidate_result": "timeout",
+      "truth_confirmed": true
+    },
+    {
+      "index": 24,
+      "case": {
+        "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+        "member": "QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+        "logic": "QF_NIA",
+        "family": "LassoRanker",
+        "bytes": 24177,
+        "sha256": "68798a8ba5809648e09994276b2bc1fed413b743b8fce6d21d9de3a4865aa057",
+        "expected": "unsat",
+        "shared_archive_member": "non-incremental/QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+        "shared_archive_sha256": "0ec220292ed6c506b6c5dd9241e27ca7c74d8bda10a3db42249dc3f23c6d6078",
+        "archive_matches_server": true,
+        "archive_member_found": true,
+        "repetitions": 1
+      },
+      "z3_result": "unsat",
+      "candidate_result": "timeout",
+      "truth_confirmed": false
+    },
+    {
+      "index": 27,
+      "case": {
+        "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+        "member": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+        "logic": "QF_NIA",
+        "family": "20230328-sqrtmodinv-hoenicke",
+        "bytes": 1077,
+        "sha256": "4be4382761af8ae34ba468d292dedbbce60a1adbce104d03ebecaf9217d020d8",
+        "expected": "unsat",
+        "shared_archive_member": "non-incremental/QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+        "shared_archive_sha256": "0ec220292ed6c506b6c5dd9241e27ca7c74d8bda10a3db42249dc3f23c6d6078",
+        "archive_matches_server": true,
+        "archive_member_found": true,
+        "repetitions": 1
+      },
+      "z3_result": "unsat",
+      "candidate_result": "timeout",
+      "truth_confirmed": false
+    },
+    {
+      "index": 29,
+      "case": {
+        "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NIA/UltimateLassoRanker/CookSeeZuleger-2013TACAS-Fig7a-alloca_true-termination.c.i_Iteration8_Lasso+nonterminationTemplate.smt2",
+        "member": "QF_NIA/UltimateLassoRanker/CookSeeZuleger-2013TACAS-Fig7a-alloca_true-termination.c.i_Iteration8_Lasso+nonterminationTemplate.smt2",
+        "logic": "QF_NIA",
+        "family": "UltimateLassoRanker",
+        "bytes": 4964939,
+        "sha256": "0d5e3d04305e393bfd392b8652ba33f37220c4ff420054acffb70d61df5c89e7",
+        "expected": "unsat",
+        "shared_archive_member": "non-incremental/QF_NIA/UltimateLassoRanker/CookSeeZuleger-2013TACAS-Fig7a-alloca_true-termination.c.i_Iteration8_Lasso+nonterminationTemplate.smt2",
+        "shared_archive_sha256": "0ec220292ed6c506b6c5dd9241e27ca7c74d8bda10a3db42249dc3f23c6d6078",
+        "archive_matches_server": true,
+        "archive_member_found": true,
+        "repetitions": 1
+      },
+      "z3_result": "unsat",
+      "candidate_result": "timeout",
+      "truth_confirmed": true
+    },
+    {
+      "index": 34,
+      "case": {
+        "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NIA/20210219-Dartagnan/ReachSafety-Loops/ps6-ll_valuebound5-O0.smt2",
+        "member": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/ps6-ll_valuebound5-O0.smt2",
+        "logic": "QF_NIA",
+        "family": "20210219-Dartagnan",
+        "bytes": 163261,
+        "sha256": "ecf140bb267be14f595da4be5a54940f0a71fc7e4348aaa027bff1d7166f1ec3",
+        "expected": "unknown",
+        "shared_archive_member": "non-incremental/QF_NIA/20210219-Dartagnan/ReachSafety-Loops/ps6-ll_valuebound5-O0.smt2",
+        "shared_archive_sha256": "0ec220292ed6c506b6c5dd9241e27ca7c74d8bda10a3db42249dc3f23c6d6078",
+        "archive_matches_server": true,
+        "archive_member_found": true,
+        "repetitions": 1
+      },
+      "z3_result": "unsat",
+      "candidate_result": "timeout",
+      "truth_confirmed": true
+    },
+    {
+      "index": 42,
+      "case": {
+        "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep2a.smt2",
+        "member": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep2a.smt2",
+        "logic": "QF_NIA",
+        "family": "20230328-sqrtmodinv-hoenicke",
+        "bytes": 1149,
+        "sha256": "a6848324353b5f5c15ba7135e0aad06acb838ac38e020c5e0cced695ece5e33a",
+        "expected": "unsat",
+        "shared_archive_member": "non-incremental/QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep2a.smt2",
+        "shared_archive_sha256": "0ec220292ed6c506b6c5dd9241e27ca7c74d8bda10a3db42249dc3f23c6d6078",
+        "archive_matches_server": true,
+        "archive_member_found": true,
+        "repetitions": 1
+      },
+      "z3_result": "unsat",
+      "candidate_result": "timeout",
+      "truth_confirmed": false
+    },
+    {
+      "index": 47,
+      "case": {
+        "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NIA/20250331-elster/D_2.smt2",
+        "member": "QF_NIA/20250331-elster/D_2.smt2",
+        "logic": "QF_NIA",
+        "family": "20250331-elster",
+        "bytes": 2705660,
+        "sha256": "2c37069c8324458e8f3ad46cc6dbe0cc3a6c2f31012ed504123e660bfdf7aba4",
+        "expected": "sat",
+        "shared_archive_member": "non-incremental/QF_NIA/20250331-elster/D_2.smt2",
+        "shared_archive_sha256": "0ec220292ed6c506b6c5dd9241e27ca7c74d8bda10a3db42249dc3f23c6d6078",
+        "archive_matches_server": true,
+        "archive_member_found": true,
+        "repetitions": 1
+      },
+      "z3_result": "sat",
+      "candidate_result": "timeout",
+      "truth_confirmed": true
+    },
+    {
+      "index": 48,
+      "case": {
+        "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LRA/sal/pursuit/pursuit-safety-20.smt2",
+        "member": "QF_LRA/sal/pursuit/pursuit-safety-20.smt2",
+        "logic": "QF_LRA",
+        "family": "sal",
+        "bytes": 54119,
+        "sha256": "1db0853aaa0f355969a8b7e17778b10137081d30ee7f98e6ff8d94039a55b85b",
+        "expected": "unsat",
+        "shared_archive_member": "non-incremental/QF_LRA/sal/pursuit/pursuit-safety-20.smt2",
+        "shared_archive_sha256": "c594f41da343112c66598ffb4cbf9bd8f8aa8c4c1283cef09d4c79b06fb4504c",
+        "archive_matches_server": true,
+        "archive_member_found": true,
+        "repetitions": 1
+      },
+      "z3_result": "unsat",
+      "candidate_result": "timeout",
+      "truth_confirmed": true
+    },
+    {
+      "index": 49,
+      "case": {
+        "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LRA/2019-ezsmt/travellingSalesperson/rand_80_340_1159656267_16.lp.smt2",
+        "member": "QF_LRA/2019-ezsmt/travellingSalesperson/rand_80_340_1159656267_16.lp.smt2",
+        "logic": "QF_LRA",
+        "family": "2019-ezsmt",
+        "bytes": 1783427,
+        "sha256": "d4baea957f7fe792713edbaf3edc6769274ab0aafe5e86182d023e858037d615",
+        "expected": "unknown",
+        "shared_archive_member": "non-incremental/QF_LRA/2019-ezsmt/travellingSalesperson/rand_80_340_1159656267_16.lp.smt2",
+        "shared_archive_sha256": "c594f41da343112c66598ffb4cbf9bd8f8aa8c4c1283cef09d4c79b06fb4504c",
+        "archive_matches_server": true,
+        "archive_member_found": true,
+        "repetitions": 1
+      },
+      "z3_result": "sat",
+      "candidate_result": "timeout",
+      "truth_confirmed": true
+    },
+    {
+      "index": 50,
+      "case": {
+        "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_jain_5.i_2_4_3.bpl_7.smt2",
+        "member": "QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_jain_5.i_2_4_3.bpl_7.smt2",
+        "logic": "QF_LRA",
+        "family": "2017-Heizmann-UltimateInvariantSynthesis",
+        "bytes": 580508,
+        "sha256": "7e71a151d917978f1b5afc2791abf589e30c8ff97e930979df6ef82ad72dcdc0",
+        "expected": "unsat",
+        "shared_archive_member": "non-incremental/QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_jain_5.i_2_4_3.bpl_7.smt2",
+        "shared_archive_sha256": "c594f41da343112c66598ffb4cbf9bd8f8aa8c4c1283cef09d4c79b06fb4504c",
+        "archive_matches_server": true,
+        "archive_member_found": true,
+        "repetitions": 1
+      },
+      "z3_result": "unsat",
+      "candidate_result": "timeout",
+      "truth_confirmed": true
+    },
+    {
+      "index": 51,
+      "case": {
+        "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LRA/LassoRanker/CooperatingT2/ludcmp.c.i.ludcmp.pl.t2.fixed.t2.c_Iteration8_Loop_7-phaseTemplate.smt2",
+        "member": "QF_LRA/LassoRanker/CooperatingT2/ludcmp.c.i.ludcmp.pl.t2.fixed.t2.c_Iteration8_Loop_7-phaseTemplate.smt2",
+        "logic": "QF_LRA",
+        "family": "LassoRanker",
+        "bytes": 937621,
+        "sha256": "8fb5c2cfe016233a2f76c3d3b103066448f0f1d3faa1c9d9493c55c304d877cb",
+        "expected": "sat",
+        "shared_archive_member": "non-incremental/QF_LRA/LassoRanker/CooperatingT2/ludcmp.c.i.ludcmp.pl.t2.fixed.t2.c_Iteration8_Loop_7-phaseTemplate.smt2",
+        "shared_archive_sha256": "c594f41da343112c66598ffb4cbf9bd8f8aa8c4c1283cef09d4c79b06fb4504c",
+        "archive_matches_server": true,
+        "archive_member_found": true,
+        "repetitions": 1
+      },
+      "z3_result": "sat",
+      "candidate_result": "timeout",
+      "truth_confirmed": true
+    },
+    {
+      "index": 56,
+      "case": {
+        "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LRA/miplib/pp08a-3000.smt2",
+        "member": "QF_LRA/miplib/pp08a-3000.smt2",
+        "logic": "QF_LRA",
+        "family": "miplib",
+        "bytes": 70406,
+        "sha256": "49761967d8071fc4d32d82165bcd7ef4fcdfe436b7634da8d42a9be673087218",
+        "expected": "unsat",
+        "shared_archive_member": "non-incremental/QF_LRA/miplib/pp08a-3000.smt2",
+        "shared_archive_sha256": "c594f41da343112c66598ffb4cbf9bd8f8aa8c4c1283cef09d4c79b06fb4504c",
+        "archive_matches_server": true,
+        "archive_member_found": true,
+        "repetitions": 1
+      },
+      "z3_result": "unsat",
+      "candidate_result": "timeout",
+      "truth_confirmed": true
+    },
+    {
+      "index": 58,
+      "case": {
+        "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LRA/uart/uart-26.base.cvc.smt2",
+        "member": "QF_LRA/uart/uart-26.base.cvc.smt2",
+        "logic": "QF_LRA",
+        "family": "uart",
+        "bytes": 99496,
+        "sha256": "64f223bcde0c40ca731ab7443a27e55abf89d82d240cb58aed03a32ff50b15e8",
+        "expected": "unsat",
+        "shared_archive_member": "non-incremental/QF_LRA/uart/uart-26.base.cvc.smt2",
+        "shared_archive_sha256": "c594f41da343112c66598ffb4cbf9bd8f8aa8c4c1283cef09d4c79b06fb4504c",
+        "archive_matches_server": true,
+        "archive_member_found": true,
+        "repetitions": 1
+      },
+      "z3_result": "unsat",
+      "candidate_result": "timeout",
+      "truth_confirmed": true
+    },
+    {
+      "index": 69,
+      "case": {
+        "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NRA/LassoRanker/CooperatingT2/byron-2.t2.c_Iteration3_Loop_4-pieceTemplate.smt2",
+        "member": "QF_NRA/LassoRanker/CooperatingT2/byron-2.t2.c_Iteration3_Loop_4-pieceTemplate.smt2",
+        "logic": "QF_NRA",
+        "family": "LassoRanker",
+        "bytes": 282056,
+        "sha256": "72e580ee3a690b54865e129f44529a71d81112f35193cbc93775236ea62a0f13",
+        "expected": "sat",
+        "shared_archive_member": "non-incremental/QF_NRA/LassoRanker/CooperatingT2/byron-2.t2.c_Iteration3_Loop_4-pieceTemplate.smt2",
+        "shared_archive_sha256": "fd4a0d330192dc622d1746daef26649f52803dcd197923e4a26c5596e226546c",
+        "archive_matches_server": true,
+        "archive_member_found": true,
+        "repetitions": 1
+      },
+      "z3_result": "sat",
+      "candidate_result": "timeout",
+      "truth_confirmed": true
+    },
+    {
+      "index": 72,
+      "case": {
+        "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NRA/2019-ezsmt/reverseFolding/39-reverse_folding-0-0.smt2",
+        "member": "QF_NRA/2019-ezsmt/reverseFolding/39-reverse_folding-0-0.smt2",
+        "logic": "QF_NRA",
+        "family": "2019-ezsmt",
+        "bytes": 41658500,
+        "sha256": "cc66abe5f5716404298fd97cb383e65487d9277ea2611ee41add8e324e7eb2c4",
+        "expected": "unknown",
+        "shared_archive_member": "non-incremental/QF_NRA/2019-ezsmt/reverseFolding/39-reverse_folding-0-0.smt2",
+        "shared_archive_sha256": "fd4a0d330192dc622d1746daef26649f52803dcd197923e4a26c5596e226546c",
+        "archive_matches_server": true,
+        "archive_member_found": true,
+        "repetitions": 1
+      },
+      "z3_result": "sat",
+      "candidate_result": "timeout",
+      "truth_confirmed": true
+    },
+    {
+      "index": 77,
+      "case": {
+        "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NRA/UltimateAutomizer/InVarSynth_InvariantSynthesis_Disjunctive02.bpl_Iteration1_0.smt2",
+        "member": "QF_NRA/UltimateAutomizer/InVarSynth_InvariantSynthesis_Disjunctive02.bpl_Iteration1_0.smt2",
+        "logic": "QF_NRA",
+        "family": "UltimateAutomizer",
+        "bytes": 25560,
+        "sha256": "7511fd4d07cdce648daf4ac76fc32c90af91cf9d9576d4e955a51d0dbd4534b7",
+        "expected": "sat",
+        "shared_archive_member": "non-incremental/QF_NRA/UltimateAutomizer/InVarSynth_InvariantSynthesis_Disjunctive02.bpl_Iteration1_0.smt2",
+        "shared_archive_sha256": "fd4a0d330192dc622d1746daef26649f52803dcd197923e4a26c5596e226546c",
+        "archive_matches_server": true,
+        "archive_member_found": true,
+        "repetitions": 1
+      },
+      "z3_result": "sat",
+      "candidate_result": "timeout",
+      "truth_confirmed": true
+    },
+    {
+      "index": 80,
+      "case": {
+        "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LIA/cut_lemmas/20-vars/cut_lemma_03_004.smt2",
+        "member": "QF_LIA/cut_lemmas/20-vars/cut_lemma_03_004.smt2",
+        "logic": "QF_LIA",
+        "family": "cut_lemmas",
+        "bytes": 2940,
+        "sha256": "1bcb3b052ef1f9ebe04cf76147f19dc54fb0678342d72b829a38a936c56959fe",
+        "expected": "unsat",
+        "shared_archive_member": "non-incremental/QF_LIA/cut_lemmas/20-vars/cut_lemma_03_004.smt2",
+        "shared_archive_sha256": "47f34fff3323f52e04ee33e611b80fd31b8f7f0177b7a9891b2499b259da69cf",
+        "archive_matches_server": true,
+        "repetitions": 1
+      },
+      "z3_result": "unsat",
+      "candidate_result": "timeout",
+      "truth_confirmed": false
+    },
+    {
+      "index": 89,
+      "case": {
+        "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LIA/RWS/Example_16.txt.smt2",
+        "member": "QF_LIA/RWS/Example_16.txt.smt2",
+        "logic": "QF_LIA",
+        "family": "RWS",
+        "bytes": 295218,
+        "sha256": "5b983ea0194c5b7fcdee4a87c0de44da99828561d82d288a89fd99da128f4c5f",
+        "expected": "sat",
+        "shared_archive_member": "non-incremental/QF_LIA/RWS/Example_16.txt.smt2",
+        "shared_archive_sha256": "47f34fff3323f52e04ee33e611b80fd31b8f7f0177b7a9891b2499b259da69cf",
+        "archive_matches_server": true,
+        "repetitions": 1
+      },
+      "z3_result": "sat",
+      "candidate_result": "timeout",
+      "truth_confirmed": true
+    },
+    {
+      "index": 98,
+      "case": {
+        "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LIA/2019-cmodelsdiff/labyrinth/0003-labyrinth-11-0.smt2",
+        "member": "QF_LIA/2019-cmodelsdiff/labyrinth/0003-labyrinth-11-0.smt2",
+        "logic": "QF_LIA",
+        "family": "2019-cmodelsdiff",
+        "bytes": 10871473,
+        "sha256": "41b0d2ff3be911992bc3a0d8996bb79b2daedd9e66d0b274081fcadeb9ecf27d",
+        "expected": "unknown",
+        "shared_archive_member": "non-incremental/QF_LIA/2019-cmodelsdiff/labyrinth/0003-labyrinth-11-0.smt2",
+        "shared_archive_sha256": "47f34fff3323f52e04ee33e611b80fd31b8f7f0177b7a9891b2499b259da69cf",
+        "archive_matches_server": true,
+        "repetitions": 1
+      },
+      "z3_result": "sat",
+      "candidate_result": "timeout",
+      "truth_confirmed": true
+    },
+    {
+      "index": 106,
+      "case": {
+        "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NIA/20170427-VeryMax/ITS/From_AProVE_2014__juLinkedListCreateAddAllAt.jar-obl-17__p9090_safety_0.smt2",
+        "member": "QF_NIA/20170427-VeryMax/ITS/From_AProVE_2014__juLinkedListCreateAddAllAt.jar-obl-17__p9090_safety_0.smt2",
+        "logic": "QF_NIA",
+        "family": "20170427-VeryMax",
+        "bytes": 52516,
+        "sha256": "c96b35bb3cae604115b99477562c4059c6e78ad16658f50d9dbb9ed8abad0a25",
+        "expected": "sat",
+        "shared_archive_member": "non-incremental/QF_NIA/20170427-VeryMax/ITS/From_AProVE_2014__juLinkedListCreateAddAllAt.jar-obl-17__p9090_safety_0.smt2",
+        "shared_archive_sha256": "0ec220292ed6c506b6c5dd9241e27ca7c74d8bda10a3db42249dc3f23c6d6078",
+        "archive_matches_server": true,
+        "repetitions": 1
+      },
+      "z3_result": "sat",
+      "candidate_result": "timeout",
+      "truth_confirmed": true
+    },
+    {
+      "index": 108,
+      "case": {
+        "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NIA/20250331-elster/B_2.smt2",
+        "member": "QF_NIA/20250331-elster/B_2.smt2",
+        "logic": "QF_NIA",
+        "family": "20250331-elster",
+        "bytes": 1223131,
+        "sha256": "26d6012f717dec2f43e57be63e8638d1a13b6bc9cb5fcc963c08476793385786",
+        "expected": "sat",
+        "shared_archive_member": "non-incremental/QF_NIA/20250331-elster/B_2.smt2",
+        "shared_archive_sha256": "0ec220292ed6c506b6c5dd9241e27ca7c74d8bda10a3db42249dc3f23c6d6078",
+        "archive_matches_server": true,
+        "repetitions": 1
+      },
+      "z3_result": "sat",
+      "candidate_result": "timeout",
+      "truth_confirmed": true
+    },
+    {
+      "index": 114,
+      "case": {
+        "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+        "member": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+        "logic": "QF_NIA",
+        "family": "20210219-Dartagnan",
+        "bytes": 165175,
+        "sha256": "1aea29b746e949da62b784ed14b262444d87c36051a63e0aa197d313fd3f8d99",
+        "expected": "unknown",
+        "shared_archive_member": "non-incremental/QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+        "shared_archive_sha256": "0ec220292ed6c506b6c5dd9241e27ca7c74d8bda10a3db42249dc3f23c6d6078",
+        "archive_matches_server": true,
+        "repetitions": 1
+      },
+      "z3_result": "unsat",
+      "candidate_result": "timeout",
+      "truth_confirmed": false
+    },
+    {
+      "index": 116,
+      "case": {
+        "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NIA/AProVE/aproveSMT5381466618694630101.smt2",
+        "member": "QF_NIA/AProVE/aproveSMT5381466618694630101.smt2",
+        "logic": "QF_NIA",
+        "family": "AProVE",
+        "bytes": 8176,
+        "sha256": "f6e90d9f987771e1dd41731a7fedef9cb83d38cd6c3e8131ac254e47e5c57cdc",
+        "expected": "unsat",
+        "shared_archive_member": "non-incremental/QF_NIA/AProVE/aproveSMT5381466618694630101.smt2",
+        "shared_archive_sha256": "0ec220292ed6c506b6c5dd9241e27ca7c74d8bda10a3db42249dc3f23c6d6078",
+        "archive_matches_server": true,
+        "repetitions": 1
+      },
+      "z3_result": "unsat",
+      "candidate_result": "timeout",
+      "truth_confirmed": true
+    },
+    {
+      "index": 122,
+      "case": {
+        "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NIA/20250331-elster/D_1.smt2",
+        "member": "QF_NIA/20250331-elster/D_1.smt2",
+        "logic": "QF_NIA",
+        "family": "20250331-elster",
+        "bytes": 2721425,
+        "sha256": "c88289f0453a6bbe098b4c5f092dfc50cd9e0ac21d799c6ccfc0a61b5a974389",
+        "expected": "sat",
+        "shared_archive_member": "non-incremental/QF_NIA/20250331-elster/D_1.smt2",
+        "shared_archive_sha256": "0ec220292ed6c506b6c5dd9241e27ca7c74d8bda10a3db42249dc3f23c6d6078",
+        "archive_matches_server": true,
+        "repetitions": 1
+      },
+      "z3_result": "sat",
+      "candidate_result": "timeout",
+      "truth_confirmed": true
+    },
+    {
+      "index": 128,
+      "case": {
+        "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LRA/uart/uart-19.base.cvc.smt2",
+        "member": "QF_LRA/uart/uart-19.base.cvc.smt2",
+        "logic": "QF_LRA",
+        "family": "uart",
+        "bytes": 72783,
+        "sha256": "718a1e36294547bf1605cbbbcc01dc2bbf4ae1682c8d30fc7f246f6f031d3bdf",
+        "expected": "unsat",
+        "shared_archive_member": "non-incremental/QF_LRA/uart/uart-19.base.cvc.smt2",
+        "shared_archive_sha256": "c594f41da343112c66598ffb4cbf9bd8f8aa8c4c1283cef09d4c79b06fb4504c",
+        "archive_matches_server": true,
+        "repetitions": 1
+      },
+      "z3_result": "unsat",
+      "candidate_result": "timeout",
+      "truth_confirmed": true
+    },
+    {
+      "index": 129,
+      "case": {
+        "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LRA/LassoRanker/CooperatingT2/polyrank4.t2.c_Iteration8_Loop_4-pieceTemplate.smt2",
+        "member": "QF_LRA/LassoRanker/CooperatingT2/polyrank4.t2.c_Iteration8_Loop_4-pieceTemplate.smt2",
+        "logic": "QF_LRA",
+        "family": "LassoRanker",
+        "bytes": 222248,
+        "sha256": "a7dc84671c8b4907afe99c6e0156f36462f3a89a666b25926d92511f963fe476",
+        "expected": "unsat",
+        "shared_archive_member": "non-incremental/QF_LRA/LassoRanker/CooperatingT2/polyrank4.t2.c_Iteration8_Loop_4-pieceTemplate.smt2",
+        "shared_archive_sha256": "c594f41da343112c66598ffb4cbf9bd8f8aa8c4c1283cef09d4c79b06fb4504c",
+        "archive_matches_server": true,
+        "repetitions": 1
+      },
+      "z3_result": "unsat",
+      "candidate_result": "timeout",
+      "truth_confirmed": true
+    },
+    {
+      "index": 130,
+      "case": {
+        "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LRA/TM/p-3-bucket_s10.smt2",
+        "member": "QF_LRA/TM/p-3-bucket_s10.smt2",
+        "logic": "QF_LRA",
+        "family": "TM",
+        "bytes": 444322,
+        "sha256": "2606855399c6a9008140acb6c981d3f41d03194cab8075b68f2b198a20b2935a",
+        "expected": "sat",
+        "shared_archive_member": "non-incremental/QF_LRA/TM/p-3-bucket_s10.smt2",
+        "shared_archive_sha256": "c594f41da343112c66598ffb4cbf9bd8f8aa8c4c1283cef09d4c79b06fb4504c",
+        "archive_matches_server": true,
+        "repetitions": 1
+      },
+      "z3_result": "sat",
+      "candidate_result": "timeout",
+      "truth_confirmed": true
+    },
+    {
+      "index": 131,
+      "case": {
+        "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LRA/sc/sc-37.induction2.cvc.smt2",
+        "member": "QF_LRA/sc/sc-37.induction2.cvc.smt2",
+        "logic": "QF_LRA",
+        "family": "sc",
+        "bytes": 93763,
+        "sha256": "8b660dc1debe27fe09a0eb3ca9e4e3833f075f89a66e71b90dfe102e250bc962",
+        "expected": "sat",
+        "shared_archive_member": "non-incremental/QF_LRA/sc/sc-37.induction2.cvc.smt2",
+        "shared_archive_sha256": "c594f41da343112c66598ffb4cbf9bd8f8aa8c4c1283cef09d4c79b06fb4504c",
+        "archive_matches_server": true,
+        "repetitions": 1
+      },
+      "z3_result": "sat",
+      "candidate_result": "timeout",
+      "truth_confirmed": true
+    },
+    {
+      "index": 144,
+      "case": {
+        "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NRA/2019-ezsmt/reverseFolding/31-reverse_folding-0-0.smt2",
+        "member": "QF_NRA/2019-ezsmt/reverseFolding/31-reverse_folding-0-0.smt2",
+        "logic": "QF_NRA",
+        "family": "2019-ezsmt",
+        "bytes": 29119525,
+        "sha256": "d26dd3ac7eb05e598a7b54fe02cb785ae7a85da7ceb1e5fcc95f2e4f8c852c1c",
+        "expected": "unknown",
+        "shared_archive_member": "non-incremental/QF_NRA/2019-ezsmt/reverseFolding/31-reverse_folding-0-0.smt2",
+        "shared_archive_sha256": "fd4a0d330192dc622d1746daef26649f52803dcd197923e4a26c5596e226546c",
+        "archive_matches_server": true,
+        "repetitions": 1
+      },
+      "z3_result": "sat",
+      "candidate_result": "timeout",
+      "truth_confirmed": true
+    },
+    {
+      "index": 146,
+      "case": {
+        "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NRA/LassoRanker/CooperatingT2/consts1.t2.c_Iteration1_Lasso_4-pieceTemplate.smt2",
+        "member": "QF_NRA/LassoRanker/CooperatingT2/consts1.t2.c_Iteration1_Lasso_4-pieceTemplate.smt2",
+        "logic": "QF_NRA",
+        "family": "LassoRanker",
+        "bytes": 215686,
+        "sha256": "2e27203a3ec975510dab64d149ae5f2bd8de47c8128725d04985555880240dc1",
+        "expected": "unknown",
+        "shared_archive_member": "non-incremental/QF_NRA/LassoRanker/CooperatingT2/consts1.t2.c_Iteration1_Lasso_4-pieceTemplate.smt2",
+        "shared_archive_sha256": "fd4a0d330192dc622d1746daef26649f52803dcd197923e4a26c5596e226546c",
+        "archive_matches_server": true,
+        "repetitions": 1
+      },
+      "z3_result": "sat",
+      "candidate_result": "timeout",
+      "truth_confirmed": true
+    },
+    {
+      "index": 159,
+      "case": {
+        "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NRA/20161105-Sturm-MGC/mgc_07.smt2",
+        "member": "QF_NRA/20161105-Sturm-MGC/mgc_07.smt2",
+        "logic": "QF_NRA",
+        "family": "20161105-Sturm-MGC",
+        "bytes": 2733,
+        "sha256": "3b3f35580e39c21659d09f507edd67f5c0d5271a2957125d9e99cca86db44033",
+        "expected": "unsat",
+        "shared_archive_member": "non-incremental/QF_NRA/20161105-Sturm-MGC/mgc_07.smt2",
+        "shared_archive_sha256": "fd4a0d330192dc622d1746daef26649f52803dcd197923e4a26c5596e226546c",
+        "archive_matches_server": true,
+        "repetitions": 1
+      },
+      "z3_result": "unsat",
+      "candidate_result": "timeout",
+      "truth_confirmed": false
+    }
+  ],
+  "protected_sets_used": false,
+  "boundary": "Correctness/state lifecycle repair. No fixed160 solving gain or loss; the single-round 1.874s PAR-2 difference is not an established speedup. All SAT models replay and independent UNSAT evidence is required. Seven unresolved Z3 UNSAT verdicts remain excluded. PR86 exact delivery-head and postmerge CI are still delivery gates at this snapshot."
+}
