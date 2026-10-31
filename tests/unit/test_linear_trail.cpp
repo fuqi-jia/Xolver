@@ -119,7 +119,7 @@ TEST_CASE("linear trail: LIA snapshots restore replaced definitions and source m
     solver.assertLit(replacement, true, 0, {902, false});
     solver.assertLit(trailAtom(TheoryId::LIA, 32, "snapshot-x", Relation::Eq, 4), true, 0, {903, true});
     REQUIRE(solver.check(db).kind == TheoryCheckResult::Kind::Consistent);
-    solver.pop();
+    solver.pop(1);
     REQUIRE(solver.check(db).kind == TheoryCheckResult::Kind::Consistent);
     const auto pin = solver.proveFixedValueByName("snapshot-x");
     REQUIRE(pin);
