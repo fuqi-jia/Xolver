@@ -3,6 +3,7 @@
 #include <array>
 #include <chrono>
 #include <deque>
+#include <exception>
 #include <map>
 #include <optional>
 #include <limits>
@@ -163,7 +164,23 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
         state_->owner = &gs;
         state_->identity = identity;
     }
-    auto& cache = *state_;
+    // A consumer may invoke this engine recursively, including on another
+    // simplex. Lease this invocation's cache so nested calls cannot replace
+    // storage while the outer row still holds references into it.
+    struct CacheLease {
+        std::unique_ptr<State>& destination;
+        std::unique_ptr<State> owned;
+        std::size_t& resume;
+        std::size_t nextSeed;
+        int exceptions = std::uncaught_exceptions();
+        ~CacheLease() {
+            if (std::uncaught_exceptions() == exceptions) {
+                destination = std::move(owned);
+                resume = nextSeed;
+            }
+        }
+    } lease{state_, std::move(state_), nextSeed_, nextSeed_};
+    auto& cache = *lease.owned;
     ++cache.call;
     const auto oldSize = cache.inputs.size();
     cache.inputs.resize(gs.numVars());
@@ -214,7 +231,7 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
     };
     const auto seedCount = 2 * static_cast<std::size_t>(gs.tableau().numRows());
     if (seedCount != 0) {
-        auto seed = nextSeed_ % seedCount;
+        auto seed = lease.nextSeed % seedCount;
         for (std::size_t count = 0; count < seedCount; ++count) {
             const int basic = gs.tableau().row(static_cast<int>(seed / 2)).basicVar;
             if (basic >= 0) enqueue(basic, seed % 2 == 0);
@@ -256,8 +273,8 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
         // Advance before processing: all budget exits, including a bound-count
         // limit reached mid-row, give the next direction an opportunity on the
         // following check. The current call still uses its own local overlay.
-        nextSeed_ = 2 * static_cast<std::size_t>(rowIndex) + (item.lower ? 1 : 2);
-        if (nextSeed_ == seedCount) nextSeed_ = 0;
+        lease.nextSeed = 2 * static_cast<std::size_t>(rowIndex) + (item.lower ? 1 : 2);
+        if (lease.nextSeed == seedCount) lease.nextSeed = 0;
         const auto& row = gs.tableau().row(rowIndex);
 
         if (statistics) ++statistics->rowVisits;

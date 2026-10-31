@@ -189,6 +189,35 @@ TEST_CASE("LraPropagationEngine: retained rows obey budgets and discard throwing
     CHECK(after.rowSnapshots == 1);
 }
 
+TEST_CASE("LraPropagationEngine: retained rows isolate recursive consumers") {
+    GeneralSimplex outer, inner;
+    const int x = outer.addVar("outer-x"), y = outer.addVar("outer-y");
+    const int s = outer.addConstraint({{x, 1}, {y, 1}}, 0);
+    REQUIRE(outer.assertLower(x, mkBound(1, 1)));
+    REQUIRE(outer.assertLower(y, mkBound(2, 2)));
+    REQUIRE(outer.assertUpper(s, mkBound(10, 3)));
+    const int z = inner.addVar("inner-z");
+    const int t = inner.addConstraint({{z, -2}}, 0);
+    REQUIRE(inner.assertLower(z, mkBound(100, 1)));
+    LraPropagationEngine engine;
+    const PropagationBudget budget{64, 256, 12, 1000};
+    for (int repeat = 0; repeat < 2; ++repeat) {
+        int deliveries = 0;
+        const auto result = engine.propagateAll(outer, budget, nullptr, [&](const auto&) {
+            ++deliveries;
+            const auto nested = engine.propagateAll(inner, budget);
+            CHECK(hasBound(nested, t, false, -200));
+            checkPropagationPoint(nested, {100, -200});
+            return true;
+        });
+        CHECK(deliveries > 1);
+        CHECK(hasBound(result, s, true, 3));
+        CHECK(hasBound(result, x, false, 8));
+        CHECK(hasBound(result, y, false, 9));
+        checkPropagationPoint(result, {1, 2, 3});
+    }
+}
+
 TEST_CASE("LraPropagationEngine: unavailable extrema skip arithmetic until bounds arrive") {
     GeneralSimplex gs;
     const int x = gs.addVar("availability-x"), y = gs.addVar("availability-y"), z = gs.addVar("availability-z");
