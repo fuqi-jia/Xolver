@@ -268,5 +268,42 @@
   "parent_main_ci": "https://github.com/fuqi-jia/Xolver/actions/runs/41191532259",
   "implementation": "The shared real/integer polynomial linear refuter iterates exactly entailed fixed-factor identities to closure. Local labels expand derived bounds into current original SAT premises. Only unconditional row definitions survive; conditional bounds are replaced after withdrawal. Optional rational power construction is bounded even with an unlimited base work limit. No sampled-value inference, integer rounding, filename rule, runtime oracle or new gate is added.",
   "protected_sets_used": false,
-  "boundary": "Fresh full160 verifies 101 baseline/103 candidate/118 Z3 (125 raw Z3 decisions), SAT gains69/146 independently replayed, zero losses/opposites/invalid models. PAR-2 7390.501/7179.970/5398.871; gains explain the main improvement, other single-round timing differences are not an established general speedup. Seven unconfirmed Z3 UNSATs remain excluded. All160 original triads are budget-valid; no replacements. All39 native acceptance groups,1893 units/986870 assertions and31 Python API tests pass. Exact delivery-head PR CI is required before merge, followed by main CI. This delivery update changes audit documents only and requires no extra server current-main archive. Current-kernel controlled QCP comparison remains in progress; prior whole-program proof bodies differed. Both protected sets remain unused; superiority over Z3 and the full goal are not achieved."
+  "boundary": "Fresh full160 verifies 101 baseline/103 candidate/118 Z3 (125 raw Z3 decisions), SAT gains69/146 independently replayed, zero losses/opposites/invalid models. PAR-2 7390.501/7179.970/5398.871; gains explain the main improvement, other single-round timing differences are not an established general speedup. Seven unconfirmed Z3 UNSATs remain excluded. All160 original triads are budget-valid; no replacements. All39 native acceptance groups,1893 units/986870 assertions and31 Python API tests pass. Exact delivery-head PR CI is required before merge, followed by main CI. Delivery updates audit documents and the process-lifetime test only. R1238 reproduces ESRCH failure under the old test, passes the fixed test, five real cancellations and the full Python tool harness; solver sources and listed frozen binaries remain byte-identical, so native/fixed160 evidence is reused. No extra server current-main archive is required. Current-kernel controlled QCP comparison remains in progress; prior whole-program proof bodies differed. Both protected sets remain unused; superiority over Z3 and the full goal are not achieved.",
+  "ci_lifetime_test_followup": {
+    "qualification_file": "validation/arithmetic-r103/qualification-r1238.json",
+    "qualification_sha256": "ef0509a85ddb9cd9acbb7d0bf26f294d16bc4a71102591eadb0e59a137513ec3",
+    "qualification": {
+      "parent_source_manifest_sha256": "2beacc5a5ece58f55bef275bccbabcd53cb0820ed721ea3c13a4f9401217e48b",
+      "parent_qualification_sha256": "75a384629e74de4a42860db0bf598a41e3d37a68b180234e660b2c81e63cc231",
+      "changed_file": "tests/tools/test_worker_transport.py",
+      "before_sha256": "7e963d659aae3eec109ee6201a5ffcf27bb4a23b6f6cbef4ca56faf4dfca2828",
+      "after_sha256": "242dfd4b365bae8203b5ea9de02f4f24fd179d1dd523ab04c36a6603e365bf40",
+      "unchanged_binaries": {
+        "/pub/data/jiafq/xolver/build/src/libxolver_core.a": "5d4675b9938b5d41c419e8c901637950d2f4be91f90e6a07897566e68d927ca9",
+        "/pub/data/jiafq/xolver/build/tests/xolver_unit_tests": "2f5e00d54ed3dcc160ca88b28857daa25cfed6d42612485292c56303cd70c03f",
+        "/pub/data/jiafq/xolver/validation/arithmetic-r103/monomial-fold-r1227/xolver": "577dafe83e1d8f5bb7c1f7f78f6d968ef2afb6e7127f2e80f7f8de6402845d8e",
+        "/pub/data/jiafq/xolver/validation/arithmetic-r103/monomial-fold-r1227/xolver-sv": "90b5f0a7fef48b3241aefd1a721a851050dd4eedeb1e4ac8767a194402fc443e",
+        "/pub/data/jiafq/xolver/validation/arithmetic-r103/monomial-fold-r1227/xolver-parallel-worker": "79cade8ff87d0c0e527837538a094fc146231cbc8d0dda18e15d88e3a56d1b5f"
+      },
+      "logs": {
+        "counterfactual-esrch.log": "4235bdbf4594544f5ecbc31f3a756f0287b7255efb9f2b2a4b0f78ff3ae5db79",
+        "native-cancellation-3.log": "4874efff59feddeea8b1cfa35e777f7a343b62c055f9e9fd1fe92e1c91ef7f88",
+        "native-cancellation-1.log": "328d7f59c382d8fc5adbe35367198da13469f708b9c8ac9f81646e76cf3c8525",
+        "native-cancellation-0.log": "52254b5d41104c5c88360fbb0f0b5bdb3234df1a6649dae9197f30965129f737",
+        "native-cancellation-4.log": "52254b5d41104c5c88360fbb0f0b5bdb3234df1a6649dae9197f30965129f737",
+        "fixed-esrch.log": "52254b5d41104c5c88360fbb0f0b5bdb3234df1a6649dae9197f30965129f737",
+        "regression-harness.log": "aee733c13378480a6ca3b7e091a1d0a711c933f3a4d19208ccbdea2314341dd2",
+        "native-cancellation-2.log": "f13b5e475208c9e2592e492848252d18159dba40fcc7bda21d4348bfe143ce48"
+      },
+      "metrics": {
+        "completed": 1,
+        "failures": 0
+      },
+      "failed_ci": "https://github.com/fuqi-jia/Xolver/actions/runs/41192531385",
+      "failed_job": 124512115205,
+      "protected_sets_used": false,
+      "boundary": "Test-only Linux procfs reaping race: ENOENT and ESRCH both mean the already-killed descendant has disappeared. Live-process, timeout and reply-reuse assertions remain. The same deterministic ESRCH injection fails the old test and passes the fixed test; five ordinary real cancellation checks and the complete regression harness pass. Every other qualified source and all frozen native artifacts stay byte-identical; no native rebuild or fixed160 rerun is needed."
+    }
+  },
+  "parent_main_ci_status": "success"
 }

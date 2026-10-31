@@ -59,13 +59,23 @@ All160 original triads are budget-valid; no replacement is needed. Seven
 unconfirmed Z3 UNSATs stay excluded. Exact delivery-head PR CI and postmerge
 main CI remain required. Audit-document delivery updates need no extra server
 archive. See [the phase evidence](FIXED_FACTOR_MONOMIAL_STAGE_20261031.json).
+PR88 delivery CI41192531385 passes proofs, native units, all941 regressions
+and136 quantified differential cases, but fails the process-cancellation test:
+Linux can return ESRCH when `/proc/<pid>/stat` disappears during a read. Handle
+`ProcessLookupError` alongside `FileNotFoundError`; keep the live-descendant,
+timeout and stale-reply assertions. R1238 deterministically reproduces the old
+failure, passes the fixed test, five ordinary cancellations and the full tool
+harness. Only this test and audit documents change; qualified solver sources,
+CLI/SV/worker/library/unit bytes and full160 evidence are reused. Rerun exact-head
+PR CI before merge; no extra server archive is needed.
+
 Both protected sets remain unused; Xolver has not surpassed Z3. The controlled
 current-kernel QCP comparison is running separately and supplies no score yet.
 
 PR87 is merged as main `f5e75646`; exact delivery `dd2e3510` passes both jobs of
 [PR CI41189844465](https://github.com/fuqi-jia/Xolver/actions/runs/41189844465).
 [Postmerge main CI41191532259](https://github.com/fuqi-jia/Xolver/actions/runs/41191532259)
-is the required main receipt; confirm both jobs before closing that delivery.
+passes both jobs; the PR87 delivery is complete.
 
 [PR87](https://github.com/fuqi-jia/Xolver/pull/87) implements generic exact root
 refutations, complete square models and canonical algebraic model/DSL output,
