@@ -48,9 +48,6 @@ public:
     // Model extraction: returns the last SAT sample point
     std::optional<SamplePoint> getModel() const;
 
-    // Format an algebraic root as (AlgebraicNumber (poly ...) (lower ...) (upper ...))
-    std::string formatAlgebraicRoot(const AlgebraicRoot& root) const;
-
     // Convert a CDCAC sample value (rational or algebraic root) to the unified
     // RealValue type — the bridge from the CDCAC number system to the rest of
     // the solver / model output.  Rational → RealValue::fromMpq; AlgebraicRoot

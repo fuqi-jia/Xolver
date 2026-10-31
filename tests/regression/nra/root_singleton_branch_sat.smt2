@@ -1,0 +1,11 @@
+(set-logic QF_NRA)
+(set-info :status sat)
+(declare-const x Real)
+(declare-const y Real)
+(declare-const z Real)
+(declare-const w Real)
+(declare-const t Real)
+(assert (or
+  (and (= (+ x y) 0) (= (- x y) 0) (= z (* x w)) (= (* z t) 1))
+  (and (= x 1) (= y 0) (= z 1) (= w 1) (= t 1))))
+(check-sat)

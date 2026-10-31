@@ -15,11 +15,17 @@ namespace xolver {
 // newly observed LP points refine a fresh traversal. Every original polynomial
 // is checked at the complete point.
 // Alternative covers share one call allocation and own independent contexts.
-// Failure has no refutation meaning. No state or local conflict escapes a call.
+// A root refutation uses only original affine atoms and exact fixed values
+// entailed by them. Sampled-parameter conflicts remain local to the traversal.
 class PartialLinearModelSearch {
 public:
     struct Constraint { PolyId poly; Relation rel; };
     using Model = std::unordered_map<VarId, mpq_class>;
+    struct RootRefutation {
+        // Indices into the supplied original constraints. Their conjunction
+        // is infeasible over the reals, independently of candidate choices.
+        std::vector<size_t> premises;
+    };
     struct Allocation {
         std::chrono::milliseconds time;
         size_t work;
@@ -39,12 +45,15 @@ public:
 
     // Integer clients require an integral complete model; real clients accept
     // rational models. Endpoint ordering is shared; admissibility is domain
-    // specific. This method never returns a conflict or an UNSAT result.
+    // specific. A missing model is inconclusive unless rootRefutation is set.
+    // The optional refutation output is cleared on entry; exhaustion, rejected
+    // candidates and unsupported arithmetic never produce a refutation.
     static std::optional<Model> trySolve(const std::vector<Constraint>& constraints,
                                          PolynomialKernel& kernel,
                                          bool integerDomain = false,
                                          Statistics* statistics = nullptr,
-                                         Allocation allocation = Allocation());
+                                         Allocation allocation = Allocation(),
+                                         std::optional<RootRefutation>* rootRefutation = nullptr);
 };
 
 } // namespace xolver

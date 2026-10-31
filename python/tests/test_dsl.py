@@ -1,5 +1,8 @@
 """z3-flavored Pythonic API."""
 import pytest
+from fractions import Fraction
+
+from xolver.dsl import AlgebraicNumber, _parse_value
 
 from xolver import (
     Solver, Int, Real, Bool, And, Or, Not, Implies, Ite, Distinct,
@@ -41,9 +44,23 @@ def test_nonlinear_real():
     s.add(a * a == 2, a > 0)
     assert s.check() == sat
     val = s.model()[a]
-    # a == sqrt(2): the model value squared should be 2 (exact rational approx
-    # or algebraic — at minimum the verdict is sat).
-    assert val is not None
+    assert isinstance(val, AlgebraicNumber)
+    assert val.coeffs == [1, 0, -2]
+    assert 0 < val.lower < val.upper
+    assert val.lower ** 2 < 2 < val.upper ** 2
+
+
+def test_exact_algebraic_model_bounds():
+    raw = ("(root-of-with-interval (coeffs (- 1) 0 2) "
+           "(- (/ 3.0 4.0)) (- (/ 1.0 4.0)))")
+    value = _parse_value(raw)
+    assert isinstance(value, AlgebraicNumber)
+    assert value.raw == raw
+    assert value.coeffs == [2, 0, -1]
+    assert value.lower == Fraction(-3, 4)
+    assert value.upper == Fraction(-1, 4)
+    malformed = "(root-of-with-interval (coeffs (- 2) 0 1) 2.0 1.0)"
+    assert _parse_value(malformed) == malformed
 
 
 def test_module_default_solver():

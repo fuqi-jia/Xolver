@@ -8,6 +8,67 @@
 
 using namespace xolver;
 
+TEST_CASE("partial linear model: root singleton propagation exposes an unconditional refutation") {
+    auto kernel = createPolynomialKernel();
+    const auto x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    const auto y = kernel->mkVar(kernel->getOrCreateVar("y"));
+    const auto z = kernel->mkVar(kernel->getOrCreateVar("z"));
+    const auto w = kernel->mkVar(kernel->getOrCreateVar("w"));
+    const auto t = kernel->mkVar(kernel->getOrCreateVar("t"));
+    std::vector<PartialLinearModelSearch::Constraint> constraints{
+        {x, Relation::Eq},
+        {kernel->sub(x, y), Relation::Eq},
+        {kernel->sub(z, kernel->mul(y, w)), Relation::Eq},
+        {kernel->sub(kernel->mul(z, t), kernel->mkOne()), Relation::Eq},
+        {w, Relation::Geq}
+    };
+    for (const bool integerDomain : {false, true}) {
+        PartialLinearModelSearch::Statistics stats;
+        std::optional<PartialLinearModelSearch::RootRefutation> refutation;
+        CHECK_FALSE(PartialLinearModelSearch::trySolve(constraints, *kernel, integerDomain,
+            &stats, PartialLinearModelSearch::Allocation(), &refutation));
+        INFO("propagated=" << stats.propagatedFacts << " choices=" << stats.choices
+             << " exhausted=" << stats.exhausted);
+        REQUIRE(refutation.has_value());
+        CHECK((refutation->premises == std::vector<size_t>{0, 1, 2, 3}));
+        CHECK(stats.propagatedFacts >= 3);
+        CHECK(stats.choices == 0);
+        CHECK_FALSE(stats.exhausted);
+
+        auto satisfiable = constraints;
+        satisfiable[3].poly = kernel->mul(z, t);
+        const auto model = PartialLinearModelSearch::trySolve(satisfiable, *kernel, integerDomain,
+            &stats, PartialLinearModelSearch::Allocation(), &refutation);
+        REQUIRE(model.has_value());
+        CHECK_FALSE(refutation.has_value());
+        for (const auto& c : satisfiable) {
+            const auto sign = kernel->sgnVarId(c.poly, *model);
+            CHECK((c.rel == Relation::Eq ? sign == 0 : sign >= 0));
+        }
+    }
+}
+
+TEST_CASE("partial linear model: rejected candidates and exhaustion never escape as root refutations") {
+    auto kernel = createPolynomialKernel();
+    const auto x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    const auto square = kernel->sub(kernel->pow(x, 2), kernel->mkConst(mpq_class(2)));
+    std::optional<PartialLinearModelSearch::RootRefutation> refutation{
+        PartialLinearModelSearch::RootRefutation{{99}}};
+    PartialLinearModelSearch::Statistics stats;
+    CHECK_FALSE(PartialLinearModelSearch::trySolve({{square, Relation::Eq}}, *kernel, false,
+        &stats, PartialLinearModelSearch::Allocation(), &refutation));
+    CHECK(stats.rejectedChoices > 0);
+    CHECK_FALSE(refutation.has_value());
+    const auto tiny = PartialLinearModelSearch::Allocation(std::chrono::milliseconds(100), 1);
+    CHECK_FALSE(PartialLinearModelSearch::trySolve({{square, Relation::Eq}}, *kernel, false,
+        &stats, tiny, &refutation));
+    CHECK(stats.exhausted);
+    CHECK_FALSE(refutation.has_value());
+    CHECK_FALSE(PartialLinearModelSearch::trySolve({{NullPoly, Relation::Eq}}, *kernel, false,
+        &stats, PartialLinearModelSearch::Allocation(), &refutation));
+    CHECK_FALSE(refutation.has_value());
+}
+
 TEST_CASE("boundary candidates: theory endpoints are upper first without arithmetic assumptions") {
     CHECK((boundaryCandidates<int>(1, 5) == std::vector<int>{5, 1}));
     CHECK((boundaryCandidates<int>(5, 5) == std::vector<int>{5}));

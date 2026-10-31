@@ -4,12 +4,92 @@
 // the square-defined QF_NRA gap (e.g. Geogebra IsoRightTriangle, model in Q(sqrt2)).
 #include <doctest/doctest.h>
 #include <gmpxx.h>
+#include <algorithm>
 
 #include "search/nra/NraSquareSolver.h"
 #include "algebra/poly/PolynomialKernel.h"
 #include "algebra/poly/RationalPolynomial.h"
+#include "base/WorkBudget.h"
 
 using namespace xolver;
+
+TEST_CASE("trySquareCascade: construction exhaustion leaves no model and a fresh allocation can retry") {
+    auto kernel = createPolynomialKernel();
+    auto& k = *kernel;
+    const VarId x = k.getOrCreateVar("budget-x"), y = k.getOrCreateVar("budget-y");
+    const auto xp = k.mkVar(x), yp = k.mkVar(y);
+    const std::vector<std::pair<PolyId, Relation>> constraints = {
+        {k.sub(k.pow(xp, 2), k.mkConst(2)), Relation::Eq},
+        {k.sub(k.sub(yp, xp), k.mkConst(1)), Relation::Eq},
+        {xp, Relation::Gt}};
+    std::vector<std::pair<VarId, RealValue>> model{{x, RealValue::fromInt(7)}};
+    WorkBudget shortAllocation(1);
+    CHECK_FALSE(trySquareCascade(constraints, k, &model, &shortAllocation));
+    CHECK(model.empty());
+    WorkBudget freshAllocation(200000);
+    REQUIRE(trySquareCascade(constraints, k, &model, &freshAllocation));
+    CHECK(freshAllocation.used() > shortAllocation.used());
+    REQUIRE(model.size() == 2);
+    CHECK(std::count_if(model.begin(), model.end(), [&](const auto& entry) { return entry.first == x; }) == 1);
+    CHECK(std::count_if(model.begin(), model.end(), [&](const auto& entry) { return entry.first == y; }) == 1);
+    for (const auto& [variable, value] : model) {
+        REQUIRE(value.isAlgebraic());
+        const auto& root = value.asAlgebraic();
+        const std::vector<mpz_class> expected = variable == x
+            ? std::vector<mpz_class>{-2, 0, 1} : std::vector<mpz_class>{-1, -2, 1};
+        CHECK(root.coefficients == expected);
+        CHECK(root.lower > 0);
+    }
+    CHECK(trySquareCascade(constraints, k, &model));
+    CHECK(model.size() == 2);
+}
+
+TEST_CASE("trySquareCascade: stable root aliases finish within a shared construction allocation") {
+    auto kernel = createPolynomialKernel();
+    auto& k = *kernel;
+    const auto x = k.getOrCreateVar("stable-x"), y = k.getOrCreateVar("stable-y");
+    const auto xp = k.mkVar(x), yp = k.mkVar(y);
+    const auto square = k.sub(k.pow(xp, 2), k.mkConst(2));
+    const std::vector<std::pair<PolyId, Relation>> constraints = {
+        {square, Relation::Eq}, {square, Relation::Eq},
+        {k.sub(k.sub(yp, xp), k.mkConst(1)), Relation::Eq}, {xp, Relation::Gt}};
+    WorkBudget allocation(1000);
+    std::vector<std::pair<VarId, RealValue>> model;
+    REQUIRE(trySquareCascade(constraints, k, &model, &allocation));
+    REQUIRE(model.size() == 2);
+    for (const auto& [variable, value] : model) {
+        REQUIRE(value.isAlgebraic());
+        const std::vector<mpz_class> expected = variable == x
+            ? std::vector<mpz_class>{-2, 0, 1} : std::vector<mpz_class>{-1, -2, 1};
+        CHECK(value.asAlgebraic().coefficients == expected);
+        CHECK(value.asAlgebraic().lower > 0);
+    }
+}
+
+TEST_CASE("trySquareCascade: validated pure square models need no alias or derived variable") {
+    for (const int squared : {2, 4}) {
+        auto kernel = createPolynomialKernel();
+        auto& k = *kernel;
+        const auto x = k.getOrCreateVar("pure-square-x");
+        const auto xp = k.mkVar(x);
+        const std::vector<std::pair<PolyId, Relation>> constraints = {
+            {k.sub(k.pow(xp, 2), k.mkConst(squared)), Relation::Eq}, {xp, Relation::Gt}};
+        std::vector<std::pair<VarId, RealValue>> model;
+        WorkBudget allocation(1000);
+        REQUIRE(trySquareCascade(constraints, k, &model, &allocation));
+        REQUIRE(model.size() == 1);
+        CHECK(model[0].first == x);
+        if (squared == 4) {
+            REQUIRE(model[0].second.isRational());
+            CHECK(model[0].second.asRational() == 2);
+        } else {
+            REQUIRE(model[0].second.isAlgebraic());
+            const std::vector<mpz_class> expected{-2, 0, 1};
+            CHECK(model[0].second.asAlgebraic().coefficients == expected);
+            CHECK(model[0].second.asAlgebraic().lower > 0);
+        }
+    }
+}
 
 TEST_CASE("rationalSqrt: perfect vs non-perfect rational squares") {
     mpq_class root;
@@ -269,15 +349,23 @@ TEST_CASE("trySquareCascade: rational-multiple generators collapse (sqrt2 and sq
     std::vector<std::pair<VarId, RealValue>> model;
     CHECK(trySquareCascade(cons, k, &model));
 
-    // A genuinely DISTINCT second generator (sqrt(3) vs sqrt(1/2)) must NOT collapse:
-    // 1/2 and 3 differ by a non-square ratio, so the cascade cannot place both in one
-    // field and returns false (no false sat).
+    // Distinct generators stay independent. Each isolated square can still
+    // supply its own exact algebraic value in the complete model.
     VarId d = k.getOrCreateVar("d");
     PolyId ed = k.add(k.pow(V(d), 2), C(-3));               // d^2 - 3
     std::vector<std::pair<PolyId, Relation>> cons2 = {
         {ea, Relation::Eq}, {ed, Relation::Eq}, {V(a), Relation::Gt}, {V(d), Relation::Gt},
     };
-    CHECK_FALSE(trySquareCascade(cons2, k, nullptr));
+    std::vector<std::pair<VarId, RealValue>> independent;
+    REQUIRE(trySquareCascade(cons2, k, &independent));
+    REQUIRE(independent.size() == 2);
+    for (const auto& [variable, value] : independent) {
+        REQUIRE(value.isAlgebraic());
+        const std::vector<mpz_class> expected = variable == a
+            ? std::vector<mpz_class>{-1, 0, 2} : std::vector<mpz_class>{-3, 0, 1};
+        CHECK(value.asAlgebraic().coefficients == expected);
+        CHECK(value.asAlgebraic().lower > 0);
+    }
 }
 
 TEST_CASE("trySquareCascade: coupled linear subsystem (Gaussian elimination over a generator)") {

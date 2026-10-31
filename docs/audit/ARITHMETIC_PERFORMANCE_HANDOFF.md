@@ -40,8 +40,29 @@ Older tables describe their own frozen versions and evidence boundaries.
 
 ## Current arithmetic and ASP continuation
 
-[PR86](https://github.com/fuqi-jia/Xolver/pull/86) repairs NIA model invalidation
-and publication of refinements at complete candidate checks, core `46049166`.
+[PR87](https://github.com/fuqi-jia/Xolver/pull/87) implements generic exact root
+refutations, complete square models and canonical algebraic model/DSL output,
+core `ffa78765`. R1215 qualifies the canonical source, CLI/SV/worker and native
+Python extension; all39 R1217 server groups pass, including1891 unit cases /
+986840 assertions and31 Python API tests. R1220 seals fresh fixed160:
+**101 baseline/101 candidate/117 verified Z3**, no solving gain/loss,
+opposite verdict or invalid model. Single-round verified PAR-2 is
+7386.707/7382.464/5452.788; the4.243s difference is not an established whole-suite
+speedup. Unknowns are1/2 for baseline/candidate; neither protected set was used.
+One budget-invalid original triad144 is retained and fully replaced after
+termination. Seven unconfirmed Z3 UNSATs remain excluded. See
+[the phase evidence](NRA_ROOT_REFUTATION_STAGE_20261031.json). Delivery uses the
+qualified code commit, Git/CI and binary hashes; document-only updates need no
+extra server current-main archive. Verify exact delivery-head PR CI before
+merge and postmerge main CI afterward.
+
+
+[PR86](https://github.com/fuqi-jia/Xolver/pull/86) is merged as main `bcd63cf9`.
+Its delivery head `5e9f1c3b` passes both jobs of
+[PR CI41180597606](https://github.com/fuqi-jia/Xolver/actions/runs/41180597606),
+and [main CI41182337244](https://github.com/fuqi-jia/Xolver/actions/runs/41182337244)
+is fully green. It repairs NIA model invalidation and publication of refinements
+at complete candidate checks, core `46049166`.
 R1141 qualifies the canonical source and binaries; all 39 R1143 native groups
 pass, including 1886 unit cases / 986763 assertions. R1145 seals the fresh
 fixed160 comparison: **101 delivered main / 101 candidate / 117 verified Z3**,
@@ -50,7 +71,9 @@ Seven unconfirmed Z3 UNSATs remain excluded. This is a correctness repair;
 the 1.874s single-round PAR-2 difference does not establish a speedup.
 [Phase evidence](NIA_MODEL_STATE_STAGE_20261031.json) binds the source, frozen
 binaries, acceptance and replacement of two terminal budget-invalid triads.
-Exact delivery-head PR CI and postmerge main CI remain required.
+R1152 binds the final audit documents to unchanged accepted solver sources,
+executables and library; acceptance and comparison reuse follows byte identity.
+Both delivery-head and postmerge CI pass; no extra server archive is required.
 
 R1142 separately audits the preceding delivered residue kernel on the original
 branch, GCD and max3 programs: each backend verifies 3 programs, 4 functions,
@@ -3678,8 +3701,9 @@ triads: verified101/101/117, no gains/losses/opposites/invalid models. Two
 complete triads4/10 replace terminal wall-budget failures; all originals remain.
 Verified PAR-2 is7386.098/7384.224/5484.627. This is a correctness repair with no
 established whole-suite speedup. Seven unconfirmed Z3 UNSATs remain excluded.
-See [the phase evidence](NIA_MODEL_STATE_STAGE_20261031.json). Exact delivery-head
-PR86 CI and postmerge main CI remain delivery gates at this snapshot.
+See [the phase evidence](NIA_MODEL_STATE_STAGE_20261031.json). R1152 qualifies
+the final document-only head by unchanged solver artifacts. PR86 is merged as
+main bcd63cf9; delivery-head CI41180597606 and main CI41182337244 both pass.
 
 All six fresh R1124 original-program runs now reach actual controller `done`:
 branch, GCD and max3 with each backend, using the frozen residue worker/Z3 and
@@ -3700,3 +3724,55 @@ variables already invalid. Such moves account for78/7540091,0/16387442 and
 changed. This does not explain the dense exact-arithmetic cost and must not
 be promoted as an optimization. The next observer measures pivot coefficient
 widths and eligible unit alternatives before choosing a new algorithm.
+
+R1171 closes three implemented linear pilots without promotion. Assignment-only
+repair has no gain in eight cases and slows SAT59 from3.225s to7.381s; its full
+unit run also exposes a basis-forcing fixture and an unchecked huge-power
+materialization helper in a direct component test. The production NRA caller
+already caps direction magnitudes at64. A10ms partial feasibility quantum
+passes1886 cases but gains no solve in eight valid triads. Propagation-before-LP
+loses SAT59 and fails six existing Standard-effort consistency contracts.
+The single invalid quantum triad51 is replaced completely after its original
+job terminates; every raw original remains. None of these changes is in main.
+Closed audit SHA-256:
+`c40ced1c1c01fbd7f95e0c25f1ad04a5c5e5679eb0f941d9483cd0d5be7c42bf`.
+
+
+## NRA root refutations and complete square models (R1174–R1214)
+
+The development prototype now exposes unconditional contradictions previously
+lost by partial-linear model search. Exact singleton substitutions preserve a
+transitive set of original premises; candidate choices and resource exhaustion
+cannot produce a root refutation. On the original69/146 inputs, the observer
+exports33 distinct conflicts with4–7 premises; frozen Z3 and cvc5 independently
+refute every exported subset. The partial-affine stage precedes repeated global
+box analysis, avoiding that work when the exact affine closure already refutes
+the current Boolean candidate. No new control or file-specific rule is added.
+
+Square-cascade construction shares the existing WorkBudget across attempts,
+stops stable canonical substitution passes, omits identity aliases, and retains
+fully validated independent-root and rational models. NRA getModel now emits
+exact canonical algebraic values instead of an "alg" marker. The duplicate old
+formatter/parser are removed; the Python DSL reads canonical root coefficients
+and rational isolating bounds.
+
+R1200 passes1891 native unit cases/986840 assertions; its native Python extension
+passes31 API tests. The additional stage order passes80 focused cases and the
+complete fixed160 NRA slice: fresh60s/one physical CPU/16GiB, verified
+**22 baseline/22 candidate/25 Z3**, no gains, losses, opposite verdicts or invalid
+models. Z3 UNSAT159 remains unconfirmed and excluded. Single-round PAR-2 is
+1210.415/1208.257/935.043; original157 is1.921s/0.118s with checked models, while
+65 slows0.065s/0.566s. These observations do not establish a whole-suite speedup
+or superiority. See [prototype evidence](NRA_ROOT_REFUTATION_STAGE_20261031.json).
+
+R1215 then qualifies committed coreffa78765; all39 R1217 server groups pass,
+including1891 cases/986840 assertions and31 same-core Python tests. R1220 seals
+fresh full160: verified101/101/117, no solving gain/loss or wrong/invalid model,
+PAR-27386.707/7382.464/5452.788. Baseline/candidate unknowns are1/2;156 changes
+from timeout to unknown and remains unsolved. Original triad144 is excluded
+solely for a measured389.735s baseline wall-budget violation after its run
+terminates; a complete valid replacement is selected. The raw original remains
+immutable. Seven unconfirmed Z3 UNSATs remain excluded. Both protected sets and
+a current-kernel controlled original-program QCP comparison remain outstanding.
+PR87 exact delivery-head CI and postmerge main CI complete the merge checks;
+no extra server current-main archive is required.

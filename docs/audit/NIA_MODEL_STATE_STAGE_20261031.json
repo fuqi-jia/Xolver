@@ -950,5 +950,14 @@
     }
   ],
   "protected_sets_used": false,
-  "boundary": "Correctness/state lifecycle repair. No fixed160 solving gain or loss; the single-round 1.874s PAR-2 difference is not an established speedup. All SAT models replay and independent UNSAT evidence is required. Seven unresolved Z3 UNSAT verdicts remain excluded. PR86 exact delivery-head and postmerge CI are still delivery gates at this snapshot."
+  "boundary": "Correctness/state lifecycle repair. No fixed160 solving gain or loss; the single-round 1.874s PAR-2 difference is not an established speedup. All SAT models replay and independent UNSAT evidence is required. Seven unresolved Z3 UNSAT verdicts remain excluded. PR86 final-source identity qualification, exact delivery-head CI and postmerge main CI all pass. No extra current-main archive is required.",
+  "delivery": {
+    "pr": "https://github.com/fuqi-jia/Xolver/pull/86",
+    "head": "5e9f1c3b6f0e33acecd3ba341e4b820c4c421c27",
+    "pr_ci": "https://github.com/fuqi-jia/Xolver/actions/runs/41180597606",
+    "merge_commit": "bcd63cf966ecea4b9f26d137c5b754318df9dd8b",
+    "main_ci": "https://github.com/fuqi-jia/Xolver/actions/runs/41182337244",
+    "all_checks_passed": true,
+    "additional_current_main_archive_required": false
+  }
 }

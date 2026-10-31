@@ -11,6 +11,7 @@ namespace xolver {
 
 class PolynomialKernel;
 class RationalPolynomial;
+class WorkBudget;
 
 // Foundation for the NRA algebraic SQUARE-CASCADE (Task #2: algebraic SAT model
 // construction). The dominant residual QF_NRA gap is square-defined algebraic SAT
@@ -92,9 +93,9 @@ std::optional<int> signOfPolyAtGenerator(const RationalPolynomial& rp, VarId gen
 // DERIVED variable (e.g. m = (4/5)g + 2/5) by its expression in the generator.
 PolyId substituteVarWithPoly(PolyId p, VarId var, PolyId valuePoly, PolynomialKernel& kernel);
 
-// END-TO-END algebraic square-cascade decision. Given a conjunction `cons` of
-// {poly, rel} constraints, attempt to construct + VALIDATE a satisfying model that
-// lives in Q(sqrt c) for a single algebraic generator:
+// Given a conjunction `cons`, construct and VALIDATE a rational or multiquadratic
+// model. Independent square roots remain separate generators; derived values
+// are exported only when the existing exact algebraic representation supports them:
 //   - solve perfect-square / linear equalities to rational values;
 //   - solve non-perfect square equalities to one algebraic generator (collapsing
 //     equal roots), honoring strict single-variable sign bounds;
@@ -105,8 +106,13 @@ PolyId substituteVarWithPoly(PolyId p, VarId var, PolyId valuePoly, PolynomialKe
 // Returns true iff a model is constructed AND every constraint validates (SOUND:
 // nullopt/false on any inconclusive or failing check — never a false SAT). When
 // true and `modelOut` is non-null, fills it with the var -> RealValue assignment.
+// Construction shares one work allocation across all parameter attempts. A
+// supplied budget can be shared with other candidate searches; otherwise the
+// standard WorkBudget allocation is used. Exhaustion returns false and clears
+// modelOut, leaving the complete decision procedure available to the caller.
 bool trySquareCascade(const std::vector<std::pair<PolyId, Relation>>& cons,
                       PolynomialKernel& kernel,
-                      std::vector<std::pair<VarId, RealValue>>* modelOut);
+                      std::vector<std::pair<VarId, RealValue>>* modelOut,
+                      WorkBudget* constructionBudget = nullptr);
 
 }  // namespace xolver
