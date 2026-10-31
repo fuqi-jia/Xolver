@@ -284,30 +284,31 @@ TEST_CASE("partial linear model: private premise dependencies jump over irreleva
     const auto p = kernel->getOrCreateVar("choice");
     const auto pv = kernel->mkVar(p), one = kernel->mkOne();
     std::vector<PartialLinearModelSearch::Constraint> constraints;
-    auto bounds = [&](PolyId poly) {
+    auto bounds = [&](PolyId poly, int upper) {
         constraints.push_back({poly, Relation::Geq});
-        constraints.push_back({kernel->sub(poly, one), Relation::Leq});
+        constraints.push_back({kernel->sub(poly, kernel->mkConst(upper)), Relation::Leq});
     };
-    bounds(pv);
-    constraints.push_back({kernel->sub(kernel->pow(pv, 2), pv), Relation::Eq});
+    bounds(pv, 2);
+    const auto offset = kernel->sub(pv, one);
+    constraints.push_back({kernel->mul(offset, kernel->sub(pv, kernel->mkConst(2))), Relation::Eq});
     std::vector<VarId> independent;
     for (int i = 0; i < 24; ++i) {
         const auto var = kernel->getOrCreateVar("independent_" + std::to_string(i));
         independent.push_back(var);
         const auto poly = kernel->mkVar(var);
-        bounds(poly);
-        constraints.push_back({kernel->sub(kernel->pow(poly, 3), poly), Relation::Eq});
+        bounds(poly, 1);
+        constraints.push_back({kernel->sub(kernel->pow(poly, 11), poly), Relation::Eq});
     }
     const auto q = kernel->getOrCreateVar("last");
     const auto qv = kernel->mkVar(q);
-    bounds(qv);
-    constraints.push_back({kernel->sub(kernel->add(pv, qv), one), Relation::Eq});
-    constraints.push_back({kernel->mul(kernel->pow(pv, 4),
+    bounds(qv, 2);
+    constraints.push_back({kernel->sub(kernel->add(pv, qv), kernel->mkConst(2)), Relation::Eq});
+    constraints.push_back({kernel->mul(kernel->pow(offset, 4),
         kernel->add(kernel->pow(qv, 2), one)), Relation::Eq});
     PartialLinearModelSearch::Statistics statistics;
     const auto model = PartialLinearModelSearch::trySolve(constraints, *kernel, false, &statistics);
     REQUIRE(model.has_value());
-    CHECK(model->at(p) == 0);
+    CHECK(model->at(p) == 1);
     CHECK(model->at(q) == 1);
     for (const auto var : independent)
         CHECK((model->at(var) == 0 || model->at(var) == 1));
