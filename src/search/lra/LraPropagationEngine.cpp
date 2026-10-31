@@ -7,7 +7,6 @@
 #include <map>
 #include <optional>
 #include <limits>
-#include <unordered_map>
 
 namespace xolver {
 namespace {
@@ -23,6 +22,7 @@ struct ExplainedEndpoint {
     std::vector<SatLit> reasons;
     // An unconditional derived bound has an empty, valid explanation.
     bool explained = false;
+    uint64_t version = 0;
     bool usable() const { return value.has_value() && explained; }
 };
 
@@ -70,17 +70,13 @@ struct RowAggregate {
     }
 };
 
-uint64_t sourceKey(SatLit literal) {
-    return (static_cast<uint64_t>(literal.var) << 1) | literal.sign;
-}
-
 struct RowSnapshot {
     int basic = -1;
-    uint64_t revision = 0, builtCall = 0, checkedCall = 0;
+    uint64_t revision = 0, builtCall = 0;
     bool valid = false, insufficientBounds = false;
     std::vector<std::array<Contribution, 2>> contributions;
     RowAggregate minimum, maximum;
-    std::vector<std::pair<uint64_t, uint64_t>> sources;
+    std::vector<std::array<uint64_t, 2>> inputs;
     std::size_t weight = 0;
 };
 
@@ -90,21 +86,15 @@ struct LraPropagationEngine::State {
     const GeneralSimplex* owner = nullptr;
     std::shared_ptr<const void> identity;
     std::vector<std::array<BoundInfo, 2>> inputs;
-    std::unordered_map<uint64_t, uint64_t> sourceVersions;
+    std::vector<std::array<uint64_t, 2>> inputVersions;
     std::vector<std::unique_ptr<RowSnapshot>> rows;
-    uint64_t call = 0;
+    uint64_t call = 0, nextVersion = 1;
     std::size_t weight = 0, evictionCursor = 0;
     static constexpr std::size_t maxWeight = 32768;
 
-    void invalidate(int var, const GeneralSimplex& gs) {
-        for (const auto& incident : gs.tableau().col(var).entries)
-            if (rows[incident.row]) rows[incident.row]->valid = false;
-    }
-
-    void expire(const BoundInfo& input) {
-        if (!input.bound.isFinite() || !input.reason) return;
-        auto& version = sourceVersions[sourceKey(*input.reason)];
-        if (version != std::numeric_limits<uint64_t>::max()) ++version;
+    uint64_t freshVersion() {
+        if (nextVersion == std::numeric_limits<uint64_t>::max()) return nextVersion;
+        return nextVersion++;
     }
 
     RowSnapshot* retain(int row, std::size_t needed) {
@@ -159,7 +149,8 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
     if (!state_ || !identity || state_->owner != &gs || state_->identity != identity ||
         state_->inputs.size() > static_cast<std::size_t>(gs.numVars()) ||
         state_->rows.size() > static_cast<std::size_t>(gs.numRows()) ||
-        state_->call == std::numeric_limits<uint64_t>::max()) {
+        state_->call == std::numeric_limits<uint64_t>::max() ||
+        state_->nextVersion == std::numeric_limits<uint64_t>::max()) {
         state_ = std::make_unique<State>();
         state_->owner = &gs;
         state_->identity = identity;
@@ -184,13 +175,15 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
     ++cache.call;
     const auto oldSize = cache.inputs.size();
     cache.inputs.resize(gs.numVars());
+    cache.inputVersions.resize(gs.numVars());
     for (std::size_t var = oldSize; var < cache.inputs.size(); ++var)
         cache.inputs[var][0] = BoundInfo(BoundValue::negInf());
     cache.rows.resize(gs.numRows());
 
-    // Every call starts with the actual primitive bounds. Retained arithmetic
-    // carries its original SAT premises, whose versions also invalidate proofs
-    // derived through other rows, even when their source is not incident here.
+    // Primitive inputs retain an identity only while value and reason match.
+    // Local deductions get fresh identities on every invocation: an old, valid
+    // theorem must not silently strengthen this call's overlay or change its
+    // bounded propagation sequence. Zero identifies an unavailable endpoint.
     std::vector<std::array<ExplainedEndpoint, 2>> bounds(gs.numVars());
     for (int var = 0; var < gs.numVars(); ++var) {
         const auto state = gs.varState(var);
@@ -201,8 +194,7 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
             const auto& current = *sources[side];
             if (previous.bound.kind != current.bound.kind || previous.reason != current.reason ||
                 (current.bound.isFinite() && previous.bound.value != current.bound.value)) {
-                cache.expire(previous);
-                cache.expire(current);
+                cache.inputVersions[var][side] = cache.freshVersion();
                 previous = current;
                 changed = true;
             }
@@ -212,10 +204,10 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
             if (sources[side]->reason) {
                 target.reasons.push_back(*sources[side]->reason);
                 target.explained = true;
+                target.version = cache.inputVersions[var][side];
             }
         }
         if (changed) {
-            cache.invalidate(var, gs);
             if (statistics) ++statistics->changedInputs;
         }
     }
@@ -249,10 +241,10 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
         // Materialize explanations only for a genuinely stronger bound.
         auto reasons = aggregate.explain(excluded, required, budget.maxReasonSize);
         if (!reasons) return false;
-        if (gs.basicRowOfVar(var) < 0) cache.invalidate(var, gs);
         target.value = value;
         target.reasons = *reasons;
         target.explained = true;
+        target.version = cache.freshVersion();
         accepted.push_back({var, lower, value, std::move(*reasons)});
         if (consume) {
             const auto beforeConsumer = std::chrono::steady_clock::now();
@@ -281,17 +273,20 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
         std::optional<RowSnapshot> temporary;
         RowSnapshot* snapshot = cache.retain(rowIndex, row.entries.size() + 1);
         if (!snapshot) { temporary.emplace(); snapshot = &*temporary; }
-        if (snapshot->valid && snapshot->checkedCall != cache.call) {
-            for (const auto& [source, version] : snapshot->sources) {
-                const auto found = cache.sourceVersions.find(source);
-                if (found == cache.sourceVersions.end() || found->second != version ||
-                    version == std::numeric_limits<uint64_t>::max()) {
+        if (snapshot->valid && snapshot->basic == item.basic && snapshot->revision == row.version) {
+            for (std::size_t index = 0; index < snapshot->inputs.size(); ++index) {
+                const auto& entry = row.entries[index];
+                const auto& variable = bounds[entry.col];
+                const std::array<uint64_t, 2> inputs = entry.coeff == 0 ?
+                    std::array<uint64_t, 2>{0, 0} :
+                    std::array<uint64_t, 2>{variable[0].version, variable[1].version};
+                if (snapshot->inputs[index] != inputs || inputs[0] == std::numeric_limits<uint64_t>::max() ||
+                    inputs[1] == std::numeric_limits<uint64_t>::max()) {
                     snapshot->valid = false;
                     if (statistics) ++statistics->expiredSources;
                     break;
                 }
             }
-            snapshot->checkedCall = cache.call;
         }
         if (!snapshot->valid || snapshot->basic != item.basic || snapshot->revision != row.version ||
             row.version == std::numeric_limits<uint64_t>::max()) {
@@ -300,20 +295,23 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
             snapshot->weight = weight;
             snapshot->basic = item.basic;
             snapshot->revision = row.version;
-            snapshot->builtCall = snapshot->checkedCall = cache.call;
+            snapshot->builtCall = cache.call;
             auto& contributions = snapshot->contributions;
             if (statistics) ++statistics->rowSnapshots;
             // A forward bound needs every contribution; a backward bound can
             // omit only its target. Two unavailable endpoints in EACH extremum
             // rule out both directions, regardless of the basic variable's
             // bounds. Detect that before doing rational arithmetic or building
-            // explanations. A new non-basic bound invalidates and requeues
-            // incident rows, so this cannot hide a later deduction.
+            // explanations. The inspected prefix alone witnesses both missing
+            // extrema. Its input identities suffice to validate that negative
+            // result; productive snapshots record every term's inputs.
             int missingMinimum = 0, missingMaximum = 0;
             for (const auto& entry : row.entries) {
                 if (exhausted()) return accepted;
-                if (entry.coeff == 0) continue;
                 const auto& variable = bounds[entry.col];
+                snapshot->inputs.push_back(entry.coeff == 0 ? std::array<uint64_t, 2>{0, 0} :
+                    std::array<uint64_t, 2>{variable[0].version, variable[1].version});
+                if (entry.coeff == 0) continue;
                 const size_t minSide = entry.coeff > 0 ? 0 : 1;
                 missingMinimum += !variable[minSide].usable();
                 missingMaximum += !variable[1 - minSide].usable();
@@ -336,15 +334,6 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
                     if (statistics) ++statistics->termPairs;
                 }
             }
-            for (const auto* aggregate : {&snapshot->minimum, &snapshot->maximum}) {
-                for (const auto& [reason, count] : aggregate->reasonCounts) {
-                    const auto key = sourceKey(reason);
-                    snapshot->sources.emplace_back(key, cache.sourceVersions.at(key));
-                }
-            }
-            std::sort(snapshot->sources.begin(), snapshot->sources.end());
-            snapshot->sources.erase(std::unique(snapshot->sources.begin(), snapshot->sources.end()),
-                                    snapshot->sources.end());
             snapshot->valid = true;
         } else if (statistics) {
             ++statistics->snapshotHits;

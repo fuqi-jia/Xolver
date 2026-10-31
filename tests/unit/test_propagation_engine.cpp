@@ -218,6 +218,46 @@ TEST_CASE("LraPropagationEngine: retained rows isolate recursive consumers") {
     }
 }
 
+TEST_CASE("LraPropagationEngine: retained rows preserve cold propagation prefixes") {
+    GeneralSimplex gs;
+    const int x = gs.addVar("prefix-x"), y = gs.addVar("prefix-y"), z = gs.addVar("prefix-z");
+    const int s = gs.addConstraint({{x, 1}, {y, -1}}, 0);
+    gs.addConstraint({{y, 1}, {z, 1}}, 0);
+    LraPropagationEngine engine;
+    REQUIRE(gs.assertLower(s, mkBound(1, 1)));
+    REQUIRE(gs.assertUpper(x, mkBound(2, 2)));
+    REQUIRE(gs.assertUpper(z, mkBound(3, 3)));
+    engine.propagateAll(gs, {64, 256, 12, 1000});
+    auto coldPrefix = engine;
+    CHECK(coldPrefix.propagateAll(gs, {64, 3, 12, 1000}).empty());
+    // The previous closure knew y <= 1 and t <= 4. Reusing that theorem here
+    // would emit t <= 4 before this bounded scan has derived y <= 1 again.
+    CHECK(engine.propagateAll(gs, {64, 3, 12, 1000}).empty());
+    for (int round = 0; round < 24; ++round) {
+        gs.resetActiveBounds();
+        REQUIRE(gs.assertLower(s, mkBound(1 - round % 5, 1)));
+        REQUIRE(gs.assertUpper(x, mkBound(2, 2)));
+        REQUIRE(gs.assertUpper(z, mkBound(3, 3)));
+        if (round % 2) REQUIRE(gs.assertLower(y, mkBound(-4, 4)));
+        REQUIRE(gs.check() == GeneralSimplex::Result::Sat);
+        for (const int limit : {1, 2, 8, 64}) {
+            // Copies retain the circular scheduling hint, but start without a
+            // cache. Compare the entire observable sequence at fixed budgets.
+            auto cold = engine;
+            const PropagationBudget budget{limit, 3 + round % 10, 12, 1000};
+            const auto expected = cold.propagateAll(gs, budget);
+            const auto actual = engine.propagateAll(gs, budget);
+            REQUIRE(actual.size() == expected.size());
+            for (std::size_t i = 0; i < actual.size(); ++i) {
+                CHECK(actual[i].var == expected[i].var);
+                CHECK(actual[i].isLower == expected[i].isLower);
+                CHECK(actual[i].value == expected[i].value);
+                CHECK(actual[i].reasons == expected[i].reasons);
+            }
+        }
+    }
+}
+
 TEST_CASE("LraPropagationEngine: unavailable extrema skip arithmetic until bounds arrive") {
     GeneralSimplex gs;
     const int x = gs.addVar("availability-x"), y = gs.addVar("availability-y"), z = gs.addVar("availability-z");
