@@ -62,6 +62,7 @@ TheoryCheckResult NiaSolver::assertInterfaceEquality(
     if (!cc.isConstraint())
         return TheoryCheckResult::consistent();
 
+    currentModel_.reset();
     interfaceEqualities_.push_back({a, b, reason, level, cc.diff, Relation::Eq});
     return TheoryCheckResult::consistent();
 }
@@ -83,6 +84,7 @@ TheoryCheckResult NiaSolver::assertInterfaceDisequality(
     if (!cc.isConstraint())
         return TheoryCheckResult::consistent();
 
+    currentModel_.reset();
     interfaceDisequalities_.push_back({a, b, reason, level, cc.diff, Relation::Neq});
     return TheoryCheckResult::consistent();
 }

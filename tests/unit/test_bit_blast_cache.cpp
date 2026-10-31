@@ -5,6 +5,10 @@
 #include "applications/satisfiability/smt/qfnia/NiaSolver.h"
 #include "search/arith/Reasoner.h"
 #include "search/coordination/TheoryLemmaDatabase.h"
+#include "search/boolean/Atomizer.h"
+#include "search/coordination/TheoryManager.h"
+#include "search/sat/CadicalBackend.h"
+#include "search/sat/CadicalTheoryPropagator.h"
 #include <algorithm>
 #include <chrono>
 #include <stdexcept>
@@ -39,6 +43,13 @@ public:
             if (stage->name() == name) return stage->run(db, TheoryEffort::Full);
         throw std::runtime_error("missing NIA stage: " + name);
     }
+    std::optional<TheoryCheckResult> runStageAt(const std::string& name,
+        TheoryLemmaStorage& db, TheoryEffort effort) {
+        for (auto& stage : reasoners_)
+            if (stage->name() == name)
+                return stage->runsAt(effort) ? stage->run(db, effort) : std::nullopt;
+        throw std::runtime_error("missing NIA stage: " + name);
+    }
     std::optional<TheoryCheckResult> runThroughEarly(TheoryLemmaStorage& db) {
         for (auto& stage : reasoners_) {
             const auto result = stage->run(db, TheoryEffort::Full);
@@ -47,6 +58,131 @@ public:
         throw std::runtime_error("missing early bit-blast stage");
     }
 };
+}
+
+TEST_CASE("NiaSolver: new constraints invalidate a cached integer point across withdrawal") {
+    env::Scope scope(env::Snapshot::capture({{"XOLVER_NIA_BB_EARLY_MIN_ACTIVE", "0"}}));
+    auto kernel = createPolynomialKernel();
+    const auto p = kernel->mkVar(kernel->getOrCreateVar("p"));
+    const auto x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    const auto product = kernel->sub(kernel->mul(p, x), kernel->mkConst(1002));
+    const auto p1 = kernel->sub(p, kernel->mkConst(1));
+    const auto p2 = kernel->sub(p, kernel->mkConst(2));
+    BitBlastStageProbe solver(std::move(kernel));
+    TheoryLemmaDatabase db;
+    auto assertConstraint = [&](PolyId poly, Relation relation, unsigned reason, int level) {
+        TheoryAtomRecord atom{reason, TheoryId::NIA, false, NullExpr,
+            PolynomialAtomPayload{poly, relation, RealValue::fromInt(0)}};
+        solver.assertLit(atom, true, level, SatLit::positive(reason));
+    };
+    assertConstraint(product, Relation::Eq, 1, 0);
+    for (const auto& [anchor, expected, reason] :
+            std::vector<std::tuple<PolyId, int, unsigned>>{{p1, 1002, 2}, {p2, 501, 3}}) {
+        assertConstraint(anchor, Relation::Eq, reason, 1);
+        REQUIRE_FALSE(solver.runStage("nia.normalize", db).has_value());
+        REQUIRE_FALSE(solver.runStage("nia.domain", db));
+        REQUIRE_FALSE(solver.getModel());
+        const auto result = solver.runStage("nia.bit-blast-early", db);
+        REQUIRE(result.has_value());
+        CHECK(result->kind == TheoryCheckResult::Kind::Consistent);
+        const auto model = solver.getModel();
+        REQUIRE(model.has_value());
+        CHECK(model->assignments.at("x") == std::to_string(expected));
+        CHECK(mpz_class(model->assignments.at("p")) * mpz_class(model->assignments.at("x")) == 1002);
+        solver.backtrackToLevel(0);
+    }
+}
+
+TEST_CASE("NiaSolver: new shared arrangements invalidate the previous local point") {
+    env::Scope scope(env::Snapshot::capture({{"XOLVER_NIA_BB_EARLY_MIN_ACTIVE", "0"}}));
+    for (const bool equality : {false, true}) {
+        NativeTerms terms;
+        const SortId sort = 0;
+        terms.registerSort(sort, SortKind::Int);
+        const auto expression = terms.add({Kind::Variable, sort, {}, Payload(std::string("x"))});
+        const auto zero = terms.add({Kind::ConstInt, sort, {}, Payload(int64_t(0))});
+        const auto one = terms.add({Kind::ConstInt, sort, {}, Payload(int64_t(1))});
+        SharedTermRegistry shared;
+        shared.setNativeTerms(&terms);
+        const auto sx = shared.getOrCreate(expression, sort, "x", false);
+        const auto szero = shared.getOrCreate(zero, sort, "0", false);
+        const auto sone = shared.getOrCreate(one, sort, "1", false);
+        auto kernel = createPolynomialKernel();
+        const auto x = kernel->mkVar(kernel->getOrCreateVar("x"));
+        const auto square = kernel->pow(x, 2);
+        BitBlastStageProbe solver(std::move(kernel));
+        solver.setNativeTerms(&terms);
+        solver.setSharedTermRegistry(&shared);
+        TheoryAtomRecord atom{1, TheoryId::NIA, false, NullExpr,
+            PolynomialAtomPayload{square, Relation::Eq, RealValue::fromInt(0)}};
+        solver.assertLit(atom, true, 0, SatLit::positive(1));
+        TheoryLemmaDatabase db;
+        REQUIRE_FALSE(solver.runStage("nia.normalize", db));
+        REQUIRE(solver.runStage("nia.bit-blast-early", db));
+        REQUIRE(solver.getModel());
+        CHECK(solver.getModel()->assignments.at("x") == "0");
+        if (equality)
+            solver.assertInterfaceEquality(sx, sone, SatLit::positive(2), 1);
+        else
+            solver.assertInterfaceDisequality(sx, szero, SatLit::positive(2), 1);
+        CHECK_FALSE(solver.getModel());
+        CHECK(solver.check(db, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Conflict);
+        solver.backtrackToLevel(0);
+        REQUIRE_FALSE(solver.runStage("nia.normalize", db));
+        REQUIRE(solver.runStage("nia.bit-blast-early", db));
+        REQUIRE(solver.getModel());
+        CHECK(solver.getModel()->assignments.at("x") == "0");
+    }
+}
+
+TEST_CASE("NiaSolver: partial propagation preserves unpublished refinement state") {
+    auto sat = createSatSolver();
+    Atomizer atomizer(*sat);
+    TheoryAtomRegistry registry;
+    TheoryManager theories;
+    TheoryLemmaDatabase db;
+    auto& backend = dynamic_cast<CadicalBackend&>(*sat);
+    CadicalTheoryPropagator propagator(registry, theories, db, backend);
+    registry.setContext(sat.get(), &atomizer);
+    backend.connectPropagator(&propagator);
+    struct Disconnect {
+        CadicalBackend& backend;
+        ~Disconnect() { backend.disconnectPropagator(); }
+    } disconnect{backend};
+    auto kernel = createPolynomialKernel();
+    const auto x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    BitBlastStageProbe solver(std::move(kernel));
+    solver.setRegistry(&registry);
+    const auto reason = SatLit::positive(sat->newVar());
+    TheoryAtomRecord atom{reason.var, TheoryId::NIA, false, NullExpr,
+        PolynomialAtomPayload{x, Relation::Geq, RealValue::fromInt(0)}};
+    solver.assertLit(atom, true, 0, reason);
+    REQUIRE_FALSE(solver.runStage("nia.normalize", db));
+    REQUIRE_FALSE(solver.runStage("nia.domain", db));
+    for (int repeat = 0; repeat < 8; ++repeat) {
+        CHECK_FALSE(solver.runStageAt("nia.linearize", db, TheoryEffort::Standard));
+        CHECK_FALSE(solver.runStageAt("nia.pending-lemma", db, TheoryEffort::Standard));
+        CHECK_FALSE(solver.runStageAt("nia.branch", db, TheoryEffort::Standard));
+        CHECK(registry.numAtomVars() == 0);
+    }
+    // A queued bridge must remain available until a complete model check can
+    // publish it, even if a propagation check occurs between production and
+    // consumption. Creating its atom is part of that publication transaction.
+    REQUIRE_FALSE(solver.runStageAt("nia.linearize", db, TheoryEffort::Full));
+    REQUIRE(registry.numAtomVars() > 0);
+    const auto beforeBranch = registry.numAtomVars();
+    CHECK_FALSE(solver.runStageAt("nia.pending-lemma", db, TheoryEffort::Standard));
+    const auto bridge = solver.runStageAt("nia.pending-lemma", db, TheoryEffort::Full);
+    REQUIRE(bridge.has_value());
+    CHECK(bridge->kind == TheoryCheckResult::Kind::Lemma);
+    REQUIRE(bridge->lemmaOpt.has_value());
+    CHECK_FALSE(bridge->lemmaOpt->lits.empty());
+    const auto result = solver.runStageAt("nia.branch", db, TheoryEffort::Full);
+    REQUIRE(result.has_value());
+    CHECK(result->kind == TheoryCheckResult::Kind::Lemma);
+    REQUIRE(result->lemmaOpt.has_value());
+    CHECK(result->lemmaOpt->lits.size() == 2);
+    CHECK(registry.numAtomVars() == beforeBranch + 2);
 }
 
 TEST_CASE("BitBlastSolver: cached model respects newly excluded values") {
