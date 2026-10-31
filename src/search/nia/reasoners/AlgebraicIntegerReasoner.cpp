@@ -4,6 +4,7 @@
 #include "search/nia/reasoners/UnivariateIntegerReasoner.h"  // iter-89: completeDivisors
 #include <cstdlib>
 #include "search/nia/search/IntegerModelValidator.h"
+#include "search/refute/PolynomialResidueRefutation.h"
 #include <numeric>
 
 // Helper: GCD for mpz_class using GMP
@@ -169,115 +170,24 @@ NiaReasoningResult AlgebraicIntegerReasoner::checkFactorDirectConflict(
     return {NiaReasoningKind::NoChange, std::nullopt, std::nullopt};
 }
 
-bool AlgebraicIntegerReasoner::evaluateMod(
-    PolyId /*poly*/,
-    const std::vector<std::string>& /*vars*/,
-    const std::vector<int>& /*residues*/,
-    int /*modulus*/,
-    int& /*result*/) const {
-    return false;
-}
-
 NiaReasoningResult AlgebraicIntegerReasoner::checkModular(
     const std::vector<NormalizedNiaConstraint>& equalities) {
-
-    if (equalities.empty()) return {NiaReasoningKind::NoChange, std::nullopt, std::nullopt};
-
-    std::unordered_set<std::string> allVars;
-    for (const auto& c : equalities) {
-        for (const auto& v : kernel_.variables(c.poly)) {
-            allVars.insert(v);
-        }
+    PolynomialResidueLimits limits;
+    const auto variables = config::read<config::ReadKind::Long>("XOLVER_NIA_MODULAR_MAX_VARS", 15);
+    if (variables > 0 && variables <= 50) limits.variables = static_cast<size_t>(variables);
+    const auto assignments = config::read<config::ReadKind::Long>("XOLVER_NIA_MODULAR_MAX_ENUM", 50000);
+    if (assignments > 0 && assignments <= 1000000) limits.assignments = static_cast<size_t>(assignments);
+    limits.moduli = config::read<config::ReadKind::Moduli>("XOLVER_NIA_MODULAR_MODULI");
+    // Keep the existing configurable enumeration cap. The shared work adapter
+    // still observes the enclosing solver deadline on every arithmetic step.
+    limits.work = 0;
+    std::vector<SignRefuteConstraint> constraints;
+    for (const auto& equality : equalities) {
+        auto polynomial = RationalPolynomial::fromPolyId(equality.poly, kernel_);
+        if (polynomial) constraints.push_back({std::move(*polynomial), equality.rel, equality.reason});
     }
-
-    // iter-84: var-count cap + per-modulus enumeration budget are env-overridable.
-    // Sound — UNSAT-only invariant unchanged; relaxing the caps lets the
-    // refuter attempt larger systems (potentially closing oracle-UNSAT cases
-    // that exceed the iter-79 defaults). Users / autotuner can experiment
-    // without recompiling.
-    //   XOLVER_NIA_MODULAR_MAX_VARS         (default 15, cap 50)
-    //   XOLVER_NIA_MODULAR_MAX_ENUM         (default 50000, cap 1,000,000)
-    const size_t kVarCap = [] {
-        long v = config::read<config::ReadKind::Long>("XOLVER_NIA_MODULAR_MAX_VARS", 15);
-        if (v > 0 && v <= 50) return static_cast<size_t>(v);
-        return size_t(15);
-    }();
-    const uint64_t kMaxEnumPerModulus = [] {
-        long v = config::read<config::ReadKind::Long>("XOLVER_NIA_MODULAR_MAX_ENUM", 50000);
-        if (v > 0 && v <= 1000000) return static_cast<uint64_t>(v);
-        return uint64_t(50000);
-    }();
-    if (allVars.size() > kVarCap) return {NiaReasoningKind::NoChange, std::nullopt, std::nullopt};
-
-    std::vector<std::string> vars(allVars.begin(), allVars.end());
-
-    // iter-87: moduli list is env-overridable for autotuner. Default set
-    // {2, 3, 4, 5, 7, 8, 9, 11} covers small primes + small 2^k/3^k composites
-    // — chosen for catching parity, mod-3 squares-only-{0,1}, and pow-2/3
-    // factor contradictions. XOLVER_NIA_MODULAR_MODULI parses a
-    // comma-separated list, e.g. "2,3,5,7,11,13" for wider prime coverage.
-    // Each modulus is gated by m^N ≤ kMaxEnumPerModulus per the loop below,
-    // so adding large moduli (e.g. 13) safely skips at N>4 without changing
-    // smaller-N behavior. Soundness invariant unchanged: UNSAT-only.
-    const std::vector<int> moduliVec = xolver::config::read<xolver::config::ReadKind::Moduli>("XOLVER_NIA_MODULAR_MODULI");
-
-    // iter-79: generalize from {1,2}-var hardcoded loops to N-var iterative
-    // digit-counter enumeration. Sound: same residue-search semantics, just
-    // wider variable count. Hard cap on total enumerations per (modulus, varCount)
-    // to keep the worst case bounded — 50000 tuples × #constraints per modulus
-    // (default; tunable via XOLVER_NIA_MODULAR_MAX_ENUM).
-    const size_t N = vars.size();
-
-    for (int m : moduliVec) {
-        // Tractability gate: skip this modulus if m^N exceeds the per-modulus cap.
-        uint64_t enumSize = 1;
-        bool overflow = false;
-        for (size_t i = 0; i < N; ++i) {
-            if (enumSize > kMaxEnumPerModulus / (uint64_t)m) { overflow = true; break; }
-            enumSize *= (uint64_t)m;
-        }
-        if (overflow) continue;
-
-        bool anySatisfies = false;
-        std::vector<int> digits(N, 0);  // current residue tuple
-
-        while (true) {
-            // Build model for current digit tuple
-            IntegerModel model;
-            for (size_t i = 0; i < N; ++i) {
-                model[vars[i]] = mpz_class(digits[i]);
-            }
-
-            // Check every equality satisfied at this residue assignment
-            bool allSatisfied = true;
-            for (const auto& c : equalities) {
-                auto valOpt = kernel_.evalInteger(c.poly, model);
-                if (!valOpt) { allSatisfied = false; break; }
-                if (*valOpt % m != 0) { allSatisfied = false; break; }
-            }
-            if (allSatisfied) { anySatisfies = true; break; }
-
-            // Increment digit counter (LSB-first), m-base
-            size_t pos = 0;
-            while (pos < N) {
-                if (++digits[pos] < m) break;
-                digits[pos] = 0;
-                ++pos;
-            }
-            if (pos == N) break;  // overflowed → exhausted all tuples
-        }
-
-        if (!anySatisfies) {
-            std::vector<SatLit> conflictLits;
-            for (const auto& c : equalities) {
-                conflictLits.push_back(c.reason);
-            }
-            return {NiaReasoningKind::Conflict,
-                    TheoryConflict{conflictLits},
-                    std::nullopt};
-        }
-    }
-
+    if (auto conflict = refuteByPolynomialResidues(constraints, limits))
+        return {NiaReasoningKind::Conflict, TheoryConflict{std::move(*conflict)}, std::nullopt};
     return {NiaReasoningKind::NoChange, std::nullopt, std::nullopt};
 }
 

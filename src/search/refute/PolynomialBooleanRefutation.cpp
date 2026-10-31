@@ -2,10 +2,12 @@
 #include "search/boolean/Atomizer.h"
 #include "search/refute/PolynomialSignClosure.h"
 #include "search/refute/PolynomialLinearRefutation.h"
+#include "search/refute/PolynomialResidueRefutation.h"
 #include "algebra/poly/PolynomialConverter.h"
 #include "base/WorkBudget.h"
 #include <algorithm>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace xolver {
 namespace {
@@ -58,6 +60,30 @@ bool refutePolynomialBoolean(const NativeTerms& terms, const std::vector<ExprId>
         auto kernel = createPolynomialKernel();
         PolynomialConverter converter(*kernel, &work, limits.deadline);
         std::unordered_map<SatVar, SignRefuteConstraint> polynomials;
+        std::unordered_set<SatVar> integerAtoms;
+        std::unordered_map<ExprId, bool> integerTerms;
+        auto integerTerm = [&](ExprId root) {
+            std::vector<std::pair<ExprId, bool>> pending{{root, false}};
+            while (!pending.empty()) {
+                tick();
+                const auto [id, ready] = pending.back();
+                pending.pop_back();
+                if (integerTerms.contains(id)) continue;
+                const auto node = terms.get(id);
+                if (!ready) {
+                    pending.emplace_back(id, true);
+                    for (auto child : node.children)
+                        if (!integerTerms.contains(child)) pending.emplace_back(child, false);
+                } else {
+                    bool integral = node.kind != Kind::UFApply && node.kind != Kind::BoundVariable;
+                    if (node.kind == Kind::Variable)
+                        integral = terms.sortKind(node.sort) == SortKind::Int;
+                    for (auto child : node.children) integral &= integerTerms.at(child);
+                    integerTerms.emplace(id, integral);
+                }
+            }
+            return integerTerms.at(root);
+        };
         std::vector<SatVar> atomOrder;
         for (const auto& atom : atomizer.atoms()) {
             tick();
@@ -73,6 +99,7 @@ bool refutePolynomialBoolean(const NativeTerms& terms, const std::vector<ExprId>
                 auto polynomial = RationalPolynomial::fromPolyId(converted.diff, *kernel);
                 if (!polynomial) continue;
                 polynomials.emplace(atom.var, SignRefuteConstraint{std::move(*polynomial), rel, {}});
+                if (integerTerm(atom.expr)) integerAtoms.insert(atom.var);
                 atomOrder.push_back(atom.var);
             }
         }
@@ -95,10 +122,12 @@ bool refutePolynomialBoolean(const NativeTerms& terms, const std::vector<ExprId>
             stats.largestContext = std::max(stats.largestContext, selected.size());
             if (selected.empty() || selected.size() > 128) return std::nullopt;
             std::vector<SignRefuteConstraint> constraints;
+            std::vector<SignRefuteConstraint> integers;
             for (auto literal : selected) {
                 auto constraint = polynomials.at(literal.var);
                 if (!literal.sign) constraint.rel = complement(constraint.rel);
                 constraint.reason = literal;
+                if (integerAtoms.contains(literal.var)) integers.push_back(constraint);
                 constraints.push_back(std::move(constraint));
             }
             ++stats.theoryCalls;
@@ -107,6 +136,16 @@ bool refutePolynomialBoolean(const NativeTerms& terms, const std::vector<ExprId>
             // Prefer them to a weaker conflict between abstract monomial rows,
             // which can leave additional assignments for the SAT solver.
             auto conflict = refuteBySignDefiniteness(constraints);
+            if (!conflict && !integers.empty()) {
+                PolynomialResidueLimits residueLimits;
+                residueLimits.deadline = std::min(limits.deadline,
+                    std::chrono::steady_clock::now() + std::chrono::milliseconds(2));
+                PolynomialResidueStatistics residue;
+                conflict = refuteByPolynomialResidues(integers, residueLimits, &residue);
+                ++stats.residueCalls;
+                stats.residueAssignments += residue.assignments;
+                stats.residueExhaustions += residue.exhausted;
+            }
             if (!conflict) {
                 const auto linearStarted = std::chrono::steady_clock::now();
                 PolynomialLinearStatistics linear;

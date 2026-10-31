@@ -44,12 +44,6 @@ private:
     // Check if polynomial is syntactically a sum of squares
     bool isSumOfSquares(PolyId poly, std::vector<PolyId>& squares) const;
 
-    // Evaluate polynomial mod m at a residue assignment
-    bool evaluateMod(PolyId poly,
-                     const std::vector<std::string>& vars,
-                     const std::vector<int>& residues,
-                     int modulus,
-                     int& result) const;
 };
 
 } // namespace xolver

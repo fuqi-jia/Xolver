@@ -10,6 +10,9 @@ struct PolynomialBooleanStatistics {
     size_t theoryCalls = 0;
     size_t largestContext = 0;
     size_t signExhaustions = 0;
+    size_t residueCalls = 0;
+    size_t residueAssignments = 0;
+    size_t residueExhaustions = 0;
     size_t linearCalls = 0;
     size_t linearConstraints = 0;
     size_t linearExhaustions = 0;
@@ -19,8 +22,9 @@ struct PolynomialBooleanStatistics {
 };
 
 // Whole-formula Boolean abstraction with explained polynomial conflicts. The
-// sign calculus holds over reals and integers alike. Only UNSAT is concluded;
-// an open real relaxation never establishes integer feasibility.
+// sign calculus holds over reals and integers alike. Modular conflicts use
+// only atoms whose polynomial variables are explicitly integer-sorted.
+// Only UNSAT is concluded; an open relaxation never establishes feasibility.
 bool refutePolynomialBoolean(const NativeTerms&, const std::vector<ExprId>&,
     const BooleanRefutationLimits&, PolynomialBooleanStatistics* = nullptr);
 } // namespace xolver

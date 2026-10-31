@@ -849,6 +849,9 @@ Result Solver::Impl::checkSatGround() {
                     << " conflicts=" << stats.boolean.conflicts << " theory_calls=" << stats.theoryCalls
                     << " largest_context=" << stats.largestContext << " theory_us=" << stats.theoryMicroseconds
                     << " sign_exhaustions=" << stats.signExhaustions
+                    << " residue_calls=" << stats.residueCalls
+                    << " residue_assignments=" << stats.residueAssignments
+                    << " residue_exhaustions=" << stats.residueExhaustions
                     << " linear_calls=" << stats.linearCalls << " linear_rows=" << stats.linearConstraints
                     << " linear_exhaustions=" << stats.linearExhaustions << " linear_us=" << stats.linearMicroseconds
                     << " exhausted=" << stats.exhausted << " refuted=" << refuted << " us="

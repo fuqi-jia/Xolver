@@ -3593,3 +3593,29 @@ the summary tests; the R1099 aggregation is permitted only by its independent
 per-input command-equivalence check. Final source qualification and PR84 exact
 head CI remain required. Both protected sets are untouched, and the final-kernel
 original multi-program QCP comparison remains outstanding.
+
+### Integer residue components before the SAT portfolio (in progress)
+
+The delivered candidate-evaluation source is finally source-qualified by EOS
+`601c890f32c3`: all four relevant executable hashes match source 45570429,
+16 canonical comparison tests and 243 targeted native cases pass. This authorizes
+reuse of the 39-group / 1877-case acceptance and corrected 101/101/117 fixed160
+round; exact-head PR84 CI still gates delivery.
+
+R1111 profiles public UNSAT gaps 27/34/42/116. A private R1113 early-quadratic
+reuse passes 16 selected cases / 598 assertions, but R1114 still times out on all
+four in 20-second diagnostics; no quadratic certificate is produced. That
+experiment is closed and its transform is not production code.
+
+An independent existing regression, `NIA-Core: 4-var modular system over mod 3`,
+takes 120.034762s in the accepted R1097 full unit run. Its two equalities imply
+x=y=0 modulo 3 and x+y=1 modulo 3. The new shared residue refuter reduces
+coefficients before collecting variables and enumerates connected components;
+quotient variables multiplied by the modulus disappear. Boolean polynomial
+refutation invokes it with a 2ms slice before the SAT-only portfolio, accepting
+only explicitly integer-sorted variables. The NIA algebraic stage reuses the
+same implementation and existing enumeration controls. Every conflict retains
+the original equality premises; inequalities/disequalities, incomplete search
+and resource exhaustion provide no UNSAT conclusion. Native qualification,
+independent checks and the fresh fixed160 comparison for this implementation
+are pending. Neither protected set has been used.
