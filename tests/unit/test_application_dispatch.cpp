@@ -2,6 +2,8 @@
 #include "applications/satisfiability/smt/Solver.h"
 #include "applications/satisfiability/smt/TheoryFactory.h"
 #include "search/coordination/TheoryLemmaDatabase.h"
+#include "search/sat/CadicalBackend.h"
+#include "search/sat/CadicalTheoryPropagator.h"
 #include "applications/verification/pa/Presburger.h"
 #include "applications/verification/sl/Solver.h"
 #include "applications/optimization/omt/Optimize.h"
@@ -90,6 +92,7 @@ TEST_CASE("application dispatch: factory connects theory model decisions for eve
         features.hasInt = features.hasIntVar = route.owner == TheoryId::LIA;
         features.hasReal = features.hasRealVar = route.owner == TheoryId::LRA;
         features.hasNonlinear = route.nonlinear;
+        CadicalBackend backend;
         TheoryAtomRegistry registry;
         TheoryManager manager;
         std::unique_ptr<SharedTermRegistry> shared;
@@ -97,6 +100,16 @@ TEST_CASE("application dispatch: factory connects theory model decisions for eve
         REQUIRE(result.success);
         auto* arithmetic = manager.solverFor(route.owner);
         REQUIRE(arithmetic);
+        TheoryLemmaDatabase lemmas;
+        CadicalTheoryPropagator propagator{registry, manager, lemmas, backend};
+        backend.connectPropagator(&propagator);
+        struct Disconnect {
+            CadicalBackend& backend;
+            ~Disconnect() { backend.disconnectPropagator(); }
+        } disconnect{backend};
+        registry.setContext(&backend, nullptr);
+        for (SatVar variable = 1; variable <= 4; ++variable)
+            REQUIRE(backend.newVar() == variable);
         const mpq_class large(mpz_class("9007199254740992"));
         const LinearFormKey x{{{"factory-x", 1}}};
         registry.registerParsedTheoryAtom(1, NullExpr, route.owner,
@@ -108,8 +121,7 @@ TEST_CASE("application dispatch: factory connects theory model decisions for eve
         registry.registerParsedTheoryAtom(4, NullExpr, route.owner,
             LinearAtomPayload{LinearFormKey{{{"absent-coordinate", 1}}},
                               Relation::Leq, RealValue::fromInt(1)});
-        manager.assertTheoryLit(*registry.findBySatVar(1), SatLit::positive(1), 0);
-        TheoryLemmaDatabase lemmas;
+        propagator.notify_assignment({1});
         REQUIRE(arithmetic->check(lemmas, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Consistent);
         const auto count = registry.numAtomVars();
         const auto unequal = manager.evalTheoryAtom(2);
@@ -119,6 +131,8 @@ TEST_CASE("application dispatch: factory connects theory model decisions for eve
         CHECK_FALSE(*unequal);
         CHECK(*strict);
         CHECK_FALSE(manager.evalTheoryAtom(4).has_value());
+        CHECK(propagator.cb_decide() == -2);
+        CHECK(propagator.cb_decide() == 3);
         CHECK(registry.numAtomVars() == count);
     }
 }

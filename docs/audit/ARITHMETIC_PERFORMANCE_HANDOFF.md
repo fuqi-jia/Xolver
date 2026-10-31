@@ -91,23 +91,50 @@ JSON log; R1371 preserves those failures and recovers only complete late-fragmen
 counters. The observed17/41/36% avoidable-pair fractions on49/58/59 are fragment
 measurements, not whole-run savings or solver scores.
 
-Current development targets a different functional defect: the SAT decision
-adapter builds its linear-atom candidates once, while theory cuts/branches add
-atoms later. The existing count contract now detects registration growth and
-the canonical owned-snapshot query accepts an offset into all registration
-records, so updates scan only the appended suffix. A late-registration test
-covers empty/nonempty caches, mixed atom kinds, user decision priority,
-SatActivity, model polarity and backtracking. This change is pending native
-qualification; it has no solve-count or QCP claim yet and no new PR.
+Development `b49a4350` fixes a different decision-adapter omission: its linear
+candidate snapshot was never refreshed after theory cuts/branches registered
+new atoms. The existing count contract now detects growth; an offset into all
+registration records limits updates to the appended suffix. R1377 qualifies
+CLI SHA-256 `5aff72b27f9b01930d5dc57fb79a0af3d1f3c3d983777307d2fbf9c765176041`.
+All39 R1378 groups pass, including1912 native cases /988109 assertions and31
+Python tests. The same-header old adapter fails three late-atom assertions.
+The mixed-kind, user-priority, SatActivity, polarity and backtrack contracts pass.
 
-Panda's last completed qualification is R1372, CLI SHA-256
-`1c4292d285016c0fde95f25fe59b44898ba175ce9eb42e1b458d8f70ae56b3e0`.
-That rejected shortcut still occupies the canonical source/build. The planned
-R1377 overlay uses `source-r1372.tar.json` preimages and restores its two changed
-propagation/test files alongside the decision-cache fix. Check R1377's EOS
-status and actual source before another write: if it has applied, its manifest
-becomes the next preimage. Main CI is already green; no extra server archive is
-a new delivery condition. Both protected sets remain unread and unused.
+R1379's nine-case pilot gives1 baseline/2 candidate/9 verified Z3 decisions,
+with no lost verdict, wrong verdict or invalid exported model. The gain is
+already-variable SAT51 (baseline timeout, candidate17.374s); SAT59 improves
+7.885→2.876s. All six selected gaps1/13/89/98/49/58 still time out. This does not
+establish a stable new capability or a fixed160 improvement; no new PR is open.
+R1382's short verbose diagnostic confirms dynamic linear candidates on58
+(2466→2623), while the old list stays2466. Earlier R1381 omitted CLI `--verbose`;
+its suppressed logs establish no absence of decisions or registrations.
+
+The same diagnostic exposes a more direct missing connection: pure LIA13/89
+perform2,218,211/12,236,430 unassigned model probes and receive no value on every
+probe. Their factories initialize the solver's registry but leave the owning
+TheoryManager's registry null. Development `787981dc` moves that common binding
+to `setupSolvers`, removes eleven per-builder copies, and adds eleven
+factory/manager route checks for pure arithmetic, nonlinear linear helpers and
+feature routing. This is one consolidated decision-integration stage with the
+cache fix; native qualification, original-input gains and promotion are pending.
+
+R1383's ExperimentOS build (`41a2bc99eb95`, run`e11eac07a304`) compiles but
+its new test crashes before evaluating a model: the fixture omitted the SAT
+observation context required by atom registration. This is a failed test setup,
+not a solver verdict or passed qualification. The correction connects the real
+SAT backend and theory adapter, allocates observed variables, and checks signed
+decisions through the adapter too. The failure and its original source/archive
+remain preserved; R1387 stops before dispatching any dependent native check.
+
+The next R1388 build uses `source-r1383.tar.json` preimages and checks the failed
+run is terminal with no live PID before the unique locked build is reused.
+After application, `source-r1388.tar.json` is the next canonical preimage.
+All39 R1389 groups, fixed nine-case R1390 pilot and short R1391 diagnostics are
+planned after successful qualification. Formal budget remains60s/one physical
+CPU/16GiB, with initial model export and independent replay. Main CI is already
+green; no extra server archive is a delivery condition. Both protected sets
+remain unread and unused; no new original-C QCP workflow or superiority claim
+is made. No new PR is open.
 
 [PR89](https://github.com/fuqi-jia/Xolver/pull/89), implementation `e0cafba8`,
 restores SAT's retained signed root prefix after a real restart. A shared theory
