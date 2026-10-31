@@ -19,6 +19,27 @@ using namespace xolver;
 
 static RationalPolynomial K(long c) { return RationalPolynomial::fromConstant(mpq_class(c)); }
 
+TEST_CASE("CAC engine: projectively equal boundaries retain opposite signed constraints") {
+    for (bool strict : {false, true}) {
+        auto kernel = createPolynomialKernel();
+        LibpolyBackend backend(kernel.get());
+        const VarId x = kernel->getOrCreateVar("x"), y = kernel->getOrCreateVar("y");
+        RationalPolynomial p;
+        p.addVar(x, 2, 1);
+        p.addVar(y, 1, -1);
+        p.normalize();
+        auto opposite = p;
+        opposite *= mpq_class(-1);
+        auto repeated = p;
+        repeated *= mpq_class(3, 5);
+        const auto zeroY = RationalPolynomial::fromVar(y, 1, 1);
+        const Relation relation = strict ? Relation::Gt : Relation::Geq;
+        CacEngine engine(&backend, kernel.get(), {x, y},
+            {{p, relation}, {opposite, relation}, {repeated, relation}, {zeroY, Relation::Eq}});
+        CHECK(engine.solve().status == (strict ? CacStatus::Unsat : CacStatus::Sat));
+    }
+}
+
 TEST_CASE("CAC engine: 1-var UNSAT x^2 < 0") {
     auto kernel = createPolynomialKernel();
     LibpolyBackend backend(kernel.get());

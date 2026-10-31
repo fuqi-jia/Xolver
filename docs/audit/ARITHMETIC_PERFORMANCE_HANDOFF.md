@@ -189,10 +189,39 @@ retain2 unknowns and54 timeouts. Verified PAR-2 is7105.484/7107.417/5451.485;
 this phase makes no performance-gain claim. All160 original triads are budget
 valid, requiring no replacements. See
 [the complete correctness phase](ARITHMETIC_RESET_CONTRACT_STAGE_20261101.json).
-Final delivery PR CI and merging remain pending; keep PR91 draft until both
-jobs pass. Documentation reuses the qualified implementation without an extra
-server archive. Both protected sets remain unread and unused; Xolver has not
-surpassed Z3.
+Final delivery [CI41219285757](https://github.com/fuqi-jia/Xolver/actions/runs/41219285757)
+passes both jobs. PR91 is merged as main `5969e9e9`; its
+[postmerge CI41220826923](https://github.com/fuqi-jia/Xolver/actions/runs/41220826923)
+passes both jobs. Documentation reuses the qualified implementation without an
+extra server archive. Both protected sets remain unread and unused; Xolver has
+not surpassed Z3.
+
+The R1314 batched simplex experiment `ff061b71` is **closed without promotion**.
+All39 R1317 groups pass, including1903 unit cases/1098188 assertions and31
+Python tests. The15-case pilot gains SAT51,4→5 verified solves, but fresh full160
+R1319 verifies **107 baseline/107 candidate/117 Z3**, with no gains, losses,
+opposite verdicts or invalid models. Both Xolver arms have2 unknowns and51
+timeouts. Verified PAR-2 is6892.152/6890.013/5452.822: only about0.03% lower for
+the candidate. Seven unconfirmed Z3 UNSATs remain excluded. Original144's
+baseline violates its wall budget at319.674s; all three frozen versions are
+replayed only after terminal status and absent PID, preserving the invalid
+original. Runtime changes and dedicated tests are reverted. See
+[the complete negative result](BATCH_SIMPLEX_CLOSED_STAGE_20261101.json).
+The shift from earlier104-solve rounds is observed in the unchanged baseline
+as well and is not credited to this experiment.
+
+QCP/foundations work continues in the existing PR92; intermediate experiments
+do not get separate PRs. R1321 observes actual CAC inputs without changing the
+qualified core ABI or projection results. On public SAT77, call10 supplies342
+polynomials containing the eliminated variable, with only115 distinct boundaries
+up to a nonzero rational unit. The corresponding potential pair counts are58311
+versus6555; this is not a measured speedup. Projection inputs are deduplicated
+before Lazard pair generation, while original signed constraints and covering
+origins are retained. Tests cover ordered boundary equivalence, vanishing middle
+coefficients and opposite signed constraints. Native qualification and original
+input model/independent checks remain pending. See
+[the root-cause observation](CAC_DUPLICATE_INPUT_PROBE_20261101.json).
+Both protected sets remain unread and unused.
 
 
 [PR88](https://github.com/fuqi-jia/Xolver/pull/88), core `32d23ec3`, closes the

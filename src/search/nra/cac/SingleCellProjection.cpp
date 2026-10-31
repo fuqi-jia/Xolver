@@ -106,7 +106,7 @@ CharacterizationResult characterize(const std::vector<RationalPolynomial>& cellP
                                     PolynomialKernel* kernel,
                                     const SamplePoint* sample) {
     CharacterizationResult out;
-    std::unordered_set<std::string> seenBoundary, seenDownward;
+    std::unordered_set<std::string> seenInput, seenBoundary, seenDownward;
 
     // Inputs already FREE of elimVar are at a lower level — pass them straight
     // through to downwardPolys (eliminating elimVar from them is a no-op; the
@@ -118,7 +118,11 @@ CharacterizationResult characterize(const std::vector<RationalPolynomial>& cellP
         p.normalize();
         if (p.isZero() || p.isConstant()) continue;
         if (p.degree(elimVar) >= 1) {
-            withElim.push_back(std::move(p));
+            // These are boundary polynomials, not signed constraints. Nonzero
+            // rational multiples have identical roots and degree-drop loci.
+            // Keep their first occurrence before the quadratic pair projection;
+            // the covering retains the original constraints and their origins.
+            if (seenInput.insert(unitKey(p)).second) withElim.push_back(std::move(p));
         } else if (seenDownward.insert(unitKey(p)).second) {
             out.downwardPolys.push_back(std::move(p));
         }
