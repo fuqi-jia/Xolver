@@ -61,9 +61,12 @@ original triads are valid.
 A separate same-binary60s replay R1270 reproduces gains48 (43.088s UNSAT) and131
 (52.532s SAT). SAT51 instead times out, so its performance is explicitly unstable;
 the original valid round is not selectively replaced. SAT59 slows3.027→7.707s;
-SAT76 is4.726→4.724s. Core-head PR CI41199336885 passes both jobs. Final delivery
-CI and postmerge main CI remain pending; document-only evidence updates reuse
-the qualified implementation without another server archive. See
+SAT76 is4.726→4.724s. Core-head PR CI41199336885 and final delivery
+[CI41203445566](https://github.com/fuqi-jia/Xolver/actions/runs/41203445566)
+pass both jobs. PR89 is merged as main `bcccb3fd`; its
+[postmerge CI41204899280](https://github.com/fuqi-jia/Xolver/actions/runs/41204899280)
+is in progress. Document-only evidence updates reuse the qualified
+implementation without another server archive. See
 [the phase evidence](ROOT_ASSERTION_RESTORATION_STAGE_20261031.json).
 
 Both protected sets remain unread and unused; Xolver has not surpassed Z3.
@@ -74,6 +77,22 @@ contain **3 verified bodies under4 function contracts**, with `abs` assumed by
 its declaration-only contract. Max3 verifies only the frozen upper-bound
 postcondition. The original raw receipt remains immutable; corrected
 [program evidence](QCP_ORIGINAL_PROGRAMS_STAGE_20261031.json) records these scopes.
+
+The work-bounded propagation experiment R1277/R1278 is closed without
+promotion:94 targeted cases pass, but its fresh12-case pilot drops verified
+solves5→3, loses SAT51/131 and slows SAT59 from7.990s to14.201s. Existing local
+propagation time allocation stays intact. Audit SHA-256 is
+`cd30464ee047ae77eff4ed6646ab88fffcc16f5631b794be3a1f883e86a32fba`.
+
+The next candidate hashes exact GMP numerator/denominator limbs in the shared
+linear-form and auxiliary-coordinate lookups, removing repeated decimal
+conversion without changing coordinate equality or arithmetic. R1280's isolated
+lookup microbenchmark removes524288 GMP allocations per configuration and is
+approximately4–15 times faster; this is not solver-level performance evidence.
+R1282 passes3 utility tests/893 assertions against the unchanged arithmetic
+core. Both changed hash consumers require a full native rebuild before solver
+testing; no partial-object/header mixing is qualified. Fixed160 and complete
+server/CI acceptance remain outstanding for this candidate.
 
 
 [PR88](https://github.com/fuqi-jia/Xolver/pull/88), core `32d23ec3`, closes the
