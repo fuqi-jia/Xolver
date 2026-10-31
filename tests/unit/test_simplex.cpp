@@ -10,6 +10,120 @@
 
 using namespace xolver;
 
+TEST_CASE("SparseTableau: scaled elimination handles cancellation and aliased scale") {
+    SparseTableau table;
+    for (int i = 0; i < 8; ++i) table.addEmptyCol();
+    for (int i = 0; i < 3; ++i) table.addEmptyRow();
+    table.setCoeff(0, 0, mpq_class(7, 3));
+    table.setCoeff(0, 3, mpq_class(-14, 3));
+    table.setCoeff(0, 2, 5);
+    table.setCoeff(1, 3, 9);
+    table.setCoeff(2, 0, 11);
+    // Read scale from the destination; deleting its entry must not invalidate it.
+    table.addScaledRow(0, {{3, 2}, {0, -1}, {2, 0}, {3, -2}, {7, mpq_class(3, 7)}},
+                       table.getCoeff(0, 0));
+    REQUIRE(table.row(0).entries.size() == 3);
+    CHECK(table.row(0).entries[0].col == 2);
+    CHECK(table.row(0).entries[1].col == 3);
+    CHECK(table.row(0).entries[2].col == 7);
+    CHECK(table.getCoeff(0, 2) == 5);
+    CHECK(table.getCoeff(0, 3) == mpq_class(-14, 3));
+    CHECK(table.getCoeff(0, 7) == 1);
+    CHECK(table.getCoeff(0, 0) == 0);
+    CHECK(table.getCoeff(1, 3) == 9);
+    CHECK(table.getCoeff(2, 0) == 11);
+    REQUIRE(table.col(0).entries.size() == 1);
+    CHECK(table.col(0).entries.front().row == 2);
+    for (int col = 0; col < table.numCols(); ++col) {
+        for (int i = 0; i < static_cast<int>(table.col(col).entries.size()); ++i) {
+            const auto& ce = table.col(col).entries[i];
+            const auto& re = table.row(ce.row).entries[ce.rowPos];
+            CHECK(re.col == col);
+            CHECK(re.colPos == i);
+        }
+    }
+}
+
+TEST_CASE("SparseTableau: batch and scalar elimination preserve exact ordered cross-links") {
+    SparseTableau batch, scalar;
+    constexpr int rows = 4;
+    std::vector<std::vector<mpq_class>> dense(rows, std::vector<mpq_class>(80));
+    for (int i = 0; i < 80; ++i) {
+        batch.addEmptyCol();
+        scalar.addEmptyCol();
+    }
+    for (int r = 0; r < rows; ++r) {
+        batch.addEmptyRow();
+        scalar.addEmptyRow();
+        for (int i = 0; i < (r == 0 ? 3 : 48); ++i) {
+            const int col = (i * 13 + r) % 80;
+            mpq_class value(i + 1, 17);
+            value.canonicalize();
+            batch.setCoeff(r, col, value);
+            scalar.setCoeff(r, col, value);
+            dense[r][col] = value;
+        }
+    }
+    for (int step = 0; step < 48; ++step) {
+        const int r = step % rows;
+        if (step % 9 == 0) {
+            batch.addEmptyCol();
+            scalar.addEmptyCol();
+            for (auto& row : dense) row.emplace_back(0);
+        }
+        if (step == 25) {
+            batch.replaceRow(r, -1, 0, {});
+            scalar.replaceRow(r, -1, 0, {});
+            std::fill(dense[r].begin(), dense[r].end(), mpq_class(0));
+        }
+        mpq_class scale(step % 5 - 2, 3);
+        scale.canonicalize();
+        std::vector<std::pair<int, mpq_class>> updates;
+        if (scale != 0 && !batch.row(r).entries.empty()) {
+            const auto& first = batch.row(r).entries.front();
+            updates.emplace_back(first.col, -first.coeff / scale);
+        }
+        for (int i = 0; i < (step % 2 ? 5 : 90); ++i) {
+            const int col = (i * 19 + step) % batch.numCols();
+            mpq_class value(i % 13 - 6, 7);
+            value.canonicalize();
+            updates.emplace_back(col, value);
+        }
+        batch.addScaledRow(r, updates, scale);
+        for (const auto& [col, value] : updates) {
+            scalar.addCoeff(r, col, mpq_class(scale * value));
+            dense[r][col] += scale * value;
+        }
+        for (int row = 0; row < rows; ++row) {
+            const auto& actual = batch.row(row);
+            const auto& expected = scalar.row(row);
+            REQUIRE(actual.entries.size() == expected.entries.size());
+            CHECK(actual.hasIndex == expected.hasIndex);
+            for (int i = 0; i < static_cast<int>(actual.entries.size()); ++i) {
+                const auto& entry = actual.entries[i];
+                CHECK(entry.col == expected.entries[i].col);
+                CHECK(entry.coeff == expected.entries[i].coeff);
+                CHECK(entry.colPos == expected.entries[i].colPos);
+                CHECK(entry.coeff != 0);
+            }
+            for (int col = 0; col < batch.numCols(); ++col)
+                CHECK(batch.getCoeff(row, col) == dense[row][col]);
+        }
+        for (int col = 0; col < batch.numCols(); ++col) {
+            const auto& actual = batch.col(col).entries;
+            const auto& expected = scalar.col(col).entries;
+            REQUIRE(actual.size() == expected.size());
+            for (int i = 0; i < static_cast<int>(actual.size()); ++i) {
+                CHECK(actual[i].row == expected[i].row);
+                CHECK(actual[i].rowPos == expected[i].rowPos);
+                const auto& entry = batch.row(actual[i].row).entries[actual[i].rowPos];
+                CHECK(entry.col == col);
+                CHECK(entry.colPos == i);
+            }
+        }
+    }
+}
+
 TEST_CASE("GeneralSimplex: dense coupled rational rows retain explanations across branches") {
     for (auto policy : {GeneralSimplex::AssignmentPolicy::Reinitialize,
                         GeneralSimplex::AssignmentPolicy::Preserve}) {
