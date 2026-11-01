@@ -1,0 +1,73 @@
+{
+  "source_head": "a5341d65973e2e20e3e9d6fa2eae1c6e2e5f5448",
+  "candidate_sha256": "7614728f1464cbf8956ca9c1f5c95b7f52e857d45dca47a6719f6d763b74097b",
+  "qualification_sha256": "d455b5ca495905db7aae2e53f11673095d9156e86f5d6ba4cd41a01a5e4ef5d4",
+  "source_manifest_sha256": "3fd5a487504cce8966a5a5faef527457eb264594977fb3f6c13672b50c4b94cd",
+  "native_unit_cases": 1928,
+  "native_assertions": 988961,
+  "unit_log_sha256": "b75770b6d00918922e9082fbe926e967c2fb001012163dbca5fe05401ef03fcb",
+  "pilot_cases": 13,
+  "counts": {
+    "baseline": {
+      "timeout": 4,
+      "decided": 9,
+      "verified_decided": 9,
+      "verified_par2": 627.6469710022211,
+      "raw_par2": 627.6469710022211,
+      "unsat": 2,
+      "sat": 7
+    },
+    "candidate": {
+      "timeout": 4,
+      "decided": 9,
+      "verified_decided": 9,
+      "verified_par2": 635.0418993066996,
+      "raw_par2": 635.0418993066996,
+      "unsat": 2,
+      "sat": 7
+    },
+    "z3": {
+      "sat": 11,
+      "decided": 12,
+      "verified_decided": 12,
+      "verified_par2": 147.21077330224216,
+      "raw_par2": 147.21077330224216,
+      "unsat": 1,
+      "timeout": 1
+    }
+  },
+  "changes": [],
+  "wrong_verdicts": [],
+  "invalid_exported_models": [],
+  "summary_sha256": "e60a0adedfc2427e6ef72cca7e2e531fffb1d3ef0662b5fa9eb90ef5485c9278",
+  "diagnostics": {
+    "observer_build": "00bcf82f8833483b253ae6b2add35c7aafe167197a0dc02ed2bcc96fa9f583dd",
+    "failed_repairs": "c3b512d937c844b4b8fb959375f051a340c55b5934fff4157a2298e6be483b7c",
+    "sampled_failures": 13,
+    "ray_candidates": 0,
+    "projection_candidates": 0,
+    "coupled_rounding_candidates": 0,
+    "boundary_candidates": 0,
+    "independent_state_results": {
+      "1": {
+        "z3": "sat",
+        "cvc5": "timeout"
+      },
+      "32": {
+        "z3": "sat",
+        "cvc5": "timeout"
+      },
+      "64": {
+        "z3": "sat",
+        "cvc5": "timeout"
+      },
+      "128": {
+        "z3": "sat",
+        "cvc5": "timeout"
+      }
+    }
+  },
+  "failed_observer_attempt": "R1446 four terminal runs fail before either oracle starts because the driver omitted the required environment argument; R1447 preserves them and completes corrected checks.",
+  "protected_sets_used": false,
+  "outcome": "Closed without promotion. Sparse unit-equation projection plus exact coordinate-boundary descent passes all native tests but gains no selected gap1/13/89/98 and slows pilot verified PAR-2 by about1.2%. Candidate code is removed; no full160 expansion or new PR. Prior qualified a677 runtime remains the retained implementation. Diagnostic Z3 SAT decisions on sampled integer states are not scored benchmark results or independent model certificates."
+}

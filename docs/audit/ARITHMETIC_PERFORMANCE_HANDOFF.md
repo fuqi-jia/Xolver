@@ -306,6 +306,22 @@ R1441 seals the evidence; this limited one-round gain establishes neither
 superiority over Z3 nor improved original-program QCP coverage. No new PR or
 merge is created for these intermediate experiments.
 
+The follow-up integer model-repair prototype `a5341d65` is closed and removed
+in `a6d3a639`. It projects unit equalities, rounds independent coordinates,
+and searches exact coordinate boundaries under a work budget. R1449 passes
+1928 native cases /988961 assertions, but R1450's13 selected cases give
+**9 preceding candidate/9 prototype/12 verified Z3**: no gains, losses,
+opposite verdicts or invalid models. Verified PAR-2 worsens627.647→635.042s.
+Selected gaps1/13/89/98 still time out; no full160 expansion or PR follows.
+See [the closed repair evidence](AFFINE_BOUNDARY_REPAIR_CLOSED_20261101.json).
+The restored runtime source matches `a677c395`; Panda restoration follows
+`source-r1449.tar.json`, while the retained frozen CLI is still `08088b5a…`.
+R1446's driver fails before invoking either independent solver because of a
+missing environment argument; corrected R1447 checks all four sampled states.
+Their diagnostic Z3 SAT decisions and cvc5 timeouts are not checked-model
+certificates and are not added to benchmark scores. R1453 seals the closure
+after the original R1451 receipt script fails to parse. Both failures remain.
+
 QCP's existing verification-orchestrator skill and immutable original-program
 references have been inspected, but no new original-C workflow is started with
 the regressing R1388 candidate. Both protected sets remain unread and unused.
