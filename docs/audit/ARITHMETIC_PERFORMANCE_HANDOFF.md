@@ -280,15 +280,31 @@ reaches60 seconds. Both probes confirm libc's single-thread flag remains1 for
 inline execution and0 for the worker; every SAT witness independently replays.
 These controls are causal diagnostics, not formal score replacements.
 
-The next core/runtime implementation introduces `base/ExecutionStack`: prefer
+Runtime implementation `a677c395` introduces `base/ExecutionStack`: prefer
 main-thread stack growth within the existing hard limit, retain a joined
 large-stack worker when necessary, restore temporary limits and propagate action
 exceptions. CLI parser/solver construction and destruction share that scope.
-No theory, public solver semantics, feature gate or discarded compatibility
-entry is added. Native resource/exception tests, fresh freeze and formal suite
-validation remain pending. Canonical Panda preimages are
-`source-r1419.tar.json`; diagnostic builds never replace them. Both protected
-sets remain unread and unused.
+R1434 freezes CLI `08088b5a77ba1f2e341449327a10b4e1f42b8a27d42bda91f403a015dee69e70`.
+All39 R1435 groups pass, including1924 native cases /988394 assertions and31
+Python tests. R1437 independently checks528 complete source states with both
+frozen oracles. Main-thread, hard-cap fallback, exception restoration and12000-deep
+input checks pass. Canonical Panda preimages are `source-r1434.tar.json`;
+diagnostic builds never replace them.
+
+Fresh R1439 fixed160 yields **105 main/106 candidate/117 verified Z3** after
+the original-hash certificate115 and actual timed Z3-model94 replay supplement
+the unchanged raw reports. Raw decisions are105/106/125. Eight Z3 UNSATs
+12/24/27/42/50/80/114/159 remain unconfirmed and excluded. Verified PAR-2 is
+7059.819/6891.206/5473.371: candidate improves about2.4% in this round.
+SAT51 and NRA144 are gained at17.061s and48.088s; SAT131 is lost (main58.490s,
+candidate timeout). No opposite verdict or invalid exported model occurs.
+Candidate has53 timeouts/1 unknown. The pilot gain98 does not reproduce;
+its original full-round timeout remains in the score. Neither protection set
+is read or run. The [stage evidence](EXECUTION_STACK_STAGE_20261101.json)
+binds source, frozen binary, server checks and the complete comparison.
+R1441 seals the evidence; this limited one-round gain establishes neither
+superiority over Z3 nor improved original-program QCP coverage. No new PR or
+merge is created for these intermediate experiments.
 
 QCP's existing verification-orchestrator skill and immutable original-program
 references have been inspected, but no new original-C workflow is started with
