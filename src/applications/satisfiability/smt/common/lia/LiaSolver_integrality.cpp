@@ -357,13 +357,6 @@ bool LiaSolver::tryIntegralityRepair() {
         if (auto normalized = IntegerReasoner::normalize(disequality.lhs, disequality.rhs, Relation::Neq, true))
             constraints.push_back(std::move(*normalized));
     if (auto point = findIntegerAffineModel(constraints, buildUniform(0))) return tryPoint(*point);
-    IntegerPoint relaxation;
-    for (int variable : integerVars_) {
-        const auto name = manager_.getVarName(variable);
-        if (!name.empty()) relaxation.emplace(name, gs_.value(variable).a);
-    }
-    WorkBudget repairBudget(131072);
-    if (auto point = repairIntegerAffineModel(constraints, relaxation, repairBudget)) return tryPoint(*point);
     return false;
 }
 
