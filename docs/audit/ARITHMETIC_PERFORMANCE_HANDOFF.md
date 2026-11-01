@@ -239,14 +239,56 @@ from23.135s UNSAT to the30-second limit. All variants retain exact arithmetic,
 queried-integer typing, mandatory theory/final checks and the LRA source fix.
 These are30-second causal diagnostics, not formal speedup or solve-count rows.
 
-The next implementation restores tentative exact LRA phase advice while retaining
-strict LIA model eligibility. A phase is an optional search preference, not a
-claim that pending constraints are satisfied. New tests require both available
-real advice before pending checks and correct rejection of the resulting
-contradiction afterward. The source replacement/scope/withdrawal fix and final
-model validation remain in place. Fresh native qualification and the same13-case
-formal pilot are pending; no new PR or merge is opened. Canonical Panda preimages
-remain `source-r1406.tar.json`; diagnostic builds do not replace them.
+Implementation`f33ba286` restores tentative exact LRA advice while retaining
+strict LIA model eligibility. R1419 (`bd2d9c083139`, run`0262554b5a6e`)
+qualifies CLI SHA-256
+`03c97bb1485ed6a4c6592b44281745bcb6e8a7b080c8930d5b74eb793bccb241`.
+All39 R1420 groups pass:1921 native cases/988378 assertions and31 Python tests.
+All five new contracts pass; earlier same-header functions fail all five.
+R1424 again confirms528 state transitions,398 actual SAT models and130 UNSAT
+source bases with both independent solvers.
+
+R1421's complete13-case pilot is **7 main/6 candidate/13 verified Z3**. LRA
+51/59/131 improve47.027/7.585/37.272s to16.508/2.623/23.726s, but NRA144 is lost:
+main SAT56.834s versus candidate timeout. No gains, opposite verdicts or invalid
+models occur. The R1425 full160 dispatcher rejects this pilot before creating
+any native experiment. No new PR or merge follows. R1428 (`bbe3467c1395`)
+binds source, binary, all39 groups, actual state checks and the rejected pilot;
+see [the relaxation-phase trial](RELAXATION_PHASE_TRIAL_20261101.json), SHA-256
+`677841aa44ef64d8fef786f409a9c788af375013959538d582bce598c4444216`.
+
+R1426/R1427 isolate late-atom refresh and LRA source withdrawal under identical
+headers/core. The144 current/static-candidate/prior-LRA controls all return
+independently replayed SAT in45.368/47.218/43.907s, so neither rollback alone
+establishes a fix for the formal loss. Control157 also passes. Control65's first
+independent Z3 check reaches60 seconds without a verdict, not an opposite answer;
+its failed job is retained. R1429 completes all65 variants with fresh frozen
+cvc5 UNSAT checks. These API60-second checks include separate parsing within a
+75-second invocation and do not replace the formal lost144 row.
+
+R1430/R1431 time script scan, parsing, solve and export separately. Single-query
+snapshot scans cost0.087s on98 and0.231s on144; duplicated scan work does not
+explain the whole gap. API98 has58.299s check time but61.473s total and remains
+outside the formal60-second budget. API144 is47.421s versus verbose frozen CLI
+53.306s, both with checked models. Plain and passive-observer paths agree in
+search behavior; their13 Full checks and70 Standard theory checks match CLI.
+
+R1432/R1433 then isolate only the CLI's unconditional large-stack pthread.
+With the same512MiB stack allowance, CPU and core,144 changes52.682s wall /
+52.609s CPU to45.334s wall /45.239s CPU;59 changes2.121s to1.920s;98 still
+reaches60 seconds. Both probes confirm libc's single-thread flag remains1 for
+inline execution and0 for the worker; every SAT witness independently replays.
+These controls are causal diagnostics, not formal score replacements.
+
+The next core/runtime implementation introduces `base/ExecutionStack`: prefer
+main-thread stack growth within the existing hard limit, retain a joined
+large-stack worker when necessary, restore temporary limits and propagate action
+exceptions. CLI parser/solver construction and destruction share that scope.
+No theory, public solver semantics, feature gate or discarded compatibility
+entry is added. Native resource/exception tests, fresh freeze and formal suite
+validation remain pending. Canonical Panda preimages are
+`source-r1419.tar.json`; diagnostic builds never replace them. Both protected
+sets remain unread and unused.
 
 QCP's existing verification-orchestrator skill and immutable original-program
 references have been inspected, but no new original-C workflow is started with

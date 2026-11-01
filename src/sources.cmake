@@ -3,6 +3,7 @@
 set(XOLVER_BASE_SOURCES
     "base/CaseStats.cpp"
     "base/EnvParam.cpp"
+    "base/ExecutionStack.cpp"
     "base/RealValue.cpp"
     "base/RuntimeConfig.cpp"
     "base/SolveClock.cpp"

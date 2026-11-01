@@ -92,7 +92,7 @@ foreach(layer base parallel ir contracts algebra evidence quantifiers applicatio
     list(APPEND XOLVER_CORE_OBJECTS $<TARGET_OBJECTS:xolver_${layer}>)
     set_target_properties(xolver_${layer} PROPERTIES POSITION_INDEPENDENT_CODE ON)
     target_link_libraries(xolver_${layer} PRIVATE xolver_build_options)
-    if(layer STREQUAL "parallel")
+    if(layer MATCHES "^(base|parallel)$")
         target_link_libraries(xolver_${layer} PRIVATE Threads::Threads)
     endif()
     if(layer MATCHES "^(algebra|search|applications|runtime)$")
@@ -126,7 +126,7 @@ include("${CMAKE_SOURCE_DIR}/cmake/ParallelBackends.cmake")
 add_library(xolver_checkers STATIC
     $<TARGET_OBJECTS:xolver_base> $<TARGET_OBJECTS:xolver_ir>
     $<TARGET_OBJECTS:xolver_contracts> $<TARGET_OBJECTS:xolver_evidence>)
-target_link_libraries(xolver_checkers PUBLIC somtparser_ir gmpxx ${MPFR_LIBRARIES} ${GMP_LIBRARIES})
+target_link_libraries(xolver_checkers PUBLIC somtparser_ir gmpxx ${MPFR_LIBRARIES} ${GMP_LIBRARIES} Threads::Threads)
 target_include_directories(xolver_checkers PUBLIC
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>

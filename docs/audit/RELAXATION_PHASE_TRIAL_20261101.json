@@ -1,0 +1,729 @@
+{
+  "source_head": "f33ba2866b8ce771afa124e87e736f109d6a93e2",
+  "source_manifest_sha256": "7220f0c7a0b51f0aff184ae83ee8b94519cd2fee7443452a2bb4fa696f329ab5",
+  "qualification_sha256": "da5cf7d9c8c4325f797cc919fe86018dad4ca0725e41da3f26c1a9001b7ee577",
+  "binary_sha256": "03c97bb1485ed6a4c6592b44281745bcb6e8a7b080c8930d5b74eb793bccb241",
+  "native_unit_cases": 1921,
+  "native_unit_assertions": 988378,
+  "python_tests": 31,
+  "acceptance_groups": 39,
+  "unit_log_sha256": "23503a43ea45b9ae501be67ab07f6d71b8c248da2f3d047ee1e002e572ef8081",
+  "same_header_negative_cases": 5,
+  "same_header_negative_failures": 5,
+  "transition_checks": {
+    "binary": "/pub/data/jiafq/xolver/validation/arithmetic-r103/linear-source-transitions-r1424/linear-source-transitions",
+    "binary_sha256": "7d8beecf83000377fc01cf3ed221ecf95593b95aa341798d9b86c58cb756983c",
+    "driver_sha256": "29970d5916ea1fe31640a0ad2cc8b03baaf9da8a105269e0c5df86ae60fff139",
+    "qualification_sha256": "da5cf7d9c8c4325f797cc919fe86018dad4ca0725e41da3f26c1a9001b7ee577",
+    "library_sha256": "1e5aba11a1ca67da2e690bd55b7472c63ebc5c024420e6c3053fc966cf08c1ac",
+    "source_manifest_sha256": "7220f0c7a0b51f0aff184ae83ee8b94519cd2fee7443452a2bb4fa696f329ab5",
+    "commands": [
+      [
+        "/usr/bin/c++",
+        "-std=c++20",
+        "-O2",
+        "-DNDEBUG",
+        "-DXOLVER_ENABLE_PROOFS",
+        "-DXOLVER_HAS_CADICAL",
+        "-DXOLVER_HAS_LIBPOLY",
+        "-DXOLVER_VERSION_MAJOR=0",
+        "-DXOLVER_VERSION_MINOR=1",
+        "-DXOLVER_VERSION_PATCH=0",
+        "-I/pub/data/jiafq/xolver/third_party/SOMTParser/include",
+        "-I/pub/data/jiafq/xolver/dependencies/native/include",
+        "-I/pub/data/jiafq/xolver/include",
+        "-I/pub/data/jiafq/xolver/src",
+        "-I/pub/data/jiafq/xolver/third_party/libpoly/include",
+        "-isystem",
+        "/pub/data/jiafq/xolver/dependencies/json/include",
+        "-c",
+        "/pub/data/jiafq/xolver/validation/arithmetic-r103/linear-source-transitions-r1424.cpp",
+        "-o",
+        "/pub/data/jiafq/xolver/build/diagnostics/linear-source-transitions-r1424/driver.o"
+      ],
+      [
+        "/usr/bin/c++",
+        "/pub/data/jiafq/xolver/build/diagnostics/linear-source-transitions-r1424/driver.o",
+        "-O3",
+        "-DNDEBUG",
+        "-o",
+        "/pub/data/jiafq/xolver/validation/arithmetic-r103/linear-source-transitions-r1424/linear-source-transitions",
+        "../src/libxolver_core.a",
+        "../third_party/SOMTParser/libsomtparser.a",
+        "/pub/data/jiafq/xolver/dependencies/native/lib/libgmpxx.a",
+        "/pub/data/jiafq/xolver/dependencies/native/lib/libmpfr.a",
+        "/pub/data/jiafq/xolver/dependencies/native/lib/libgmp.a",
+        "../third_party/cadical-build/libcadical.a",
+        "../third_party/libpoly/src/libpolyxx.a",
+        "../third_party/libpoly/src/libpoly.a",
+        "/pub/data/jiafq/xolver/dependencies/native/lib/libmpfr.a",
+        "/pub/data/jiafq/xolver/dependencies/native/lib/libgmp.a"
+      ]
+    ],
+    "states": 528,
+    "sat": 398,
+    "unsat": 130,
+    "independent_checks_sha256": "34175f7d76ee76caa5538b260b99bda029c25b2452ba53c21500aad7dcf2a43e",
+    "states_sha256": "ce86b008fb9a7585c135a8ca3d6ad1b8faf715b51d1694600c5e46c7264f7262",
+    "protected_sets_used": false,
+    "boundary": "Direct LRA source replacement, nested API scopes, cached conflict retirement, root replay and interior level withdrawal. Each emitted complete current source base is independently checked: SAT pins every original variable to the actual exported model; UNSAT is judged on the complete original assertions. Both frozen Z3 and cvc5 must agree. This is a functional regression check, not fixed160 performance or original-C QCP coverage."
+  },
+  "transition_record_sha256": "0d68e0c60f8f10fd16e715b880f26ff8079b196ffb46e63ffd021e3b9ef09f67",
+  "pilot": {
+    "cases": 13,
+    "binaries": {
+      "baseline": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/prefix-pruning-r1341/xolver",
+        "sha256": "30965221fc2a3b37177a7e79c771b6fb4d9f738d4a524357aee2448b5b3ba07f"
+      },
+      "candidate": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/relaxation-phase-r1419/xolver",
+        "sha256": "03c97bb1485ed6a4c6592b44281745bcb6e8a7b080c8930d5b74eb793bccb241"
+      },
+      "z3": {
+        "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+        "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      }
+    },
+    "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+    "timeout": 60,
+    "memory_bytes": 17179869184,
+    "model_capture": "initial-solve-single-model",
+    "counts": {
+      "baseline": {
+        "timeout": 6,
+        "decided": 7,
+        "verified_decided": 7,
+        "verified_par2": 894.454497627914,
+        "raw_par2": 894.454497627914,
+        "unsat": 1,
+        "sat": 6
+      },
+      "candidate": {
+        "timeout": 7,
+        "decided": 6,
+        "verified_decided": 6,
+        "verified_par2": 916.1933317780495,
+        "raw_par2": 916.1933317780495,
+        "unsat": 1,
+        "sat": 5
+      },
+      "z3": {
+        "sat": 11,
+        "decided": 13,
+        "verified_decided": 13,
+        "verified_par2": 46.18471099995077,
+        "raw_par2": 46.18471099995077,
+        "unsat": 2
+      }
+    },
+    "by_logic": {
+      "QF_LIA": {
+        "baseline": {
+          "timeout": 4,
+          "decided": 3,
+          "verified_decided": 3,
+          "verified_par2": 505.7360199280083,
+          "raw_par2": 505.7360199280083,
+          "unsat": 1,
+          "sat": 2
+        },
+        "candidate": {
+          "timeout": 4,
+          "decided": 3,
+          "verified_decided": 3,
+          "verified_par2": 513.3363984469324,
+          "raw_par2": 513.3363984469324,
+          "unsat": 1,
+          "sat": 2
+        },
+        "z3": {
+          "sat": 6,
+          "decided": 7,
+          "verified_decided": 7,
+          "verified_par2": 16.602523474022746,
+          "raw_par2": 16.602523474022746,
+          "unsat": 1
+        }
+      },
+      "QF_LRA": {
+        "baseline": {
+          "timeout": 2,
+          "decided": 3,
+          "verified_decided": 3,
+          "verified_par2": 331.88431602716446,
+          "raw_par2": 331.88431602716446,
+          "sat": 3
+        },
+        "candidate": {
+          "timeout": 2,
+          "decided": 3,
+          "verified_decided": 3,
+          "verified_par2": 282.85693333111703,
+          "raw_par2": 282.85693333111703,
+          "sat": 3
+        },
+        "z3": {
+          "sat": 4,
+          "decided": 5,
+          "verified_decided": 5,
+          "verified_par2": 21.99700960703194,
+          "raw_par2": 21.99700960703194,
+          "unsat": 1
+        }
+      },
+      "QF_NRA": {
+        "baseline": {
+          "sat": 1,
+          "decided": 1,
+          "verified_decided": 1,
+          "verified_par2": 56.834161672741175,
+          "raw_par2": 56.834161672741175
+        },
+        "candidate": {
+          "timeout": 1,
+          "decided": 0,
+          "verified_decided": 0,
+          "verified_par2": 120,
+          "raw_par2": 120
+        },
+        "z3": {
+          "sat": 1,
+          "decided": 1,
+          "verified_decided": 1,
+          "verified_par2": 7.585177918896079,
+          "raw_par2": 7.585177918896079
+        }
+      }
+    },
+    "changes": [
+      {
+        "index": 144,
+        "case": "QF_NRA/2019-ezsmt/reverseFolding/31-reverse_folding-0-0.smt2",
+        "kind": "lost",
+        "truth": "sat",
+        "evidence": [
+          "baseline-exported-model-replay",
+          "z3-exported-model-replay"
+        ],
+        "observations": {
+          "baseline": {
+            "result": "sat",
+            "seconds": 56.834161672741175
+          },
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.15357747301459
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 7.585177918896079
+          }
+        }
+      }
+    ],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "unverified": [],
+    "scoring": "Correct verdicts require a replayed model or an independent UNSAT decision on the identical input hash; unresolved results receive PAR-2 penalty."
+  },
+  "restored_prior_regressions": [
+    {
+      "index": 7,
+      "report_sha256": "022638f687742678771d3d3dc4cc3f784753f7f740beac0d096a3c223362fb5f",
+      "observations": {
+        "candidate": {
+          "result": "unsat",
+          "seconds": 25.079607838764787,
+          "verified": true
+        },
+        "z3": {
+          "result": "unsat",
+          "seconds": 0.11546631716191769,
+          "verified": true
+        },
+        "baseline": {
+          "result": "unsat",
+          "seconds": 17.482035445049405,
+          "verified": true
+        }
+      }
+    },
+    {
+      "index": 11,
+      "report_sha256": "0f0297097cdb36ffe02ac5500dbf890b95def3a854885697ea1287777f5dd5c6",
+      "observations": {
+        "z3": {
+          "result": "sat",
+          "seconds": 7.785532331094146,
+          "verified": true
+        },
+        "baseline": {
+          "result": "sat",
+          "seconds": 5.83022628724575,
+          "verified": true
+        },
+        "candidate": {
+          "result": "sat",
+          "seconds": 5.784065680578351,
+          "verified": true
+        }
+      }
+    },
+    {
+      "index": 51,
+      "report_sha256": "8b3c524fefdb511d27eac9bddbb757a0365320c8b76ad4cea7803858a50d4086",
+      "observations": {
+        "baseline": {
+          "result": "sat",
+          "seconds": 47.02653343975544,
+          "verified": true
+        },
+        "candidate": {
+          "result": "sat",
+          "seconds": 16.50844907015562,
+          "verified": true
+        },
+        "z3": {
+          "result": "sat",
+          "seconds": 0.6677702907472849,
+          "verified": true
+        }
+      }
+    },
+    {
+      "index": 59,
+      "report_sha256": "c1daa3d49df8c84603da04927f868d54b1cea7d1ed829f1cbcd00026a83bc7db",
+      "observations": {
+        "z3": {
+          "result": "sat",
+          "seconds": 0.417441064491868,
+          "verified": true
+        },
+        "baseline": {
+          "result": "sat",
+          "seconds": 7.585481684654951,
+          "verified": true
+        },
+        "candidate": {
+          "result": "sat",
+          "seconds": 2.6227910798043013,
+          "verified": true
+        }
+      }
+    },
+    {
+      "index": 91,
+      "report_sha256": "5031f3a61e67717f0f2bf67ca67c5e52407d700e8bc4da40e12e8dca792218a4",
+      "observations": {
+        "candidate": {
+          "result": "sat",
+          "seconds": 2.4727249275892973,
+          "verified": true
+        },
+        "z3": {
+          "result": "sat",
+          "seconds": 0.16645291820168495,
+          "verified": true
+        },
+        "baseline": {
+          "result": "sat",
+          "seconds": 2.4237581957131624,
+          "verified": true
+        }
+      }
+    },
+    {
+      "index": 131,
+      "report_sha256": "cfa44867c984e9fbe4ab390cffe7739a09cd01bf30f52d032c971f4327dd585c",
+      "observations": {
+        "z3": {
+          "result": "sat",
+          "seconds": 0.4677936024963856,
+          "verified": true
+        },
+        "baseline": {
+          "result": "sat",
+          "seconds": 37.27230090275407,
+          "verified": true
+        },
+        "candidate": {
+          "result": "sat",
+          "seconds": 23.725693181157112,
+          "verified": true
+        }
+      }
+    }
+  ],
+  "experiment_jobs": {
+    "xolver-relaxation-phase-source-r1419-20261101": [
+      [
+        "0262554b5a6e",
+        "success",
+        0,
+        2445540
+      ]
+    ],
+    "xolver-relaxation-phase-acceptance-r1420a-20261101": [
+      [
+        "63cabb162c90",
+        "success",
+        0,
+        2498030
+      ],
+      [
+        "5c7452202bcd",
+        "success",
+        0,
+        2498102
+      ],
+      [
+        "67233647fc6b",
+        "success",
+        0,
+        2498173
+      ],
+      [
+        "8ce728b866d3",
+        "success",
+        0,
+        2498246
+      ],
+      [
+        "7475068c26a0",
+        "success",
+        0,
+        2498319
+      ],
+      [
+        "3bbf35e02c56",
+        "success",
+        0,
+        2498408
+      ],
+      [
+        "e6601ae82439",
+        "success",
+        0,
+        2498516
+      ],
+      [
+        "57cb14fe80f0",
+        "success",
+        0,
+        2498623
+      ],
+      [
+        "df62355f722c",
+        "success",
+        0,
+        2498735
+      ],
+      [
+        "92fa2470747c",
+        "success",
+        0,
+        2498838
+      ],
+      [
+        "2d3638f9e6e7",
+        "success",
+        0,
+        2498952
+      ],
+      [
+        "c813f0bd1b24",
+        "success",
+        0,
+        2499063
+      ],
+      [
+        "d102243ec359",
+        "success",
+        0,
+        2499191
+      ],
+      [
+        "43224a06d0ea",
+        "success",
+        0,
+        2499322
+      ],
+      [
+        "fffbde8ccbca",
+        "success",
+        0,
+        2499469
+      ],
+      [
+        "23ac03299b4a",
+        "success",
+        0,
+        2499606
+      ],
+      [
+        "3735be73feb3",
+        "success",
+        0,
+        2499779
+      ],
+      [
+        "b44c6fbaf7b4",
+        "success",
+        0,
+        2499947
+      ],
+      [
+        "718382a2b342",
+        "success",
+        0,
+        2500131
+      ],
+      [
+        "bbe46c559aac",
+        "success",
+        0,
+        2500315
+      ]
+    ],
+    "xolver-relaxation-phase-acceptance-r1420b-20261101": [
+      [
+        "841ebebae123",
+        "success",
+        0,
+        2507720
+      ],
+      [
+        "437b4677823c",
+        "success",
+        0,
+        2507883
+      ],
+      [
+        "885a0539fc88",
+        "success",
+        0,
+        2508064
+      ],
+      [
+        "2825896de523",
+        "success",
+        0,
+        2508484
+      ],
+      [
+        "0ecdbffa4e99",
+        "success",
+        0,
+        2508684
+      ],
+      [
+        "64df104888c5",
+        "success",
+        0,
+        2508823
+      ],
+      [
+        "0bdcc989aca1",
+        "success",
+        0,
+        2508962
+      ],
+      [
+        "080c550a2031",
+        "success",
+        0,
+        2509105
+      ],
+      [
+        "51c78036a37d",
+        "success",
+        0,
+        2509256
+      ],
+      [
+        "9b5f0a752855",
+        "success",
+        0,
+        2509416
+      ],
+      [
+        "e0343be8a56b",
+        "success",
+        0,
+        2509563
+      ],
+      [
+        "955bf658e969",
+        "success",
+        0,
+        2509718
+      ],
+      [
+        "31004a14dfa2",
+        "success",
+        0,
+        2509874
+      ],
+      [
+        "39a850cc9faa",
+        "success",
+        0,
+        2510043
+      ],
+      [
+        "6109791bf308",
+        "success",
+        0,
+        2510196
+      ],
+      [
+        "2f29119744c7",
+        "success",
+        0,
+        2510363
+      ],
+      [
+        "1566630ef2aa",
+        "success",
+        0,
+        2510524
+      ],
+      [
+        "179d67a77f7b",
+        "success",
+        0,
+        2510676
+      ],
+      [
+        "64da685cce1f",
+        "success",
+        0,
+        2510916
+      ]
+    ],
+    "xolver-relaxation-phase-r1421-pilot-20261101": [
+      [
+        "4a7056ed19e9",
+        "success",
+        0,
+        2566093
+      ],
+      [
+        "e245610c8860",
+        "success",
+        0,
+        2566176
+      ],
+      [
+        "1edbabc24e61",
+        "success",
+        0,
+        2566246
+      ],
+      [
+        "32901e669a7f",
+        "success",
+        0,
+        2566319
+      ],
+      [
+        "e2870704716d",
+        "success",
+        0,
+        2566421
+      ],
+      [
+        "398383e35424",
+        "success",
+        0,
+        2566497
+      ],
+      [
+        "c81624ceaf4b",
+        "success",
+        0,
+        2566565
+      ],
+      [
+        "e03712e5490a",
+        "success",
+        0,
+        2566631
+      ],
+      [
+        "51512e93a820",
+        "success",
+        0,
+        2566724
+      ],
+      [
+        "fca5fbc25243",
+        "success",
+        0,
+        2566794
+      ],
+      [
+        "ce58f0533208",
+        "success",
+        0,
+        2566861
+      ],
+      [
+        "8d26b4237b96",
+        "success",
+        0,
+        2566930
+      ],
+      [
+        "046df66137d9",
+        "success",
+        0,
+        2567006
+      ]
+    ],
+    "xolver-relaxation-phase-observation-r1422-20261101": [
+      [
+        "7da2f5e9a62c",
+        "success",
+        0,
+        2568113
+      ],
+      [
+        "6e9c0eea33aa",
+        "success",
+        0,
+        2568177
+      ],
+      [
+        "7e3b217486f6",
+        "success",
+        0,
+        2568240
+      ],
+      [
+        "ca4be0a1bac6",
+        "success",
+        0,
+        2568311
+      ],
+      [
+        "3c64d165efed",
+        "success",
+        0,
+        2568370
+      ]
+    ],
+    "xolver-linear-source-transitions-r1424-20261101": [
+      [
+        "220f33975b55",
+        "success",
+        0,
+        2496582
+      ]
+    ]
+  },
+  "source_bug": "Replacing an already-applied LRA source did not withdraw its previous bounds or clear a cached conflict. API scopes did not own source snapshots; suffix-only level withdrawal could retain interior discarded sources.",
+  "outcome": "Correct LRA replacement/scopes/withdrawal and exact tentative real phase advice pass all native checks. Strict integer model eligibility remains. Independent source-state and model checks confirm the retained correctness fix. Formal13-case pilot restores51/59/131 with times47.027/7.585/37.272s to16.508/2.623/23.726s, but loses NRA144: baseline SAT56.834s versus candidate timeout. Verified solves7/6/13, no gains or wrong/invalid model. The full160 dispatcher rejects this pilot and creates no native experiment. No new PR or merge. Same-core diagnostic controls isolate dynamic candidate refresh and prior LRA lifecycle behavior; these never replace the original lost row. No protected-set or new original-C QCP execution.",
+  "protected_sets_used": false
+}
