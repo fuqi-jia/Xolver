@@ -140,6 +140,83 @@ TEST_CASE("PseudoBooleanEncoder: arithmetic fallback preserves every reified wei
     }
 }
 
+TEST_CASE("PseudoBooleanEncoder: shared sums preserve distinct and complemented thresholds") {
+    auto sat = createSatSolver();
+    BitBlastEncoder encoder(*sat);
+    WorkBudget work;
+    PseudoBooleanEncoder pb(encoder, work);
+    std::vector<WeightedLiteral> terms;
+    mpz_class total = 0, boundary = 0;
+    uint32_t state = 0x9e3779b9u;
+    for (int i = 0; i < 14; ++i) {
+        state ^= state << 13; state ^= state >> 17; state ^= state << 5;
+        const mpz_class weight = mpz_class(4194304u + (state & 0x3fffffu))*7;
+        terms.push_back({encoder.mkVar(1).bits[0], weight});
+        total += weight;
+        if (i < 7) boundary += weight;
+    }
+    auto complemented = terms, negative = terms, changed = terms;
+    for (auto& term : complemented) term.literal = term.literal.negated();
+    for (auto& term : negative) term.weight = -term.weight;
+    changed[0].weight += 7;
+    // The adjacent non-divisible bound exercises integer floor/ceiling after
+    // GCD reduction. The exact boundary is reached by the first seven inputs.
+    const auto upper = pb.lessEqual(terms, boundary + 1);
+    REQUIRE(upper);
+    REQUIRE(pb.statistics().carrySaveSums == 1);
+    const auto exactUpper = pb.lessEqual(terms, boundary);
+    const auto lower = pb.lessEqual(complemented, total - boundary - 1);
+    const auto exactLower = pb.lessEqual(negative, -boundary);
+    REQUIRE(exactUpper); REQUIRE(lower); REQUIRE(exactLower);
+    CHECK(pb.statistics().carrySaveSums == 1);
+    CHECK(pb.statistics().reusedSums == 3);
+    const auto differentSum = pb.lessEqual(changed, boundary);
+    REQUIRE(differentSum);
+    const std::vector<SatLit> predicates{*upper, *exactUpper, *lower, *exactLower, *differentSum};
+    for (unsigned mask = 0; mask < (1u << terms.size()); ++mask) {
+        std::vector<SatLit> assumptions;
+        mpz_class value = 0;
+        for (size_t i = 0; i < terms.size(); ++i) {
+            const bool chosen = mask & (1u << i);
+            assumptions.push_back(chosen ? terms[i].literal : terms[i].literal.negated());
+            if (chosen) value += terms[i].weight;
+        }
+        const std::vector<bool> expected{value <= boundary + 1, value <= boundary,
+            value > boundary, value >= boundary, value + ((mask & 1) ? 7 : 0) <= boundary};
+        assumptions.push_back({});
+        for (size_t i = 0; i < predicates.size(); ++i) {
+            assumptions.back() = expected[i] ? predicates[i] : predicates[i].negated();
+            CHECK(sat->solve(assumptions) == SatSolver::SolveResult::Sat);
+            assumptions.back() = assumptions.back().negated();
+            CHECK(sat->solve(assumptions) == SatSolver::SolveResult::Unsat);
+        }
+    }
+}
+
+TEST_CASE("PseudoBooleanEncoder: an exhausted attempt cannot corrupt a later shared sum") {
+    auto sat = createSatSolver();
+    BitBlastEncoder encoder(*sat);
+    WorkBudget work(50);
+    PseudoBooleanEncoder pb(encoder, work);
+    std::vector<WeightedLiteral> terms;
+    mpz_class total = 0;
+    for (unsigned i = 0; i < 18; ++i) {
+        const mpz_class weight = (mpz_class(1) << (i + 30)) + i*137 + 1;
+        terms.push_back({encoder.mkVar(1).bits[0], weight});
+        total += weight;
+    }
+    CHECK_FALSE(pb.lessEqual(terms, total/2).has_value());
+    work = WorkBudget();
+    const auto predicate = pb.lessEqual(terms, total/2);
+    REQUIRE(predicate);
+    std::vector<SatLit> assumptions;
+    for (const auto& term : terms) assumptions.push_back(term.literal.negated());
+    assumptions.push_back(*predicate);
+    CHECK(sat->solve(assumptions) == SatSolver::SolveResult::Sat);
+    assumptions.back() = predicate->negated();
+    CHECK(sat->solve(assumptions) == SatSolver::SolveResult::Unsat);
+}
+
 TEST_CASE("Finite integer portfolio: signed strict bounds and Boolean contexts validate exactly") {
     for (auto relation : {Kind::Eq, Kind::Distinct, Kind::Lt, Kind::Leq, Kind::Gt, Kind::Geq}) {
         BinaryFixture f;

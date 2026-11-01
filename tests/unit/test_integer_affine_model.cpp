@@ -102,12 +102,14 @@ TEST_CASE("integer radix decomposition: only a proved remainder range qualifies"
     CHECK_FALSE(findIntegerRadixDecomposition(equation,missing));
     for (const auto& range : std::vector<std::pair<mpz_class,mpz_class>>{{-1,6},{0,8},{8,8},{3,2}}) {
         const IntegerBoundsLookup bounds=[&](const std::string& name)->std::optional<std::pair<mpz_class,mpz_class>> {
-            if (name=="low") return range;return std::nullopt;
+            if (name=="low") return range;
+            return std::nullopt;
         };
         CHECK_FALSE(findIntegerRadixDecomposition(equation,bounds));
     }
     const IntegerBoundsLookup bounds=[](const std::string& name)->std::optional<std::pair<mpz_class,mpz_class>> {
-        if (name=="low") return std::pair<mpz_class,mpz_class>{0,7};return std::nullopt;
+        if (name=="low") return std::pair<mpz_class,mpz_class>{0,7};
+        return std::nullopt;
     };
     equation.rel=Relation::Leq;CHECK_FALSE(findIntegerRadixDecomposition(equation,bounds));
     equation.rel=Relation::Eq;equation.lhs.terms[1].second=-12;
@@ -122,7 +124,8 @@ TEST_CASE("integer radix decomposition: duplicate coordinates are merged before 
     const NormalizedConstraint equation{LinearFormKey{{{"word",1},{"high",-4},{"high",-4},
         {"low",-1},{"unused",5},{"unused",-5}}},3,Relation::Eq};
     const IntegerBoundsLookup bounds=[](const std::string& name)->std::optional<std::pair<mpz_class,mpz_class>> {
-        if (name=="low") return std::pair<mpz_class,mpz_class>{0,7};return std::nullopt;
+        if (name=="low") return std::pair<mpz_class,mpz_class>{0,7};
+        return std::nullopt;
     };
     const auto definition=findIntegerRadixDecomposition(equation,bounds);
     REQUIRE(definition);CHECK(definition->offset==-3);CHECK(definition->exponent==3);

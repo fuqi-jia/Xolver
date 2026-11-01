@@ -5,6 +5,19 @@
 
 namespace xolver::bitblast {
 
+bool PseudoBooleanEncoder::SumLess::operator()(
+    const std::vector<WeightedLiteral>& left, const std::vector<WeightedLiteral>& right) const {
+    if (left.size() != right.size()) return left.size() < right.size();
+    for (size_t i = 0; i < left.size(); ++i) {
+        if (left[i].literal.var != right[i].literal.var)
+            return left[i].literal.var < right[i].literal.var;
+        if (left[i].literal.sign != right[i].literal.sign)
+            return left[i].literal.sign < right[i].literal.sign;
+        if (left[i].weight != right[i].weight) return left[i].weight < right[i].weight;
+    }
+    return false;
+}
+
 void PseudoBooleanEncoder::tick() {
     work_.tick();
     if (encoder_.overflowed() || ((work_.used() & 1023) == 0 &&
@@ -55,6 +68,26 @@ std::optional<SatLit> PseudoBooleanEncoder::lessEqual(
         });
         std::vector<mpz_class> suffix(terms.size() + 1);
         for (size_t i = terms.size(); i-- > 0;) suffix[i] = suffix[i + 1] + terms[i].weight;
+        if (bound >= suffix[0]) return encoder_.constTrue();
+        // S <= b is equivalent to !(T-S <= T-b-1), where T is the
+        // total positive weight. A single polarity convention lets opposite
+        // inequalities and different bounds share the same arithmetic sum.
+        const bool complement = !terms.front().literal.sign;
+        if (complement) {
+            bound = suffix[0] - bound - 1;
+            for (auto& term : terms) term.literal = term.literal.negated();
+        }
+        auto oriented = [&](std::optional<SatLit> literal) {
+            if (literal && complement) *literal = literal->negated();
+            return literal;
+        };
+        // Once a sum needed an arithmetic encoding, subsequent thresholds
+        // reuse it before trying another potentially large decision diagram.
+        if (const auto found = sums_.find(terms); found != sums_.end()) {
+            ++statistics_.carrySaveThresholds;
+            ++statistics_.reusedSums;
+            return oriented(compareSum(found->second, bound));
+        }
 
         // A full adder needs at most five gates; the final addition/comparison
         // is linear in the coefficient width. Prefer a diagram while its
@@ -110,7 +143,7 @@ std::optional<SatLit> PseudoBooleanEncoder::lessEqual(
                     // partial diagram therefore cannot restrict the inputs.
                     stack.clear();
                     memo.clear();
-                    return carrySaveThreshold(terms, target);
+                    return oriented(carrySaveThreshold(terms, target));
                 }
                 frame.phase = 1;
                 const mpz_class lowBound = frame.bound;
@@ -127,7 +160,7 @@ std::optional<SatLit> PseudoBooleanEncoder::lessEqual(
                 stack.pop_back();
             }
         }
-        return result;
+        return oriented(result);
     } catch (const ResourceExhausted&) {
         return std::nullopt;
     }
@@ -178,6 +211,15 @@ std::optional<SatLit> PseudoBooleanEncoder::carrySaveThreshold(
     }
     const auto sum = encoder_.add(left, right);
     if (encoder_.overflowed()) return std::nullopt;
+    // Publish only a complete sum. Partial gates from exhausted attempts
+    // never become a reusable expression or an exposed threshold predicate.
+    sums_.emplace(terms, sum);
+    ++statistics_.carrySaveSums;
+    return compareSum(sum, bound);
+}
+
+std::optional<SatLit> PseudoBooleanEncoder::compareSum(
+    const BitVec& sum, const mpz_class& bound) {
     const auto difference = encoder_.sub(sum, encoder_.mkConst(bound));
     if (encoder_.overflowed()) return std::nullopt;
     const auto predicate = encoder_.relZero(difference, Relation::Leq);

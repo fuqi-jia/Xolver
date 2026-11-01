@@ -768,6 +768,8 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
             std::cerr << "[EAGER-PB] thresholds=" << counts.thresholds
                       << " diagram_states=" << counts.diagramStates
                       << " carry_save=" << counts.carrySaveThresholds
+                      << " arithmetic_sums=" << counts.carrySaveSums
+                      << " reused_sums=" << counts.reusedSums
                       << " compressors=" << counts.compressors << "\n";
         }
         if (!encodeOk) return out;            // unsupported mid-encode -> Unknown

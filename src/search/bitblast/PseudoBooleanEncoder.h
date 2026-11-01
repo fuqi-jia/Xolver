@@ -4,6 +4,7 @@
 #include "search/bitblast/BitBlastEncoder.h"
 #include <chrono>
 #include <cstddef>
+#include <map>
 #include <optional>
 #include <vector>
 
@@ -19,13 +20,16 @@ struct WeightedLiteral {
 // Signed weights, repeated/complementary literals and arbitrary-size integers
 // are normalized before building a shared decision diagram. If its state
 // count exceeds the estimated arithmetic-circuit size, an exact carry-save
-// sum replaces the diagram. Exhaustion exposes no unfinished literal.
+// sum replaces the diagram and is reused across thresholds of that expression,
+// including complemented inequalities. Exhaustion exposes no unfinished literal.
 class PseudoBooleanEncoder {
 public:
     struct Statistics {
         size_t thresholds = 0;
         size_t diagramStates = 0;
         size_t carrySaveThresholds = 0;
+        size_t carrySaveSums = 0;
+        size_t reusedSums = 0;
         size_t compressors = 0;
     };
     PseudoBooleanEncoder(BitBlastEncoder& encoder, WorkBudget& work,
@@ -41,7 +45,15 @@ private:
     WorkBudget& work_;
     std::chrono::steady_clock::time_point deadline_;
     Statistics statistics_;
+    struct SumLess {
+        bool operator()(const std::vector<WeightedLiteral>& left,
+                        const std::vector<WeightedLiteral>& right) const;
+    };
+    // Complete exact sums in this encoder's SAT instance. Bounds and
+    // threshold polarities are deliberately absent from the expression key.
+    std::map<std::vector<WeightedLiteral>, BitVec, SumLess> sums_;
     void tick();
+    std::optional<SatLit> compareSum(const BitVec& sum, const mpz_class& bound);
     std::optional<SatLit> carrySaveThreshold(
         const std::vector<WeightedLiteral>& terms, const mpz_class& bound);
 };
