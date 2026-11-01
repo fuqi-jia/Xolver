@@ -101,6 +101,45 @@ TEST_CASE("PseudoBooleanEncoder: partial resource-limited encodings expose no li
     CHECK(enc.overflowed());
 }
 
+TEST_CASE("PseudoBooleanEncoder: arithmetic fallback preserves every reified weighted assignment") {
+    auto sat=createSatSolver();
+    BitBlastEncoder enc(*sat);
+    enc.setVarBudget(20000);
+    std::vector<WeightedLiteral> terms;
+    mpz_class total=0;
+    uint32_t state=0x9e3779b9u;
+    for (int i=0;i<14;++i) {
+        state^=state<<13;state^=state>>17;state^=state<<5;
+        mpz_class weight=4194304u+(state&0x3fffffu);
+        terms.push_back({enc.mkVar(1).bits[0],weight});
+        total+=weight;
+    }
+    const mpz_class bound=total/2+17;
+    WorkBudget work;
+    PseudoBooleanEncoder pb(enc,work);
+    const auto root=pb.lessEqual(terms,bound);
+    REQUIRE(root);
+    REQUIRE(pb.statistics().carrySaveThresholds>0);
+    CHECK(pb.statistics().compressors>0);
+    CHECK(enc.varCount()<10000);
+    std::vector<SatLit> assignments;
+    assignments.reserve(terms.size()+1);
+    for (unsigned mask=0;mask<(1u<<terms.size());++mask) {
+        mpz_class value=0;
+        assignments.clear();
+        for (size_t i=0;i<terms.size();++i) {
+            const bool chosen=mask&(1u<<i);
+            assignments.push_back(chosen?terms[i].literal:terms[i].literal.negated());
+            if (chosen) value+=terms[i].weight;
+        }
+        const bool expected=value<=bound;
+        assignments.push_back(expected?*root:root->negated());
+        CHECK(sat->solve(assignments)==SatSolver::SolveResult::Sat);
+        assignments.back()=assignments.back().negated();
+        CHECK(sat->solve(assignments)==SatSolver::SolveResult::Unsat);
+    }
+}
+
 TEST_CASE("Finite integer portfolio: signed strict bounds and Boolean contexts validate exactly") {
     for (auto relation : {Kind::Eq, Kind::Distinct, Kind::Lt, Kind::Leq, Kind::Gt, Kind::Geq}) {
         BinaryFixture f;

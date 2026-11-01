@@ -707,6 +707,13 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
             if (!encodeOk) break;
             enc.assertLit(l);
         }
+        if (diag) {
+            const auto& counts = pb.statistics();
+            std::cerr << "[EAGER-PB] thresholds=" << counts.thresholds
+                      << " diagram_states=" << counts.diagramStates
+                      << " carry_save=" << counts.carrySaveThresholds
+                      << " compressors=" << counts.compressors << "\n";
+        }
         if (!encodeOk) return out;            // unsupported mid-encode -> Unknown
         if (enc.overflowed()) {               // budget blown; wider K only worse
             if (diag) std::cerr << "[EAGER-BB] overflow at width=" << K << " -> stop\n";
