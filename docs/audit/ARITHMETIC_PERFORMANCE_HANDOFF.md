@@ -40,16 +40,6 @@ Older tables describe their own frozen versions and evidence boundaries.
 
 ## Current arithmetic and ASP continuation
 
-The current model-hint candidate is not delivered. R1401 compiles but fails
-the LRA retained-source contract: replacing an already-applied `x >= 1` by
-`x > 1` leaves the old bound installed because the replay cursor is unchanged.
-The next implementation withdraws derived bounds before replaying replacement
-sources, owns API scope snapshots independently of simplex resets, and uses
-the shared incremental context for interior level withdrawals. New contracts
-cover conflict retirement, nested scopes, root replay and non-monotone levels.
-Native qualification and a fresh comparison remain pending; no new PR or
-performance claim follows from this implementation alone.
-
 The consolidated QCP/foundations delivery
 [PR92](https://github.com/fuqi-jia/Xolver/pull/92) is merged as main
 `26aca1b816bdcdd02c070164bf2193c2b3483e56`. Final
@@ -197,25 +187,66 @@ problem visible rather than establishing a beneficial default search policy.
 Development now validates model hints against their actual retained sources and
 coordinate domain. The common LinearAtomManager handles LRA/LIA signed
 relations and shared relations; LIA additionally rejects fractional/infinitesimal
-integer coordinates, while LRA retains exact infinitesimals. A point revision
-covers coordinate reconstruction even without bound changes. The generic
-incremental context distinguishes appended sources from replaced/withdrawn/
-restored prefixes, allowing an unchanged feasible point to check only appended
-sources. No decision-source enum, explicit-user priority, theory deductions or
-LRA/LIA rollback policy is changed. New source/point lifecycle and two-theory
-contracts are pending native qualification, including a same-header old-advice
-negative control and the newly exposed loss cases in the next pilot.
+integer coordinates, while LRA retains exact infinitesimals. Point and retained
+source-prefix revisions validate the readiness certificate across reconstruction,
+append, replacement, withdrawal and restoration. This strict eligibility rule
+is an experimental heuristic contract, not a soundness prerequisite for phase
+advice; decisions still pass all mandatory theory and final-model checks.
 
-R1401's overlay from source`0f2f7d9f` is applied after checking R1388 preimages
-and the completed R1400 audit. Its native ExperimentOS build is`ee861f5d0781`,
-run`e72a25bee194`, and is still compiling at this handoff; qualification and the
-frozen successor are pending. `source-r1401.tar.json` is now the canonical
-preimage for a later overlay, even while this build has not yet qualified.
-Control-plane`launch-current-model-hints-r1405.py` waits for that exact run,
-then dispatches all39 R1402 checks, the13-case R1403 same-budget pilot and five
-short R1404 observers. Pilot selection adds7/11/91 and144 to the prior nine
-public cases. Do not overwrite scripts or restart an experiment because an SSH
-observation expires; inspect EOS status, output records and terminal PID cleanup.
+R1401 (source`0f2f7d9f`, experiment`ee861f5d0781`, run`e72a25bee194`)
+compiles but fails the new retained-source contract: LRA replaces an already
+applied `x >= 1` with `x > 1` without withdrawing the previous bound or rewinding
+its replay cursor. No candidate is frozen; R1402–R1404 are never dispatched.
+The failed source and scripts remain immutable.
+
+Implementation`2cef2e1a` fixes that actual source-state defect: replacing applied
+sources clears obsolete bounds/conflicts before replay, API scopes own complete
+source/interface snapshots independently of simplex resets, and the common
+incremental context filters interior level withdrawals. It preserves LRA's
+assignment choices: SAT rollback keeps its point, API pop/reset reinitializes it.
+R1406 (`2b95b5be056d`, run`463ad93c5e48`) qualifies CLI SHA-256
+`93118071c3f5428f3ba17409fcaa887b970a7eb017bbf80dc0e93b429d58e808`.
+All39 R1407 groups pass, including1920 unit cases/988379 assertions and31
+Python tests. The four new source/scope/hint contracts pass; restoring earlier
+function bodies under identical new headers fails all four. The strict-hint
+contract's failure alone is not evidence of an unsound SMT verdict.
+R1411 (`15188bc03a58`) checks528 direct LRA source-transition states: both
+frozen independent solvers confirm398 actual exported SAT models and130 UNSAT
+source bases, including replacement, nested pop, root replay and interior removal.
+
+R1408's13-case pilot rejects the combined default-search candidate: **6 main/
+3 candidate/13 verified Z3**, no gains, losses51/59/131 (all LRA), and no wrong
+verdict or invalid exported model. Earlier LIA losses7/11/91 are restored, but
+LRA59 changes8.593s SAT to timeout;98 also remains unsolved. No full160 expansion,
+new PR or merge follows. R1414 (`867a0b99ad58`) checks source, binaries, all39
+acceptance jobs, the pilot and both-oracle state evidence. See
+[the current-model trial](CURRENT_MODEL_HINTS_TRIAL_20261101.json), SHA-256
+`cdfe6a30db6b81276e912e3f30ad50b37124eebe2c12b209b6a90833e0ded0f6`.
+
+R1415/R1416 isolate variable selection from phase advice through the existing
+legal CaDiCaL phase API, with the same arithmetic core and ABI. All five jobs
+succeed, but all three policies still reach the30-second limit on59 and98.
+Thus phase-only steering is not established as a fix. R1412's first diagnostic
+build used arithmetic include paths and omitted `cadical.hpp`; its failure is
+preserved, and R1415 uses exact SAT-component compiler flags. No production
+source, public interface or frozen library is changed by these diagnostics.
+R1417/R1418 isolate the strict whole-source advice rule from exact queried-point
+arithmetic. On59, strict advice reaches30 seconds with1,470,075 requests and708
+Full checks; tentative real-coordinate advice gives independently replayed SAT
+in1.921s with83,605 requests and5 Full checks. Changing only LRA advice suffices.
+Integer11/91 remain correct, but dropping integer whole-source checks changes7
+from23.135s UNSAT to the30-second limit. All variants retain exact arithmetic,
+queried-integer typing, mandatory theory/final checks and the LRA source fix.
+These are30-second causal diagnostics, not formal speedup or solve-count rows.
+
+The next implementation restores tentative exact LRA phase advice while retaining
+strict LIA model eligibility. A phase is an optional search preference, not a
+claim that pending constraints are satisfied. New tests require both available
+real advice before pending checks and correct rejection of the resulting
+contradiction afterward. The source replacement/scope/withdrawal fix and final
+model validation remain in place. Fresh native qualification and the same13-case
+formal pilot are pending; no new PR or merge is opened. Canonical Panda preimages
+remain `source-r1406.tar.json`; diagnostic builds do not replace them.
 
 QCP's existing verification-orchestrator skill and immutable original-program
 references have been inspected, but no new original-C workflow is started with

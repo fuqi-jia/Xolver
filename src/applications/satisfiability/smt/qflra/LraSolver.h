@@ -58,7 +58,8 @@ public:
     std::vector<TheoryLemma> takeEntailmentPropagations() override;
 
     // cb_decide feasibility heuristic: is the bound atom `v` true at the current
-    // simplex point? Exact evaluation of a current feasible point; heuristic only.
+    // simplex point? Exact tentative-point evaluation; heuristic only, including
+    // while newly asserted sources await checking by the relaxation.
     std::optional<bool> evalAtomAtModel(SatVar v) override;
 
 protected:

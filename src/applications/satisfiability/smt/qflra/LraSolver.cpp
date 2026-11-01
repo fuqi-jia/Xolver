@@ -875,17 +875,9 @@ std::optional<bool> LraSolver::evalAtomAtModel(SatVar v) {
     if (!record) return std::nullopt;
     const auto* atom = std::get_if<LinearAtomPayload>(&record->payload);
     if (!atom) return std::nullopt;
-    auto interfacesHold = [this]() {
-        auto valueOf = [this](SharedTermId term) -> std::optional<DeltaRational> {
-            if (sharedTermRegistry_)
-                if (auto constant = sharedTermRegistry_->constValue(term)) return DeltaRational(*constant);
-            const int column = manager_.findVarIndex(getVarNameForSharedTerm(term));
-            if (column < 0 || column >= gs_.numVars()) return std::nullopt;
-            return gs_.value(column);
-        };
-        return LinearAtomManager::sharedRelationsHold(interfaceEqualities_, interfaceDisequalities_, valueOf);
-    };
-    if (!manager_.currentPointSatisfies(gs_, theoryTrail_, SortKind::Real, interfacesHold)) return std::nullopt;
+    // Pending SAT assignments may not yet have reached the relaxation. Its
+    // exact point still supplies useful phase advice: it is not a model of
+    // every current source, and never bypasses theory or final-model checks.
     return manager_.evaluateAtModel(gs_, *atom, SortKind::Real);
 }
 

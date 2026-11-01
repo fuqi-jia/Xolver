@@ -1,0 +1,1012 @@
+{
+  "source_head": "2cef2e1a03394a0d81eabd4985780b0750e504ae",
+  "source_manifest_sha256": "e6ecb324ca789e245e309fa18285d8c1b88cf1962102bfe95e091dd6d9be3e99",
+  "qualification_sha256": "0f42265d6d64a963a1e38715cfcf355d98f3e5083364c7d75fd397c01723f31f",
+  "binary_sha256": "93118071c3f5428f3ba17409fcaa887b970a7eb017bbf80dc0e93b429d58e808",
+  "native_unit_cases": 1920,
+  "native_unit_assertions": 988379,
+  "python_tests": 31,
+  "acceptance_groups": 39,
+  "unit_log_sha256": "3c4bec8fe0b5945b8e9d13988f202bf7996d5d30f4949afb867a2ae1f1beb413",
+  "same_header_negative_cases": 4,
+  "same_header_negative_failures": 4,
+  "transition_checks": {
+    "binary": "/pub/data/jiafq/xolver/validation/arithmetic-r103/linear-source-transitions-r1411/linear-source-transitions",
+    "binary_sha256": "417746349e8cecde21b6b45051160bfbbb3fe7dd0fcb86e8fe45a46dda9944e9",
+    "driver_sha256": "29970d5916ea1fe31640a0ad2cc8b03baaf9da8a105269e0c5df86ae60fff139",
+    "qualification_sha256": "0f42265d6d64a963a1e38715cfcf355d98f3e5083364c7d75fd397c01723f31f",
+    "library_sha256": "6ed8e39ccc7db9c4749645978b2ed91e85380c756d637ba46f7a5ac9d5a984ad",
+    "source_manifest_sha256": "e6ecb324ca789e245e309fa18285d8c1b88cf1962102bfe95e091dd6d9be3e99",
+    "commands": [
+      [
+        "/usr/bin/c++",
+        "-std=c++20",
+        "-O2",
+        "-DNDEBUG",
+        "-DXOLVER_ENABLE_PROOFS",
+        "-DXOLVER_HAS_CADICAL",
+        "-DXOLVER_HAS_LIBPOLY",
+        "-DXOLVER_VERSION_MAJOR=0",
+        "-DXOLVER_VERSION_MINOR=1",
+        "-DXOLVER_VERSION_PATCH=0",
+        "-I/pub/data/jiafq/xolver/third_party/SOMTParser/include",
+        "-I/pub/data/jiafq/xolver/dependencies/native/include",
+        "-I/pub/data/jiafq/xolver/include",
+        "-I/pub/data/jiafq/xolver/src",
+        "-I/pub/data/jiafq/xolver/third_party/libpoly/include",
+        "-isystem",
+        "/pub/data/jiafq/xolver/dependencies/json/include",
+        "-c",
+        "/pub/data/jiafq/xolver/validation/arithmetic-r103/linear-source-transitions-r1411.cpp",
+        "-o",
+        "/pub/data/jiafq/xolver/build/diagnostics/linear-source-transitions-r1411/driver.o"
+      ],
+      [
+        "/usr/bin/c++",
+        "/pub/data/jiafq/xolver/build/diagnostics/linear-source-transitions-r1411/driver.o",
+        "-O3",
+        "-DNDEBUG",
+        "-o",
+        "/pub/data/jiafq/xolver/validation/arithmetic-r103/linear-source-transitions-r1411/linear-source-transitions",
+        "../src/libxolver_core.a",
+        "../third_party/SOMTParser/libsomtparser.a",
+        "/pub/data/jiafq/xolver/dependencies/native/lib/libgmpxx.a",
+        "/pub/data/jiafq/xolver/dependencies/native/lib/libmpfr.a",
+        "/pub/data/jiafq/xolver/dependencies/native/lib/libgmp.a",
+        "../third_party/cadical-build/libcadical.a",
+        "../third_party/libpoly/src/libpolyxx.a",
+        "../third_party/libpoly/src/libpoly.a",
+        "/pub/data/jiafq/xolver/dependencies/native/lib/libmpfr.a",
+        "/pub/data/jiafq/xolver/dependencies/native/lib/libgmp.a"
+      ]
+    ],
+    "states": 528,
+    "sat": 398,
+    "unsat": 130,
+    "independent_checks_sha256": "34175f7d76ee76caa5538b260b99bda029c25b2452ba53c21500aad7dcf2a43e",
+    "states_sha256": "ce86b008fb9a7585c135a8ca3d6ad1b8faf715b51d1694600c5e46c7264f7262",
+    "protected_sets_used": false,
+    "boundary": "Direct LRA source replacement, nested API scopes, cached conflict retirement, root replay and interior level withdrawal. Each emitted complete current source base is independently checked: SAT pins every original variable to the actual exported model; UNSAT is judged on the complete original assertions. Both frozen Z3 and cvc5 must agree. This is a functional regression check, not fixed160 performance or original-C QCP coverage."
+  },
+  "transition_record_sha256": "c03b9ef6741a9f68593387f8e9cede59c5f7dc8e5a8d7c93a4b9c69adef934ff",
+  "pilot": {
+    "cases": 13,
+    "binaries": {
+      "baseline": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/prefix-pruning-r1341/xolver",
+        "sha256": "30965221fc2a3b37177a7e79c771b6fb4d9f738d4a524357aee2448b5b3ba07f"
+      },
+      "candidate": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/current-model-hints-r1406/xolver",
+        "sha256": "93118071c3f5428f3ba17409fcaa887b970a7eb017bbf80dc0e93b429d58e808"
+      },
+      "z3": {
+        "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+        "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      }
+    },
+    "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+    "timeout": 60,
+    "memory_bytes": 17179869184,
+    "model_capture": "initial-solve-single-model",
+    "counts": {
+      "baseline": {
+        "timeout": 7,
+        "decided": 6,
+        "verified_decided": 6,
+        "verified_par2": 982.4449687227607,
+        "raw_par2": 982.4449687227607,
+        "unsat": 1,
+        "sat": 5
+      },
+      "candidate": {
+        "timeout": 10,
+        "decided": 3,
+        "verified_decided": 3,
+        "verified_par2": 1236.7537440098822,
+        "raw_par2": 1236.7537440098822,
+        "unsat": 1,
+        "sat": 2
+      },
+      "z3": {
+        "sat": 11,
+        "decided": 13,
+        "verified_decided": 13,
+        "verified_par2": 50.042830592021346,
+        "raw_par2": 50.042830592021346,
+        "unsat": 2
+      }
+    },
+    "by_logic": {
+      "QF_LIA": {
+        "baseline": {
+          "timeout": 4,
+          "decided": 3,
+          "verified_decided": 3,
+          "verified_par2": 506.9195779655129,
+          "raw_par2": 506.9195779655129,
+          "unsat": 1,
+          "sat": 2
+        },
+        "candidate": {
+          "timeout": 4,
+          "decided": 3,
+          "verified_decided": 3,
+          "verified_par2": 516.7537440098822,
+          "raw_par2": 516.7537440098822,
+          "unsat": 1,
+          "sat": 2
+        },
+        "z3": {
+          "sat": 6,
+          "decided": 7,
+          "verified_decided": 7,
+          "verified_par2": 17.61312730424106,
+          "raw_par2": 17.61312730424106,
+          "unsat": 1
+        }
+      },
+      "QF_LRA": {
+        "baseline": {
+          "timeout": 2,
+          "decided": 3,
+          "verified_decided": 3,
+          "verified_par2": 355.5253907572478,
+          "raw_par2": 355.5253907572478,
+          "sat": 3
+        },
+        "candidate": {
+          "timeout": 5,
+          "decided": 0,
+          "verified_decided": 0,
+          "verified_par2": 600,
+          "raw_par2": 600
+        },
+        "z3": {
+          "sat": 4,
+          "decided": 5,
+          "verified_decided": 5,
+          "verified_par2": 24.74680895730853,
+          "raw_par2": 24.74680895730853,
+          "unsat": 1
+        }
+      },
+      "QF_NRA": {
+        "baseline": {
+          "timeout": 1,
+          "decided": 0,
+          "verified_decided": 0,
+          "verified_par2": 120,
+          "raw_par2": 120
+        },
+        "candidate": {
+          "timeout": 1,
+          "decided": 0,
+          "verified_decided": 0,
+          "verified_par2": 120,
+          "raw_par2": 120
+        },
+        "z3": {
+          "sat": 1,
+          "decided": 1,
+          "verified_decided": 1,
+          "verified_par2": 7.682894330471754,
+          "raw_par2": 7.682894330471754
+        }
+      }
+    },
+    "changes": [
+      {
+        "index": 51,
+        "case": "QF_LRA/LassoRanker/CooperatingT2/ludcmp.c.i.ludcmp.pl.t2.fixed.t2.c_Iteration8_Loop_7-phaseTemplate.smt2",
+        "kind": "lost",
+        "truth": "sat",
+        "evidence": [
+          "baseline-exported-model-replay",
+          "z3-exported-model-replay"
+        ],
+        "observations": {
+          "baseline": {
+            "result": "sat",
+            "seconds": 49.41831563971937
+          },
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.02044071815908
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 0.7175797428935766
+          }
+        }
+      },
+      {
+        "index": 59,
+        "case": "QF_LRA/tta_startup/simple_startup_10nodes.missing.induct.smt2",
+        "kind": "lost",
+        "truth": "sat",
+        "evidence": [
+          "z3-exported-model-replay",
+          "baseline-exported-model-replay"
+        ],
+        "observations": {
+          "z3": {
+            "result": "sat",
+            "seconds": 0.46917163021862507
+          },
+          "baseline": {
+            "result": "sat",
+            "seconds": 8.593369744718075
+          },
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.01128746382892
+          }
+        }
+      },
+      {
+        "index": 131,
+        "case": "QF_LRA/sc/sc-37.induction2.cvc.smt2",
+        "kind": "lost",
+        "truth": "sat",
+        "evidence": [
+          "z3-exported-model-replay",
+          "baseline-exported-model-replay"
+        ],
+        "observations": {
+          "z3": {
+            "result": "sat",
+            "seconds": 0.5689969565719366
+          },
+          "baseline": {
+            "result": "sat",
+            "seconds": 57.513705372810364
+          },
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.00879096053541
+          }
+        }
+      }
+    ],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "unverified": [],
+    "scoring": "Correct verdicts require a replayed model or an independent UNSAT decision on the identical input hash; unresolved results receive PAR-2 penalty."
+  },
+  "restored_prior_regressions": [
+    {
+      "index": 7,
+      "observations": {
+        "candidate": {
+          "result": "unsat",
+          "seconds": 27.243119647726417,
+          "launch_seconds": 0.002208039164543152,
+          "wait_seconds": 27.240911608561873,
+          "returncode": 0,
+          "timeout_notified_seconds": null,
+          "cleanup_seconds": null,
+          "timed_out": false,
+          "budget_overrun": false,
+          "command": [
+            "prlimit",
+            "--as=17179869184",
+            "--cpu=62:63",
+            "--",
+            "/pub/data/jiafq/xolver/validation/arithmetic-r103/current-model-hints-r1406/xolver",
+            "solve",
+            "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LIA/wisa/wisa2.smt2",
+            "--timeout",
+            "60",
+            "--produce-models"
+          ],
+          "cpu": 2,
+          "verified": true
+        },
+        "z3": {
+          "result": "unsat",
+          "seconds": 0.11827502399682999,
+          "launch_seconds": 0.0023899078369140625,
+          "wait_seconds": 0.11588511615991592,
+          "returncode": 0,
+          "timeout_notified_seconds": null,
+          "cleanup_seconds": null,
+          "timed_out": false,
+          "budget_overrun": false,
+          "command": [
+            "prlimit",
+            "--as=17179869184",
+            "--cpu=62:63",
+            "--",
+            "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+            "-T:60",
+            "-model",
+            "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LIA/wisa/wisa2.smt2"
+          ],
+          "cpu": 2,
+          "verified": true
+        },
+        "baseline": {
+          "result": "unsat",
+          "seconds": 17.45955097861588,
+          "launch_seconds": 0.0032380949705839157,
+          "wait_seconds": 17.456312883645296,
+          "returncode": 0,
+          "timeout_notified_seconds": null,
+          "cleanup_seconds": null,
+          "timed_out": false,
+          "budget_overrun": false,
+          "command": [
+            "prlimit",
+            "--as=17179869184",
+            "--cpu=62:63",
+            "--",
+            "/pub/data/jiafq/xolver/validation/arithmetic-r103/prefix-pruning-r1341/xolver",
+            "solve",
+            "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LIA/wisa/wisa2.smt2",
+            "--timeout",
+            "60",
+            "--produce-models"
+          ],
+          "cpu": 2,
+          "verified": true
+        }
+      }
+    },
+    {
+      "index": 11,
+      "observations": {
+        "z3": {
+          "result": "sat",
+          "seconds": 7.784949759021401,
+          "launch_seconds": 0.0022869762033224106,
+          "wait_seconds": 7.782662782818079,
+          "returncode": 0,
+          "timeout_notified_seconds": null,
+          "cleanup_seconds": null,
+          "timed_out": false,
+          "budget_overrun": false,
+          "command": [
+            "prlimit",
+            "--as=17179869184",
+            "--cpu=62:63",
+            "--",
+            "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+            "-T:60",
+            "-model",
+            "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LIA/slacks/30-28.slack.smt2"
+          ],
+          "cpu": 3,
+          "verified": true,
+          "replay": {
+            "result": "sat",
+            "seconds": 0.01832685060799122,
+            "launch_seconds": 0.0028773564845323563,
+            "wait_seconds": 0.015449494123458862,
+            "returncode": 0,
+            "timeout_notified_seconds": null,
+            "cleanup_seconds": null,
+            "timed_out": false,
+            "budget_overrun": false,
+            "command": [
+              "prlimit",
+              "--as=17179869184",
+              "--cpu=62:63",
+              "--",
+              "/pub/data/jiafq/xolver/dependencies/oracles/cvc5",
+              "--lang=smt2",
+              "--tlimit=60000",
+              "validation/arithmetic-r103/fair-r1408/case-011/z3-replay.smt2"
+            ],
+            "cpu": 3
+          }
+        },
+        "baseline": {
+          "result": "sat",
+          "seconds": 6.084865299984813,
+          "launch_seconds": 0.002444494515657425,
+          "wait_seconds": 6.082420805469155,
+          "returncode": 0,
+          "timeout_notified_seconds": null,
+          "cleanup_seconds": null,
+          "timed_out": false,
+          "budget_overrun": false,
+          "command": [
+            "prlimit",
+            "--as=17179869184",
+            "--cpu=62:63",
+            "--",
+            "/pub/data/jiafq/xolver/validation/arithmetic-r103/prefix-pruning-r1341/xolver",
+            "solve",
+            "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LIA/slacks/30-28.slack.smt2",
+            "--timeout",
+            "60",
+            "--produce-models"
+          ],
+          "cpu": 3,
+          "verified": true,
+          "replay": {
+            "result": "sat",
+            "seconds": 0.034026192501187325,
+            "launch_seconds": 0.002376977354288101,
+            "wait_seconds": 0.03164921514689922,
+            "returncode": 0,
+            "timeout_notified_seconds": null,
+            "cleanup_seconds": null,
+            "timed_out": false,
+            "budget_overrun": false,
+            "command": [
+              "prlimit",
+              "--as=17179869184",
+              "--cpu=62:63",
+              "--",
+              "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+              "-T:60",
+              "validation/arithmetic-r103/fair-r1408/case-011/baseline-replay.smt2"
+            ],
+            "cpu": 3
+          }
+        },
+        "candidate": {
+          "result": "sat",
+          "seconds": 6.185783425346017,
+          "launch_seconds": 0.002167709171772003,
+          "wait_seconds": 6.183615716174245,
+          "returncode": 0,
+          "timeout_notified_seconds": null,
+          "cleanup_seconds": null,
+          "timed_out": false,
+          "budget_overrun": false,
+          "command": [
+            "prlimit",
+            "--as=17179869184",
+            "--cpu=62:63",
+            "--",
+            "/pub/data/jiafq/xolver/validation/arithmetic-r103/current-model-hints-r1406/xolver",
+            "solve",
+            "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LIA/slacks/30-28.slack.smt2",
+            "--timeout",
+            "60",
+            "--produce-models"
+          ],
+          "cpu": 3,
+          "verified": true,
+          "replay": {
+            "result": "sat",
+            "seconds": 0.03394417278468609,
+            "launch_seconds": 0.001964293420314789,
+            "wait_seconds": 0.0319798793643713,
+            "returncode": 0,
+            "timeout_notified_seconds": null,
+            "cleanup_seconds": null,
+            "timed_out": false,
+            "budget_overrun": false,
+            "command": [
+              "prlimit",
+              "--as=17179869184",
+              "--cpu=62:63",
+              "--",
+              "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+              "-T:60",
+              "validation/arithmetic-r103/fair-r1408/case-011/candidate-replay.smt2"
+            ],
+            "cpu": 3
+          }
+        }
+      }
+    },
+    {
+      "index": 91,
+      "observations": {
+        "candidate": {
+          "result": "sat",
+          "seconds": 3.324840936809778,
+          "launch_seconds": 0.003100194036960602,
+          "wait_seconds": 3.3217407427728176,
+          "returncode": 0,
+          "timeout_notified_seconds": null,
+          "cleanup_seconds": null,
+          "timed_out": false,
+          "budget_overrun": false,
+          "command": [
+            "prlimit",
+            "--as=17179869184",
+            "--cpu=62:63",
+            "--",
+            "/pub/data/jiafq/xolver/validation/arithmetic-r103/current-model-hints-r1406/xolver",
+            "solve",
+            "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LIA/convert/convert-jpg2gif-query-1206.smt2",
+            "--timeout",
+            "60",
+            "--produce-models"
+          ],
+          "cpu": 12,
+          "verified": true,
+          "replay": {
+            "result": "sat",
+            "seconds": 0.06681216508150101,
+            "launch_seconds": 0.0028246454894542694,
+            "wait_seconds": 0.06398751959204674,
+            "returncode": 0,
+            "timeout_notified_seconds": null,
+            "cleanup_seconds": null,
+            "timed_out": false,
+            "budget_overrun": false,
+            "command": [
+              "prlimit",
+              "--as=17179869184",
+              "--cpu=62:63",
+              "--",
+              "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+              "-T:60",
+              "validation/arithmetic-r103/fair-r1408/case-091/candidate-replay.smt2"
+            ],
+            "cpu": 12
+          }
+        },
+        "z3": {
+          "result": "sat",
+          "seconds": 0.16690630093216896,
+          "launch_seconds": 0.0020257700234651566,
+          "wait_seconds": 0.1648805309087038,
+          "returncode": 0,
+          "timeout_notified_seconds": null,
+          "cleanup_seconds": null,
+          "timed_out": false,
+          "budget_overrun": false,
+          "command": [
+            "prlimit",
+            "--as=17179869184",
+            "--cpu=62:63",
+            "--",
+            "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+            "-T:60",
+            "-model",
+            "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LIA/convert/convert-jpg2gif-query-1206.smt2"
+          ],
+          "cpu": 12,
+          "verified": true,
+          "replay": {
+            "result": "sat",
+            "seconds": 0.06626000627875328,
+            "launch_seconds": 0.0022100862115621567,
+            "wait_seconds": 0.06404992006719112,
+            "returncode": 0,
+            "timeout_notified_seconds": null,
+            "cleanup_seconds": null,
+            "timed_out": false,
+            "budget_overrun": false,
+            "command": [
+              "prlimit",
+              "--as=17179869184",
+              "--cpu=62:63",
+              "--",
+              "/pub/data/jiafq/xolver/dependencies/oracles/cvc5",
+              "--lang=smt2",
+              "--tlimit=60000",
+              "validation/arithmetic-r103/fair-r1408/case-091/z3-replay.smt2"
+            ],
+            "cpu": 12
+          }
+        },
+        "baseline": {
+          "result": "sat",
+          "seconds": 3.375161686912179,
+          "launch_seconds": 0.002673676237463951,
+          "wait_seconds": 3.372488010674715,
+          "returncode": 0,
+          "timeout_notified_seconds": null,
+          "cleanup_seconds": null,
+          "timed_out": false,
+          "budget_overrun": false,
+          "command": [
+            "prlimit",
+            "--as=17179869184",
+            "--cpu=62:63",
+            "--",
+            "/pub/data/jiafq/xolver/validation/arithmetic-r103/prefix-pruning-r1341/xolver",
+            "solve",
+            "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LIA/convert/convert-jpg2gif-query-1206.smt2",
+            "--timeout",
+            "60",
+            "--produce-models"
+          ],
+          "cpu": 12,
+          "verified": true,
+          "replay": {
+            "result": "sat",
+            "seconds": 0.06645199656486511,
+            "launch_seconds": 0.0024860315024852753,
+            "wait_seconds": 0.06396596506237984,
+            "returncode": 0,
+            "timeout_notified_seconds": null,
+            "cleanup_seconds": null,
+            "timed_out": false,
+            "budget_overrun": false,
+            "command": [
+              "prlimit",
+              "--as=17179869184",
+              "--cpu=62:63",
+              "--",
+              "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+              "-T:60",
+              "validation/arithmetic-r103/fair-r1408/case-091/baseline-replay.smt2"
+            ],
+            "cpu": 12
+          }
+        }
+      }
+    }
+  ],
+  "experiment_jobs": {
+    "xolver-current-model-hints-source-r1406-20261101": [
+      [
+        "463ad93c5e48",
+        "success",
+        0,
+        1953845
+      ]
+    ],
+    "xolver-current-model-hints-acceptance-r1407a-20261101": [
+      [
+        "4e8acdc23a92",
+        "success",
+        0,
+        2011783
+      ],
+      [
+        "58c688a5a5f0",
+        "success",
+        0,
+        2011845
+      ],
+      [
+        "f6c1d268c9e1",
+        "success",
+        0,
+        2011906
+      ],
+      [
+        "f13b2dfb65ec",
+        "success",
+        0,
+        2011977
+      ],
+      [
+        "29f8ad82e3d7",
+        "success",
+        0,
+        2012049
+      ],
+      [
+        "da762d74b0a8",
+        "success",
+        0,
+        2012133
+      ],
+      [
+        "17976f5a70c5",
+        "success",
+        0,
+        2012226
+      ],
+      [
+        "bcf3d803370b",
+        "success",
+        0,
+        2012329
+      ],
+      [
+        "34ad934ce671",
+        "success",
+        0,
+        2012438
+      ],
+      [
+        "ffb8e0efcfac",
+        "success",
+        0,
+        2012543
+      ],
+      [
+        "82de733e17ff",
+        "success",
+        0,
+        2012654
+      ],
+      [
+        "cf9b893c0146",
+        "success",
+        0,
+        2012763
+      ],
+      [
+        "4ef8cc886bfb",
+        "success",
+        0,
+        2012883
+      ],
+      [
+        "88a120d0a7d2",
+        "success",
+        0,
+        2013007
+      ],
+      [
+        "88c553c4ec91",
+        "success",
+        0,
+        2013137
+      ],
+      [
+        "721423f27b5d",
+        "success",
+        0,
+        2013275
+      ],
+      [
+        "cc62c66f70af",
+        "success",
+        0,
+        2013478
+      ],
+      [
+        "48af1623a924",
+        "success",
+        0,
+        2013601
+      ],
+      [
+        "27a9260cdc78",
+        "success",
+        0,
+        2013727
+      ],
+      [
+        "e63f9b81faf8",
+        "success",
+        0,
+        2013864
+      ]
+    ],
+    "xolver-current-model-hints-acceptance-r1407b-20261101": [
+      [
+        "7c7b10171505",
+        "success",
+        0,
+        2020761
+      ],
+      [
+        "a88e441c705d",
+        "success",
+        0,
+        2020971
+      ],
+      [
+        "2878d86d425f",
+        "success",
+        0,
+        2021093
+      ],
+      [
+        "00a8a83541d9",
+        "success",
+        0,
+        2021232
+      ],
+      [
+        "94a84fe53966",
+        "success",
+        0,
+        2021405
+      ],
+      [
+        "867ea865c82c",
+        "success",
+        0,
+        2021615
+      ],
+      [
+        "bbac33628cd5",
+        "success",
+        0,
+        2021753
+      ],
+      [
+        "f05eb857c257",
+        "success",
+        0,
+        2021968
+      ],
+      [
+        "a4d1dd167edb",
+        "success",
+        0,
+        2022102
+      ],
+      [
+        "01be1dcd9c51",
+        "success",
+        0,
+        2022241
+      ],
+      [
+        "f686401679dd",
+        "success",
+        0,
+        2022379
+      ],
+      [
+        "6626738a960c",
+        "success",
+        0,
+        2022550
+      ],
+      [
+        "8a00227d6adb",
+        "success",
+        0,
+        2022715
+      ],
+      [
+        "652b1d5973b0",
+        "success",
+        0,
+        2022890
+      ],
+      [
+        "e730b73c8925",
+        "success",
+        0,
+        2023060
+      ],
+      [
+        "ba6b9076e98c",
+        "success",
+        0,
+        2023223
+      ],
+      [
+        "19ca0a774c64",
+        "success",
+        0,
+        2023370
+      ],
+      [
+        "7936a889d823",
+        "success",
+        0,
+        2023514
+      ],
+      [
+        "358b54dffbe6",
+        "success",
+        0,
+        2023660
+      ]
+    ],
+    "xolver-current-model-hints-r1408-pilot-20261101": [
+      [
+        "c42de31e0424",
+        "success",
+        0,
+        2072514
+      ],
+      [
+        "a6bcd519949b",
+        "success",
+        0,
+        2072578
+      ],
+      [
+        "d9e87d22989b",
+        "success",
+        0,
+        2072640
+      ],
+      [
+        "3c693d7bbf79",
+        "success",
+        0,
+        2072692
+      ],
+      [
+        "abd34bc3a2cd",
+        "success",
+        0,
+        2072765
+      ],
+      [
+        "3368a725a9b6",
+        "success",
+        0,
+        2072830
+      ],
+      [
+        "f8dd08efb447",
+        "success",
+        0,
+        2072966
+      ],
+      [
+        "83cb7f9e0646",
+        "success",
+        0,
+        2073064
+      ],
+      [
+        "57049e8bfb88",
+        "success",
+        0,
+        2073132
+      ],
+      [
+        "baeab501cbed",
+        "success",
+        0,
+        2073196
+      ],
+      [
+        "f4667852be3d",
+        "success",
+        0,
+        2073337
+      ],
+      [
+        "c030ff46454a",
+        "success",
+        0,
+        2073399
+      ],
+      [
+        "c66a6c26ec13",
+        "success",
+        0,
+        2073467
+      ]
+    ],
+    "xolver-current-model-hints-observation-r1409-20261101": [
+      [
+        "39413507bfa7",
+        "success",
+        0,
+        2075531
+      ],
+      [
+        "643827d30565",
+        "success",
+        0,
+        2075598
+      ],
+      [
+        "1cea39d117de",
+        "success",
+        0,
+        2075673
+      ],
+      [
+        "f3f71aba6bfc",
+        "success",
+        0,
+        2075741
+      ],
+      [
+        "8b9dee922b4a",
+        "success",
+        0,
+        2075815
+      ]
+    ],
+    "xolver-linear-source-transitions-r1411-20261101": [
+      [
+        "cb7ea23a97ab",
+        "success",
+        0,
+        2036045
+      ]
+    ]
+  },
+  "source_bug": "Replacing an already-applied LRA source did not withdraw its previous bounds or clear a cached conflict. API scopes did not own source snapshots; suffix-only level withdrawal could retain interior discarded sources.",
+  "outcome": "Functional LRA replacement, nested scopes and interior withdrawal contracts now pass with independently checked actual state models/verdicts. Model-readiness validation is correct for its declared current-model contract but the combined default search candidate regresses from6 to3 verified pilot solves and is not promoted. No full160 expansion, PR, merge, protected-set run or original-C QCP stage is triggered. Next causal diagnostic isolates model-directed variable selection from model phase advice.",
+  "protected_sets_used": false
+}

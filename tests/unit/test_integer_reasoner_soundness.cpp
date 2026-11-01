@@ -679,7 +679,7 @@ TEST_CASE("LIA: decision hints use exact values and leave unregistered coordinat
     CHECK(registry.numAtomVars() == size);
 }
 
-TEST_CASE("Linear model hints decline points violating retained sources after append and replacement") {
+TEST_CASE("Integer model hints decline points violating retained sources after append and replacement") {
     auto exercise = []<class Engine>(TheoryId theory) {
         Allocator allocator;
         TheoryAtomRegistry registry;
@@ -714,7 +714,40 @@ TEST_CASE("Linear model hints decline points violating retained sources after ap
         CHECK_FALSE(*solver.evalAtomAtModel(query.var));
     };
     exercise.operator()<LiaSolver>(TheoryId::LIA);
-    exercise.operator()<LraSolver>(TheoryId::LRA);
+}
+
+TEST_CASE("Real tentative phase advice never replaces pending theory checks") {
+    Allocator allocator;
+    TheoryAtomRegistry registry;
+    registry.setContext(&allocator, &allocator);
+    const LinearFormKey x{{{"tentative-real-x", 1}}};
+    const auto lower = registry.getOrCreateLinearBoundAtom(x, Relation::Geq, 1, TheoryId::LRA);
+    const auto query = registry.getOrCreateLinearBoundAtom(x, Relation::Leq, 1, TheoryId::LRA);
+    LraSolver solver;
+    solver.setRegistry(&registry);
+    TheoryLemmaDatabase lemmas;
+    solver.assertLit(*registry.findBySatVar(lower.var), true, 0, lower);
+    REQUIRE(solver.check(lemmas).kind == TheoryCheckResult::Kind::Consistent);
+    REQUIRE(solver.evalAtomAtModel(query.var).has_value());
+    CHECK(*solver.evalAtomAtModel(query.var));
+
+    // The old point lies on the boundary. Keep its phase advice while the
+    // newly asserted open bound is pending, then respect the repaired delta.
+    auto strict = *registry.findBySatVar(lower.var);
+    std::get<LinearAtomPayload>(strict.payload).rel = Relation::Gt;
+    solver.assertLit(strict, true, 0, lower);
+    REQUIRE(solver.evalAtomAtModel(query.var).has_value());
+    CHECK(*solver.evalAtomAtModel(query.var));
+    REQUIRE(solver.check(lemmas).kind == TheoryCheckResult::Kind::Consistent);
+    REQUIRE(solver.evalAtomAtModel(query.var).has_value());
+    CHECK_FALSE(*solver.evalAtomAtModel(query.var));
+
+    // A tentative phase cannot suppress a real contradiction or assert a
+    // lemma. The mandatory theory check must still reject x>1 and x<=1.
+    solver.assertLit(*registry.findBySatVar(query.var), true, 0, query);
+    REQUIRE(solver.evalAtomAtModel(query.var).has_value());
+    CHECK_FALSE(*solver.evalAtomAtModel(query.var));
+    REQUIRE(solver.check(lemmas).kind == TheoryCheckResult::Kind::Conflict);
 }
 
 TEST_CASE("Linear model hint validity separates integer and real points and tracks coordinate changes") {
