@@ -132,6 +132,12 @@ std::optional<SatLit> PseudoBooleanEncoder::lessEqual(
             ++statistics_.reusedSums;
             return oriented(compareSum(found->second, bound));
         }
+        // Several individually affordable diagrams can still duplicate most
+        // of the encoding for a family of bounds. Once this sum needed a large
+        // complete diagram, a new threshold makes the shared arithmetic
+        // representation useful. Existing diagram literals remain exact.
+        if (diagramSums_.contains(terms))
+            return oriented(carrySaveThreshold(terms, bound));
 
         // A full adder needs at most five gates; the final addition/comparison
         // is linear in the coefficient width. If a diagram exceeds that
@@ -213,6 +219,7 @@ std::optional<SatLit> PseudoBooleanEncoder::lessEqual(
                 stack.pop_back();
             }
         }
+        if (keepDiagram) diagramSums_.insert(std::move(terms));
         return oriented(result);
     } catch (const ResourceExhausted&) {
         return std::nullopt;

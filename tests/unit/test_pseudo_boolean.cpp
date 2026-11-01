@@ -227,6 +227,57 @@ TEST_CASE("PseudoBooleanEncoder: a proven resource bound retains the stronger co
     }
 }
 
+TEST_CASE("PseudoBooleanEncoder: repeated bounds amortize a completed strong diagram") {
+    auto sat = createSatSolver();
+    BitBlastEncoder encoder(*sat);
+    encoder.setVarBudget(20000);
+    WorkBudget work;
+    PseudoBooleanEncoder pb(encoder, work);
+    std::vector<WeightedLiteral> terms;
+    mpz_class total = 0;
+    for (int i = 0; i < 32; ++i) {
+        const mpz_class weight = i % 3 + 1;
+        terms.push_back({encoder.mkVar(1).bits[0], weight});
+        total += weight;
+    }
+    const mpz_class boundary = total/2;
+    const auto first = pb.lessEqual(terms, boundary);
+    REQUIRE(first);
+    REQUIRE(pb.statistics().diagramBudgetProofs == 1);
+    REQUIRE(pb.statistics().carrySaveSums == 0);
+    const auto next = pb.lessEqual(terms, boundary + 1);
+    REQUIRE(next);
+    CHECK(pb.statistics().carrySaveSums == 1);
+    auto complemented = terms;
+    for (auto& term : complemented) term.literal = term.literal.negated();
+    const auto opposite = pb.lessEqual(complemented, total - boundary - 2);
+    REQUIRE(opposite);
+    CHECK(pb.statistics().reusedSums == 1);
+    CHECK_FALSE(encoder.overflowed());
+    // The old diagram and the new arithmetic representation coexist in one
+    // SAT instance. Check both truth directions, including exact boundaries.
+    for (unsigned sample = 0; sample < 66; ++sample) {
+        std::vector<SatLit> assumptions;
+        mpz_class value = 0;
+        for (size_t i = 0; i < terms.size(); ++i) {
+            const bool chosen = sample == 64 ||
+                (sample != 65 && ((sample >> (i % 6)) & 1));
+            assumptions.push_back(chosen ? terms[i].literal : terms[i].literal.negated());
+            if (chosen) value += terms[i].weight;
+        }
+        const std::vector<SatLit> outputs{*first, *next, *opposite};
+        const std::vector<bool> expected{value <= boundary, value <= boundary + 1,
+                                        value > boundary + 1};
+        assumptions.push_back({});
+        for (size_t index = 0; index < outputs.size(); ++index) {
+            assumptions.back() = expected[index] ? outputs[index] : outputs[index].negated();
+            CHECK(sat->solve(assumptions) == SatSolver::SolveResult::Sat);
+            assumptions.back() = assumptions.back().negated();
+            CHECK(sat->solve(assumptions) == SatSolver::SolveResult::Unsat);
+        }
+    }
+}
+
 TEST_CASE("PseudoBooleanEncoder: an exhausted attempt cannot corrupt a later shared sum") {
     auto sat = createSatSolver();
     BitBlastEncoder encoder(*sat);

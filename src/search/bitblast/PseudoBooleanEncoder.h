@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <map>
 #include <optional>
+#include <set>
 #include <vector>
 
 namespace xolver::bitblast {
@@ -20,6 +21,8 @@ struct WeightedLiteral {
 // Signed weights, repeated/complementary literals and arbitrary-size integers
 // are normalized before building a shared decision diagram. Complete diagrams
 // are retained when their state space provably fits the declared budgets.
+// An expensive diagram is attempted once per normalized sum; further bounds
+// use a shared arithmetic sum to amortize their encoding instead.
 // Otherwise an exact carry-save sum can replace an expanding diagram and be
 // reused across bounds and complemented inequalities. Exhaustion exposes no
 // unfinished literal.
@@ -54,6 +57,10 @@ private:
     // Complete exact sums in this encoder's SAT instance. Bounds and
     // threshold polarities are deliberately absent from the expression key.
     std::map<std::vector<WeightedLiteral>, BitVec, SumLess> sums_;
+    // Only completed diagrams that exceeded the arithmetic cost are recorded.
+    // A later threshold over the same sum can amortize an arithmetic encoding;
+    // an isolated threshold retains the diagram's stronger propagation.
+    std::set<std::vector<WeightedLiteral>, SumLess> diagramSums_;
     void tick();
     bool diagramFitsBudget(const std::vector<WeightedLiteral>& terms,
                            const std::vector<mpz_class>& suffix, const mpz_class& bound);
