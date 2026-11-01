@@ -101,7 +101,7 @@ TEST_CASE("PseudoBooleanEncoder: partial resource-limited encodings expose no li
     CHECK(enc.overflowed());
 }
 
-TEST_CASE("Binary integer portfolio: signed strict bounds and Boolean contexts validate exactly") {
+TEST_CASE("Finite integer portfolio: signed strict bounds and Boolean contexts validate exactly") {
     for (auto relation : {Kind::Eq, Kind::Distinct, Kind::Lt, Kind::Leq, Kind::Gt, Kind::Geq}) {
         BinaryFixture f;
         const auto x = f.variable("x"), y = f.variable("y");
@@ -123,7 +123,7 @@ TEST_CASE("Binary integer portfolio: signed strict bounds and Boolean contexts v
         roots.push_back(requireTrue ? predicate : f.term(Kind::Not, {predicate}));
         EagerBitBlastSolver solver;
         solver.setFarkasBudget(33, 1000);
-        const auto result = solver.solveBinary(f.ir, roots);
+        const auto result = solver.solveLinear(f.ir, roots);
         REQUIRE(result.status == EagerBitBlastSolver::Status::Sat);
         const mpz_class value = weight * (result.model.at("x") - result.model.at("y"));
         bool holds = false;
@@ -141,18 +141,111 @@ TEST_CASE("Binary integer portfolio: signed strict bounds and Boolean contexts v
     }
 }
 
-TEST_CASE("Binary integer portfolio: branch-local bounds do not qualify an unbounded variable") {
+TEST_CASE("Finite integer portfolio: branch-local bounds do not qualify an unbounded variable") {
     BinaryFixture f;
     const auto x = f.variable("x");
     const auto zero = f.term(Kind::Eq, {x, f.integer(0)});
     const auto two = f.term(Kind::Eq, {x, f.integer(2)});
     EagerBitBlastSolver solver;
-    const auto result = solver.solveBinary(f.ir, {f.term(Kind::Or, {zero, two})});
+    const auto result = solver.solveLinear(f.ir, {f.term(Kind::Or, {zero, two})});
     CHECK(result.status == EagerBitBlastSolver::Status::Unknown);
-    const auto qualified = solver.solveBinary(f.ir, {zero});
+    const auto qualified = solver.solveLinear(f.ir, {zero});
     REQUIRE(qualified.status == EagerBitBlastSolver::Status::Sat);
     CHECK(qualified.model.at("x") == 0);
-    CHECK(solver.solveBinary(f.ir, {two}).status == EagerBitBlastSolver::Status::Unknown);
+    const auto nonbinary = solver.solveLinear(f.ir, {two});
+    REQUIRE(nonbinary.status == EagerBitBlastSolver::Status::Sat);
+    CHECK(nonbinary.model.at("x") == 2);
+    CHECK(solver.solveLinear(f.ir, {f.term(Kind::Or, {zero, two})}).status == EagerBitBlastSolver::Status::Unknown);
+}
+
+TEST_CASE("Finite integer portfolio: signed wide weights preserve exact Boolean branch models") {
+    BinaryFixture f;
+    const auto x=f.variable("x"),y=f.variable("y");
+    const auto choose=f.ir.add({Kind::Variable,0,{},Payload(std::string("choose"))});
+    std::vector<ExprId> roots{
+        f.term(Kind::Geq,{x,f.integer(-5)}),f.term(Kind::Leq,{x,f.integer(3)}),
+        f.term(Kind::Geq,{y,f.integer(2)}),f.term(Kind::Leq,{y,f.integer(8)})};
+    const mpz_class weight=mpz_class(1)<<100;
+    const auto sum=f.term(Kind::Add,{f.term(Kind::Mul,{f.integer(weight),x}),
+        f.term(Kind::Mul,{f.integer(mpz_class(-weight-1)),y})});
+    const auto target=f.term(Kind::Eq,{sum,f.integer(mpz_class(-5*weight-3))});
+    const auto impossible=f.term(Kind::Gt,{y,f.integer(100)});
+    roots.push_back(f.term(Kind::Or,{f.term(Kind::And,{choose,target}),
+        f.term(Kind::And,{f.term(Kind::Not,{choose}),impossible})}));
+    EagerBitBlastSolver solver;
+    solver.setFarkasBudget(33,1000);
+    const auto result=solver.solveLinear(f.ir,roots);
+    REQUIRE(result.status==EagerBitBlastSolver::Status::Sat);
+    CHECK(result.model.at("x")==-2);
+    CHECK(result.model.at("y")==3);
+    CHECK(result.boolModel.at("choose"));
+    CHECK(weight*result.model.at("x")-(weight+1)*result.model.at("y")==-5*weight-3);
+}
+
+TEST_CASE("Finite integer portfolio: root equality propagation qualifies bounded aliases") {
+    BinaryFixture f;
+    const auto x=f.variable("x"),y=f.variable("y");
+    std::vector<ExprId> roots{
+        f.term(Kind::Geq,{x,f.integer(1)}),f.term(Kind::Leq,{x,f.integer(4)}),
+        f.term(Kind::Eq,{y,f.term(Kind::Add,{f.term(Kind::Mul,{f.integer(3),x}),f.integer(2)})}),
+        f.term(Kind::Distinct,{y,f.integer(8)})};
+    EagerBitBlastSolver solver;
+    const auto result=solver.solveLinear(f.ir,roots);
+    REQUIRE(result.status==EagerBitBlastSolver::Status::Sat);
+    CHECK(result.model.at("x")>=1);CHECK(result.model.at("x")<=4);
+    CHECK(result.model.at("y")==3*result.model.at("x")+2);
+    CHECK(result.model.at("y")!=8);
+}
+
+TEST_CASE("Finite integer portfolio: all signed relations retain their truth under negation") {
+    for (auto relation : {Kind::Eq,Kind::Distinct,Kind::Lt,Kind::Leq,Kind::Gt,Kind::Geq}) {
+        BinaryFixture f;
+        const auto x=f.variable("x");
+        std::vector<ExprId> roots{
+            f.term(Kind::Geq,{x,f.integer(-8)}),f.term(Kind::Leq,{x,f.integer(-2)})};
+        const auto predicate=f.term(relation,{x,f.integer(-5)});
+        roots.push_back(f.term(Kind::Not,{predicate}));
+        EagerBitBlastSolver solver;
+        const auto result=solver.solveLinear(f.ir,roots);
+        REQUIRE(result.status==EagerBitBlastSolver::Status::Sat);
+        const auto& value=result.model.at("x");
+        CHECK(value>=-8);CHECK(value<=-2);
+        switch (relation) {
+            case Kind::Eq: CHECK(value!=-5);break;
+            case Kind::Distinct: CHECK(value==-5);break;
+            case Kind::Lt: CHECK(value>=-5);break;
+            case Kind::Leq: CHECK(value>-5);break;
+            case Kind::Gt: CHECK(value<=-5);break;
+            case Kind::Geq: CHECK(value<-5);break;
+            default: break;
+        }
+    }
+}
+
+TEST_CASE("Finite integer portfolio: incomplete domains and nonlinear formulas fall through") {
+    BinaryFixture f;
+    const auto x=f.variable("x"),y=f.variable("y");
+    std::vector<ExprId> roots;
+    f.bounds(x,roots);
+    EagerBitBlastSolver solver;
+    roots.push_back(f.term(Kind::Gt,{y,f.integer(0)}));
+    CHECK(solver.solveLinear(f.ir,roots).status==EagerBitBlastSolver::Status::Unknown);
+    f.bounds(y,roots);
+    roots.push_back(f.term(Kind::Eq,{f.term(Kind::Mul,{x,y}),f.integer(1)}));
+    CHECK(solver.solveLinear(f.ir,roots).status==EagerBitBlastSolver::Status::Unknown);
+    const auto nonlinear=solver.solve(f.ir,roots);
+    REQUIRE(nonlinear.status==EagerBitBlastSolver::Status::Sat);
+    CHECK(nonlinear.model.at("x")==1);CHECK(nonlinear.model.at("y")==1);
+}
+
+TEST_CASE("Finite integer portfolio: a finite refutation yields to the complete theory solver") {
+    BinaryFixture f;
+    const auto x=f.variable("x");
+    const std::vector<ExprId> roots{
+        f.term(Kind::Geq,{x,f.integer(-3)}),f.term(Kind::Leq,{x,f.integer(3)}),
+        f.term(Kind::Eq,{f.term(Kind::Mul,{f.integer(2),x}),f.integer(1)})};
+    EagerBitBlastSolver solver;
+    CHECK(solver.solveLinear(f.ir,roots).status==EagerBitBlastSolver::Status::Unknown);
 }
 
 TEST_CASE("Binary polynomial encoding: positive powers collapse without losing exact models") {

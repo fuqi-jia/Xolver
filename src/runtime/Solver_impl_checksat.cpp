@@ -876,7 +876,7 @@ Result Solver::Impl::checkSatGround() {
         // main-loop surgery (invariant 5 intact).
         //
         // Applies to pure QF_NIA and to LIA whose integer domains are proved
-        // binary by positive root facts (no real/UF/array/DT/mixed). Iter-3/4/5
+        // finite by positive root facts (no real/UF/array/DT/mixed). Iter-3/4/5
         // confirmed the CDCL(T)-per-atom-assignment bit-blast cannot close
         // the leipzig / VeryMax cluster because each per-call constraint
         // subset enumerates Boolean disjunct choices serially. The eager
@@ -897,8 +897,8 @@ Result Solver::Impl::checkSatGround() {
                           << " hasNonlinear=" << features.hasNonlinear
                           << "\n";
             }
-            const bool binaryLinear = (logic == "QF_LIA" || logic == "LIA");
-            const bool logicOk = (logic == "QF_NIA" || logic == "NIA" || binaryLinear);
+            const bool finiteLinear = (logic == "QF_LIA" || logic == "LIA");
+            const bool logicOk = (logic == "QF_NIA" || logic == "NIA" || finiteLinear);
             if (logicOk &&
                 !features.hasRealVar && !features.hasMixedIntReal &&
                 !features.hasUF && !features.hasArray && !features.hasDatatype) {
@@ -916,7 +916,7 @@ Result Solver::Impl::checkSatGround() {
                 // otherwise eager-bb hogs the wall-clock and the refutation never
                 // runs. The detector bails on non-Farkas inputs (good()==false),
                 // so the cost there is one O(tree) scan.
-                if (!binaryLinear) {
+                if (!finiteLinear) {
                     farkas::FarkasOrDetector fdet(*ir);
                     auto fprof = fdet.detect();
                     if (fprof.good() && !fprof.boundedGlobals.empty()) {
@@ -936,7 +936,7 @@ Result Solver::Impl::checkSatGround() {
                 auto eagerRoots = ir->assertions();
                 eagerRoots.insert(eagerRoots.end(), assumptionIndicators.begin(), assumptionIndicators.end());
                 eagerRoots.insert(eagerRoots.end(), indicatorRoots_.begin(), indicatorRoots_.end());
-                auto ibr = binaryLinear ? eagerbb.solveBinary(*ir, eagerRoots)
+                auto ibr = finiteLinear ? eagerbb.solveLinear(*ir, eagerRoots)
                                         : eagerbb.solve(*ir, eagerRoots);
                 phase("eager-bb-done");
                 if (ibr.status == bitblast::EagerBitBlastSolver::Status::Sat) {
