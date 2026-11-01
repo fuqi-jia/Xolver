@@ -314,13 +314,28 @@ and searches exact coordinate boundaries under a work budget. R1449 passes
 opposite verdicts or invalid models. Verified PAR-2 worsens627.647→635.042s.
 Selected gaps1/13/89/98 still time out; no full160 expansion or PR follows.
 See [the closed repair evidence](AFFINE_BOUNDARY_REPAIR_CLOSED_20261101.json).
-The restored runtime source matches `a677c395`; Panda restoration follows
-`source-r1449.tar.json`, while the retained frozen CLI is still `08088b5a…`.
+The restored runtime source matches `a677c395`. R1452 restores Panda from
+`source-r1449.tar.json`; its canonical manifest is now `source-r1452.tar.json`.
+Rebuilt CLI, SV, QCP worker, core archive and unit binary exactly match R1434.
+The restoration receipt SHA-256 is
+`76954e1954d0652088881f9602f82437635248cb9db6e37aebfce5e2e299065f`;
+the retained frozen CLI is still `08088b5a…`.
 R1446's driver fails before invoking either independent solver because of a
 missing environment argument; corrected R1447 checks all four sampled states.
 Their diagnostic Z3 SAT decisions and cvc5 timeouts are not checked-model
 certificates and are not added to benchmark scores. R1453 seals the closure
 after the original R1451 receipt script fails to parse. Both failures remain.
+R1454 additionally finds no violated equality-conditioned integer bound in
+any of those four sampled rational states; it invokes no oracle because there
+is no candidate theorem. This supplies no basis for adding that cut here.
+
+The next capability under investigation is whole-formula finite-domain LIA
+encoding. `EagerBitBlastSolver::solveBinary` currently admits only variables
+whose positive root bounds individually prove0/1, although the shared collector
+already propagates other finite integer bounds. The encoder's pseudo-Boolean
+path also only accepts0/1 monomials. No finite-domain implementation or measured
+gain is claimed yet; any generalization must retain exact model validation,
+signed integer semantics and the SAT-only result boundary.
 
 QCP's existing verification-orchestrator skill and immutable original-program
 references have been inspected, but no new original-C workflow is started with
