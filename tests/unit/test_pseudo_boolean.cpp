@@ -101,7 +101,7 @@ TEST_CASE("PseudoBooleanEncoder: partial resource-limited encodings expose no li
     CHECK(enc.overflowed());
 }
 
-TEST_CASE("PseudoBooleanEncoder: arithmetic fallback preserves every reified weighted assignment") {
+TEST_CASE("PseudoBooleanEncoder: dense thresholds preserve every reified weighted assignment") {
     auto sat=createSatSolver();
     BitBlastEncoder enc(*sat);
     enc.setVarBudget(20000);
@@ -119,8 +119,6 @@ TEST_CASE("PseudoBooleanEncoder: arithmetic fallback preserves every reified wei
     PseudoBooleanEncoder pb(enc,work);
     const auto root=pb.lessEqual(terms,bound);
     REQUIRE(root);
-    REQUIRE(pb.statistics().carrySaveThresholds>0);
-    CHECK(pb.statistics().compressors>0);
     CHECK(enc.varCount()<10000);
     std::vector<SatLit> assignments;
     assignments.reserve(terms.size()+1);
@@ -143,6 +141,9 @@ TEST_CASE("PseudoBooleanEncoder: arithmetic fallback preserves every reified wei
 TEST_CASE("PseudoBooleanEncoder: shared sums preserve distinct and complemented thresholds") {
     auto sat = createSatSolver();
     BitBlastEncoder encoder(*sat);
+    // The complete requested-bound state space exceeds this finite budget;
+    // the exact shared arithmetic alternative remains comfortably inside it.
+    encoder.setVarBudget(12000);
     WorkBudget work;
     PseudoBooleanEncoder pb(encoder, work);
     std::vector<WeightedLiteral> terms;
@@ -190,6 +191,38 @@ TEST_CASE("PseudoBooleanEncoder: shared sums preserve distinct and complemented 
             assumptions.back() = assumptions.back().negated();
             CHECK(sat->solve(assumptions) == SatSolver::SolveResult::Unsat);
         }
+    }
+}
+
+TEST_CASE("PseudoBooleanEncoder: a proven resource bound retains the stronger complete diagram") {
+    auto sat = createSatSolver();
+    BitBlastEncoder encoder(*sat);
+    encoder.setVarBudget(20000);
+    WorkBudget work;
+    PseudoBooleanEncoder pb(encoder, work);
+    std::vector<WeightedLiteral> terms;
+    mpz_class total = 0;
+    uint32_t state = 0x9e3779b9u;
+    for (int i = 0; i < 14; ++i) {
+        state ^= state << 13; state ^= state >> 17; state ^= state << 5;
+        const mpz_class weight = 4194304u + (state & 0x3fffffu);
+        terms.push_back({encoder.mkVar(1).bits[0], weight});
+        total += weight;
+    }
+    const auto root = pb.lessEqual(terms, total/2 + 17);
+    REQUIRE(root);
+    REQUIRE(pb.statistics().diagramBudgetProofs == 1);
+    CHECK(pb.statistics().carrySaveThresholds == 0);
+    CHECK_FALSE(encoder.overflowed());
+    CHECK(encoder.varCount() <= 20000);
+    for (bool all : {false, true}) {
+        std::vector<SatLit> assumptions;
+        for (const auto& term : terms)
+            assumptions.push_back(all ? term.literal : term.literal.negated());
+        assumptions.push_back(all ? root->negated() : *root);
+        CHECK(sat->solve(assumptions) == SatSolver::SolveResult::Sat);
+        assumptions.back() = assumptions.back().negated();
+        CHECK(sat->solve(assumptions) == SatSolver::SolveResult::Unsat);
     }
 }
 

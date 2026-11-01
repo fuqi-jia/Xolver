@@ -18,15 +18,17 @@ struct WeightedLiteral {
 // Fully reified exact integer threshold: the returned literal is equivalent to
 // sum(weight * [literal]) <= bound, including under negation or disjunction.
 // Signed weights, repeated/complementary literals and arbitrary-size integers
-// are normalized before building a shared decision diagram. If its state
-// count exceeds the estimated arithmetic-circuit size, an exact carry-save
-// sum replaces the diagram and is reused across thresholds of that expression,
-// including complemented inequalities. Exhaustion exposes no unfinished literal.
+// are normalized before building a shared decision diagram. Complete diagrams
+// are retained when their state space provably fits the declared budgets.
+// Otherwise an exact carry-save sum can replace an expanding diagram and be
+// reused across bounds and complemented inequalities. Exhaustion exposes no
+// unfinished literal.
 class PseudoBooleanEncoder {
 public:
     struct Statistics {
         size_t thresholds = 0;
         size_t diagramStates = 0;
+        size_t diagramBudgetProofs = 0;
         size_t carrySaveThresholds = 0;
         size_t carrySaveSums = 0;
         size_t reusedSums = 0;
@@ -53,6 +55,8 @@ private:
     // threshold polarities are deliberately absent from the expression key.
     std::map<std::vector<WeightedLiteral>, BitVec, SumLess> sums_;
     void tick();
+    bool diagramFitsBudget(const std::vector<WeightedLiteral>& terms,
+                           const std::vector<mpz_class>& suffix, const mpz_class& bound);
     std::optional<SatLit> compareSum(const BitVec& sum, const mpz_class& bound);
     std::optional<SatLit> carrySaveThreshold(
         const std::vector<WeightedLiteral>& terms, const mpz_class& bound);

@@ -25,6 +25,43 @@ void PseudoBooleanEncoder::tick() {
         throw ResourceExhausted("pseudo-Boolean encoding budget exhausted");
 }
 
+bool PseudoBooleanEncoder::diagramFitsBudget(
+    const std::vector<WeightedLiteral>& terms, const std::vector<mpz_class>& suffix,
+    const mpz_class& bound) {
+    if (!encoder_.remainingVarBudget() && !work_.remaining()) return false;
+    auto capacity = [&] {
+        uint64_t result = encoder_.remainingVarBudget().value_or(std::numeric_limits<uint64_t>::max());
+        if (const auto work = work_.remaining()) {
+            // A complete memoized diagram with N expanded states performs
+            // at most 4N+1 loop iterations, each charging one work unit.
+            result = std::min<uint64_t>(result, *work ? (*work - 1)/4 : 0);
+        }
+        return result;
+    };
+    mpz_class prefixWeight = 0, prefixGcd = 0, assignments = 1, states = 0;
+    for (size_t index = 0; index < terms.size(); ++index) {
+        tick();
+        // Residual b is bound minus a prefix sum. Such sums lie between zero
+        // and prefixWeight and are multiples of prefixGcd. Only residuals in
+        // [0,suffix[index]-1] can create nonconstant diagram nodes.
+        const mpz_class lower = std::max(mpz_class(0), mpz_class(bound - prefixWeight));
+        const mpz_class upper = std::min(bound, mpz_class(suffix[index] - 1));
+        if (lower <= upper) {
+            const mpz_class residues = prefixGcd == 0 ? mpz_class(1)
+                : mpz_class((upper - lower)/prefixGcd + 1);
+            states += std::min(assignments, residues);
+            // iteGate creates at most one SAT variable per expanded state.
+            // Using remaining resources after the partial diagram and this
+            // estimate is conservative: it reserves the full diagram again.
+            if (states > capacity()) return false;
+        }
+        prefixWeight += terms[index].weight;
+        mpz_gcd(prefixGcd.get_mpz_t(), prefixGcd.get_mpz_t(), terms[index].weight.get_mpz_t());
+        assignments <<= 1;
+    }
+    return states <= capacity();
+}
+
 std::optional<SatLit> PseudoBooleanEncoder::lessEqual(
     std::vector<WeightedLiteral> terms, mpz_class bound) {
     ++statistics_.thresholds;
@@ -90,8 +127,9 @@ std::optional<SatLit> PseudoBooleanEncoder::lessEqual(
         }
 
         // A full adder needs at most five gates; the final addition/comparison
-        // is linear in the coefficient width. Prefer a diagram while its
-        // observed state count is cheaper than that structural alternative.
+        // is linear in the coefficient width. If a diagram exceeds that
+        // structural estimate, check whether its full state space fits the
+        // existing budgets before sacrificing its stronger propagation.
         size_t circuitCost = 0, maximumWidth = 0;
         const auto maximum = std::numeric_limits<size_t>::max();
         auto charge = [&](size_t amount, size_t multiplier) {
@@ -120,6 +158,7 @@ std::optional<SatLit> PseudoBooleanEncoder::lessEqual(
         stack.push_back({0, std::move(bound), 0, {}});
         SatLit result = encoder_.constFalse();
         size_t expanded = 0;
+        bool keepDiagram = false;
         while (!stack.empty()) {
             tick();
             auto& frame = stack.back();
@@ -137,7 +176,14 @@ std::optional<SatLit> PseudoBooleanEncoder::lessEqual(
                     continue;
                 }
                 ++statistics_.diagramStates;
-                if (++expanded > circuitCost) {
+                if (++expanded > circuitCost && !keepDiagram) {
+                    // A smaller adder need not propagate as strongly as the
+                    // diagram. Keep the diagram when its whole state space
+                    // provably fits the existing variable and work limits.
+                    keepDiagram = diagramFitsBudget(terms, suffix, target);
+                    if (keepDiagram) ++statistics_.diagramBudgetProofs;
+                }
+                if (expanded > circuitCost && !keepDiagram) {
                     // Every emitted gate is only a total-function definition;
                     // no source predicate has been asserted. Discarding the
                     // partial diagram therefore cannot restrict the inputs.

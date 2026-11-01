@@ -6,6 +6,7 @@
 #include <gmpxx.h>
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <utility>
 #include <unordered_map>
 
@@ -58,6 +59,11 @@ public:
     // contradiction as evidence about the intended, exact encoding.
     bool inconsistent() const { return sat_.inconsistent(); }
     uint64_t varCount() const { return varCount_; }
+    std::optional<uint64_t> remainingVarBudget() const {
+        if (over_) return uint64_t(0);
+        if (!maxVars_) return std::nullopt;
+        return maxVars_ > varCount_ ? maxVars_ - varCount_ : 0;
+    }
 
 private:
     SatSolver& sat_;
