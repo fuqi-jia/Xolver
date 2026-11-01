@@ -119,6 +119,9 @@ TEST_CASE("PseudoBooleanEncoder: dense thresholds preserve every reified weighte
     PseudoBooleanEncoder pb(enc,work);
     const auto root=pb.lessEqual(terms,bound);
     REQUIRE(root);
+    // A large global variable allowance must not turn a compact arithmetic
+    // threshold into a superquadratic decision diagram.
+    CHECK(pb.statistics().carrySaveSums == 1);
     CHECK(enc.varCount()<10000);
     std::vector<SatLit> assignments;
     assignments.reserve(terms.size()+1);
@@ -202,14 +205,12 @@ TEST_CASE("PseudoBooleanEncoder: a proven resource bound retains the stronger co
     PseudoBooleanEncoder pb(encoder, work);
     std::vector<WeightedLiteral> terms;
     mpz_class total = 0;
-    uint32_t state = 0x9e3779b9u;
-    for (int i = 0; i < 14; ++i) {
-        state ^= state << 13; state ^= state >> 17; state ^= state << 5;
-        const mpz_class weight = 4194304u + (state & 0x3fffffu);
+    for (int i = 0; i < 48; ++i) {
+        const mpz_class weight = i % 3 + 1;
         terms.push_back({encoder.mkVar(1).bits[0], weight});
         total += weight;
     }
-    const auto root = pb.lessEqual(terms, total/2 + 17);
+    const auto root = pb.lessEqual(terms, total/2);
     REQUIRE(root);
     REQUIRE(pb.statistics().diagramBudgetProofs == 1);
     CHECK(pb.statistics().carrySaveThresholds == 0);

@@ -29,6 +29,13 @@ bool PseudoBooleanEncoder::diagramFitsBudget(
     const std::vector<WeightedLiteral>& terms, const std::vector<mpz_class>& suffix,
     const mpz_class& bound) {
     if (!encoder_.remainingVarBudget() && !work_.remaining()) return false;
+    // A global allocation limit says little about whether one threshold is
+    // affordable: a single exponential diagram can consume the whole arm's
+    // wall time before any SAT search. Extend a diagram beyond the arithmetic
+    // cost only when its complete state bound is quadratic in its inputs.
+    // This selects an encoding; exceeding it still uses the exact shared sum.
+    const mpz_class inputs = terms.size();
+    const mpz_class structuralLimit = inputs * inputs;
     auto capacity = [&] {
         uint64_t result = encoder_.remainingVarBudget().value_or(std::numeric_limits<uint64_t>::max());
         if (const auto work = work_.remaining()) {
@@ -53,7 +60,7 @@ bool PseudoBooleanEncoder::diagramFitsBudget(
             // iteGate creates at most one SAT variable per expanded state.
             // Using remaining resources after the partial diagram and this
             // estimate is conservative: it reserves the full diagram again.
-            if (states > capacity()) return false;
+            if (states > structuralLimit || states > capacity()) return false;
         }
         prefixWeight += terms[index].weight;
         mpz_gcd(prefixGcd.get_mpz_t(), prefixGcd.get_mpz_t(), terms[index].weight.get_mpz_t());
