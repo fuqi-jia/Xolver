@@ -767,6 +767,7 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
             const auto& counts = pb.statistics();
             std::cerr << "[EAGER-PB] thresholds=" << counts.thresholds
                       << " diagram_states=" << counts.diagramStates
+                      << " interval_hits=" << counts.intervalHits
                       << " carry_save=" << counts.carrySaveThresholds
                       << " arithmetic_sums=" << counts.carrySaveSums
                       << " reused_sums=" << counts.reusedSums

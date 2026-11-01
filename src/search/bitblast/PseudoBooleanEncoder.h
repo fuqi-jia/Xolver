@@ -18,7 +18,7 @@ struct WeightedLiteral {
 // Fully reified exact integer threshold: the returned literal is equivalent to
 // sum(weight * [literal]) <= bound, including under negation or disjunction.
 // Signed weights, repeated/complementary literals and arbitrary-size integers
-// are normalized before building a shared decision diagram. If its state
+// are normalized before building an interval-memoized decision diagram. If its state
 // count exceeds the estimated arithmetic-circuit size, an exact carry-save
 // sum replaces the diagram and is reused across thresholds of that expression,
 // including complemented inequalities. Exhaustion exposes no unfinished literal.
@@ -27,6 +27,7 @@ public:
     struct Statistics {
         size_t thresholds = 0;
         size_t diagramStates = 0;
+        size_t intervalHits = 0;
         size_t carrySaveThresholds = 0;
         size_t carrySaveSums = 0;
         size_t reusedSums = 0;

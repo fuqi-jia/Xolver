@@ -101,7 +101,7 @@ TEST_CASE("PseudoBooleanEncoder: partial resource-limited encodings expose no li
     CHECK(enc.overflowed());
 }
 
-TEST_CASE("PseudoBooleanEncoder: arithmetic fallback preserves every reified weighted assignment") {
+TEST_CASE("PseudoBooleanEncoder: dense thresholds preserve every reified weighted assignment") {
     auto sat=createSatSolver();
     BitBlastEncoder enc(*sat);
     enc.setVarBudget(20000);
@@ -119,8 +119,6 @@ TEST_CASE("PseudoBooleanEncoder: arithmetic fallback preserves every reified wei
     PseudoBooleanEncoder pb(enc,work);
     const auto root=pb.lessEqual(terms,bound);
     REQUIRE(root);
-    REQUIRE(pb.statistics().carrySaveThresholds>0);
-    CHECK(pb.statistics().compressors>0);
     CHECK(enc.varCount()<10000);
     std::vector<SatLit> assignments;
     assignments.reserve(terms.size()+1);
@@ -140,6 +138,38 @@ TEST_CASE("PseudoBooleanEncoder: arithmetic fallback preserves every reified wei
     }
 }
 
+TEST_CASE("PseudoBooleanEncoder: equivalent residual bounds share a diagram node") {
+    for (const auto& scale : std::vector<mpz_class>{1, mpz_class(1) << 80}) {
+        auto sat = createSatSolver();
+        BitBlastEncoder encoder(*sat);
+        WorkBudget work;
+        PseudoBooleanEncoder pb(encoder, work);
+        std::vector<WeightedLiteral> terms;
+        for (int coefficient : {6, 5, 4})
+            terms.push_back({encoder.mkVar(1).bits[0], coefficient*scale});
+        const mpz_class bound = 8*scale - 1;
+        const auto root = pb.lessEqual(terms, bound);
+        REQUIRE(root);
+        // Residual bounds 1 and 2 both denote the interval [0,3] for
+        // the final weight4. A requested-bound-only memo misses this reuse.
+        REQUIRE(pb.statistics().intervalHits > 0);
+        CHECK(pb.statistics().carrySaveThresholds == 0);
+        for (unsigned mask = 0; mask < 8; ++mask) {
+            std::vector<SatLit> assumptions;
+            mpz_class value = 0;
+            for (size_t i = 0; i < terms.size(); ++i) {
+                const bool chosen = mask & (1u << i);
+                assumptions.push_back(chosen ? terms[i].literal : terms[i].literal.negated());
+                if (chosen) value += terms[i].weight;
+            }
+            assumptions.push_back(value <= bound ? *root : root->negated());
+            CHECK(sat->solve(assumptions) == SatSolver::SolveResult::Sat);
+            assumptions.back() = assumptions.back().negated();
+            CHECK(sat->solve(assumptions) == SatSolver::SolveResult::Unsat);
+        }
+    }
+}
+
 TEST_CASE("PseudoBooleanEncoder: shared sums preserve distinct and complemented thresholds") {
     auto sat = createSatSolver();
     BitBlastEncoder encoder(*sat);
@@ -148,19 +178,22 @@ TEST_CASE("PseudoBooleanEncoder: shared sums preserve distinct and complemented 
     std::vector<WeightedLiteral> terms;
     mpz_class total = 0, boundary = 0;
     uint32_t state = 0x9e3779b9u;
-    for (int i = 0; i < 14; ++i) {
+    for (int i = 0; i < 32; ++i) {
         state ^= state << 13; state ^= state >> 17; state ^= state << 5;
         const mpz_class weight = mpz_class(4194304u + (state & 0x3fffffu))*7;
         terms.push_back({encoder.mkVar(1).bits[0], weight});
         total += weight;
-        if (i < 7) boundary += weight;
+        if (i < 7 || (i >= 14 && i%2 == 0)) boundary += weight;
     }
     auto complemented = terms, negative = terms, changed = terms;
     for (auto& term : complemented) term.literal = term.literal.negated();
     for (auto& term : negative) term.weight = -term.weight;
     changed[0].weight += 7;
     // The adjacent non-divisible bound exercises integer floor/ceiling after
-    // GCD reduction. The exact boundary is reached by the first seven inputs.
+    // GCD reduction. A 32-input sum genuinely needs the arithmetic fallback;
+    // the old 14-input truth table above remains fully exhaustive. Here all
+    // assignments of 14 inputs are checked with the other 18 fixed to an
+    // alternating pattern. The first seven free inputs reach the exact bound.
     const auto upper = pb.lessEqual(terms, boundary + 1);
     REQUIRE(upper);
     REQUIRE(pb.statistics().carrySaveSums == 1);
@@ -173,11 +206,11 @@ TEST_CASE("PseudoBooleanEncoder: shared sums preserve distinct and complemented 
     const auto differentSum = pb.lessEqual(changed, boundary);
     REQUIRE(differentSum);
     const std::vector<SatLit> predicates{*upper, *exactUpper, *lower, *exactLower, *differentSum};
-    for (unsigned mask = 0; mask < (1u << terms.size()); ++mask) {
+    for (unsigned mask = 0; mask < (1u << 14); ++mask) {
         std::vector<SatLit> assumptions;
         mpz_class value = 0;
         for (size_t i = 0; i < terms.size(); ++i) {
-            const bool chosen = mask & (1u << i);
+            const bool chosen = i < 14 ? bool(mask & (1u << i)) : i%2 == 0;
             assumptions.push_back(chosen ? terms[i].literal : terms[i].literal.negated());
             if (chosen) value += terms[i].weight;
         }
