@@ -4,8 +4,53 @@
 #include <algorithm>
 #include <map>
 #include <set>
+#include <limits>
 
 namespace xolver {
+
+std::optional<IntegerRadixDecomposition> findIntegerRadixDecomposition(
+    const NormalizedConstraint& equation, const IntegerBoundsLookup& bounds) {
+    if (equation.rel != Relation::Eq || equation.rhs.get_den() != 1) return std::nullopt;
+    std::map<std::string, mpz_class> terms;
+    for (const auto& [name, coefficient] : equation.lhs.terms) {
+        if (coefficient.get_den() != 1) return std::nullopt;
+        terms[name] += coefficient.get_num();
+        if (terms[name] == 0) terms.erase(name);
+    }
+    if (terms.size() != 3) return std::nullopt;
+    mpz_class divisor = 0, rhs = equation.rhs.get_num();
+    for (const auto& [name, coefficient] : terms) {
+        (void)name;
+        mpz_gcd(divisor.get_mpz_t(), divisor.get_mpz_t(), coefficient.get_mpz_t());
+    }
+    if (rhs % divisor != 0) return std::nullopt;
+    rhs /= divisor;
+    for (auto& [name, coefficient] : terms) { (void)name; coefficient /= divisor; }
+    auto quotient = terms.end();
+    for (auto it = terms.begin(); it != terms.end(); ++it) {
+        if (it->second == 1 || it->second == -1) continue;
+        if (quotient != terms.end()) return std::nullopt;
+        quotient = it;
+    }
+    if (quotient == terms.end()) return std::nullopt;
+    const mpz_class magnitude = abs(quotient->second);
+    if (mpz_popcount(magnitude.get_mpz_t()) != 1) return std::nullopt;
+    const auto exponent = mpz_scan1(magnitude.get_mpz_t(), 0);
+    if (exponent > std::numeric_limits<unsigned>::max()) return std::nullopt;
+    for (const auto& [remainder, coefficient] : terms) {
+        if (remainder == quotient->first) continue;
+        const auto range = bounds(remainder);
+        if (!range || range->first < 0 || range->first > range->second || range->second >= magnitude)
+            continue;
+        for (const auto& [dividend, unit] : terms) {
+            if (dividend == quotient->first || dividend == remainder || coefficient != -unit) continue;
+            return IntegerRadixDecomposition{dividend, quotient->first, remainder,
+                mpz_class(-rhs / unit), static_cast<unsigned>(exponent),
+                (quotient->second > 0) == (unit > 0), range->first, range->second};
+        }
+    }
+    return std::nullopt;
+}
 
 std::optional<IntegerPoint> findIntegerAffineModel(
     const std::vector<NormalizedConstraint>& constraints, const IntegerPoint& seed) {

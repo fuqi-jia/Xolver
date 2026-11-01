@@ -287,6 +287,67 @@ TEST_CASE("Finite integer portfolio: a finite refutation yields to the complete 
     CHECK(solver.solveLinear(f.ir,roots).status==EagerBitBlastSolver::Status::Unknown);
 }
 
+TEST_CASE("Finite integer radix encoding: signed offsets and quotient orientation remain exact") {
+    for (bool negate : {false,true}) for (int offset : {-17,0,19}) {
+        BinaryFixture f;
+        const auto word=f.variable("word"),q=f.variable("q"),r=f.variable("r");
+        const auto equation=f.term(Kind::Eq,{
+            f.term(Kind::Add,{word,f.integer(offset)}),
+            f.term(Kind::Add,{f.term(Kind::Mul,{f.integer(negate?-8:8),q}),r})});
+        const std::vector<ExprId> roots{
+            f.term(Kind::Geq,{word,f.integer(-16-offset)}),f.term(Kind::Leq,{word,f.integer(15-offset)}),
+            f.term(Kind::Geq,{q,f.integer(negate?-1:-2)}),f.term(Kind::Leq,{q,f.integer(negate?2:1)}),
+            f.term(Kind::Geq,{r,f.integer(0)}),f.term(Kind::Leq,{r,f.integer(7)}),equation,
+            f.term(Kind::Not,{f.term(Kind::Distinct,{word,f.integer(-1-offset)})})};
+        EagerBitBlastSolver solver;
+        const auto result=solver.solveLinear(f.ir,roots);
+        REQUIRE(result.status==EagerBitBlastSolver::Status::Sat);
+        CHECK(result.model.at("word")==-1-offset);
+        CHECK(result.model.at("q")== (negate?1:-1));CHECK(result.model.at("r")==7);
+        CHECK(result.model.at("word")+offset==(negate?-8:8)*result.model.at("q")+result.model.at("r"));
+    }
+}
+
+TEST_CASE("Finite integer radix encoding: nested and repeated definitions retain every equality") {
+    BinaryFixture f;
+    const auto x=f.variable("x"),a=f.variable("a"),b=f.variable("b"),c=f.variable("c"),
+               d=f.variable("d"),e=f.variable("e"),r=f.variable("r");
+    std::vector<ExprId> roots;
+    for (auto [variable,upper] : std::vector<std::pair<ExprId,int>>{{x,63},{a,3},{b,15},{c,3},{d,3},{e,15},{r,3}}) {
+        roots.push_back(f.term(Kind::Geq,{variable,f.integer(0)}));
+        roots.push_back(f.term(Kind::Leq,{variable,f.integer(upper)}));
+    }
+    auto define=[&](ExprId value,int scale,ExprId high,ExprId low) {
+        roots.push_back(f.term(Kind::Eq,{value,f.term(Kind::Add,{f.term(Kind::Mul,{f.integer(scale),high}),low})}));
+    };
+    define(x,16,a,b);define(b,4,c,d);define(x,4,e,r);
+    roots.push_back(f.term(Kind::Not,{f.term(Kind::Distinct,{x,f.integer(42)})}));
+    EagerBitBlastSolver solver;
+    const auto result=solver.solveLinear(f.ir,roots);
+    REQUIRE(result.status==EagerBitBlastSolver::Status::Sat);
+    const auto& p=result.model;
+    CHECK(p.at("x")==42);CHECK(p.at("x")==16*p.at("a")+p.at("b"));
+    CHECK(p.at("b")==4*p.at("c")+p.at("d"));CHECK(p.at("x")==4*p.at("e")+p.at("r"));
+}
+
+TEST_CASE("Finite integer radix encoding: conditional definitions and later calls do not become root facts") {
+    BinaryFixture f;
+    const auto x=f.variable("x"),q=f.variable("q"),r=f.variable("r");
+    const auto definition=f.term(Kind::Eq,{x,f.term(Kind::Add,{f.term(Kind::Mul,{f.integer(8),q}),r})});
+    const std::vector<ExprId> roots{
+        f.term(Kind::Eq,{x,f.integer(1)}),f.term(Kind::Eq,{q,f.integer(0)}),
+        f.term(Kind::Eq,{r,f.integer(0)}),
+        f.term(Kind::Or,{definition,f.term(Kind::Eq,{x,f.integer(1)})})};
+    EagerBitBlastSolver solver;
+    const auto conditional=solver.solveLinear(f.ir,roots);
+    REQUIRE(conditional.status==EagerBitBlastSolver::Status::Sat);
+    CHECK(conditional.model.at("x")==1);CHECK(conditional.model.at("q")==0);
+    const auto first=solver.solveLinear(f.ir,{definition,f.term(Kind::Eq,{q,f.integer(0)}),f.term(Kind::Eq,{r,f.integer(0)})});
+    REQUIRE(first.status==EagerBitBlastSolver::Status::Sat);CHECK(first.model.at("x")==0);
+    const auto restored=solver.solveLinear(f.ir,roots);
+    REQUIRE(restored.status==EagerBitBlastSolver::Status::Sat);CHECK(restored.model.at("x")==1);
+}
+
 TEST_CASE("Binary polynomial encoding: positive powers collapse without losing exact models") {
     BinaryFixture f;
     const auto x = f.variable("x"), y = f.variable("y");

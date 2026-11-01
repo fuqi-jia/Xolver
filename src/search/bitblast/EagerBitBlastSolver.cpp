@@ -7,6 +7,7 @@
 #include "search/bitblast/BitVec.h"
 #include "search/bitblast/SpaceEstimator.h"
 #include "search/bitblast/PseudoBooleanEncoder.h"
+#include "search/bitblast/IntegerRadixEncoder.h"
 #include "search/linear/LinearBoundPropagation.h"
 #include "algebra/linear/LinearExpr.h"
 #include "algebra/poly/PolynomialEvaluation.h"
@@ -394,6 +395,48 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
     }
     if (finiteLinearOnly && !boundedLinear) return out;
     const bool exactDomains = binaryDomains || boundedLinear;
+    const IntegerBoundsLookup integerBounds = [&](const std::string& variable)
+        -> std::optional<std::pair<mpz_class, mpz_class>> {
+        const auto lower = lb_.find(variable), upper = ub_.find(variable);
+        if (lower == lb_.end() || upper == ub_.end() || lower->second > upper->second)
+            return std::nullopt;
+        return std::pair<mpz_class, mpz_class>{lower->second, upper->second};
+    };
+    std::vector<IntegerRadixDecomposition> radixDefinitions;
+    std::vector<PolyId> radixEquations;
+    std::unordered_set<ExprId> rootSeen;
+    std::unordered_set<PolyId> equationSeen;
+    std::vector<ExprId> rootPending(assertions.rbegin(), assertions.rend());
+    while (!rootPending.empty()) {
+        const auto id = rootPending.back(); rootPending.pop_back();
+        if (!rootSeen.insert(id).second) continue;
+        const auto& root = ir.get(id);
+        if (root.kind == Kind::And) {
+            for (size_t child = root.children.size(); child-- > 0;)
+                rootPending.push_back(root.children[child]);
+            continue;
+        }
+        const auto atom = atomCs_.find(id);
+        if (atom == atomCs_.end()) continue;
+        for (const auto& [poly, relation] : atom->second.parts) {
+            if (relation != Relation::Eq || poly == NullPoly || !equationSeen.insert(poly).second) continue;
+            const auto terms = kernel_->terms(poly);
+            if (!terms) continue;
+            NormalizedConstraint equation{{}, 0, Relation::Eq};
+            bool linear = true;
+            for (const auto& term : *terms) {
+                if (term.powers.empty()) equation.rhs -= term.coefficient;
+                else if (term.powers.size() == 1 && term.powers[0].second == 1)
+                    equation.lhs.terms.emplace_back(std::string(kernel_->varName(term.powers[0].first)),
+                                                   mpq_class(term.coefficient));
+                else { linear = false; break; }
+            }
+            if (linear) if (auto definition = findIntegerRadixDecomposition(equation, integerBounds)) {
+                radixDefinitions.push_back(std::move(*definition));
+                radixEquations.push_back(poly);
+            }
+        }
+    }
 
     // Var-budget cap (encode SIZE): bounds a single attempt's encoding so a huge
     // formula bails (overflow->Unknown) instead of OOM. Competition has 30GB, so
@@ -513,18 +556,29 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
         for (const auto& v : intVars_) {
             unsigned w = K;
             auto il = lb_.find(v), iu = ub_.find(v);
-            if (il != lb_.end() && iu != ub_.end() && il->second <= iu->second) {
+            const bool bounded = il != lb_.end() && iu != ub_.end() && il->second <= iu->second;
+            if (bounded) {
                 w = SpaceEstimator::bitsToCover(il->second, iu->second);
                 if (il->second == iu->second) {
                     varBits[v] = enc.mkConst(il->second, w);
                     continue;
                 }
             }
-            if (binaryDomains) {
-                varBits[v] = enc.mkVar(1);
-                varBits[v].bits.push_back(enc.constFalse());
+            if (bounded && (il->second >= 0 || iu->second < 0)) {
+                // A root-proven sign is a constant bit, including domains wider
+                // than 0/1. Other original bounds are still encoded below.
+                varBits[v] = enc.mkVar(w - 1);
+                varBits[v].bits.push_back(il->second >= 0 ? enc.constFalse() : enc.constTrue());
             } else varBits[v] = enc.mkVar(w);
         }
+        std::unordered_set<PolyId> radixZeroPolynomials;
+        try {
+            const auto shared = encodeIntegerRadixDefinitions(enc, radixDefinitions, varBits, integerBounds, pbWork, deadline);
+            for (size_t index : shared) radixZeroPolynomials.insert(radixEquations[index]);
+            if (diag) std::cerr << "[EAGER-RADIX] candidates=" << radixDefinitions.size()
+                                << " shared=" << shared.size() << "\n";
+        } catch (const ResourceExhausted&) { return out; }
+        if (enc.overflowed()) return out;
         PolyBitBlaster blaster(enc, *kernel_, varBits);
 
         auto encodeFinitePolynomial = [&](PolyId polynomial, Relation relation) -> std::optional<SatLit> {
@@ -665,6 +719,8 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
                             if (part.first == NullPoly)
                                 pl = (part.second == Relation::Eq) ? enc.constTrue()
                                                                    : enc.constFalse();
+                            else if (radixZeroPolynomials.contains(part.first))
+                                pl = relationHolds(mpz_class(0), part.second) ? enc.constTrue() : enc.constFalse();
                             else if (exactDomains) {
                                 const auto encoded = encodeFinitePolynomial(part.first, part.second);
                                 if (!encoded) { encodeOk = false; break; }
