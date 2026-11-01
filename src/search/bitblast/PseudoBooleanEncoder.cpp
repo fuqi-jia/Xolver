@@ -107,26 +107,18 @@ std::optional<SatLit> PseudoBooleanEncoder::lessEqual(
         const mpz_class target = bound;
 
         // F(i,b) = ite(literal_i, F(i+1,b-weight_i), F(i+1,b)).
-        // A node is valid throughout an interval of integer bounds. Reuse
-        // that whole interval: memoizing only the requested bound repeatedly
-        // expands the same Boolean function and can prematurely abandon the
-        // more strongly propagating diagram for an arithmetic circuit.
-        struct Interval {
-            SatLit literal;
-            mpz_class lower, upper;
-        };
-        std::vector<std::map<mpz_class, Interval>> memo(terms.size());
+        // Memoization is local to this normalized threshold. Gate sharing in
+        // BitBlastEncoder also shares equivalent subexpressions across atoms.
+        std::vector<std::map<mpz_class, SatLit>> memo(terms.size());
         struct Frame {
             size_t index;
             mpz_class bound;
             unsigned phase = 0;
-            Interval low;
+            SatLit low;
         };
         std::vector<Frame> stack;
         stack.push_back({0, std::move(bound), 0, {}});
-        // Every reachable residual bound lies in [-totalWeight,totalWeight].
-        // Finite sentinels avoid infinity arithmetic, with no truncation.
-        Interval result{encoder_.constFalse(), -suffix[0], -1};
+        SatLit result = encoder_.constFalse();
         size_t expanded = 0;
         while (!stack.empty()) {
             tick();
@@ -134,20 +126,15 @@ std::optional<SatLit> PseudoBooleanEncoder::lessEqual(
             const size_t index = frame.index;
             if (frame.phase == 0) {
                 if (frame.bound < 0 || frame.bound >= suffix[index]) {
-                    if (frame.bound < 0) result = {encoder_.constFalse(), -suffix[0], -1};
-                    else result = {encoder_.constTrue(), suffix[index], suffix[0]};
+                    result = frame.bound < 0 ? encoder_.constFalse() : encoder_.constTrue();
                     stack.pop_back();
                     continue;
                 }
-                auto cached = memo[index].upper_bound(frame.bound);
-                if (cached != memo[index].begin()) {
-                    --cached;
-                    if (frame.bound <= cached->second.upper) {
-                        result = cached->second;
-                        ++statistics_.intervalHits;
-                        stack.pop_back();
-                        continue;
-                    }
+                const auto cached = memo[index].find(frame.bound);
+                if (cached != memo[index].end()) {
+                    result = cached->second;
+                    stack.pop_back();
+                    continue;
                 }
                 ++statistics_.diagramStates;
                 if (++expanded > circuitCost) {
@@ -167,18 +154,13 @@ std::optional<SatLit> PseudoBooleanEncoder::lessEqual(
                 const mpz_class highBound = frame.bound - terms[index].weight;
                 stack.push_back({index + 1, highBound, 0, {}});
             } else {
-                const auto literal = encoder_.iteGate(terms[index].literal, result.literal, frame.low.literal);
+                result = encoder_.iteGate(terms[index].literal, result, frame.low);
                 if (encoder_.overflowed()) return std::nullopt;
-                // Both child functions must stay unchanged. The high branch
-                // sees b-weight, so translate its interval before intersecting.
-                result = {literal,
-                    std::max(frame.low.lower, mpz_class(result.lower + terms[index].weight)),
-                    std::min(frame.low.upper, mpz_class(result.upper + terms[index].weight))};
-                memo[index].emplace(result.lower, result);
+                memo[index].emplace(frame.bound, result);
                 stack.pop_back();
             }
         }
-        return oriented(result.literal);
+        return oriented(result);
     } catch (const ResourceExhausted&) {
         return std::nullopt;
     }
