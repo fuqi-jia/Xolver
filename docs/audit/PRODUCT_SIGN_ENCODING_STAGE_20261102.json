@@ -156,15 +156,152 @@
     "boundary": "Observer-only 30-second prefixes retaining 60-second internal scheduling; diagnostics change timing. Encoding cost changes little; most observed benefit is in subsequent SAT search. This does not establish a universal search-time improvement."
   },
   "full160": {
-    "stage": "product-sign-full-r1778",
-    "status": "running",
+    "stage": "product-sign-full-r1778-recovery-r1779-acceptance-r1780",
+    "status": "validated-experimental-frozen-round",
+    "summary": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/product-sign-full-r1778/summary.json",
+      "sha256": "d6a882603881d6bbf497e34aadb180ea0d5f624bfcfc0b83eb5af33c9c996530"
+    },
+    "acceptance_experiment": "689216eb3866",
+    "binaries": {
+      "baseline": "a42bfd4c02845bf2e15eae183bc3e99792262d19b3cb51025d34095e8fed1233",
+      "candidate": "517c3f74a457e783934b78d562fcdc84f10800b96589db918f6db32cfce9f002",
+      "z3": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+    },
+    "scores": {
+      "baseline": {
+        "verified": 109,
+        "raw": {
+          "unsat": 48,
+          "timeout": 50,
+          "sat": 61,
+          "unknown": 1
+        },
+        "unconfirmed": [],
+        "verified_par2": 6624.395398687571
+      },
+      "candidate": {
+        "verified": 112,
+        "raw": {
+          "unsat": 49,
+          "timeout": 47,
+          "sat": 63,
+          "unknown": 1
+        },
+        "unconfirmed": [],
+        "verified_par2": 6289.952657941729
+      },
+      "z3": {
+        "verified": 116,
+        "raw": {
+          "unsat": 58,
+          "sat": 67,
+          "timeout": 35
+        },
+        "unconfirmed": [
+          12,
+          24,
+          27,
+          42,
+          50,
+          75,
+          80,
+          114,
+          148
+        ],
+        "verified_par2": 5563.175168571994
+      }
+    },
+    "gained": [
+      106,
+      113,
+      131
+    ],
+    "lost": [],
+    "recovery": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/product-sign-recovery-inputs-r1779/recovery.json",
+      "sha256": "158d7541f380b565a7a907b19606d459ab4ea5606450d2495a47944e10da5346",
+      "preserved_valid_complete_triads": 155,
+      "retaken_incomplete_cohorts": [
+        24,
+        27,
+        47,
+        49,
+        50
+      ],
+      "original_valid_partial_arm_retaken_in_cohort": 47
+    },
+    "source_certificate": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/polynomial-mod-confirmation-r1697/report.json",
+      "sha256": "a43df2517da6f7af13805682dc413553d650bab450e17ac5993cb9a9b2d1fee3",
+      "checked": {
+        "status": "checked-unsat",
+        "input_sha256": "02a58b11df8951543940a1090a140592e24de41dcaeb6470e7a50d42e804be64",
+        "assertion": 9,
+        "path": [
+          2
+        ],
+        "checked_residues": 12
+      },
+      "credits": [
+        {
+          "index": 115,
+          "backend": "candidate",
+          "result": "unsat",
+          "evidence": "fresh source certificate check"
+        },
+        {
+          "index": 115,
+          "backend": "baseline",
+          "result": "unsat",
+          "evidence": "fresh source certificate check"
+        }
+      ]
+    },
+    "attribution": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/product-sign-full-r1778/attribution.json",
+      "sha256": "49da6e17d78f8562991ec2c3b7962e2ce3fe1d2615b78e561b2ef61f0e49c941",
+      "previous_summary": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/candidate-height-full-r1769/summary.json",
+        "sha256": "d1da4b35ec2566d458d0803a17295f03f9bdd790317afc789a425e5f6bf07292"
+      },
+      "current_summary": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/product-sign-full-r1778/summary.json",
+        "sha256": "d6a882603881d6bbf497e34aadb180ea0d5f624bfcfc0b83eb5af33c9c996530"
+      },
+      "previous_verified": 111,
+      "current_verified": 112,
+      "new_vs_previous": [
+        106
+      ],
+      "lost_vs_previous": [],
+      "unstable_controls": {
+        "113": {
+          "previous_candidate_binary": "a42bfd4c02845bf2e15eae183bc3e99792262d19b3cb51025d34095e8fed1233",
+          "current_baseline_binary": "a42bfd4c02845bf2e15eae183bc3e99792262d19b3cb51025d34095e8fed1233",
+          "previous_candidate_result": "unsat",
+          "previous_candidate_seconds": 0.03410746157169342,
+          "current_baseline_result": "timeout",
+          "current_candidate_result": "unsat"
+        },
+        "131": {
+          "previous_candidate_binary": "a42bfd4c02845bf2e15eae183bc3e99792262d19b3cb51025d34095e8fed1233",
+          "current_baseline_binary": "a42bfd4c02845bf2e15eae183bc3e99792262d19b3cb51025d34095e8fed1233",
+          "previous_candidate_result": "sat",
+          "previous_candidate_seconds": 59.73033153638244,
+          "current_baseline_result": "timeout",
+          "current_candidate_result": "sat"
+        }
+      },
+      "boundary": "Sealed training-suite report comparison only; no solver rerun or new oracle judgment. The prior canonical parent is the identical a42 binary now used as baseline. Its known111 verified solve set is fully preserved by the112 prototype set, which adds106. Fresh same-round109-to112 differences also include113/131 where parent control times out; these two are not credited as new capability or as mechanism-specific performance gains. Neither protected set was used."
+    },
     "canonical_source_qualification": "pending",
-    "boundary": "Fresh all160 experiment, no substitution of pilot observations; final canonical CMake build, server acceptance and PR/main CI required before promotion."
+    "boundary": "All160 experimental observations accepted;155 original valid triads preserved, only5 incomplete137 wrapper cohorts recovered. Known111 solve set fully preserved with106 added. Control113/131 variability is not attributed to this mechanism. Normal CMake qualification, new-version QCP regression and PR/main CI remain required before promotion."
   },
   "qcp": {
     "status": "candidate-height canonical qualification still in fresh native validation; not a product-sign QCP result"
   },
   "protected_sets_used": false,
   "promoted": false,
-  "boundary": "A selected training pilot verifies one added solve and no lost solve. Neither an overall fixed160 improvement nor superiority to Z3 is established. Both independent protected sets remain unused."
+  "boundary": "Full160 experimental prototype comparison verifies109/112/116 for parent/candidate/Z3; Z3 raw125 includes9 unconfirmed excluded from verified counts. The previously verified111 parent solve set is preserved and106 is added. Fresh109-to112 also reflects unstable controls113/131, not three attributed algorithmic gains. Neither an overall win over Z3 nor final protected-set performance is established. Canonical qualification and delivery gates remain pending."
 }

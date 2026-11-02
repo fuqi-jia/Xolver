@@ -5240,6 +5240,28 @@ benefit is subsequent SAT search, rather than encoding CPU time. The
 [stage record](PRODUCT_SIGN_ENCODING_STAGE_20261102.json) seals source,
 control, model and profile evidence. Fresh full160 R1778 is running using the
 unchanged frozen prototype. Canonical qualification, QCP checks and PR/main CI
-remain necessary before promotion. No overall fixed160 gain or superiority to
-Z3 is claimed, neither protected set is used, and the cancelled extra
+remain necessary before promotion. Neither protected set is used, and the cancelled extra
 `validation/current-main.json` archive remains unnecessary.
+
+R1778 now completes all160 with leased acceptance R1780: parent/candidate/Z3
+verify109/112/116, with125 raw Z3 decisions. The nine unconfirmed Z3 outcomes
+remain excluded. Fresh PAR-2 totals are6624.395/6289.953/5563.175s. Fresh gains
+are106/113/131 with no losses;113 and131 are unstable controls previously
+solved by the identical parent, so they are not attributed to the algorithm.
+The candidate preserves the previous111 verified solve set and adds106. Its
+actual new timed witness (11.444s SAT) replays with frozen Z3. Summary SHA-256:
+`d6a882603881d6bbf497e34aadb180ea0d5f624bfcfc0b83eb5af33c9c996530`;
+sealed attribution SHA-256:
+`49da6e17d78f8562991ec2c3b7962e2ce3fe1d2615b78e561b2ef61f0e49c941`.
+
+Five raw wrapper137 failures are preserved, not classified as proven native
+solver OOM. Only their incomplete cohorts24/27/47/49/50 are recovered under
+unchanged frozen versions/budgets;155 valid complete original triads are
+retained. The original valid partial Z3 arm on47 is preserved unscored and its
+whole cohort is retaken, so no blanket claim of zero repeated valid arms is
+made. The original50 timing overrun is excluded. Source115 UNSAT truth is
+independently rechecked from its unchanged modulo12 certificate; no historical
+timed result is reused. All five recoveries and acceptance exit0 with PIDs
+gone. Core implementation is8a553f49 on feat/qcp-foundations; this remains an
+experimental prototype with canonical CMake/new-version QCP/CI gates pending,
+and it still falls short of Z3 and the126 target.
