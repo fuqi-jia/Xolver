@@ -40,6 +40,7 @@ public:
         size_t choices = 0, rejectedChoices = 0, definitions = 0, modelChecks = 0, maxDepth = 0;
         size_t backjumps = 0, skippedLevels = 0, explanationFallbacks = 0;
         size_t propagatedFacts = 0, propagationRounds = 0, maxActiveAtoms = 0, refinements = 0;
+        size_t integerCompletions = 0, integerCompletionNodes = 0, integerCompletionModels = 0;
         bool exhausted = false;
     };
 

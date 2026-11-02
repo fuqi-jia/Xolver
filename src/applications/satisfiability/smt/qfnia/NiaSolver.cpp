@@ -24,6 +24,7 @@
 #include "contracts/LogicFeatureDetector.h"
 #include "search/presolve/Presolve.h"
 #include "search/candidate/CompleteFiniteDomainEnumerator.h"
+#include "search/candidate/PartialLinearModelSearch.h"
 #include "search/coordination/TheoryLemmaDatabase.h"
 #include "evidence/ArithModelValidator.h"
 #include "base/EnvParam.h"
@@ -35,6 +36,7 @@
 #include "search/nia/farkas/FarkasOrModelAssembler.h"
 #include "base/MpqUtils.h"
 #include <chrono>
+#include <fstream>
 #include <iostream>
 
 namespace xolver {
@@ -128,6 +130,52 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     addFull("nia.linear-decide", &NiaSolver::stageLinearDecide);
     add("nia.presolve", &NiaSolver::stagePresolveFixpoint);
     addFull("nia.sign-refute", &NiaSolver::stageSignRefute);
+    reasoners_.push_back(std::make_unique<CallbackReasoner>(
+        "nia.partial-linear-model",
+        [this](TheoryLemmaStorage&, TheoryEffort) -> std::optional<TheoryCheckResult> {
+            if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty())
+                return std::nullopt;
+            std::vector<PartialLinearModelSearch::Constraint> constraints;
+            constraints.reserve(normalized_.size());
+            for (const auto& constraint : normalized_)
+                constraints.push_back({constraint.poly, constraint.rel});
+            PartialLinearModelSearch::Statistics statistics;
+            const auto started = std::chrono::steady_clock::now();
+            auto model = PartialLinearModelSearch::trySolve(
+                constraints, *kernel_, true, &statistics);
+            bool accepted = false;
+            IntegerModel point;
+            if (model) {
+                for (const auto& [variable, value] : *model) {
+                    if (value.get_den() != 1) return std::nullopt;
+                    point.emplace(std::string(kernel_->varName(variable)), value.get_num());
+                }
+                accepted = validator_.validate(point, normalized_) ==
+                    IntegerModelValidator::Result::Valid;
+            }
+            const auto profile = config::read<config::ReadKind::ProfilePath>(
+                "ARITH_STAGE_PROF", "/tmp/xolver_stageprof.txt");
+            if (!profile.empty()) {
+                std::ofstream out(profile.string() + ".integer-boundary.log", std::ios::app);
+                out << "variables=" << statistics.variables
+                    << " parameters=" << statistics.parameters
+                    << " contexts=" << statistics.contexts
+                    << " checks=" << statistics.linearChecks
+                    << " choices=" << statistics.choices
+                    << " models=" << statistics.modelChecks
+                    << " propagated=" << statistics.propagatedFacts
+                    << " integer_completions=" << statistics.integerCompletions
+                    << " integer_nodes=" << statistics.integerCompletionNodes
+                    << " integer_models=" << statistics.integerCompletionModels
+                    << " exhausted=" << statistics.exhausted
+                    << " accepted=" << accepted << " us="
+                    << std::chrono::duration_cast<std::chrono::microseconds>(
+                           std::chrono::steady_clock::now() - started).count() << '\n';
+            }
+            if (!accepted) return std::nullopt;
+            currentModel_ = std::move(point);
+            return TheoryCheckResult::consistent();
+        }, ReasonerSchedule::CandidateModel));
     // Apply exact linear, presolve and sign reasoning before constructing a
     // bounded candidate encoding. Infeasible integer boxes alone need not
     // refute an unbounded problem, and must not starve these exact stages.

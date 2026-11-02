@@ -38,7 +38,14 @@ fix is retained under the user's explicit functionality-first instruction,
 including its known SAT59 timeout regression. No performance superiority is claimed.
 Older tables describe their own frozen versions and evidence boundaries.
 
-## Qualified PR94 candidate
+## Latest canonical delivery (PR94)
+
+[PR94](https://github.com/fuqi-jia/Xolver/pull/94) is merged as main
+`5dfaeadec1f00e34139b0ba5d558f34f506f06dd`. Both final
+[PR CI41439898323](https://github.com/fuqi-jia/Xolver/actions/runs/41439898323)
+and [post-merge main CI41443736430](https://github.com/fuqi-jia/Xolver/actions/runs/41443736430)
+pass build-test and proof-gate. The evidence-only final head `7b9a0f54`
+matches every qualified build-bearing file of implementation `029c9a56`.
 
 [PR94](https://github.com/fuqi-jia/Xolver/pull/94) implementation `029c9a56`
 passes ordinary Panda1/ExperimentOS CMake qualification:2015 unit cases /
@@ -84,9 +91,43 @@ do not repeat the closed affine-line or work-budget-only experiments. Standard
 theory `unknown` is already ignored unless explicitly requesting Farkas-model
 recovery; there is no evidence for a general premature-unknown termination bug.
 Neither protected set has been used. Overall superiority and126/160 remain
-unproved; merging and post-merge main CI are separate delivery gates.
+unproved. Draco/MaxSMT work remains paused.
 
-## Latest canonical delivery
+## Shared affine integer completion under qualification (R1883–R1894)
+
+The shared partial-linear search rejected fractional LP vertices without
+completing the integer affine block. R1887 records the same `x0=C/2` after
+changing a different sampled coefficient from2 to1, even though an integer
+completion exists. A new shared `completeIntegerModel` uses scoped neighboring
+integer pins, bounded work and the caller's deadline. It emits no refutation;
+clients still validate every original obligation. NIA calls the existing shared
+partial-linear search before expensive bounded encoding. Real-domain behavior
+and existing LRA/LIA rollback policies are retained.
+
+R1888's isolated native binary `71e7e1b3` passes2019 cases/1314387 assertions;
+the new85-assertion regression fails on the old shared implementation and passes
+on the patch. R1891's five helper cases include cancellation, restored caller
+levels, strict bounds, mixed integer/real columns, negative rounding and budget
+exhaustion. R1889 checks eight generated inputs: main/integration-only/completion
+verify6/7/8, and all nine actual SAT models pass both frozen independent solvers.
+The16-parameter input changes from60s timeout to0.116s SAT; profiled nonlinear
+choices fall5297→17. These generated diagnostics earn no fixed160 credit.
+
+R1890/R1892's fresh20-input public pilot remains5→5 verified, with19 for Z3,
+no gains, losses, errors or opposite verdicts. PAR-2 is1888.703/1876.558/222.073s;
+the reduction is dominated by unchanged LRA131 and is not attributed to integer
+completion. Neither production root sources nor its archive were replaced.
+See [isolated capability and public-pilot evidence](INTEGER_MODEL_COMPLETION_STAGE_20261102.json).
+No new full160, current-worker QCP or protected-set result is claimed.
+
+The next private client is LIA, before disequality handling and split selection,
+so both inspect any changed LP point. Exact original-atom validation and the
+interface gate remain mandatory; applied-prefix identity may refresh only after
+all temporary bounds and explanations restore. R1893 fails in the Python build
+script before compilation; its unchanged source is retained and R1894 fixes
+only that script. LIA qualification and a fresh public pilot remain pending.
+
+## Previous canonical delivery (PR93)
 
 [PR93](https://github.com/fuqi-jia/Xolver/pull/93) is merged as main
 `c062a6fc`. PR CI and post-merge CI41371989502 both pass build-test and proof-gate. The fresh
