@@ -100,7 +100,8 @@ private:
 
     // Walk the DAG: reject unsupported constructs (UF/array/quantifier),
     // convert every polynomial atom, collect numeric vars. False => Unknown.
-    bool collect(const NativeTerms& ir, const std::vector<ExprId>& assertions);
+    bool collect(const NativeTerms& ir, const std::vector<ExprId>& assertions,
+                 std::unordered_map<std::string, std::vector<mpz_class>>& finiteValues);
 
     bool isBoolTyped(ExprId eid, const NativeTerms& ir) const;
     bool isArithAtom(ExprId eid, const NativeTerms& ir) const;

@@ -342,21 +342,27 @@ TEST_CASE("Finite integer portfolio: signed strict bounds and Boolean contexts v
     }
 }
 
-TEST_CASE("Finite integer portfolio: branch-local bounds do not qualify an unbounded variable") {
+TEST_CASE("Finite integer portfolio: finite unions retain every alternative and reject unbounded branches") {
     BinaryFixture f;
     const auto x = f.variable("x");
     const auto zero = f.term(Kind::Eq, {x, f.integer(0)});
     const auto two = f.term(Kind::Eq, {x, f.integer(2)});
     EagerBitBlastSolver solver;
     const auto result = solver.solveLinear(f.ir, {f.term(Kind::Or, {zero, two})});
-    CHECK(result.status == EagerBitBlastSolver::Status::Unknown);
+    REQUIRE(result.status == EagerBitBlastSolver::Status::Sat);
+    CHECK((result.model.at("x") == 0 || result.model.at("x") == 2));
+    const auto unbounded = f.term(Kind::Or, {zero, f.term(Kind::Geq, {x, f.integer(2)})});
+    CHECK(solver.solveLinear(f.ir, {unbounded}).status == EagerBitBlastSolver::Status::Unknown);
     const auto qualified = solver.solveLinear(f.ir, {zero});
     REQUIRE(qualified.status == EagerBitBlastSolver::Status::Sat);
     CHECK(qualified.model.at("x") == 0);
     const auto nonbinary = solver.solveLinear(f.ir, {two});
     REQUIRE(nonbinary.status == EagerBitBlastSolver::Status::Sat);
     CHECK(nonbinary.model.at("x") == 2);
-    CHECK(solver.solveLinear(f.ir, {f.term(Kind::Or, {zero, two})}).status == EagerBitBlastSolver::Status::Unknown);
+    const auto restored = solver.solveLinear(f.ir, {f.term(Kind::Or, {zero, two})});
+    REQUIRE(restored.status == EagerBitBlastSolver::Status::Sat);
+    CHECK((restored.model.at("x") == 0 || restored.model.at("x") == 2));
+    CHECK(solver.solveLinear(f.ir, {unbounded}).status == EagerBitBlastSolver::Status::Unknown);
 }
 
 TEST_CASE("Finite integer portfolio: signed wide weights preserve exact Boolean branch models") {

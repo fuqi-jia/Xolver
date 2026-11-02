@@ -8,12 +8,14 @@
 #include "search/bitblast/SpaceEstimator.h"
 #include "search/bitblast/PseudoBooleanEncoder.h"
 #include "search/bitblast/IntegerRadixEncoder.h"
+#include "search/bitblast/IntegerFiniteDomainEncoder.h"
 #include "search/linear/LinearBoundPropagation.h"
 #include "algebra/linear/LinearExpr.h"
 #include "algebra/poly/PolynomialEvaluation.h"
 #include "contracts/SatSolver.h"
 #include <algorithm>
 #include <functional>
+#include <iterator>
 #include <unordered_set>
 #include <cstdlib>
 #include <iostream>
@@ -126,7 +128,8 @@ void EagerBitBlastSolver::tryExtractBound(PolyId diff, Relation rel) {
     if (hasHi) { auto it = ub_.find(x); if (it == ub_.end() || hi < it->second) ub_[x] = hi; }
 }
 
-bool EagerBitBlastSolver::collect(const NativeTerms& ir, const std::vector<ExprId>& assertions) {
+bool EagerBitBlastSolver::collect(const NativeTerms& ir, const std::vector<ExprId>& assertions,
+    std::unordered_map<std::string, std::vector<mpz_class>>& finiteValues) {
     std::unordered_set<std::string> intVarSet;
     std::unordered_set<ExprId> visited;
     bool ok = true;
@@ -256,18 +259,68 @@ bool EagerBitBlastSolver::collect(const NativeTerms& ir, const std::vector<ExprI
     if (!ok) return false;
     intVars_.assign(intVarSet.begin(), intVarSet.end());
 
-    // Bound extraction is POLARITY-AWARE: only atoms that are TOP-LEVEL POSITIVE
-    // CONJUNCTS (reachable from an assertion root through And nodes only) are
-    // genuinely asserted, so only those may set variable bounds (-> offset width)
-    // and be skipped in the encoding. An atom under not/or/ite/implies is NOT
-    // guaranteed true — extracting a bound from it (e.g. `(= rfc0 0)` under
-    // `(not ...)`) would wrongly pin rfc0=0 and produce an invalid model.
+    // Only positive root conjuncts are facts. An asserted disjunction of points
+    // proves their union, never an individual alternative. Other conditional
+    // atoms cannot set bounds: e.g. `(not (= rfc0 0))` cannot pin rfc0=0.
     std::unordered_set<ExprId> topSeen;
     std::vector<LinearBoundRow> rows;
+    WorkBudget domainBudget(262144);
+    auto finiteDisjunction = [&](ExprId root) {
+        std::vector<ExprId> pending{root};
+        std::unordered_set<ExprId> seen;
+        std::optional<std::string> variable;
+        std::vector<mpz_class> points;
+        while (!pending.empty()) {
+            domainBudget.tick();
+            const auto id = pending.back(); pending.pop_back();
+            if (!seen.insert(id).second) continue;
+            const auto& expression = ir.get(id);
+            if (expression.kind == Kind::Or) {
+                pending.insert(pending.end(), expression.children.begin(), expression.children.end());
+                continue;
+            }
+            if (expression.kind == Kind::ConstBool) {
+                const auto* value = std::get_if<bool>(&expression.payload.value);
+                if (value && !*value) continue;
+                return;
+            }
+            const auto atom = atomCs_.find(id);
+            if (atom == atomCs_.end() || atom->second.parts.size() != 1) return;
+            const auto& [poly, relation] = atom->second.parts.front();
+            if (poly == NullPoly || relation != Relation::Eq) return;
+            const auto names = kernel_->variables(poly);
+            if (names.size() != 1 || (variable && *variable != names.front())) return;
+            const auto coefficients = kernel_->getIntegerCoefficients(poly, names.front());
+            if (!coefficients || coefficients->size() != 2 || coefficients->front() == 0) return;
+            const mpz_class numerator = -coefficients->back();
+            mpq_class point(numerator, coefficients->front());
+            point.canonicalize();
+            // Fractional alternatives need a different numeric representation.
+            if (point.get_den() != 1) return;
+            variable = names.front();
+            points.push_back(point.get_num());
+        }
+        if (!variable || points.empty()) return;
+        std::sort(points.begin(), points.end());
+        points.erase(std::unique(points.begin(), points.end()), points.end());
+        const auto found = finiteValues.find(*variable);
+        if (found == finiteValues.end()) finiteValues.emplace(*variable, std::move(points));
+        else {
+            std::vector<mpz_class> intersection;
+            std::set_intersection(found->second.begin(), found->second.end(),
+                                  points.begin(), points.end(), std::back_inserter(intersection));
+            found->second = std::move(intersection);
+        }
+    };
     std::function<void(ExprId)> markTop = [&](ExprId eid) {
         if (!topSeen.insert(eid).second) return;
         const TermExpr& e = ir.get(eid);
         if (e.kind == Kind::And) { for (ExprId c : e.children) markTop(c); return; }
+        if (e.kind == Kind::Or) {
+            try { finiteDisjunction(eid); }
+            catch (const ResourceExhausted&) { /* Previously completed root domains remain valid. */ }
+            return;
+        }
         auto it = atomCs_.find(eid);
         if (it == atomCs_.end()) return;                 // not an asserted arith atom
         for (const auto& [diff, rel] : it->second.parts) {
@@ -293,6 +346,12 @@ bool EagerBitBlastSolver::collect(const NativeTerms& ir, const std::vector<ExprI
         }
     };
     for (ExprId a : assertions) markTop(a);
+    for (const auto& [variable, points] : finiteValues) {
+        if (points.empty()) return false;
+        auto lo = lb_.find(variable), hi = ub_.find(variable);
+        if (lo == lb_.end() || lo->second < points.front()) lb_[variable] = points.front();
+        if (hi == ub_.end() || hi->second > points.back()) ub_[variable] = points.back();
+    }
     WorkBudget aggregateBudget(262144);
     if (const auto conflict = LinearBoundPropagation::aggregateConflict(rows, aggregateBudget)) {
         if (xolver::config::read<xolver::config::ReadKind::Presence>("NIA_EAGER_BB_DIAG"))
@@ -351,8 +410,17 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
     intVars_.clear();
     lb_.clear();
     ub_.clear();
+    std::unordered_map<std::string, std::vector<mpz_class>> finiteValues;
     const bool diag = xolver::config::read<xolver::config::ReadKind::Presence>("NIA_EAGER_BB_DIAG");
-    if (!collect(ir, assertions)) return out;   // unsupported construct -> Unknown
+    if (!collect(ir, assertions, finiteValues)) return out;   // unsupported construct -> Unknown
+    for (auto& [variable, points] : finiteValues) {
+        const auto lower = lb_.find(variable), upper = ub_.find(variable);
+        points.erase(std::remove_if(points.begin(), points.end(), [&](const mpz_class& point) {
+            return (lower != lb_.end() && point < lower->second) ||
+                   (upper != ub_.end() && point > upper->second);
+        }), points.end());
+        if (points.empty()) return out;
+    }
     const bool binaryDomains = !intVars_.empty() && std::all_of(intVars_.begin(), intVars_.end(),
         [&](const auto& variable) {
             const auto lo = lb_.find(variable), hi = ub_.find(variable);
@@ -550,9 +618,10 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
         // Per-var width (BLAN collector discipline): both-sided-bounded vars get
         // their EXACT width (value provably fits — bound atom still encoded);
         // unbounded vars get the cascade width K. Bounds are POLARITY-AWARE (only
-        // top-level positive conjuncts set them — see markTop in collect), so a
+        // positive root facts set them — see markTop in collect), so a
         // negated atom like `(not (= rfc0 0))` never wrongly pins rfc0.
         std::unordered_map<std::string, BitVec> varBits;
+        std::unordered_map<std::string, EncodedIntegerDomain> pointDomains;
         for (const auto& v : intVars_) {
             unsigned w = K;
             auto il = lb_.find(v), iu = ub_.find(v);
@@ -561,6 +630,14 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
                 w = SpaceEstimator::bitsToCover(il->second, iu->second);
                 if (il->second == iu->second) {
                     varBits[v] = enc.mkConst(il->second, w);
+                    continue;
+                }
+                const auto points = finiteValues.find(v);
+                if (points != finiteValues.end() && points->second.size() < w) {
+                    auto encoded = encodeIntegerFiniteDomain(enc, points->second, pbWork, deadline);
+                    if (!encoded) return out;
+                    varBits[v] = encoded->value;
+                    pointDomains.emplace(v, std::move(*encoded));
                     continue;
                 }
             }
@@ -573,8 +650,18 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
         }
         std::unordered_set<PolyId> radixZeroPolynomials;
         try {
-            const auto shared = encodeIntegerRadixDefinitions(enc, radixDefinitions, varBits, integerBounds, pbWork, deadline);
-            for (size_t index : shared) radixZeroPolynomials.insert(radixEquations[index]);
+            // Radix sharing replaces previously unused dividend bits. A point
+            // domain already uses those bits in its selector representation;
+            // keep its original radix equation instead of discarding that link.
+            std::vector<IntegerRadixDecomposition> definitions;
+            std::vector<size_t> indices;
+            for (size_t index = 0; index < radixDefinitions.size(); ++index)
+                if (!pointDomains.contains(radixDefinitions[index].dividend)) {
+                    definitions.push_back(radixDefinitions[index]);
+                    indices.push_back(index);
+                }
+            const auto shared = encodeIntegerRadixDefinitions(enc, definitions, varBits, integerBounds, pbWork, deadline);
+            for (size_t index : shared) radixZeroPolynomials.insert(radixEquations[indices[index]]);
             if (diag) std::cerr << "[EAGER-RADIX] candidates=" << radixDefinitions.size()
                                 << " shared=" << shared.size() << "\n";
         } catch (const ResourceExhausted&) { return out; }
@@ -584,13 +671,37 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
         auto encodeFinitePolynomial = [&](PolyId polynomial, Relation relation) -> std::optional<SatLit> {
             const auto terms = kernel_->terms(polynomial);
             if (!terms) return std::nullopt;
+            // Reify a univariate predicate directly over shared point choices,
+            // including its negative polarity and gaps inside the interval.
+            const auto variables = kernel_->variables(polynomial);
+            if (variables.size() == 1) {
+                const auto domain = pointDomains.find(variables.front());
+                if (domain != pointDomains.end()) {
+                    auto result = enc.constFalse();
+                    for (const auto& [point, selector] : domain->second.choices) {
+                        const auto evaluation = makePolynomialEvaluation(*kernel_,
+                            std::unordered_map<std::string, mpz_class>{{variables.front(), point}});
+                        const auto value = evaluation->evaluateInteger(polynomial);
+                        if (!value) return std::nullopt;
+                        if (relationHolds(*value, relation)) result = enc.orGate(result, selector);
+                    }
+                    return result;
+                }
+            }
             std::vector<WeightedLiteral> weighted;
             mpz_class constant = 0;
             for (const auto& term : *terms) {
                 if (term.powers.empty()) { constant += term.coefficient; continue; }
                 if (!binaryDomains) {
                     if (term.powers.size() != 1 || term.powers[0].second != 1) return std::nullopt;
-                    const auto found = varBits.find(std::string(kernel_->varName(term.powers[0].first)));
+                    const auto name = std::string(kernel_->varName(term.powers[0].first));
+                    const auto domain = pointDomains.find(name);
+                    if (domain != pointDomains.end()) {
+                        for (const auto& [point, selector] : domain->second.choices)
+                            weighted.push_back({selector, mpz_class(term.coefficient * point)});
+                        continue;
+                    }
+                    const auto found = varBits.find(name);
                     if (found == varBits.end()) return std::nullopt;
                     const auto& bits = found->second;
                     if (bits.isConst) {

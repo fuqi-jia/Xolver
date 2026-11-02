@@ -5320,3 +5320,101 @@ comments about the residual engine. Fresh canonical qualification,160 and
 new-version QCP validation remain pending. Prior c528 QCP acceptance remains
 version-specific. Neither protected set is read; the cancelled
 `validation/current-main.json` archive is still unnecessary.
+
+R1828 now qualifies the complete committed `f2b8a197` source normally:
+CLI `3343e9c49caff2573f72e83971cc453ff87b48cf9864d2d85eb8580fac1ff51a`,
+worker `bc0dec345e2777d6962ac9040a1a01ec3c52cc52b76cb8ef5d57fae692f00794`.
+All2008 units/1314157 assertions, seven CTests, Python smoke and three
+original-source soundness regressions pass; both independent solvers judge
+all three regressions UNSAT. No injected objects enter these targets.
+
+Fresh R1829/R1831 completes160 valid original triads, with zero execution,
+protocol or opposite-verdict errors and no recovery. Main/candidate/Z3 verify
+111/111/115; Z3 has124 raw decisions, with nine unconfirmed outcomes excluded
+at12/24/27/42/50/75/80/114/148. Verified PAR-2 is6453.817/6349.930/5640.678s.
+Inherited product-sign106 is gained;131 is lost (main45.045s SAT versus
+candidate60.008s timeout).113 now returns independently confirmed UNSAT in
+0.034s for both versions; keep both rounds' observations. Summary SHA-256:
+`44da08a80273d2d76a8b0358787ca81396f02e2d3fb12f6c67a183a703d3106d`.
+
+The131 observer compares main/parent/candidate at38.623/39.139/59.429s SAT,
+with22825/23341/32383 pivots and6768/6813/9032 theory-pipeline calls. It does
+not replace the formal timeout or establish its cause. The current candidate
+is not promoted.
+
+R1830 also replays all780 ordered native QCP queries with the current canonical
+worker, matching both previously audited backend traces and closing all three
+workers. This earns zero new C-program/VC coverage or end-to-end timing credit.
+The overall goal remains unmet; PR/main CI and both final protected sets are
+still pending.
+
+R1834/R1835 counters motivate explanation-capacity pruning before rational
+arithmetic. The R1836 prototype passes2011 units and independent checks, but
+its fresh12-case R1837 pilot preserves only5/5 verified Xolver solves versus12
+for Z3:131 is gained,51 is lost (16.912s SAT becomes60.017s timeout), and PAR-2
+worsens960.315→968.700s. R1839 closes the experiment without promotion;
+summary SHA-256 is
+`8813c7b230cafced779b3d8c5fa7b0134f0b93f0ef3557efa24f778747466653`.
+The experimental engine and tests are removed, restoring committed `f2b8a197`
+bytes. Preserve the correctness repair; this failed pruning adds no solve credit.
+
+R1840 observes identical ordered188 lowered assertions for131 on the parent
+and canonical candidate. R1843 builds two temporary diagnostic binaries with
+the same archive member order and common tracing objects, differing only in
+operator-index applicability guards; both retain all arithmetic correctness
+repairs. An unchanged-archive relink first reproduces the ordinary canonical
+CLI byte for byte. R1844 then runs three eight-second observers per variant:
+all first100000 recorded setup/search events agree after actor-ordinal removal,
+including initial CNF, atom registration and early decisions/theory responses.
+R1845 checks all terminal runs, hashes and traces; summary SHA-256 is
+`50e1b63b2209865b084d69878f02407a23b730bfc1d83a416198ef611494f0c4`.
+This bounded prefix does not establish complete search equivalence or identify
+the60s regression's cause. Diagnostic overhead and the event cap permit no
+performance credit. No production code or protected-set input is changed.
+
+## Exact finite integer choices (R1846–R1858)
+
+Original89 declares203 integer variables through finite equality disjunctions,
+but the old eager finite-linear collector recognizes zero bounded variables.
+The new collector retains each unconditional root union, intersects repeated
+domains and seeds exact interval closure. Sparse domains share exactly-one
+point selectors, signed value bits and fully reified comparisons; multivariate
+linear predicates use weighted selectors. Conditional alternatives never
+become unconditional bounds. Used point representations retain their radix
+equations rather than discarding an existing selector/value link. The shared
+integer representation also serves nonlinear and integer-valued real candidates;
+all SAT models still require exact original-formula validation.
+
+R1846's original full test run fails two assertions requiring `unknown` for an
+unconditional finite root union. Updated tests validate its new SAT model and
+retain unbounded-branch/query-reset checks. Fresh ordinary CMake qualification
+R1850 passes2014 units/1314250 assertions, seven CTests, Python checks and the
+existing soundness regressions. CLI SHA-256 is
+`e94da0c8a9100dd414c2e926d5f276aa223d16512644ddb2b4d89169167c9900`.
+R1852 checks128 originals,64 actual SAT models and384 independent judgments
+using both frozen Z3 and cvc5. The old-library control fails the two new root
+domain capability contracts; the current implementation passes all six cases.
+
+R1853/R1856 accepts26 fresh triads covering all16 previous verified Z3-only
+gaps and10 controls:10/12/26 verified for parent/candidate/Z3, with no lost
+solve or wrong verdict. Original89 changes60s timeout→1.621s SAT; the actual
+timed model replays successfully.144 is also gained this round, but its known
+timing variability prevents a stable mechanism attribution. Pilot summary
+SHA-256 is `2c087c6a78f93047b2f5fbd1136f8faf0311f7f3bce7f703695873f508fd2da9`.
+
+R1858 passes all780 ordered original QCP queries with the frozen current
+worker, earning zero new original-C/VC coverage or end-to-end timing credit.
+A fresh full160 R1857 comparison, accepted by R1860, verifies111 main/113
+candidate/115 Z3 results. Gains are89/106, with no lost solve, opposite verdict,
+execution error or protocol error. Every original triad is valid; none is rerun.
+Verified PAR-2 totals are6464.483/6118.142/5641.868s. Z3 has124 raw decisions;
+the nine unconfirmed outcomes12/24/27/42/50/75/80/114/148 remain excluded.
+Input115's unchanged modular certificate is independently checked again before
+crediting this round's timed UNSAT. Summary SHA-256 is
+`cf25ba7690a74a8b186456c0a62e29e22d6e47fd04951945997ede167f9c7e12`.
+The original R1859 receipt is retained; R1860 corrects its inherited prose
+about an earlier131 loss without changing any report, score or timing. See the
+[stage record](FINITE_INTEGER_DOMAINS_STAGE_20261102.json).
+Current-version original-C/Rocq QCP acceptance and PR/main CI remain pending.
+Neither protected set is used; no overall Z3 superiority is established, and
+the target remains at least126 verified results.

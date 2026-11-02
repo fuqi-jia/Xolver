@@ -1,6 +1,6 @@
 {
   "stage": "semantic-arithmetic-witnesses-and-active-preprocess-summaries-r1811-r1827",
-  "status": "prototype-correctness-accepted-not-promoted",
+  "status": "canonical-tested-with-regression-not-promoted",
   "source_parent": "63b60f23c5a69550368d3480e6227fe4f91f9a4d",
   "source_sha256": {
     "src/ir/TermFeatureIndex.h": "0cbbd2fd4c37300dbcfbc0647e5431e89d93660d41e1ed28572d6ed2052de574",
@@ -395,15 +395,243 @@
   },
   "qcp_boundary": "Existing fresh original-program/Rocq acceptance is version-specific to c528; three programs and23VCs per backend. No end-to-end claim for this new prototype or query replay substitution.",
   "pending": [
-    "ordinary complete-source CMake CLI/worker/Python qualification",
-    "fresh same-round60s/physical-core/16GiB fixed160",
-    "new-version QCP validation",
+    "resolve or remove the current131 SAT performance loss",
+    "new-version original-program QCP validation when final candidate is frozen",
     "PR and post-merge main CI",
-    "final independent program and SMT protected-set checks once"
+    "at least126 verified fixed160 solves with a fresh same-round comparison",
+    "independent program and SMT protected sets once for the final frozen version"
   ],
   "protected_sets_used": false,
   "external_runtime_oracle": false,
   "new_feature_gates": false,
   "promoted": false,
-  "overall_goal_achieved": false
+  "overall_goal_achieved": false,
+  "canonical_native": {
+    "experiment": "5da12c2a5e7d",
+    "run": "52e842244801",
+    "head": "f2b8a1979cb59248365c1ec6f672f5fcbe29ef03",
+    "qualification": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/semantic-witness-canonical-r1828/qualification.json",
+      "sha256": "cec4db66db059d2ba2b61750235ca4f7caf62d11f5e840fa535a524c8baeb959"
+    },
+    "source_manifest_sha256": "c9a331885fdbe23325e1c959780bd873e94b387428fdc641a7b3ac8a4c2f9454",
+    "binary_sha256": "3343e9c49caff2573f72e83971cc453ff87b48cf9864d2d85eb8580fac1ff51a",
+    "worker_sha256": "bc0dec345e2777d6962ac9040a1a01ec3c52cc52b76cb8ef5d57fae692f00794",
+    "python_extension_sha256": "037e8679871bb6029aa13459ea02fd3cfe093f39b18c48d1183b6c596655a854",
+    "library_sha256": "d69ca85aa3dd48d82aebb958dfb1ee40f1cdca7c55ee0ecd92bf0293c596489d",
+    "unit_cases": 2008,
+    "unit_assertions": 1314157,
+    "ctests": 7,
+    "fresh_original_soundness_regressions": 3,
+    "independent_regression_judgments": 9,
+    "canonical_complete_source_build": true,
+    "injected_object_overrides": false
+  },
+  "current_fresh160": {
+    "summary": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/semantic-witness-canonical-full-r1829/summary.json",
+      "sha256": "44da08a80273d2d76a8b0358787ca81396f02e2d3fb12f6c67a183a703d3106d"
+    },
+    "acceptance_experiment": "67b713269add",
+    "acceptance_run": "46126f856111",
+    "batches": [
+      {
+        "experiment": "94053ac3df41",
+        "jobs": 65
+      },
+      {
+        "experiment": "823ffbe0afa0",
+        "jobs": 39
+      },
+      {
+        "experiment": "a096bab68adf",
+        "jobs": 32
+      },
+      {
+        "experiment": "c4e42ed3afe2",
+        "jobs": 24
+      }
+    ],
+    "scores": {
+      "baseline": {
+        "verified": 111,
+        "raw": {
+          "unsat": 49,
+          "timeout": 48,
+          "sat": 62,
+          "unknown": 1
+        },
+        "unconfirmed": [],
+        "verified_par2": 6453.816806262359
+      },
+      "candidate": {
+        "verified": 111,
+        "raw": {
+          "unsat": 49,
+          "timeout": 48,
+          "sat": 62,
+          "unknown": 1
+        },
+        "unconfirmed": [],
+        "verified_par2": 6349.929618753493
+      },
+      "z3": {
+        "verified": 115,
+        "raw": {
+          "unsat": 58,
+          "sat": 66,
+          "timeout": 36
+        },
+        "unconfirmed": [
+          12,
+          24,
+          27,
+          42,
+          50,
+          75,
+          80,
+          114,
+          148
+        ],
+        "verified_par2": 5640.67830439657
+      }
+    },
+    "gained": [
+      106
+    ],
+    "lost": [
+      131
+    ],
+    "original_complete_valid_triads": 160,
+    "incomplete_cohorts_recovered": [],
+    "wrong_verdicts": 0,
+    "execution_errors": 0,
+    "protocol_errors": 0,
+    "source_certificate": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/polynomial-mod-confirmation-r1697/report.json",
+      "sha256": "a43df2517da6f7af13805682dc413553d650bab450e17ac5993cb9a9b2d1fee3",
+      "checked": {
+        "status": "checked-unsat",
+        "input_sha256": "02a58b11df8951543940a1090a140592e24de41dcaeb6470e7a50d42e804be64",
+        "assertion": 9,
+        "path": [
+          2
+        ],
+        "checked_residues": 12
+      },
+      "credits": [
+        {
+          "index": 115,
+          "backend": "candidate",
+          "evidence": "independently rechecked unchanged source certificate"
+        },
+        {
+          "index": 115,
+          "backend": "baseline",
+          "evidence": "independently rechecked unchanged source certificate"
+        }
+      ]
+    },
+    "budget": {
+      "seconds": 60,
+      "physical_cpu_per_solver": 1,
+      "memory_bytes": 17179869184
+    },
+    "boundary": "New ordinary canonical binaries, same-round rotating order and actual initial-solve SAT model replay.115 verified Z3 versus124 raw decisions; all nine unconfirmed excluded.111 verified solves for each Xolver version; inherited product-sign106 gain replaces131 SAT loss. No no-loss, superiority or promotion claim."
+  },
+  "current_qcp_query_regression": {
+    "experiment": "419b50bbe8d7",
+    "queries": 780,
+    "programs_verified": 0,
+    "verification_conditions_verified": 0,
+    "new_end_to_end": false,
+    "reports": [
+      {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/semantic-witness-qcp-query-r1830/branch/report.json",
+        "sha256": "084510f9af50c21b6fdd6f9993cee54ffcd0ec64cfe8f4df3a6c988b0ec459ca"
+      },
+      {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/semantic-witness-qcp-query-r1830/gcd/report.json",
+        "sha256": "ec3742ea38f6e018a89f58e2144746dcfc1467e31f46a31de45b65b2e8466d1e"
+      },
+      {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/semantic-witness-qcp-query-r1830/max3/report.json",
+        "sha256": "c459041fc0da2e2bc211517620bdc967b70645298c46acccc9721b37c5c982a0"
+      }
+    ],
+    "boundary": "Exact original branch188/gcd296/max3296 final-validation queries, one fresh canonical worker per ordered stream, all match both previously audited backend traces; this executes no original C or Rocq workflow."
+  },
+  "regression131_diagnosis": {
+    "source_sha256": "8b660dc1debe27fe09a0eb3ca9e4e3833f075f89a66e71b90dfe102e250bc962",
+    "formal_baseline_seconds": 45.0445298012346,
+    "formal_candidate_result": "timeout",
+    "formal_candidate_seconds": 60.007568301633,
+    "observer_experiment": "e3139cc195b5",
+    "observer_main": {
+      "seconds": 38.62298774905503,
+      "pivots": 22825,
+      "pipeline_calls": 6768
+    },
+    "observer_parent": {
+      "seconds": 39.139198860153556,
+      "pivots": 23341,
+      "pipeline_calls": 6813
+    },
+    "observer_candidate": {
+      "seconds": 59.42882723547518,
+      "pivots": 32383,
+      "pipeline_calls": 9032
+    },
+    "cause_unproven": true,
+    "boundary": "The new observer SAT does not replace the formal timeout. More pivots and theory checks show a changed search trajectory; no operator-cache or correctness-fix cause is established.",
+    "ordered_preprocessing_signatures": {
+      "experiment": "baa69be7f2ac",
+      "assertions": 188,
+      "parent_and_canonical_sha256": "024990238a4a9602ceacf41f75a0752585ab568922eb1e6475a03eb375de3094"
+    },
+    "early_search_observers": {
+      "build_experiment": "9a972edc4964",
+      "trace_experiment": "90d7c16343e3",
+      "acceptance_experiment": "d63cc79928df",
+      "summary": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/search-divergence-acceptance-r1845/summary.json",
+        "sha256": "50e1b63b2209865b084d69878f02407a23b730bfc1d83a416198ef611494f0c4"
+      },
+      "variants": 2,
+      "repetitions_per_variant": 3,
+      "observer_seconds": 8,
+      "identical_prefix_events": 100000,
+      "normalized_prefix_sha256": "f9268414b4d5ecf4e2e148f1267c4c18ff25d0713b4e74893d4e649b22d946d1",
+      "archive_member_order_preserved": true,
+      "unchanged_archive_relink_byte_identical": true,
+      "boundary": "Only operator-index applicability guards differ between temporary diagnostic variants, retaining all semantic/NIRA correctness fixes. Identical recorded setup/search prefixes establish equal initial CNF/atoms and early behavior, not complete trajectory equivalence or the cause of the ordinary60s regression. Diagnostic timing is unscored; all formal observations remain unchanged."
+    }
+  },
+  "closed_explanation_capacity_experiment": {
+    "status": "removed-no-gain-with-SAT-regression",
+    "build_experiment": "034a68f4440b",
+    "pilot_experiment": "903921b97041",
+    "independent_experiment": "bed66783bbb3",
+    "acceptance_experiment": "029a0888512c",
+    "summary": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/reason-capacity-pilot-r1837/summary.json",
+      "sha256": "8813c7b230cafced779b3d8c5fa7b0134f0b93f0ef3557efa24f778747466653"
+    },
+    "unit_cases": 2011,
+    "pilot_cases": 12,
+    "verified": {
+      "baseline": 5,
+      "candidate": 5,
+      "z3": 12
+    },
+    "gained": [131],
+    "lost": [51],
+    "verified_par2": {
+      "baseline": 960.3149361871183,
+      "candidate": 968.699627308175,
+      "z3": 68.24137800186872
+    },
+    "production_engine_and_tests_restored_to": "f2b8a1979cb59248365c1ec6f672f5fcbe29ef03",
+    "boundary": "Proof-capacity pruning passes targeted correctness but adds no verified solve and loses SAT51; experimental engine/test changes are removed. Frozen source, binary and failed pilot evidence remain available. This is not canonical qualification or a current-version performance gain."
+  }
 }
