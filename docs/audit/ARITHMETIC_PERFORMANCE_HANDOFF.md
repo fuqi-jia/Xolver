@@ -38,7 +38,19 @@ fix is retained under the user's explicit functionality-first instruction,
 including its known SAT59 timeout regression. No performance superiority is claimed.
 Older tables describe their own frozen versions and evidence boundaries.
 
-## Current arithmetic and ASP continuation
+## Latest canonical delivery
+
+[PR93](https://github.com/fuqi-jia/Xolver/pull/93) is merged as main
+`c062a6fc`. PR CI and post-merge CI41371989502 both pass build-test and proof-gate. The fresh
+comparison against previous main26aca1b8 is104→111 verified, no lost solves,
+versus116 verified/125 raw Z3. The same three original-C QCP programs and
+23VCs pass on both backends; supplied-proof final validation totals90.573s
+Xolver/99.618s Z3 in one cohort. Neither protected set has been used. See
+[canonical evidence](CANONICAL_FOUNDATIONS_STAGE_20261102.json) and
+[current QCP evidence](QCP_CANONICAL_PROOFS_STAGE_20261102.json). Overall
+superiority to Z3 remains unproved. Draco/MaxSMT work remains paused.
+
+## Previous delivered main and closed cache experiments
 
 The consolidated QCP/foundations delivery
 [PR92](https://github.com/fuqi-jia/Xolver/pull/92) is merged as main
@@ -5132,10 +5144,35 @@ This times complete provided-proof final validation; proof construction and
 controller orchestration are excluded. GCD remains partial correctness with
 the declared external abs assumption; max3 retains its upper-bound property.
 No protected set was used; no overall Z3 superiority or Xolver PR/main
-acceptance is claimed. PR93 CI is still running.
+acceptance was claimed before CI completed. PR93 subsequently passes both
+[PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/41369882982) and
+merges normally as main `c062a6fc5adfbb9bc8ed1aa016071bafb9d1e7d2`.
+[Post-merge main CI](https://github.com/fuqi-jia/Xolver/actions/runs/41371989502)
+passes both build-test and proof-gate. This completes the canonical delivery
+acceptance; the broader SMT/protected-set objective remains incomplete.
 
 R1719 instruments actual bounded-value and membership reads on original106.
 All5900 sampled calls read all58 bounded values; repeated read projections
 are zero. Whole-branch dependency memoization is therefore rejected for this
 mechanism, with no production cache added. The next prototype shares exact
 matrix row reduction while retaining the existing pivot and candidate order.
+
+## Closed follow-up probes after the canonical delivery (R1720–R1732)
+
+Sparse exact RREF passes4860 independent dense-matrix comparisons and11
+Farkas unit cases, but its six-case fresh pilot remains3/3/4 verified for
+parent/candidate/Z3 with worse PAR-2. It is not retained. A sparse-pivot row
+update passes1200 dense-reference operations and147 linear unit cases; its
+first twelve-case pilot gains variable-time131, but the owned-scalar revision
+returns6/6/12 verified, no gained/lost solves. Final PAR-2 movement is only
+862.140→858.427s; none of the five selected pre-existing gaps closes. This
+experiment is closed without promotion or another full160 run.
+
+Returning early when augmented Farkas candidates are empty skips unused
+inequality extraction. Instrumented fifteen-second progress rises from5900
+to7700 calls, but all58 bounded values remain dependencies and repeated
+projections remain zero. The six-case fresh pilot stays3/3/4 verified;106
+still times out60s. Its PAR-2 movement is chiefly unrelated LIA131, so this
+prototype is also unselected. All original reports and failed test setup
+evidence remain intact; no follow-up prototype enters main or uses protected
+sets. The canonical111 verified score is unchanged.
