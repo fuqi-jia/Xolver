@@ -29,6 +29,9 @@ public:
 
     TheoryId id() const override { return TheoryId::NIRA; }
 
+    void assertLit(const TheoryAtomRecord& atom, bool value,
+                   int level, SatLit assertedLit) override;
+
     TheoryCheckResult check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) override;
 
     bool needsActiveLinearContext() const override { return true; }
@@ -78,13 +81,13 @@ private:
 
     enum class AssignmentCheckResult { Sat, Unsat, Unknown };
 
-    // Bounded-complete helper: check one integer assignment with fresh simplex.
-    // linearCtx carries LIRA constraints that bound real variables.
-    static AssignmentCheckResult checkAssignmentWithSimplex(
+    // Bounded-complete helper: check the joint real residual after fixing
+    // every integer. linearCtx includes the LIRA side constraints.
+    static AssignmentCheckResult checkAssignmentWithRealSolver(
         const std::vector<ActiveAssignment>& assignments,
         const std::vector<ActiveLinearConstraint>* linearCtx,
         const std::unordered_map<std::string, mpq_class>& fixedValues,
-        PolynomialKernel* kernel);
+        PolynomialKernel* kernel, TheoryModel* model);
 };
 
 } // namespace xolver

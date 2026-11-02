@@ -1,6 +1,6 @@
 {
   "date": "2026-11-02",
-  "status": "canonical_native_full160_and_three_QCP_pairs_passed_PR_CI_pending",
+  "status": "canonical_stage_merged_main_CI_green_overall_goal_incomplete",
   "qualification": {
     "unit_cases": 1994,
     "unit_assertions": 1295886,
@@ -98,9 +98,9 @@
     "attribution": "NIA29 matches the exact-before-encoding mechanism. NRA144 is recorded without attributing it to this scheduling change."
   },
   "qcp_new_worker_end_to_end_validated": true,
-  "pr_main_ci_complete": false,
+  "pr_main_ci_complete": true,
   "protected_sets_used": false,
-  "boundary": "Complete canonical native build,1994 unit cases,63 parser CTests,96 fresh independently checked cases and three original-C QCP paired final validations pass. Fresh main/candidate/Z3 verified scores104/111/116; raw Z3 score125 includes nine unconfirmed verdicts. Candidate gains seven with no losses. QCP provided-proof final validation totals90.573s/99.618s for the same three programs/23VCs,one fresh paired cohort. PR/main CI and protected-set acceptance are incomplete; overall Z3 superiority is not established.",
+  "boundary": "Complete canonical native build,1994 unit cases,63 parser CTests,96 fresh independently checked cases and three original-C QCP paired final validations pass. Fresh main/candidate/Z3 verified scores104/111/116; raw Z3 score125 includes nine unconfirmed verdicts. Candidate gains seven with no losses. QCP provided-proof final validation totals90.573s/99.618s for the same three programs/23VCs,one fresh paired cohort. PR93 CI passed and ordinary merge produced main c062a6fc; post-merge main CI41371989502 passed both jobs; protected-set acceptance is incomplete; overall Z3 superiority is not established.",
   "full_comparison": {
     "stage": "R1698-R1699",
     "cases": 160,
@@ -223,7 +223,12 @@
     "dependency_merge": "Pending required independent review; normal merge rejected by ruleset5590872,admin override approval requested and not yet received.",
     "boundary": "Xolver pins62b302c,whose source files equal the native-qualified b9063fa plus two retained modifications. The later upstream-main merge in the dependency PR is not substituted into this frozen Xolver build.",
     "root_source_commit": "552fb46e00f78a3e19ca59c2848506cc80921ee2",
-    "root_pr": "https://github.com/fuqi-jia/Xolver/pull/93"
+    "root_pr": "https://github.com/fuqi-jia/Xolver/pull/93",
+    "root_merge_commit": "c062a6fc5adfbb9bc8ed1aa016071bafb9d1e7d2",
+    "root_pr_ci": "https://github.com/fuqi-jia/Xolver/actions/runs/41369882982",
+    "root_pr_checks": "build-test and proof-gate passed",
+    "root_main_ci": "https://github.com/fuqi-jia/Xolver/actions/runs/41371989502",
+    "root_main_ci_status": "success: build-test and proof-gate"
   },
   "current_main_comparison": {
     "main": "26aca1b816bdcdd02c070164bf2193c2b3483e56",
@@ -366,5 +371,58 @@
     "report_sha256": "d67a8b5fddf6bf061cc0c60e5bb9104abffea3e549af66470eae892c0d82acf1",
     "decision": "Reject whole-branch read-projection memoization for this mechanism; no production cache added. Investigate repeated exact matrix arithmetic with fixed pivot selection.",
     "protected_sets_used": false
-  }
+  },
+  "pr_ci_passed": true,
+  "closed_followup_experiments": [
+    {
+      "stage": "R1720-R1724",
+      "mechanism": "Shared sparse exact RREF with original pivot choice",
+      "summary_sha256": "f9b699b7921e6e31127dbcc284587f101eb6b3ad4505128b02fbd16a54287310",
+      "verified_baseline_candidate_z3": [
+        3,
+        3,
+        4
+      ],
+      "cases": 6,
+      "gained": [],
+      "lost": [],
+      "decision": "Closed: no gained solve and worse pilot PAR-2. No production change."
+    },
+    {
+      "stage": "R1725-R1729",
+      "mechanism": "Sparse pivot coefficient moves and scaled row update",
+      "first_summary_sha256": "f21f4eafe092a871f7261b0fbfe273d25b7f7a56d5d35755d9940fd04a829bec",
+      "owned_scalar_summary_sha256": "d84d1d83b4e5a4cd7e02c3568817662dc1e8059580d4339e9698acc42c90157b",
+      "first_verified_baseline_candidate_z3": [
+        6,
+        7,
+        12
+      ],
+      "final_verified_baseline_candidate_z3": [
+        6,
+        6,
+        12
+      ],
+      "cases": 12,
+      "decision": "Closed without promotion: variable-time131 crossing does not repeat; no pre-existing gap closes. Final PAR-2 improves862.140 to858.427s only."
+    },
+    {
+      "stage": "R1730-R1732",
+      "mechanism": "Return before inequality extraction when augmented candidate set is empty",
+      "summary_sha256": "e12245698592cb02fa246ed7873dc727be53c7f7001d97465557375ddafd6e13",
+      "verified_baseline_candidate_z3": [
+        3,
+        3,
+        4
+      ],
+      "cases": 6,
+      "sampled_progress_before_after": [
+        5900,
+        7700
+      ],
+      "actual_value_dependencies": 58,
+      "repeated_read_projections": 0,
+      "decision": "Closed without promotion for this stage: work throughput improves but106 remains timeout60; pilot PAR-2 movement chiefly comes from unrelated LIA131."
+    }
+  ]
 }

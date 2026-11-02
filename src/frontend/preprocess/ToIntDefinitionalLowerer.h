@@ -32,9 +32,9 @@ namespace xolver {
  * assignment extends to a model of the lowered formula and vice versa.
  *
  * Reports `hadNonlinearBridge()` true iff any introduced bridge equality
- * `r_t = t` has a nonlinear `t`. Reports `hadIntBridge()` true iff any
- * introduced bridge equality refers to Int-sorted variables (so a pure-Real
- * logic must upgrade to a mixed-sort logic).
+ * `r_t = t` has a nonlinear `t`. Every newly introduced floor triple requires
+ * both integer and real arithmetic, reported by `hadIntBridge()` and
+ * `hadRealBridge()`, including when the original argument is purely real.
  */
 class ToIntDefinitionalLowerer {
 public:
@@ -62,8 +62,6 @@ private:
     ExprId mkAdd(ExprId a, ExprId b);
 
     bool isNonlinearReal(ExprId e) const;
-    bool refersToIntVar(ExprId e) const;
-    bool refersToRealVar(ExprId e) const;
 
     NativeTerms& ir_;
     SortId boolSortId_;

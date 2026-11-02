@@ -1,0 +1,8 @@
+(set-logic ALL)
+(set-info :status unsat)
+(declare-const p Bool)
+(declare-const y Real)
+(assert (= y (to_real (div (ite p 3 4) 2))))
+(assert (>= y (/ 3 2)))
+(assert (<= y (/ 3 2)))
+(check-sat)

@@ -59,10 +59,13 @@ BitVec PolyBitBlaster::encodeMonomial(const PolynomialKernel::MonomialTerm& m) {
 BitVec PolyBitBlaster::encodePoly(PolyId p) {
     auto termsOpt = kernel_.terms(p);
     if (!termsOpt || termsOpt->empty()) return enc_.mkConst(mpz_class(0), 1);
+    return encodeSum(*termsOpt);
+}
 
+BitVec PolyBitBlaster::encodeSum(const std::vector<PolynomialKernel::MonomialTerm>& terms) {
     std::vector<BitVec> monos;
-    monos.reserve(termsOpt->size());
-    for (const auto& m : *termsOpt) monos.push_back(encodeMonomial(m));
+    monos.reserve(terms.size());
+    for (const auto& m : terms) monos.push_back(encodeMonomial(m));
 
     // Greedy Addition: repeatedly fold the two narrowest summands.
     while (monos.size() > 1) {
@@ -76,7 +79,52 @@ BitVec PolyBitBlaster::encodePoly(PolyId p) {
 }
 
 SatLit PolyBitBlaster::encodeConstraint(const NormalizedNiaConstraint& c) {
-    BitVec value = encodePoly(c.poly);
+    auto terms = kernel_.terms(c.poly);
+    if (terms && !terms->empty()) {
+        // p = m*q: comparing p with zero needs the factors' zero/sign bits,
+        // not the magnitude of their product. Retain m=0 explicitly: cancelling
+        // a possibly-zero factor would change both equalities and inequalities.
+        std::map<VarId, int> common(terms->front().powers.begin(), terms->front().powers.end());
+        for (size_t i = 1; i < terms->size() && !common.empty(); ++i) {
+            for (auto it = common.begin(); it != common.end();) {
+                const auto& powers = (*terms)[i].powers;
+                const auto power = std::find_if(powers.begin(), powers.end(),
+                    [&](const auto& entry) { return entry.first == it->first; });
+                if (power == powers.end()) it = common.erase(it);
+                else { it->second = std::min(it->second, power->second); ++it; }
+            }
+        }
+        if (!common.empty()) {
+            SatLit factorZero = enc_.constFalse();
+            SatLit factorNegative = enc_.constFalse();
+            for (const auto& [variable, exponent] : common) {
+                const auto& bits = varBits_.at(std::string(kernel_.varName(variable)));
+                factorZero = enc_.orGate(factorZero, enc_.isZero(bits));
+                if (exponent % 2 != 0)
+                    factorNegative = enc_.xorGate(factorNegative, bits.sign());
+            }
+            for (auto& term : *terms) {
+                for (auto& [variable, exponent] : term.powers) {
+                    const auto found = common.find(variable);
+                    if (found != common.end()) exponent -= found->second;
+                }
+                std::erase_if(term.powers, [](const auto& power) { return power.second == 0; });
+            }
+            const auto quotient = encodeSum(*terms);
+            const auto zero = enc_.orGate(factorZero, enc_.isZero(quotient));
+            const auto negative = enc_.andGate(zero.negated(),
+                enc_.xorGate(factorNegative, quotient.sign()));
+            switch (c.rel) {
+                case Relation::Eq: return zero;
+                case Relation::Neq: return zero.negated();
+                case Relation::Lt: return negative;
+                case Relation::Geq: return negative.negated();
+                case Relation::Leq: return enc_.orGate(zero, negative);
+                case Relation::Gt: return enc_.orGate(zero, negative).negated();
+            }
+        }
+    }
+    BitVec value = terms && !terms->empty() ? encodeSum(*terms) : enc_.mkConst(mpz_class(0), 1);
     const bool diag = xolver::config::read<xolver::config::ReadKind::Presence>("BB_ASSERT_DIAG");
     if (diag) {
         std::cerr << "[BB-ASSERT] rel=" << (int)c.rel

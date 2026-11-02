@@ -44,6 +44,16 @@ BooleanRefutationResult refuteBooleanTheory(
                 return result;
             }
         }
+        // The allocation counts theory assignments, not the SAT check of the
+        // clauses just learned. The last allowed conflict may complete the
+        // refutation without creating a construction-time unit contradiction.
+        if (limits.assignments && std::chrono::steady_clock::now() < limits.deadline) {
+            sat.limit("conflicts", limits.satConflicts);
+            if (sat.solve() == SatSolver::SolveResult::Unsat) {
+                result.refuted = true;
+                return result;
+            }
+        }
         result.exhausted = true;
     } catch (const ResourceExhausted&) {
         result.exhausted = true;

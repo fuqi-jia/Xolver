@@ -32,6 +32,7 @@ public:
 
 private:
     BitVec encodeMonomial(const PolynomialKernel::MonomialTerm& m);
+    BitVec encodeSum(const std::vector<PolynomialKernel::MonomialTerm>& terms);
 
     BitBlastEncoder& enc_;
     PolynomialKernel& kernel_;

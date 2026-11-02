@@ -151,17 +151,19 @@ ExprId ToIntDefinitionalLowerer::getOrLowerToInt(ExprId arg, ScopeLevel level) {
         return arg;
     }
 
-    ExprId i_t = ir_.makeFreshVariable(intSortId_, "__nlc_floor", /*routingAuxiliary=*/true);
+    // These variables carry semantic domain obligations. In particular i_t
+    // must remain integer when automatic routing examines the lowered query.
+    ExprId i_t = ir_.makeFreshVariable(intSortId_, "__nlc_floor");
     // r_t is a fresh Real proxy for the original argument; the bridge
     // equality routes through the atomizer to whichever arithmetic theory
     // owns the original expression.
-    ExprId r_t = ir_.makeFreshVariable(realSortId_, "__nlc_floor_r", /*routingAuxiliary=*/true);
+    ExprId r_t = ir_.makeFreshVariable(realSortId_, "__nlc_floor_r");
 
     // Soundness side-effects: track what kind of bridge we are introducing
     // so the Solver can upgrade the declared logic.
     if (isNonlinearReal(arg)) hadNonlinearBridge_ = true;
-    if (refersToIntVar(arg)) hadIntBridge_ = true;
-    if (refersToRealVar(arg)) hadRealBridge_ = true;
+    hadIntBridge_ = true;
+    hadRealBridge_ = true;
 
     // (= r_t t)
     sideAssertions_.emplace_back(level, mkEq(r_t, arg));
@@ -296,28 +298,6 @@ bool ToIntDefinitionalLowerer::isNonlinearReal(ExprId root) const {
             default:
                 return true;  // unknown construct -> conservative
         }
-    }
-    return false;
-}
-
-bool ToIntDefinitionalLowerer::refersToIntVar(ExprId root) const {
-    std::vector<ExprId> stack{root};
-    while (!stack.empty()) {
-        const auto& n = ir_.get(stack.back());
-        stack.pop_back();
-        if (n.kind == Kind::Variable && n.sort == intSortId_) return true;
-        for (ExprId c : n.children) stack.push_back(c);
-    }
-    return false;
-}
-
-bool ToIntDefinitionalLowerer::refersToRealVar(ExprId root) const {
-    std::vector<ExprId> stack{root};
-    while (!stack.empty()) {
-        const auto& n = ir_.get(stack.back());
-        stack.pop_back();
-        if (n.kind == Kind::Variable && n.sort == realSortId_) return true;
-        for (ExprId c : n.children) stack.push_back(c);
     }
     return false;
 }

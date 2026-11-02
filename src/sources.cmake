@@ -24,6 +24,7 @@ set(XOLVER_IR_SOURCES
     "ir/NativeTerms.cpp"
     "ir/NumericLiteral.cpp"
     "ir/Smt2Dumper.cpp"
+    "ir/TermFeatureIndex.cpp"
 )
 
 set(XOLVER_CONTRACTS_SOURCES
@@ -97,6 +98,7 @@ set(XOLVER_SEARCH_SOURCES
     "search/bitblast/BitBlastEncoder.cpp"
     "search/bitblast/BitBlastSolver.cpp"
     "search/bitblast/EagerBitBlastSolver.cpp"
+    "search/bitblast/IntegerFiniteDomainEncoder.cpp"
     "search/bitblast/IntegerRadixEncoder.cpp"
     "search/bitblast/PolyBitBlaster.cpp"
     "search/bitblast/PseudoBooleanEncoder.cpp"

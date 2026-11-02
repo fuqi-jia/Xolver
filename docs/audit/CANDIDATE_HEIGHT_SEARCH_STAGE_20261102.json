@@ -1,0 +1,375 @@
+{
+  "status": "functional_and_api_budget_improvement_verified_formal_pilot_no_gains_canonical_delivery_pending",
+  "binaries": {
+    "baseline": "0ffc60cda9e73d6418f49584398537b7d869ec9e58dd21f34e34e5e22a07065d",
+    "candidate": "7ebbe64360d32b37e61f52f37258d55df9681c297a28164cbdcf4e92d5604831",
+    "z3": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+  },
+  "scores": {
+    "baseline": {
+      "verified": 9,
+      "results": {
+        "unsat": 3,
+        "sat": 6,
+        "timeout": 8
+      },
+      "par2": 1122.1656244825572
+    },
+    "candidate": {
+      "verified": 9,
+      "results": {
+        "unsat": 3,
+        "sat": 6,
+        "timeout": 8
+      },
+      "par2": 1104.8881384003907
+    },
+    "z3": {
+      "verified": 15,
+      "results": {
+        "unsat": 5,
+        "sat": 10,
+        "timeout": 2
+      },
+      "par2": 295.5818499960005
+    }
+  },
+  "gained": [],
+  "lost": [],
+  "reports": {
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/candidate-height-pilot-r1763/case-159/report.json": "a40e208d0843068a494a69c3a80a25c9cc773110f7b1a755c05a44f206c626df",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/candidate-height-pilot-r1763/case-131/report.json": "7edbf03cb636ec2c7c766f8d87efd4859b4e6b58b614d401e6bef68512068957",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/candidate-height-pilot-r1763/case-116/report.json": "93728bb1f512774cee2dff70a0b9cdc7c5affadf0d14036ed5fd90d0249c0b65",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/candidate-height-pilot-r1763/case-034/report.json": "e86e4261803c84b727b512dccc899c70a42230f0bbe5eb532980e253c230ae64",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/candidate-height-pilot-r1763/case-029/report.json": "de04b5200b69ac70e8e9ddad5fd2c9f127aa3da629006349333971cfb46155e4",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/candidate-height-pilot-r1763/case-047/report.json": "73ff8ac14e53553b3370365a847ae5f42c9e0028fd8d83f01442e52bf46c751b",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/candidate-height-pilot-r1763/case-120/report.json": "48283a2e2c5ba620a21007b82565f34807ff162905ba28e155a844981b6e7942",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/candidate-height-pilot-r1763/case-007/report.json": "234ff081471fa277389a46f7fbf187060177da50684137eb30e63e7fbc7de2c2",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/candidate-height-pilot-r1763/case-051/report.json": "a9cbec94143bc40a5801debcc784abcea0ec5a77233f11939e29d890d329b282",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/candidate-height-pilot-r1763/case-035/report.json": "6b479f6c85653fd7bbb27dbcb1e81ab116e5480bab3be2918c243547cf07e983",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/candidate-height-pilot-r1763/case-059/report.json": "0cfed8f773b17c3abfe5a458dd55715ce3e634f195969f1e5b5ce05bd5b4c8f2",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/candidate-height-pilot-r1763/case-122/report.json": "2d8b1d9a1fb2b84395c4354b502bd00e5428dd5f14930ff85b701b2a554561e2",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/candidate-height-pilot-r1763/case-149/report.json": "e7e6e3b3c86ab7ff1fdf2c2dd45766bccf71a5fef6a46064f1d2e63a9badb694",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/candidate-height-pilot-r1763/case-108/report.json": "6fcd12f9903cc0ff4215848f79855989180c4963783a1b447b9b4739d536136c",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/candidate-height-pilot-r1763/case-098/report.json": "d58789807b8f07987c7b68e8aa3c890293b3a868624a969de9c4cbf2b87f210b",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/candidate-height-pilot-r1763/case-106/report.json": "dab0c59f6ed5f7d397b552dec0a67463933e0faf5296661da7475809c27f88e0",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/candidate-height-pilot-r1763/case-077/report.json": "711d58a6685d6e2ad7fb8a0c37cf99c471d6989df6320c2b2592403d5d4e1c67"
+  },
+  "runs": {
+    "94ca2bea2bce": [
+      {
+        "id": "fc23dd7db9de",
+        "input": "106",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 3484671,
+        "pid_gone": true,
+        "cpu": 0
+      }
+    ],
+    "2c550001529e": [
+      {
+        "id": "f3a0297dfa1a",
+        "input": "7",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 3565180,
+        "pid_gone": true,
+        "cpu": 0
+      },
+      {
+        "id": "eefdd55b3e18",
+        "input": "29",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 3565245,
+        "pid_gone": true,
+        "cpu": 1
+      },
+      {
+        "id": "1a2b65470055",
+        "input": "34",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 3565316,
+        "pid_gone": true,
+        "cpu": 2
+      },
+      {
+        "id": "1684720174a4",
+        "input": "35",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 3565431,
+        "pid_gone": true,
+        "cpu": 3
+      },
+      {
+        "id": "b73821f4db04",
+        "input": "47",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 3565535,
+        "pid_gone": true,
+        "cpu": 4
+      },
+      {
+        "id": "d859fd9673cf",
+        "input": "51",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 3565691,
+        "pid_gone": true,
+        "cpu": 5
+      },
+      {
+        "id": "239efb0082ce",
+        "input": "59",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 3565822,
+        "pid_gone": true,
+        "cpu": 6
+      },
+      {
+        "id": "4c646f0924ec",
+        "input": "77",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 3565953,
+        "pid_gone": true,
+        "cpu": 8
+      },
+      {
+        "id": "7bbd4a0edeb5",
+        "input": "98",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 3566265,
+        "pid_gone": true,
+        "cpu": 9
+      },
+      {
+        "id": "552de431de56",
+        "input": "106",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 3566505,
+        "pid_gone": true,
+        "cpu": 10
+      },
+      {
+        "id": "9588b44bc1fa",
+        "input": "108",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 3566586,
+        "pid_gone": true,
+        "cpu": 11
+      },
+      {
+        "id": "63214fa70827",
+        "input": "116",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 3566656,
+        "pid_gone": true,
+        "cpu": 12
+      },
+      {
+        "id": "00d08757e8be",
+        "input": "120",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 3566725,
+        "pid_gone": true,
+        "cpu": 13
+      },
+      {
+        "id": "0f4dbce05e76",
+        "input": "122",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 3566792,
+        "pid_gone": true,
+        "cpu": 15
+      },
+      {
+        "id": "da607cfabcca",
+        "input": "131",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 3566857,
+        "pid_gone": true,
+        "cpu": 17
+      },
+      {
+        "id": "d8f57896099f",
+        "input": "149",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 3566928,
+        "pid_gone": true,
+        "cpu": 18
+      },
+      {
+        "id": "1d213e12c573",
+        "input": "159",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 3567009,
+        "pid_gone": true,
+        "cpu": 20
+      }
+    ],
+    "2d9ef22af315": [
+      {
+        "id": "ab533d31c188",
+        "input": "106",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 3588661,
+        "pid_gone": true,
+        "cpu": 0
+      }
+    ],
+    "1cbf1dc71552": [
+      {
+        "id": "a56002d183e1",
+        "input": "integer-64",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 3603757,
+        "pid_gone": true,
+        "cpu": 0
+      },
+      {
+        "id": "4dba486d1607",
+        "input": "real-32",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 3603816,
+        "pid_gone": true,
+        "cpu": 1
+      },
+      {
+        "id": "52a47baa639a",
+        "input": "budget-128",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 3603881,
+        "pid_gone": true,
+        "cpu": 5
+      },
+      {
+        "id": "02861ee6b5de",
+        "input": "budget-512",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 3603952,
+        "pid_gone": true,
+        "cpu": 6
+      }
+    ]
+  },
+  "unit": {
+    "cases": 1996,
+    "assertions": 1296152,
+    "qualification": "/pub/data/jiafq/xolver/validation/arithmetic-r103/candidate-height-r1762/qualification.json",
+    "qualification_sha256": "d90ebcb190ff0fbef295842acb06e6395736ce2f69682d3e1a05ca1cb008a2d2",
+    "old_control": "Both >30-dimensional sparse witness cases fail on frozen parent and pass on new implementation."
+  },
+  "api": {
+    "real-32": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/candidate-height-api-cases-r1765/real-32/report.json",
+      "sha256": "dc19f24363744c2abe8e7fdbd130908accabbdf8dbaaa78c16155eb45e8e2c66",
+      "results": {
+        "candidate": "sat",
+        "baseline": "no-witness"
+      },
+      "search_seconds": {
+        "candidate": 0.028921344,
+        "baseline": 5.000598044
+      },
+      "case": {
+        "domain": "real",
+        "dimensions": 32,
+        "target": 2,
+        "upper": 1,
+        "budget_ms": 5000,
+        "expect_gain": true
+      }
+    },
+    "integer-64": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/candidate-height-api-cases-r1765/integer-64/report.json",
+      "sha256": "47a5e25c3ca4c3d792712a552504d9239c3ea1b09cff82dcc975d5e7f3640684",
+      "results": {
+        "baseline": "no-witness",
+        "candidate": "sat"
+      },
+      "search_seconds": {
+        "baseline": 1.408906008,
+        "candidate": 0.572135168
+      },
+      "case": {
+        "domain": "integer",
+        "dimensions": 64,
+        "target": 3,
+        "upper": 1,
+        "budget_ms": 5000,
+        "expect_gain": true
+      }
+    },
+    "budget-128": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/candidate-height-api-cases-r1765/budget-128/report.json",
+      "sha256": "98f810378246445f03aa7a7decf03a494a89fb6d8c34712334d07bcb17045380",
+      "results": {
+        "baseline": "no-witness",
+        "candidate": "no-witness"
+      },
+      "search_seconds": {
+        "baseline": 1.530389497,
+        "candidate": 0.001174026
+      },
+      "case": {
+        "domain": "integer",
+        "dimensions": 128,
+        "target": 3,
+        "upper": 4096,
+        "budget_ms": 1,
+        "expect_gain": false
+      }
+    },
+    "budget-512": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/candidate-height-api-cases-r1765/budget-512/report.json",
+      "sha256": "fdf33c9604cbe94d00076f1ba41c617e419e9a83bcdd24bf00cf4ad4186750aa",
+      "results": {
+        "candidate": "no-witness",
+        "baseline": "no-witness"
+      },
+      "search_seconds": {
+        "candidate": 0.001097541,
+        "baseline": 6.183444788
+      },
+      "case": {
+        "domain": "integer",
+        "dimensions": 512,
+        "target": 3,
+        "upper": 4096,
+        "budget_ms": 1,
+        "expect_gain": false
+      }
+    }
+  },
+  "protocol": {
+    "host": "Panda1",
+    "scheduler": "ExperimentOS",
+    "seconds": 60,
+    "physical_cores": 1,
+    "memory_bytes": 17179869184,
+    "actual_timed_sat_model_replay": true
+  },
+  "protected_sets_used": false,
+  "promoted": false,
+  "boundary": "Native prototype restores high-dimensional candidate enumeration and bounds priority-list construction by the existing deadline; independent actual-model replay validates the two new API witnesses. Fresh17 fixed-suite cases show no gained/lost solves or wrong results. Source131 remains a variable control and its17-second movement is not attributed to this implementation. No full160, new canonical binary/source qualification, fresh QCP requalification or PR/main CI is claimed. Delivered canonical111 score remains unchanged."
+}
