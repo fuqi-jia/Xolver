@@ -72,6 +72,28 @@ TEST_CASE("MC: real bound model in [0,1]") {
     // Don't constrain exact form (could be "0", "1/2", "0.5", etc.) — only non-empty.
 }
 
+TEST_CASE("MC: integral real candidates reconstruct fractional values and Boolean choices") {
+    const auto path = writeSmt2("real_integral_candidate_reconstruction",
+        "(set-logic QF_NRA)\n"
+        "(declare-const x Real)\n"
+        "(declare-const y Real)\n"
+        "(declare-const c Bool)\n"
+        "(assert (= x (/ y 2)))\n"
+        "(assert (ite c (= (* y y) 9) (= (* y y) 25)))\n"
+        "(assert (> y 0))\n"
+        "(assert (< y 4))\n"
+        "(check-sat)\n");
+    Solver solver;
+    solver.setRuntimeParameter("XOLVER_WALLCLOCK_MS", "10000");
+    REQUIRE(solver.parseFile(path));
+    REQUIRE_RESULT(solver.checkSat(), Result::Sat);
+    CHECK(solver.validateModel() == Solver::ModelValidation::Satisfied);
+    const auto values = modelValueSet(solver.getModel());
+    CHECK(values.count("3/2") + values.count("(/ 3 2)") + values.count("1.5") > 0);
+    REQUIRE_RESULT(solver.checkSat(), Result::Sat);
+    CHECK(solver.validateModel() == Solver::ModelValidation::Satisfied);
+}
+
 TEST_CASE("MC: distinct pair has at least two values in model") {
     auto path = writeSmt2("distinct_pair",
         "(set-logic QF_LIA)\n"

@@ -25,13 +25,90 @@
 
 using namespace xolver;
 
+TEST_CASE("SAT: theory model decisions include atoms registered after the first request") {
+    struct Lookup : TheoryAtomLookup {
+        std::vector<TheoryAtomRecord> atoms;
+        const TheoryAtomRecord* findBySatVar(SatVar var) const override {
+            for (const auto& atom : atoms) if (atom.satVar == var) return &atom;
+            return nullptr;
+        }
+        std::vector<SatVar> allAtomVars() const override {
+            std::vector<SatVar> result;
+            for (const auto& atom : atoms) result.push_back(atom.satVar);
+            return result;
+        }
+    } registry;
+    struct Callbacks : TheoryPropagationCallbacks {
+        int evaluations = 0;
+        SatVar negative = 0;
+        void assertTheoryLit(const TheoryAtomRecord&, SatLit, int) override {}
+        void backtrackToLevel(int) override {}
+        void setAssignmentView(TheoryAssignmentView*) override {}
+        TheoryCheckResult check(TheoryLemmaStorage&, TheoryEffort) override {
+            return TheoryCheckResult::consistent();
+        }
+        std::optional<bool> evalTheoryAtom(SatVar var) override {
+            ++evaluations;
+            return var != negative;
+        }
+    } theories;
+    struct Selection : Propagator {
+        DecisionSource source = DecisionSource::SatActivity;
+        int pick = 0;
+        int decide() override { return pick; }
+        DecisionSource decisionSource(const DecisionContext&) override { return source; }
+    } selection;
+    CadicalBackend backend;
+    TheoryLemmaDatabase lemmas;
+    CadicalTheoryPropagator propagator{registry, theories, lemmas, backend};
+    backend.connectPropagator(&propagator);
+    struct Disconnect {
+        CadicalBackend& backend;
+        ~Disconnect() { backend.disconnectPropagator(); }
+    } disconnect{backend};
+    CHECK(propagator.cb_decide() == 0); // initialize an empty candidate snapshot
+    const auto nonLinear = backend.newVar();
+    registry.atoms.push_back({nonLinear, TheoryId::EUF, false, NullExpr,
+                             EufAtomPayload{NullExpr, NullExpr, Relation::Eq}});
+    backend.addObservedVar(nonLinear);
+    CHECK(propagator.cb_decide() == 0); // registry size is not the linear count
+    const auto real = backend.newVar();
+    registry.atoms.push_back({real, TheoryId::LRA, true, NullExpr,
+                             LinearAtomPayload{{}, Relation::Eq, RealValue::fromInt(0)}});
+    backend.addObservedVar(real);
+    CHECK(propagator.cb_decide() == static_cast<int>(real));
+    propagator.notify_assignment({static_cast<int>(real)});
+    propagator.setUserPropagator(&selection);
+    const auto integer = backend.newVar();
+    registry.atoms.push_back({integer, TheoryId::LIA, true, NullExpr,
+                             LinearAtomPayload{{}, Relation::Lt, RealValue::fromInt(0)}});
+    backend.addObservedVar(integer);
+    CHECK(registry.numAtomVars() == 3);
+    CHECK((registry.linearAtomVars(1) == std::vector<SatVar>{real, integer}));
+    CHECK((registry.linearAtomVars(2) == std::vector<SatVar>{integer}));
+    CHECK(registry.linearAtomVars(3).empty());
+    theories.negative = integer;
+    const auto previousEvaluations = theories.evaluations;
+    CHECK(propagator.cb_decide() == 0);
+    CHECK(theories.evaluations == previousEvaluations);
+    selection.source = DecisionSource::TheoryModel;
+    CHECK(propagator.cb_decide() == -static_cast<int>(integer));
+    selection.pick = static_cast<int>(integer);
+    CHECK(propagator.cb_decide() == selection.pick); // explicit choice wins
+    selection.pick = 0;
+    propagator.notify_new_decision_level();
+    propagator.notify_assignment({-static_cast<int>(integer)});
+    CHECK(propagator.cb_decide() == 0); // assigned atoms are never proposed
+    propagator.notify_backtrack(0);
+    CHECK(propagator.cb_decide() == -static_cast<int>(integer));
+}
+
 TEST_CASE("SAT: decision sources preserve explicit steering and mandatory model checks") {
     struct Lookup : TheoryAtomLookup {
         TheoryAtomRecord atom{};
         const TheoryAtomRecord* findBySatVar(SatVar v) const override {
             return v == atom.satVar ? &atom : nullptr;
         }
-        std::vector<SatVar> linearAtomVars() const override { return {atom.satVar}; }
         std::vector<SatVar> allAtomVars() const override { return {atom.satVar}; }
     } registry;
     struct Callbacks : TheoryPropagationCallbacks {

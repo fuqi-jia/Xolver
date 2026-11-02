@@ -58,7 +58,8 @@ public:
     std::vector<TheoryLemma> takeEntailmentPropagations() override;
 
     // cb_decide feasibility heuristic: is the bound atom `v` true at the current
-    // simplex point? double eval (allocation-free hot path); heuristic only.
+    // simplex point? Exact tentative-point evaluation; heuristic only, including
+    // while newly asserted sources await checking by the relaxation.
     std::optional<bool> evalAtomAtModel(SatVar v) override;
 
 protected:
@@ -98,11 +99,14 @@ private:
     struct TrailKey {
         SatVar operator()(const LraTrailEntry& entry) const { return entry.atom.satVar; }
     };
-    incremental::IndexedContext<LraTrailEntry, TrailKey> theoryTrail_;
+    using TrailContext = incremental::IndexedContext<LraTrailEntry, TrailKey>;
+    TrailContext theoryTrail_;
     size_t appliedCursor_ = 0;
     std::optional<TheoryCheckResult> pendingConflict_;
 
     void clearActiveSources();
+    void rebuildTrailCaches();
+    void resetAppliedBounds(GeneralSimplex::AssignmentPolicy policy);
     bool applyEntryToSimplex(const LraTrailEntry& e);
 
     // -------------------------------------------------------------------------
@@ -133,6 +137,14 @@ private:
     std::vector<InterfaceEq> interfaceEqualities_;
     std::vector<InterfaceEq> interfaceDisequalities_;
     int currentLevel_ = 0;
+
+    struct ScopeState {
+        TrailContext::Snapshot trail;
+        std::vector<InterfaceEq> equalities;
+        std::vector<InterfaceEq> disequalities;
+        int level;
+    };
+    std::vector<ScopeState> scopes_;
 
     // Map from (a,b) canonical key to auxiliary var index for x - y
     std::unordered_map<uint64_t, int> interfaceEqAuxVars_;

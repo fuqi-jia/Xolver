@@ -1,0 +1,336 @@
+{
+  "date": "2026-11-02",
+  "status": "rejected_and_removed_after_pilot_regression",
+  "core_change": "Track actual theory-source withdrawals in the shared SAT/theory adapter independently of assignment count. Full source replay and theory-specific rollback unchanged.",
+  "frozen_versions": {
+    "parent_cli_sha256": "cce9debc774347d77227393df0f51ff8d72a13c30a54c5f1311155f5911c273d",
+    "candidate_cli_sha256": "94d1ccdd7f194e7c90b2d6b0339db2b72271c29e350b6b2dda835dea0cf8c350",
+    "candidate_worker_sha256": "a1f9376015d6e17f95300d910ba65b766f6f106c1f70800417c2d7de7c8da6d7",
+    "z3_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+  },
+  "qualification": {
+    "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/theory-withdrawal-r1636/qualification.json",
+    "sha256": "122a5cb6de1761de02b1ffd885c9ef2741a2e9a459865242561848927ce59e2d",
+    "input_path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/theory-withdrawal-inputs-r1634/inputs.json",
+    "inputs_sha256": "ccce0b1ec00af38cb7193a454e9fb3d2705cefd53939ff098303401aa86f5d1b",
+    "unit_cases": 1985,
+    "unit_assertions": 1293776,
+    "sat_backend_cases": 22,
+    "sat_backend_assertions": 325,
+    "actual_lra_lia_replacement_regression_assertions": 40,
+    "old_same_header_control_exit_code": 1
+  },
+  "native_recovery": {
+    "previous_experiment": "80ddba5ffc67",
+    "previous_exit_code": 1,
+    "previous_pid_gone": true,
+    "previous_metrics_sha256": "74e95ee9cc5ef9c1478ee819500b3ad3d0e4991d6e88c54ec625627cd82a4b6d",
+    "previous_build_script_sha256": "7a0fb0163ee7c54b9ea50e420d196f64221d6e9313f0f496d1dfbc7918187620",
+    "previous_compile_and_link_logs": {
+      "old-control.log": "eeed4e3efd69fd4cb8b7342e0a926a348acaa1ba908c386fd5fe287626d1fb23",
+      "compile-CadicalTheoryPropagator.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compile-Solver_impl_model.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "link-old-control.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compile-NativeDecision.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compile-Solver_impl_solve.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compile-test_bit_blast_cache.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compile-Solver_impl_checksat.log": "c8a2d732438c223e1985fd43a73a8f6b03c3842220cc4397701110f88b31c10b",
+      "compile-test_sat_backend.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compile-test_nia.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compile-ReadOnlyArrayModel.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compile-test_mcsat_smt2_soundness.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compile-test_lia.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compile-CadicalBackend.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compile-old-control.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compile-test_application_dispatch.log": "154de38f9d80ff9cee9bb280af84727f3d0e03c0ee815282c3a063d9bf98c013",
+      "link-unit.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compile-Solver.log": "5beef92d84c27f635fabb29034086aa58a4f9814691a61aec51ee6d5597039ad"
+    },
+    "reused_outputs": {
+      "/pub/data/jiafq/xolver/build/diagnostics/theory-withdrawal-r1634/NativeDecision.o": "c57db5bcc0013eb9176afbb49202e10928d2a1691341a29fd3cbdc430bdb6ff2",
+      "/pub/data/jiafq/xolver/build/diagnostics/theory-withdrawal-r1634/ReadOnlyArrayModel.o": "3f7183a68b504bdf1f4c6b738d04150b3f8878ae9d78aad1997b169d31e71ad4",
+      "/pub/data/jiafq/xolver/build/diagnostics/theory-withdrawal-r1634/Solver.o": "4fd6233bd2cb2b15189eaac7af130d80545c1e4f47b26f62ba954ad97a80dfcb",
+      "/pub/data/jiafq/xolver/build/diagnostics/theory-withdrawal-r1634/Solver_impl_checksat.o": "1e69a52c2a8d7fcbce3721187612393b18ee025f4fdee6376e22181153057330",
+      "/pub/data/jiafq/xolver/build/diagnostics/theory-withdrawal-r1634/Solver_impl_model.o": "d0f7587d39b32b936e70c371b0f2d3c59af6b26343a8819cd98c2a5154c8af77",
+      "/pub/data/jiafq/xolver/build/diagnostics/theory-withdrawal-r1634/Solver_impl_solve.o": "139094798576c6d2dc3b5d9b1cf036c1fab5e814e72d1895a944b87899e5cfbd",
+      "/pub/data/jiafq/xolver/build/diagnostics/theory-withdrawal-r1634/CadicalBackend.o": "301ee95fc6ba070e633900f6e3cf705debe65266cfcea604f2de32f70e9d7657",
+      "/pub/data/jiafq/xolver/build/diagnostics/theory-withdrawal-r1634/CadicalTheoryPropagator.o": "dae0a0c4df311c95c1e92cbcfc41b46a326b790a774c6b910aa0d3f3770d4500",
+      "/pub/data/jiafq/xolver/build/diagnostics/ray-scale-r1585/AffineIntegerDomain.o": "f376e8ef22dc4a84b8b8fd6c6a068e8ae99f0135b95713a9bf6d3f31bed03558",
+      "/pub/data/jiafq/xolver/build/diagnostics/ray-scale-r1586/FarkasOrBranchSolver.o": "d918c08914dca5a4c584e01530cebe9ca798780dbd721e19d3e38afaeda3f21d",
+      "/pub/data/jiafq/xolver/build/diagnostics/ray-scale-r1585/Presburger.o": "e0f2aed0735a125994551a418249486cfb6ec2b0972b947a3a84fcee0620c375",
+      "/pub/data/jiafq/xolver/build/diagnostics/ray-scale-r1585/LiaSolver.o": "b34e09c7d64eea911206086715c2ba0fb73e2f634e30d8524511fce24a3abd5e",
+      "/pub/data/jiafq/xolver/build/diagnostics/farkas-cache-r1578/NativeTerms.o": "78fbe9d5a280c6c071322f8a23b30693a1c2dde16924826275ebe46a87777f8a",
+      "/pub/data/jiafq/xolver/build/diagnostics/farkas-cache-r1578/NiaSolver.o": "fdf976f77b9acb544f5962868d3084c0f0ea07a7d103a497ccd8b63c241e0f9a",
+      "/pub/data/jiafq/xolver/build/diagnostics/farkas-cache-r1578/NiaSolver_farkas.o": "e16420272ab0698590f5df81fcaf21df829843597de195cd1b78b0c82c072a3a",
+      "/pub/data/jiafq/xolver/build/diagnostics/monomial-squares-r1572/MonomialSquares.o": "66504965fc11ad17aad80da47d9884d4ec1d598f4c2dab73a2328486cf12c239",
+      "/pub/data/jiafq/xolver/build/diagnostics/monomial-squares-r1572/PolynomialSignClosure.o": "ce8032bbb318920fa8f72e5ca246a8db69c6823d93d4b9a09c97e0aa5db2019c",
+      "/pub/data/jiafq/xolver/build/diagnostics/sparse-support-r1551/FarkasOrSolver.o": "4dcd50a2699189299cd3e35d282ab8e4585bcf72d05a71994a90bebdd289d96d",
+      "/pub/data/jiafq/xolver/build/diagnostics/candidate-schedule-r1549/NiaSolver_bitblast.o": "7ec1e2a21c0f2cbae88b2398016b25b6ed3fe0f66ffb764ba0e243cac88332f0",
+      "/pub/data/jiafq/xolver/build/diagnostics/quotient-cuts-r1544/IntDivModLowerer.o": "282c15da7302e63a73f810f077c100b3957d9e24c29ef5f3e39619800dde0980",
+      "/pub/data/jiafq/xolver/build/diagnostics/demand-nodes-r1516/dag.o": "a174639e9e15c1a7a20b55084ad325ce05f6eb533c03d295e071e9c78dc99867",
+      "/pub/data/jiafq/xolver/build/diagnostics/shared-form-r1537/LinearBoundPropagation.o": "c3807cf28dce8810de4aa34255adae4274d1c6bf64f92e04d511277ee0b96cc5",
+      "/pub/data/jiafq/xolver/build/diagnostics/shared-form-r1537/LinearNiaDomainReasoner.o": "773f6452458d89362f7f8221d62dcc1d98b75f0ae6e2defa337a8eddcea44d19",
+      "/pub/data/jiafq/xolver/build/diagnostics/shared-form-r1537/EagerBitBlastSolver.o": "a1edc25f4da6b25910aade2b5a3ff659e4d83a5049fbfd39fa16741b0784d616",
+      "/pub/data/jiafq/xolver/build/diagnostics/shared-form-r1537/IntegerReasoner.o": "484c8a2583a0bd5bca7a40714a00c9bb43c5b65f8af617b356efdc6f86a01421",
+      "/pub/data/jiafq/xolver/build/diagnostics/candidate-schedule-r1549/test_linear_bound_propagation.o": "1345132d3a05e9ce3edd50617e3b4d829e5573fb692ca61dcea0a1519149f80e",
+      "/pub/data/jiafq/xolver/build/diagnostics/candidate-schedule-r1549/test_integer_reasoner_soundness.o": "220ba4a131d61abc3aa27b6d03331bec6747d5951c6cbc168b6df60fc3692c48",
+      "/pub/data/jiafq/xolver/build/diagnostics/candidate-schedule-r1549/test_int_divmod_lowerer.o": "eb90148f4e8a33aca20aa0e06db52444ca178c78dae61b41a3c375d48cb62f91",
+      "/pub/data/jiafq/xolver/build/diagnostics/sparse-support-r1551/test_bounded_support_product.o": "e0ca3a5e88bbf4cb5bae497b7ff4aeb6991248227c55d1310abe53b66873cbaa",
+      "/pub/data/jiafq/xolver/build/diagnostics/sparse-support-r1551/test_farkas_or_solver.o": "997dc6279312d0b12ca0600d4f93e9f4923eb746ac89acf7b9d21a80d4ed2df1",
+      "/pub/data/jiafq/xolver/build/diagnostics/integral-real-r1558/test_eager_affine_bounds.o": "3d4155ee6992ce14cfe57f47ed1ea85626264d910a660a1478f540782e55a270",
+      "/pub/data/jiafq/xolver/build/diagnostics/integral-real-r1558/test_model_consistency.o": "d86ca03bb6f043c91005731b429b4cfe8fa06cf25cd00489862b1cdbb77a0955",
+      "/pub/data/jiafq/xolver/build/diagnostics/integral-real-r1558/test_boolean_structure.o": "8dd199551acb36bfc79064e6cc93764a03f5565269b788a28c08a06a6f8cbd37",
+      "/pub/data/jiafq/xolver/build/diagnostics/monomial-squares-r1572/test_monomial_squares.o": "4d5c38d2118b425add1135fd45d19511e2e5fc3c35d54fbbf3d5c35bf991971c",
+      "/pub/data/jiafq/xolver/build/diagnostics/monomial-squares-r1572/test_polynomial_sign_closure.o": "1c68639d35d0321c1b4307355adc95ec0fcf14412c3346cd52b996603039093f",
+      "/pub/data/jiafq/xolver/build/diagnostics/farkas-cache-r1582/test_assertion_snapshot.o": "d9b4a537fd1adf65ae801f1a228f852fdc4445b1b667617fbacea3d3c7c9ad16",
+      "/pub/data/jiafq/xolver/build/diagnostics/ray-scale-r1585/test_affine_integer_domain.o": "690e1518284ed46b804fe4029614a91c61e41bea23f5707e2ae74c0250a28f60",
+      "/pub/data/jiafq/xolver/build/diagnostics/ray-scale-r1585/test_farkas_or_branch_solver.o": "c41c0eaa761311198ff388a31c48c5a2a50ac1ba21608ca418efdcef0a207a84",
+      "/pub/data/jiafq/xolver/build/diagnostics/ray-scale-r1585/test_nia_farkas_cache.o": "6f9f7e66b994663508705d406eb7a121ac22f215d74380bf547e0b07d66a2e78",
+      "/pub/data/jiafq/xolver/build/diagnostics/ray-scale-r1585/test_native_presburger.o": "4952ba1e3a31641f90ce373e02fabce3ada3393730198c1023f3a5bff45eac02",
+      "/pub/data/jiafq/xolver/build/diagnostics/theory-withdrawal-r1634/test_application_dispatch.o": "fcec5aeb1d88d843be4c3bec16047e151cbd76df13e997ed14d242ec91c42a03",
+      "/pub/data/jiafq/xolver/build/diagnostics/theory-withdrawal-r1634/test_bit_blast_cache.o": "6afec976fcb8491522edbe8ae883f3224615ef05142914b02fc6dc5be63bcaa2",
+      "/pub/data/jiafq/xolver/build/diagnostics/theory-withdrawal-r1634/test_lia.o": "0a07df863d9d4c711554b0e436ccc4ed1af447073e8993d1a5fe07a88bbcda21",
+      "/pub/data/jiafq/xolver/build/diagnostics/theory-withdrawal-r1634/test_mcsat_smt2_soundness.o": "d5a9fad6e12a0e33b51a54fd2cc479de5fad040f53b03f99e8357faa56132a47",
+      "/pub/data/jiafq/xolver/build/diagnostics/theory-withdrawal-r1634/test_nia.o": "a79fc28f7e36ced4e9bace96ec98778f1bd1bb4ff702c92c35b7e501876f74b7",
+      "/pub/data/jiafq/xolver/build/diagnostics/theory-withdrawal-r1634/test_sat_backend.o": "c70273aedcd79e67da9f76fc24f7b31b541ba49519872b2c04767bd7bf5e0a59",
+      "/pub/data/jiafq/xolver/build/diagnostics/theory-withdrawal-r1634/unit-tests": "cf27a1b7115f4416bb4a16b0a025678136b3c69d5d9fb77c1cb634a364b14142",
+      "/pub/data/jiafq/xolver/build/diagnostics/theory-withdrawal-r1634/old-unit-tests": "d1f9765b0f5ddff7519e79ac3e57270e9fdd545b7afce785f5caf82805ca37a0"
+    },
+    "reason": "The negative control failed at the intended REQUIRE, but the build wrapper erroneously rejected doctest FATAL ERROR for a failed REQUIRE as a crash. No candidate test had run. Preserve the failed wrapper and all immutable sources; continue qualification from the completed pinned compilation without recompilation or code changes."
+  },
+  "independent_checks": {
+    "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/theory-withdrawal-evidence-r1639/report.json",
+    "sha256": "1f50891e1555c0850ccd77fe02e1bfa2f3d8b4c4e65fdb72a3165205cf0f97dd",
+    "actual_exported_contexts": 8,
+    "checks": 72,
+    "summary": "Z3/cvc5 and frozen Xolver refute actual emitted clauses and solve fresh neighboring SAT inputs; all exported models cross-replay.",
+    "recovery": {
+      "previous_experiment": "5ba8d37ed0a5",
+      "previous_exit_code": 1,
+      "previous_pid_gone": true,
+      "previous_inputs_sha256": "f3d4c133f00fcf7c54529335157f5e5a4b92fcd28dd813caf4a5bcf131e19047",
+      "previous_metrics_sha256": "92fdc5f812a759441cfe08bd8856f6c00c7cff0efc1abaacf98a7b187d8f2a94",
+      "original_exports_sha256": "572aba06a2c19cc4e0208e0a45666835db9e33dcff212b33aaa1434b9cd7ba56",
+      "compile_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "link_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "reason": "The exporter completed all eight actual contexts before the checker import failed because its tools/fuzz path was absent. Preserve this failure and reuse the unchanged compiled exporter/output. No oracle check had run."
+    }
+  },
+  "pilot": {
+    "count": 19,
+    "host": "Panda1",
+    "scheduler": "ExperimentOS",
+    "physical_cpu_per_case": 1,
+    "timeout_seconds": 60,
+    "memory_bytes": 17179869184,
+    "scores": {
+      "baseline": {
+        "verified": 13,
+        "raw": 13,
+        "verdicts": {
+          "unsat": 4,
+          "timeout": 6,
+          "sat": 9
+        },
+        "verified_par2_sum": 868.1937762312591
+      },
+      "candidate": {
+        "verified": 12,
+        "raw": 12,
+        "verdicts": {
+          "unsat": 4,
+          "timeout": 7,
+          "sat": 8
+        },
+        "verified_par2_sum": 987.818734921515
+      },
+      "z3": {
+        "verified": 19,
+        "raw": 19,
+        "verdicts": {
+          "unsat": 6,
+          "sat": 13
+        },
+        "verified_par2_sum": 43.81489862687886
+      }
+    },
+    "new_solves": [],
+    "lost_solves": [
+      {
+        "index": 6,
+        "case": {
+          "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LIA/dillig/40-12.smt2",
+          "member": "QF_LIA/dillig/40-12.smt2",
+          "logic": "QF_LIA",
+          "family": "dillig",
+          "bytes": 11440,
+          "sha256": "6456df748988b2633d3b19919d50e25fd71f4058eb999c6cc4381f5e832e27f9",
+          "expected": "sat",
+          "shared_archive_member": "non-incremental/QF_LIA/dillig/40-12.smt2",
+          "shared_archive_sha256": "47f34fff3323f52e04ee33e611b80fd31b8f7f0177b7a9891b2499b259da69cf",
+          "archive_matches_server": true,
+          "archive_member_found": true,
+          "repetitions": 1
+        },
+        "observations": {
+          "baseline": {
+            "result": "sat",
+            "seconds": 0.3168818764388561,
+            "verified": true
+          },
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.00199251808226,
+            "verified": false
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 0.06579041667282581,
+            "verified": true
+          }
+        }
+      }
+    ],
+    "wrong": 0,
+    "protocol_errors": 0,
+    "invalid_models": 0,
+    "report_pins": {
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/theory-withdrawal-pilot-r1637/case-000/report.json": "9a4d8cca9c969d1bbf992e94a5fbce375300491157dca611d2a695cb98486fed",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/theory-withdrawal-pilot-r1637/case-001/report.json": "62b0ba38d3d11a9816dc1f0bc87a2ddfa4d497efe83cb302b48b56477d254243",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/theory-withdrawal-pilot-r1637/case-003/report.json": "80b9c40b838563c5d3cb68e7774539af41198f559cc56c73cce4869b5fb49306",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/theory-withdrawal-pilot-r1637/case-006/report.json": "19c924c529f85c79a0ed95650952112960f9af5e276ad740171586b319a4abe4",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/theory-withdrawal-pilot-r1637/case-007/report.json": "8d7dcc7892ea2ad6add72a02b8bdb9dc8e879efbb255d529f054a3d88aba74c2",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/theory-withdrawal-pilot-r1637/case-011/report.json": "59c2225d42eeffc52e57f3594000193911cc143750e9cc80c9ba80bcb2b91e33",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/theory-withdrawal-pilot-r1637/case-013/report.json": "75deabb1707a45571b36a55327ba06efb977a99cf49a1862eea769280ffc1e36",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/theory-withdrawal-pilot-r1637/case-020/report.json": "3da5b5a79be26a35ebb4c17362988547edeac8c0d327c12bb99d178a14ee1144",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/theory-withdrawal-pilot-r1637/case-048/report.json": "c873f1e77235b8f120047f583ff2afd50c46afda458bcf87df8f442410d439c7",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/theory-withdrawal-pilot-r1637/case-049/report.json": "3f2fe4a0c50e38a414b2655044cb7a5a54c2832b0e92d4adad3ae48924c312d1",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/theory-withdrawal-pilot-r1637/case-051/report.json": "145d9c980cc814329ebba185492543c62b1b9441cf8447ec4e95bf2a4b0713fc",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/theory-withdrawal-pilot-r1637/case-058/report.json": "ee989c041002218536f9d02716b724efbd9e7991c4b02c8d2dae65e5d6e0dc95",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/theory-withdrawal-pilot-r1637/case-059/report.json": "b9411a147aa047bba8a0826dd7d9330d681c6223ee6736f78499a3d721414776",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/theory-withdrawal-pilot-r1637/case-089/report.json": "79a5d4d6097dd6f85df277ee120d6f54ae5a4615ac7d1b9a568d3c6775e46f31",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/theory-withdrawal-pilot-r1637/case-091/report.json": "864d7fda671a51ea2cf5cff35eec2a07af7ab2cfc5d7b017299f81f783fc948d",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/theory-withdrawal-pilot-r1637/case-098/report.json": "bf621217f0104a63e0270d930aa6149ebceac9c5a75d2b073afd49a6b7a3ff8a",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/theory-withdrawal-pilot-r1637/case-128/report.json": "e25f3f45a3b205a9e2a8c266646badbd3cacc7f43995c319e8ffbf3816a919eb",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/theory-withdrawal-pilot-r1637/case-131/report.json": "03ead584016cc128861bb944c0acbdbff7f62c9067339dfab90ac7a449e13ccd",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/theory-withdrawal-pilot-r1637/case-159/report.json": "2c83082257bed7f1bf78bb1dd3e1e76b5c409e370c31b40f0278c7bbcb745d7a"
+    }
+  },
+  "measured_original_gap_evidence": [
+    {
+      "index": 1,
+      "report_path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/theory-withdrawal-probe-run-r1633/1/report.json",
+      "report_sha256": "543d101c296cfe2de23136f223d5a1e7dd879416fcd4de098d4f1feac86b782a",
+      "last_missed_event": "[WITHDRAWAL-PROBE] missed=128 withdrawn=1227 level=154 current=2864 previous=2791 threshold=286 full=232 standard=2 decisions=1154"
+    },
+    {
+      "index": 13,
+      "report_path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/theory-withdrawal-probe-run-r1633/13/report.json",
+      "report_sha256": "5f8d1b4eb5ed439b89d339ccf383ce5d9502f8e9921b79d41120d9ea27d1ad97",
+      "last_missed_event": "[WITHDRAWAL-PROBE] missed=16 withdrawn=22485 level=1232 current=19878 previous=19848 threshold=1987 full=0 standard=104 decisions=22475"
+    },
+    {
+      "index": 48,
+      "report_path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/theory-withdrawal-probe-run-r1633/48/report.json",
+      "report_sha256": "770dfdf8a55cc67686a7af57949796662e780ea960c63ba9dfdbe5d62b900cbf",
+      "last_missed_event": "[WITHDRAWAL-PROBE] missed=256 withdrawn=223165 level=103 current=1459 previous=1427 threshold=145 full=0 standard=3310 decisions=81460"
+    },
+    {
+      "index": 49,
+      "report_path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/theory-withdrawal-probe-run-r1633/49/report.json",
+      "report_sha256": "1cb4c201c7ec7966793525cbf48a1da0141b2d23c4d9e09a8674b615952d92bb",
+      "last_missed_event": "[WITHDRAWAL-PROBE] missed=256 withdrawn=336922 level=657 current=29951 previous=27783 threshold=2995 full=0 standard=1152 decisions=166604"
+    },
+    {
+      "index": 58,
+      "report_path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/theory-withdrawal-probe-run-r1633/58/report.json",
+      "report_sha256": "0642b894091204d9615f606af6fe517711f879e14c10d00868c19c3dd2728a86",
+      "last_missed_event": "[WITHDRAWAL-PROBE] missed=256 withdrawn=252839 level=365 current=2159 previous=2148 threshold=215 full=0 standard=3753 decisions=105976"
+    },
+    {
+      "index": 89,
+      "report_path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/theory-withdrawal-probe-run-r1633/89/report.json",
+      "report_sha256": "c51849f1ff7bececd3cc56af77fa9a1ef2660537c4fca23e9631d37f302308e2",
+      "last_missed_event": "[WITHDRAWAL-PROBE] missed=1024 withdrawn=400235 level=564 current=17257 previous=15633 threshold=1725 full=1004 standard=396 decisions=269086"
+    }
+  ],
+  "regression_profile": {
+    "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/theory-withdrawal-regression-profile-r1640/candidate/report.json",
+    "sha256": "275403b556cf2104aad0be4328a0f41c66b09220d00371a5b31909593c320be5",
+    "samples": 24,
+    "stage_core_and_simplex_check_inclusive_samples": 21,
+    "boundary": "10-second diagnostic, not a formal retiming. Exact cycle/state and coefficient growth remain unproven pending R1641."
+  },
+  "experimentos": {
+    "1f26ad73c66e": {
+      "runs": 1,
+      "outcomes": {
+        "success/exit0": 1
+      },
+      "all_pids_gone": true
+    },
+    "26d13a6b12f1": {
+      "runs": 6,
+      "outcomes": {
+        "success/exit0": 6
+      },
+      "all_pids_gone": true
+    },
+    "80ddba5ffc67": {
+      "runs": 1,
+      "outcomes": {
+        "failed/exit1": 1
+      },
+      "all_pids_gone": true
+    },
+    "07b12098ee45": {
+      "runs": 1,
+      "outcomes": {
+        "success/exit0": 1
+      },
+      "all_pids_gone": true
+    },
+    "ca15e692d2f9": {
+      "runs": 19,
+      "outcomes": {
+        "success/exit0": 19
+      },
+      "all_pids_gone": true
+    },
+    "5ba8d37ed0a5": {
+      "runs": 1,
+      "outcomes": {
+        "failed/exit1": 1
+      },
+      "all_pids_gone": true
+    },
+    "489a4ec133d0": {
+      "runs": 1,
+      "outcomes": {
+        "success/exit0": 1
+      },
+      "all_pids_gone": true
+    },
+    "2aafdb17888d": {
+      "runs": 2,
+      "outcomes": {
+        "success/exit0": 2
+      },
+      "all_pids_gone": true
+    }
+  },
+  "protected_sets_used": false,
+  "qcp_new_candidate_validated": false,
+  "merge_status": "not_promoted",
+  "evidence_boundary": "This event is missed by size-only scheduling, but Standard checks are optional pruning; no unsound old verdict has been demonstrated. The unmodified candidate loses a verified SAT and adds no original solve, so this is not a deliverable performance gain. No full160 expansion, PR/main CI or protected-set result. The scheduling candidate and its two tests are removed; the next affine-line candidate is separate. No repeat is seen at the sampled LP checkpoints, and small coefficient widths do not support coefficient explosion. This does not prove absence of every shorter cycle.",
+  "simplex_state_diagnostic": {
+    "report_path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/simplex-cycle-r1641/report.json",
+    "report_sha256": "927cacfe8458a69fe0d5fd7e3658867aedfb724869992ed09e14f29ca21a9cce",
+    "candidate_records": 200,
+    "exact_repeated_state_records": 0,
+    "maximum_sampled_numerator_bits": 26,
+    "maximum_sampled_denominator_bits": 24,
+    "maximum_sampled_pivots_in_one_check": 2048,
+    "last": "[SIMPLEX-TRAJECTORY] check=162 iter=1536 rows=117 vars=157 nnz=1704 max_num_bits=8 max_den_bits=2 distinct_states=49"
+  }
+}

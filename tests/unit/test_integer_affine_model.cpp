@@ -67,3 +67,66 @@ TEST_CASE("integer affine model: coupled equations, seed coordinates and inconsi
     CHECK_FALSE(findIntegerAffineModel(constraints, {{"z", 2}}));
     CHECK_FALSE(findIntegerAffineModel({constraint(2, 4, Relation::Eq, 1)}, {{"x", 0}, {"y", 0}}));
 }
+
+TEST_CASE("integer radix decomposition: signed scaled equations retain exact Euclidean meaning") {
+    for (unsigned shift : {1u,3u,16u,65u}) for (bool negate : {false,true})
+        for (int scale : {-2,1,3}) for (int offset : {-19,0,21}) {
+            const mpz_class radix=mpz_class(1)<<shift;
+            const NormalizedConstraint equation{
+                LinearFormKey{{{"word",mpq_class(scale)},
+                    {"high",mpq_class((negate?radix:-radix)*scale)},
+                    {"low",mpq_class(-scale)}}},mpq_class(-scale*offset),Relation::Eq};
+            const IntegerBoundsLookup bounds=[&](const std::string& name)
+                ->std::optional<std::pair<mpz_class,mpz_class>> {
+                if (name!="low") return std::nullopt;
+                return std::pair<mpz_class,mpz_class>{0,mpz_class(radix-1)};
+            };
+            const auto definition=findIntegerRadixDecomposition(equation,bounds);
+            REQUIRE(definition);
+            CHECK(definition->dividend=="word");CHECK(definition->quotient=="high");
+            CHECK(definition->remainder=="low");CHECK(definition->exponent==shift);
+            CHECK(definition->offset==offset);CHECK(definition->negateQuotient==negate);
+            for (int q=-3;q<=3;++q) for (const auto& r : std::vector<mpz_class>{0,1,mpz_class(radix-1)}) {
+                const mpz_class value=(negate?-radix:radix)*q+r-offset;
+                mpz_class quotient,remainder;
+                const mpz_class shifted=value+offset;
+                mpz_fdiv_qr(quotient.get_mpz_t(),remainder.get_mpz_t(),shifted.get_mpz_t(),radix.get_mpz_t());
+                CHECK(quotient==(negate?-q:q));CHECK(remainder==r);
+            }
+        }
+}
+
+TEST_CASE("integer radix decomposition: only a proved remainder range qualifies") {
+    NormalizedConstraint equation{LinearFormKey{{{"word",1},{"high",-8},{"low",-1}}},0,Relation::Eq};
+    const IntegerBoundsLookup missing=[](const std::string&)->std::optional<std::pair<mpz_class,mpz_class>> {return std::nullopt;};
+    CHECK_FALSE(findIntegerRadixDecomposition(equation,missing));
+    for (const auto& range : std::vector<std::pair<mpz_class,mpz_class>>{{-1,6},{0,8},{8,8},{3,2}}) {
+        const IntegerBoundsLookup bounds=[&](const std::string& name)->std::optional<std::pair<mpz_class,mpz_class>> {
+            if (name=="low") return range;
+            return std::nullopt;
+        };
+        CHECK_FALSE(findIntegerRadixDecomposition(equation,bounds));
+    }
+    const IntegerBoundsLookup bounds=[](const std::string& name)->std::optional<std::pair<mpz_class,mpz_class>> {
+        if (name=="low") return std::pair<mpz_class,mpz_class>{0,7};
+        return std::nullopt;
+    };
+    equation.rel=Relation::Leq;CHECK_FALSE(findIntegerRadixDecomposition(equation,bounds));
+    equation.rel=Relation::Eq;equation.lhs.terms[1].second=-12;
+    CHECK_FALSE(findIntegerRadixDecomposition(equation,bounds));
+    equation.lhs.terms[1].second=-8;equation.rhs=mpq_class(1,2);
+    CHECK_FALSE(findIntegerRadixDecomposition(equation,bounds));
+    equation.rhs=0;equation.lhs.terms[1].second=mpq_class(-8,3);
+    CHECK_FALSE(findIntegerRadixDecomposition(equation,bounds));
+}
+
+TEST_CASE("integer radix decomposition: duplicate coordinates are merged before recognition") {
+    const NormalizedConstraint equation{LinearFormKey{{{"word",1},{"high",-4},{"high",-4},
+        {"low",-1},{"unused",5},{"unused",-5}}},3,Relation::Eq};
+    const IntegerBoundsLookup bounds=[](const std::string& name)->std::optional<std::pair<mpz_class,mpz_class>> {
+        if (name=="low") return std::pair<mpz_class,mpz_class>{0,7};
+        return std::nullopt;
+    };
+    const auto definition=findIntegerRadixDecomposition(equation,bounds);
+    REQUIRE(definition);CHECK(definition->offset==-3);CHECK(definition->exponent==3);
+}

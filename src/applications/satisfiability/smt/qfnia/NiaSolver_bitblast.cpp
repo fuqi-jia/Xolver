@@ -37,7 +37,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageBounded(TheoryLemmaStorage& lem
 }
 
 std::optional<TheoryCheckResult> NiaSolver::stageBitBlastEarly(TheoryLemmaStorage&, TheoryEffort) {
-    // Run at partial and full effort, before later integer search stages.
+    // Run on a complete Boolean candidate, before later integer search stages.
     // Applicability, resource limits and result validation remain below.
     // Array terms belong to the combined EUF/array problem; this bit-blast
     // stage only handles integer constraints without array obligations.

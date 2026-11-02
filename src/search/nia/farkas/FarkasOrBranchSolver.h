@@ -57,7 +57,7 @@ struct CtBound {
 struct BranchCandidate {
     int branchIndex = -1;                        // index into FarkasOrBlock::branches
     std::vector<std::string> lambdaNames;        // same as branch.lambdas
-    std::vector<mpz_class>   lambdaRay;          // primitive non-negative integer ray
+    std::vector<mpz_class>   lambdaRay;          // fully materialized non-negative integer values
     int scaleT = 1;                              // multiplier; final λ = scaleT · ray
     std::vector<CtBound> ctBounds;               // one per branch inequality
     // Residual co-var assignments used to make the branch feasible. These
@@ -206,6 +206,12 @@ private:
         const IneqRow& row,
         const std::vector<mpz_class>& ray,
         const std::vector<std::string>& lambdaNames) const;
+
+    // Choose an exact integer scale preserving every equality and all scalar
+    // inequalities, then reconstruct CT bounds at the scaled values.
+    bool completeCandidate(const std::vector<EqRow>& equalities,
+                           const std::vector<IneqRow>& inequalities,
+                           BranchCandidate& candidate) const;
 };
 
 } // namespace xolver::farkas

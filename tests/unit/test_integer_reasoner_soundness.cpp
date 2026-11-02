@@ -679,6 +679,115 @@ TEST_CASE("LIA: decision hints use exact values and leave unregistered coordinat
     CHECK(registry.numAtomVars() == size);
 }
 
+TEST_CASE("Integer model hints decline points violating retained sources after append and replacement") {
+    auto exercise = []<class Engine>(TheoryId theory) {
+        Allocator allocator;
+        TheoryAtomRegistry registry;
+        registry.setContext(&allocator, &allocator);
+        const LinearFormKey x{{{"hint-current-x", 1}}};
+        const auto parent = registry.getOrCreateLinearBoundAtom(x, Relation::Geq, 1, theory);
+        const auto excluded = registry.getOrCreateLinearBoundAtom(x, Relation::Eq, 1, theory);
+        const auto query = registry.getOrCreateLinearBoundAtom(x, Relation::Leq, 1, theory);
+        Engine solver;
+        solver.setRegistry(&registry);
+        solver.assertLit(*registry.findBySatVar(parent.var), true, 0, parent);
+        CHECK_FALSE(solver.evalAtomAtModel(query.var).has_value());
+        TheoryLemmaDatabase lemmas;
+        REQUIRE(solver.check(lemmas).kind == TheoryCheckResult::Kind::Consistent);
+        REQUIRE(solver.evalAtomAtModel(query.var).has_value());
+        CHECK(*solver.evalAtomAtModel(query.var));
+        // The new disequality shares the same auxiliary coordinate; no point
+        // update can make an old prefix certificate cover this appended source.
+        solver.assertLit(*registry.findBySatVar(excluded.var), false, 1, excluded.negated());
+        CHECK_FALSE(solver.evalAtomAtModel(query.var).has_value());
+        solver.backtrackToLevel(0);
+        solver.restoreRootLiteral(*registry.findBySatVar(parent.var), true, parent);
+        REQUIRE(solver.check(lemmas).kind == TheoryCheckResult::Kind::Consistent);
+        REQUIRE(solver.evalAtomAtModel(query.var).has_value());
+        CHECK(*solver.evalAtomAtModel(query.var));
+        auto strict = *registry.findBySatVar(parent.var);
+        std::get<LinearAtomPayload>(strict.payload).rel = Relation::Gt;
+        solver.assertLit(strict, true, 0, parent);
+        CHECK_FALSE(solver.evalAtomAtModel(query.var).has_value());
+        REQUIRE(solver.check(lemmas).kind == TheoryCheckResult::Kind::Consistent);
+        REQUIRE(solver.evalAtomAtModel(query.var).has_value());
+        CHECK_FALSE(*solver.evalAtomAtModel(query.var));
+    };
+    exercise.operator()<LiaSolver>(TheoryId::LIA);
+}
+
+TEST_CASE("Real tentative phase advice never replaces pending theory checks") {
+    Allocator allocator;
+    TheoryAtomRegistry registry;
+    registry.setContext(&allocator, &allocator);
+    const LinearFormKey x{{{"tentative-real-x", 1}}};
+    const auto lower = registry.getOrCreateLinearBoundAtom(x, Relation::Geq, 1, TheoryId::LRA);
+    const auto query = registry.getOrCreateLinearBoundAtom(x, Relation::Leq, 1, TheoryId::LRA);
+    LraSolver solver;
+    solver.setRegistry(&registry);
+    TheoryLemmaDatabase lemmas;
+    solver.assertLit(*registry.findBySatVar(lower.var), true, 0, lower);
+    REQUIRE(solver.check(lemmas).kind == TheoryCheckResult::Kind::Consistent);
+    REQUIRE(solver.evalAtomAtModel(query.var).has_value());
+    CHECK(*solver.evalAtomAtModel(query.var));
+
+    // The old point lies on the boundary. Keep its phase advice while the
+    // newly asserted open bound is pending, then respect the repaired delta.
+    auto strict = *registry.findBySatVar(lower.var);
+    std::get<LinearAtomPayload>(strict.payload).rel = Relation::Gt;
+    solver.assertLit(strict, true, 0, lower);
+    REQUIRE(solver.evalAtomAtModel(query.var).has_value());
+    CHECK(*solver.evalAtomAtModel(query.var));
+    REQUIRE(solver.check(lemmas).kind == TheoryCheckResult::Kind::Consistent);
+    REQUIRE(solver.evalAtomAtModel(query.var).has_value());
+    CHECK_FALSE(*solver.evalAtomAtModel(query.var));
+
+    // A tentative phase cannot suppress a real contradiction or assert a
+    // lemma. The mandatory theory check must still reject x>1 and x<=1.
+    solver.assertLit(*registry.findBySatVar(query.var), true, 0, query);
+    REQUIRE(solver.evalAtomAtModel(query.var).has_value());
+    CHECK_FALSE(*solver.evalAtomAtModel(query.var));
+    REQUIRE(solver.check(lemmas).kind == TheoryCheckResult::Kind::Conflict);
+}
+
+TEST_CASE("Linear model hint validity separates integer and real points and tracks coordinate changes") {
+    struct Source { int level; TheoryAtomRecord atom; bool value; int auxVar; };
+    incremental::Context<Source> sources;
+    LinearAtomManager manager;
+    GeneralSimplex simplex;
+    const LinearFormKey x{{{"typed-hint-x", 1}}};
+    const auto auxiliary = manager.getOrCreateAuxVar(simplex, x, 0);
+    const auto column = manager.findVarIndex("typed-hint-x");
+    sources.append({0, TheoryAtomRecord{1, TheoryId::LIA, false, NullExpr,
+        LinearAtomPayload{x, Relation::Geq, RealValue::fromInt(0)}}, true, auxiliary});
+    const auto pin = [&](mpq_class value) {
+        simplex.resetActiveBounds(GeneralSimplex::AssignmentPolicy::Reinitialize);
+        REQUIRE(simplex.assertLower(column, BoundInfo(BoundValue(DeltaRational(value)), SatLit::positive(1))));
+        REQUIRE(simplex.assertUpper(column, BoundInfo(BoundValue(DeltaRational(value)), SatLit::positive(1))));
+        REQUIRE(simplex.check() == GeneralSimplex::Result::Sat);
+    };
+    bool extra = true;
+    auto extraCheck = [&] { return extra; };
+    pin(mpq_class(1, 2));
+    CHECK(manager.currentPointSatisfies(simplex, sources, SortKind::Real, extraCheck));
+    CHECK_FALSE(manager.currentPointSatisfies(simplex, sources, SortKind::Int, extraCheck));
+    const LinearAtomPayload query{x, Relation::Leq, RealValue::fromInt(1)};
+    REQUIRE(manager.evaluateAtModel(simplex, query, SortKind::Real).has_value());
+    CHECK_FALSE(manager.evaluateAtModel(simplex, query, SortKind::Int).has_value());
+    pin(1);
+    CHECK(manager.currentPointSatisfies(simplex, sources, SortKind::Int, extraCheck));
+    extra = false;
+    manager.invalidateModelHints();
+    CHECK_FALSE(manager.currentPointSatisfies(simplex, sources, SortKind::Int, extraCheck));
+    extra = true;
+    manager.invalidateModelHints();
+    CHECK(manager.currentPointSatisfies(simplex, sources, SortKind::Int, extraCheck));
+    pin(-1);
+    CHECK_FALSE(manager.currentPointSatisfies(simplex, sources, SortKind::Int, extraCheck));
+    sources.replace(0, {0, sources[0].atom, false, auxiliary}); // x < 0
+    CHECK(manager.currentPointSatisfies(simplex, sources, SortKind::Int, extraCheck));
+}
+
 TEST_CASE("IntegerReasoner soundness: normalization preserves integer witnesses") {
     for (const auto& a : {mpq_class(-3,2), mpq_class(-1,2), mpq_class(1,2), mpq_class(2,3), mpq_class(2)})
     for (const auto& b : {mpq_class(-2), mpq_class(-1,3), mpq_class(0), mpq_class(1,2), mpq_class(1), mpq_class(2)})
@@ -769,6 +878,62 @@ TEST_CASE("IntegerReasoner soundness: LIA core preserves a rational-bound counte
         solver.assertLit(*f.registry.findBySatVar(pin.lit.var), true, 0, pin.lit);
     }
     REQUIRE(solver.check(lemmas, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Consistent);
+}
+
+TEST_CASE("IntegerReasoner soundness: coupled interval closure cites active guards after context changes") {
+    for (const mpq_class& scale : {mpq_class(1), mpq_class(1, 2), mpq_class(-2)}) {
+        Fixture f;
+        std::vector<ActiveLinearAtom> atoms;
+        const std::vector<std::string> names{"x", "y", "z"};
+        for (const auto& name : names) {
+            atoms.push_back(f.atom({{{name, 1}}}, Relation::Geq, 0));
+            atoms.push_back(f.atom({{{name, 1}}}, Relation::Leq, 3));
+        }
+        for (size_t i = 0; i < names.size(); ++i) {
+            const int weight = i == 2 ? 2 : 1;
+            LinearFormKey form;
+            for (size_t j = 0; j < names.size(); ++j)
+                form.terms.emplace_back(names[j], scale * (weight - (i == j ? 5 : 0)));
+            atoms.push_back(f.atom(std::move(form), scale < 0 ? Relation::Geq : Relation::Leq, 0));
+        }
+        const LinearFormKey sum{{{"x", 1}, {"y", 1}, {"z", 1}}};
+        atoms.push_back(f.atom(sum, Relation::Leq, 0, false));
+        atoms.push_back(f.atom(sum, Relation::Leq, 3));
+        const auto registered = f.registry.numAtomVars();
+        const auto conflict = f.reasoner.checkIntervalCombinationConflict(atoms);
+        REQUIRE(conflict);
+        REQUIRE_FALSE(conflict->clause.empty());
+        CHECK(f.registry.numAtomVars() == registered);
+        for (const SatLit literal : conflict->clause)
+            CHECK(std::any_of(atoms.begin(), atoms.end(), [&](const auto& atom) { return atom.lit == literal; }));
+        for (int x = -1; x <= 4; ++x) for (int y = -1; y <= 4; ++y) for (int z = -1; z <= 4; ++z) {
+            const Values values{{"x", x}, {"y", y}, {"z", z}};
+            CHECK_FALSE(std::all_of(conflict->clause.begin(), conflict->clause.end(),
+                [&](SatLit literal) { return f.holds(literal, values); }));
+        }
+        auto popped = atoms;
+        popped.erase(popped.begin() + 8); // Remove one coupled row, leaving a concrete model.
+        const Values poppedWitness{{"x", 1}, {"y", 1}, {"z", 0}};
+        for (const auto& atom : popped) REQUIRE(f.holds(atom.lit, poppedWitness));
+        CHECK_FALSE(f.reasoner.checkIntervalCombinationConflict(popped));
+        CHECK(f.reasoner.checkIntervalCombinationConflict(atoms).has_value());
+        auto relaxed = atoms;
+        relaxed.back() = f.atom(sum, Relation::Leq, 5);
+        const Values relaxedWitness{{"x", 1}, {"y", 1}, {"z", 2}};
+        for (const auto& atom : relaxed) REQUIRE(f.holds(atom.lit, relaxedWitness));
+        CHECK_FALSE(f.reasoner.checkIntervalCombinationConflict(relaxed));
+
+        LiaSolver solver;
+        solver.setRegistry(&f.registry);
+        for (const auto& atom : atoms)
+            solver.assertLit(*f.registry.findBySatVar(atom.lit.var), atom.value, 0, atom.lit);
+        TheoryLemmaDatabase lemmas;
+        const auto checked = solver.check(lemmas, TheoryEffort::Full);
+        REQUIRE(checked.kind == TheoryCheckResult::Kind::Conflict);
+        REQUIRE(checked.conflictOpt);
+        for (const SatLit literal : checked.conflictOpt->clause)
+            CHECK(std::any_of(atoms.begin(), atoms.end(), [&](const auto& atom) { return atom.lit == literal; }));
+    }
 }
 
 TEST_CASE("IntegerReasoner soundness: shared integer atom normalization preserves witnesses") {

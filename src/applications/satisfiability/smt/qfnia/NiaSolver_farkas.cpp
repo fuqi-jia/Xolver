@@ -31,6 +31,7 @@
 #include <set>
 #include "search/nia/farkas/FarkasOrDetector.h"
 #include "search/nia/farkas/FarkasOrSolver.h"
+#include "search/nia/farkas/FarkasOrContext.h"
 #include "search/nia/farkas/FarkasOrModelAssembler.h"
 #include "base/MpqUtils.h"
 #include <chrono>
@@ -43,15 +44,13 @@ namespace xolver {
 // NOTE: This translation unit was split out of NiaSolver.cpp for readability.
 // It compiles into the same xolver_core target and shares the class's
 // private state via the declarations in the corresponding header.
-// Behavior is byte-identical to the pre-split definitions.
 
 // Farkas-Or Phase 4: NiaSolver stage that runs the full
 // detector → CSP → assembler → ArithModelValidator pipeline.
 //
 // Soundness: every SAT verdict here is gated by ArithModelValidator
-// against the ORIGINAL nativeTerms_ assertions. Never returns UNSAT —
-// failed CSP / failed validation falls through to the rest of the
-// pipeline.
+// against the ORIGINAL nativeTerms_ assertions. Failed CSP / validation falls
+// through; the separate bounded real-relaxation refutation can emit a conflict.
 //
 // PROMOTED default-ON (2026-06-08): the bounded-B Farkas refutation solves
 // VeryMax/Stroeder QF_NIA UNSAT the rest of the pipeline cannot (+11/51 small
@@ -59,25 +58,17 @@ namespace xolver {
 // one O(tree) scan (good()==false → nullopt below). No flag — a good lever
 // belongs on the default path, not gated. Full-effort only.
 std::optional<TheoryCheckResult>
-NiaSolver::stageFarkasOr(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
+NiaSolver::stageFarkasOr(TheoryLemmaStorage& lemmaDb, TheoryEffort,
+                       farkas::FarkasOrContext& context) {
     if (nativeTerms_ == nullptr) return std::nullopt;
 
-    // Memoize the detector profile + support table across stage calls.
-    // The NativeTerms doesn't change during the check loop, so we can build
-    // once. With residual co-var grid enumeration this is the dominant
-    // cost (Stroeder p21258: ~100ms first time, 0ms thereafter).
-    static thread_local const NativeTerms* cachedIr = nullptr;
-    static thread_local farkas::FarkasProfile cachedProfile;
-    static thread_local farkas::SupportTable cachedTable;
-    if (cachedIr != nativeTerms_) {
+    // Reuse formula analysis within this reasoner only. A NativeTerms object
+    // can retain its address while scopes, assertions or its entire index space
+    // change. Commit all derived state together after a successful rebuild.
+    if (!context.assertions.matches(*nativeTerms_)) {
+        farkas::FarkasOrContext next;
         farkas::FarkasOrDetector det(*nativeTerms_);
-        cachedProfile = det.detect();
-        if (!cachedProfile.good()) {
-            cachedIr = nativeTerms_;
-            cachedTable = farkas::SupportTable{};
-            return std::nullopt;
-        }
-        farkas::FarkasOrSolver solverBuild(*nativeTerms_);
+        next.profile = det.detect();
         // Cap on the B cartesian product (number of bounded-tuple
         // points the table-builder will enumerate). 500 was the
         // initial conservative pick that floored p21258 (~81 tuples)
@@ -90,12 +81,16 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
         //   override:  XOLVER_NIA_FARKAS_OR_MAX_B
         std::size_t maxB = static_cast<std::size_t>(
             config::read<config::ReadKind::Long>("XOLVER_NIA_FARKAS_OR_MAX_B", 8000));
-        cachedTable = solverBuild.buildTable(cachedProfile, maxB);
-        cachedIr = nativeTerms_;
+        if (next.profile.good()) {
+            farkas::FarkasOrSolver solverBuild(*nativeTerms_);
+            next.table = solverBuild.buildTable(next.profile, maxB);
+        }
+        next.assertions = AssertionSnapshot(*nativeTerms_);
+        context = std::move(next);
     }
-    if (!cachedProfile.good()) return std::nullopt;
-    const auto& profile = cachedProfile;
-    const auto& table = cachedTable;
+    if (!context.profile.good()) return std::nullopt;
+    const auto& profile = context.profile;
+    const auto& table = context.table;
     farkas::FarkasOrSolver solver(*nativeTerms_);
     const bool trace = xolver::config::read<xolver::config::ReadKind::Presence>("XOLVER_NIA_FARKAS_OR_TRACE");
     auto traceWrite = [&](const std::string& s) {
@@ -208,7 +203,7 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     // empty-table / CSP paths — for cases like Stroeder loop3 the table is empty
     // (no single-ray Farkas certificate) yet the bounded-B per-leaf refutation
     // can still prove integer UNSAT. Soundness is checked inside.
-    if (auto refute = tryBoundedBRefutation(profile)) return refute;
+    if (auto refute = tryBoundedBRefutation(profile, context.notRefutable)) return refute;
     if (table.rows.empty()) {
         traceWrite("  exhaustive=" + std::string(table.exhaustive ? "true" : "false")
                    + " outerAssertions=" + std::to_string(profile.outerAssertions.size()));
@@ -486,7 +481,8 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
 }
 
 std::optional<TheoryCheckResult>
-NiaSolver::tryBoundedBRefutation(const farkas::FarkasProfile& profile) {
+NiaSolver::tryBoundedBRefutation(const farkas::FarkasProfile& profile,
+                               bool& notRefutable) {
     // PROMOTED default-ON (2026-06-08) — see stageFarkasOr. Returns nullopt
     // immediately unless the formula is Farkas-Or-shaped with bounded template
     // coeffs, so the cost on every other NIA solve is two empty-container checks.
@@ -497,15 +493,14 @@ NiaSolver::tryBoundedBRefutation(const farkas::FarkasProfile& profile) {
     if (profile.boundedGlobals.empty() || profile.blocks.empty())
         return std::nullopt;
 
-    // Once-per-solve cache: the refutation verdict depends only on the formula
-    // (nativeTerms_), not the trail, so a not-refutable outcome is memoized to avoid
+    // The refutation verdict depends only on the current assertion snapshot,
+    // not the trail, so a not-refutable outcome is memoized to avoid
     // re-running the expensive per-leaf CdcacCore enumeration on every Full-effort
     // cb_propagate. (An UNSAT outcome ends the solve, so it is never reached
     // again — no need to cache it.)
-    static thread_local const NativeTerms* refuteNotRefutableIr = nullptr;
-    if (refuteNotRefutableIr == nativeTerms_) return std::nullopt;
+    if (notRefutable) return std::nullopt;
     auto giveUp = [&]() -> std::optional<TheoryCheckResult> {
-        refuteNotRefutableIr = nativeTerms_;
+        notRefutable = true;
         return std::nullopt;
     };
 

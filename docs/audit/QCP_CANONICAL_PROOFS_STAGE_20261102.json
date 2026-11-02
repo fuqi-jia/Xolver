@@ -1,0 +1,211 @@
+{
+  "stage": "R1701-R1718",
+  "programs": 3,
+  "verified_programs": {
+    "xolver": 3,
+    "z3": 3
+  },
+  "top_level_vcs": 23,
+  "all_queries_per_backend": {
+    "xolver": 2340,
+    "z3": 2340
+  },
+  "final_validation_queries_per_backend": {
+    "xolver": 780,
+    "z3": 780
+  },
+  "verdicts_per_backend": {
+    "sat": 1188,
+    "unsat": 1152
+  },
+  "logic_per_backend": {
+    "QF_LIA": 2130,
+    "QF_UFLIA": 210
+  },
+  "provided_proof_final_validation_seconds": {
+    "xolver": 90.5727766174823,
+    "z3": 99.61799624934793
+  },
+  "relative_seconds_change": -0.09079905210324712,
+  "programs_evidence": [
+    {
+      "program": "branch",
+      "pair_path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1597/requalification-r1701/branch/paired-final-r1715.json",
+      "pair_sha256": "b93d3d7699d6466f824029401c749349398ba277219c8b94b4941f6e3aa66024",
+      "same_physical_cpu": "0",
+      "order": [
+        "xolver",
+        "z3"
+      ],
+      "seconds": {
+        "xolver": 28.284213254228234,
+        "z3": 32.35379319451749
+      },
+      "receipts": {
+        "xolver": {
+          "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1597/requalification-r1701/branch/xolver/accepted-r1716/receipt.json",
+          "sha256": "3dc1598f810540bff37c587c52280b9da6ac6d06059f453bfe3db1ae75bffc18",
+          "run_id": "native_branch_xolver_r1124-20261101232707",
+          "queries": 564,
+          "verdicts": {
+            "sat": 222,
+            "unsat": 342
+          },
+          "top_level_vcs": 10,
+          "ordered_trace_sha256": "1851dc6d8811109a0b1ddbade2bf0a39c8546d88472715d88fd9ad0a0cfb1777"
+        },
+        "z3": {
+          "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1597/requalification-r1701/branch/z3/accepted-r1716/receipt.json",
+          "sha256": "161803383cfa0037f86346676173da4fc331e5f09a489fab4acdee8c641d0b04",
+          "run_id": "native_branch_xolver_r1124-20261101235206",
+          "queries": 564,
+          "verdicts": {
+            "sat": 222,
+            "unsat": 342
+          },
+          "top_level_vcs": 10,
+          "ordered_trace_sha256": "1851dc6d8811109a0b1ddbade2bf0a39c8546d88472715d88fd9ad0a0cfb1777"
+        }
+      },
+      "final_queries": {
+        "xolver": {
+          "queries": 188,
+          "session_sha256": "d6e4cd0521756fa4cdc0dcb4daede741ee4180813621ce9dc0ca2323e07ecc30",
+          "verdicts": {
+            "sat": 74,
+            "unsat": 114
+          }
+        },
+        "z3": {
+          "queries": 188,
+          "session_sha256": "4ec5b755cc7a839be9b3afd0061e9abbaab0557a75e2f2daa8f4b27350fac54c",
+          "verdicts": {
+            "sat": 74,
+            "unsat": 114
+          }
+        }
+      }
+    },
+    {
+      "program": "gcd",
+      "pair_path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1597/requalification-r1701/gcd/paired-final-r1715.json",
+      "pair_sha256": "c4cbc95bab9a5c17e036c988ef3af4ccb967abedf55f2deb7bb0453ee8c3f8d5",
+      "same_physical_cpu": "1",
+      "order": [
+        "z3",
+        "xolver"
+      ],
+      "seconds": {
+        "xolver": 34.51658341102302,
+        "z3": 36.56388218328357
+      },
+      "receipts": {
+        "xolver": {
+          "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1597/requalification-r1701/gcd/xolver/accepted-r1716/receipt.json",
+          "sha256": "d5e4bc9d123426c177ff2e8bc16fd6c0c2c74a40bfba6772950ca1f0f2667b85",
+          "run_id": "native_gcd_xolver_r1124-20261101235207",
+          "queries": 888,
+          "verdicts": {
+            "sat": 522,
+            "unsat": 366
+          },
+          "top_level_vcs": 9,
+          "ordered_trace_sha256": "ba00d306d6c77600b69cb7fd1056257148b5dbeca83900f59e2c7a50846ea247"
+        },
+        "z3": {
+          "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1597/requalification-r1701/gcd/z3/accepted-r1716/receipt.json",
+          "sha256": "b0724e8c98663ff10135cc1f1b91463074003bb578ec5432d67b50b5258b7a5e",
+          "run_id": "native_gcd_xolver_r1124-20261101232708",
+          "queries": 888,
+          "verdicts": {
+            "sat": 522,
+            "unsat": 366
+          },
+          "top_level_vcs": 9,
+          "ordered_trace_sha256": "ba00d306d6c77600b69cb7fd1056257148b5dbeca83900f59e2c7a50846ea247"
+        }
+      },
+      "final_queries": {
+        "xolver": {
+          "queries": 296,
+          "session_sha256": "86d628c605c0aea216673f23c18d4f6190dec9b470487ef321fbb55758b57336",
+          "verdicts": {
+            "sat": 174,
+            "unsat": 122
+          }
+        },
+        "z3": {
+          "queries": 296,
+          "session_sha256": "1f64a58d55704f681bfe12171552e0f0ed3e3c1a454ef3a88055c1d294a88e6d",
+          "verdicts": {
+            "sat": 174,
+            "unsat": 122
+          }
+        }
+      }
+    },
+    {
+      "program": "max3",
+      "pair_path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1597/requalification-r1701/max3/paired-final-r1715.json",
+      "pair_sha256": "7441a8f02196cd8f8b057573ce5f12e42d35cec78b1e40b25949151505a57b45",
+      "same_physical_cpu": "0",
+      "order": [
+        "xolver",
+        "z3"
+      ],
+      "seconds": {
+        "xolver": 27.77197995223105,
+        "z3": 30.700320871546865
+      },
+      "receipts": {
+        "xolver": {
+          "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1597/requalification-r1701/max3/xolver/accepted-r1716/receipt.json",
+          "sha256": "e19359d7503cd096eafc44ebb2cb32a6560ef01ac4d52e9f6f735d485f93364e",
+          "run_id": "native_max3_xolver_r1124-20261101232709",
+          "queries": 888,
+          "verdicts": {
+            "sat": 444,
+            "unsat": 444
+          },
+          "top_level_vcs": 4,
+          "ordered_trace_sha256": "d69756207113992985b362d4c30e4bff3982bfae3739bafea4312f3246144969"
+        },
+        "z3": {
+          "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1597/requalification-r1701/max3/z3/accepted-r1716/receipt.json",
+          "sha256": "f27bf34118131e1a94226e70c27dc77c76a0d22a6221e6ba5e8fba2cbdd321b2",
+          "run_id": "native_max3_xolver_r1124-20261101235208",
+          "queries": 888,
+          "verdicts": {
+            "sat": 444,
+            "unsat": 444
+          },
+          "top_level_vcs": 4,
+          "ordered_trace_sha256": "d69756207113992985b362d4c30e4bff3982bfae3739bafea4312f3246144969"
+        }
+      },
+      "final_queries": {
+        "xolver": {
+          "queries": 296,
+          "session_sha256": "0e76b7324d38305c37abf66c6236d25cfaacfb2c885373c978cbbe5416faa51d",
+          "verdicts": {
+            "sat": 148,
+            "unsat": 148
+          }
+        },
+        "z3": {
+          "queries": 296,
+          "session_sha256": "bded22546faa1ab1e1f067f08c564db4055d37077184402683a2ce1586aacfc4",
+          "verdicts": {
+            "sat": 148,
+            "unsat": 148
+          }
+        }
+      }
+    }
+  ],
+  "worker_sha256": "907a8b9b5685396a6f660b1056b87140855a61b6d0f8115e6c663615924c8428",
+  "all_required_jobs_success0_pid_gone": true,
+  "known_setup_failures_preserved": true,
+  "protected_sets_used": false,
+  "boundary": "One fresh same-physical-core paired cohort per original C program using pinned closed QCP native symbolic execution, actual selected persistent backend with fresh query contexts, identical provided contracts/proofs, and complete canonical Rocq final-check. Timed scope is provided-proof final validation; proof construction and controller orchestration are excluded. GCD partial correctness and assumed external abs contract are unchanged; max3 proves its original upper-bound property, not maximum membership. Native-session program_verified=false and generic program-audit backend_qualified=false do not independently establish endpoint correctness/backend coverage: composite source, query-session, public final-check and post-run receipts establish those distinct facts. No independent protected set or general QCP superiority."
+}

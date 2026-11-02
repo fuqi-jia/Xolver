@@ -1,0 +1,158 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-02",
+  "status": "diagnostic-complete",
+  "runs": {
+    "4e2134ae8eaa": [
+      {
+        "id": "22303529ee1a",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 570933
+      }
+    ],
+    "dd179edb22d7": [
+      {
+        "id": "28426dc9ebd9",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 635808
+      },
+      {
+        "id": "a609f2e89137",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 636019
+      },
+      {
+        "id": "f1eeb15c9acf",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 636099
+      }
+    ],
+    "1b6cfb1fc0ba": [
+      {
+        "id": "47c2511c9837",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 713317
+      },
+      {
+        "id": "b5756cff5ff0",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 713410
+      }
+    ],
+    "35f19dc9cff8": [
+      {
+        "id": "f0aaf8153384",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 739094
+      }
+    ]
+  },
+  "probe": {
+    "binary_sha256": "9fb9bb7986e3153c015aec900bf6f61cd438359d4e1658188184fec6e7ab2637",
+    "qualification_sha256": "411fc5a2ae3c5011551857eb6c66efb1ab7d6d244fe355f46dc5e791d55f3ae8",
+    "unit_cases": 2,
+    "unit_assertions": 14
+  },
+  "kernel": {
+    "report_sha256": "bf268bd3b02995d8064a7c36f0f2e629dddce78aea6d4e42cdf46a1b85a637ca",
+    "checks": 4,
+    "combination_replayed": true,
+    "gcd_contradiction_checked": true
+  },
+  "real_cases": [
+    {
+      "index": 1,
+      "report_sha256": "7e84726b12f561caa0daa8865950ee7b8b2738608f5750bbf2a730ada48db88e",
+      "input_sha256": "df42f9cdbe66be22d8b5f55d904ae308677681d21cf6ba13801a6c1bcc7d712b",
+      "snapshots": 9,
+      "exhausted_samples": 9,
+      "certificates": 0,
+      "verdict": "timeout"
+    },
+    {
+      "index": 13,
+      "report_sha256": "dde0c376d6f8da926da63943c444a905d52c1cf25d593077837c3a8854f7c99d",
+      "input_sha256": "d9c546291b74c1b0021e19bff6aa4e9fbbb220fdcd253de67479375572f913f6",
+      "snapshots": 0,
+      "exhausted_samples": 0,
+      "certificates": 0,
+      "verdict": "timeout"
+    },
+    {
+      "index": 89,
+      "report_sha256": "a8ea4a701ad0677d3878e2d873895226db787e458a523e89ba14fe375572aadf",
+      "input_sha256": "5b983ea0194c5b7fcdee4a87c0de44da99828561d82d288a89fd99da128f4c5f",
+      "snapshots": 0,
+      "exhausted_samples": 0,
+      "certificates": 0,
+      "verdict": "timeout"
+    }
+  ],
+  "dispatch_profiles": [
+    {
+      "index": 13,
+      "report_sha256": "22ae4f74d8c04aedb86e3bf91a59e3eccf4ae748430d397d218d08b5ec70cee4",
+      "input_sha256": "d9c546291b74c1b0021e19bff6aa4e9fbbb220fdcd253de67479375572f913f6",
+      "samples": 37,
+      "verdict": "timeout",
+      "relevant_frames": [
+        {
+          "function": "xolver::LiaSolver::stageCore(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)",
+          "samples": 26
+        },
+        {
+          "function": "xolver::GeneralSimplex::pivotAndUpdate(int, int, xolver::DeltaRational const&)",
+          "samples": 25
+        },
+        {
+          "function": "xolver::GeneralSimplex::pivot(int, int)",
+          "samples": 24
+        },
+        {
+          "function": "xolver::LiaSolver::onBacktrack(int)",
+          "samples": 2
+        }
+      ]
+    },
+    {
+      "index": 89,
+      "report_sha256": "9804e4a6f285eabe3a59ba2eda11b86df53080a54a93916ab0886aa8d5d04d8b",
+      "input_sha256": "5b983ea0194c5b7fcdee4a87c0de44da99828561d82d288a89fd99da128f4c5f",
+      "samples": 37,
+      "verdict": "timeout",
+      "relevant_frames": [
+        {
+          "function": "xolver::CadicalTheoryPropagator::cb_check_found_model(std::vector<int, std::allocator<int> > const&)",
+          "samples": 22
+        },
+        {
+          "function": "xolver::LiaSolver::assertLit(xolver::TheoryAtomRecord const&, bool, int, xolver::SatLit)",
+          "samples": 6
+        },
+        {
+          "function": "xolver::LiaSolver::onBacktrack(int)",
+          "samples": 5
+        },
+        {
+          "function": "xolver::LiaSolver::stageCore(xolver::TheoryLemmaStorage&, xolver::TheoryEffort)",
+          "samples": 4
+        }
+      ]
+    }
+  ],
+  "decision": "A minimal multi-equation GCD gap is independently confirmed, but no real-input conflict is established: case1 exhausts its diagnostic budget and cases13/89 do not reach the sampled repair entry. Follow actual case89 model synchronization overhead before integrating a new modular reasoner.",
+  "boundaries": {
+    "original_suite_solves_added": 0,
+    "new_production_reasoner": false,
+    "protected_sets_used": false,
+    "pr_created": false,
+    "main_promoted": false
+  }
+}

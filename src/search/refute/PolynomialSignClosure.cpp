@@ -1,4 +1,5 @@
 #include "search/refute/PolynomialSignClosure.h"
+#include "search/refute/MonomialSquares.h"
 #include "base/WorkBudget.h"
 #include <algorithm>
 #include <chrono>
@@ -249,6 +250,27 @@ class SignClosure {
                 if (!result.signs) throw Conflict{std::move(result.reasons)};
             }
         }
+        return result;
+    }
+    Proof squareSign(const RationalPolynomial& polynomial) {
+        auto decomposition = decomposeMonomialSquares(polynomial,
+            [&](const MonomialKey& weight) { return !(monomialSign(weight, 1).signs & Neg); }, budget_);
+        if (decomposition.squares.empty()) return {};
+        Proof result{Zero | Pos, {}};
+        for (const auto& square : decomposition.squares) {
+            const auto weight = monomialSign(square.weight, 1);
+            include(result.reasons, weight.reasons);
+        }
+        // Every square is nonnegative, but it can vanish. Strict positivity
+        // must come from the explained remainder, never from its coefficient.
+        Proof remainder{Zero, {}};
+        for (const auto& [monomial, coefficient] : decomposition.remainder.terms()) {
+            const auto term = monomialSign(monomial, coefficient);
+            remainder.signs = combine(remainder.signs, term.signs, false);
+            include(remainder.reasons, term.reasons);
+        }
+        result.signs = combine(result.signs, remainder.signs, false);
+        include(result.reasons, remainder.reasons);
         return result;
     }
     void bound(VarId variable, bool lower, const mpq_class& value, bool strict, const Reasons& reasons) {
@@ -573,6 +595,40 @@ class SignClosure {
             }
         }
     }
+    void cancelKnownContent(RationalPolynomial& polynomial, Reasons& reasons) {
+        std::map<VarId, int> common;
+        bool first = true;
+        for (const auto& [monomial, coefficient] : polynomial.terms()) {
+            (void)coefficient;
+            tick(monomial.size() + 1);
+            if (first) { common.insert(monomial.begin(), monomial.end()); first = false; }
+            else for (auto it = common.begin(); it != common.end();) {
+                const auto found = std::find_if(monomial.begin(), monomial.end(),
+                    [&](const auto& power) { return power.first == it->first; });
+                if (found == monomial.end()) it = common.erase(it);
+                else { it->second = std::min(it->second, found->second); ++it; }
+            }
+            if (common.empty()) return;
+        }
+        for (auto it = common.begin(); it != common.end();) {
+            const auto proof = variableSign(it->first);
+            if (proof.signs & Zero) it = common.erase(it);
+            else { include(reasons, proof.reasons); ++it; }
+        }
+        if (common.empty()) return;
+        RationalPolynomial reduced;
+        for (const auto& [monomial, coefficient] : polynomial.terms()) {
+            MonomialKey key;
+            for (const auto& [variable, exponent] : monomial) {
+                const auto found = common.find(variable);
+                const int remaining = exponent - (found == common.end() ? 0 : found->second);
+                if (remaining) key.emplace_back(variable, remaining);
+            }
+            reduced.addTerm(key, coefficient);
+        }
+        polynomial = std::move(reduced);
+        ++stats_.cancellations;
+    }
     void analyze(Fact fact, size_t position) {
         bool substituted = false;
         for (const auto& [variable, fixed] : fixed_) if (fact.poly.contains(variable)) {
@@ -640,12 +696,103 @@ class SignClosure {
             }
         }
     }
+    void equationalSquareProof() {
+        bool applicable = false;
+        for (const auto& fact : facts_) {
+            tick();
+            for (const auto& [monomial, coefficient] : fact.poly.terms()) {
+                (void)coefficient;
+                for (const auto& power : monomial) applicable |= power.second >= 2;
+            }
+        }
+        if (!applicable) return;
+
+        // Globally linear parameters should be eliminated before powers that
+        // obstruct their equations. Among equally linear variables, prefer
+        // those coupling higher-degree constraints. IDs only break ties.
+        std::map<VarId, std::pair<int, size_t>> order;
+        for (const auto& fact : facts_) {
+            const auto degree = totalDegree(fact.poly);
+            for (const auto& [monomial, coefficient] : fact.poly.terms()) {
+                (void)coefficient;
+                for (const auto& [variable, exponent] : monomial) {
+                    auto& rank = order[variable];
+                    rank.first = std::min(rank.first, -exponent);
+                    rank.second = std::max(rank.second, degree);
+                }
+            }
+        }
+        auto less = [&](VarId a, VarId b) { return std::tie(order.at(a), a) < std::tie(order.at(b), b); };
+        struct Equation { size_t source; Fact fact; VarId pivot = 0; };
+        std::vector<Equation> equations, rules;
+        for (size_t i = 0; i < facts_.size(); ++i) if (facts_[i].signs == Zero) {
+            auto fact = facts_[i];
+            cancelKnownContent(fact.poly, fact.reasons);
+            equations.push_back({i, std::move(fact)});
+        }
+        std::stable_sort(equations.begin(), equations.end(), [](const auto& a, const auto& b) {
+            return a.fact.poly.terms().size() < b.fact.poly.terms().size();
+        });
+        auto reduce = [&](Fact& fact, size_t source) {
+            for (size_t pass = 0; pass <= rules.size(); ++pass) {
+                bool progress = false;
+                for (const auto& rule : rules) {
+                    tick();
+                    if (rule.source == source) continue;
+                    auto reduced = reduceByMonomialEquation(fact.poly, rule.fact.poly, rule.pivot, budget_);
+                    if (!reduced || reduced->quotient.isZero()) continue;
+                    checkSize(reduced->remainder);
+                    fact.poly = std::move(reduced->remainder);
+                    include(fact.reasons, rule.fact.reasons);
+                    if (fact.signs == Zero) cancelKnownContent(fact.poly, fact.reasons);
+                    ++stats_.substitutions;
+                    progress = true;
+                }
+                if (!progress) break;
+            }
+        };
+        // The context stays local to this query. Intermediate normal forms do
+        // not re-enter the propagation queue or displace the existing rules.
+        for (auto& equation : equations) {
+            reduce(equation.fact, equation.source);
+            const auto variables = equation.fact.poly.variables();
+            if (variables.empty()) continue;
+            const auto highest = *std::max_element(variables.begin(), variables.end(), less);
+            if (equation.fact.poly.degree(highest) == 1 &&
+                equation.fact.poly.leadingCoefficient(highest).terms().size() == 1) {
+                equation.pivot = highest;
+                rules.push_back(std::move(equation));
+            }
+        }
+        for (size_t i = 0; i < facts_.size(); ++i) {
+            auto fact = facts_[i];
+            reduce(fact, i);
+            Proof proof{Zero, {}};
+            for (const auto& [monomial, coefficient] : fact.poly.terms()) {
+                const auto term = monomialSign(monomial, coefficient);
+                proof.signs = combine(proof.signs, term.signs, false);
+                include(proof.reasons, term.reasons);
+            }
+            if (proof.signs == Any) {
+                proof = squareSign(fact.poly);
+                if (proof.signs == Any) {
+                    proof = squareSign(-fact.poly);
+                    proof.signs = negate(proof.signs);
+                }
+            }
+            if (!(proof.signs & fact.signs)) {
+                include(fact.reasons, proof.reasons);
+                throw Conflict{std::move(fact.reasons)};
+            }
+        }
+    }
 public:
     explicit SignClosure(PolynomialSignStatistics& statistics) : stats_(statistics) { facts_.reserve(256); }
     void run(const std::vector<SignRefuteConstraint>& constraints) {
         if (constraints.size() > 128) throw ResourceExhausted("sign closure input allocation exhausted");
         for (const auto& constraint : constraints) add(constraint.poly, signsOf(constraint.rel), {constraint.reason});
         stats_.inferredFacts = 0;
+        bool certificatesTried = false;
         for (size_t round = 0; round < 32; ++round) {
             ++stats_.rounds;
             changed_ = false;
@@ -655,6 +802,10 @@ public:
                 if (!substitutedFacts_.contains(i)) analyze(facts_[i], i);
             }
             if (changed_) continue;
+            if (!certificatesTried) {
+                certificatesTried = true;
+                equationalSquareProof();
+            }
             for (size_t i = 0; i < limit; ++i) {
                 const Fact fact = facts_[i];
                 if (std::any_of(fixed_.begin(), fixed_.end(), [&](const auto& value) {

@@ -87,7 +87,63 @@ public:
     // rational/infinitesimal ordering. Missing coordinates leave the hint open.
     // A point value is a backtrackable phase hint, not an entailment or verdict.
     std::optional<bool> evaluateAtModel(
-        const GeneralSimplex& gs, const LinearAtomPayload& atom) const;
+        const GeneralSimplex& gs, const LinearAtomPayload& atom, SortKind domain) const;
+
+    // Validate the current point against retained signed sources and its
+    // coordinate domain. Unchanged points check only newly appended sources;
+    // replacement, withdrawal and restoration invalidate that prefix.
+    // Additional context (e.g. shared relations) must invalidate this cache
+    // when mutated, and is validated through extraCheck on a fresh point.
+    void invalidateModelHints() const { hintPointRevision_.reset(); hintPrefixRevision_.reset(); }
+    template<class Sources, class ExtraCheck>
+    bool currentPointSatisfies(const GeneralSimplex& gs, const Sources& sources,
+                               SortKind domain, ExtraCheck&& extraCheck) const {
+        // Uninitialized row values do not yet represent their defining forms.
+        if (!gs.hasCoherentPoint()) { invalidateModelHints(); return false; }
+        const auto point = gs.pointRevision();
+        const auto prefix = sources.retainedPrefixRevision();
+        const bool extend = point && prefix && hintPointRevision_ == point &&
+            hintPrefixRevision_ == prefix && hintSimplex_ == &gs &&
+            hintSources_ == &sources && hintDomain_ == domain && hintSourceCount_ <= sources.size();
+        if (extend && !hintPointValid_) return false;
+        const size_t begin = extend ? hintSourceCount_ : 0;
+        invalidateModelHints();
+        bool valid = domain == SortKind::Int || domain == SortKind::Real;
+        for (size_t i = begin; valid && i < sources.size(); ++i) {
+            const auto& source = sources[i];
+            const auto* payload = std::get_if<LinearAtomPayload>(&source.atom.payload);
+            if (!payload || source.auxVar < 0 || source.auxVar >= gs.numVars()) { valid = false; break; }
+            valid = relationHolds(gs.value(source.auxVar), source.value ? payload->rel : negateRelation(payload->rel));
+            if (valid && domain == SortKind::Int) {
+                for (const auto& [name, coefficient] : payload->lhs.terms) {
+                    if (coefficient == 0) continue;
+                    const int column = findVarIndex(name);
+                    if (column < 0 || column >= gs.numVars()) { valid = false; break; }
+                    const auto coordinate = gs.value(column);
+                    if (coordinate.b != 0 || coordinate.a.get_den() != 1) { valid = false; break; }
+                }
+            }
+        }
+        if (valid && !extend) valid = extraCheck();
+        hintSimplex_ = &gs; hintSources_ = &sources; hintDomain_ = domain;
+        hintSourceCount_ = sources.size(); hintPointValid_ = valid;
+        hintPointRevision_ = point; hintPrefixRevision_ = prefix;
+        return valid;
+    }
+
+    template<class Equalities, class Disequalities, class ValueOf>
+    static bool sharedRelationsHold(const Equalities& equalities, const Disequalities& disequalities,
+                                    ValueOf&& valueOf) {
+        for (const auto& relation : equalities) {
+            const auto left = valueOf(relation.a), right = valueOf(relation.b);
+            if (!left || !right || *left != *right) return false;
+        }
+        for (const auto& relation : disequalities) {
+            const auto left = valueOf(relation.a), right = valueOf(relation.b);
+            if (!left || !right || *left == *right) return false;
+        }
+        return true;
+    }
 
     // Reverse of getOrCreateAuxVar: if `aux` is an auxiliary variable created
     // for some constraint, recover its defining form (aux = Σ lhs - rhs over
@@ -96,6 +152,13 @@ public:
     bool auxForm(int aux, LinearFormKey& lhsOut, mpq_class& rhsOut) const;
 
 private:
+    static bool relationHolds(const DeltaRational& difference, Relation relation);
+    mutable const GeneralSimplex* hintSimplex_ = nullptr;
+    mutable const void* hintSources_ = nullptr;
+    mutable SortKind hintDomain_ = SortKind::Real;
+    mutable std::optional<uint64_t> hintPointRevision_, hintPrefixRevision_;
+    mutable size_t hintSourceCount_ = 0;
+    mutable bool hintPointValid_ = false;
     // Canonical (lhs, rhs) -> aux var (solver-local)
     struct FormKey {
         LinearFormKey lhs;

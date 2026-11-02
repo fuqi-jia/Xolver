@@ -179,6 +179,7 @@ private:
     bool expectDecisionLit_ = false;   // next notify_assignment's first lit is the decision
 
     bool theoryAtomVarsBuilt_ = false;
+    size_t cachedAtomCount_ = 0;
     std::vector<SatVar> theoryAtomVars_;
     size_t decideCursor_ = 0;
     long long steeredDecisions_ = 0;

@@ -81,6 +81,10 @@ public:
     // Let aliases are resolved without duplicating their bound expressions.
     ExprId index(std::shared_ptr<SOMTParser::DAGNode>);
     std::shared_ptr<SOMTParser::DAGNode> native(ExprId) const;
+    // Opaque lifetime identity of this expression-index space. Copies receive
+    // a fresh identity; moves transfer it. Holding the token prevents address
+    // reuse from making a different index space look like the old one.
+    std::shared_ptr<const void> expressionIndexIdentity() const;
     std::vector<std::shared_ptr<SOMTParser::DAGNode>> native(const std::vector<ExprId>& ids) const {
         std::vector<std::shared_ptr<SOMTParser::DAGNode>> nodes;
         nodes.reserve(ids.size());

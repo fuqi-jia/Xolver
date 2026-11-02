@@ -66,13 +66,9 @@ struct SupportTable {
     std::vector<SupportRow> rows;
     // Size of the table (#feasible (block, branch, B) triples).
     std::size_t feasibleTotal = 0;
-    // iter-46: true iff the B-tuple enumeration covered the FULL cartesian
-    // product (no sparseMode, no row-count cap hit). When this is true and
-    // feasibleTotal == 0, every (block, branch, B-tuple) was tested and NO
-    // Farkas certificate was found anywhere -- a strong UNSAT signal for
-    // pure Farkas-Or formulas. Wiring the actual Unsat emit deferred to a
-    // future iteration (needs outerAssertions audit + conflict construction
-    // + full 87-case differential).
+    // True iff B-tuple enumeration covered the full Cartesian product without
+    // hitting the row cap. P1 remains a candidate constructor, so this flag
+    // alone never certifies infeasibility of the original formula.
     bool exhaustive = false;
 };
 
@@ -95,10 +91,10 @@ class FarkasOrSolver {
 public:
     explicit FarkasOrSolver(const NativeTerms& ir) : ir_(ir), p1_(ir) {}
 
-    // Build support table by precomputing for every (block, branch, B)
-    // triple. The B cartesian product must be ≤ maxBProduct or the
-    // build returns an empty table (signal: too large for P2a, P2b
-    // territory).
+    // Precompute (block, branch, B) supports in Cartesian tuple order.
+    // Products above maxBProduct use bounded-support enumeration, subject to
+    // the existing sparse-work and row caps. Sparse/capped tables remain
+    // non-exhaustive and may only construct independently validated models.
     SupportTable buildTable(const FarkasProfile& profile,
                             std::size_t maxBProduct = 5000) const;
 

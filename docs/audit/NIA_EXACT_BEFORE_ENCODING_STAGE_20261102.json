@@ -1,0 +1,2181 @@
+{
+  "stage": "exact-NIA-reasoning-before-bounded-encoding-R1680-R1688",
+  "status": "native_qualified_full160_complete_canonical_build_and_ci_pending",
+  "binaries": {
+    "baseline": "819ea67f5b4f8e89f49baad8e0a0c74b52bffcf796efe7c69886ed296529be9d",
+    "candidate": "f9c75a00e2b633051af2445f99de21e027de02cea64ee110dfce74a50eb916f4",
+    "z3": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+  },
+  "qualification": {
+    "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-r1680/qualification.json",
+    "sha256": "9ef54838ebd39d3fc10de8355cf19a0d2dcdc3b17c0f7917ffbb56eae02a0a53",
+    "worker_sha256": "c2112c2bf440f5e3296b16c33a0529aac8164965ce6f4fe1d26e987f9202e59c",
+    "unit_cases": 1994,
+    "unit_assertions": 1295886,
+    "inputs_sha256": "0a722aaa1094837c0ba98404aae73b44071012028c13e0d68b968bf14927b22e"
+  },
+  "score": {
+    "baseline": {
+      "verified": 108,
+      "raw_definite": 109,
+      "verified_par2": 6734.9561100732535,
+      "results": {
+        "unsat": 48,
+        "timeout": 50,
+        "sat": 61,
+        "unknown": 1
+      },
+      "unconfirmed": [
+        115
+      ]
+    },
+    "candidate": {
+      "verified": 110,
+      "raw_definite": 111,
+      "verified_par2": 6583.809268474579,
+      "results": {
+        "unsat": 49,
+        "sat": 62,
+        "timeout": 48,
+        "unknown": 1
+      },
+      "unconfirmed": [
+        115
+      ]
+    },
+    "z3": {
+      "verified": 115,
+      "raw_definite": 124,
+      "verified_par2": 5636.001924855635,
+      "results": {
+        "unsat": 58,
+        "sat": 66,
+        "timeout": 36
+      },
+      "unconfirmed": [
+        12,
+        24,
+        27,
+        42,
+        50,
+        75,
+        80,
+        114,
+        148
+      ]
+    }
+  },
+  "gained": [
+    29,
+    131
+  ],
+  "lost": [],
+  "reports": {
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-pilot-r1682/case-159/report.json": "82dedf1e320237e25b6a53d78177c27030169145b0d9aa0b26b460bc23a7132c",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-pilot-r1682/case-131/report.json": "1b86c110e76b8195638a638c98355ea6e823e9cceb105c910505ccf013956f44",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-pilot-r1682/case-116/report.json": "9320d0d08afdea97157e56b435be7a95d742b0e13850a8c1435f49e66c07e41c",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-pilot-r1682/case-144/report.json": "da56272cedff649a499be9cd6091410513bfa06a60b904315a94b0941aabb640",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-pilot-r1682/case-089/report.json": "2ca333145000fe35ad262c4991f2d4bd74cb41c833fda8c4e292fefe8c06dab9",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-pilot-r1682/case-034/report.json": "91a6258360f81e42623a9d48fefc13b9f2463f0bd83ebfaaa0bb3e329227b7d3",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-pilot-r1682/case-146/report.json": "40a80ec75b316621e260b6fb4d83aa1887bf102d0e107c6ab51a2703c19488c6",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-pilot-r1682/case-013/report.json": "09ecbc2a20aeef13e215582a0a02a782d7fabf9ce4d9b47fd3bf67a5de0a9ea2",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-pilot-r1682/case-029/report.json": "234ca10c6e3f72dacaa21d85ad00ba4406b7f901e4a83bd572a87336097b3196",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-pilot-r1682/case-047/report.json": "65825d3548801d26f699d0d1326a1c64f556db740d969789cf97593355c37724",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-pilot-r1682/case-058/report.json": "50c1976dd1985f75af42ffcb651e6aa566864289b3342b9cc681f799dcd7c07f",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-pilot-r1682/case-000/report.json": "87e5f21e0567f714cb625c4e740d7bb7b6d5678aecc9b028d026865c85112665",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-pilot-r1682/case-049/report.json": "2821c1e4c5cb6ff5a92ed9611f49e63a7d6ece6639ba1b53c486bc6ab036d053",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-pilot-r1682/case-072/report.json": "6e6d1f3a2b73445b64eb3d462d8e344f90c5cd93b26399ac9f6478069c7806b8",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-pilot-r1682/case-094/report.json": "e9ef50f99b061e3a1d3c04e02eaacf881c806dcb1e8ea735cbfd7b2dee5c51de",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-pilot-r1682/case-007/report.json": "7259134d6c3d662c692f27a79dd66763f283df9b4ba3e038c5b6944231f6e1e9",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-pilot-r1682/case-011/report.json": "c244403d836055f01adb5920a0985b73120b47b594584e0b1517ebe99eb115e7",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-pilot-r1682/case-059/report.json": "f776bb009c057ad50032d7222dc1bfa52895dbccee66ec3cf5c035b78d68d3d1",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-pilot-r1682/case-048/report.json": "7c7395d16b6cba079b7ab8b9fb7cbc9f46fac8528afcc56aafa596c96c25695e",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-pilot-r1682/case-001/report.json": "4257302792816f5bb5511637a1b1d65b78118a66d255aae5032f9a359ceecd2f",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-pilot-r1682/case-006/report.json": "9a8a7e3ca246838981a0609ece6bef8581ba1b6775663df1b7cc7c1ce008a9a1",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-pilot-r1682/case-108/report.json": "35b69c6e723c0e10dff88bc3b44e897c75fa994e1fee370f8c4d4daa1bd0d8d3",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-pilot-r1682/case-098/report.json": "a39eb56e49a52bb6ce76e77a720871ab3e691b12d8f6288a24fe42b5c40dd45d",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-pilot-r1682/case-002/report.json": "bdf38f13459cbdc725d9aba48ab7461729bbe624c156e977bde0e5c25c7183e6",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-pilot-r1682/case-004/report.json": "8bc7c4419b9586fe002021d2a4252f24ab05f33d28fe05e5bb243460cc1f20c5",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-020/report.json": "195f910ecdf402487a2e1222692a418ad22962fb8d9bbe10855b3f04322714bc",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-044/report.json": "b1a74d944433a30e43c0270649b42ca083e9d62bf63347b608c95566d84eb208",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-128/report.json": "b3c571d67296f53bae1301bd97cbb4354174f064b7642a45e347155cac165dcb",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-071/report.json": "47935918647f4e12fb0d3d51a75e3432ea983b411a0f3651a18f7bd6af820199",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-066/report.json": "b3ccc01e37de73765744c1d23e5fb637669d19ea047d6986cd3772d681e0c4c0",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-016/report.json": "b90fc0057ba739358639bdd1a5210b5184dd55c061ff935b28be29f7a5b25615",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-031/report.json": "326af89c698e461cff0e1ac95b5b7139870d12705ed26d65b02c25207a415a06",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-028/report.json": "d694db00cfef139866898ca3c020b7e8e7c46562fdf082daf081971f00246c03",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-060/report.json": "4108bab5659eca38efec3537368c2d5db4b283542b181519dec9209c5eadcd86",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-109/report.json": "044cc31530d2d712dc28e47257ada8589dce8249fe593d537b5430638564d521",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-147/report.json": "52a0f9e23d15024b3d2aed6942e9667366abb5a4d52b4ef5d92b91006380a7cb",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-018/report.json": "d33789066d2d9cd0c1bc37af2d91426e19aeceea9c72f8ed530b4cd984635799",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-135/report.json": "2a80a9c2a0b156a95b1bd0d2d1deab95bf5041adba44c533316eead115f5d99e",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-015/report.json": "acd695c9a943766a9608e1323d83cd7fc089d1a62c444763b22e738760a08f74",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-104/report.json": "96ae7bd165e192924302bb557e9059b6a2fa7bac37710b53632efc06d184beab",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-056/report.json": "b085ea33a7f9321ac80877da36897a5b3d29cea435f6651943ce13f510c49270",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-139/report.json": "d4f25720267378199ccc7097c0509df52118e920b9810846fe3f0d11df530c3d",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-127/report.json": "d8223fa5198aab90a746045f49d159053e9e03bca65e473d216b9cce849a81a7",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-054/report.json": "d548b4ab89b77a0ad33c04bd344548ac5910be3088f75a8bc5788c964c8c919c",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-154/report.json": "12a5bc791e883bc9c60a328607f84bcf48e9df8f2bdd1ce68c4d50a752633ef9",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-009/report.json": "ac9be9922250fbeba1e34f1e3951f904e8d545d6cf264d51fcfc71115b44384f",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-115/report.json": "c6a6afefcdc004cfdcd86359faa85ab25a98e7cde86cb5762f6162b607ea3027",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-026/report.json": "de490c18cacb89f189085bb91cc63ab1f1067735f7626348b6419484008b6dba",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-063/report.json": "9c5b7d8605db1fbd50d3c4525170a5a8200e0ef355e0a963074f2364084677c5",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-134/report.json": "ebc95be823f4a6c54a78cce3c5a1e046cc23f82f5341b7e9897b2a73873cc7c9",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-158/report.json": "81efd60f1455294e845010609ac1ecfb8115157209a2ae9e4b016104447fb200",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-153/report.json": "a942a6ddfd1920c1ddf0e33399a02a553747dea59b93f7760ebae3d499fc0c86",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-067/report.json": "a90d7a0cb98ba701a2a811b05555ba4c080ab213125c85a08e12771a64e40cfd",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-137/report.json": "766642de772995fc7e6dc0aa94f5714a25f49c35b6ba9bd1ca06771b35396e11",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-145/report.json": "1bc2f588dcaa7931ed938b3e5a21eb04a9329e56a68197e31a486bf710444e0d",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-114/report.json": "c2fe563317d992555a59d98d41a32a65b384e425a57cff58100d691285fe5edb",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-081/report.json": "4d8d501607b7c0e396d0b1d50ca3857a069ba4e8b07da8d606063e33b13f4348",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-039/report.json": "ce477df830751bedefcb61f3af81d090cc58b05ca540e4bb4c663e6f221f7b15",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-073/report.json": "9177f5c005ebfc62347df27ad4f76d2e592d1f42ce7d3be0ff114ca0dda53ced",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-078/report.json": "f6b921a7585e876816ef422c218a0787887338d78246d2ccbe93f412fc2ce692",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-037/report.json": "722deeda073ad9370fb5ac6550613e3a3def29b4b5e3d30c002fd6b8346ab167",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-093/report.json": "bfd91d5540934974a55c1fe67cada6acb65fc33737883aee06be2def24067617",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-092/report.json": "59eef224336db32c06f78b3e38f0c035c2397e9de2e3e8e4a8ab4d96fbb4bde4",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-088/report.json": "b5b0cd2c70528e47df64e6cde7b7746bf3492061ed8542034ac51ea6437028be",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-117/report.json": "9e8ad1124bdef1075bdba306aaebaa83966b4c493cb3cdb8be8b22e6e53489c9",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-126/report.json": "8988589b44423debf0387e2f3031a3a6f27d2535e112912ec6c8023c76be7934",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-148/report.json": "2ec6735a49c978283f94012890669fdf48b8fbd9882110a64c12ea59db5d6cc1",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-138/report.json": "fabec8c9efe9e49a98826abc1b763a9a881a1483996520562f6a18288bc2b7fa",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-022/report.json": "dbb90af9e44f55b8dcd85ed0358d1d46c52da290efae16e0ce8ea0557e2679b8",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-076/report.json": "0d1171a6bc480d473b76dcdb7a770d893f813d73de91603dce12349e0acf9d56",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-156/report.json": "772502c309579158e5fe14f182a8269a7f1d4539517871f1c039141a1e3c9658",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-150/report.json": "a408de3a4314130c58d4521a5a0b8ac98d7512d389d1f10dfd1d63e63f3b053e",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-118/report.json": "2a43edc5ee0d55dcfc37a20a89f80aaf07ab0d6b9d4bc190741003924fd92929",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-046/report.json": "56ce2dc4cae28784c58a7a2f93b2cffaf7bfe47526e80e8397950a6663581ff5",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-120/report.json": "1a3ab326a0ae8d3fdf3cf673c0a2d43bca5bd5f0cd197e9cc9256cd5a35f6172",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-085/report.json": "02ff7cedd8b6547f4e4952790c5ad60c1ca1acb7436403d85a6a7aeb0469634f",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-068/report.json": "38130013f4e6aa7f95c98cd7910b033eb6684b15eb10043fefd69db6c34a9bcc",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-130/report.json": "07499b3f320d4332a2a656ca66cdbdfae38804a32a8b23cc907bf35353fe4d76",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-062/report.json": "db73f3c3cc1c7ba319cf58277236dbaf5e1f5f4903d33cbb899d76bc8ee5ae61",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-023/report.json": "4670f2c0f8b49e56f991039095883c7f637d682be6cd0a4264cb42ff85546e9a",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-112/report.json": "eede1f3bfcf6a4b213e10a46111b3068437aa57e07190431a2634e118bf7bc97",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-100/report.json": "91e62761508b58418446eaea8448a159529125e0e2b9536f40cba15f61a2a91f",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-050/report.json": "654dde927c0af2b71535f06439cfd7c8dc81d67281b6b78b540ba117e93c9012",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-151/report.json": "d7171229117504d0fdcbcf8a7d70d4c1b04933c87805f54a60137e6641591e56",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-133/report.json": "ce6f8a55a56ccf8dc09a791e07b95064d25ffb04f5cb77f980a0b6ba509ac146",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-025/report.json": "91b9c56246f3143ac015a5061813d4e6e1ad3402852a48079cd0ba667931da28",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-033/report.json": "e0649940f020a965e1a35c8ffaa3356cb4ae2e407ad40de949f39bd7ad5580a9",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-008/report.json": "14f475b6c2bbd40edf6d388c7b47b6d49b7e9068e2499a2aeaaab113f9dff371",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-017/report.json": "7f22e9fef5b7f0db909fbe8f64800111249dee2168a8b16ae45bd0352691d99b",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-142/report.json": "d10506c4834384bf28aedab69a99294fd95594ba49b66d2a3bc1fc502a90601d",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-079/report.json": "74dd532c4c3986d9ad6a1ee1986ca283a9acbf0b26556eba144db13b03569cfe",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-102/report.json": "89964cd2496c5daca02491d61629633624fe4ecf9841a7edbb9d6e91f6f7b272",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-065/report.json": "bcd3743b63382a1317dd52432a34408895a090be8903e1f4ade368ebde5d367c",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-074/report.json": "9dc45abe21d6e8bd519b4dc8ad2eb27b1a4a5b89a9294557e90f28ac8f8ede63",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-129/report.json": "61a731187769c649761f99fe2f0ea059455118b189926f06ec29722b8bbee89b",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-021/report.json": "b1945ca7cf66dba56420978068e4e9c362ea3fb3c11913a82b32b4b665f049dd",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-107/report.json": "e0ca7a1598a41464bfa20ae128c66a51b41c2e1e5ae0d5441f595abe4e0ec93e",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-003/report.json": "36cd44fe20575d5a7dc88dfa74e31af0f64f1459c115463d7e310bc81e147818",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-101/report.json": "41c873d8e3c782caf6f51509e120d21dda391f72e4375a17ad31c4f0139db6af",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-051/report.json": "2a9bc274d61ac22d768c60f42bed7d0c0d8a1ec939f7bc4ad82717fb9ed9f77d",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-019/report.json": "f552e256351d31f859e7e2e42851f19a6a6bb0f3fed51f9940316196f28359c1",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-097/report.json": "6cd53bab5bb063b75ed3183ac0a2f463c232fedbfc9e33c1a467e581ed8e9e2d",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-103/report.json": "4d9c2ce2f3006fe71419d3e4aeccb27dc79c832a531fa5f417878f446e6d9da3",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-038/report.json": "4d9f4f78cb93670ddd1acb508b892f2056adc6ebfb8c1156dd2e56ac7f718edd",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-052/report.json": "4caffafbee3af9718cf3696a5d2ef8cef9ad47e430a05757f2d8dac86ef56829",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-012/report.json": "4dcb85495c859debd81688f2aa575875bdeacbac69de308a10aa7161ed2bfdac",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-121/report.json": "2e4a2be29f6cbed8fac66a2a6a331355c3561b12c0e96200b21e8f12813a9857",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-045/report.json": "f6fdc9f6d664bb52782971a56196f19d11f66c462f862196d9a40d55f92bb8ac",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-110/report.json": "82b5797b0e094368d12c66eb08b1fdfc5ec630e74f2c8d5a987af865d1dd356e",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-035/report.json": "31b46d319bde3767c0c671b0b1dc1a16dcdfa527d6546cec61122f8f6c0d7dd5",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-123/report.json": "8d8b512f0cf512d0a349a2141eccfaa530aa26cae8895825c38e99e3dfb9fab7",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-087/report.json": "04037ea932ede9c07d5d94f19b5ef804a9361c6ff2f24ae9a048459c42c4fa0f",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-010/report.json": "c40d3bc686925764f5430bfcf0be32d113b63db01140407fadf972b91e2be5a2",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-061/report.json": "b03dea05b03bc16d9e6bc2b3e6e10b57ad171c6b6b6ec2316fab1814324dbd6c",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-090/report.json": "ee6bf881ff95b6d0cf19b6d6e74e0dbcdfbe99f5dc9ac3a66d1b44a09a1f458c",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-005/report.json": "6d3a848f89971e49019d335fe69ef2b87b326bad1623f3849f69239ead7f786c",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-043/report.json": "f7248ca971ccb7da5f2a85844be5ae2c78e9fe06263f4aa4d564ac61f63ff3ec",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-141/report.json": "300dd2f83fd67736703c7e80055d8fd2a17ff15d0c4f56798fb974aeaebb45ac",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-155/report.json": "02d82d6450a499e6f422ad7bdf8d76cfe65e809899450377a625bae575925fcf",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-136/report.json": "2387914f71ed6d03ade5c36eca025d1391ed84aab63198b89bd530672f257c55",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-132/report.json": "990f8b9fbd0b30c74aafb2e8e59b2a2313337164570ce1b974105da5f0e11a36",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-152/report.json": "4cd44fdcb035374921d591c3ca3aad3f7603f659bc112ef156ab1f273315b0fc",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-024/report.json": "fea77865fbeb7e650c16e7740932cdcab38cb639541a9d4908113f8674fb6e09",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-042/report.json": "8d0578c1adad300df051063573b773ba15b50bf95f641b2de8d2e0d73e87bb80",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-080/report.json": "3948a20929cf6b61212878ad733022019ba0f1ae728eaa165373f3b85cab18de",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-105/report.json": "fe6c217eedad36e28380cb537636fdc93d68c02a6c9f558e83a55ab68ad7d8a6",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-030/report.json": "2f121db04b11353624b1480e7919f9cccb9bc1032cf804611167947f016a184e",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-095/report.json": "b743c71c4f303a9024d1ae75cce6376f52e658ff0728d4f3dcbc5c3f92e3d89d",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-111/report.json": "b6cd7c24dde70dcd704641f73f2e03e350332000f77ca4f4e83abf674f92c5f9",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-086/report.json": "400905a2d6e3c94bb27bd79835a42daa59a21c9262bca68478eb1d636677e8e3",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-040/report.json": "305c4bae758b7e4bb32dee35d0bc3e8a870c67d02acb01946d1b59064ef6132c",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-083/report.json": "25ee3daace9c45861b46e845f0d7ee1328ed8388bf7300d092be2b3c5679f2c8",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-055/report.json": "d085935baecb01156339e042517877429bc0ce657b3bb013bed15cc06cf8c47d",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-143/report.json": "c56300ba412fa07eccebeaa89b00f56ec8393cf7df6e6748c9a932956d5de1ca",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-096/report.json": "39876b2881055edc04136c669da64ccb5c0fde44f78c35ee340897a9a58395e0",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-027/report.json": "dbb349b644a5cf0f44bde259689b79e64d59a9750da52d8f1b54df4a4c166aba",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-082/report.json": "931679ec19624c460b92df2ebf3ceb031706bae7d184e900a72cbf2285407048",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-124/report.json": "68dfbb772d7a105a82af920a879718830901379d3389c2c02dc03f30f0ece455",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-119/report.json": "a28514353b03ef760dbd5dfcc566dd80e4d27768ca46f8bb1af5472a1662b8eb",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-122/report.json": "a5ab968feced3d617ec220001b668adcfbc3f2d110459ae32f6b6e3d76426d95",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-064/report.json": "58ff04c5127d09c85dd4774c75eebf88a3e0ad480e29743aa570117e0200cf3f",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-069/report.json": "966984a5c0085f8d43a8130ccb53fb90812d728fa5352d701e1c2d5e57eb731a",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-014/report.json": "ce6239ed5b9a3ef470a2ae35daa8a076fc3f6cfd9544e7ab5efe97aeb4e33578",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-106/report.json": "2ba35020142128c70486e12926e29fae0510461f7569d42d688c672ab6d33fc2",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-157/report.json": "d59e65a76f43b8f5eecaa36dd45ebc17996f2b73d1123a69590e7bfc3083934e",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-099/report.json": "b1d13b8861c2ae94d808adab27b8116c15cfdb438f483d6c25d1609ae7c064aa",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-091/report.json": "43107ac79113680360d99abddea39d761be5faaa05b9512cc9094d2b7de7e7bb",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-084/report.json": "d74dbc96bdd5af4554205fb504ad286787bfb60ce0236f3aabd780093e85be14",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-032/report.json": "00388e4d8b9859ae4c52eff179da774fe1c591c8fa872f7af81ac63e70717698",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-057/report.json": "5fe47a954381f3e4186093ac7b77427ec6bb647c3169199a0dc53cf7b58d84b1",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-077/report.json": "8cb6d1e7dd73bc01aa123454d91cbb9489f9be490a6fa69902512ed2cdb35c56",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-041/report.json": "928e81d71d83005b0ca3f879f35ee5a2d136b9021d7a4e612b5b731383b76312",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-113/report.json": "dd5bd5a1b3632ca9e66384f6a8510c81d5ed9fd061758f40c79770637d8bba2c",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-053/report.json": "f769d273a22733b0596eda2f66c4c4ce86954ff4ddeabd9aaf9326b11f14d903",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-125/report.json": "e5265d6ad1e53300daa64a75b26a1b654c1b25bd8be3c3eb600977ab09c7b2ec",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-075/report.json": "303416b913675d64fbce26813c697865b0c4891c89a3845ea87db08ee243e6cb",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-070/report.json": "bd2eb9260634aa7b4f7f65d64fa8c4ffe62bdebd6708a9c4851c6b24f0559546",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-036/report.json": "5ec56f6a9ad1cbf31257d8e24412926b439834295c0347616e1ab9e12b77871c",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-recovery-r1688/case-140/report.json": "1d60a16b9a0f6dfcbe449934c3ac09a85423bcdd7bdf1afd992f125370afda19",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-recovery-r1688/case-149/report.json": "fd5bf49f48555e6c16cf9b7b78f78cbb53b06665991468bc5b8ebd10706f47bd"
+  },
+  "independent_reports": {
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-check-r1681/3/report.json": "67825e64d2fe87583563cc40b216e91141c1a332e5d8f125e77f2d8d1e9ab4d2",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-check-r1681/5/report.json": "fe02450812c20b0ae302e2d40f93ce9d7886ca412ce7f12fce42397a0020b094",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-check-r1681/0/report.json": "f0b0ac68eee3743a05026f89d414ce63f86737433fcc934124da05e4ab759855",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-check-r1681/1/report.json": "590b320220206657170ff5cb6297bb68c79b7957d971ca5330ad90dfe4cfd526",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-check-r1681/7/report.json": "065426e369879720aa36b5652c4845283092c0e2eceed3b7566a4eba1d89ef09",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-check-r1681/6/report.json": "2e9c19e1297420b26f3711ccdfc08df75a755a2eb8a26ce1bbacec88fbdc0076",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-check-r1681/2/report.json": "acb1ce3908f6fe3c844df09afa0f36ad22ca0506b8a2a92011238cc24a5ed4c5",
+    "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-check-r1681/4/report.json": "a0494fd6f788c086c148b5e80e8b7d156f98081a5dd5183236796abec7a27811"
+  },
+  "runs": {
+    "1f83c098ab22": [
+      {
+        "id": "75e64a08ae8c",
+        "input": "build",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2004327,
+        "pid_gone": true,
+        "cpu": "0",
+        "invalid_preserved": false
+      }
+    ],
+    "74454ebb245d": [
+      {
+        "id": "de41cfa7128d",
+        "input": "0",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2018574,
+        "pid_gone": true,
+        "cpu": "1",
+        "invalid_preserved": false
+      },
+      {
+        "id": "39143d193267",
+        "input": "1",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2018642,
+        "pid_gone": true,
+        "cpu": "2",
+        "invalid_preserved": false
+      },
+      {
+        "id": "576c773058ec",
+        "input": "2",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2018705,
+        "pid_gone": true,
+        "cpu": "4",
+        "invalid_preserved": false
+      },
+      {
+        "id": "2e8336145f81",
+        "input": "3",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2018767,
+        "pid_gone": true,
+        "cpu": "6",
+        "invalid_preserved": false
+      },
+      {
+        "id": "673432c71fdd",
+        "input": "4",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2018846,
+        "pid_gone": true,
+        "cpu": "7",
+        "invalid_preserved": false
+      },
+      {
+        "id": "350f79021697",
+        "input": "5",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2018937,
+        "pid_gone": true,
+        "cpu": "8",
+        "invalid_preserved": false
+      },
+      {
+        "id": "89f6a8efc29b",
+        "input": "6",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2019036,
+        "pid_gone": true,
+        "cpu": "9",
+        "invalid_preserved": false
+      },
+      {
+        "id": "2e675ed788c2",
+        "input": "7",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2019220,
+        "pid_gone": true,
+        "cpu": "10",
+        "invalid_preserved": false
+      }
+    ],
+    "e2f224ad6572": [
+      {
+        "id": "64530ccaf5e0",
+        "input": "0",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2022224,
+        "pid_gone": true,
+        "cpu": "1",
+        "invalid_preserved": false
+      },
+      {
+        "id": "e85b6798724e",
+        "input": "1",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2022283,
+        "pid_gone": true,
+        "cpu": "2",
+        "invalid_preserved": false
+      },
+      {
+        "id": "84b4e974ba49",
+        "input": "2",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2022346,
+        "pid_gone": true,
+        "cpu": "4",
+        "invalid_preserved": false
+      },
+      {
+        "id": "d1d38c025b20",
+        "input": "4",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2022415,
+        "pid_gone": true,
+        "cpu": "6",
+        "invalid_preserved": false
+      },
+      {
+        "id": "30cbe8a27d90",
+        "input": "6",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2022491,
+        "pid_gone": true,
+        "cpu": "7",
+        "invalid_preserved": false
+      },
+      {
+        "id": "455f8dab7eb4",
+        "input": "7",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2022610,
+        "pid_gone": true,
+        "cpu": "8",
+        "invalid_preserved": false
+      },
+      {
+        "id": "09641c1a40b3",
+        "input": "11",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2022735,
+        "pid_gone": true,
+        "cpu": "9",
+        "invalid_preserved": false
+      },
+      {
+        "id": "4789f1b2658a",
+        "input": "13",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2022806,
+        "pid_gone": true,
+        "cpu": "10",
+        "invalid_preserved": false
+      },
+      {
+        "id": "9586dfc96cfa",
+        "input": "29",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2022907,
+        "pid_gone": true,
+        "cpu": "11",
+        "invalid_preserved": false
+      },
+      {
+        "id": "18a98f465dc9",
+        "input": "34",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2023138,
+        "pid_gone": true,
+        "cpu": "12",
+        "invalid_preserved": false
+      },
+      {
+        "id": "c31e66317028",
+        "input": "47",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2023620,
+        "pid_gone": true,
+        "cpu": "13",
+        "invalid_preserved": false
+      },
+      {
+        "id": "71dae5376622",
+        "input": "48",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2023773,
+        "pid_gone": true,
+        "cpu": "14",
+        "invalid_preserved": false
+      },
+      {
+        "id": "61c1155c9aea",
+        "input": "49",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2023833,
+        "pid_gone": true,
+        "cpu": "15",
+        "invalid_preserved": false
+      },
+      {
+        "id": "3da447672629",
+        "input": "58",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2023896,
+        "pid_gone": true,
+        "cpu": "16",
+        "invalid_preserved": false
+      },
+      {
+        "id": "ea1fbb17b8ff",
+        "input": "59",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2023964,
+        "pid_gone": true,
+        "cpu": "17",
+        "invalid_preserved": false
+      },
+      {
+        "id": "38385234b94f",
+        "input": "72",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2024036,
+        "pid_gone": true,
+        "cpu": "18",
+        "invalid_preserved": false
+      },
+      {
+        "id": "d5c95d820080",
+        "input": "89",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2024114,
+        "pid_gone": true,
+        "cpu": "19",
+        "invalid_preserved": false
+      },
+      {
+        "id": "330ec566e1c3",
+        "input": "94",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2024186,
+        "pid_gone": true,
+        "cpu": "20",
+        "invalid_preserved": false
+      },
+      {
+        "id": "1c261bed122e",
+        "input": "98",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2024284,
+        "pid_gone": true,
+        "cpu": "23",
+        "invalid_preserved": false
+      },
+      {
+        "id": "952040f3e2d5",
+        "input": "108",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2024352,
+        "pid_gone": true,
+        "cpu": "24",
+        "invalid_preserved": false
+      },
+      {
+        "id": "1cca50a91e33",
+        "input": "116",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2024424,
+        "pid_gone": true,
+        "cpu": "25",
+        "invalid_preserved": false
+      },
+      {
+        "id": "939c07d1fbce",
+        "input": "131",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2024490,
+        "pid_gone": true,
+        "cpu": "26",
+        "invalid_preserved": false
+      },
+      {
+        "id": "70eaec112a8e",
+        "input": "144",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2024554,
+        "pid_gone": true,
+        "cpu": "27",
+        "invalid_preserved": false
+      },
+      {
+        "id": "e756c902ff22",
+        "input": "146",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2024618,
+        "pid_gone": true,
+        "cpu": "28",
+        "invalid_preserved": false
+      },
+      {
+        "id": "af89c7521740",
+        "input": "159",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2024688,
+        "pid_gone": true,
+        "cpu": "29",
+        "invalid_preserved": false
+      }
+    ],
+    "217675447a8c": [
+      {
+        "id": "3e6fd0ebae63",
+        "input": "29",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2040110,
+        "pid_gone": true,
+        "cpu": "1",
+        "invalid_preserved": false
+      },
+      {
+        "id": "50d09b0f22f8",
+        "input": "34",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2040177,
+        "pid_gone": true,
+        "cpu": "7",
+        "invalid_preserved": false
+      },
+      {
+        "id": "106a25eb1292",
+        "input": "116",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2040247,
+        "pid_gone": true,
+        "cpu": "9",
+        "invalid_preserved": false
+      }
+    ],
+    "06d3680c68d2": [
+      {
+        "id": "23f8818d563d",
+        "input": "core",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2075857,
+        "pid_gone": true,
+        "cpu": "1",
+        "invalid_preserved": false
+      },
+      {
+        "id": "72b3182efd11",
+        "input": "29",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2075916,
+        "pid_gone": true,
+        "cpu": "2",
+        "invalid_preserved": false
+      }
+    ],
+    "f8eebde835e1": [
+      {
+        "id": "6f0c5d548730",
+        "input": "3",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2101100,
+        "pid_gone": true,
+        "cpu": "0",
+        "invalid_preserved": false
+      },
+      {
+        "id": "bf750d9fa864",
+        "input": "5",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2101160,
+        "pid_gone": true,
+        "cpu": "1",
+        "invalid_preserved": false
+      },
+      {
+        "id": "c14e156a64d9",
+        "input": "8",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2101222,
+        "pid_gone": true,
+        "cpu": "2",
+        "invalid_preserved": false
+      },
+      {
+        "id": "293e031e2717",
+        "input": "9",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2101291,
+        "pid_gone": true,
+        "cpu": "3",
+        "invalid_preserved": false
+      },
+      {
+        "id": "d56753a4f65f",
+        "input": "10",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2101349,
+        "pid_gone": true,
+        "cpu": "4",
+        "invalid_preserved": false
+      },
+      {
+        "id": "7b723dd666af",
+        "input": "12",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2101425,
+        "pid_gone": true,
+        "cpu": "6",
+        "invalid_preserved": false
+      },
+      {
+        "id": "9df1915ff4a5",
+        "input": "14",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2101483,
+        "pid_gone": true,
+        "cpu": "7",
+        "invalid_preserved": false
+      },
+      {
+        "id": "5e045dbf567d",
+        "input": "15",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2101560,
+        "pid_gone": true,
+        "cpu": "8",
+        "invalid_preserved": false
+      },
+      {
+        "id": "d56abcd718a7",
+        "input": "16",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2101632,
+        "pid_gone": true,
+        "cpu": "9",
+        "invalid_preserved": false
+      },
+      {
+        "id": "7322d3227388",
+        "input": "17",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2101700,
+        "pid_gone": true,
+        "cpu": "10",
+        "invalid_preserved": false
+      },
+      {
+        "id": "ac85e2c616e6",
+        "input": "18",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2101768,
+        "pid_gone": true,
+        "cpu": "11",
+        "invalid_preserved": false
+      },
+      {
+        "id": "8d003d827c4e",
+        "input": "19",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2101828,
+        "pid_gone": true,
+        "cpu": "12",
+        "invalid_preserved": false
+      },
+      {
+        "id": "5b5d80a5a610",
+        "input": "20",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2101898,
+        "pid_gone": true,
+        "cpu": "13",
+        "invalid_preserved": false
+      },
+      {
+        "id": "8a1d272cd114",
+        "input": "21",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2102043,
+        "pid_gone": true,
+        "cpu": "14",
+        "invalid_preserved": false
+      },
+      {
+        "id": "4dc6adf2401b",
+        "input": "22",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2102106,
+        "pid_gone": true,
+        "cpu": "15",
+        "invalid_preserved": false
+      },
+      {
+        "id": "68e56a742bf1",
+        "input": "23",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2102170,
+        "pid_gone": true,
+        "cpu": "16",
+        "invalid_preserved": false
+      },
+      {
+        "id": "7f84298b2e23",
+        "input": "24",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2102247,
+        "pid_gone": true,
+        "cpu": "17",
+        "invalid_preserved": false
+      },
+      {
+        "id": "48d636ee4441",
+        "input": "25",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2102320,
+        "pid_gone": true,
+        "cpu": "18",
+        "invalid_preserved": false
+      },
+      {
+        "id": "4797d74bd3d7",
+        "input": "26",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2102386,
+        "pid_gone": true,
+        "cpu": "19",
+        "invalid_preserved": false
+      },
+      {
+        "id": "a00fcadb6550",
+        "input": "27",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2102457,
+        "pid_gone": true,
+        "cpu": "20",
+        "invalid_preserved": false
+      },
+      {
+        "id": "94d8c060c5a0",
+        "input": "28",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2102531,
+        "pid_gone": true,
+        "cpu": "21",
+        "invalid_preserved": false
+      },
+      {
+        "id": "1402aa5065bc",
+        "input": "30",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2102598,
+        "pid_gone": true,
+        "cpu": "22",
+        "invalid_preserved": false
+      },
+      {
+        "id": "090645ff986d",
+        "input": "31",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2102678,
+        "pid_gone": true,
+        "cpu": "23",
+        "invalid_preserved": false
+      },
+      {
+        "id": "3b8f4189675f",
+        "input": "32",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2102749,
+        "pid_gone": true,
+        "cpu": "24",
+        "invalid_preserved": false
+      },
+      {
+        "id": "3806b72b2663",
+        "input": "33",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2102827,
+        "pid_gone": true,
+        "cpu": "25",
+        "invalid_preserved": false
+      },
+      {
+        "id": "7595f61deba2",
+        "input": "35",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2102912,
+        "pid_gone": true,
+        "cpu": "26",
+        "invalid_preserved": false
+      },
+      {
+        "id": "c41eaa922d6d",
+        "input": "36",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2102993,
+        "pid_gone": true,
+        "cpu": "27",
+        "invalid_preserved": false
+      },
+      {
+        "id": "b57926e8668e",
+        "input": "37",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2103106,
+        "pid_gone": true,
+        "cpu": "28",
+        "invalid_preserved": false
+      },
+      {
+        "id": "7071ff9ab78a",
+        "input": "38",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2103178,
+        "pid_gone": true,
+        "cpu": "29",
+        "invalid_preserved": false
+      },
+      {
+        "id": "059e3b72897c",
+        "input": "39",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2103246,
+        "pid_gone": true,
+        "cpu": "30",
+        "invalid_preserved": false
+      },
+      {
+        "id": "e549a4884798",
+        "input": "40",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2103310,
+        "pid_gone": true,
+        "cpu": "31",
+        "invalid_preserved": false
+      },
+      {
+        "id": "c7c9b9610707",
+        "input": "41",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2103386,
+        "pid_gone": true,
+        "cpu": "32",
+        "invalid_preserved": false
+      },
+      {
+        "id": "20419180ecc1",
+        "input": "42",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2103457,
+        "pid_gone": true,
+        "cpu": "33",
+        "invalid_preserved": false
+      },
+      {
+        "id": "c71b93c9b361",
+        "input": "43",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2103526,
+        "pid_gone": true,
+        "cpu": "34",
+        "invalid_preserved": false
+      },
+      {
+        "id": "431c0708741d",
+        "input": "44",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2103602,
+        "pid_gone": true,
+        "cpu": "35",
+        "invalid_preserved": false
+      },
+      {
+        "id": "f03d1abbc415",
+        "input": "45",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2103679,
+        "pid_gone": true,
+        "cpu": "36",
+        "invalid_preserved": false
+      },
+      {
+        "id": "da49b51d6abd",
+        "input": "46",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2103753,
+        "pid_gone": true,
+        "cpu": "37",
+        "invalid_preserved": false
+      },
+      {
+        "id": "ee7b7ba8c0a3",
+        "input": "50",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2103817,
+        "pid_gone": true,
+        "cpu": "38",
+        "invalid_preserved": false
+      },
+      {
+        "id": "87daaab51ef5",
+        "input": "51",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2103880,
+        "pid_gone": true,
+        "cpu": "39",
+        "invalid_preserved": false
+      },
+      {
+        "id": "33d4b06c267e",
+        "input": "52",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2103951,
+        "pid_gone": true,
+        "cpu": "40",
+        "invalid_preserved": false
+      },
+      {
+        "id": "981b1e5e979e",
+        "input": "53",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2104083,
+        "pid_gone": true,
+        "cpu": "41",
+        "invalid_preserved": false
+      },
+      {
+        "id": "a1e130593afd",
+        "input": "54",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2104152,
+        "pid_gone": true,
+        "cpu": "42",
+        "invalid_preserved": false
+      },
+      {
+        "id": "0290251683b5",
+        "input": "55",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2104213,
+        "pid_gone": true,
+        "cpu": "43",
+        "invalid_preserved": false
+      },
+      {
+        "id": "6752be1d9572",
+        "input": "56",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2104278,
+        "pid_gone": true,
+        "cpu": "44",
+        "invalid_preserved": false
+      },
+      {
+        "id": "7640d6aa15f0",
+        "input": "57",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2104352,
+        "pid_gone": true,
+        "cpu": "45",
+        "invalid_preserved": false
+      },
+      {
+        "id": "1bc84ba2031b",
+        "input": "60",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2104426,
+        "pid_gone": true,
+        "cpu": "46",
+        "invalid_preserved": false
+      },
+      {
+        "id": "6dd00d3818e2",
+        "input": "61",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2104497,
+        "pid_gone": true,
+        "cpu": "47",
+        "invalid_preserved": false
+      },
+      {
+        "id": "d922423a576e",
+        "input": "62",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2104573,
+        "pid_gone": true,
+        "cpu": "48",
+        "invalid_preserved": false
+      },
+      {
+        "id": "6fca949b037f",
+        "input": "63",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2104634,
+        "pid_gone": true,
+        "cpu": "49",
+        "invalid_preserved": false
+      },
+      {
+        "id": "f53255c8fcbb",
+        "input": "64",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2104707,
+        "pid_gone": true,
+        "cpu": "50",
+        "invalid_preserved": false
+      },
+      {
+        "id": "b3940d7667eb",
+        "input": "65",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2104780,
+        "pid_gone": true,
+        "cpu": "51",
+        "invalid_preserved": false
+      },
+      {
+        "id": "2c0b2322d4f2",
+        "input": "66",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2104856,
+        "pid_gone": true,
+        "cpu": "52",
+        "invalid_preserved": false
+      },
+      {
+        "id": "c4818c80881d",
+        "input": "67",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2104928,
+        "pid_gone": true,
+        "cpu": "53",
+        "invalid_preserved": false
+      },
+      {
+        "id": "374ab8d499cb",
+        "input": "68",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2104994,
+        "pid_gone": true,
+        "cpu": "54",
+        "invalid_preserved": false
+      },
+      {
+        "id": "7ac7c0fd75d3",
+        "input": "69",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2105066,
+        "pid_gone": true,
+        "cpu": "55",
+        "invalid_preserved": false
+      },
+      {
+        "id": "e2e8752f8a28",
+        "input": "70",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2105136,
+        "pid_gone": true,
+        "cpu": "56",
+        "invalid_preserved": false
+      },
+      {
+        "id": "0205d8158d64",
+        "input": "71",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2105213,
+        "pid_gone": true,
+        "cpu": "57",
+        "invalid_preserved": false
+      },
+      {
+        "id": "b2cfb4ef18ed",
+        "input": "73",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2105290,
+        "pid_gone": true,
+        "cpu": "58",
+        "invalid_preserved": false
+      },
+      {
+        "id": "f827a6ba8ab1",
+        "input": "74",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2105361,
+        "pid_gone": true,
+        "cpu": "59",
+        "invalid_preserved": false
+      },
+      {
+        "id": "dc23431016f9",
+        "input": "75",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2105425,
+        "pid_gone": true,
+        "cpu": "62",
+        "invalid_preserved": false
+      },
+      {
+        "id": "a31c5951e6a2",
+        "input": "76",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2105503,
+        "pid_gone": true,
+        "cpu": "63",
+        "invalid_preserved": false
+      },
+      {
+        "id": "4214ea650a53",
+        "input": "77",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2105588,
+        "pid_gone": true,
+        "cpu": "64",
+        "invalid_preserved": false
+      },
+      {
+        "id": "1d1776b82318",
+        "input": "78",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2105666,
+        "pid_gone": true,
+        "cpu": "66",
+        "invalid_preserved": false
+      },
+      {
+        "id": "5b1c15bf6cac",
+        "input": "79",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2105756,
+        "pid_gone": true,
+        "cpu": "67",
+        "invalid_preserved": false
+      }
+    ],
+    "10c362a652fe": [
+      {
+        "id": "19ba7dabda9e",
+        "input": "80",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2119856,
+        "pid_gone": true,
+        "cpu": "0",
+        "invalid_preserved": false
+      },
+      {
+        "id": "080fe5bf91d6",
+        "input": "81",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2119950,
+        "pid_gone": true,
+        "cpu": "1",
+        "invalid_preserved": false
+      },
+      {
+        "id": "df6c327e3cd2",
+        "input": "82",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2120075,
+        "pid_gone": true,
+        "cpu": "2",
+        "invalid_preserved": false
+      },
+      {
+        "id": "fb2f500afefb",
+        "input": "83",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2120345,
+        "pid_gone": true,
+        "cpu": "3",
+        "invalid_preserved": false
+      },
+      {
+        "id": "85dadd743112",
+        "input": "84",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2120798,
+        "pid_gone": true,
+        "cpu": "8",
+        "invalid_preserved": false
+      },
+      {
+        "id": "d207810b9fcd",
+        "input": "85",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2120904,
+        "pid_gone": true,
+        "cpu": "10",
+        "invalid_preserved": false
+      },
+      {
+        "id": "51dd781f88ac",
+        "input": "86",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2120972,
+        "pid_gone": true,
+        "cpu": "12",
+        "invalid_preserved": false
+      },
+      {
+        "id": "465e3b575278",
+        "input": "87",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2121033,
+        "pid_gone": true,
+        "cpu": "13",
+        "invalid_preserved": false
+      },
+      {
+        "id": "4322387c3bd1",
+        "input": "88",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2121102,
+        "pid_gone": true,
+        "cpu": "15",
+        "invalid_preserved": false
+      },
+      {
+        "id": "2ece03cbcc03",
+        "input": "90",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2121173,
+        "pid_gone": true,
+        "cpu": "18",
+        "invalid_preserved": false
+      },
+      {
+        "id": "bc1c79e16446",
+        "input": "91",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2121249,
+        "pid_gone": true,
+        "cpu": "19",
+        "invalid_preserved": false
+      },
+      {
+        "id": "850f3319e68a",
+        "input": "92",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2121312,
+        "pid_gone": true,
+        "cpu": "21",
+        "invalid_preserved": false
+      },
+      {
+        "id": "8cf7524c3e5a",
+        "input": "93",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2121382,
+        "pid_gone": true,
+        "cpu": "22",
+        "invalid_preserved": false
+      },
+      {
+        "id": "5425a3e39c95",
+        "input": "95",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2121452,
+        "pid_gone": true,
+        "cpu": "27",
+        "invalid_preserved": false
+      },
+      {
+        "id": "4601f91fdf70",
+        "input": "96",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2121512,
+        "pid_gone": true,
+        "cpu": "28",
+        "invalid_preserved": false
+      },
+      {
+        "id": "2a82946cd1b5",
+        "input": "97",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2121583,
+        "pid_gone": true,
+        "cpu": "30",
+        "invalid_preserved": false
+      },
+      {
+        "id": "33be1e5af2c2",
+        "input": "99",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2121655,
+        "pid_gone": true,
+        "cpu": "31",
+        "invalid_preserved": false
+      },
+      {
+        "id": "76a18d66fb1d",
+        "input": "100",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2121727,
+        "pid_gone": true,
+        "cpu": "32",
+        "invalid_preserved": false
+      },
+      {
+        "id": "f38f33d7fe0c",
+        "input": "101",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2121782,
+        "pid_gone": true,
+        "cpu": "34",
+        "invalid_preserved": false
+      },
+      {
+        "id": "646ae0d390f9",
+        "input": "102",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2121858,
+        "pid_gone": true,
+        "cpu": "37",
+        "invalid_preserved": false
+      },
+      {
+        "id": "1d6a435c7fa3",
+        "input": "103",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2122005,
+        "pid_gone": true,
+        "cpu": "39",
+        "invalid_preserved": false
+      },
+      {
+        "id": "eadfaa93d7a4",
+        "input": "104",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2122075,
+        "pid_gone": true,
+        "cpu": "40",
+        "invalid_preserved": false
+      },
+      {
+        "id": "411dd107d02a",
+        "input": "105",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2122142,
+        "pid_gone": true,
+        "cpu": "41",
+        "invalid_preserved": false
+      },
+      {
+        "id": "74571f5791a4",
+        "input": "106",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2122229,
+        "pid_gone": true,
+        "cpu": "42",
+        "invalid_preserved": false
+      },
+      {
+        "id": "2163edd46a06",
+        "input": "107",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2122301,
+        "pid_gone": true,
+        "cpu": "43",
+        "invalid_preserved": false
+      },
+      {
+        "id": "0a4a6341c082",
+        "input": "109",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2122372,
+        "pid_gone": true,
+        "cpu": "46",
+        "invalid_preserved": false
+      },
+      {
+        "id": "2ab8a78d4c40",
+        "input": "110",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2122439,
+        "pid_gone": true,
+        "cpu": "47",
+        "invalid_preserved": false
+      },
+      {
+        "id": "d52788a55497",
+        "input": "111",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2122512,
+        "pid_gone": true,
+        "cpu": "49",
+        "invalid_preserved": false
+      },
+      {
+        "id": "7099e64972ae",
+        "input": "112",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2122585,
+        "pid_gone": true,
+        "cpu": "53",
+        "invalid_preserved": false
+      },
+      {
+        "id": "dfc0f2f78edb",
+        "input": "113",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2122649,
+        "pid_gone": true,
+        "cpu": "54",
+        "invalid_preserved": false
+      },
+      {
+        "id": "7d2b7411df7f",
+        "input": "114",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2122723,
+        "pid_gone": true,
+        "cpu": "56",
+        "invalid_preserved": false
+      },
+      {
+        "id": "7fbb7e6b0a74",
+        "input": "115",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2122794,
+        "pid_gone": true,
+        "cpu": "58",
+        "invalid_preserved": false
+      },
+      {
+        "id": "e80352afd627",
+        "input": "117",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2122868,
+        "pid_gone": true,
+        "cpu": "62",
+        "invalid_preserved": false
+      },
+      {
+        "id": "6323439cb4fc",
+        "input": "118",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2122938,
+        "pid_gone": true,
+        "cpu": "63",
+        "invalid_preserved": false
+      },
+      {
+        "id": "56805ae4e5a1",
+        "input": "119",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2123084,
+        "pid_gone": true,
+        "cpu": "64",
+        "invalid_preserved": false
+      },
+      {
+        "id": "5ec2cad7b603",
+        "input": "120",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2123195,
+        "pid_gone": true,
+        "cpu": "67",
+        "invalid_preserved": false
+      },
+      {
+        "id": "53b4fd4e0b2a",
+        "input": "121",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2123537,
+        "pid_gone": true,
+        "cpu": "68",
+        "invalid_preserved": false
+      },
+      {
+        "id": "38f0610750dc",
+        "input": "122",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2123863,
+        "pid_gone": true,
+        "cpu": "69",
+        "invalid_preserved": false
+      },
+      {
+        "id": "941ed900db5d",
+        "input": "123",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2123951,
+        "pid_gone": true,
+        "cpu": "70",
+        "invalid_preserved": false
+      },
+      {
+        "id": "7bea736f8644",
+        "input": "124",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2124020,
+        "pid_gone": true,
+        "cpu": "71",
+        "invalid_preserved": false
+      },
+      {
+        "id": "5f574b6de882",
+        "input": "125",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2124077,
+        "pid_gone": true,
+        "cpu": "73",
+        "invalid_preserved": false
+      },
+      {
+        "id": "4dd66a42182d",
+        "input": "126",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2124143,
+        "pid_gone": true,
+        "cpu": "74",
+        "invalid_preserved": false
+      },
+      {
+        "id": "669e0fbd97c1",
+        "input": "127",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2124212,
+        "pid_gone": true,
+        "cpu": "75",
+        "invalid_preserved": false
+      },
+      {
+        "id": "219e1da935da",
+        "input": "128",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2124279,
+        "pid_gone": true,
+        "cpu": "76",
+        "invalid_preserved": false
+      },
+      {
+        "id": "148eb94d0fa1",
+        "input": "129",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2124345,
+        "pid_gone": true,
+        "cpu": "78",
+        "invalid_preserved": false
+      },
+      {
+        "id": "b40c7daba35a",
+        "input": "130",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2124410,
+        "pid_gone": true,
+        "cpu": "79",
+        "invalid_preserved": false
+      },
+      {
+        "id": "a24fc78a0907",
+        "input": "132",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2124477,
+        "pid_gone": true,
+        "cpu": "80",
+        "invalid_preserved": false
+      },
+      {
+        "id": "d9560d829aee",
+        "input": "133",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2124608,
+        "pid_gone": true,
+        "cpu": "81",
+        "invalid_preserved": false
+      },
+      {
+        "id": "b95f61d61ac5",
+        "input": "134",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2124678,
+        "pid_gone": true,
+        "cpu": "82",
+        "invalid_preserved": false
+      },
+      {
+        "id": "c19c262e0051",
+        "input": "135",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2124748,
+        "pid_gone": true,
+        "cpu": "83",
+        "invalid_preserved": false
+      },
+      {
+        "id": "e817896d672e",
+        "input": "136",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2124825,
+        "pid_gone": true,
+        "cpu": "84",
+        "invalid_preserved": false
+      },
+      {
+        "id": "7bb176ce0990",
+        "input": "137",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2124916,
+        "pid_gone": true,
+        "cpu": "85",
+        "invalid_preserved": false
+      },
+      {
+        "id": "8228aeb1559e",
+        "input": "138",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2125016,
+        "pid_gone": true,
+        "cpu": "86",
+        "invalid_preserved": false
+      }
+    ],
+    "533c9c3dd3bf": [
+      {
+        "id": "f01e154dcf63",
+        "input": "140",
+        "status": "failed",
+        "exit_code": 1,
+        "pid": 2142128,
+        "pid_gone": true,
+        "cpu": "8",
+        "invalid_preserved": true
+      },
+      {
+        "id": "c0ad28bd82f6",
+        "input": "149",
+        "status": "failed",
+        "exit_code": 1,
+        "pid": 2142804,
+        "pid_gone": true,
+        "cpu": "19",
+        "invalid_preserved": true
+      },
+      {
+        "id": "cbc3ac36324c",
+        "input": "139",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2142054,
+        "pid_gone": true,
+        "cpu": "2",
+        "invalid_preserved": false
+      },
+      {
+        "id": "627736fc35ec",
+        "input": "141",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2142200,
+        "pid_gone": true,
+        "cpu": "10",
+        "invalid_preserved": false
+      },
+      {
+        "id": "9379a5dcd254",
+        "input": "142",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2142277,
+        "pid_gone": true,
+        "cpu": "11",
+        "invalid_preserved": false
+      },
+      {
+        "id": "b654f8c2fddd",
+        "input": "143",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2142402,
+        "pid_gone": true,
+        "cpu": "13",
+        "invalid_preserved": false
+      },
+      {
+        "id": "0772dffbf685",
+        "input": "145",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2142554,
+        "pid_gone": true,
+        "cpu": "15",
+        "invalid_preserved": false
+      },
+      {
+        "id": "61c778f6d494",
+        "input": "147",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2142640,
+        "pid_gone": true,
+        "cpu": "16",
+        "invalid_preserved": false
+      },
+      {
+        "id": "b23c7e516ad0",
+        "input": "148",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2142713,
+        "pid_gone": true,
+        "cpu": "18",
+        "invalid_preserved": false
+      },
+      {
+        "id": "b6e2c688c442",
+        "input": "150",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2142876,
+        "pid_gone": true,
+        "cpu": "21",
+        "invalid_preserved": false
+      },
+      {
+        "id": "c2909bd65bdc",
+        "input": "151",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2142947,
+        "pid_gone": true,
+        "cpu": "23",
+        "invalid_preserved": false
+      },
+      {
+        "id": "02ecd77e0582",
+        "input": "152",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2143022,
+        "pid_gone": true,
+        "cpu": "27",
+        "invalid_preserved": false
+      },
+      {
+        "id": "7bd1379c866d",
+        "input": "153",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2143092,
+        "pid_gone": true,
+        "cpu": "28",
+        "invalid_preserved": false
+      },
+      {
+        "id": "3dde8aae03b8",
+        "input": "154",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2143166,
+        "pid_gone": true,
+        "cpu": "31",
+        "invalid_preserved": false
+      },
+      {
+        "id": "c61f73808ddd",
+        "input": "155",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2143241,
+        "pid_gone": true,
+        "cpu": "32",
+        "invalid_preserved": false
+      },
+      {
+        "id": "e4cc7dd31f05",
+        "input": "156",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2143395,
+        "pid_gone": true,
+        "cpu": "34",
+        "invalid_preserved": false
+      },
+      {
+        "id": "78a0aa2ea888",
+        "input": "157",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2143665,
+        "pid_gone": true,
+        "cpu": "35",
+        "invalid_preserved": false
+      },
+      {
+        "id": "4feae09134a7",
+        "input": "158",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2143876,
+        "pid_gone": true,
+        "cpu": "36",
+        "invalid_preserved": false
+      }
+    ],
+    "ead2203c8e3a": [
+      {
+        "id": "22d076379f60",
+        "input": "140",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2310361,
+        "pid_gone": true,
+        "cpu": "0",
+        "invalid_preserved": false
+      },
+      {
+        "id": "8fdecedf69b8",
+        "input": "149",
+        "status": "success",
+        "exit_code": 0,
+        "pid": 2310429,
+        "pid_gone": true,
+        "cpu": "1",
+        "invalid_preserved": false
+      }
+    ]
+  },
+  "protocol": {
+    "host": "Panda1",
+    "scheduler": "ExperimentOS",
+    "seconds": 60,
+    "physical_cores": 1,
+    "memory_bytes": 17179869184,
+    "original_timed_model_replay": true
+  },
+  "recovery": {
+    "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-recovery-inputs-r1688/recovery.json",
+    "sha256": "3e7ce37a8e6df4dc6c3d4c4bab8c148e9dc2d3992f0ca8361091a45533449677",
+    "invalid_originals_excluded": [
+      140,
+      149
+    ],
+    "other_valid_reports_preserved": 158
+  },
+  "mechanism": "Original29 returns presolve conflicts after moving existing exact stages before early bounded encoding; formal candidate22.520s UNSAT versus parent timeout60s.131 changes from parent timeout to candidate52.561s SAT, but LRA code is unchanged and this crossing is not attributed to the NIA mechanism.",
+  "boundary": "Actual core implementation with qualified object-overlay native units,96 fresh six-logic correctness inputs and48 original-model cross-replays; full160 fresh three-arm comparison, with only2 invalid cohorts retaken unchanged. No canonical complete-source build, new QCP execution, PR/main CI or protected-set result yet. Fixed160 verified counts remain below same-round Z3; no overall superiority claim.",
+  "protected_sets_used": false,
+  "evidence_summary_sha256": "bcad10a2ab4ace704a457c1367d153d2d3ce02dfc357a4e186940e620a04d58f",
+  "changed_core_sources": [
+    "src/applications/satisfiability/smt/qfnia/NiaSolver.cpp"
+  ],
+  "changed_tests": [
+    "tests/unit/test_nia.cpp"
+  ],
+  "new_feature_gate": false,
+  "independent_cases": 96,
+  "sat_models_cross_replayed": 48,
+  "independent_oracle_checks": 288,
+  "supplemental_source_certificate": {
+    "receipt": {
+      "input_sha256": "02a58b11df8951543940a1090a140592e24de41dcaeb6470e7a50d42e804be64",
+      "original_input": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NIA/20230321-UltimateAutomizerSvcomp2023/ps6.c_7.smt2",
+      "source_query_count": 1,
+      "certificate": "/pub/data/jiafq/xolver/validation/arithmetic-r103/polynomial-mod-confirmation-r1697/certificate.json",
+      "certificate_sha256": "48f5d0ca9b19679a48f3248ac1183c31d09e0c198bfda0a70b3b4272b6d1a5ba",
+      "checked": {
+        "status": "checked-unsat",
+        "input_sha256": "02a58b11df8951543940a1090a140592e24de41dcaeb6470e7a50d42e804be64",
+        "assertion": 9,
+        "path": [
+          2
+        ],
+        "checked_residues": 12
+      },
+      "coefficients": [
+        0,
+        0,
+        1,
+        0,
+        7,
+        6,
+        10
+      ],
+      "modulus": 12,
+      "residues": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "checker_files": {
+        "tools/soundness/polynomial_mod_certificate.py": "e4b5b0eb2b4f1e3b3d508d4d741dcac2e95e70af0a1a6c9075eb03159aae3098",
+        "tools/proof/isabelle_pa.py": "23e8b6001327ea2d0e4970bf4c1983b7a30ff53462f65f9c501b90b825932881"
+      },
+      "timed_report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/nia-exact-before-encoding-full-r1685/case-115/report.json",
+      "timed_report_sha256": "c6a6afefcdc004cfdcd86359faa85ab25a98e7cde86cb5762f6162b607ea3027",
+      "existing_observations": {
+        "baseline": {
+          "binary": {
+            "path": "validation/arithmetic-r103/active-term-uses-r1668/xolver",
+            "sha256": "819ea67f5b4f8e89f49baad8e0a0c74b52bffcf796efe7c69886ed296529be9d"
+          },
+          "result": "unsat",
+          "seconds": 0.01793212816119194,
+          "stdout_sha256": "5c17dfcc2a8f1f30d9e96df6a9825a5030ade046d560332c19de74d93d591a18",
+          "original_verified": false,
+          "supplemental_source_truth": "checked-unsat"
+        },
+        "candidate": {
+          "binary": {
+            "path": "validation/arithmetic-r103/nia-exact-before-encoding-r1680/xolver",
+            "sha256": "f9c75a00e2b633051af2445f99de21e027de02cea64ee110dfce74a50eb916f4"
+          },
+          "result": "unsat",
+          "seconds": 0.01806691475212574,
+          "stdout_sha256": "5c17dfcc2a8f1f30d9e96df6a9825a5030ade046d560332c19de74d93d591a18",
+          "original_verified": false,
+          "supplemental_source_truth": "checked-unsat"
+        }
+      },
+      "cpu": "0",
+      "protected_sets_used": false,
+      "boundary": "Independent Python proof checker reparses the unchanged original integer query, expands simultaneous lets and identifies an unconditional positive-conjunction literal. All12 residue classes are evaluated both by coefficient Horner arithmetic and directly from the source AST. This proves the selected modular disequality false for every integer, and therefore proves the whole source UNSAT. No Xolver/kernel call, external oracle, original-solver rerun or result-file modification. This is supplemental truth evidence for the pinned timed observations, not a new algorithmic solve or a timed result for the new canonical binary."
+    },
+    "receipt_sha256": "a43df2517da6f7af13805682dc413553d650bab450e17ac5993cb9a9b2d1fee3",
+    "local_certificate": "docs/audit/certificates/ps6_mod12_zero.json",
+    "boundary": "Confirm exactly source115. Original oracle-only reports and score fields are retained unchanged; this is not a new solving or algorithmic gain."
+  },
+  "score_with_source_certificates": {
+    "baseline": {
+      "verified": 109,
+      "raw_definite": 109,
+      "verified_par2": 6614.974042201415,
+      "results": {
+        "unsat": 48,
+        "timeout": 50,
+        "sat": 61,
+        "unknown": 1
+      },
+      "unconfirmed": []
+    },
+    "candidate": {
+      "verified": 111,
+      "raw_definite": 111,
+      "verified_par2": 6463.827335389331,
+      "results": {
+        "unsat": 49,
+        "sat": 62,
+        "timeout": 48,
+        "unknown": 1
+      },
+      "unconfirmed": []
+    },
+    "z3": {
+      "verified": 115,
+      "raw_definite": 124,
+      "verified_par2": 5636.001924855635,
+      "results": {
+        "unsat": 58,
+        "sat": 66,
+        "timeout": 36
+      },
+      "unconfirmed": [
+        12,
+        24,
+        27,
+        42,
+        50,
+        75,
+        80,
+        114,
+        148
+      ]
+    }
+  }
+}

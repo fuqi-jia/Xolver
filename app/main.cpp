@@ -7,8 +7,6 @@
 #include <fstream>
 #include <string>
 #include <optional>
-#include <functional>
-#include <pthread.h>
 #include <execinfo.h>
 #include <csignal>
 #include <sys/time.h>
@@ -21,9 +19,10 @@
 #include <limits>
 #include "xolver/Script.h"
 #include "base/RuntimeConfig.h"
+#include "base/ExecutionStack.h"
 
 // XOLVER_SELFPROF: poor-man's CPU profiler. ITIMER_PROF fires SIGPROF on the
-// thread consuming CPU (the large-stack solve worker), so the backtrace lands
+// thread consuming CPU, so the backtrace lands
 // in the actual hot loop. backtrace_symbols_fd writes to the real fd 2,
 // bypassing the std::cerr NullStreambuf, so samples survive non-verbose mode.
 // Async-signal-safe (backtrace/backtrace_symbols_fd/write). Resolve frames with
@@ -88,35 +87,6 @@ struct NullStreambuf : std::streambuf {
     std::streamsize xsputn(const char*, std::streamsize n) override { return n; }
 };
 
-// Defense-in-depth net for deep-input stack overflow. The frontend preprocess
-// passes and the SOMTParser rewriter are iterative, but other recursive
-// walkers remain downstream (e.g. PolynomialConverter::collectRec, the
-// atomizer, theory term builders). Running parse+solve on a thread with a
-// large stack lets those survive deeply-nested benchmarks rather than
-// SIGSEGV. Single worker; the caller blocks on join, so stdout/stderr writes
-// are not concurrent. Falls back to inline execution if the thread cannot be
-// created. Stack reservation is virtual (lazily committed), not RSS.
-struct LargeStackCtx { std::function<int()> fn; int ret; };
-extern "C" inline void* largeStackTrampoline(void* p) {
-    auto* c = static_cast<LargeStackCtx*>(p);
-    c->ret = c->fn();
-    return nullptr;
-}
-inline int runWithLargeStack(std::function<int()> fn) {
-    constexpr size_t kStackBytes = 512UL * 1024 * 1024;  // 512 MB
-    pthread_attr_t attr;
-    if (pthread_attr_init(&attr) != 0) return fn();
-    LargeStackCtx ctx{std::move(fn), EXIT_FAILURE};
-    pthread_t tid;
-    if (pthread_attr_setstacksize(&attr, kStackBytes) == 0 &&
-        pthread_create(&tid, &attr, largeStackTrampoline, &ctx) == 0) {
-        pthread_join(tid, nullptr);
-        pthread_attr_destroy(&attr);
-        return ctx.ret;
-    }
-    pthread_attr_destroy(&attr);
-    return ctx.fn();  // fallback: run on the current thread
-}
 }  // namespace
 
 // --certify: persist a portable, independently re-checkable SAT certificate.
@@ -152,7 +122,9 @@ static bool writeSatCertificate(const xolver::Solver& solver,
 }
 
 
-static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
+static int cmdSolve(int argc, char* argv[], bool defaultMode = false);
+
+static int solveCommand(int argc, char* argv[], bool defaultMode) {
     int fileIdx = defaultMode ? 1 : 2;
     if (argc < fileIdx + 1) {
         std::cerr << "Error: solve requires an input file.\n";
@@ -249,8 +221,8 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
         std::cerr.rdbuf(&nullCerr);
     }
 
-    // Parse + solve + emit on a large-stack worker thread so deeply-nested
-    // inputs survive any remaining recursive walker (see runWithLargeStack).
+    // Parse + solve + emit with sufficient stack for remaining recursive
+    // walkers, preserving single-threaded execution when the host allows it.
     auto exportPA = [&]() -> bool {
         if (!paCertificate) return true;
         const auto certificate = solver.getProof().presburger();
@@ -519,7 +491,15 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
         return EXIT_FAILURE;
       }
     };
-    return runWithLargeStack(body);
+    return body();
+}
+
+static int cmdSolve(int argc, char* argv[], bool defaultMode) {
+    int result = EXIT_FAILURE;
+    // Keep construction and destruction of parser/solver state inside the
+    // stack allowance as well as the parse, solve and output operations.
+    xolver::withExecutionStack([&] { result = solveCommand(argc, argv, defaultMode); });
+    return result;
 }
 
 static int cmdBench(int argc, char* argv[]) {

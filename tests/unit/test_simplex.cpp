@@ -10,6 +10,23 @@
 
 using namespace xolver;
 
+TEST_CASE("GeneralSimplex: point revisions include reconstruction without new bound assertions") {
+    GeneralSimplex simplex;
+    const int x = simplex.addVar("point-revision-x");
+    REQUIRE(simplex.assertLower(x, BoundInfo(BoundValue(DeltaRational(3)), SatLit::positive(1))));
+    const auto bounds = simplex.boundRevision(), point = simplex.pointRevision();
+    REQUIRE(simplex.check() == GeneralSimplex::Result::Sat);
+    CHECK(simplex.boundRevision() == bounds);
+    CHECK(simplex.pointRevision() != point);
+    CHECK(simplex.value(x) == DeltaRational(3));
+    simplex.resetActiveBounds(GeneralSimplex::AssignmentPolicy::Reinitialize);
+    const auto resetBounds = simplex.boundRevision(), resetPoint = simplex.pointRevision();
+    REQUIRE(simplex.check() == GeneralSimplex::Result::Sat);
+    CHECK(simplex.boundRevision() == resetBounds);
+    CHECK(simplex.pointRevision() != resetPoint);
+    CHECK(simplex.value(x) == DeltaRational(0));
+}
+
 TEST_CASE("GeneralSimplex: dense coupled rational rows retain explanations across branches") {
     for (auto policy : {GeneralSimplex::AssignmentPolicy::Reinitialize,
                         GeneralSimplex::AssignmentPolicy::Preserve}) {

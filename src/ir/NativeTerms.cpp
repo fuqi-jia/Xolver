@@ -84,6 +84,7 @@ std::string text(const Payload& payload) {
 } // namespace
 
 struct NativeTerms::Storage {
+    std::shared_ptr<const void> identity = std::make_shared<const char>(0);
     std::shared_ptr<SOMTParser::NodeManager> manager;
     std::vector<Node> nodes;
     std::vector<SortId> nodeSorts; // resolve parser numeral sorts once, bottom-up
@@ -115,7 +116,9 @@ NativeTerms::NativeTerms(const NativeTerms& other)
       intSortId_(other.intSortId_), realSortId_(other.realSortId_),
       nextSortId_(other.nextSortId_), freshVarCounter_(other.freshVarCounter_),
       freshVarNames_(other.freshVarNames_), internalVariables_(other.internalVariables_),
-      routingAuxiliaries_(other.routingAuxiliaries_) {}
+      routingAuxiliaries_(other.routingAuxiliaries_) {
+    storage_->identity = std::make_shared<const char>(0);
+}
 NativeTerms& NativeTerms::operator=(const NativeTerms& other) {
     if (this != &other) *this = NativeTerms(other);
     return *this;
@@ -123,6 +126,9 @@ NativeTerms& NativeTerms::operator=(const NativeTerms& other) {
 
 size_t NativeTerms::size() const { return storage_->nodes.size(); }
 Node NativeTerms::native(ExprId id) const { return storage_->nodes.at(id); }
+std::shared_ptr<const void> NativeTerms::expressionIndexIdentity() const {
+    return storage_->identity;
+}
 
 ExprId NativeTerms::append(Node node) {
     if (auto it = storage_->ids.find(node); it != storage_->ids.end()) return it->second;

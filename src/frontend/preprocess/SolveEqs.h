@@ -59,14 +59,14 @@ private:
 
     // Is `e` a bare Variable of Int/Real sort? Returns its name if so.
     std::optional<std::string> asNumericVar(ExprId e) const;
-    // Does Variable named `name` occur anywhere in `e`?
-    bool occurs(const std::string& name, ExprId e) const;
+    struct RunState;
     // Is `e` reconstructable under the selected arithmetic fragment?
-    bool isReconstructable(ExprId e, bool polynomial) const;
-    bool admissibleDefinition(const std::string& name, ExprId e, SortId targetSort);
+    bool isReconstructable(ExprId e, bool polynomial, RunState& state) const;
+    bool admissibleDefinition(const std::string& name, ExprId e, SortId targetSort, RunState& state);
     bool hasOnlyLinearUses(const std::string& name);
     // Substitute Variable named `name` by `replacement` throughout `e` (memoized).
-    ExprId substitute(ExprId e, const std::string& name, ExprId replacement);
+    ExprId substitute(ExprId e, const std::string& name, ExprId replacement,
+                      const std::unordered_set<ExprId>& affected);
 
     NativeTerms& ir_;
     ModelConverter& mc_;
@@ -81,12 +81,8 @@ private:
     size_t eliminated_ = 0;
     bool didRun_ = false;
 
-    // Substitution-work guard (see run()). Counts node-visits across all
-    // substitute() calls; when it exceeds workBudget_ the elimination loop stops
-    // (partial pass is sound). Bounds the O(eliminations × formula-size) cost
-    // that otherwise turns large chained-equality UNSATs (SMPT/nec) into
-    // timeouts. Default tuned so small formulas (convert) finish; env-overridable
-    // via XOLVER_PP_SOLVE_EQS_BUDGET.
+    // Counts substitution and active-use-index work. Finish one elimination
+    // atomically before stopping at this budget; a partial pass remains sound.
     uint64_t substWork_ = 0;
     uint64_t workBudget_ = 40'000'000;
 

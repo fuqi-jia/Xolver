@@ -1,0 +1,308 @@
+{
+  "date": "2026-11-01",
+  "status": "current_frozen_worker_qualified_common_proof_program_comparison_complete",
+  "worktree_head": "eb5235fc81f2aa9f3afcf8e03f47e8f7fc831c5b",
+  "scope": "Fresh original-C QCP validation for branch, GCD and max3 with identical frozen specifications, case libraries and proof sources.",
+  "frozen_versions": {
+    "qcp_revision": "08cc7a0f",
+    "qcp_symexec_sha256": "0e74c446cebca8c804ff9b838f07c67f23e31a093630675bc720b25c986e1032",
+    "xolver_worker_sha256": "f71ac0756383264323b081479d87238c26705d02ec18887ab8243e2e450626c4",
+    "xolver_cli_sha256": "cce9debc774347d77227393df0f51ff8d72a13c30a54c5f1311155f5911c273d",
+    "z3_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+    "qualification_path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/ray-scale-r1586/qualification.json",
+    "qualification_sha256": "e6add31b11591abc3a16070001586a9a43c0e741371043436a048c00e56f0184",
+    "qualification_source_head": "eb5235fc81f2aa9f3afcf8e03f47e8f7fc831c5b",
+    "native_unit_cases": 1983,
+    "native_unit_assertions": 1293727,
+    "source_boundary": "Frozen native source/object overrides on the recorded canonical archive, with recursively pinned qualification. Not a canonical full-source rebuild or a PR/main CI result."
+  },
+  "protocol": {
+    "host": "Panda1",
+    "scheduler": "ExperimentOS",
+    "physical_cpus_per_native_job": 1,
+    "smt_query_seconds": 60,
+    "smt_query_memory_bytes": 17179869184,
+    "coq_check_seconds": 900,
+    "invocation_seconds": 2000,
+    "initial_backend_order": {
+      "branch": [
+        "xolver",
+        "z3"
+      ],
+      "gcd": [
+        "z3",
+        "xolver"
+      ],
+      "max3": [
+        "xolver",
+        "z3"
+      ]
+    },
+    "common_proof_rule": "Every final C, library, goal, auto, manual and goal-check role matches one immutable accepted reference byte for byte. Both backends use the same current VC partition and proof modes.",
+    "native_queries": "One fresh SMT context per occurrence, including repeated formulas, through the pinned actual native SAT-entry bridge. No unsupported-result fallback.",
+    "experiment_native_runs": 132,
+    "all_native_success_exit0_pid_gone": true,
+    "root_workflow": "Current public controller actions only; independent annotation/VC/group roles; root-only parent/publication/final checks. Numeric main-owned actions serialize within each case.",
+    "prepared_sha256": "21428b0941139d0fde06af0360b3bc20349b6c36e0329c8d3cea309afc3da5cf",
+    "backend_packet_sha256": "ee6ea20b512c0fdc4e3a6a014ae6b30710a82289dfae116e8a6b5aede0c43e5e",
+    "native_runner_sha256": "600ad1b65e1025019fa38f2a11829391bea6c7d018c80c1fb90def75c3e01f66"
+  },
+  "programs": {
+    "branch": {
+      "verified_function_bodies": [
+        "example"
+      ],
+      "assumed_external_contracts": [],
+      "specification_boundary": "Frozen original branch contract.",
+      "identical_proof_and_input_bytes": true,
+      "identical_ordered_native_query_and_verdict_traces": true,
+      "backends": {
+        "xolver": {
+          "run_id": "native_branch_xolver_r1124-20261101143710",
+          "program_verified": true,
+          "top_level_vcs": 10,
+          "split_goals": 0,
+          "smt_queries": 564,
+          "verdicts": {
+            "sat": 222,
+            "unsat": 342
+          },
+          "logic_counts": {
+            "QF_LIA": 564
+          },
+          "smt_callback_seconds": 1.7160132409999986,
+          "backend_request_seconds": 0.7190737575292587,
+          "final_validation_seconds": 26.676095977425575,
+          "final_validation_smt_queries": 188,
+          "ordered_trace_sha256": "1851dc6d8811109a0b1ddbade2bf0a39c8546d88472715d88fd9ad0a0cfb1777",
+          "receipt": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1597/branch/xolver/accepted/receipt.json",
+          "receipt_sha256": "b2f082f9c375dc51cf9c7c98debecfcb4d39ebfcc89c027deb62ab20d49b44d9"
+        },
+        "z3": {
+          "run_id": "native_branch_xolver_r1124-20261101143711",
+          "program_verified": true,
+          "top_level_vcs": 10,
+          "split_goals": 0,
+          "smt_queries": 564,
+          "verdicts": {
+            "sat": 222,
+            "unsat": 342
+          },
+          "logic_counts": {
+            "QF_LIA": 564
+          },
+          "smt_callback_seconds": 10.997080529,
+          "backend_request_seconds": 9.662549965083599,
+          "final_validation_seconds": 29.73500731214881,
+          "final_validation_smt_queries": 188,
+          "ordered_trace_sha256": "1851dc6d8811109a0b1ddbade2bf0a39c8546d88472715d88fd9ad0a0cfb1777",
+          "receipt": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1597/branch/z3/accepted/receipt.json",
+          "receipt_sha256": "49c2d31bc385febe7dbdeccba1425d0a2dc970314cb75adaebdfb1b1228d1bb7"
+        }
+      }
+    },
+    "gcd": {
+      "verified_function_bodies": [
+        "gcd"
+      ],
+      "assumed_external_contracts": [
+        "abs"
+      ],
+      "specification_boundary": "Partial correctness; external abs assumed, no termination claim.",
+      "identical_proof_and_input_bytes": true,
+      "identical_ordered_native_query_and_verdict_traces": true,
+      "backends": {
+        "xolver": {
+          "run_id": "native_gcd_xolver_r1124-20261101143713",
+          "program_verified": true,
+          "top_level_vcs": 9,
+          "split_goals": 3,
+          "smt_queries": 888,
+          "verdicts": {
+            "sat": 522,
+            "unsat": 366
+          },
+          "logic_counts": {
+            "QF_LIA": 678,
+            "QF_UFLIA": 210
+          },
+          "smt_callback_seconds": 3.450489558,
+          "backend_request_seconds": 1.7076673451811075,
+          "final_validation_seconds": 34.41346924379468,
+          "final_validation_smt_queries": 296,
+          "ordered_trace_sha256": "ba00d306d6c77600b69cb7fd1056257148b5dbeca83900f59e2c7a50846ea247",
+          "receipt": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1597/gcd/xolver/accepted/receipt.json",
+          "receipt_sha256": "2ff14e640ed9cd08f3f6b4de98a4531843a5fd17b477040a0deab3e3b2ef9067"
+        },
+        "z3": {
+          "run_id": "native_gcd_xolver_r1124-20261101143712",
+          "program_verified": true,
+          "top_level_vcs": 9,
+          "split_goals": 3,
+          "smt_queries": 888,
+          "verdicts": {
+            "sat": 522,
+            "unsat": 366
+          },
+          "logic_counts": {
+            "QF_LIA": 678,
+            "QF_UFLIA": 210
+          },
+          "smt_callback_seconds": 8.134512671000003,
+          "backend_request_seconds": 6.29962594807148,
+          "final_validation_seconds": 35.40174696408212,
+          "final_validation_smt_queries": 296,
+          "ordered_trace_sha256": "ba00d306d6c77600b69cb7fd1056257148b5dbeca83900f59e2c7a50846ea247",
+          "receipt": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1597/gcd/z3/accepted/receipt.json",
+          "receipt_sha256": "6be6b76968205ec044dc577f14047dc5c415d79d6c0b14ed49e41631e1dab74b"
+        }
+      }
+    },
+    "max3": {
+      "verified_function_bodies": [
+        "max3"
+      ],
+      "assumed_external_contracts": [],
+      "specification_boundary": "Upper bound of all three inputs, not membership.",
+      "identical_proof_and_input_bytes": true,
+      "identical_ordered_native_query_and_verdict_traces": true,
+      "backends": {
+        "xolver": {
+          "run_id": "native_max3_xolver_r1124-20261101143714",
+          "program_verified": true,
+          "top_level_vcs": 4,
+          "split_goals": 0,
+          "smt_queries": 888,
+          "verdicts": {
+            "sat": 444,
+            "unsat": 444
+          },
+          "logic_counts": {
+            "QF_LIA": 888
+          },
+          "smt_callback_seconds": 3.259409679,
+          "backend_request_seconds": 1.7763278875499964,
+          "final_validation_seconds": 27.477918745949864,
+          "final_validation_smt_queries": 296,
+          "ordered_trace_sha256": "d69756207113992985b362d4c30e4bff3982bfae3739bafea4312f3246144969",
+          "receipt": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1597/max3/xolver/accepted/receipt.json",
+          "receipt_sha256": "5784b10150e764dc0bc8e85a9b32ea551e2203eb03cdf8ab31bb44d6fe399511"
+        },
+        "z3": {
+          "run_id": "native_max3_xolver_r1124-20261101143715",
+          "program_verified": true,
+          "top_level_vcs": 4,
+          "split_goals": 0,
+          "smt_queries": 888,
+          "verdicts": {
+            "sat": 444,
+            "unsat": 444
+          },
+          "logic_counts": {
+            "QF_LIA": 888
+          },
+          "smt_callback_seconds": 9.789374202000003,
+          "backend_request_seconds": 7.6150343511253595,
+          "final_validation_seconds": 32.95569701306522,
+          "final_validation_smt_queries": 296,
+          "ordered_trace_sha256": "d69756207113992985b362d4c30e4bff3982bfae3739bafea4312f3246144969",
+          "receipt": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1597/max3/z3/accepted/receipt.json",
+          "receipt_sha256": "56da79c9a5f8c03666d9cd158a7e8ec679e2ee408f10fc551f4a113604180b26"
+        }
+      }
+    }
+  },
+  "totals": {
+    "xolver": {
+      "programs": 3,
+      "top_level_vcs": 23,
+      "split_goals": 3,
+      "smt_queries": 2340,
+      "smt_callback_seconds": 8.425912477999999,
+      "backend_request_seconds": 4.203068990260363,
+      "final_validation_seconds": 88.56748396717012,
+      "final_validation_smt_queries": 780,
+      "verdicts": {
+        "sat": 1188,
+        "unsat": 1152
+      },
+      "logic_counts": {
+        "QF_LIA": 2130,
+        "QF_UFLIA": 210
+      }
+    },
+    "z3": {
+      "programs": 3,
+      "top_level_vcs": 23,
+      "split_goals": 3,
+      "smt_queries": 2340,
+      "smt_callback_seconds": 28.92096740200001,
+      "backend_request_seconds": 23.57721026428044,
+      "final_validation_seconds": 98.09245128929615,
+      "final_validation_smt_queries": 780,
+      "verdicts": {
+        "sat": 1188,
+        "unsat": 1152
+      },
+      "logic_counts": {
+        "QF_LIA": 2130,
+        "QF_UFLIA": 210
+      }
+    }
+  },
+  "measured_result": {
+    "final_validation_delta_seconds": -9.524967322126031,
+    "final_validation_delta_percent": -9.710194002630043,
+    "boundary": "All programs are fresh canonical done checks with frozen original C/contracts/libraries/proofs and identical native traces. Final-validation time measures one complete final-check: current-C symexec, selected real backend, full Rocq proof/library/safety/freshness checks and cleanup with PROVIDED frozen proofs. It excludes annotation/proof construction and orchestration waits; it is not automatic proof-search or all-QCP superiority. One cohort on these three training programs; no statistical general speedup or protected-set conclusion.",
+    "attribution": "This compares the retained frozen worker with frozen Z3. It does not isolate a speedup caused by a particular retained core patch; no parent-Xolver QCP timing arm was measured here.",
+    "theory_distribution": "2130 LIA and210 UFLIA calls per backend. These three programs do not establish nonlinear, arbitrary-program or automatic-proof-search superiority."
+  },
+  "core_source_changes_this_stage": [],
+  "retained_core_changes": "Assertion-scoped Farkas cache, exact integer ray scaling and sign correction, polynomial positivity and other earlier qualified changes remain; the rejected unary propagation prototype remains removed.",
+  "evidence": {
+    "summary": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1597/paired-summary.json",
+      "sha256": "181ee12b111188bc9fd7b82af3bda67a9f6ae10b9cf55cb5f64f6246246eed17"
+    },
+    "receipt": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1597/paired-receipt.json",
+      "sha256": "8321b8e32734fe60e557e0c1af74e8ce54619a98ad78ebe40358aea3d629285c"
+    }
+  },
+  "separate_diagnostic": {
+    "stage": "R1598",
+    "experiment": "35a5e2ad70a3",
+    "run": "781ba1c4e147",
+    "original_index": 49,
+    "original_sha256": "d4baea957f7fe792713edbaf3edc6769274ab0aafe5e86182d023e858037d615",
+    "derived_sha256": "d4d35f9f22d2b40f0bc4822b2f2322c1ac71cb59a56654cef24744eb4bab0b14",
+    "change": "Only the set-logic declaration changes from LRA to RDL for a structurally pure difference input.",
+    "result": "Both identical frozen Xolver instances and frozen Z3 time out at60s. No wrong verdict or budget protocol failure.",
+    "report_sha256": "0aaa1b323b7c9602c09fb35ea880fd93ab8684bcd02670dc9090a1483a2a7fce",
+    "conclusion": "Automatic difference-logic routing is not supported by this probe. No solver routing change is implemented; this derived input receives no original-suite performance credit."
+  },
+  "overall_goal": {
+    "achieved": false,
+    "latest_same_round_verified_fixed160": {
+      "xolver": 109,
+      "z3": 119
+    },
+    "reference_target": 126,
+    "unresolved_excluded": [
+      12,
+      24,
+      27,
+      42,
+      114,
+      115
+    ],
+    "final_frozen_comparison_outstanding": true,
+    "independent_program_and_smt_protected_sets_used": false,
+    "main_promotion": false
+  },
+  "next": [
+    "Use the measured LIA/UFLIA application mix and actual hard original queries to choose the next general core improvement; expand training-program coverage without reading or tuning against protected sets.",
+    "Measure missing relational propagation or another shared reasoning mechanism before implementation; the failed pure-difference dispatch probe is closed.",
+    "Resolve remaining generic SMT gaps, complete a canonical source build and PR/main CI, then perform the final fresh frozen comparison and the still-unused independent protected sets."
+  ]
+}

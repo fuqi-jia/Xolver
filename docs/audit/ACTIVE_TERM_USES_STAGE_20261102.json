@@ -1,0 +1,671 @@
+{
+  "date": "2026-11-02",
+  "status": "native_and_independent_checks_pass_full160_no_new_verified_solve",
+  "selected_root": "Repeated full-DAG substitution and repeated definition eligibility walks during unconditional equality elimination. Case94 sampling puts23/37 samples in SolveEqs,18/37 in substitute before LIA is reached.",
+  "core_files": [
+    "src/ir/ActiveTermUses.h",
+    "src/ir/ActiveTermUses.cpp",
+    "src/frontend/preprocess/SolveEqs.h",
+    "src/frontend/preprocess/SolveEqs.cpp",
+    "tests/unit/test_active_term_uses.cpp",
+    "tests/unit/test_solve_eqs.cpp"
+  ],
+  "implementation": "Maintain exact reverse parent edges and stable root slots only for live DAG terms. Root replacement retains shared subtrees before releasing old uses. Collect all live variable leaves by semantic name, traverse only their ancestors, and substitute only affected roots/subtrees in original order. Memoize reconstruction-fragment checks over immutable terms separately for linear and polynomial policies. Keep nonlinear-use checks current, unsafe UF/array variables, scoped assertions and reverse-order model reconstruction. Count graph work in the existing bounded pass; finish each chosen elimination atomically. No class field/public API, theory rollback, Full replay, feature gate, runtime oracle or filename rule change.",
+  "qualification": {
+    "experiment": "7a54cb9990d8",
+    "run": "9786f8fea911",
+    "qualification_sha256": "359fb3417b13731e08fbe0bd2d6cd09d319b51a2ebf6a4f2ae2b6fd5591e88f4",
+    "binary_sha256": "819ea67f5b4f8e89f49baad8e0a0c74b52bffcf796efe7c69886ed296529be9d",
+    "worker_sha256": "dbeb788868b00de174c551db97be34c55687362f10f7eefd8a8eb2ddd8c5a20e",
+    "inputs_sha256": "740d0c8d8d88d6693b1704e86c01a28820b5af14894421a99391ed3f0ba3b295",
+    "unit_cases": 1992,
+    "unit_assertions": 1295873
+  },
+  "targeted_tests": {
+    "index_cases": 4,
+    "index_assertions": 1935,
+    "solve_eqs_cases": 16,
+    "solve_eqs_assertions": 257,
+    "checks": "Independent forward traversals after120 root replacements and eight variable queries each, duplicate child edges/root slots, distinct same-name variable handles, inactive parent exclusion, reactivation,400 unrelated roots,4000-deep shared DAG; exact180-step scoped model reconstruction and retained self definitions."
+  },
+  "pilot": {
+    "experiment": "e87ecda0a65f",
+    "spec": "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-pilot-r1663.yaml",
+    "spec_sha256": "6fbffa1474398de4eca4c93c7310567795fa93d8ea1f29ff03200461ddfa7619",
+    "inputs": [
+      0,
+      1,
+      3,
+      6,
+      7,
+      11,
+      13,
+      20,
+      48,
+      49,
+      51,
+      58,
+      59,
+      89,
+      91,
+      94,
+      98,
+      128,
+      131,
+      159
+    ],
+    "seconds_per_solver": 60,
+    "physical_cpu_per_task": 1,
+    "memory_bytes": 17179869184,
+    "independent_original_model_replay": true,
+    "results_pending": false,
+    "all_20_exit_zero_pid_gone": true,
+    "verified": {
+      "baseline": 12,
+      "candidate": 13,
+      "z3": 19
+    },
+    "verified_par2": {
+      "baseline": 1071.4241358041763,
+      "candidate": 1010.8720880579203,
+      "z3": 169.81533882766962
+    },
+    "gained": [
+      131
+    ],
+    "lost": [],
+    "wrong": 0,
+    "protocol_errors": 0,
+    "reports": {
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-pilot-r1663/case-000/report.json": "0e672fe2f5bf2292ead51e26c16727f861378c65f812d8a9be002b1cafc78da4",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-pilot-r1663/case-001/report.json": "ef902cf883702e34a2f84fbcc5366abe0c84efaffd53d56ed84c93f8b29aaff8",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-pilot-r1663/case-003/report.json": "72f757718c327ea2b6d25a1e8fd02e7f1ec4fe2da82bd564bbba206d9aef3117",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-pilot-r1663/case-006/report.json": "3d9af161c96a1a97278891a44fe7bdb0c7decfe3a13e792f755c1ef2ce1c397b",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-pilot-r1663/case-007/report.json": "86b35313bb018d119ab8e302ad620df7e3053c60c6de85f895e398dd4a3378f4",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-pilot-r1663/case-011/report.json": "cf5b531c9fbc21467420196695e4dfe223118c0d0da5d04e26a5c718f1a76d6c",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-pilot-r1663/case-013/report.json": "7a6bf879f0e1e171ad49606f3ffed95076f7fa99220bcaecec885dc4505d436d",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-pilot-r1663/case-020/report.json": "e9791b21fbdeebf70a3be92c8c192441b0da8aa0c40dd0a656e6b9233ee1f7b9",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-pilot-r1663/case-048/report.json": "82b8146b9b97e8ec7085610151647011c03db66147b79ffbe3abffefb14fc44a",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-pilot-r1663/case-049/report.json": "35f68ea228fb5637338a705589e3c9023dcbdd8ebfa8f041e159cab33f517f8c",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-pilot-r1663/case-051/report.json": "629a5c94cd9f37819a4212914d5937136fae82ac0fcc51b213cac72a9d37a050",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-pilot-r1663/case-058/report.json": "7da2c9922becbb8cfb5cebde6c60c58582c6b1aa435bf82b6e0a4b405793b07e",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-pilot-r1663/case-059/report.json": "bfb2c30827db92498f8b5a56bc0c618dcde6d1449a99701bac98dc2b04e237b9",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-pilot-r1663/case-089/report.json": "207125cd788c37ffd8aacb18b00db486da57b5b3ffbf881849cf96bc9f24e2f5",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-pilot-r1663/case-091/report.json": "9eb7acca62a46b736c23086b61e8f94097dbc34bf7bd0a657ee2bec574279feb",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-pilot-r1663/case-094/report.json": "a8ddc0b9dd0ee0e6d07f1f3fca39fae78738ab868a17b0dbc33a601022ed15c4",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-pilot-r1663/case-098/report.json": "f1c3dd07aae8229eecf4ab92c65dfb7ff728eb8e626aa560e043e2ab085f4831",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-pilot-r1663/case-128/report.json": "8ee3be5ce01b54cb2eaa5dd03c2c37796c5ea6e6ff28ef74982ee8930347217d",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-pilot-r1663/case-131/report.json": "0eab6594855ff6dca82b231d6deeec28ffa8631c7105078e77cfc45b9f9d4742",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-pilot-r1663/case-159/report.json": "32c3fcb65a3f35da2ebaae5a656c7c85c911bfea2cf54f43ed2ff7feed37f0d8"
+    },
+    "boundary": "Case131's parent times out this round but solved in earlier rounds; do not treat its crossing as a reproducible mechanism-attributed gain. Case94 still times out in all three arms."
+  },
+  "profile": {
+    "experiment": "0ef45c0cbd30",
+    "input": 94,
+    "versions": [
+      "parent",
+      "candidate"
+    ],
+    "diagnostic_seconds": 15,
+    "results_pending": false,
+    "reports": {
+      "94-candidate": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-profile-r1664/94-candidate/report.json",
+        "sha256": "3b02f53c33719351bd0271d98f2fe4a5cda038099aa4bdaec31e13aa57ab0e30",
+        "samples": 37,
+        "verdict": "timeout",
+        "solve_eqs_lines": [],
+        "selected_inclusive": [
+          [
+            "xolver::SolveEqs::run()",
+            20
+          ],
+          [
+            "xolver::SolveEqs::asNumericVar[abi:cxx11](unsigned int) const",
+            6
+          ],
+          [
+            "xolver::SolveEqs::run()::{lambda()#1}::operator()() const",
+            1
+          ],
+          [
+            "xolver::SolveEqs::computeUnsafeVars()",
+            1
+          ],
+          [
+            "xolver::ActiveTermUses::setRoot(unsigned long, unsigned int)",
+            1
+          ],
+          [
+            "xolver::ActiveTermUses::retain(unsigned int)",
+            1
+          ]
+        ]
+      },
+      "94-parent": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-profile-r1664/94-parent/report.json",
+        "sha256": "2eb74fc0e000d1ac7a6da8c7f02534a15fc865b2eac935b61964e1e28d8822e7",
+        "samples": 37,
+        "verdict": "timeout",
+        "solve_eqs_lines": [],
+        "selected_inclusive": [
+          [
+            "xolver::SolveEqs::run()",
+            19
+          ],
+          [
+            "xolver::SolveEqs::substitute(unsigned int, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, unsigned int)",
+            15
+          ],
+          [
+            "xolver::SolveEqs::run()::{lambda()#1}::operator()() const",
+            1
+          ],
+          [
+            "xolver::SolveEqs::computeUnsafeVars()",
+            1
+          ]
+        ]
+      }
+    },
+    "boundary": "Both15s runs remain in preprocessing. Candidate substitutes less but still scans/reclassifies potential definitions repeatedly:20/37 samples in SolveEqs,6/37 in asNumericVar. Motivates an ordered eligibility worklist, not a gain claim."
+  },
+  "protected_sets_used": false,
+  "qcp_candidate_validated": false,
+  "pr_main_promoted": false,
+  "evidence_boundary": "All1992 native tests and96 generated independent cases pass. The completed fixed160 fair round verifies109 parent/109 candidate/116 Z3 results (raw110/110/125); one Xolver and nine Z3 unconfirmed decisions remain excluded. No gained/lost solve; verified PAR-2 sums6656.479/6648.335/5564.032. The8.144s difference is small and not established as a reproducible whole-suite gain. The original94 preprocessing pass completes in the diagnostic window but its whole solve still times out. Retain the measured traversal improvement for further core work; no overall win, current-worker QCP comparison, protected-set run, full canonical source rebuild or PR/main promotion.",
+  "refinement": {
+    "build_experiment": "36086b9b3293",
+    "run": "ab48764cc2cd",
+    "inputs_sha256": "a7487884357be263b2cf28c329919dce05e091dac7b24ad654e2179013480785",
+    "implementation": "Discard equalities with no bare numeric-variable side from the candidate agenda. Keep failed candidates dormant until their defining assertion changes. Process reactivated slots in original order. The existing PolynomialInLinearPositions policy restores all live candidate slots after each elimination because nonlinear uses elsewhere can change eligibility. Reuse the already-qualified unchanged IR index and its tests; recompile changed preprocessing/tests. New tests cover local reactivation and global nonlinear-use reactivation.",
+    "solve_eqs_cases_passed": 18,
+    "solve_eqs_assertions_passed": 271,
+    "full_unit_pending": false,
+    "superseded_before_formal_pilot": true,
+    "native_qualification": {
+      "experiment": "36086b9b3293",
+      "run": "ab48764cc2cd",
+      "unit_cases": 1991,
+      "unit_assertions": 1295869,
+      "sha256": "620ef12e7be2fb6a9c1c1df089baa4e0fc9605ba78ba524ce6e889fd4b199203"
+    },
+    "budget_semantics_correction": "The existing NIA caller reuses a SolveEqs object across rewrite rounds. Remove the experimental per-run work reset, preserve its cumulative allowance, and avoid rebuilding an index once the allowance is exhausted. A regression contrasts the exhausted reused object with a fresh pass."
+  },
+  "case94": {
+    "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_LIA/20210219-Dartagnan/ConcurrencySafety-Main/fib_bench_longer-2-O0.smt2",
+    "member": "QF_LIA/20210219-Dartagnan/ConcurrencySafety-Main/fib_bench_longer-2-O0.smt2",
+    "logic": "QF_LIA",
+    "family": "20210219-Dartagnan",
+    "bytes": 8891673,
+    "sha256": "a6b68604187a341c570d8bd76135552ece1bbf958a1d7e9d4ff7f3eae998fd8f",
+    "expected": "unknown",
+    "shared_archive_member": "non-incremental/QF_LIA/20210219-Dartagnan/ConcurrencySafety-Main/fib_bench_longer-2-O0.smt2",
+    "shared_archive_sha256": "47f34fff3323f52e04ee33e611b80fd31b8f7f0177b7a9891b2499b259da69cf",
+    "archive_matches_server": true,
+    "repetitions": 1
+  },
+  "initial_index_qualification": {
+    "experiment": "ffbbcebae3b7",
+    "run": "f049d670c883",
+    "qualification_sha256": "e023f9bd4cb6e5564cfbb54e53e8eac2e1ee627c37f9c766eed91888fdcd869f",
+    "binary_sha256": "58df0666e4405f08ac7fe340a650b8cd36c936b614e3ccfa7483823f42340f16",
+    "worker_sha256": "d1e89bdf29eb095c39139cad28bdb2ef542a6a9107353e5cf28f8ad82ba3599f",
+    "inputs_sha256": "b9213a718940281c916df2d33a714c57c2c66dd3d412b261f927862223e655ed",
+    "unit_cases": 1989,
+    "unit_assertions": 1295855
+  },
+  "final_pilot": {
+    "experiment": "e975dc06b7a6",
+    "inputs": [
+      0,
+      1,
+      3,
+      6,
+      7,
+      11,
+      13,
+      20,
+      48,
+      49,
+      51,
+      58,
+      59,
+      89,
+      91,
+      94,
+      98,
+      128,
+      131,
+      159
+    ],
+    "all_20_exit_zero_pid_gone": true,
+    "verified": {
+      "baseline": 13,
+      "candidate": 13,
+      "z3": 20
+    },
+    "verified_par2": {
+      "baseline": 990.2582866735756,
+      "candidate": 984.2216952312738,
+      "z3": 98.94872191734612
+    },
+    "gained": [],
+    "lost": [],
+    "wrong": 0,
+    "protocol_errors": 0,
+    "spec_sha256": "d6f594b050d8b09e8e58fa73d704464ceea827082311e6d2a91982b8084b4dad"
+  },
+  "final_profile": {
+    "experiment": "ba7e933ee0b8",
+    "case": 94,
+    "seconds": 15,
+    "samples_each": 37,
+    "parent_solve_eqs_samples": 19,
+    "candidate_solve_eqs_samples": 4,
+    "parent_substitution_samples": 15,
+    "candidate_completed_eliminations": 538,
+    "candidate_work": 532123,
+    "candidate_dag_before": 196970,
+    "candidate_dag_after": 195836,
+    "boundary": "The candidate completes this preprocessing pass in the diagnostic window. The parent does not. The original candidate and parent whole-input decisions still time out at60s; no original-input solve credit or global speedup follows."
+  },
+  "independent_checks": {
+    "experiments": [
+      "539879c6b348",
+      "2613bcf3e2a3"
+    ],
+    "cases": 96,
+    "sat_models_cross_replayed": 48,
+    "oracle_checks": 288,
+    "logics": [
+      "QF_LIA",
+      "QF_LRA",
+      "QF_NIA",
+      "QF_NRA",
+      "QF_UFLIA",
+      "QF_AUFLIA"
+    ],
+    "reused_actual_xolver_results": 72,
+    "reports": [
+      {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-check-r1671/0/report.json",
+        "sha256": "4caf50c8a5577f8a926caed72996abbfe9742c04fb6155fdc258f3d93e6acc00",
+        "cases": 12,
+        "models": 6,
+        "oracle_checks": 36,
+        "reused_xolver_results": 6
+      },
+      {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-check-r1671/1/report.json",
+        "sha256": "1a98fedc58e2c51cb7ce771061f3320fd0699af7ff368c323e3d3ead0862e97a",
+        "cases": 12,
+        "models": 6,
+        "oracle_checks": 36,
+        "reused_xolver_results": 12
+      },
+      {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-check-r1671/2/report.json",
+        "sha256": "9621313c00e75dd48b759e05c5b5d9e6ba9b7e2be5d18b6712f4dece439dc141",
+        "cases": 12,
+        "models": 6,
+        "oracle_checks": 36,
+        "reused_xolver_results": 6
+      },
+      {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-check-r1671/3/report.json",
+        "sha256": "48717f9543e7dd9ab9e1bb08954ba86cb6fe7a3676e7ab25de463cf3ebd2734a",
+        "cases": 12,
+        "models": 6,
+        "oracle_checks": 36,
+        "reused_xolver_results": 12
+      },
+      {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-check-r1671/4/report.json",
+        "sha256": "1e611500642ec288a62145054fa5c32c6cdae885a7c08578b28aa964493f41b3",
+        "cases": 12,
+        "models": 6,
+        "oracle_checks": 36,
+        "reused_xolver_results": 6
+      },
+      {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-check-r1671/5/report.json",
+        "sha256": "a157a1cb960a3b87ad120cbc33e006c9fb4c73696fe6e4208dab6b284f56936b",
+        "cases": 12,
+        "models": 6,
+        "oracle_checks": 36,
+        "reused_xolver_results": 12
+      },
+      {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-check-r1671/6/report.json",
+        "sha256": "ba8215883e918bdcd08e8193036cf3558b406f885c552e8c2db2373c69dbab87",
+        "cases": 12,
+        "models": 6,
+        "oracle_checks": 36,
+        "reused_xolver_results": 6
+      },
+      {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-check-r1671/7/report.json",
+        "sha256": "9f6b61a73c8478dbe2d1c2d48908dafd31a3a87f1a9ef538bdacd1a99f391167",
+        "cases": 12,
+        "models": 6,
+        "oracle_checks": 36,
+        "reused_xolver_results": 12
+      }
+    ],
+    "recovery": "R1669 completes earlier native verdicts but stops on cvc5 constant-array model syntax requiring --arrays-exp. Preserve every old source/output. R1670 stops at Python syntax before any solver invocation (JavaScript replacement expansion); R1671's source is AST-checked before submission, passes one canary, then R1672 dispatches the other seven batches. Reuse72 identical source/output witnesses and check all96 cases/48 models independently. This oracle configuration applies only to correctness checks, not the fair arithmetic comparison."
+  },
+  "full160": {
+    "results_pending": false,
+    "retained_pilot_count": 20,
+    "additional_inputs": 140,
+    "waves": [
+      {
+        "experiment": "e2cdd60b8443",
+        "count": 64
+      },
+      {
+        "experiment": "13090c3e60ba",
+        "count": 50
+      },
+      {
+        "experiment": "06bfba8ecdbb",
+        "count": 24
+      },
+      {
+        "experiment": "dcfb1b1cf69e",
+        "count": 2
+      }
+    ],
+    "completed_valid_cases": 160,
+    "unusable_original_runs": [
+      {
+        "index": 83,
+        "run": "5c3870281241",
+        "status": "oom",
+        "exit_code": 137,
+        "pid_gone": true
+      },
+      {
+        "index": 116,
+        "run": "3a063f35ddce",
+        "status": "oom",
+        "exit_code": 137,
+        "pid_gone": true
+      }
+    ],
+    "recovery": {
+      "experiment": "e9621e3c6fea",
+      "inputs": [
+        83,
+        116
+      ],
+      "receipt": "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-recovery-inputs-r1674/recovery.json",
+      "sha256": "6b6d0178f4d7f4bd2010a6760850b0eb582a91f2134b9f124c411ec432171ee8",
+      "reason": "Case116 records a196.257s timeout notification; neither original cohort yields a complete valid formal record. Outer runs terminate137 (EOS calls them oom, which does not establish OOM). Old controller and observed child PIDs are gone. Retake only these two invalid cohorts under unchanged60s/single-core/16GiB and identical frozen binaries/harness; retain the other158 reports. No cgroup quota limit is observed; environmental cause remains unproven.",
+      "complete": true,
+      "all_two_exit_zero_pid_gone": true
+    },
+    "summary": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-full-r1673/summary.json",
+      "sha256": "7f61c8992b9ac5738d866723654da78a139975fbfbd085c7fa1bf50d205505cf"
+    },
+    "score": {
+      "baseline": {
+        "verified": 109,
+        "raw_definite": 110,
+        "unconfirmed": [
+          115
+        ],
+        "results": {
+          "sat": 62,
+          "unsat": 48,
+          "timeout": 49,
+          "unknown": 1
+        },
+        "verified_par2_sum": 6656.478708261624
+      },
+      "candidate": {
+        "verified": 109,
+        "raw_definite": 110,
+        "unconfirmed": [
+          115
+        ],
+        "results": {
+          "sat": 62,
+          "unsat": 48,
+          "timeout": 49,
+          "unknown": 1
+        },
+        "verified_par2_sum": 6648.334767146036
+      },
+      "z3": {
+        "verified": 116,
+        "raw_definite": 125,
+        "unconfirmed": [
+          12,
+          24,
+          27,
+          42,
+          50,
+          75,
+          80,
+          114,
+          148
+        ],
+        "results": {
+          "sat": 67,
+          "unsat": 58,
+          "timeout": 35
+        },
+        "verified_par2_sum": 5564.032035103068
+      }
+    },
+    "gained": [],
+    "lost": [],
+    "wrong": 0,
+    "protocol_errors": 0,
+    "gap": [
+      {
+        "index": 1,
+        "logic": "QF_LIA",
+        "family": "convert",
+        "member": "QF_LIA/convert/convert-jpg2gif-query-1470.smt2",
+        "sha256": "df42f9cdbe66be22d8b5f55d904ae308677681d21cf6ba13801a6c1bcc7d712b",
+        "xolver_result": "timeout",
+        "z3_result": "sat",
+        "z3_seconds": 0.7690572198480368,
+        "evidence": "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-pilot-r1666/case-001/report.json"
+      },
+      {
+        "index": 13,
+        "logic": "QF_LIA",
+        "family": "tropical-matrix",
+        "member": "QF_LIA/tropical-matrix/constraint-517804.smt2",
+        "sha256": "d9c546291b74c1b0021e19bff6aa4e9fbbb220fdcd253de67479375572f913f6",
+        "xolver_result": "timeout",
+        "z3_result": "sat",
+        "z3_seconds": 0.9196687564253807,
+        "evidence": "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-pilot-r1666/case-013/report.json"
+      },
+      {
+        "index": 29,
+        "logic": "QF_NIA",
+        "family": "UltimateLassoRanker",
+        "member": "QF_NIA/UltimateLassoRanker/CookSeeZuleger-2013TACAS-Fig7a-alloca_true-termination.c.i_Iteration8_Lasso+nonterminationTemplate.smt2",
+        "sha256": "0d5e3d04305e393bfd392b8652ba33f37220c4ff420054acffb70d61df5c89e7",
+        "xolver_result": "timeout",
+        "z3_result": "unsat",
+        "z3_seconds": 0.26667454838752747,
+        "evidence": "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-full-r1673/case-029/report.json"
+      },
+      {
+        "index": 34,
+        "logic": "QF_NIA",
+        "family": "20210219-Dartagnan",
+        "member": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/ps6-ll_valuebound5-O0.smt2",
+        "sha256": "ecf140bb267be14f595da4be5a54940f0a71fc7e4348aaa027bff1d7166f1ec3",
+        "xolver_result": "timeout",
+        "z3_result": "unsat",
+        "z3_seconds": 1.168767897412181,
+        "evidence": "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-full-r1673/case-034/report.json"
+      },
+      {
+        "index": 47,
+        "logic": "QF_NIA",
+        "family": "20250331-elster",
+        "member": "QF_NIA/20250331-elster/D_2.smt2",
+        "sha256": "2c37069c8324458e8f3ad46cc6dbe0cc3a6c2f31012ed504123e660bfdf7aba4",
+        "xolver_result": "timeout",
+        "z3_result": "sat",
+        "z3_seconds": 16.959521420300007,
+        "evidence": "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-full-r1673/case-047/report.json"
+      },
+      {
+        "index": 49,
+        "logic": "QF_LRA",
+        "family": "2019-ezsmt",
+        "member": "QF_LRA/2019-ezsmt/travellingSalesperson/rand_80_340_1159656267_16.lp.smt2",
+        "sha256": "d4baea957f7fe792713edbaf3edc6769274ab0aafe5e86182d023e858037d615",
+        "xolver_result": "timeout",
+        "z3_result": "sat",
+        "z3_seconds": 1.8216603174805641,
+        "evidence": "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-pilot-r1666/case-049/report.json"
+      },
+      {
+        "index": 56,
+        "logic": "QF_LRA",
+        "family": "miplib",
+        "member": "QF_LRA/miplib/pp08a-3000.smt2",
+        "sha256": "49761967d8071fc4d32d82165bcd7ef4fcdfe436b7634da8d42a9be673087218",
+        "xolver_result": "timeout",
+        "z3_result": "unsat",
+        "z3_seconds": 4.024674981832504,
+        "evidence": "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-full-r1673/case-056/report.json"
+      },
+      {
+        "index": 58,
+        "logic": "QF_LRA",
+        "family": "uart",
+        "member": "QF_LRA/uart/uart-26.base.cvc.smt2",
+        "sha256": "64f223bcde0c40ca731ab7443a27e55abf89d82d240cb58aed03a32ff50b15e8",
+        "xolver_result": "timeout",
+        "z3_result": "unsat",
+        "z3_seconds": 19.979262998327613,
+        "evidence": "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-pilot-r1666/case-058/report.json"
+      },
+      {
+        "index": 72,
+        "logic": "QF_NRA",
+        "family": "2019-ezsmt",
+        "member": "QF_NRA/2019-ezsmt/reverseFolding/39-reverse_folding-0-0.smt2",
+        "sha256": "cc66abe5f5716404298fd97cb383e65487d9277ea2611ee41add8e324e7eb2c4",
+        "xolver_result": "timeout",
+        "z3_result": "sat",
+        "z3_seconds": 9.842993773519993,
+        "evidence": "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-full-r1673/case-072/report.json"
+      },
+      {
+        "index": 89,
+        "logic": "QF_LIA",
+        "family": "RWS",
+        "member": "QF_LIA/RWS/Example_16.txt.smt2",
+        "sha256": "5b983ea0194c5b7fcdee4a87c0de44da99828561d82d288a89fd99da128f4c5f",
+        "xolver_result": "timeout",
+        "z3_result": "sat",
+        "z3_seconds": 0.8687610439956188,
+        "evidence": "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-pilot-r1666/case-089/report.json"
+      },
+      {
+        "index": 94,
+        "logic": "QF_LIA",
+        "family": "20210219-Dartagnan",
+        "member": "QF_LIA/20210219-Dartagnan/ConcurrencySafety-Main/fib_bench_longer-2-O0.smt2",
+        "sha256": "a6b68604187a341c570d8bd76135552ece1bbf958a1d7e9d4ff7f3eae998fd8f",
+        "xolver_result": "timeout",
+        "z3_result": "sat",
+        "z3_seconds": 53.81566437333822,
+        "evidence": "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-pilot-r1666/case-094/report.json"
+      },
+      {
+        "index": 106,
+        "logic": "QF_NIA",
+        "family": "20170427-VeryMax",
+        "member": "QF_NIA/20170427-VeryMax/ITS/From_AProVE_2014__juLinkedListCreateAddAllAt.jar-obl-17__p9090_safety_0.smt2",
+        "sha256": "c96b35bb3cae604115b99477562c4059c6e78ad16658f50d9dbb9ed8abad0a25",
+        "xolver_result": "timeout",
+        "z3_result": "sat",
+        "z3_seconds": 0.6673476193100214,
+        "evidence": "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-full-r1673/case-106/report.json"
+      },
+      {
+        "index": 108,
+        "logic": "QF_NIA",
+        "family": "20250331-elster",
+        "member": "QF_NIA/20250331-elster/B_2.smt2",
+        "sha256": "26d6012f717dec2f43e57be63e8638d1a13b6bc9cb5fcc963c08476793385786",
+        "xolver_result": "timeout",
+        "z3_result": "sat",
+        "z3_seconds": 4.577450316399336,
+        "evidence": "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-full-r1673/case-108/report.json"
+      },
+      {
+        "index": 116,
+        "logic": "QF_NIA",
+        "family": "AProVE",
+        "member": "QF_NIA/AProVE/aproveSMT5381466618694630101.smt2",
+        "sha256": "f6e90d9f987771e1dd41731a7fedef9cb83d38cd6c3e8131ac254e47e5c57cdc",
+        "xolver_result": "timeout",
+        "z3_result": "unsat",
+        "z3_seconds": 1.4692782778292894,
+        "evidence": "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-recovery-r1674/case-116/report.json"
+      },
+      {
+        "index": 122,
+        "logic": "QF_NIA",
+        "family": "20250331-elster",
+        "member": "QF_NIA/20250331-elster/D_1.smt2",
+        "sha256": "c88289f0453a6bbe098b4c5f092dfc50cd9e0ac21d799c6ccfc0a61b5a974389",
+        "xolver_result": "timeout",
+        "z3_result": "sat",
+        "z3_seconds": 18.41202468983829,
+        "evidence": "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-full-r1673/case-122/report.json"
+      },
+      {
+        "index": 128,
+        "logic": "QF_LRA",
+        "family": "uart",
+        "member": "QF_LRA/uart/uart-19.base.cvc.smt2",
+        "sha256": "718a1e36294547bf1605cbbbcc01dc2bbf4ae1682c8d30fc7f246f6f031d3bdf",
+        "xolver_result": "timeout",
+        "z3_result": "unsat",
+        "z3_seconds": 3.9258802887052298,
+        "evidence": "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-pilot-r1666/case-128/report.json"
+      },
+      {
+        "index": 129,
+        "logic": "QF_LRA",
+        "family": "LassoRanker",
+        "member": "QF_LRA/LassoRanker/CooperatingT2/polyrank4.t2.c_Iteration8_Loop_4-pieceTemplate.smt2",
+        "sha256": "a7dc84671c8b4907afe99c6e0156f36462f3a89a666b25926d92511f963fe476",
+        "xolver_result": "timeout",
+        "z3_result": "unsat",
+        "z3_seconds": 5.581271540373564,
+        "evidence": "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-full-r1673/case-129/report.json"
+      },
+      {
+        "index": 130,
+        "logic": "QF_LRA",
+        "family": "TM",
+        "member": "QF_LRA/TM/p-3-bucket_s10.smt2",
+        "sha256": "2606855399c6a9008140acb6c981d3f41d03194cab8075b68f2b198a20b2935a",
+        "xolver_result": "timeout",
+        "z3_result": "sat",
+        "z3_seconds": 5.331645967438817,
+        "evidence": "/pub/data/jiafq/xolver/validation/arithmetic-r103/active-term-uses-full-r1673/case-130/report.json"
+      }
+    ],
+    "verified_par2_delta_seconds": -8.14394111558795
+  }
+}

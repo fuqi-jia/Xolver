@@ -1,0 +1,26 @@
+{
+  "input_sha256": "3b3f35580e39c21659d09f507edd67f5c0d5271a2957125d9e99cca86db44033",
+  "definitions": {
+    "__certificateA": "(* 49 alpha vv1 (^ vv3 6))",
+    "__certificateB": "(* theta (+ (^ vv3 7) 1))"
+  },
+  "multipliers": [
+    {
+      "premise": 3,
+      "factor": "(* (- 49) alpha delta theta (^ vv3 6))"
+    },
+    {
+      "premise": 4,
+      "factor": "(* 7 (^ delta 2) (^ theta 2) (^ vv3 6))"
+    },
+    {
+      "premise": 5,
+      "factor": "(* 7 delta (^ theta 2) (^ vv3 6))"
+    },
+    {
+      "premise": 7,
+      "factor": "(* delta theta)"
+    }
+  ],
+  "positive_expression": "(* delta theta (+ (^ __certificateA 2) (* __certificateA delta __certificateB) (* 2 __certificateA delta) (* 2 __certificateA __certificateB) __certificateA (^ (- delta __certificateB) 2) (* delta (^ (- __certificateB 1) 2)) (* __certificateB (^ (- delta 1) 2)) (* delta __certificateB) (* 7 delta theta) (* 7 delta theta (^ vv3 6) gamma0 mu)))"
+}

@@ -69,3 +69,102 @@ TEST_CASE("Arithmetic reset: withdraw old interface disequalities before checkin
         checkWithdrawnInterface<LiaSolver>(TheoryId::LIA, true, applied);
     }
 }
+
+TEST_CASE("LRA replacement withdraws old bounds and cached conflicts") {
+    LraSolver engine;
+    TheoryLemmaDatabase lemmas;
+    const LinearFormKey x{{{"replacement-x", 1}}};
+    TheoryAtomRecord source{1, TheoryId::LRA, false, NullExpr,
+        LinearAtomPayload{x, Relation::Geq, RealValue::fromInt(2)}};
+    const TheoryAtomRecord ceiling{2, TheoryId::LRA, false, NullExpr,
+        LinearAtomPayload{x, Relation::Leq, RealValue::fromInt(1)}};
+    engine.assertLit(source, true, 0, {1, true});
+    engine.assertLit(ceiling, true, 0, {2, true});
+    REQUIRE(engine.check(lemmas).kind == TheoryCheckResult::Kind::Conflict);
+
+    // Changing the RHS creates a different auxiliary coordinate. The old
+    // bound and the conflict it caused must both disappear.
+    source.payload = LinearAtomPayload{x, Relation::Geq, RealValue::fromInt(0)};
+    engine.assertLit(source, true, 0, {1, true});
+    REQUIRE(engine.check(lemmas).kind == TheoryCheckResult::Kind::Consistent);
+    const auto model = engine.getModel();
+    REQUIRE(model);
+    const auto value = model->numericAssignments.at("replacement-x").tryAsRational();
+    REQUIRE(value);
+    CHECK(*value >= 0);
+    CHECK(*value <= 1);
+
+    // A relation-only replacement reuses the same auxiliary coordinate.
+    source.payload = LinearAtomPayload{x, Relation::Gt, RealValue::fromInt(1)};
+    engine.assertLit(source, true, 0, {1, true});
+    REQUIRE(engine.check(lemmas).kind == TheoryCheckResult::Kind::Conflict);
+    std::get<LinearAtomPayload>(source.payload).rel = Relation::Leq;
+    engine.assertLit(source, true, 0, {1, true});
+    REQUIRE(engine.check(lemmas).kind == TheoryCheckResult::Kind::Consistent);
+    const auto relaxed = engine.getModel();
+    REQUIRE(relaxed);
+    CHECK(relaxed->numericAssignments.at("replacement-x").tryAsRational() <= mpq_class(1));
+}
+
+TEST_CASE("LRA scopes restore sources after replacement conflicts and root replay") {
+    LraSolver engine;
+    TheoryLemmaDatabase lemmas;
+    const LinearFormKey x{{{"scoped-x", 1}}};
+    TheoryAtomRecord source{1, TheoryId::LRA, false, NullExpr,
+        LinearAtomPayload{x, Relation::Eq, RealValue::fromInt(0)}};
+    const auto checkValue = [&](int expected) {
+        REQUIRE(engine.check(lemmas).kind == TheoryCheckResult::Kind::Consistent);
+        const auto model = engine.getModel();
+        REQUIRE(model);
+        CHECK(model->numericAssignments.at("scoped-x").tryAsRational() == mpq_class(expected));
+    };
+    engine.assertLit(source, true, 0, {1, true});
+    checkValue(0);
+    engine.push();
+    std::get<LinearAtomPayload>(source.payload).rhs = RealValue::fromInt(1);
+    engine.assertLit(source, true, 0, {1, true});
+    checkValue(1);
+    engine.push();
+    const TheoryAtomRecord excluded{2, TheoryId::LRA, false, NullExpr,
+        LinearAtomPayload{x, Relation::Leq, RealValue::fromInt(1)}};
+    engine.assertLit(excluded, false, 1, {2, false});
+    REQUIRE(engine.check(lemmas).kind == TheoryCheckResult::Kind::Conflict);
+    engine.pop(1);
+    checkValue(1);
+
+    // Root restarts clear the live source base, but must preserve API scopes.
+    engine.backtrackToLevel(0);
+    std::get<LinearAtomPayload>(source.payload).rhs = RealValue::fromInt(2);
+    engine.restoreRootLiteral(source, true, {1, true});
+    checkValue(2);
+    engine.pop(1);
+    checkValue(0);
+    engine.pop(0);
+    checkValue(0);
+
+    engine.push();
+    engine.assertLit(excluded, false, 1, {2, false});
+    engine.push();
+    engine.pop(2);
+    checkValue(0);
+}
+
+TEST_CASE("LRA backtracking withdraws interior sources after level replacement") {
+    LraSolver engine;
+    TheoryLemmaDatabase lemmas;
+    const LinearFormKey x{{{"interior-x", 1}}};
+    const TheoryAtomRecord lower{1, TheoryId::LRA, false, NullExpr,
+        LinearAtomPayload{x, Relation::Geq, RealValue::fromInt(2)}};
+    const TheoryAtomRecord upper{2, TheoryId::LRA, false, NullExpr,
+        LinearAtomPayload{x, Relation::Leq, RealValue::fromInt(1)}};
+    engine.assertLit(lower, true, 1, {1, true});
+    engine.assertLit(upper, true, 1, {2, true});
+    REQUIRE(engine.check(lemmas).kind == TheoryCheckResult::Kind::Conflict);
+    engine.assertLit(lower, true, 2, {1, true});
+    REQUIRE(engine.check(lemmas).kind == TheoryCheckResult::Kind::Conflict);
+    engine.backtrackToLevel(1);
+    REQUIRE(engine.check(lemmas).kind == TheoryCheckResult::Kind::Consistent);
+    const auto model = engine.getModel();
+    REQUIRE(model);
+    CHECK(model->numericAssignments.at("interior-x").tryAsRational() <= mpq_class(1));
+}

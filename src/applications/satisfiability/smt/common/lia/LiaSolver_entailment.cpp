@@ -25,7 +25,21 @@ std::optional<bool> LiaSolver::evalAtomAtModel(SatVar variable) {
     const auto* record = registry_ ? registry_->findBySatVar(variable) : nullptr;
     if (!record) return std::nullopt;
     const auto* atom = std::get_if<LinearAtomPayload>(&record->payload);
-    return atom ? manager_.evaluateAtModel(gs_, *atom) : std::nullopt;
+    if (!atom) return std::nullopt;
+    auto interfacesHold = [this]() {
+        auto valueOf = [this](SharedTermId term) -> std::optional<DeltaRational> {
+            if (sharedTermRegistry_)
+                if (auto constant = sharedTermRegistry_->constValue(term)) return DeltaRational(*constant);
+            const int column = manager_.findVarIndex(getVarNameForSharedTerm(term));
+            if (column < 0 || column >= gs_.numVars()) return std::nullopt;
+            const auto point = gs_.value(column);
+            if (point.b != 0 || point.a.get_den() != 1) return std::nullopt;
+            return point;
+        };
+        return LinearAtomManager::sharedRelationsHold(interfaceEqualities_, interfaceDisequalities_, valueOf);
+    };
+    if (!manager_.currentPointSatisfies(gs_, theoryTrail_, SortKind::Int, interfacesHold)) return std::nullopt;
+    return manager_.evaluateAtModel(gs_, *atom, SortKind::Int);
 }
 
 // NOTE: This translation unit was split out of LiaSolver.cpp for readability.

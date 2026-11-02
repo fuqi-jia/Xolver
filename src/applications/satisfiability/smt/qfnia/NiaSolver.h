@@ -35,7 +35,7 @@ class NiaLinearizationAdapter;
 class CdcacCore;        // integer-aware CDCAC (libpoly-gated; constructed in .cpp)
 class AlgebraBackend;
 class NiaLinearDecider; // embedded bounded LIA model search (nia.linear-decide; own TU)
-namespace farkas { struct FarkasProfile; }  // bounded-B refutation input
+namespace farkas { struct FarkasProfile; struct FarkasOrContext; }
 
 /**
  * NIA (Nonlinear Integer Arithmetic) theory solver.
@@ -247,7 +247,8 @@ private:
     // disjunctive Farkas-certificate-synthesis problems (VeryMax/Stroeder).
     // Returns SAT only after validating
     // against the original NativeTerms formula; never UNSAT.
-    std::optional<TheoryCheckResult> stageFarkasOr(TheoryLemmaStorage&, TheoryEffort);
+    std::optional<TheoryCheckResult> stageFarkasOr(
+        TheoryLemmaStorage&, TheoryEffort, farkas::FarkasOrContext&);
     // Bounded-B real-relaxation refutation.
     // For each integer tuple of the bounded template vars B and
     // each Or-branch combo, substitute B and decide the REAL relaxation over
@@ -258,7 +259,7 @@ private:
     // every leaf is a CdcacCore projection-certified Unsat; any Sat/Unknown
     // leaf (or any modelling gap) bails to nullopt.
     std::optional<TheoryCheckResult> tryBoundedBRefutation(
-        const farkas::FarkasProfile& profile);
+        const farkas::FarkasProfile& profile, bool& notRefutable);
     std::optional<TheoryCheckResult> stageLocalSearch(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stagePendingLemma(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageBranch(TheoryLemmaStorage&, TheoryEffort);

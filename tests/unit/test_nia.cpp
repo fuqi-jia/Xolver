@@ -1,6 +1,9 @@
 #include <doctest/doctest.h>
 #include "xolver/Solver.h"
 #include "applications/satisfiability/smt/qfnia/NiaLinearDecider.h"
+#include "applications/satisfiability/smt/qfnia/NiaSolver.h"
+#include "base/EnvParam.h"
+#include "search/arith/Reasoner.h"
 #include "search/coordination/TheoryAtomRegistry.h"
 #include "search/boolean/Atomizer.h"
 #include "search/coordination/TheoryManager.h"
@@ -31,6 +34,97 @@ struct LinearDeciderContext {
     ~LinearDeciderContext() { backend.disconnectPropagator(); }
     SatLit reason() { return SatLit::positive(sat->newVar()); }
 };
+
+class ModelEncodingCounter : public NiaSolver {
+public:
+    explicit ModelEncodingCounter(std::unique_ptr<PolynomialKernel> kernel)
+        : NiaSolver(std::move(kernel)) {
+        for (auto& stage : reasoners_) {
+            if (stage->name() != "nia.bit-blast-early") continue;
+            const auto original = std::shared_ptr<Reasoner>(std::move(stage));
+            stage = std::make_unique<CallbackReasoner>("nia.bit-blast-early",
+                [this, original](TheoryLemmaStorage& db, TheoryEffort effort) {
+                    ++encodingCalls;
+                    return original->run(db, effort);
+                }, ReasonerSchedule::CandidateModel);
+        }
+    }
+    unsigned encodingCalls = 0;
+};
+}
+
+TEST_CASE("NIA: exact polynomial refutation precedes bounded model encoding") {
+    env::Scope scope(env::Snapshot::capture({
+        {"XOLVER_NIA_BB_EARLY_MIN_ACTIVE", "0"},
+        {"XOLVER_NIA_BITBLAST_GATE_BUDGET", "1"}}));
+    auto kernel = createPolynomialKernel();
+    auto* polynomial = kernel.get();
+    const auto p = polynomial->mkVar(polynomial->getOrCreateVar("p"));
+    LinearDeciderContext context;
+    ModelEncodingCounter solver(std::move(kernel));
+    solver.setRegistry(&context.registry);
+    const auto impossible = context.reason();
+    solver.assertLit(TheoryAtomRecord{impossible.var, TheoryId::NIA, false, NullExpr,
+        PolynomialAtomPayload{polynomial->add(polynomial->pow(p, 2), polynomial->mkConst(1)),
+                              Relation::Lt, RealValue::fromInt(0)}}, true, 0, impossible);
+    for (int index = 0; index < 64; ++index) {
+        const auto variable = polynomial->mkVar(polynomial->getOrCreateVar("w" + std::to_string(index)));
+        const auto reason = context.reason();
+        solver.assertLit(TheoryAtomRecord{reason.var, TheoryId::NIA, false, NullExpr,
+            PolynomialAtomPayload{polynomial->pow(variable, 2), Relation::Geq,
+                                  RealValue::fromInt(0)}}, true, 0, reason);
+    }
+    TheoryLemmaDatabase db;
+    const auto result = solver.check(db, TheoryEffort::Full);
+    REQUIRE(result.kind == TheoryCheckResult::Kind::Conflict);
+    REQUIRE(result.conflictOpt);
+    CHECK(std::find(result.conflictOpt->clause.begin(), result.conflictOpt->clause.end(),
+                    impossible) != result.conflictOpt->clause.end());
+    CHECK(solver.encodingCalls == 0);
+}
+
+TEST_CASE("NIA: exact linear decisions retain branch reasons and models without encoding") {
+    env::Scope scope(env::Snapshot::capture({
+        {"XOLVER_NIA_BB_EARLY_MIN_ACTIVE", "0"},
+        {"XOLVER_NIA_BITBLAST_GATE_BUDGET", "1"}}));
+    auto kernel = createPolynomialKernel();
+    auto* polynomial = kernel.get();
+    const auto x = polynomial->mkVar(polynomial->getOrCreateVar("x"));
+    const auto y = polynomial->mkVar(polynomial->getOrCreateVar("y"));
+    const auto z = polynomial->mkVar(polynomial->getOrCreateVar("z"));
+    LinearDeciderContext context;
+    ModelEncodingCounter solver(std::move(kernel));
+    solver.setRegistry(&context.registry);
+    auto assertConstraint = [&](PolyId poly, SatLit reason, int level) {
+        solver.assertLit(TheoryAtomRecord{reason.var, TheoryId::NIA, false, NullExpr,
+            PolynomialAtomPayload{poly, Relation::Geq, RealValue::fromInt(0)}}, true, level, reason);
+    };
+    assertConstraint(polynomial->sub(polynomial->sub(x, y), polynomial->mkConst(1)), context.reason(), 0);
+    assertConstraint(polynomial->sub(polynomial->sub(y, z), polynomial->mkConst(1)), context.reason(), 0);
+    for (int index = 0; index < 64; ++index) {
+        const auto left = polynomial->mkVar(polynomial->getOrCreateVar("w" + std::to_string(index)));
+        const auto right = polynomial->mkVar(polynomial->getOrCreateVar("w" + std::to_string(index + 1)));
+        assertConstraint(polynomial->sub(left, right), context.reason(), 0);
+    }
+    const auto closing = context.reason();
+    assertConstraint(polynomial->sub(z, x), closing, 1);
+    TheoryLemmaDatabase db;
+    const auto conflict = solver.check(db, TheoryEffort::Full);
+    REQUIRE(conflict.kind == TheoryCheckResult::Kind::Conflict);
+    REQUIRE(conflict.conflictOpt);
+    CHECK(std::find(conflict.conflictOpt->clause.begin(), conflict.conflictOpt->clause.end(),
+                    closing) != conflict.conflictOpt->clause.end());
+    CHECK(solver.encodingCalls == 0);
+    solver.backtrackToLevel(0);
+    REQUIRE(solver.check(db, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Consistent);
+    const auto model = solver.getModel();
+    REQUIRE(model);
+    const mpz_class xv(model->assignments.at("x"));
+    const mpz_class yv(model->assignments.at("y"));
+    const mpz_class zv(model->assignments.at("z"));
+    CHECK(xv - yv >= 1);
+    CHECK(yv - zv >= 1);
+    CHECK(solver.encodingCalls == 0);
 }
 
 static std::string writeTempSmt2(const std::string& content) {

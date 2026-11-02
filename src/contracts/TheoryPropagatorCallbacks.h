@@ -13,18 +13,29 @@ class TheoryAtomLookup {
 public:
     virtual ~TheoryAtomLookup() = default;
     virtual const TheoryAtomRecord* findBySatVar(SatVar v) const = 0;
-    // SatVars of all registered linear (bound) atoms. Used by cb_decide
-    // feasibility steering. Default empty.
-    virtual std::vector<SatVar> linearAtomVars() const { return {}; }
+    // Linear candidates from an append-only registration suffix. The offset
+    // counts ALL records, matching numAtomVars(), including non-linear atoms.
+    // Omitting it returns an owned snapshot of all linear candidates.
+    virtual std::vector<SatVar> linearAtomVars(size_t firstRecord = 0) const {
+        std::vector<SatVar> result;
+        const auto atoms = allAtomVars();
+        for (size_t i = firstRecord; i < atoms.size(); ++i) {
+            const auto* atom = findBySatVar(atoms[i]);
+            if (atom && std::holds_alternative<LinearAtomPayload>(atom->payload))
+                result.push_back(atoms[i]);
+        }
+        return result;
+    }
     // SatVars of ALL registered theory atoms (linear, polynomial, shared-eq,
     // EUF-eq, ...). Used by cb_decide to break the combination livelock:
     // shared-equality / interface atoms are OBSERVED but appear in no
     // irredundant clause, so CaDiCaL cannot VSIDS-decide them and spins on
     // cb_decide without completing a model. Default empty.
     virtual std::vector<SatVar> allAtomVars() const { return {}; }
-    // O(1) count of registered atoms, so cb_decide can detect when its cached
-    // allAtomVars() snapshot is stale (atoms are created dynamically mid-solve).
-    virtual size_t numAtomVars() const { return 0; }
+    // Count registered atoms so decision snapshots can detect dynamic growth.
+    // Registries override this with an O(1) count; custom lookups inherit a
+    // count consistent with their enumeration rather than an unknown zero.
+    virtual size_t numAtomVars() const { return allAtomVars().size(); }
 };
 
 // ---------------------------------------------------------------------------

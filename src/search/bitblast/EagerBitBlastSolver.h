@@ -13,7 +13,7 @@ namespace xolver::bitblast {
 
 // Whole-formula eager bit-blaster (BLAN-style) as a SOUND PORTFOLIO ARM.
 //
-// Translates the ENTIRE lowered integer formula — boolean skeleton via Tseitin
+// Translates the ENTIRE lowered numeric formula — boolean skeleton via Tseitin
 // gates + each arithmetic atom reified via the ported bit-blaster (Int vars ->
 // two's-complement bit-vectors) — into ONE SAT instance and solves it once.
 //
@@ -21,8 +21,12 @@ namespace xolver::bitblast {
 // CANDIDATE; it is accepted only after EXACT integer re-evaluation of every
 // assertion (kernel arithmetic + the boolean structure). It NEVER returns Unsat
 // (a bit-blast UNSAT at a heuristic width proves nothing about the unbounded
-// integer problem) and NEVER returns an unvalidated Sat. Binary-domain LIA
-// enters through solveBinary and uses fully reified pseudo-Boolean constraints.
+// integer problem) and NEVER returns an unvalidated Sat. Real polynomial
+// inputs use the same integer-valued candidate points and exact validation;
+// failure of that subset search leaves the original real problem open.
+// Finite-domain LIA
+// enters through solveLinear and uses fully reified pseudo-Boolean constraints
+// for arbitrary finite signed integer domains.
 // Any encoding mistake
 // can therefore only downgrade a candidate to Unknown, never produce a wrong
 // answer. Widths are escalated (cascade); overflow of the var budget bails the
@@ -40,7 +44,7 @@ public:
         // Without this, evalBool's missing-var default to false caused wrong
         // Ite-branch selection during reconstruction (test_model_consistency).
         Status status = Status::Unknown;
-        std::unordered_map<std::string, mpz_class> model;     // validated int model
+        std::unordered_map<std::string, mpz_class> model;     // validated integral numeric point
         std::unordered_map<std::string, bool> boolModel;      // Bool variables
     };
 
@@ -49,10 +53,10 @@ public:
     // Attempt to find (and exactly validate) a model for `assertions` in `ir`.
     Result solve(const NativeTerms& ir, const std::vector<ExprId>& assertions);
 
-    // Linear integer portfolio entry. Applies only when positive root facts
-    // prove every used integer variable lies in {0,1}; otherwise returns
-    // Unknown before polynomial conversion or SAT allocation.
-    Result solveBinary(const NativeTerms& ir, const std::vector<ExprId>& assertions);
+    // Linear integer portfolio entry. Positive root facts and their exact
+    // linear consequences must bound every used integer variable. Conditional
+    // bounds cannot qualify a domain. No SAT allocation occurs otherwise.
+    Result solveLinear(const NativeTerms& ir, const std::vector<ExprId>& assertions);
 
     // Give eager-bb a SMALL slice for this one call (Farkas/termination shapes,
     // where its bilinear-λ width search diverges on UNSAT) so it bails to Unknown
@@ -69,6 +73,8 @@ public:
     }
 
 private:
+    Result solveImpl(const NativeTerms& ir, const std::vector<ExprId>& assertions,
+                     bool finiteLinearOnly);
     long budgetPctOverride_ = -1;
     long budgetMsOverride_ = -1;
     std::unique_ptr<PolynomialKernel> kernel_;
@@ -92,8 +98,8 @@ private:
     void tryExtractBound(PolyId diff, Relation rel);
 
 
-    // Walk the DAG: reject unsupported constructs (UF/array/quantifier/real),
-    // convert every arith atom, collect int vars. Returns false => bail Unknown.
+    // Walk the DAG: reject unsupported constructs (UF/array/quantifier),
+    // convert every polynomial atom, collect numeric vars. False => Unknown.
     bool collect(const NativeTerms& ir, const std::vector<ExprId>& assertions);
 
     bool isBoolTyped(ExprId eid, const NativeTerms& ir) const;

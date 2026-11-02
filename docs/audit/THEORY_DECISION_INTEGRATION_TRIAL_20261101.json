@@ -1,0 +1,3929 @@
+{
+  "schema": "xolver-theory-decision-integration-trial/1",
+  "implementation_commit": "de0aea14774bd954abd175859b384be1768fcc38",
+  "qualification": {
+    "native_builder_sha256": "8d2c292158580df641a2f3eb110c0a5d54676346a2df37347d10ed12314abea2",
+    "source_head": "de0aea14774bd954abd175859b384be1768fcc38",
+    "source_manifest_sha256": "92444636e2ea3b97afd1c6fa94ebbf6345742bafe1d6ed250d61ceabe6971ade",
+    "binaries": {
+      "xolver": "f4bfca785b42ea287df7af9f37fa28bf8e3745c8ce46c9b0266dcc74b3a1988b",
+      "xolver-sv": "af7607aa50c7d7cd4c6845f53871592587876277f49203f8619d7a7845f3a3ec",
+      "xolver-parallel-worker": "bc17dd8b1b33b587e1f4130f8ad4bf7e4663810a20536cc5a0fd3871cfab5182"
+    },
+    "binary_sha256": "f4bfca785b42ea287df7af9f37fa28bf8e3745c8ce46c9b0266dcc74b3a1988b",
+    "unit_binary_sha256": "32ed1185db7ebbf681b93ab89eb56110facff1dbcc4831c6b07e83b2b13c13ac",
+    "full_unit_tests_pending": true,
+    "library_sha256": "e1f2f3b6f38cb574abf0c4d7e5e83d7d3adae64b83c4d3dfea32330ee9ad7665",
+    "python_extension_sha256": "f5cc2de1f8a61616478c074f478024b0aaa0310fed72f663574d14f1d9e22114",
+    "python_shared_libraries": {
+      "/usr/lib/x86_64-linux-gnu/libmpfr.so.6": "1aed080b3143049fbe016cd82cdc5fb47db386386556cc1bb37cfccc133c0fae",
+      "/usr/lib/x86_64-linux-gnu/libgmp.so.10": "fda9699eef15deda5f1c626e9140377a7f5d88c41516a54278ac02429cb20fa5",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/partial-proof-python-r1208/native-runtime/usr/lib/x86_64-linux-gnu/libgmpxx.so.4.7.0": "c6261b838536ec28a47008433227aaaf2573f408b54bfa79bea8c9c98c4acaa6"
+    },
+    "python_tests": 31,
+    "logs": {
+      "targeted.log": "ea1c668e26ed5a0e95717b24fdfd103f3e269ecf0560241701ab9ca83582d6bf",
+      "python-tests.log": "728b31d4b0ce392935e2d4ca99f10ef1a45990754a92a0e5e7d0d33b7fd504b2",
+      "negative-contract.log": "970e7aced7f5fd78ebdb2d1dbe3f71dedcc19940125d821f6960ef2150c04b9b",
+      "negative-build.log": "d574007d1e27a162b2eea3ce9c46eaa59129c322c4eb19de4ec89cd741ae6a15",
+      "python-link.log": "7dcc0b3899864f169ca92b4d8a6dc182922336bdb79756cc6d553f9601d23ecb",
+      "build-unit.log": "ef596e2273817ca77d0405fca1518cc819f4c1d4a81c8540cb215432ea4972a0",
+      "factory-route-contract.log": "b78cb464b6c12943d5087015877868ef3b6a38351e70e26eb605c566858f4fb4",
+      "architecture.log": "ee2d80a785e3e9e3a4c838efaf85059ad52986f30af4974c3a7b3b9707d0b44c",
+      "build.log": "ed5c017c0e4eb17ee3e1cf9030e18c1483fb7df44e2ea573ce38d80fe717ab5d",
+      "overlay.log": "771460a31d7ec70964d9b5ec0500e429e2bd1d132e1d23ceb2263f7c6b4bb6d1",
+      "configure.log": "8807d55a20c22a2c29350fd4c1ec0cdb8491e2981ab7efe4faf100e01cfb22c0"
+    },
+    "metrics": {
+      "completed": 1,
+      "failures": 0
+    },
+    "negative_source_sha256": "9803e747e0ce1e416cc6638a19f5bd71e91d69a9f051b6f9bde8fe96af6637ea",
+    "negative_unit_exit_code": 1,
+    "negative_same_abi_headers": {
+      "src/applications/satisfiability/smt/TheoryFactory.h": "6d3d27146a7aa97a008acdfb19d94f5c07a1184a5811d9e3aded5994286b32d2",
+      "src/search/coordination/TheoryManager.h": "0810a88001119223f3924418a2dca3f3938b3cd982764397e0f09ff71a3881ba",
+      "src/search/coordination/TheoryAtomRegistry.h": "95bc188636671b32beeba07e4207163c7fa4aa3a43dd30517ee11428b886f7c8"
+    },
+    "previous_qualified_source_head": "b49a43506ca3199a40f5c9ccd9b570d67a145883",
+    "overlay_parent_source_head": "787981dcbd5bd0bb719f187efb644dee208391b7",
+    "recovered_failed_build": {
+      "experiment": "41a2bc99eb95",
+      "run": "e11eac07a304",
+      "metrics_sha256": "9743c137ed43f6f9c59c730cb77388e38e82c6ef40bdaa0262df1dc2a36ca1f1",
+      "test_log_sha256": "b1a8cab44eca3581bb79037c69e5c267a1efdbb3ae885adb5d3ce506e281224c",
+      "reason": "Initial new test omitted the required SAT observation context. Corrected fixture connects the real SAT backend and adapter; production code is unchanged from the failed source."
+    },
+    "protected_sets_used": false,
+    "boundary": "All factory-built theory stacks share the atom registry at the common setup boundary, including pure LIA, linear helpers and feature-routed stacks. Eleven factory/manager integration routes test exact model phases and no registration side effects. The old factory against identical headers must fail the new integration contract. Candidate-cache refresh remains included from R1377. This build freeze qualifies targeted native checks and31 Python tests; full units and all39 checks follow once. Both protected sets remain unused, with no solver-score, original-C QCP or promotion claim."
+  },
+  "qualification_sha256": "2504c3073f951c67df73e4a5e11846db4e39f8f870fb630771d3ea424a62539f",
+  "native_build": [
+    {
+      "experiment": "72c980afd63f",
+      "run": "32d734d495d8",
+      "input": "run",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "0"
+        ]
+      }
+    }
+  ],
+  "acceptance": [
+    {
+      "experiment": "71e1e1834a9e",
+      "run": "97d81b937be0",
+      "input": "unit",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "0"
+        ]
+      },
+      "commands_sha256": "b4acf0577efd08bea26d84ad0913a118b0db47ecbe38695fea0f6c5b9e628ba1"
+    },
+    {
+      "experiment": "71e1e1834a9e",
+      "run": "1749a44befa5",
+      "input": "regression-lra",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "1"
+        ]
+      },
+      "commands_sha256": "b5fc1e13da0ad5d15fbaa9ed6e3fc3ce1c6f0721fdeecb575318598cf72ce991"
+    },
+    {
+      "experiment": "71e1e1834a9e",
+      "run": "de7e4c812999",
+      "input": "regression-lia",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "2"
+        ]
+      },
+      "commands_sha256": "24c859f6a14187cec31b9ed9c1309d091714060c15c543625ad09880f4c0662a"
+    },
+    {
+      "experiment": "71e1e1834a9e",
+      "run": "e88a87d760bd",
+      "input": "linear",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "3"
+        ]
+      },
+      "commands_sha256": "5e9a67b490b21172af4b893529d1b2a9640b6c9a924f0d9a152f9df7198ba291"
+    },
+    {
+      "experiment": "71e1e1834a9e",
+      "run": "1065b03915a0",
+      "input": "qcp",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "4"
+        ]
+      },
+      "commands_sha256": "6d172dec37883a72c1a48f55d43c803a7f81a6fa9d2514f8a1b01f3b355b3b18"
+    },
+    {
+      "experiment": "71e1e1834a9e",
+      "run": "2df9ecf37430",
+      "input": "tools",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "5"
+        ]
+      },
+      "commands_sha256": "22bd6b541e2294e42c7247cc0d27bb240c99f56430fe249e943fe8bc19cf23ef"
+    },
+    {
+      "experiment": "71e1e1834a9e",
+      "run": "98557b43f61e",
+      "input": "root-regressions",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "6"
+        ]
+      },
+      "commands_sha256": "44dfbcd5eeccf15126687cabdffc82af47276613111f8b9b5550c21dfee7bd82"
+    },
+    {
+      "experiment": "71e1e1834a9e",
+      "run": "4b6ee7b3b7b5",
+      "input": "architecture",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "7"
+        ]
+      },
+      "commands_sha256": "e461e8286c921ba15a02f96ccdb224c415702d272ba70f34af6ef4c546b86716"
+    },
+    {
+      "experiment": "71e1e1834a9e",
+      "run": "0f3ea2891a7c",
+      "input": "known-gaps",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "8"
+        ]
+      },
+      "commands_sha256": "924a72d48cafaa88547ae8eca67ef92a2a0e7faf8639ec85a4ef081a7338bf8c"
+    },
+    {
+      "experiment": "71e1e1834a9e",
+      "run": "f09955a750f4",
+      "input": "affine",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "9"
+        ]
+      },
+      "commands_sha256": "b1a8e7050c7bbd5fa5443e05a973ce77bd96cc22c8ec0c5cbfcae3693b793adf"
+    },
+    {
+      "experiment": "71e1e1834a9e",
+      "run": "d02aa2868e0c",
+      "input": "partial",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "10"
+        ]
+      },
+      "commands_sha256": "b5d20755652ec1cfe3d8b3c0ee7f663216034a28643f16cd555e7a6251628752"
+    },
+    {
+      "experiment": "71e1e1834a9e",
+      "run": "7ebe183a9350",
+      "input": "intervals",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "11"
+        ]
+      },
+      "commands_sha256": "e5f553ab8cde0c60b734b508fa7508b38bfb7689ef0dac3566dd1307bf0f304c"
+    },
+    {
+      "experiment": "71e1e1834a9e",
+      "run": "6382efe1fd19",
+      "input": "quick",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "12"
+        ]
+      },
+      "commands_sha256": "5181e50599a5807ccffd9b2e7bb1eadbc814f24f7efba6976166132350f6a9f2"
+    },
+    {
+      "experiment": "71e1e1834a9e",
+      "run": "d40cc09a9db3",
+      "input": "regression-alia",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "13"
+        ]
+      },
+      "commands_sha256": "329a5bd99cf6ecaa76b7bac2bce818caec0fa12a736d9ee1140d256ff8cb23d3"
+    },
+    {
+      "experiment": "71e1e1834a9e",
+      "run": "f5e62fedb566",
+      "input": "regression-alra",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "14"
+        ]
+      },
+      "commands_sha256": "efa393d6f481e8d144f3bf99a44810c17e4fd4b19ddb0f45b8e382e536efcd1c"
+    },
+    {
+      "experiment": "71e1e1834a9e",
+      "run": "c33233a44e62",
+      "input": "regression-ania",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "15"
+        ]
+      },
+      "commands_sha256": "120e87ff576e07967316dba65ae932f6bdd3e2057b4cdbb79ec7f22b4e6eb0ba"
+    },
+    {
+      "experiment": "71e1e1834a9e",
+      "run": "10fe5c143e0b",
+      "input": "regression-auflia",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "16"
+        ]
+      },
+      "commands_sha256": "657e2c884f26cbfa51a536b9ff1ef7deb09cb23e84bebc9b3cff02919e9ece39"
+    },
+    {
+      "experiment": "71e1e1834a9e",
+      "run": "491f1da128ab",
+      "input": "regression-auflra",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "17"
+        ]
+      },
+      "commands_sha256": "b6925d36042df1e82710a5ff8ceffb9c1a4dd878de2c331402711990eca4ba41"
+    },
+    {
+      "experiment": "71e1e1834a9e",
+      "run": "ea322b53a70d",
+      "input": "regression-aufnia",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "20"
+        ]
+      },
+      "commands_sha256": "4e4f62e8d3590f3b30ec36109fca82c8afca361864c0af2283e76ea6ee7574b7"
+    },
+    {
+      "experiment": "71e1e1834a9e",
+      "run": "aa156314e430",
+      "input": "regression-ax",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "21"
+        ]
+      },
+      "commands_sha256": "c811a50e20b08e309dbcaaa2bfa69e8cfe255aadae0a1d157f16dac980cccdf9"
+    },
+    {
+      "experiment": "f01f813194f2",
+      "run": "544a0795bff2",
+      "input": "regression-bool",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "1"
+        ]
+      },
+      "commands_sha256": "b881b61b7ccb0cadc87a2f38c8ea3c56b176402f164fb71c5e2b22699368c04f"
+    },
+    {
+      "experiment": "f01f813194f2",
+      "run": "c94042579877",
+      "input": "regression-dt",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "2"
+        ]
+      },
+      "commands_sha256": "f08e7c05d57f81ae281858702ae35276d20c9f9a9d76791b9bf2e0ec0a1955cd"
+    },
+    {
+      "experiment": "f01f813194f2",
+      "run": "3244ef7a4839",
+      "input": "regression-euf",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "6"
+        ]
+      },
+      "commands_sha256": "ca18666f15a1eea8ab2f1165320a6e16de2cba8714468c816f8909bb77f1ac3b"
+    },
+    {
+      "experiment": "f01f813194f2",
+      "run": "3ca1abcc91f0",
+      "input": "regression-idl",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "7"
+        ]
+      },
+      "commands_sha256": "1868f9951706be93cd331b939e50c504e23c056c1a8177ec7565a74ccad2ea30"
+    },
+    {
+      "experiment": "f01f813194f2",
+      "run": "4e51f9a088d9",
+      "input": "regression-lira",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "8"
+        ]
+      },
+      "commands_sha256": "e87063a6a9c29e93d3705bfc365f9eb77989a34957ddb2b9908e614569ef04b0"
+    },
+    {
+      "experiment": "f01f813194f2",
+      "run": "0375be938a82",
+      "input": "regression-nira",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "10"
+        ]
+      },
+      "commands_sha256": "caee3aab1470269e6e615490ca293a2cba9f8ac3073b9dd9d670becfb07750a7"
+    },
+    {
+      "experiment": "f01f813194f2",
+      "run": "a0109e4eacc1",
+      "input": "regression-nra",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "12"
+        ]
+      },
+      "commands_sha256": "a185ac65af597a06fbabf1127da8a88ff8f9d53a71bbf1dd3c8145b53d887141"
+    },
+    {
+      "experiment": "f01f813194f2",
+      "run": "f9c92650b1ed",
+      "input": "regression-quantifiers",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "13"
+        ]
+      },
+      "commands_sha256": "57d204ef04ddb20948dd4e9a92a1195ab0d918acb7dde498bf6f4943832302d7"
+    },
+    {
+      "experiment": "f01f813194f2",
+      "run": "ae70ccb9aa3b",
+      "input": "regression-rdl",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "14"
+        ]
+      },
+      "commands_sha256": "ce742a1ef7ccf836c073689925e9efee2ec86a83f81d658ca59c2bdd428f09f0"
+    },
+    {
+      "experiment": "f01f813194f2",
+      "run": "46377050a212",
+      "input": "regression-sl",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "15"
+        ]
+      },
+      "commands_sha256": "ce0d394ab918ca85191f76fa829ae22558e2835f2d459acd5cb970932f77ff44"
+    },
+    {
+      "experiment": "f01f813194f2",
+      "run": "2910208a93c8",
+      "input": "regression-ufdtlia",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "16"
+        ]
+      },
+      "commands_sha256": "0f4f6025cbf13791ed1385ec11d22c422dd71e4b33ab85ecfe7670707a4b110f"
+    },
+    {
+      "experiment": "f01f813194f2",
+      "run": "954b1d1e0f93",
+      "input": "regression-ufdtnia",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "17"
+        ]
+      },
+      "commands_sha256": "0facc49034394cd9e21e95ec31a5767da396407a06e70ce8340ad81888d7bb45"
+    },
+    {
+      "experiment": "f01f813194f2",
+      "run": "6b4698935892",
+      "input": "regression-uflia",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "20"
+        ]
+      },
+      "commands_sha256": "f97a3d1efca283fd5dfc19d2855d34b30e155d29bf3bab143f096e3218098899"
+    },
+    {
+      "experiment": "f01f813194f2",
+      "run": "36d5dd39a283",
+      "input": "regression-uflra",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "21"
+        ]
+      },
+      "commands_sha256": "81904bd68ec5f7459f64e05d1642f91ccaf5326c4de048fea64a8b1b8d248936"
+    },
+    {
+      "experiment": "f01f813194f2",
+      "run": "366f887153b4",
+      "input": "regression-ufnia",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "22"
+        ]
+      },
+      "commands_sha256": "98857c0ec6776ccda187c7102b64356612a3ec27865ce6a8f0810928379eb1bb"
+    },
+    {
+      "experiment": "f01f813194f2",
+      "run": "7b0067249d62",
+      "input": "regression-ufnra",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "23"
+        ]
+      },
+      "commands_sha256": "d848f22063ec9e4e051c8ac290caa30a3095514ca88093d3b63e6fa33f5c3c19"
+    },
+    {
+      "experiment": "f01f813194f2",
+      "run": "2741789b473d",
+      "input": "theory-models",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "24"
+        ]
+      },
+      "commands_sha256": "a50e41d7995a90db3c449d95a09ff8f87406c089b4c90b7074a0d61b2751c816"
+    },
+    {
+      "experiment": "f01f813194f2",
+      "run": "9c7a147671cb",
+      "input": "regression-nia",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "25"
+        ]
+      },
+      "commands_sha256": "c0fd7d0450096f6c064a3fa2ab004183190911d83665aed76c0a83ddf3b1064d"
+    },
+    {
+      "experiment": "f01f813194f2",
+      "run": "8d15608d8138",
+      "input": "certificate-115",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "26"
+        ]
+      },
+      "commands_sha256": "a28da27d7ae489e5833230b75f5021deeda01e5ddcab1309f83261b8a66a60ab"
+    }
+  ],
+  "unit_cases": 1913,
+  "unit_assertions": 988274,
+  "unit_log_sha256": "10a5158cdf746f071e54aea19c69775ded986c8c30c84c79a5fa22623aa8c0f2",
+  "python_tests": 31,
+  "pilot": {
+    "cases": 9,
+    "binaries": {
+      "baseline": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/prefix-pruning-r1341/xolver",
+        "sha256": "30965221fc2a3b37177a7e79c771b6fb4d9f738d4a524357aee2448b5b3ba07f"
+      },
+      "candidate": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/theory-routing-r1388/xolver",
+        "sha256": "f4bfca785b42ea287df7af9f37fa28bf8e3745c8ce46c9b0266dcc74b3a1988b"
+      },
+      "z3": {
+        "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+        "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      }
+    },
+    "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+    "timeout": 60,
+    "memory_bytes": 17179869184,
+    "model_capture": "initial-solve-single-model",
+    "counts": {
+      "baseline": {
+        "timeout": 7,
+        "decided": 2,
+        "verified_decided": 2,
+        "verified_par2": 906.3066127747297,
+        "raw_par2": 906.3066127747297,
+        "sat": 2
+      },
+      "candidate": {
+        "timeout": 5,
+        "decided": 4,
+        "verified_decided": 4,
+        "verified_par2": 734.4312226865441,
+        "raw_par2": 734.4312226865441,
+        "sat": 4
+      },
+      "z3": {
+        "sat": 8,
+        "decided": 9,
+        "verified_decided": 9,
+        "verified_par2": 32.48996232636273,
+        "raw_par2": 32.48996232636273,
+        "unsat": 1
+      }
+    },
+    "by_logic": {
+      "QF_LIA": {
+        "baseline": {
+          "timeout": 4,
+          "decided": 0,
+          "verified_decided": 0,
+          "verified_par2": 480,
+          "raw_par2": 480
+        },
+        "candidate": {
+          "timeout": 3,
+          "decided": 1,
+          "verified_decided": 1,
+          "verified_par2": 416.2738230731338,
+          "raw_par2": 416.2738230731338,
+          "sat": 1
+        },
+        "z3": {
+          "sat": 4,
+          "decided": 4,
+          "verified_decided": 4,
+          "verified_par2": 9.289052138105035,
+          "raw_par2": 9.289052138105035
+        }
+      },
+      "QF_LRA": {
+        "baseline": {
+          "timeout": 3,
+          "decided": 2,
+          "verified_decided": 2,
+          "verified_par2": 426.30661277472973,
+          "raw_par2": 426.30661277472973,
+          "sat": 2
+        },
+        "candidate": {
+          "timeout": 2,
+          "decided": 3,
+          "verified_decided": 3,
+          "verified_par2": 318.15739961341023,
+          "raw_par2": 318.15739961341023,
+          "sat": 3
+        },
+        "z3": {
+          "sat": 4,
+          "decided": 5,
+          "verified_decided": 5,
+          "verified_par2": 23.200910188257694,
+          "raw_par2": 23.200910188257694,
+          "unsat": 1
+        }
+      }
+    },
+    "changes": [
+      {
+        "index": 51,
+        "case": "QF_LRA/LassoRanker/CooperatingT2/ludcmp.c.i.ludcmp.pl.t2.fixed.t2.c_Iteration8_Loop_7-phaseTemplate.smt2",
+        "kind": "gained",
+        "truth": "sat",
+        "evidence": [
+          "candidate-exported-model-replay",
+          "z3-exported-model-replay"
+        ],
+        "observations": {
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.02094038017094
+          },
+          "candidate": {
+            "result": "sat",
+            "seconds": 17.511106522753835
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 0.6673196274787188
+          }
+        }
+      },
+      {
+        "index": 98,
+        "case": "QF_LIA/2019-cmodelsdiff/labyrinth/0003-labyrinth-11-0.smt2",
+        "kind": "gained",
+        "truth": "sat",
+        "evidence": [
+          "z3-exported-model-replay",
+          "candidate-exported-model-replay"
+        ],
+        "observations": {
+          "z3": {
+            "result": "sat",
+            "seconds": 6.7850037813186646
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.05891567841172
+          },
+          "candidate": {
+            "result": "sat",
+            "seconds": 56.273823073133826
+          }
+        }
+      }
+    ],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "unverified": [],
+    "scoring": "Correct verdicts require a replayed model or an independent UNSAT decision on the identical input hash; unresolved results receive PAR-2 penalty."
+  },
+  "pilot_runs": [
+    {
+      "experiment": "01dfb114527f",
+      "run": "f9b3bd8a805e",
+      "input": "1",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "1"
+        ]
+      },
+      "report_sha256": "371e335458abce7fe54d870f0f3eb57b83ff8995b831764f112f8886a7b8a7ae"
+    },
+    {
+      "experiment": "01dfb114527f",
+      "run": "807d9d2d53cf",
+      "input": "13",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "2"
+        ]
+      },
+      "report_sha256": "9d5d4bce6375ade1ec695e3add70d6f269076f0afca63c97464159563feb39cf"
+    },
+    {
+      "experiment": "01dfb114527f",
+      "run": "9b0a519662d3",
+      "input": "89",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "4"
+        ]
+      },
+      "report_sha256": "1bf384d641f550b83da972a7cb3b64dbd8e40a036e23b4aa5d050c8450cec9ef"
+    },
+    {
+      "experiment": "01dfb114527f",
+      "run": "06aad44112bb",
+      "input": "98",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "6"
+        ]
+      },
+      "report_sha256": "c0459a0d383014db4a24893e4db5f776741bb7554791fecbf6a3b3a4f3cf979f"
+    },
+    {
+      "experiment": "01dfb114527f",
+      "run": "47566de54c37",
+      "input": "49",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "7"
+        ]
+      },
+      "report_sha256": "95331d385cdd28e1cac29fddcb4bbbda6febe375f2ebc11893bfc644bbac7fa5"
+    },
+    {
+      "experiment": "01dfb114527f",
+      "run": "85f48a8927c7",
+      "input": "58",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "8"
+        ]
+      },
+      "report_sha256": "bd84c995635a13e4159a32d77cd724c8bba1fd1728849ff8d45da0abc7e7ddb6"
+    },
+    {
+      "experiment": "01dfb114527f",
+      "run": "388178941229",
+      "input": "51",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "9"
+        ]
+      },
+      "report_sha256": "730551beccac7080410f248bf6321ba1bf1fbf396d3df11c39b271cbfebfe986"
+    },
+    {
+      "experiment": "01dfb114527f",
+      "run": "0dd009508707",
+      "input": "59",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "10"
+        ]
+      },
+      "report_sha256": "6fcab691be6c2b96d42368084a839bd38fdfbc00a1343703bce4fdf2b661d206"
+    },
+    {
+      "experiment": "01dfb114527f",
+      "run": "d2c8d825dc57",
+      "input": "131",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "11"
+        ]
+      },
+      "report_sha256": "924cb8816c62ba8cb669fe894051b8ba94ea44017ae455bd5dbb82b6bd13b7f6"
+    }
+  ],
+  "formal_raw": {
+    "cases": 160,
+    "binaries": {
+      "baseline": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/prefix-pruning-r1341/xolver",
+        "sha256": "30965221fc2a3b37177a7e79c771b6fb4d9f738d4a524357aee2448b5b3ba07f"
+      },
+      "candidate": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/theory-routing-r1388/xolver",
+        "sha256": "f4bfca785b42ea287df7af9f37fa28bf8e3745c8ce46c9b0266dcc74b3a1988b"
+      },
+      "z3": {
+        "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+        "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      }
+    },
+    "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+    "timeout": 60,
+    "memory_bytes": 17179869184,
+    "model_capture": "initial-solve-single-model",
+    "counts": {
+      "baseline": {
+        "unsat": 47,
+        "decided": 106,
+        "verified_decided": 105,
+        "verified_par2": 7073.356673059985,
+        "raw_par2": 6953.422882141545,
+        "timeout": 53,
+        "sat": 59,
+        "unknown": 1
+      },
+      "candidate": {
+        "unsat": 46,
+        "decided": 105,
+        "verified_decided": 104,
+        "verified_par2": 7243.452563429251,
+        "raw_par2": 7123.522841047496,
+        "timeout": 54,
+        "sat": 59,
+        "unknown": 1
+      },
+      "z3": {
+        "unsat": 58,
+        "decided": 126,
+        "verified_decided": 117,
+        "verified_par2": 5420.759929722175,
+        "raw_par2": 4493.516584744677,
+        "sat": 68,
+        "timeout": 34
+      }
+    },
+    "by_logic": {
+      "QF_LIA": {
+        "baseline": {
+          "unsat": 15,
+          "decided": 34,
+          "verified_decided": 34,
+          "verified_par2": 1909.5252249706537,
+          "raw_par2": 1909.5252249706537,
+          "timeout": 14,
+          "sat": 19
+        },
+        "candidate": {
+          "unsat": 14,
+          "decided": 32,
+          "verified_decided": 32,
+          "verified_par2": 2176.617304516956,
+          "raw_par2": 2176.617304516956,
+          "timeout": 16,
+          "sat": 18
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 39,
+          "verified_decided": 36,
+          "verified_par2": 1480.4107120931149,
+          "raw_par2": 1217.1661461219192,
+          "sat": 24,
+          "timeout": 9
+        }
+      },
+      "QF_NIA": {
+        "baseline": {
+          "timeout": 19,
+          "decided": 29,
+          "verified_decided": 28,
+          "verified_par2": 2448.4600602481514,
+          "raw_par2": 2328.526269329712,
+          "unsat": 16,
+          "sat": 13
+        },
+        "candidate": {
+          "timeout": 19,
+          "decided": 29,
+          "verified_decided": 28,
+          "verified_par2": 2448.6232576034963,
+          "raw_par2": 2328.6935352217406,
+          "unsat": 16,
+          "sat": 13
+        },
+        "z3": {
+          "unsat": 22,
+          "decided": 35,
+          "verified_decided": 31,
+          "verified_par2": 2119.9404028002173,
+          "raw_par2": 1640.6554136611521,
+          "sat": 13,
+          "timeout": 13
+        }
+      },
+      "QF_LRA": {
+        "baseline": {
+          "unsat": 10,
+          "decided": 19,
+          "verified_decided": 19,
+          "verified_par2": 1709.1939749699086,
+          "raw_par2": 1709.1939749699086,
+          "timeout": 13,
+          "sat": 9
+        },
+        "candidate": {
+          "unsat": 10,
+          "decided": 19,
+          "verified_decided": 19,
+          "verified_par2": 1676.6258541718125,
+          "raw_par2": 1676.6258541718125,
+          "timeout": 13,
+          "sat": 9
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 26,
+          "verified_decided": 25,
+          "verified_par2": 884.4241481926292,
+          "raw_par2": 819.4442232307047,
+          "sat": 11,
+          "timeout": 6
+        }
+      },
+      "QF_NRA": {
+        "baseline": {
+          "sat": 18,
+          "decided": 24,
+          "verified_decided": 24,
+          "verified_par2": 1006.1774128712714,
+          "raw_par2": 1006.1774128712714,
+          "unsat": 6,
+          "timeout": 7,
+          "unknown": 1
+        },
+        "candidate": {
+          "sat": 19,
+          "decided": 25,
+          "verified_decided": 25,
+          "verified_par2": 941.5861471369863,
+          "raw_par2": 941.5861471369863,
+          "unsat": 6,
+          "timeout": 6,
+          "unknown": 1
+        },
+        "z3": {
+          "sat": 20,
+          "decided": 26,
+          "verified_decided": 25,
+          "verified_par2": 935.9846666362137,
+          "raw_par2": 816.250801730901,
+          "timeout": 6,
+          "unsat": 6
+        }
+      }
+    },
+    "changes": [
+      {
+        "index": 7,
+        "case": "QF_LIA/wisa/wisa2.smt2",
+        "kind": "lost",
+        "truth": "unsat",
+        "evidence": [
+          "independent-z3-xolver-agreement"
+        ],
+        "observations": {
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.00787572748959
+          },
+          "z3": {
+            "result": "unsat",
+            "seconds": 0.11611009202897549
+          },
+          "baseline": {
+            "result": "unsat",
+            "seconds": 17.56759701296687
+          }
+        }
+      },
+      {
+        "index": 11,
+        "case": "QF_LIA/slacks/30-28.slack.smt2",
+        "kind": "lost",
+        "truth": "sat",
+        "evidence": [
+          "z3-exported-model-replay",
+          "baseline-exported-model-replay"
+        ],
+        "observations": {
+          "z3": {
+            "result": "sat",
+            "seconds": 7.732551308348775
+          },
+          "baseline": {
+            "result": "sat",
+            "seconds": 5.882134009152651
+          },
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.00779949687421
+          }
+        }
+      },
+      {
+        "index": 91,
+        "case": "QF_LIA/convert/convert-jpg2gif-query-1206.smt2",
+        "kind": "lost",
+        "truth": "sat",
+        "evidence": [
+          "z3-exported-model-replay",
+          "baseline-exported-model-replay"
+        ],
+        "observations": {
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.00968965701759
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 0.16661554016172886
+          },
+          "baseline": {
+            "result": "sat",
+            "seconds": 3.3257247675210238
+          }
+        }
+      },
+      {
+        "index": 98,
+        "case": "QF_LIA/2019-cmodelsdiff/labyrinth/0003-labyrinth-11-0.smt2",
+        "kind": "gained",
+        "truth": "sat",
+        "evidence": [
+          "z3-exported-model-replay",
+          "candidate-exported-model-replay"
+        ],
+        "observations": {
+          "z3": {
+            "result": "sat",
+            "seconds": 6.683090185746551
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.06059540249407
+          },
+          "candidate": {
+            "result": "sat",
+            "seconds": 57.513923009857535
+          }
+        }
+      },
+      {
+        "index": 144,
+        "case": "QF_NRA/2019-ezsmt/reverseFolding/31-reverse_folding-0-0.smt2",
+        "kind": "gained",
+        "truth": "sat",
+        "evidence": [
+          "candidate-exported-model-replay",
+          "z3-exported-model-replay"
+        ],
+        "observations": {
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.16070244833827
+          },
+          "candidate": {
+            "result": "sat",
+            "seconds": 54.95852508209646
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 7.785985155031085
+          }
+        }
+      }
+    ],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "unverified": [
+      {
+        "index": 12,
+        "case": "QF_LIA/fft/Sz128_2823.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 24,
+        "case": "QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 27,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 42,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep2a.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 50,
+        "case": "QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_jain_5.i_2_4_3.bpl_7.smt2",
+        "results": {
+          "z3": "unsat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 80,
+        "case": "QF_LIA/cut_lemmas/20-vars/cut_lemma_03_004.smt2",
+        "results": {
+          "z3": "unsat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 94,
+        "case": "QF_LIA/20210219-Dartagnan/ConcurrencySafety-Main/fib_bench_longer-2-O0.smt2",
+        "results": {
+          "candidate": "timeout",
+          "z3": "sat",
+          "baseline": "timeout"
+        },
+        "reasons": {
+          "z3": "unsupported model binding"
+        }
+      },
+      {
+        "index": 114,
+        "case": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 115,
+        "case": "QF_NIA/20230321-UltimateAutomizerSvcomp2023/ps6.c_7.smt2",
+        "results": {
+          "candidate": "unsat",
+          "z3": "timeout",
+          "baseline": "unsat"
+        },
+        "reasons": {
+          "candidate": "no independent confirmation within budget",
+          "baseline": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 159,
+        "case": "QF_NRA/20161105-Sturm-MGC/mgc_07.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      }
+    ],
+    "scoring": "Correct verdicts require a replayed model or an independent UNSAT decision on the identical input hash; unresolved results receive PAR-2 penalty."
+  },
+  "formal": {
+    "cases": 160,
+    "binaries": {
+      "baseline": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/prefix-pruning-r1341/xolver",
+        "sha256": "30965221fc2a3b37177a7e79c771b6fb4d9f738d4a524357aee2448b5b3ba07f"
+      },
+      "candidate": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/theory-routing-r1388/xolver",
+        "sha256": "f4bfca785b42ea287df7af9f37fa28bf8e3745c8ce46c9b0266dcc74b3a1988b"
+      },
+      "z3": {
+        "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+        "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      }
+    },
+    "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+    "timeout": 60,
+    "memory_bytes": 17179869184,
+    "model_capture": "initial-solve-single-model",
+    "counts": {
+      "baseline": {
+        "unsat": 47,
+        "decided": 106,
+        "verified_decided": 106,
+        "verified_par2": 6953.422882141545,
+        "raw_par2": 6953.422882141545,
+        "timeout": 53,
+        "sat": 59,
+        "unknown": 1
+      },
+      "candidate": {
+        "unsat": 46,
+        "decided": 105,
+        "verified_decided": 105,
+        "verified_par2": 7123.522841047496,
+        "raw_par2": 7123.522841047496,
+        "timeout": 54,
+        "sat": 59,
+        "unknown": 1
+      },
+      "z3": {
+        "unsat": 58,
+        "decided": 126,
+        "verified_decided": 118,
+        "verified_par2": 5356.97461026907,
+        "raw_par2": 4493.516584744677,
+        "sat": 68,
+        "timeout": 34
+      }
+    },
+    "by_logic": {
+      "QF_LIA": {
+        "baseline": {
+          "unsat": 15,
+          "decided": 34,
+          "verified_decided": 34,
+          "verified_par2": 1909.5252249706537,
+          "raw_par2": 1909.5252249706537,
+          "timeout": 14,
+          "sat": 19
+        },
+        "candidate": {
+          "unsat": 14,
+          "decided": 32,
+          "verified_decided": 32,
+          "verified_par2": 2176.617304516956,
+          "raw_par2": 2176.617304516956,
+          "timeout": 16,
+          "sat": 18
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 39,
+          "verified_decided": 37,
+          "verified_par2": 1416.6253926400095,
+          "raw_par2": 1217.1661461219192,
+          "sat": 24,
+          "timeout": 9
+        }
+      },
+      "QF_NIA": {
+        "baseline": {
+          "timeout": 19,
+          "decided": 29,
+          "verified_decided": 29,
+          "verified_par2": 2328.526269329712,
+          "raw_par2": 2328.526269329712,
+          "unsat": 16,
+          "sat": 13
+        },
+        "candidate": {
+          "timeout": 19,
+          "decided": 29,
+          "verified_decided": 29,
+          "verified_par2": 2328.6935352217406,
+          "raw_par2": 2328.6935352217406,
+          "unsat": 16,
+          "sat": 13
+        },
+        "z3": {
+          "unsat": 22,
+          "decided": 35,
+          "verified_decided": 31,
+          "verified_par2": 2119.9404028002173,
+          "raw_par2": 1640.6554136611521,
+          "sat": 13,
+          "timeout": 13
+        }
+      },
+      "QF_LRA": {
+        "baseline": {
+          "unsat": 10,
+          "decided": 19,
+          "verified_decided": 19,
+          "verified_par2": 1709.1939749699086,
+          "raw_par2": 1709.1939749699086,
+          "timeout": 13,
+          "sat": 9
+        },
+        "candidate": {
+          "unsat": 10,
+          "decided": 19,
+          "verified_decided": 19,
+          "verified_par2": 1676.6258541718125,
+          "raw_par2": 1676.6258541718125,
+          "timeout": 13,
+          "sat": 9
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 26,
+          "verified_decided": 25,
+          "verified_par2": 884.4241481926292,
+          "raw_par2": 819.4442232307047,
+          "sat": 11,
+          "timeout": 6
+        }
+      },
+      "QF_NRA": {
+        "baseline": {
+          "sat": 18,
+          "decided": 24,
+          "verified_decided": 24,
+          "verified_par2": 1006.1774128712714,
+          "raw_par2": 1006.1774128712714,
+          "unsat": 6,
+          "timeout": 7,
+          "unknown": 1
+        },
+        "candidate": {
+          "sat": 19,
+          "decided": 25,
+          "verified_decided": 25,
+          "verified_par2": 941.5861471369863,
+          "raw_par2": 941.5861471369863,
+          "unsat": 6,
+          "timeout": 6,
+          "unknown": 1
+        },
+        "z3": {
+          "sat": 20,
+          "decided": 26,
+          "verified_decided": 25,
+          "verified_par2": 935.9846666362137,
+          "raw_par2": 816.250801730901,
+          "timeout": 6,
+          "unsat": 6
+        }
+      }
+    },
+    "changes": [
+      {
+        "index": 7,
+        "case": "QF_LIA/wisa/wisa2.smt2",
+        "kind": "lost",
+        "truth": "unsat",
+        "evidence": [
+          "independent-z3-xolver-agreement"
+        ],
+        "observations": {
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.00787572748959
+          },
+          "z3": {
+            "result": "unsat",
+            "seconds": 0.11611009202897549
+          },
+          "baseline": {
+            "result": "unsat",
+            "seconds": 17.56759701296687
+          }
+        }
+      },
+      {
+        "index": 11,
+        "case": "QF_LIA/slacks/30-28.slack.smt2",
+        "kind": "lost",
+        "truth": "sat",
+        "evidence": [
+          "z3-exported-model-replay",
+          "baseline-exported-model-replay"
+        ],
+        "observations": {
+          "z3": {
+            "result": "sat",
+            "seconds": 7.732551308348775
+          },
+          "baseline": {
+            "result": "sat",
+            "seconds": 5.882134009152651
+          },
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.00779949687421
+          }
+        }
+      },
+      {
+        "index": 91,
+        "case": "QF_LIA/convert/convert-jpg2gif-query-1206.smt2",
+        "kind": "lost",
+        "truth": "sat",
+        "evidence": [
+          "z3-exported-model-replay",
+          "baseline-exported-model-replay"
+        ],
+        "observations": {
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.00968965701759
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 0.16661554016172886
+          },
+          "baseline": {
+            "result": "sat",
+            "seconds": 3.3257247675210238
+          }
+        }
+      },
+      {
+        "index": 98,
+        "case": "QF_LIA/2019-cmodelsdiff/labyrinth/0003-labyrinth-11-0.smt2",
+        "kind": "gained",
+        "truth": "sat",
+        "evidence": [
+          "z3-exported-model-replay",
+          "candidate-exported-model-replay"
+        ],
+        "observations": {
+          "z3": {
+            "result": "sat",
+            "seconds": 6.683090185746551
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.06059540249407
+          },
+          "candidate": {
+            "result": "sat",
+            "seconds": 57.513923009857535
+          }
+        }
+      },
+      {
+        "index": 144,
+        "case": "QF_NRA/2019-ezsmt/reverseFolding/31-reverse_folding-0-0.smt2",
+        "kind": "gained",
+        "truth": "sat",
+        "evidence": [
+          "candidate-exported-model-replay",
+          "z3-exported-model-replay"
+        ],
+        "observations": {
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.16070244833827
+          },
+          "candidate": {
+            "result": "sat",
+            "seconds": 54.95852508209646
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 7.785985155031085
+          }
+        }
+      }
+    ],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "unverified": [
+      {
+        "index": 12,
+        "case": "QF_LIA/fft/Sz128_2823.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 24,
+        "case": "QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 27,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 42,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep2a.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 50,
+        "case": "QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_jain_5.i_2_4_3.bpl_7.smt2",
+        "results": {
+          "z3": "unsat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 80,
+        "case": "QF_LIA/cut_lemmas/20-vars/cut_lemma_03_004.smt2",
+        "results": {
+          "z3": "unsat",
+          "baseline": "timeout",
+          "candidate": "timeout"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 114,
+        "case": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 159,
+        "case": "QF_NRA/20161105-Sturm-MGC/mgc_07.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      }
+    ],
+    "scoring": "Correct verdicts require a replayed model or an independent UNSAT decision on the identical input hash; unresolved results receive PAR-2 penalty. The same-round independent modular-certificate acceptance additionally confirms UNSAT115; the original raw reports and raw summary are preserved. Actual timed Z3 model94 is independently replayed after omitting unused internal universe metadata; every original interpretation is retained as a closed numeric/Boolean term.",
+    "certificate_confirmation": {
+      "index": 115,
+      "input_sha256": "02a58b11df8951543940a1090a140592e24de41dcaeb6470e7a50d42e804be64",
+      "certificate_sha256": "48f5d0ca9b19679a48f3248ac1183c31d09e0c198bfda0a70b3b4272b6d1a5ba",
+      "receipt": {
+        "experiment": "f01f813194f2",
+        "run": "8d15608d8138",
+        "input": "certificate-115",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "26"
+          ]
+        },
+        "commands_sha256": "a28da27d7ae489e5833230b75f5021deeda01e5ddcab1309f83261b8a66a60ab"
+      },
+      "checker_sha256": "e4b5b0eb2b4f1e3b3d508d4d741dcac2e95e70af0a1a6c9075eb03159aae3098",
+      "log_sha256": "823672e87696cac914fac33d8d0027db15a21b566e700a65300cdca704cf910e"
+    },
+    "model_confirmation": {
+      "receipt": [
+        {
+          "experiment": "05b863a1267f",
+          "run": "f2ffc514601b",
+          "input": "94",
+          "resources": {
+            "cpu_slots": 1,
+            "cpu_ids": [
+              "0"
+            ]
+          }
+        }
+      ],
+      "record": {
+        "index": 94,
+        "input_sha256": "a6b68604187a341c570d8bd76135552ece1bbf958a1d7e9d4ff7f3eae998fd8f",
+        "timed_report_sha256": "d34c3926c60c3c2c655392aed21c6fdbc270012a7e34878d7b860d5257821b2e",
+        "actual_timed_model_sha256": "6236638ba899c1b28ca4caaf5c00c781e8bbe8ce9c8f48b6a68ac4800c308a21",
+        "original_interpretations": 47343,
+        "omitted_model_forms": 247,
+        "all_original_interpretations_closed": true,
+        "projection_sha256": "cd5b5d017c1185d688755fa0acb5276f9b1dbb8806b71813bf21f026277965f3",
+        "pinned_sha256": "56e5f92326bbd1255c2aadb0f7ec36911c5ca421d20438cf8158c1da8f7bd49b",
+        "checker_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+        "checker_result": "sat",
+        "checker_timing": {
+          "seconds": 3.1403869800269604,
+          "launch_seconds": 0.002821166068315506,
+          "wait_seconds": 3.137565813958645,
+          "returncode": 0,
+          "timeout_notified_seconds": null,
+          "cleanup_seconds": null,
+          "timed_out": false,
+          "budget_overrun": false
+        },
+        "script_sha256": "403f56284b7cb368335b42423a8acfeb193372fc44f94908594b9c22351fd6bc",
+        "protected_sets_used": false,
+        "boundary": "Supplement only: independent replay of the actual model exported by the existing timed R1394 Z3 invocation. All original declarations retain closed numeric/Boolean definitions; unused internal universe metadata is omitted. Every original assertion is checked. No new timed search, modified raw report or selected timing replacement."
+      },
+      "record_sha256": "a91b3966450fd4f2fc665cc0d2d2c038a8773f97195a6a270c5a6a28411afd89"
+    }
+  },
+  "formal_runs": [
+    {
+      "experiment": "0daceb31acd0",
+      "run": "48f388800ec1",
+      "input": "0",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "0"
+        ]
+      },
+      "report_sha256": "0453be459f1a7a729622f9310261b38d4039d16d3d84e048b4d7045cfe126e66"
+    },
+    {
+      "experiment": "0daceb31acd0",
+      "run": "4dd3b932378c",
+      "input": "1",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "1"
+        ]
+      },
+      "report_sha256": "00c89b599369a4f9b57cacdfb4467b03b757916dea1115643d1f7915e1446ca3"
+    },
+    {
+      "experiment": "0daceb31acd0",
+      "run": "f8b87e7d85d3",
+      "input": "2",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "2"
+        ]
+      },
+      "report_sha256": "68694987b37c0d91ef82ae9e286a9cbea120ec624e5b557b345a519cbc865e33"
+    },
+    {
+      "experiment": "0daceb31acd0",
+      "run": "f18fe4124202",
+      "input": "3",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "4"
+        ]
+      },
+      "report_sha256": "a216c85ed949f2a3e33581c0c2b19c090bc41776dd980cbe8df46d52d888a2cb"
+    },
+    {
+      "experiment": "0daceb31acd0",
+      "run": "9438d8f79150",
+      "input": "4",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "6"
+        ]
+      },
+      "report_sha256": "c405f68794c80c2d52d89b1ac53d28d1ba05bbbfaf44b54b72819357a869eee8"
+    },
+    {
+      "experiment": "0daceb31acd0",
+      "run": "3278222d8c48",
+      "input": "5",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "7"
+        ]
+      },
+      "report_sha256": "9fd7574393c6072b54a1afb20271993d990a1ccc2ea18a70aefb87b7ce65849e"
+    },
+    {
+      "experiment": "0daceb31acd0",
+      "run": "c116f4b9bebd",
+      "input": "6",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "8"
+        ]
+      },
+      "report_sha256": "8a2ca7393f74c057feb2f9e29ce01e9449b5561b22be17c7c8dd79fb52f0127c"
+    },
+    {
+      "experiment": "0daceb31acd0",
+      "run": "b8244e305ffb",
+      "input": "7",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "9"
+        ]
+      },
+      "report_sha256": "d5316389ed6da827e06bfda4f39a0311161af18b9db3f1f89d0bc44f3f469281"
+    },
+    {
+      "experiment": "4c0e1b3721f9",
+      "run": "e4c057abf695",
+      "input": "8",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "0"
+        ]
+      },
+      "report_sha256": "793e6e72e29079424706d2f9e5800ea23f2d6f2586a07bcb9e48dcc35a328119"
+    },
+    {
+      "experiment": "4c0e1b3721f9",
+      "run": "f1279cd8fe77",
+      "input": "9",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "4"
+        ]
+      },
+      "report_sha256": "39593bf3df79d8187d5998f50f8ed97482bda91151edb942295b7da546793278"
+    },
+    {
+      "experiment": "4c0e1b3721f9",
+      "run": "b72555d43d61",
+      "input": "10",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "10"
+        ]
+      },
+      "report_sha256": "ca489c214b9cd93c91cdfb9b256db05b670ac93eb54c59a5b8210a66f6f634cf"
+    },
+    {
+      "experiment": "4c0e1b3721f9",
+      "run": "7b0978bbb08b",
+      "input": "11",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "11"
+        ]
+      },
+      "report_sha256": "a9069077a6f1de946b90f73f3fa063403d154b7c52c7b3556fd79143df0b8127"
+    },
+    {
+      "experiment": "4c0e1b3721f9",
+      "run": "30f4c9a6822a",
+      "input": "12",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "12"
+        ]
+      },
+      "report_sha256": "41c78b9f9b2d37df0a5d1de72b9c027d4f98962a9b88475275b0ad4fa87f5ee2"
+    },
+    {
+      "experiment": "4c0e1b3721f9",
+      "run": "6afba9c58276",
+      "input": "13",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "13"
+        ]
+      },
+      "report_sha256": "ac80f3592630459dcfc80255f6a296db5136134d674ff77c9d0b46dff4dd07f1"
+    },
+    {
+      "experiment": "4c0e1b3721f9",
+      "run": "0b5c347e1ea7",
+      "input": "14",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "14"
+        ]
+      },
+      "report_sha256": "6045e0159d527a277195488e74a80cd58be965d3e6ba5ffc2a595ede5fb85d47"
+    },
+    {
+      "experiment": "4c0e1b3721f9",
+      "run": "4e84b613f660",
+      "input": "15",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "15"
+        ]
+      },
+      "report_sha256": "9bdf39569a0c74c9e5fac543651204a3112230e8b9482d11b1b8bd2e23d88ff1"
+    },
+    {
+      "experiment": "70dbbd31a53a",
+      "run": "aae44ef86026",
+      "input": "16",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "0"
+        ]
+      },
+      "report_sha256": "8b880d221d15076ebdd28402d72ad9c2c2f706efa80458394a54e0d70ec2035d"
+    },
+    {
+      "experiment": "70dbbd31a53a",
+      "run": "cd0026091032",
+      "input": "17",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "4"
+        ]
+      },
+      "report_sha256": "90e6a6d921ea2e9eed8d812d9f500c4edfac2714e6a124994fa9ac80cb878fda"
+    },
+    {
+      "experiment": "70dbbd31a53a",
+      "run": "76913085d61a",
+      "input": "18",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "7"
+        ]
+      },
+      "report_sha256": "35b0079347bbee510ce74c874571923f3fd1b55c9be62a3a615019fc1f0ebc29"
+    },
+    {
+      "experiment": "70dbbd31a53a",
+      "run": "bcb515630226",
+      "input": "19",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "15"
+        ]
+      },
+      "report_sha256": "9b3fcc36d24a8cb3a33809423056d777533b07cd4322b602f59462aacf3dd6da"
+    },
+    {
+      "experiment": "70dbbd31a53a",
+      "run": "77c5b3e83c4c",
+      "input": "20",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "16"
+        ]
+      },
+      "report_sha256": "d0a16bca81d2cdbebc4cdf880024b59b83456bbd1feb5f86d523481c6c5f5029"
+    },
+    {
+      "experiment": "70dbbd31a53a",
+      "run": "0bea3c9edfb8",
+      "input": "21",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "17"
+        ]
+      },
+      "report_sha256": "d2e1f6c1ece7095983bd80e36bcdfa959a6bae2f23381f26b492b2b153c1efe2"
+    },
+    {
+      "experiment": "70dbbd31a53a",
+      "run": "7d2d92a2244b",
+      "input": "22",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "20"
+        ]
+      },
+      "report_sha256": "972b245f6c5d43bf606bbbcb5e5d14a31855b4ca9e91f89e6e2cf8bfa24a2fce"
+    },
+    {
+      "experiment": "70dbbd31a53a",
+      "run": "2a4f80200e87",
+      "input": "23",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "21"
+        ]
+      },
+      "report_sha256": "fc31b02f88ae17b4317f7d7c4578b2e6e3fb9703cedc42228615324ce93fbb5d"
+    },
+    {
+      "experiment": "60c66cb84aa4",
+      "run": "c403d9f833c3",
+      "input": "24",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "4"
+        ]
+      },
+      "report_sha256": "733644e542afcc5aa268b475fa22a94493bb787e07e929679ced0c789d9fc1f0"
+    },
+    {
+      "experiment": "60c66cb84aa4",
+      "run": "090d8a7d84f2",
+      "input": "25",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "8"
+        ]
+      },
+      "report_sha256": "a9cc00443d5409a97aa45822149a513d2e9a6550f616a0da6fb712c5afada4ae"
+    },
+    {
+      "experiment": "60c66cb84aa4",
+      "run": "643ebb411696",
+      "input": "26",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "15"
+        ]
+      },
+      "report_sha256": "c78f0098314312e0e68c052cdcff5de0b49a16a1f696e99764ebe7f8f7ccabd8"
+    },
+    {
+      "experiment": "60c66cb84aa4",
+      "run": "af54c93a216c",
+      "input": "27",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "16"
+        ]
+      },
+      "report_sha256": "4e08ffe8930b0d3c834e629abad1596fe009ab9bbee90da6d011461c1d7b197a"
+    },
+    {
+      "experiment": "60c66cb84aa4",
+      "run": "5cab55e6e737",
+      "input": "28",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "20"
+        ]
+      },
+      "report_sha256": "289fe3f03e4711ffdb37e69863b11b93a33700bac9575ea9517a79ed9acc07c6"
+    },
+    {
+      "experiment": "60c66cb84aa4",
+      "run": "e20528a74835",
+      "input": "29",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "22"
+        ]
+      },
+      "report_sha256": "e8c6b3a9fb9918df0905ae7287cdf985296669c5e87f0b0e974703fa3bab4265"
+    },
+    {
+      "experiment": "60c66cb84aa4",
+      "run": "8a80adaf4654",
+      "input": "30",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "23"
+        ]
+      },
+      "report_sha256": "c995c3768bb09dac9ca0d1e147dc5ebb9492f6cf3480d616ee2ab56d1a9ad236"
+    },
+    {
+      "experiment": "60c66cb84aa4",
+      "run": "866176148ebf",
+      "input": "31",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "24"
+        ]
+      },
+      "report_sha256": "5bd14a215a570aeebf2336b82aabf319c45c41148903883e8c91ade5ed90d46f"
+    },
+    {
+      "experiment": "636bcdd1ca05",
+      "run": "2fab2c264b57",
+      "input": "32",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "8"
+        ]
+      },
+      "report_sha256": "6575c9007ec897c983e290424f4a626a862593749f10760fc7a29aaf208ec4ec"
+    },
+    {
+      "experiment": "636bcdd1ca05",
+      "run": "7669cb0d0378",
+      "input": "33",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "15"
+        ]
+      },
+      "report_sha256": "d14687eff8f821cb0883c82f93927574a1c567ce4a4a9a4efc289afd1e578377"
+    },
+    {
+      "experiment": "636bcdd1ca05",
+      "run": "c056ad8f48cb",
+      "input": "34",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "20"
+        ]
+      },
+      "report_sha256": "547bf13f11c7b5c3fdc726dd12abaefdc665e7994642070828cb62dfd5179ea7"
+    },
+    {
+      "experiment": "636bcdd1ca05",
+      "run": "d7547690ad7c",
+      "input": "35",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "23"
+        ]
+      },
+      "report_sha256": "bed495c5691de6a1e4628adcb58c2059c82569814252fc9998c5a57b6a79e79c"
+    },
+    {
+      "experiment": "636bcdd1ca05",
+      "run": "fd5c44cb3136",
+      "input": "36",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "25"
+        ]
+      },
+      "report_sha256": "a59f3955d0fe4721d35de53854899fbc8cb4bccf64b2749d2854a5754652acaf"
+    },
+    {
+      "experiment": "636bcdd1ca05",
+      "run": "988433ffb0b2",
+      "input": "37",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "26"
+        ]
+      },
+      "report_sha256": "f660ada385c1ce4f48a1bfa35c6d205c71d42d3bb93d3272872408cac11b7eac"
+    },
+    {
+      "experiment": "636bcdd1ca05",
+      "run": "6e63ec0757c5",
+      "input": "38",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "27"
+        ]
+      },
+      "report_sha256": "cbb81fd8edee4f72899e179a5e5ffa2a525217da21374324cdd02e049da3e439"
+    },
+    {
+      "experiment": "636bcdd1ca05",
+      "run": "b5a4dd7cd77b",
+      "input": "39",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "28"
+        ]
+      },
+      "report_sha256": "4ab4761e2d9982f1cfb5749cd473027ca6953441a0ff32ca9bdfa9625f5376d4"
+    },
+    {
+      "experiment": "e69c6c046314",
+      "run": "7e5b48d74129",
+      "input": "40",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "25"
+        ]
+      },
+      "report_sha256": "32c01723cf9a30f52e2462bf51941450e97c2c2540769ad849a365a85e12b4e5"
+    },
+    {
+      "experiment": "e69c6c046314",
+      "run": "6329efdfa087",
+      "input": "41",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "26"
+        ]
+      },
+      "report_sha256": "d1b00660a690f820c688d348897bd7482cd2650a86eb0325d93624a72da1ae0e"
+    },
+    {
+      "experiment": "e69c6c046314",
+      "run": "90302400da38",
+      "input": "42",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "28"
+        ]
+      },
+      "report_sha256": "7c198b84e5ee51330ba933713d4f8f2bda0968d59ec845ecb1a00b071cae16fa"
+    },
+    {
+      "experiment": "e69c6c046314",
+      "run": "b2a8b710bff3",
+      "input": "43",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "29"
+        ]
+      },
+      "report_sha256": "a596f0a62641bbe3c53002f3e32a3d1357e9dcb1c6d965fd7a03acde082b832f"
+    },
+    {
+      "experiment": "e69c6c046314",
+      "run": "3df851c21813",
+      "input": "44",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "30"
+        ]
+      },
+      "report_sha256": "43303d6acc749dc4588beacff86e066ef35bab69fec05eadb37e7ca7b3be97c5"
+    },
+    {
+      "experiment": "e69c6c046314",
+      "run": "660e08934ada",
+      "input": "45",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "32"
+        ]
+      },
+      "report_sha256": "5324a08db32b7d4d89afe0daed94e830d4241302cafb1ed06b35828c50b4a84a"
+    },
+    {
+      "experiment": "e69c6c046314",
+      "run": "b1cd32496765",
+      "input": "46",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "33"
+        ]
+      },
+      "report_sha256": "8bc7e3b2b3aa3f80e0b42c554b07137f58ae296c70e89a3a15342ccc9a41cccb"
+    },
+    {
+      "experiment": "e69c6c046314",
+      "run": "0ad83f6527ec",
+      "input": "47",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "34"
+        ]
+      },
+      "report_sha256": "ec05e4d6372abe0b18f71f064cbcf17f5665de0fa63be96e54d8787d02616c03"
+    },
+    {
+      "experiment": "50635da35fbb",
+      "run": "58e3a8db19a7",
+      "input": "48",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "25"
+        ]
+      },
+      "report_sha256": "f6ca7a92f5207fe06c6928e46a50a3cbe9ca6836ab3fb6fed7af7e1e00de1a9e"
+    },
+    {
+      "experiment": "50635da35fbb",
+      "run": "27b2c8934b3f",
+      "input": "49",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "26"
+        ]
+      },
+      "report_sha256": "ed130147bf1e835ef96b7a989c1a42c19fc13b4d2eebb1b474e321dc01151e99"
+    },
+    {
+      "experiment": "50635da35fbb",
+      "run": "dec704e4f19b",
+      "input": "50",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "29"
+        ]
+      },
+      "report_sha256": "9e649ab4d14d4e8a29a5c9fac4d24a177a6f0268e7a5d5267b082ed2af7352e7"
+    },
+    {
+      "experiment": "50635da35fbb",
+      "run": "44fd931f0b02",
+      "input": "51",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "33"
+        ]
+      },
+      "report_sha256": "9116fbca3cb19a1ca5dd369cd8f531b29121155a9be65fc3cf1fc8f13eae33e8"
+    },
+    {
+      "experiment": "50635da35fbb",
+      "run": "dc0ffc74ee14",
+      "input": "52",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "35"
+        ]
+      },
+      "report_sha256": "b51c7f2a206e01627e6debaa7ecef1fe4ba3e5f46f2576ed0f5126de972133b6"
+    },
+    {
+      "experiment": "50635da35fbb",
+      "run": "6c526b4a3431",
+      "input": "53",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "38"
+        ]
+      },
+      "report_sha256": "4b7cde3f6084a38c7e834fb60ebd10fa4fe4a4609e9876820adc818e33b1161e"
+    },
+    {
+      "experiment": "50635da35fbb",
+      "run": "4741f1bf1599",
+      "input": "54",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "39"
+        ]
+      },
+      "report_sha256": "fc32c2c813e0543909e6f3d990120416025931f44c751c6a0c1b5c6110379edb"
+    },
+    {
+      "experiment": "50635da35fbb",
+      "run": "ddd143bb681c",
+      "input": "55",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "41"
+        ]
+      },
+      "report_sha256": "ea34495f87414cd06510406dec4b0354c8253f831cff5457f94782a66027f38f"
+    },
+    {
+      "experiment": "27120d2bc2b6",
+      "run": "2c55216ef8c4",
+      "input": "56",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "6"
+        ]
+      },
+      "report_sha256": "c1321eaa12e8c9771083da99bf4463334a73246852d5429bf1a17d1ece95bbed"
+    },
+    {
+      "experiment": "27120d2bc2b6",
+      "run": "16a472d92a0c",
+      "input": "57",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "38"
+        ]
+      },
+      "report_sha256": "df9834c713c1c3a118392abee9ff47217a7dda7af6b013aae104e2635dcd92b1"
+    },
+    {
+      "experiment": "27120d2bc2b6",
+      "run": "8cae73e715da",
+      "input": "58",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "39"
+        ]
+      },
+      "report_sha256": "541bf7b0ab48416e4e5435f8e03e7ea80e23a9cf1b59fbfb0b3a9108c84d8fc6"
+    },
+    {
+      "experiment": "27120d2bc2b6",
+      "run": "f3f89102e967",
+      "input": "59",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "41"
+        ]
+      },
+      "report_sha256": "27f86e64e524f2d74cdb637189f914c17e2deee0d138e0f4e1fc8e8c1d252999"
+    },
+    {
+      "experiment": "27120d2bc2b6",
+      "run": "817f2f38435c",
+      "input": "60",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "42"
+        ]
+      },
+      "report_sha256": "a1b674c590634459db604b7f37e541408ddbe2ffeec7f783efb0c91fff200d46"
+    },
+    {
+      "experiment": "27120d2bc2b6",
+      "run": "bed6524f3e4f",
+      "input": "61",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "44"
+        ]
+      },
+      "report_sha256": "538ea684fbcf33ac7310f3fbdb1ad5185f1f55370028a2f4e7483116ce9b089d"
+    },
+    {
+      "experiment": "27120d2bc2b6",
+      "run": "6ad43930d649",
+      "input": "62",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "46"
+        ]
+      },
+      "report_sha256": "294320cf9c38cc600a234cd6df2fab6ecab35660ae390d0bc90af4e26b323ee1"
+    },
+    {
+      "experiment": "27120d2bc2b6",
+      "run": "e427deacd519",
+      "input": "63",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "47"
+        ]
+      },
+      "report_sha256": "02e8353168b30645143130f4caca99494b31f63b79df40d3ccf64a11f59c2993"
+    },
+    {
+      "experiment": "23f948323f1e",
+      "run": "193b2c2cbd16",
+      "input": "64",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "18"
+        ]
+      },
+      "report_sha256": "9749612293076a686f3e0cf0344942458758739d3b337d3a0f8e0f68f0039185"
+    },
+    {
+      "experiment": "23f948323f1e",
+      "run": "47fb67c8de66",
+      "input": "65",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "19"
+        ]
+      },
+      "report_sha256": "00a6b91794ad31d7f730e9783413ed9dd517d930a75b194f19e1d25e06d5a033"
+    },
+    {
+      "experiment": "23f948323f1e",
+      "run": "67dcb9871e8a",
+      "input": "66",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "35"
+        ]
+      },
+      "report_sha256": "e2604d73950cb7658c391c1d76a67e7ae3c9d82f890bf914b610babd8b4f6f75"
+    },
+    {
+      "experiment": "23f948323f1e",
+      "run": "44eaf4fdadf5",
+      "input": "67",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "36"
+        ]
+      },
+      "report_sha256": "0cbd064068e4146a97bc3e5e2f9f064f7b820328b704a7bc356b1fc6df93f284"
+    },
+    {
+      "experiment": "23f948323f1e",
+      "run": "5811cf9779ca",
+      "input": "68",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "37"
+        ]
+      },
+      "report_sha256": "a23ac7103df32b55672826f81611096352f7652189b6210f3f2c32765c460e1c"
+    },
+    {
+      "experiment": "23f948323f1e",
+      "run": "71d8521b451c",
+      "input": "69",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "42"
+        ]
+      },
+      "report_sha256": "8657d885d7dd5d2f7514dde80fff286fa6fd002ab0d1d3432a1f62278cb0946c"
+    },
+    {
+      "experiment": "23f948323f1e",
+      "run": "b8a9bb579462",
+      "input": "70",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "44"
+        ]
+      },
+      "report_sha256": "e06cc45d8581f6cc64b19d307926453fac8786002cd550e5264acf830253264d"
+    },
+    {
+      "experiment": "23f948323f1e",
+      "run": "1aa327637562",
+      "input": "71",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "48"
+        ]
+      },
+      "report_sha256": "bddda026901e4de6ff9fc33dc2b775ecd9dac5510867e92e615b307e4f35bdc6"
+    },
+    {
+      "experiment": "1369e8c0dd33",
+      "run": "a3ac84c001af",
+      "input": "72",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "18"
+        ]
+      },
+      "report_sha256": "e586dc1715680acb942e7c32715d421ceb88a8d97d0573c0414adf562506be86"
+    },
+    {
+      "experiment": "1369e8c0dd33",
+      "run": "6c1736c3801c",
+      "input": "73",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "21"
+        ]
+      },
+      "report_sha256": "7e50fd81bb0f6411a695e6b6e7bfc1c2321c721b968e08940826c7320a11301a"
+    },
+    {
+      "experiment": "1369e8c0dd33",
+      "run": "f2e6ffbe6724",
+      "input": "74",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "36"
+        ]
+      },
+      "report_sha256": "1cd015f3351d0fb16003d531fac692c711f106640a74530a3e37ff908444af3a"
+    },
+    {
+      "experiment": "1369e8c0dd33",
+      "run": "5cced30c5269",
+      "input": "75",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "37"
+        ]
+      },
+      "report_sha256": "26b8c0ae1139127ef69c9de2302d7e954056659ab297ac952ebf2adea0af7c3a"
+    },
+    {
+      "experiment": "1369e8c0dd33",
+      "run": "7adddc6bd4b2",
+      "input": "76",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "44"
+        ]
+      },
+      "report_sha256": "d32a8c8a2b4dba4e2b1ebcb2cafa646174080eef0fdc75c5d2a2559fabcc24d8"
+    },
+    {
+      "experiment": "1369e8c0dd33",
+      "run": "d7c99e7962a2",
+      "input": "77",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "49"
+        ]
+      },
+      "report_sha256": "a06a5fb19463563d12694a1eb47c35366793320fa731c740ede227ec80c1c1d1"
+    },
+    {
+      "experiment": "1369e8c0dd33",
+      "run": "4a632c7e6dff",
+      "input": "78",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "50"
+        ]
+      },
+      "report_sha256": "c3996cc750fa31bec0662f033ed3a8347607c76cec55c902ae704fdda4e00da4"
+    },
+    {
+      "experiment": "1369e8c0dd33",
+      "run": "032f65455276",
+      "input": "79",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "51"
+        ]
+      },
+      "report_sha256": "0f925e58c8ec3bb4bdb4c02349519b307dfb3ca8813171b100812080d6c05b38"
+    },
+    {
+      "experiment": "6aac0592a057",
+      "run": "9666e5227a67",
+      "input": "80",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "9"
+        ]
+      },
+      "report_sha256": "2ff0fc06f21e4acaa1f35cc72146e6b6cf5bd53d8755fe8f304d2fa0a58c212b"
+    },
+    {
+      "experiment": "6aac0592a057",
+      "run": "92a168dc561a",
+      "input": "81",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "11"
+        ]
+      },
+      "report_sha256": "19fb466f2c46f7fc7e25c2f1660a3c1b941905319ebf25c7c646f13796fc1197"
+    },
+    {
+      "experiment": "6aac0592a057",
+      "run": "2a83c1de77a7",
+      "input": "82",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "21"
+        ]
+      },
+      "report_sha256": "22022289ad5ea7bfc8ea3278a468899ba42bfa1dddce7e16f4cd68abe4578cba"
+    },
+    {
+      "experiment": "6aac0592a057",
+      "run": "1c073541b4fd",
+      "input": "83",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "24"
+        ]
+      },
+      "report_sha256": "9f768c19b50d6ddc3e35aaa75d898ffa71aa2f777adc077ad890367fea7eb293"
+    },
+    {
+      "experiment": "6aac0592a057",
+      "run": "4d384cc957f9",
+      "input": "84",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "30"
+        ]
+      },
+      "report_sha256": "19c76f13c80d19d7b3c124374b21565d84e06129ec8e80d4cee4816ac2656049"
+    },
+    {
+      "experiment": "6aac0592a057",
+      "run": "cdd744a4ecc2",
+      "input": "85",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "37"
+        ]
+      },
+      "report_sha256": "67c9994917f0255d7ae6f583803bfe17b41f055d0dae939e1cd04cb1f889987d"
+    },
+    {
+      "experiment": "6aac0592a057",
+      "run": "f822019c7771",
+      "input": "86",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "41"
+        ]
+      },
+      "report_sha256": "3f2db9dadd1176eec43a1539128fb641865bc9c2b9fc88404325e0234626f0ac"
+    },
+    {
+      "experiment": "6aac0592a057",
+      "run": "61ec26009f6e",
+      "input": "87",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "47"
+        ]
+      },
+      "report_sha256": "eb4643313ed0a55a95afa12143c65c9137a92b84624545d75d5a99e2e73c5283"
+    },
+    {
+      "experiment": "36d85602862f",
+      "run": "698b91a12ee3",
+      "input": "88",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "7"
+        ]
+      },
+      "report_sha256": "3b19ea737767c300ba130ae8b9df2d8a4c4ad2397177def24b66eaaceaeb47ba"
+    },
+    {
+      "experiment": "36d85602862f",
+      "run": "02e0b5978de0",
+      "input": "89",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "21"
+        ]
+      },
+      "report_sha256": "5aecd55684713837b657a07c530a1a2b5c3ca1a42cf92d16747585a030ae30f2"
+    },
+    {
+      "experiment": "36d85602862f",
+      "run": "96cf6d9aaa4e",
+      "input": "90",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "37"
+        ]
+      },
+      "report_sha256": "fbc88b14533b370f4fa172b34408024ebd76ed9c1bd24b291e252e7b04f7370e"
+    },
+    {
+      "experiment": "36d85602862f",
+      "run": "20be51e57ed8",
+      "input": "91",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "44"
+        ]
+      },
+      "report_sha256": "afbc4cc73e0b7a0c27c552c8bbf16f3288127a940fd8c71a106d33fb6ab9b7f9"
+    },
+    {
+      "experiment": "36d85602862f",
+      "run": "744fedd832ac",
+      "input": "92",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "47"
+        ]
+      },
+      "report_sha256": "ff7b2561f1085e68c055f454a2b835e8c23c6cabc2b46a656dd8c6992551edf9"
+    },
+    {
+      "experiment": "36d85602862f",
+      "run": "9f334c46e358",
+      "input": "93",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "51"
+        ]
+      },
+      "report_sha256": "eef85b80b54ebcc86c4ca43cb6ed72f2ae7fa958a8ac749251ba45ce31297b5f"
+    },
+    {
+      "experiment": "36d85602862f",
+      "run": "fa89f5c66284",
+      "input": "94",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "52"
+        ]
+      },
+      "report_sha256": "d34c3926c60c3c2c655392aed21c6fdbc270012a7e34878d7b860d5257821b2e"
+    },
+    {
+      "experiment": "36d85602862f",
+      "run": "a802ae0abf11",
+      "input": "95",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "53"
+        ]
+      },
+      "report_sha256": "919d9a08b75e9803196b3126eea7550fd1a8f867f32ee8b101d796904572d7fa"
+    },
+    {
+      "experiment": "577f8670fd0b",
+      "run": "50fd142cc945",
+      "input": "96",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "1"
+        ]
+      },
+      "report_sha256": "092ad476b5f13ba21234de001d0bc7adabf565dd1b6afda184e5d8aa39f31d12"
+    },
+    {
+      "experiment": "577f8670fd0b",
+      "run": "27a2e687c6c6",
+      "input": "97",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "2"
+        ]
+      },
+      "report_sha256": "120770e1a9053c4c34d7cd7a38729362fb817f66688f427c62a3214b614ac85b"
+    },
+    {
+      "experiment": "577f8670fd0b",
+      "run": "364060b97bc6",
+      "input": "98",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "7"
+        ]
+      },
+      "report_sha256": "b0e8ca25aeac15c31a1605d4170dad88615380d708ba1512b5e89d2c76141680"
+    },
+    {
+      "experiment": "577f8670fd0b",
+      "run": "8b2287cbef3b",
+      "input": "99",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "30"
+        ]
+      },
+      "report_sha256": "b20ba6347e26ffdafb5a407e67a9f8f9ed4da5566545081af4b8ee0f9361f2d2"
+    },
+    {
+      "experiment": "577f8670fd0b",
+      "run": "4779490631fd",
+      "input": "100",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "32"
+        ]
+      },
+      "report_sha256": "3d837655e0b867821ca1fda1df2898f8ecda7539581a652af93b0648bbdf5788"
+    },
+    {
+      "experiment": "577f8670fd0b",
+      "run": "4c60f69eb62b",
+      "input": "101",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "33"
+        ]
+      },
+      "report_sha256": "fd5a0509319c65a04ea431fc8c754642ec0bfe576fb517ecaac3e6653abbc44a"
+    },
+    {
+      "experiment": "577f8670fd0b",
+      "run": "31708ff92570",
+      "input": "102",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "37"
+        ]
+      },
+      "report_sha256": "a8187c19762a06861683310d98f557d2ad46eaf30fd568e7d7b059f934fdf93a"
+    },
+    {
+      "experiment": "577f8670fd0b",
+      "run": "7d4283d0150e",
+      "input": "103",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "42"
+        ]
+      },
+      "report_sha256": "458600f1fc19a68d44183c8e58a59b9dbfda97a06a4766ece825eb52f33387dc"
+    },
+    {
+      "experiment": "efa27f07e446",
+      "run": "d7ac35544ee1",
+      "input": "104",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "13"
+        ]
+      },
+      "report_sha256": "ac6185e731df07d1744c835327d69bb8fcad49b7455325805503362ad7698629"
+    },
+    {
+      "experiment": "efa27f07e446",
+      "run": "73d02f37d7d7",
+      "input": "105",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "30"
+        ]
+      },
+      "report_sha256": "71ebc30d9a213a88fd806311b480a4a58def69f75a1c67edbc67a6f304416b92"
+    },
+    {
+      "experiment": "efa27f07e446",
+      "run": "32ad0404b527",
+      "input": "106",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "33"
+        ]
+      },
+      "report_sha256": "e8e21e6f8778f6aff5b7921de77e21b3109f56cf80cf93c50e8e8b7372116f55"
+    },
+    {
+      "experiment": "efa27f07e446",
+      "run": "f2e2868503e6",
+      "input": "107",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "37"
+        ]
+      },
+      "report_sha256": "b819ff371b8d064048184b84362b98c4455f3e6349ea184bb66334615a43d783"
+    },
+    {
+      "experiment": "efa27f07e446",
+      "run": "c930b0bb3279",
+      "input": "108",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "42"
+        ]
+      },
+      "report_sha256": "c1b488471cfe644b0121264cedb7abe94d95444e63ec509740ba4037a61eeac4"
+    },
+    {
+      "experiment": "efa27f07e446",
+      "run": "064928f65bdc",
+      "input": "109",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "47"
+        ]
+      },
+      "report_sha256": "197a9f82ecc3c6e203bcec13eeeb10a96d34a8c4b5494a65af6a3e1345c2b248"
+    },
+    {
+      "experiment": "efa27f07e446",
+      "run": "8efaaef0265c",
+      "input": "110",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "48"
+        ]
+      },
+      "report_sha256": "1bb6423836d0c7578731b4007f39c9b6455460b8f136296852b9d66bb810ca39"
+    },
+    {
+      "experiment": "efa27f07e446",
+      "run": "bbabfab2023c",
+      "input": "111",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "53"
+        ]
+      },
+      "report_sha256": "72472914aab4b24d0387fd3f5b8b81045ce3bced88bb5130e681484055483fe0"
+    },
+    {
+      "experiment": "da4e4ac94a14",
+      "run": "1348a891c386",
+      "input": "112",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "1"
+        ]
+      },
+      "report_sha256": "31ff033e5c6882eec977ad0711341c52d42d2b7f8ff23efca82d8b7c620cb274"
+    },
+    {
+      "experiment": "da4e4ac94a14",
+      "run": "7a27528cbebd",
+      "input": "113",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "19"
+        ]
+      },
+      "report_sha256": "01b429c6765d1eba29553cd9a54dfdfa4c3002352e221b77e0e6ceed2590bcb4"
+    },
+    {
+      "experiment": "da4e4ac94a14",
+      "run": "aae6f02188e0",
+      "input": "114",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "25"
+        ]
+      },
+      "report_sha256": "6148440f925345b70bdcc794ccb17cb4d1e3817748412634b0df4e17338abe1d"
+    },
+    {
+      "experiment": "da4e4ac94a14",
+      "run": "1deaf9a30c4b",
+      "input": "115",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "35"
+        ]
+      },
+      "report_sha256": "76483a7d6b9be8e4201518ebc80656a32f2e8768dc2fcb81fa0d839388bfc006"
+    },
+    {
+      "experiment": "da4e4ac94a14",
+      "run": "0a7a76fd409e",
+      "input": "116",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "47"
+        ]
+      },
+      "report_sha256": "056d82b440191ba7fbee47fc1f709db4f91b49c09a2cc2a21b3f3ef2c5c00980"
+    },
+    {
+      "experiment": "da4e4ac94a14",
+      "run": "f7d425ef89c2",
+      "input": "117",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "48"
+        ]
+      },
+      "report_sha256": "d0eed01b5ce3052a22bd698209fea7291f96e98e5dbd5cb7fc6f5a8042494034"
+    },
+    {
+      "experiment": "da4e4ac94a14",
+      "run": "449180bc466b",
+      "input": "118",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "53"
+        ]
+      },
+      "report_sha256": "16932305ef9605cadb163832428083a4c6c57390810e3ae6627ef7a4d689f1c3"
+    },
+    {
+      "experiment": "da4e4ac94a14",
+      "run": "4e96abcc1090",
+      "input": "119",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "54"
+        ]
+      },
+      "report_sha256": "be3967ca61435d3dd7a055d4a9c2c31a551b99a70ed8330031a440a628857b5f"
+    },
+    {
+      "experiment": "7a9c8e5f195c",
+      "run": "7030d50f18a3",
+      "input": "120",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "1"
+        ]
+      },
+      "report_sha256": "721bc993744c6b918140af5d60b08b880527b20a18bf8d6b4acb8213a5ac9534"
+    },
+    {
+      "experiment": "7a9c8e5f195c",
+      "run": "3977b1056eba",
+      "input": "121",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "19"
+        ]
+      },
+      "report_sha256": "4620ac99a5dba2d46dee76f29738f67de9fec66493d6450a84ec1edd4147c1b1"
+    },
+    {
+      "experiment": "7a9c8e5f195c",
+      "run": "32700976dffa",
+      "input": "122",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "20"
+        ]
+      },
+      "report_sha256": "b9a0ca2e95b7d32858ad8bdf86b328d5e5270bac27484a8e5fca329d1308fa05"
+    },
+    {
+      "experiment": "7a9c8e5f195c",
+      "run": "07cc8247347b",
+      "input": "123",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "22"
+        ]
+      },
+      "report_sha256": "df13d9ff68d5285bb8202c8f51b298c6fc4838ea168ff0f4390c66e481e9977f"
+    },
+    {
+      "experiment": "7a9c8e5f195c",
+      "run": "77b0adf35e6c",
+      "input": "124",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "48"
+        ]
+      },
+      "report_sha256": "de45dc5e68665232f93d3cdf65ef574eec3b69cf7f79e6f1b624b866d47a099f"
+    },
+    {
+      "experiment": "7a9c8e5f195c",
+      "run": "04d97729ff80",
+      "input": "125",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "55"
+        ]
+      },
+      "report_sha256": "4b6c11e8286138d8455b02e3ab0e023bbe78164c2cabf10d740481f0fe823445"
+    },
+    {
+      "experiment": "7a9c8e5f195c",
+      "run": "0f3f22829e51",
+      "input": "126",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "56"
+        ]
+      },
+      "report_sha256": "4879b96684e665df5dc88d9bfa0ff5bd225175ceee25aa63b8485d19696a6889"
+    },
+    {
+      "experiment": "7a9c8e5f195c",
+      "run": "31d8f5288b99",
+      "input": "127",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "57"
+        ]
+      },
+      "report_sha256": "dba97820ec77a24333212ea9bea52b3578756fc516eaf5d1c19d34e7aa67124d"
+    },
+    {
+      "experiment": "f3ec0682a556",
+      "run": "d21b07ac9be7",
+      "input": "128",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "3"
+        ]
+      },
+      "report_sha256": "c61d15e6417ad9ede9c9ce7a47be7b2698f7a9cd90d8765846623a456de21409"
+    },
+    {
+      "experiment": "f3ec0682a556",
+      "run": "6380eeeba406",
+      "input": "129",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "11"
+        ]
+      },
+      "report_sha256": "6fbf28b8aad2ffcc1361254b583441b06c763240b94997cea7710697a39ba062"
+    },
+    {
+      "experiment": "f3ec0682a556",
+      "run": "5d1319ab1853",
+      "input": "130",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "48"
+        ]
+      },
+      "report_sha256": "0d5e993e1110febf6efb13d271f967696f6d3fd582dea048c8e02af53f6d9fa1"
+    },
+    {
+      "experiment": "f3ec0682a556",
+      "run": "2d55b0b95d93",
+      "input": "131",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "56"
+        ]
+      },
+      "report_sha256": "a70c668591d800b0f46d567a50ab8a57af19c2343643cea1e4f707bdf6508c74"
+    },
+    {
+      "experiment": "f3ec0682a556",
+      "run": "6625f9a503aa",
+      "input": "132",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "57"
+        ]
+      },
+      "report_sha256": "7e51bbcd6025cce9b9375b01dd6c679f91129a06a6888d5851fbd9fcc8eadabd"
+    },
+    {
+      "experiment": "f3ec0682a556",
+      "run": "57cbad4fe242",
+      "input": "133",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "58"
+        ]
+      },
+      "report_sha256": "1023b880b8728bc6752bca07a0a7a5d7d2584acf704f0e7bb52cec453c1b71bb"
+    },
+    {
+      "experiment": "f3ec0682a556",
+      "run": "6380f816b7f2",
+      "input": "134",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "59"
+        ]
+      },
+      "report_sha256": "37f957b8f1a0aa0074ffd3b2ea68ebe531a0f9d49958d78020ad7ce2b4651fea"
+    },
+    {
+      "experiment": "f3ec0682a556",
+      "run": "f0fda6ac7a00",
+      "input": "135",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "60"
+        ]
+      },
+      "report_sha256": "f0da95eb85b287aed1064f878131fdf4d3f6f9a0bb6257c1e6b5222d31a8cd5a"
+    },
+    {
+      "experiment": "177259d1fdad",
+      "run": "008e733b9844",
+      "input": "136",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "5"
+        ]
+      },
+      "report_sha256": "4c5341bc1b58453536c4d58ed777ee1d8da72a5a5de712b882d20b2477c9a9a3"
+    },
+    {
+      "experiment": "177259d1fdad",
+      "run": "3ed4d9d6f412",
+      "input": "137",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "26"
+        ]
+      },
+      "report_sha256": "da7dac0194136da1fdf14493ca6f6664c5f1bb27d33c3f8aad819dc635f3dc2a"
+    },
+    {
+      "experiment": "177259d1fdad",
+      "run": "e182e96393b0",
+      "input": "138",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "31"
+        ]
+      },
+      "report_sha256": "33779410effb7b7b8150ed5b09acab7520897844ebc76668a60be228f1eafb3b"
+    },
+    {
+      "experiment": "177259d1fdad",
+      "run": "5c224abf3f4d",
+      "input": "139",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "32"
+        ]
+      },
+      "report_sha256": "1c94d37ea89991504f735e4d43a7129eac062f2ba54083d7bae90a30a406034a"
+    },
+    {
+      "experiment": "177259d1fdad",
+      "run": "ce1f28d98c1d",
+      "input": "140",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "40"
+        ]
+      },
+      "report_sha256": "286b3c82dd5aca4cb4f926a48c6ac36e43061a214a07a3ca6b51acdeace467f3"
+    },
+    {
+      "experiment": "177259d1fdad",
+      "run": "655350d8c4bf",
+      "input": "141",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "44"
+        ]
+      },
+      "report_sha256": "7a24144b7ae5fff6a63e2d21932c2c8db54a06a01759a04fa584a1c8af9b6e6f"
+    },
+    {
+      "experiment": "177259d1fdad",
+      "run": "0a116e8435e2",
+      "input": "142",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "55"
+        ]
+      },
+      "report_sha256": "7964405333938a1f37705f512014998daae6e6681c969b4d2c78f24f3c3306f5"
+    },
+    {
+      "experiment": "177259d1fdad",
+      "run": "fa5971ca451b",
+      "input": "143",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "57"
+        ]
+      },
+      "report_sha256": "49877725337553cdb991e7d64d8e4f68b2c31af0c8c251211e677ca5a85344db"
+    },
+    {
+      "experiment": "47ccc486549c",
+      "run": "7133c804cc35",
+      "input": "144",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "0"
+        ]
+      },
+      "report_sha256": "7bc45895955252c4f9ad5dec727f8f0322135d123f703e3c5bcec6d6345671e1"
+    },
+    {
+      "experiment": "47ccc486549c",
+      "run": "1558196efc45",
+      "input": "145",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "8"
+        ]
+      },
+      "report_sha256": "50e8a375cc26bc773508e048d38dedcded6f1102589089b8018c9776d13c2a67"
+    },
+    {
+      "experiment": "47ccc486549c",
+      "run": "ca1b04a1231f",
+      "input": "146",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "10"
+        ]
+      },
+      "report_sha256": "d91f5725941db6c5b014038a2e606bea0587975f47d5f997eac39e94be67c6fc"
+    },
+    {
+      "experiment": "47ccc486549c",
+      "run": "1a2aeef098a2",
+      "input": "147",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "13"
+        ]
+      },
+      "report_sha256": "6306ee98e8c585c63c22817cb618be2620305976cd4352f6bdfe9f84c1dc8e57"
+    },
+    {
+      "experiment": "47ccc486549c",
+      "run": "d637f972f369",
+      "input": "148",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "14"
+        ]
+      },
+      "report_sha256": "ae743b5d71591856179c2731dac2579bb35e709acbff2c828c1ac22f60a567ba"
+    },
+    {
+      "experiment": "47ccc486549c",
+      "run": "997897add510",
+      "input": "149",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "17"
+        ]
+      },
+      "report_sha256": "8c1703908849f37d34d9a7f82fb4841bf5f894fbc39e85ca47b3618ee5dfe633"
+    },
+    {
+      "experiment": "47ccc486549c",
+      "run": "1d1fc70f55cc",
+      "input": "150",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "22"
+        ]
+      },
+      "report_sha256": "0c29189d41aa90506eb3f640e05663f7bcc7c22e83637960bdbeec02f3153acf"
+    },
+    {
+      "experiment": "47ccc486549c",
+      "run": "03d420482ab8",
+      "input": "151",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "32"
+        ]
+      },
+      "report_sha256": "cef890a405bdfc7053207aa64e2cc462cc5b1b91a7dcdcbfa26c7541a9f148b1"
+    },
+    {
+      "experiment": "3e54260edce9",
+      "run": "660a698e59d7",
+      "input": "152",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "4"
+        ]
+      },
+      "report_sha256": "7e742b33be979353556fb0cc884c22b2586ce6ad098ce66e1ec2eb002215b2a0"
+    },
+    {
+      "experiment": "3e54260edce9",
+      "run": "f521f3e59001",
+      "input": "153",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "6"
+        ]
+      },
+      "report_sha256": "698e63cb4df9e98e04663d8e6fd8cb7b561e15080aaa96fedbd203777e01a2f4"
+    },
+    {
+      "experiment": "3e54260edce9",
+      "run": "30e950bebcf4",
+      "input": "154",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "8"
+        ]
+      },
+      "report_sha256": "f17c203c4113756997c23e3c546a088b59a312c3b3b4db7be03029de5ae1a625"
+    },
+    {
+      "experiment": "3e54260edce9",
+      "run": "c99d417044cb",
+      "input": "155",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "13"
+        ]
+      },
+      "report_sha256": "e2b3981acc942aa4248394cbd73fcf69783816f3c8a9d4f60e777816a4f3aa89"
+    },
+    {
+      "experiment": "3e54260edce9",
+      "run": "673cd89e7aa9",
+      "input": "156",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "14"
+        ]
+      },
+      "report_sha256": "f1997565a7c7a3d9b0d7be832fa6541523e0259b708ec5d1ae4897289e0f533f"
+    },
+    {
+      "experiment": "3e54260edce9",
+      "run": "fd5ca5f046b1",
+      "input": "157",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "16"
+        ]
+      },
+      "report_sha256": "d58f62c7c178613ffa24996cd45a2fb1643b002c5b05fa6cac86939d67290710"
+    },
+    {
+      "experiment": "3e54260edce9",
+      "run": "d013a17f5dd3",
+      "input": "158",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "17"
+        ]
+      },
+      "report_sha256": "fb2bb2a331d4a043ce8c690f875afb07cdd77a8fb99be76c81128840ce02e382"
+    },
+    {
+      "experiment": "3e54260edce9",
+      "run": "a4895b8bc7f1",
+      "input": "159",
+      "resources": {
+        "cpu_slots": 1,
+        "cpu_ids": [
+          "22"
+        ]
+      },
+      "report_sha256": "b93d8974bcd2440f808d20e1ae2fde9d66c2e91161ce260ab2f1aaaa10ef1581"
+    }
+  ],
+  "observations": [
+    {
+      "receipt": {
+        "experiment": "2df72caac4c6",
+        "run": "52d835a12420",
+        "input": "13",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "12"
+          ]
+        }
+      },
+      "record": {
+        "index": 13,
+        "input_sha256": "d9c546291b74c1b0021e19bff6aa4e9fbbb220fdcd253de67479375572f913f6",
+        "observations": {
+          "baseline": {
+            "binary_sha256": "30965221fc2a3b37177a7e79c771b6fb4d9f738d4a524357aee2448b5b3ba07f",
+            "returncode": 0,
+            "candidate_sizes": [
+              5820
+            ],
+            "last_decision_probe": "[DECIDE-PROBE] decisions=87000 steered=0 unassignedProbes=2218211 evalNull=2218211 observedDecisionLits=86999 theoryAtomDecisions=58852 theoryAtomPct=67.6468%",
+            "phase_lines": [
+              "[PHASE] enter  +0ms (asserts=1)",
+              "[PHASE] rewrite-done  +295ms (asserts=1)",
+              "[PHASE] solve-eqs-done  +49ms (asserts=1)",
+              "[PHASE] symbolic-mod-done  +64ms (asserts=1)",
+              "[PHASE] ite-lowering-done  +149ms (asserts=1)",
+              "[PHASE] constant-propagation-done  +42ms (asserts=1)",
+              "[PHASE] integer-divmod-done  +269ms (asserts=1)",
+              "[PHASE] preprocess-done  +293ms (asserts=1600)",
+              "[PHASE] detect-done  +42ms (asserts=1600)",
+              "[PHASE] eager-bb-start  +0ms (asserts=1600)",
+              "[PHASE] eager-bb-done  +57ms (asserts=1600)",
+              "[PHASE] setup-done  +0ms (asserts=1600)",
+              "[PHASE] atomize-done  +241ms (asserts=1600)",
+              "[PHASE] bound-axioms-done  +11ms (asserts=1600)"
+            ],
+            "stdout_sha256": "7f51b4fb44dbc72708fac0a474600c2e9d8af4ce3a8b8f1680330454f6a8d68f",
+            "stderr_sha256": "1a6ebc29bc524203cf491c566ace3b5c96f01054a4d09caeed8191d54ffc9d64"
+          },
+          "candidate": {
+            "binary_sha256": "f4bfca785b42ea287df7af9f37fa28bf8e3745c8ce46c9b0266dcc74b3a1988b",
+            "returncode": 0,
+            "candidate_sizes": [
+              5820
+            ],
+            "last_decision_probe": "[DECIDE-PROBE] decisions=52000 steered=38653 unassignedProbes=661887 evalNull=623234 observedDecisionLits=51999 theoryAtomDecisions=40219 theoryAtomPct=77.3457%",
+            "phase_lines": [
+              "[PHASE] enter  +0ms (asserts=1)",
+              "[PHASE] rewrite-done  +290ms (asserts=1)",
+              "[PHASE] solve-eqs-done  +46ms (asserts=1)",
+              "[PHASE] symbolic-mod-done  +63ms (asserts=1)",
+              "[PHASE] ite-lowering-done  +145ms (asserts=1)",
+              "[PHASE] constant-propagation-done  +44ms (asserts=1)",
+              "[PHASE] integer-divmod-done  +268ms (asserts=1)",
+              "[PHASE] preprocess-done  +285ms (asserts=1600)",
+              "[PHASE] detect-done  +41ms (asserts=1600)",
+              "[PHASE] eager-bb-start  +0ms (asserts=1600)",
+              "[PHASE] eager-bb-done  +55ms (asserts=1600)",
+              "[PHASE] setup-done  +0ms (asserts=1600)",
+              "[PHASE] atomize-done  +237ms (asserts=1600)",
+              "[PHASE] bound-axioms-done  +11ms (asserts=1600)"
+            ],
+            "stdout_sha256": "7f51b4fb44dbc72708fac0a474600c2e9d8af4ce3a8b8f1680330454f6a8d68f",
+            "stderr_sha256": "25e220c01954c1c23288ba5c8d1879e2f4a733b987832b7290a171e9c9155cce"
+          }
+        },
+        "script_sha256": "383ac3ee018a150b64edc6c36b82e46b43f5784dafbb3b19568acce921026880",
+        "protected_sets_used": false,
+        "prior_collection_limitation": "R1381 omitted CLI --verbose, so std::cerr candidate/probe logs were suppressed. Its empty logs establish no absence of decisions or dynamic registrations.",
+        "boundary": "10-second verbose diagnostic with existing decision logging enabled. Not a formal verdict, solve count, model qualification or timing comparison."
+      },
+      "record_sha256": "982983b0844d11c69da290148b5d341086f6f3e71dcbe899fd7e729e8f07b3d4"
+    },
+    {
+      "receipt": {
+        "experiment": "2df72caac4c6",
+        "run": "a75f01d8a111",
+        "input": "89",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "13"
+          ]
+        }
+      },
+      "record": {
+        "index": 89,
+        "input_sha256": "5b983ea0194c5b7fcdee4a87c0de44da99828561d82d288a89fd99da128f4c5f",
+        "observations": {
+          "baseline": {
+            "binary_sha256": "30965221fc2a3b37177a7e79c771b6fb4d9f738d4a524357aee2448b5b3ba07f",
+            "returncode": 0,
+            "candidate_sizes": [
+              1631
+            ],
+            "last_decision_probe": "[DECIDE-PROBE] decisions=317000 steered=0 unassignedProbes=11668105 evalNull=11668105 observedDecisionLits=296021 theoryAtomDecisions=264907 theoryAtomPct=89.4893%",
+            "phase_lines": [
+              "[PHASE] enter  +0ms (asserts=2849)",
+              "[PHASE] rewrite-done  +85ms (asserts=2849)",
+              "[PHASE] solve-eqs-done  +10ms (asserts=2849)",
+              "[PHASE] symbolic-mod-done  +17ms (asserts=2849)",
+              "[PHASE] ite-lowering-done  +137ms (asserts=13405)",
+              "[PHASE] constant-propagation-done  +38ms (asserts=13405)",
+              "[PHASE] integer-divmod-done  +330ms (asserts=13405)",
+              "[PHASE] preprocess-done  +285ms (asserts=13405)",
+              "[PHASE] detect-done  +30ms (asserts=13405)",
+              "[PHASE] eager-bb-start  +0ms (asserts=13405)",
+              "[PHASE] eager-bb-done  +43ms (asserts=13405)",
+              "[PHASE] setup-done  +0ms (asserts=13405)",
+              "[PHASE] atomize-done  +127ms (asserts=13405)",
+              "[PHASE] bound-axioms-done  +1ms (asserts=13405)"
+            ],
+            "stdout_sha256": "7f51b4fb44dbc72708fac0a474600c2e9d8af4ce3a8b8f1680330454f6a8d68f",
+            "stderr_sha256": "a5606f4764e29b1e9f3466942fa1ed1aff51e558b52b2315b6154bbfe6cfd206"
+          },
+          "candidate": {
+            "binary_sha256": "f4bfca785b42ea287df7af9f37fa28bf8e3745c8ce46c9b0266dcc74b3a1988b",
+            "returncode": 0,
+            "candidate_sizes": [
+              1631
+            ],
+            "last_decision_probe": "[DECIDE-PROBE] decisions=262000 steered=211567 unassignedProbes=211567 evalNull=0 observedDecisionLits=218707 theoryAtomDecisions=218171 theoryAtomPct=99.7549%",
+            "phase_lines": [
+              "[PHASE] enter  +0ms (asserts=2849)",
+              "[PHASE] rewrite-done  +84ms (asserts=2849)",
+              "[PHASE] solve-eqs-done  +9ms (asserts=2849)",
+              "[PHASE] symbolic-mod-done  +17ms (asserts=2849)",
+              "[PHASE] ite-lowering-done  +134ms (asserts=13405)",
+              "[PHASE] constant-propagation-done  +33ms (asserts=13405)",
+              "[PHASE] integer-divmod-done  +326ms (asserts=13405)",
+              "[PHASE] preprocess-done  +282ms (asserts=13405)",
+              "[PHASE] detect-done  +27ms (asserts=13405)",
+              "[PHASE] eager-bb-start  +0ms (asserts=13405)",
+              "[PHASE] eager-bb-done  +42ms (asserts=13405)",
+              "[PHASE] setup-done  +0ms (asserts=13405)",
+              "[PHASE] atomize-done  +125ms (asserts=13405)",
+              "[PHASE] bound-axioms-done  +1ms (asserts=13405)"
+            ],
+            "stdout_sha256": "7f51b4fb44dbc72708fac0a474600c2e9d8af4ce3a8b8f1680330454f6a8d68f",
+            "stderr_sha256": "d68982783792ab2700ee0344e6fa20bbc459a8c5bd67779398d3a76efe6c1a14"
+          }
+        },
+        "script_sha256": "383ac3ee018a150b64edc6c36b82e46b43f5784dafbb3b19568acce921026880",
+        "protected_sets_used": false,
+        "prior_collection_limitation": "R1381 omitted CLI --verbose, so std::cerr candidate/probe logs were suppressed. Its empty logs establish no absence of decisions or dynamic registrations.",
+        "boundary": "10-second verbose diagnostic with existing decision logging enabled. Not a formal verdict, solve count, model qualification or timing comparison."
+      },
+      "record_sha256": "635310a659a1dc80d0ade6a55e5be7a54168aad24e9072f5aa0e3455395572a3"
+    },
+    {
+      "receipt": {
+        "experiment": "2df72caac4c6",
+        "run": "bcb614dbbf5f",
+        "input": "58",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "14"
+          ]
+        }
+      },
+      "record": {
+        "index": 58,
+        "input_sha256": "64f223bcde0c40ca731ab7443a27e55abf89d82d240cb58aed03a32ff50b15e8",
+        "observations": {
+          "baseline": {
+            "binary_sha256": "30965221fc2a3b37177a7e79c771b6fb4d9f738d4a524357aee2448b5b3ba07f",
+            "returncode": 0,
+            "candidate_sizes": [
+              2466
+            ],
+            "last_decision_probe": "[DECIDE-PROBE] decisions=82000 steered=81664 unassignedProbes=84353 evalNull=2689 observedDecisionLits=81999 theoryAtomDecisions=81758 theoryAtomPct=99.7061%",
+            "phase_lines": [
+              "[PHASE] enter  +0ms (asserts=1)",
+              "[PHASE] rewrite-done  +53ms (asserts=1)",
+              "[PHASE] solve-eqs-done  +36ms (asserts=440)",
+              "[PHASE] symbolic-mod-done  +10ms (asserts=440)",
+              "[PHASE] ite-lowering-done  +29ms (asserts=1064)",
+              "[PHASE] constant-propagation-done  +9ms (asserts=1064)",
+              "[PHASE] integer-divmod-done  +52ms (asserts=1064)",
+              "[PHASE] preprocess-done  +63ms (asserts=1064)",
+              "[PHASE] detect-done  +6ms (asserts=1064)",
+              "[PHASE] setup-done  +0ms (asserts=1064)",
+              "[PHASE] atomize-done  +51ms (asserts=1064)",
+              "[PHASE] bound-axioms-done  +0ms (asserts=1064)"
+            ],
+            "stdout_sha256": "7f51b4fb44dbc72708fac0a474600c2e9d8af4ce3a8b8f1680330454f6a8d68f",
+            "stderr_sha256": "a8f38a0cd90540ce01a7e945d65a1fc08d0423b1cecdc1bd169ba9d42423d5e3"
+          },
+          "candidate": {
+            "binary_sha256": "f4bfca785b42ea287df7af9f37fa28bf8e3745c8ce46c9b0266dcc74b3a1988b",
+            "returncode": 0,
+            "candidate_sizes": [
+              2466,
+              2467,
+              2468,
+              2469,
+              2471,
+              2473,
+              2475,
+              2477,
+              2479,
+              2481,
+              2482,
+              2484,
+              2485,
+              2487,
+              2489,
+              2491,
+              2493,
+              2495,
+              2497,
+              2499,
+              2501,
+              2503,
+              2504,
+              2505,
+              2507,
+              2509,
+              2511,
+              2512,
+              2514,
+              2515,
+              2517,
+              2519,
+              2521,
+              2523,
+              2524,
+              2526,
+              2528,
+              2530,
+              2532,
+              2534,
+              2536,
+              2538,
+              2540,
+              2542,
+              2544,
+              2546,
+              2548,
+              2550,
+              2552,
+              2554,
+              2556,
+              2558,
+              2560,
+              2562,
+              2564,
+              2566,
+              2567,
+              2569,
+              2571,
+              2573,
+              2575,
+              2576,
+              2578,
+              2580,
+              2582,
+              2584,
+              2585,
+              2587,
+              2589,
+              2591,
+              2593,
+              2595,
+              2597,
+              2599,
+              2601,
+              2603,
+              2605,
+              2607,
+              2609,
+              2611,
+              2613,
+              2615,
+              2617,
+              2619,
+              2621,
+              2623,
+              2625,
+              2626
+            ],
+            "last_decision_probe": "[DECIDE-PROBE] decisions=88000 steered=87610 unassignedProbes=90084 evalNull=2474 observedDecisionLits=87998 theoryAtomDecisions=87682 theoryAtomPct=99.6409%",
+            "phase_lines": [
+              "[PHASE] enter  +0ms (asserts=1)",
+              "[PHASE] rewrite-done  +51ms (asserts=1)",
+              "[PHASE] solve-eqs-done  +35ms (asserts=440)",
+              "[PHASE] symbolic-mod-done  +9ms (asserts=440)",
+              "[PHASE] ite-lowering-done  +26ms (asserts=1064)",
+              "[PHASE] constant-propagation-done  +9ms (asserts=1064)",
+              "[PHASE] integer-divmod-done  +51ms (asserts=1064)",
+              "[PHASE] preprocess-done  +61ms (asserts=1064)",
+              "[PHASE] detect-done  +6ms (asserts=1064)",
+              "[PHASE] setup-done  +0ms (asserts=1064)",
+              "[PHASE] atomize-done  +49ms (asserts=1064)",
+              "[PHASE] bound-axioms-done  +0ms (asserts=1064)"
+            ],
+            "stdout_sha256": "7f51b4fb44dbc72708fac0a474600c2e9d8af4ce3a8b8f1680330454f6a8d68f",
+            "stderr_sha256": "eed63d5cc72fa1cbfe5a249be176b13c31db784b80826f823ce5d67eedbc6504"
+          }
+        },
+        "script_sha256": "383ac3ee018a150b64edc6c36b82e46b43f5784dafbb3b19568acce921026880",
+        "protected_sets_used": false,
+        "prior_collection_limitation": "R1381 omitted CLI --verbose, so std::cerr candidate/probe logs were suppressed. Its empty logs establish no absence of decisions or dynamic registrations.",
+        "boundary": "10-second verbose diagnostic with existing decision logging enabled. Not a formal verdict, solve count, model qualification or timing comparison."
+      },
+      "record_sha256": "6ebf345876f0c30b3b1b16b359689fdff7614bb8a5536a7839828fd693e9a381"
+    }
+  ],
+  "prior_failed_audit": {
+    "experiment": "5aeb26842876",
+    "run": "af9857b297d6",
+    "reason": "The read-only audit queried a nonexistent old experiment name. Source/build, actual native runs and their raw reports were unchanged; this successor corrects the lookup and adds independent actual-model94 confirmation."
+  },
+  "protected_sets_used": false,
+  "superiority_claim": false,
+  "outcome": "not_promoted_full160_loses_three_LIA_inputs_despite_two_gains",
+  "boundary": "Common factory registry wiring and dynamic decision-candidate refresh pass1913 native units,31 Python tests and39 acceptance groups, including same-header negative integration controls. SAT98 is independently model-replayed in both pilot and full160, and SAT144 is gained in the complete round. Full160 loses LIA7/11/91:106 retained main,105 candidate,118 verified Z3 after the same-round original-input115 modular certificate. Raw reports and raw105/104/117 score remain preserved. Z3 SAT94 originally has unsupported auxiliary universe metadata. Retaining all47343 closed original interpretations and independently replaying them with cvc5 confirms the actual timed model; only eight unconfirmed UNSATs remain excluded. No opposite verdict or invalid exported Xolver model is found. Functional integration remains on development while the default decision policy is investigated through the existing API. No new PR, protected-set access or new original-C QCP qualification; do not promote this performance regression."
+}

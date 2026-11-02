@@ -40,9 +40,13 @@ Older tables describe their own frozen versions and evidence boundaries.
 
 ## Current arithmetic and ASP continuation
 
-The consolidated QCP/foundations delivery remains
-[PR92](https://github.com/fuqi-jia/Xolver/pull/92). Its retained runtime is
-`65c21b9b` (documentation head `c9c4243c`): verified coprime nonlinear
+The consolidated QCP/foundations delivery
+[PR92](https://github.com/fuqi-jia/Xolver/pull/92) is merged as main
+`26aca1b816bdcdd02c070164bf2193c2b3483e56`. Final
+[PR CI41242293854](https://github.com/fuqi-jia/Xolver/actions/runs/41242293854)
+and [main CI41244346132](https://github.com/fuqi-jia/Xolver/actions/runs/41244346132)
+pass build-test and proof-gate. Its retained runtime is
+`65c21b9b` (consolidated documentation head `253e70c0`): verified coprime nonlinear
 projection and certified shallow-conflict exclusion. R1341 qualifies that
 runtime, all39 R1343 acceptance groups pass, and R1345 binds the native/API
 and actual-model evidence. The PR records the final CI and merge receipts.
@@ -70,11 +74,274 @@ has SHA-256 `07e1516f370812f4ad38f7675d202093cd45c828d978fac4f89ffc1b396f7ae7`.
 The entire cache, its definition-identity interface, widened row versions and
 cache-only tests are reverted in `cecea9fa`; runtime files again match the
 qualified `65c21b9b` byte for byte. These new scores qualify the rejected cache,
-not the restored prefix runtime. Panda's canonical source/build still contains
-R1362: any next source overlay must use `source-r1362.tar.json` as its preimage
-and restore all seven reverted files. Frozen evidence is retained; no new PR,
+not the restored prefix runtime. At closure Panda contained R1362; the subsequent
+R1372 overlay restored all seven reverted files. Frozen evidence is retained; no new PR,
 compatibility entry, protected-set run or end-to-end QCP claim is introduced.
 The propagation memory-pool and work-budget-only experiments remain closed.
+
+The row-deduction eligibility shortcut `d88eaf45` is also closed and removed in
+`4949df12`. Its1914 native cases,31 Python tests,381 independent implications
+and all39 R1375 groups pass, but R1374 drops verified solves3→1, loses51/131,
+and gains no input. SAT59 improves14.105→7.886s; that does not compensate for
+the losses. No full160 expansion is performed. See
+[the closed shortcut evidence](LINEAR_ROW_ELIGIBILITY_CLOSED_20261101.json),
+SHA-256 `d2ea00e4eba84c970276fd793bb481940d26b009cad59d83953f2720119c8a12`.
+R1370's original diagnostic tasks fail because stage text overwrites the shared
+JSON log; R1371 preserves those failures and recovers only complete late-fragment
+counters. The observed17/41/36% avoidable-pair fractions on49/58/59 are fragment
+measurements, not whole-run savings or solver scores.
+
+Development `b49a4350` fixes a different decision-adapter omission: its linear
+candidate snapshot was never refreshed after theory cuts/branches registered
+new atoms. The existing count contract now detects growth; an offset into all
+registration records limits updates to the appended suffix. R1377 qualifies
+CLI SHA-256 `5aff72b27f9b01930d5dc57fb79a0af3d1f3c3d983777307d2fbf9c765176041`.
+All39 R1378 groups pass, including1912 native cases /988109 assertions and31
+Python tests. The same-header old adapter fails three late-atom assertions.
+The mixed-kind, user-priority, SatActivity, polarity and backtrack contracts pass.
+
+R1379's nine-case pilot gives1 baseline/2 candidate/9 verified Z3 decisions,
+with no lost verdict, wrong verdict or invalid exported model. The gain is
+already-variable SAT51 (baseline timeout, candidate17.374s); SAT59 improves
+7.885→2.876s. All six selected gaps1/13/89/98/49/58 still time out. This does not
+establish a stable new capability or a fixed160 improvement; no new PR is open.
+R1382's short verbose diagnostic confirms dynamic linear candidates on58
+(2466→2623), while the old list stays2466. Earlier R1381 omitted CLI `--verbose`;
+its suppressed logs establish no absence of decisions or registrations.
+
+The same diagnostic exposes a more direct missing connection: pure LIA13/89
+perform2,218,211/12,236,430 unassigned model probes and receive no value on every
+probe. Their factories initialize the solver's registry but leave the owning
+TheoryManager's registry null. Development `787981dc` moves that common binding
+to `setupSolvers`, removes eleven per-builder copies, and adds eleven
+factory/manager route checks for pure arithmetic, nonlinear linear helpers and
+feature routing. This is one consolidated decision-integration stage with the
+cache fix; native qualification, original-input gains and promotion are pending.
+
+R1383's ExperimentOS build (`41a2bc99eb95`, run`e11eac07a304`) compiles but
+its new test crashes before evaluating a model: the fixture omitted the SAT
+observation context required by atom registration. This is a failed test setup,
+not a solver verdict or passed qualification. The correction connects the real
+SAT backend and theory adapter, allocates observed variables, and checks signed
+decisions through the adapter too. The failure and its original source/archive
+remain preserved; R1387 stops before dispatching any dependent native check.
+
+R1388 (`72c980afd63f`, run`32d734d495d8`) succeeds from source`de0aea14`,
+using `source-r1383.tar.json` preimages only after the failed run is terminal and
+its PID gone. The corrected factory/manager/real-adapter test passes165
+assertions across eleven routes; the same-header old factory fails at LIA model
+evaluation. All218 targeted native cases /177765 assertions and31 Python tests
+pass. Frozen CLI SHA-256 is
+`f4bfca785b42ea287df7af9f37fa28bf8e3745c8ce46c9b0266dcc74b3a1988b`;
+SV is`af7607aa50c7d7cd4c6845f53871592587876277f49203f8619d7a7845f3a3ec`,
+worker is`bc17dd8b1b33b587e1f4130f8ad4bf7e4663810a20536cc5a0fd3871cfab5182`.
+The source/core hash and failed-fixture recovery are bound in its qualification.
+All39 R1389 groups (`71e1e1834a9e` /`f01f813194f2`) now pass, including1913
+native cases /988274 assertions. `source-r1388.tar.json` remains the canonical
+preimage for another source update; subsequent documentation reuses this frozen
+runtime without another native archive.
+
+R1390's fixed nine-case pilot (`01dfb114527f`) gives **2 main/4 candidate/9
+verified Z3** decisions, with no lost verdict, wrong verdict, invalid exported
+model or protocol error. New SAT98 (2019-cmodelsdiff, original10.9MB QF_LIA)
+finishes56.274s versus main timeout, and its actual exported model independently
+replays SAT. Earlier cache-only R1379 still timed out on98. SAT51 also improves
+from timeout to17.511s but remains an already-variable control. SAT59 improves
+8.188→2.823s, while131 is58.118→57.823s. Gaps1/13/49/58/89 still time out.
+These are pilot observations, not a complete-suite score or superiority claim.
+
+R1391's short verbose diagnostic (`2df72caac4c6`) confirms the connection on
+real inputs:89 changes from11,668,105 all-null unassigned probes to211,567 model
+probes with no null results;13 obtains38,653 model-based decisions instead of
+zero. Their10-second logged traces are not formal timing scores. The dynamic
+candidate refresh on58 is also active. R1381's earlier suppressed logs are not
+used as absence evidence.
+
+R1394's fresh fixed160 round is complete with **106 main/105 candidate/118
+verified Z3**. Candidate gains SAT98 (57.514s) and SAT144 (54.959s), but loses
+LIA7 UNSAT17.568s, SAT11 at5.882s and SAT91 at3.326s. Both versions have1 unknown;
+timeouts53/54. Verified PAR-2 is6953.423/7123.523/5356.975. No opposite verdict or
+invalid exported Xolver model occurs. The candidate is not promoted. Raw reports
+and raw105/104/117 counts remain unchanged: R1389's original-input115 modular
+certificate confirms both Xolver UNSATs, and R1399 independently replays the
+actual timed Z3 model94 after omitting247 unused universe forms while retaining
+all47343 closed original interpretations. Eight unconfirmed Z3 UNSATs remain
+excluded. R1400 (`994170403b9a`, run`d570a8a474a3`) checks the complete chain; see
+[the integration trial](THEORY_DECISION_INTEGRATION_TRIAL_20261101.json), SHA-256
+`7a1d34d783938efada617407e9b44d5c859209ba8006ee2f4113f74747d159aa`.
+R1395's earlier read-only audit failed on a nonexistent old experiment name;
+its failure is preserved and R1400 corrects that lookup.
+
+R1397's same-core public-policy observer (`357b808bb3d5`, SHA-256
+`673a96dd8a7d88d38a5ec03b12d37a72706488286b818e5f3fc3240369b23958`)
+and all four R1398 cases (`dbee9a69eb83`) pass. With SatActivity,7 returns UNSAT
+14.951s,11 SAT5.027s and91 SAT1.921s; their model-source checks reach30 seconds.
+Every decided result has an independent original-input or exported-model check.
+These instrumented runs use30-second checks plus parsing, so they are causal
+diagnostics, not replacements for the formal60-second records. LIA model-source
+samples on7 violate current active constraints99/120 times;11/91's initial
+samples are both fractional and source-inconsistent. On98,31/65 samples violate
+active constraints. The integration made an existing model-advice validity
+problem visible rather than establishing a beneficial default search policy.
+
+Development now validates model hints against their actual retained sources and
+coordinate domain. The common LinearAtomManager handles LRA/LIA signed
+relations and shared relations; LIA additionally rejects fractional/infinitesimal
+integer coordinates, while LRA retains exact infinitesimals. Point and retained
+source-prefix revisions validate the readiness certificate across reconstruction,
+append, replacement, withdrawal and restoration. This strict eligibility rule
+is an experimental heuristic contract, not a soundness prerequisite for phase
+advice; decisions still pass all mandatory theory and final-model checks.
+
+R1401 (source`0f2f7d9f`, experiment`ee861f5d0781`, run`e72a25bee194`)
+compiles but fails the new retained-source contract: LRA replaces an already
+applied `x >= 1` with `x > 1` without withdrawing the previous bound or rewinding
+its replay cursor. No candidate is frozen; R1402–R1404 are never dispatched.
+The failed source and scripts remain immutable.
+
+Implementation`2cef2e1a` fixes that actual source-state defect: replacing applied
+sources clears obsolete bounds/conflicts before replay, API scopes own complete
+source/interface snapshots independently of simplex resets, and the common
+incremental context filters interior level withdrawals. It preserves LRA's
+assignment choices: SAT rollback keeps its point, API pop/reset reinitializes it.
+R1406 (`2b95b5be056d`, run`463ad93c5e48`) qualifies CLI SHA-256
+`93118071c3f5428f3ba17409fcaa887b970a7eb017bbf80dc0e93b429d58e808`.
+All39 R1407 groups pass, including1920 unit cases/988379 assertions and31
+Python tests. The four new source/scope/hint contracts pass; restoring earlier
+function bodies under identical new headers fails all four. The strict-hint
+contract's failure alone is not evidence of an unsound SMT verdict.
+R1411 (`15188bc03a58`) checks528 direct LRA source-transition states: both
+frozen independent solvers confirm398 actual exported SAT models and130 UNSAT
+source bases, including replacement, nested pop, root replay and interior removal.
+
+R1408's13-case pilot rejects the combined default-search candidate: **6 main/
+3 candidate/13 verified Z3**, no gains, losses51/59/131 (all LRA), and no wrong
+verdict or invalid exported model. Earlier LIA losses7/11/91 are restored, but
+LRA59 changes8.593s SAT to timeout;98 also remains unsolved. No full160 expansion,
+new PR or merge follows. R1414 (`867a0b99ad58`) checks source, binaries, all39
+acceptance jobs, the pilot and both-oracle state evidence. See
+[the current-model trial](CURRENT_MODEL_HINTS_TRIAL_20261101.json), SHA-256
+`cdfe6a30db6b81276e912e3f30ad50b37124eebe2c12b209b6a90833e0ded0f6`.
+
+R1415/R1416 isolate variable selection from phase advice through the existing
+legal CaDiCaL phase API, with the same arithmetic core and ABI. All five jobs
+succeed, but all three policies still reach the30-second limit on59 and98.
+Thus phase-only steering is not established as a fix. R1412's first diagnostic
+build used arithmetic include paths and omitted `cadical.hpp`; its failure is
+preserved, and R1415 uses exact SAT-component compiler flags. No production
+source, public interface or frozen library is changed by these diagnostics.
+R1417/R1418 isolate the strict whole-source advice rule from exact queried-point
+arithmetic. On59, strict advice reaches30 seconds with1,470,075 requests and708
+Full checks; tentative real-coordinate advice gives independently replayed SAT
+in1.921s with83,605 requests and5 Full checks. Changing only LRA advice suffices.
+Integer11/91 remain correct, but dropping integer whole-source checks changes7
+from23.135s UNSAT to the30-second limit. All variants retain exact arithmetic,
+queried-integer typing, mandatory theory/final checks and the LRA source fix.
+These are30-second causal diagnostics, not formal speedup or solve-count rows.
+
+Implementation`f33ba286` restores tentative exact LRA advice while retaining
+strict LIA model eligibility. R1419 (`bd2d9c083139`, run`0262554b5a6e`)
+qualifies CLI SHA-256
+`03c97bb1485ed6a4c6592b44281745bcb6e8a7b080c8930d5b74eb793bccb241`.
+All39 R1420 groups pass:1921 native cases/988378 assertions and31 Python tests.
+All five new contracts pass; earlier same-header functions fail all five.
+R1424 again confirms528 state transitions,398 actual SAT models and130 UNSAT
+source bases with both independent solvers.
+
+R1421's complete13-case pilot is **7 main/6 candidate/13 verified Z3**. LRA
+51/59/131 improve47.027/7.585/37.272s to16.508/2.623/23.726s, but NRA144 is lost:
+main SAT56.834s versus candidate timeout. No gains, opposite verdicts or invalid
+models occur. The R1425 full160 dispatcher rejects this pilot before creating
+any native experiment. No new PR or merge follows. R1428 (`bbe3467c1395`)
+binds source, binary, all39 groups, actual state checks and the rejected pilot;
+see [the relaxation-phase trial](RELAXATION_PHASE_TRIAL_20261101.json), SHA-256
+`677841aa44ef64d8fef786f409a9c788af375013959538d582bce598c4444216`.
+
+R1426/R1427 isolate late-atom refresh and LRA source withdrawal under identical
+headers/core. The144 current/static-candidate/prior-LRA controls all return
+independently replayed SAT in45.368/47.218/43.907s, so neither rollback alone
+establishes a fix for the formal loss. Control157 also passes. Control65's first
+independent Z3 check reaches60 seconds without a verdict, not an opposite answer;
+its failed job is retained. R1429 completes all65 variants with fresh frozen
+cvc5 UNSAT checks. These API60-second checks include separate parsing within a
+75-second invocation and do not replace the formal lost144 row.
+
+R1430/R1431 time script scan, parsing, solve and export separately. Single-query
+snapshot scans cost0.087s on98 and0.231s on144; duplicated scan work does not
+explain the whole gap. API98 has58.299s check time but61.473s total and remains
+outside the formal60-second budget. API144 is47.421s versus verbose frozen CLI
+53.306s, both with checked models. Plain and passive-observer paths agree in
+search behavior; their13 Full checks and70 Standard theory checks match CLI.
+
+R1432/R1433 then isolate only the CLI's unconditional large-stack pthread.
+With the same512MiB stack allowance, CPU and core,144 changes52.682s wall /
+52.609s CPU to45.334s wall /45.239s CPU;59 changes2.121s to1.920s;98 still
+reaches60 seconds. Both probes confirm libc's single-thread flag remains1 for
+inline execution and0 for the worker; every SAT witness independently replays.
+These controls are causal diagnostics, not formal score replacements.
+
+Runtime implementation `a677c395` introduces `base/ExecutionStack`: prefer
+main-thread stack growth within the existing hard limit, retain a joined
+large-stack worker when necessary, restore temporary limits and propagate action
+exceptions. CLI parser/solver construction and destruction share that scope.
+R1434 freezes CLI `08088b5a77ba1f2e341449327a10b4e1f42b8a27d42bda91f403a015dee69e70`.
+All39 R1435 groups pass, including1924 native cases /988394 assertions and31
+Python tests. R1437 independently checks528 complete source states with both
+frozen oracles. Main-thread, hard-cap fallback, exception restoration and12000-deep
+input checks pass. Canonical Panda preimages are `source-r1434.tar.json`;
+diagnostic builds never replace them.
+
+Fresh R1439 fixed160 yields **105 main/106 candidate/117 verified Z3** after
+the original-hash certificate115 and actual timed Z3-model94 replay supplement
+the unchanged raw reports. Raw decisions are105/106/125. Eight Z3 UNSATs
+12/24/27/42/50/80/114/159 remain unconfirmed and excluded. Verified PAR-2 is
+7059.819/6891.206/5473.371: candidate improves about2.4% in this round.
+SAT51 and NRA144 are gained at17.061s and48.088s; SAT131 is lost (main58.490s,
+candidate timeout). No opposite verdict or invalid exported model occurs.
+Candidate has53 timeouts/1 unknown. The pilot gain98 does not reproduce;
+its original full-round timeout remains in the score. Neither protection set
+is read or run. The [stage evidence](EXECUTION_STACK_STAGE_20261101.json)
+binds source, frozen binary, server checks and the complete comparison.
+R1441 seals the evidence; this limited one-round gain establishes neither
+superiority over Z3 nor improved original-program QCP coverage. No new PR or
+merge is created for these intermediate experiments.
+
+The follow-up integer model-repair prototype `a5341d65` is closed and removed
+in `a6d3a639`. It projects unit equalities, rounds independent coordinates,
+and searches exact coordinate boundaries under a work budget. R1449 passes
+1928 native cases /988961 assertions, but R1450's13 selected cases give
+**9 preceding candidate/9 prototype/12 verified Z3**: no gains, losses,
+opposite verdicts or invalid models. Verified PAR-2 worsens627.647→635.042s.
+Selected gaps1/13/89/98 still time out; no full160 expansion or PR follows.
+See [the closed repair evidence](AFFINE_BOUNDARY_REPAIR_CLOSED_20261101.json).
+The restored runtime source matches `a677c395`. R1452 restores Panda from
+`source-r1449.tar.json`; its canonical manifest is now `source-r1452.tar.json`.
+Rebuilt CLI, SV, QCP worker, core archive and unit binary exactly match R1434.
+The restoration receipt SHA-256 is
+`76954e1954d0652088881f9602f82437635248cb9db6e37aebfce5e2e299065f`;
+the retained frozen CLI is still `08088b5a…`.
+R1446's driver fails before invoking either independent solver because of a
+missing environment argument; corrected R1447 checks all four sampled states.
+Their diagnostic Z3 SAT decisions and cvc5 timeouts are not checked-model
+certificates and are not added to benchmark scores. R1453 seals the closure
+after the original R1451 receipt script fails to parse. Both failures remain.
+R1454 additionally finds no violated equality-conditioned integer bound in
+any of those four sampled rational states; it invokes no oracle because there
+is no candidate theorem. This supplies no basis for adding that cut here.
+
+The next capability under investigation is whole-formula finite-domain LIA
+encoding. `EagerBitBlastSolver::solveBinary` currently admits only variables
+whose positive root bounds individually prove0/1, although the shared collector
+already propagates other finite integer bounds. The encoder's pseudo-Boolean
+path also only accepts0/1 monomials. No finite-domain implementation or measured
+gain is claimed yet; any generalization must retain exact model validation,
+signed integer semantics and the SAT-only result boundary.
+
+QCP's existing verification-orchestrator skill and immutable original-program
+references have been inspected, but no new original-C workflow is started with
+the regressing R1388 candidate. Both protected sets remain unread and unused.
+No new PR is open; main remains the green PR92 delivery. No additional server
+archive is a new condition for that delivered main.
 
 [PR89](https://github.com/fuqi-jia/Xolver/pull/89), implementation `e0cafba8`,
 restores SAT's retained signed root prefix after a real restart. A shared theory
@@ -4184,3 +4451,691 @@ immutable. Seven unconfirmed Z3 UNSATs remain excluded. Both protected sets and
 a current-kernel controlled original-program QCP comparison remain outstanding.
 PR87 exact delivery-head CI and postmerge main CI complete the merge checks;
 no extra server current-main archive is required.
+
+## Guarded quotient order and controlled QCP completion (R1518, R1544–R1547)
+
+`IntDivModLowerer` now derives signed quotient bounds from comparisons between
+a dividend and a product containing its divisor. Both the source predicate
+and divisor sign guard each consequence; zero-divisor functions remain
+arbitrary, and derived scope is the maximum premise/definition scope. Native
+qualification passes1951 unit cases/1276486 assertions and four added SMT-LIB
+regressions. Exhaustive witness tests include false Boolean premises, negative
+and zero divisors, composite divisors and different definition/premise scopes.
+
+Frozen candidatecbc11dad versus parent12eb7570 and fresh Z3 verifies7/7 kernel
+cases versus5/7 for the parent. Two product/quotient contradictions change from
+60s timeouts to independently confirmed UNSAT in about0.018s. These generated
+kernels are separate from fixed160. The nine-original pilot verifies5/5/5,
+with no gain/loss or wrong verdict; original27/42 still time out. No full160
+or overall Z3 advantage follows. The previous fullR1538 round, supplemented
+with the existing independent truth record for80, remains106/106/118 verified.
+Original115 stays unconfirmed after cvc5's1800s validation timeout.
+
+The separate NodeManager-worker QCP cohortR1518 now has all six original-C
+controller runs at `done`, with fresh native symexec and Rocq checks. Each
+backend verifies branch/GCD/max3,23 top-level VCs and3 splits, across2340 native
+SMT calls with identical ordered queries/verdicts. Branch/GCD manual proof bytes
+differ, so shorter Xolver callbacks are not an end-to-end speedup claim. GCD
+assumes external `abs`; max3's frozen contract proves an upper bound only.
+This cohort does not use the new quotient binary. Both protected sets remain
+unused. No prototype PR/main promotion is claimed. Evidence and remaining
+boundaries: [quotient-order stage](QUOTIENT_ORDER_STAGE_20261101.json).
+
+## Integral real candidates and independent sign certificates (R1549–R1563)
+
+The whole-formula numeric candidate engine now also searches integer-valued
+points of pure nonlinear real formulas with Boolean alternatives. Its exact
+polynomial/Boolean validation and model reconstruction remain mandatory;
+an exhausted integer subset never refutes a real formula. A shared,
+polarity-aware Boolean-structure helper leaves real literal conjunctions to
+the existing arithmetic engines. Native qualification passes1962 unit cases/
+1283340 assertions, including92 targeted cases. Frozen candidated6bde65e
+and worker2abfb403 correspond to the recorded source overrides, not a new main.
+
+Fresh fullR1561, all160 EOS runs successful with60s/one physical CPU/16GiB,
+verifies107 parent,108 candidate and117 Z3. The only solve change is original77:
+parent timeout to candidate SAT in1.82s, with its exported model replayed.
+Candidate PAR-2 improves6859.180→6774.000s; Z3 remains5371.916s. Original146
+still slows11.24→33.49s. No lost solve, opposite verdict, invalid model or
+protocol error occurs in the accepted round. Earlier failed pilots remain
+recorded separately and are never substituted into this round.
+
+Original159 is now independently UNSAT: an offline exact-rational checker
+verifies a four-equality positive weighted-square identity on the original
+input hash. Its10 tests cover tampering, conditional/weak sign premises,
+zero identities, macro shadowing and scope changes. This closes truth only;
+Xolver still times out on159. Unconfirmed12/24/27/42/114/115 remain excluded.
+The separate48-case NIA comparison verifies28/28/29; sparse-support enumeration
+has no solve-count gain there. Do not repeat its budget tuning.
+
+Runtime discovery of the checked positivity certificate remained open at
+R1563; the following stage addresses it for integer and real clients.
+There is no new QCP end-to-end result for this worker, no PR/main promotion,
+and neither protected set has been used. See [stage evidence](INTEGRAL_REAL_CANDIDATES_STAGE_20261101.json)
+and the [checkable certificate](certificates/mgc_07_sign.json).
+
+## Shared nonlinear positivity discovery (R1572–R1576)
+
+`MonomialSquares` now constructs exact weighted-binomial-square identities
+and exact leading-monomial equation reductions. `PolynomialSignClosure`
+uses these in a local query context shared by NIA/NRA and whole-formula Boolean
+refutation. Structural ordering eliminates globally linear parameters before
+high powers; variable IDs only break ties. Common-factor cancellation retains
+nonzero premises, while exact monomial division requires no such premise.
+The existing propagation/projection schedule and100000-work/10ms allocation
+remain. Native qualification passes1973 cases/1283468 assertions, including
+27 targeted cases covering powers2/3/7, variable-ID permutations, weak bounds,
+zero/negative weights and incomplete divisions. Frozen CLIf1fd6f51 and
+workerf19db8dc correspond to the recorded source overrides.
+
+The accepted R1573/R1575 full160 comparison verifies108 parent,109 candidate,
+120 Z3; Z3 has125 raw decisions. Original159 changes from60s timeout to
+UNSAT in0.017s, matching fresh Z3 and the existing independently checked
+polynomial certificate. No valid lost solve, opposite verdict or invalid
+model occurs. PAR-2 is6813.007/6685.203/5137.449s. Six initial triads violated
+the wall-budget protocol and remain immutable; only these were replaced by
+fresh complete triads with identical frozen versions and60s/one physical CPU/
+16GiB budgets. The selection receipt retains all166 runs and both report hashes.
+Historical independent cvc5 records50/80 supplement truth only, never timing.
+Unconfirmed12/24/27/42/114/115 remain excluded.
+
+The earlier global-rewrite prototypes exhausted allocations or failed existing
+capability checks and were not promoted. A diagnostic trace exposed dependence
+on native variable numbering; the accepted structural order removes that
+observed failure. Its relaxed tracing allocation is not production behavior
+or performance evidence. See [positivity stage evidence](NONLINEAR_POSITIVITY_STAGE_20261101.json).
+
+Next, qualify the frozen worker through the controlled original-C QCP checks
+with common frozen proof materials. The new worker has no QCP end-to-end win
+yet. Keep both protected sets unused until the final comparison; no PR/main
+promotion is claimed. The raw-pointer Farkas memo concern is reproduced and
+fixed in the following stage; the fresh-query suite alone did not cover it.
+
+## Assertion-scoped Farkas analysis (R1577–R1583)
+
+The registered parent Farkas callback emits a false conflict after the same
+`NativeTerms` changes from UNSAT coefficient bounds to a SAT formula with the
+exact witness `x=4,y=-5,l0=l1=2`. Both frozen Z3 and cvc5 confirm the formulas
+and the pinned witness. This is a direct theory-stage reproduction, not a
+claim of a public CLI opposite verdict or failed QCP program.
+
+`AssertionSnapshot` now keys formula analyses by a lifetime-safe expression-index
+identity and every scope-tagged assertion root. The Farkas profile, support table
+and failed-refutation memo belong to one registered reasoner and are rebuilt
+together after assertion replacement, pop or index-space replacement. The key
+is theory-independent; this stage migrates the Farkas client. Existing public
+API semantics, LRA/LIA rollback and search allocations remain. Native qualification
+passes1977 cases/1283496 assertions, including4 targeted cases/28 assertions.
+Frozen CLI41e9f2be and workera9a9075c match the recorded source overrides.
+
+The fresh R1583 full160 round verifies109 parent,109 candidate and119 Z3
+(raw110/110/124). There are no new/lost solves, opposite verdicts, invalid
+models or protocol errors. All160 native case jobs finish successfully without
+retakes. Verified PAR-2 is6658.252/6677.684/5201.628s: candidate is19.432s slower
+(0.29%), so this is a correctness fix with no measured performance benefit.
+The largest observed change is LRA131,33.28→53.15s; causality is unproven and
+the closed clock-gate experiment must not be repeated. Z3's original94 is a
+valid timeout this round; its historical SAT timing is not substituted.
+Unconfirmed12/24/27/42/114/115 remain excluded. Independent50/80 records supply
+truth only. See [cache-stage evidence](FARKAS_ASSERTION_CACHE_STAGE_20261101.json).
+
+At R1583 the SAT-side Farkas candidate constructor could still give up when a
+primitive integer ray needed scaling. The following stage addresses that
+capability while preserving the equality and inequality semantics.
+Current-worker original-C QCP checks, final fair
+comparison, both protected sets and PR/main promotion remain outstanding.
+
+## Exact integer ray scaling and shared affine domains (R1585–R1588)
+
+`AffineIntegerDomain` now computes exact integer boundaries for rational affine
+constraints, including strict bounds and excluded points. The existing
+Presburger unary kernel and both Farkas candidate paths share it. Each candidate
+constrains its scale by every equality and each scalar inequality, materializes
+the least positive GMP integer multiplier and rebuilds symbolic cost intervals.
+Nonzero equality RHS remains enforced. CT-dependent constraints still go through
+the existing CSP/model checks; inability to scale one ray is never an UNSAT proof.
+The formerly missing `l0=l1=2` witness is now constructed and independently
+validated by the real Farkas stage.
+
+The new tests also expose an existing reversed-constant sign error:
+`c < p` must become `p-c>0`, whereas the old extractor used `p+c>0`.
+R1585's failed targeted record is retained; correcting the implementation
+without relaxing tests passes34 cases/14887 assertions. Full native qualification
+passes1983 cases/1293727 assertions. Eight generic kernels receive16 independent
+Z3/cvc5 confirmations. Frozen CLIcce9debc and workerf71ac075 match the recorded
+source overrides. See [ray-scaling evidence](INTEGER_RAY_SCALING_STAGE_20261101.json).
+
+The fresh R1588 full160 round verifies108 parent,108 candidate and119 Z3
+(raw109/109/124). No new/lost solve, opposite verdict, invalid model or protocol
+error occurs; all160 native jobs succeed without retakes. Verified PAR-2 is
+6767.815/6763.298/5207.655s, a nominal0.067% candidate improvement, insufficient
+to establish general speedup. Original144 is a valid timeout for both arms this
+round, including the same frozen parent that solved it previously. Preserve
+these observations rather than substituting historical timing. Unconfirmed
+12/24/27/42/114/115 remain excluded; historical50/80 records establish truth only.
+
+The representative29/106/116 gaps remain timeouts, so this scaling performance
+experiment is closed without budget tuning. Retain its verified capability and
+sign fixes, then measure another remaining mechanism before implementing the
+next optimization. There is no new whole-program QCP result, main promotion,
+protected-set use or overall Z3 superiority claim.
+
+## Unary affine propagation experiment closed (R1590–R1596)
+
+Native sampling of remaining LRA gaps58/128 puts17/35 and24/35 frames inside
+`LraPropagationEngine::propagateAll`. Diagnostic counters also show repeated
+row visits. A prototype maps unary affine endpoints directly, avoiding generic
+row aggregation while retaining exact signed infinitesimals, explanations,
+quotas, callback timing and scheduling. It passes1985 unit cases/1293826
+assertions and96 independent Z3/cvc5 implication/witness checks. These establish
+correctness of the tested kernels, not a resolution of the remaining gaps.
+
+The fresh R1595/R1596 comparison verifies109 parent,109 candidate and119 Z3
+results (raw110/110/124), with no new/lost solve, opposite verdict or invalid
+model. Verified PAR-2 is6668.040/6650.376/5201.593s. The nominal0.265% improvement
+comes mostly from one NIA input; LRA PAR-2 increases. This does not demonstrate
+a stable benefit. Original23 had a recorded baseline wall-budget overrun;
+only that complete triad was repaired with the same three frozen versions and
+60s/one physical CPU/16GiB budgets. All161 native runs and both reports remain
+in the selection receipt. No valid result was retaken. Unconfirmed
+12/24/27/42/114/115 remain excluded; historical50/80 records provide truth only.
+
+The prototype and its two experimental tests are removed. Their restored bytes
+match the canonical parent used by qualified R1586; no new native run is claimed
+for that restoration. Earlier assertion-cache, integer-scaling, constant-sign
+and positivity fixes remain. See [experiment evidence](UNARY_PROPAGATION_STAGE_20261101.json).
+Next, qualify the retained worker in controlled original-C QCP workflows with
+common frozen proof materials, and measure missing relational inference before
+another core change. Difference-logic routing is only an untested hypothesis.
+There is no new QCP whole-program result, PR/main promotion or protected-set use.
+
+## QCP validation with identical proof materials (R1597–R1598)
+
+The retained R1586 worker `f71ac075` now completes fresh original-C branch,
+GCD and max3 workflows against frozen Z3. All six controller runs reach `done`
+after independent native symexec replay and full Rocq final checks. Every final
+C/specification/library/goal/auto/manual/goal-check role matches one immutable
+reference byte for byte. Ordered native formulas, query bytes, callers, modes
+and verdict traces match between backends. All132 native ExperimentOS jobs
+finish successfully with exit0 and PID gone; query budgets remain60s, one leased
+physical CPU and16GiB. This qualifies earlier retained core changes; no solver
+core change is introduced or individually timed in this stage.
+
+Each backend verifies3 function bodies,23 top-level VCs and3 splits, executing
+2340 native calls:1188 SAT/1152 UNSAT, comprising2130 LIA and210 UFLIA queries.
+GCD assumes the external `abs` contract and proves partial correctness; max3
+retains its original upper-bound property. No stronger property is claimed.
+
+With PROVIDED identical frozen proofs, complete current-C final validation
+(symexec, selected real backend, Rocq checks and cleanup) totals88.567s Xolver
+versus98.092s Z3,9.710% lower in this cohort. Those timed final checks contain
+780 native calls per backend. Whole-workflow callback totals8.426/28.921s cover
+all2340 calls and must not be substituted for complete validation time. Neither
+measure includes automatic proof construction or orchestration waiting. This
+single cohort on three training programs does not establish statistical or
+arbitrary-program superiority. See [QCP comparison evidence](QCP_COMMON_PROOFS_STAGE_20261101.json).
+
+A separate R1598 diagnostic changes only original49's declared logic from LRA
+to RDL. Both identical frozen Xolver instances and frozen Z3 time out at60s.
+Thus pure-difference dispatch is not a demonstrated fix: no routing change is
+implemented, and the derived input receives no original-suite performance credit.
+
+The latest generic SMT comparison remains109 verified Xolver versus119 Z3;
+unconfirmed12/24/27/42/114/115 stay excluded. Use the measured LIA/UFLIA application
+mix and harder training queries to select the next general reasoning change.
+Canonical build, PR/main CI, final frozen comparison and both independent
+protected sets remain outstanding. No main promotion or protected-set use occurs.
+
+## Linear predicate propagation experiment closed (R1599–R1619)
+
+Native diagnostics find source-bound and difference-path implications that the
+existing propagator does not publish. Raw diagnostic counts include already
+assigned predicates; they must not be reported as useful missing SAT propagations
+or as new original-input solves. A shared LRA/LIA prototype normalizes proportional
+forms exactly, applies integer lattices only to integer targets, and explains
+bounded difference paths without changing simplex coordinates or registering atoms.
+Two refinements add predicate-threshold search cutoffs and deliver cheap
+conclusions to SAT before expensive relational closure.
+
+The three frozen candidates pass1995/1998/1999 unit cases respectively; the final
+variant passes1296798 assertions. For EACH version,16 actual emitted clauses pass
+independent Z3/cvc5 refutation checks and fresh exact SAT-witness replay:64 oracle
+checks per version. These establish tested kernel correctness, not benchmark gains.
+Each fresh11-case pilot verifies5 parent,5 candidate and11 Z3 results, with no
+new/lost solve, opposite verdict or invalid model. Candidate PAR-2 is worse in all
+three rounds. Unrestricted and threshold-limited variants spend roughly one-third
+to over half of sampled time inside the new component. The scheduling variant
+reduces some overhead but adds no verified solve.
+
+The experiment is rejected. Its component, caller integrations and experimental
+tests are removed; restored caller bytes match the retained qualified parent.
+Earlier correctness and capability fixes remain. Frozen source/binary/checking
+evidence is preserved in [the stage record](LINEAR_PREDICATE_PROPAGATION_STAGE_20261102.json).
+No new full160 score or QCP result is claimed; the retained full160 comparison
+remains109 verified Xolver versus119 Z3. Next, measure whether sparse combinations
+of integer equalities expose divisibility conflicts missed by per-row GCD checks.
+No PR/main promotion or protected-set use occurs in this experiment.
+
+## Model-source synchronization rejected; withdrawal scheduling measured (R1620–R1633)
+
+The integer-entry probe confirms a small combined-equality divisibility gap,
+but does not establish it as the cause of an original timeout: input1 exhausts
+its diagnostic work allowance and13/89 do not reach the sampled repair entry.
+Its exact toy certificates and independent checks are recorded separately in
+[the integer-entry evidence](INTEGER_ENTRY_DIAGNOSTIC_STAGE_20261102.json).
+
+R1624 instead measures repeated complete model-source replay on89. A shared
+SAT/theory adapter candidate retains notified contexts only after exact
+model/notification coverage and unchanged registration generation, while always
+performing Full checking. R1625 passes1992 cases/1294023 assertions. Its reduced
+sampled callback fraction is not a throughput result. The complete fresh160
+comparison retains the original11 pilot observations and runs149 new inputs:
+109 parent/108 candidate/116 independently verified Z3 results, with no gained
+solve and lost LRA48 (37.177s parent UNSAT, candidate60s timeout). Verified
+PAR-2 sums are6649.650/6671.331/5565.914. Xolver115 and nine Z3 decisions remain
+unconfirmed in these reports and are excluded; no historical adjudication is
+silently applied. There is no opposite verdict, protocol error or invalid model.
+
+The first dispatch registers17 excess jobs without CPU leases; taskset rejects
+them before any solver invocation. All149 valid new comparisons subsequently
+complete with proper leases; no valid timed result is retaken. The incident,
+corrected stage-parallelism clamp and report hashes remain in the
+[closed trial](MODEL_SOURCE_SYNCHRONIZATION_CLOSED_20261102.json).
+
+R1630/R1631 isolate the reuse effect under identical candidate ABI and objects.
+Baseline and the always-replay control have1040 matching recorded events after
+removing timing/instance addresses. The first candidate difference is the
+second Full check: equal source/level fingerprints,52 versus58 conflict literals.
+This supports changed search explanations, not an unsound-verdict conclusion.
+The reuse implementation and its nine experimental tests are removed. Complete
+Full replay is restored; the next adapter change is a distinct candidate.
+
+R1632/R1633 measure a scheduling defect on six original training gaps. A source
+withdrawal can regrow to the prior assignment count, or beyond it by less than
+the growth threshold, before cb_propagate. The size-only backtrack test then
+skips checking the replacement theory context. In15-second samples this happens
+at least128/16/256/256/256/1024 times on1/13/48/49/58/89 respectively. Production
+now tracks actual theory-source withdrawals until a Standard or Full check;
+theory rollback policies and Full replay remain unchanged. Native qualification,
+independent clause/model checks and a fresh fixed pilot are pending. No current
+candidate QCP, PR/main CI or protected-set result is claimed.
+
+## Withdrawal candidate closed; affine-line integer repair in qualification (R1634–R1643)
+
+R1636 qualifies the withdrawal-aware scheduling candidate:1985 cases/1293776
+assertions and22 SAT-backend cases pass. The old implementation, under identical
+new headers, fails the intended actual-LRA replacement-branch assertion. R1639
+checks eight actual adapter-emitted conflicts and neighboring SAT models with
+72 independent checks. Earlier R1634 misclassifies doctest's failed REQUIRE as
+a crash; R1638 exports all contexts but fails before oracle execution because
+its checker import path is absent. Both failures and their unchanged native
+outputs remain pinned in the recovery receipts.
+
+The complete fresh19-case R1637 pilot rejects this candidate:13 parent/12
+candidate/19 verified Z3 results, no new solve, lost LIA6 (0.317s SAT to60s
+timeout). Verified PAR-2 sums are868.194/987.819/43.815. There is no opposite
+verdict or invalid model. This missed optional-pruning event is not evidence
+that the earlier solver returned unsound verdicts. R1640 locates most sampled
+regression time in simplex pivoting; R1641 sees no repeated exact basis/point
+state at its32-pivot checkpoints, and sampled coefficient widths stay at most
+26/24 numerator/denominator bits. More branches and more pivots per check are
+observed. These samples do not establish a cycling or coefficient-growth bug.
+
+The scheduling candidate and its two tests are removed; adapter/header/test
+bytes match the retained parent. See
+[the complete scheduling trial](THEORY_WITHDRAWAL_SCHEDULING_STAGE_20261102.json).
+No full160 expansion or new QCP/promotion result is attributed to that trial.
+
+The next candidate extends integer repair beyond local corners and the existing
+at-most-one-free-coordinate affine model. `findIntegerLineModel` derives a
+primitive integer direction between an integer anchor and an exact rational
+point; the shared algebraic `AffineIntegerDomain` solves both parameter
+orientations with all six relations, offsets, strict bounds and exclusions.
+Returned coordinates are exactly rechecked, then validated against all original
+active LIA atoms by the existing repair boundary. Original rounding candidates
+keep their order. A shared8192-work proposal budget respects wall cancellation;
+failure/exhaustion continues ordinary solving. LRA and rollback policies do not
+change, and no runtime oracle or feature gate is added.
+
+R1642 compiles both production sources, then fails compiling a conjunction
+inside doctest CHECK_FALSE. R1643 retains the production bytes/objects and
+recompiles the corrected test. The four new tests pass5259 assertions, covering
+a feasible affine plane beyond failed old corners, nonzero equality offsets,
+primitive directions, negative parameters, large bounds, independent bounded
+enumeration and resource exhaustion. All19 existing LIA cases/497 assertions
+also pass. Full native qualification completes in ExperimentOS `071dd748eb04`,
+run`3a9249dd25eb`:1987 cases/1298986 assertions, exit0 and PID gone. Frozen CLI
+is`9662380b`, worker`f14fcb80`, qualification SHA-256
+`8f8c5d02e19b0316eecd34bdae33ae9f00e1b97a7fe7f944769c0c6780b5eb18`.
+R1644's complete20-input fixed pilot verifies13 parent/13 candidate/20 Z3
+results, without a new/lost solve or opposite verdict. Verified PAR-2 sums
+are1009.151/997.510/97.655. The apparent total reduction comes from unchanged
+LRA; affected LIA is slightly slower (539.226 to540.077). R1645/R1646's
+usage probe records zero new ray models on the sampled original contexts.
+The candidate and four tests are removed; bytes again match the retained
+parent. No full160 expansion or new QCP/promotion result is attributed to it.
+
+## Shared sparse equation conflicts under qualification (R1647–R1652)
+
+Sparse, fraction-free elimination with indexed incident rows reaches actual
+source contexts before simplex on training inputs1/7/89. The diagnostic
+finds41 conditional conflicts:36 zero-row contradictions and5 integer GCD
+contradictions. R1650 independently replays every exact weighted combination
+and passes173 frozen Z3/cvc5 checks. The five integer-only contexts remain
+SAT over reals, with models cross-replayed. Two derived pins are checked
+from their original signed guards. These are branch conflicts, not new
+whole-input solve credit. The evidence report is
+`validation/arithmetic-r103/sparse-equation-evidence-r1650/report.json`
+(SHA-256 `6ba1351b16b0473a161a794f0db4abfbaf18e217897e1422afd3870ce38c5148`).
+
+The production algebra supports rational and integer equation domains; the
+shared search adapter collects active equality and directly explained pin
+sources, rechecks certificates, and projects rational conflicts back to
+original signed Farkas forms. LRA requires that checked projection, so
+integer-rounded bounds cannot refute real contexts. LRA/LIA invoke bounded
+discovery before simplex without changing their rollback policies or Full
+replay. Existing proof emission accepts directly checked equality signs
+before its bounded fallback sign search.
+
+R1651 compiles all production sources and tests, then exposes an overly
+specific test expectation: an individually integer-infeasible row already
+admits a valid GCD conflict. R1652 changes the example to two individually
+feasible equations and reuses unchanged production/test objects. Native
+qualification completes; the closed trial and next implementation follow.
+No full160 expansion or protected-set result is attributed to this trial.
+
+## Sparse-equation candidate closed; indexed substitution implemented (R1653–R1662)
+
+R1652 qualifies the sparse equation candidate:1992 cases/1322753 assertions.
+Its fresh20 fixed pilot ends13 parent/10 candidate/19 verified Z3 decisions,
+with no gained solve and lost7/48/131. Verified PAR-2 sums are
+1002.072/1282.235/166.977. All20 jobs exit0, with no opposite verdict,
+protocol error or invalid model. Z3's19 is this round's pilot score, not the
+historical fixed160 reference.
+
+Initial observers incorrectly used std::cerr under the quiet CLI, which hides
+that stream. Their empty logs do not establish absent inference. The same
+frozen observer with visible output records188 actually returned conflicts.
+R1661 replays187 exact signed Farkas sums and passes753 Z3/cvc5 checks across
+all188 guard contexts; the remaining integer-only context is SAT over reals
+with cross-replayed model. R1655's checker fails before any oracle call due
+to a serializer-name shadowing error; its recovery retains unchanged reports.
+The checked report SHA-256 is
+`5b088855a49c934c6370f16c0709a3d2445b9cc8e6c5d7f5b16b2d16b25653c4`.
+These checks support observed conditional conflicts, not improved throughput.
+The candidate and its nine tests are removed; see
+[the closed experiment](SPARSE_EQUATION_CONFLICT_STAGE_20261102.json).
+
+R1649 already locates23/37 case94 samples in SolveEqs,18/37 in substitution.
+R1662 implements a generic IR ActiveTermUses index with active reference
+counts, parent edges and stable root slots. Root replacement retains shared
+subtrees before releasing old ones; withdrawn parents are excluded. SolveEqs
+visits only the selected variable's ancestor terms and affected assertions,
+memoizes reconstructable immutable terms, and keeps original equality order,
+UF/array guards, scopes and reverse model reconstruction. No theory rollback,
+Full replay or new feature gate changes. Four independent index tests and
+all16 SolveEqs tests pass. Full native qualification completes1989 cases/
+1295855 assertions, exit0 and PID gone. CLI is58df0666, worker d1e89bdf,
+qualification SHA-256 e023f9bd4cb6e5564cfbb54e53e8eac2e1ee627c37f9c766eed91888fdcd869f.
+R1663 starts a fresh20-input frozen pilot with60s/one physical CPU/16GiB
+and independent original-model replay; R1664 separately samples case94.
+No timing gain or new QCP result is claimed before that comparison. See
+[the active stage](ACTIVE_TERM_USES_STAGE_20261102.json).
+
+## Indexed substitution and ordered candidate worklist qualified (R1663–R1674)
+
+The initial index-only pilot verifies12 parent/13 candidate/19 Z3 results,
+with no loss; the crossing on131 is not a stable new capability because
+older rounds solved it. Case94 still times out. R1664 instead exposes repeated
+candidate scans after full-DAG substitution is removed. The final implementation
+keeps failed definitions dormant until the corresponding assertion changes,
+reactivates them in original order, and retains global rechecks for the existing
+PolynomialInLinearPositions policy. The NIA caller's cumulative work allowance
+across repeated run() calls is preserved, with an explicit regression.
+
+R1668 passes1992 cases/1295873 assertions. CLI is819ea67f, worker dbeb7888;
+qualification SHA-256 is
+`359fb3417b13731e08fbe0bd2d6cd09d319b51a2ebf6a4f2ae2b6fd5591e88f4`.
+The fresh20 pilot ends13/13/20 verified, no new/lost solve, with verified
+PAR-2 sums990.258/984.222/98.949. On94, a separate15s diagnostic shows the
+new pass completing538 eliminations with532123 work and19/37 to4/37
+inclusive SolveEqs samples. The original whole-input solve still times out;
+this is a preprocessing result, not a coverage gain.
+
+R1671/R1672 check96 generated cases over LIA/LRA/NIA/NRA/UFLIA/AUFLIA,
+with48 original SAT models cross-replayed and288 independent oracle checks.
+CVC5 needs --arrays-exp for the exported constant-array models; failed checker
+setup and unchanged native witnesses are preserved. These correctness-checker
+options do not change the fair arithmetic harness.
+
+R1673 expands the remaining140 fixed inputs in64/50/24/2 actually leased waves,
+without rerunning the20 valid pilot cases.158 complete records pass protocol
+checks. Original83/116 outer jobs terminate137 without valid formal records;
+116's Z3 timeout notification is196.257s, so it cannot be scored as a60s result.
+EOS labels these runs oom; that label alone does not establish memory exhaustion.
+Old controller and observed child PIDs are gone. R1674 retakes only83/116 with
+the same frozen binaries, unchanged harness and60s/one physical core/16GiB.
+The other158 observations remain unchanged. The full160 score is pending;
+there is no new QCP, protected-set or PR/main result.
+
+R1674's two retakes complete with valid60s budgets, exit0 and PIDs gone.
+The complete frozen160 round is109 parent/109 candidate/116 verified Z3
+(raw110/110/125). Xolver115 and Z3 12/24/27/42/50/75/80/114/148 remain
+unconfirmed and excluded. There is no gained/lost solve, opposite verdict,
+invalid model or protocol error among the160 scored records. Verified PAR-2
+sums are6656.479/6648.335/5564.032; the8.144s delta does not establish a
+reproducible whole-suite benefit. The consolidated summary SHA-256 is
+`7f61c8992b9ac5738d866723654da78a139975fbfbd085c7fa1bf50d205505cf`.
+The indexed traversal result is retained as measured preprocessing progress,
+without a new QCP, protected-set, PR or main claim. The next measured read
+path is NativeTerms::get:16/37 case94 diagnostic samples include it; child
+alias resolution and native-pointer-to-handle lookup are repeated on reads.
+
+## Native child-handle cache closed; exact NIA stages moved ahead of encoding (R1675–R1680)
+
+R1675 qualifies a child-handle metadata cache with1994 unit cases/1295885
+assertions. R1676 checks96 fresh six-logic cases,48 exported SAT models and288
+independent oracle results. The fresh25-input pilot R1677 ends13 parent/12
+candidate/24 verified Z3, with no gain and lost131; verified PAR-2 sums are
+1772.631/1824.154/248.417. All jobs finish with exit0 and PIDs gone, without
+opposite verdicts or invalid models. The cache and its two tests are removed.
+The restored NativeTerms.cpp is the qualified R1578 source, preserving the
+existing index-lifetime identity fix rather than reverting to Git HEAD. See
+[the closed experiment](NATIVE_CHILD_HANDLE_STAGE_20261102.json).
+
+R1679 samples original fixed-suite inputs29/34/106/116 on retained819ea67f.
+On29/34/116,21/32/25 of37 samples include early bit-blast encoding/search;
+the existing exact linear decision, presolve and sign-refutation stages occur
+after that search. R1680 moves those three existing stages before early
+encoding, preserving their implementations, budgets and candidate validation.
+New component tests check explained conflicts and exact models after branch
+retraction, and run against unchanged parent objects as a negative control.
+Native qualification and fresh comparison are in progress; this ordering
+change has no claimed fixed-suite or QCP gain yet. Input106 instead samples
+Farkas support-table construction and remains a separate measured gap.
+
+## Exact-before-encoding native comparison completed (R1680–R1688)
+
+R1680 passes1994 unit cases/1295886 assertions. Its two new component tests
+pass all13 assertions; the unchanged parent fails only three encoding-call
+expectations. CLI isf9c75a00, worker c2112c2b; qualification SHA-256 is
+`9ef54838ebd39d3fc10de8355cf19a0d2dcdc3b17c0f7917ffbb56eae02a0a53`.
+R1681 passes96 fresh six-logic cases,48 exported-model cross-replays and288
+independent oracle checks. Original29 now returns explained presolve conflicts;
+its formal result is22.520s UNSAT against parent timeout60s and matching Z3.
+
+The25-input pilot is12 parent/14 candidate/24 verified Z3, with no loss.
+R1685 expands only the remaining135 inputs in64/53/18 leased waves. Cohorts
+140/149 produce invalid timeout notifications of111.220/386.817s;140's parent
+also overruns to255.143s. Foreign fuzzer processes share their pinned CPUs8/19.
+All original controllers and observed solver children are gone before R1688
+retakes only those two cohorts on fresh EOS leases, with unchanged binaries,
+harness and60s/one physical core/16GiB budgets. Both retakes pass, and the
+other158 valid records remain unchanged. No foreign task or system setting
+is modified.
+
+The complete round is108 parent/110 candidate/115 verified Z3
+(raw109/111/124). Gains are29/131, losses none;131 is unchanged LRA code and
+is not attributed to this NIA mechanism. Verified PAR-2 sums are
+6734.956/6583.809/5636.002. Xolver115 and Z3 12/24/27/42/50/75/80/114/148
+remain unconfirmed and excluded. All scored records have no opposite verdict,
+invalid model or protocol error. Summary SHA-256 is
+`bcad10a2ab4ace704a457c1367d153d2d3ce02dfc357a4e186940e620a04d58f`;
+see [the native-qualified stage](NIA_EXACT_BEFORE_ENCODING_STAGE_20261102.json).
+This is an object-overlay qualification; a complete-source build, fresh QCP
+validation, PR/main CI and protected-set acceptance remain outstanding.
+
+R1686's separate106 diagnostic fails compilation before solver invocation
+because its include list omits the qualified BoundedSupportProduct header.
+R1687 adds only that include path and retains the same instrumented source.
+It observes7200 completed branch solves, zero support rows and no repeated
+syntactic projection among those calls. The syntactic dependency set includes
+lambda variables, so it does not settle whether effective coefficient inputs
+repeat. This diagnostic earns no solve/timing credit and adds no production
+cache or feature gate.
+
+## Complete-source build checkpoint (R1689; recovery R1691 in progress)
+
+R1689 matches2110 local source hashes and updates60 source/test files in the
+native canonical tree. Its standard CMake compilation database supplies541
+independent compilation jobs, each on an EOS-leased physical CPU; all541
+finish successfully. One parent owns build/.writer.lock, and normal CMake
+linking follows in that same unique build directory. No object overrides
+are injected. Architecture checks707 source/header files with zero violations.
+
+The full default build reaches the Python module link and fails because the
+cached native MPFR static library is not PIC. This is not a successful complete
+build or a solver verdict failure. R1691 retains Python and the unchanged
+source tree, freezes the installed shared GMP/MPFR libraries, and retries
+linking and native checks while reusing the541 successful compilation units.
+The shared runtime MPFR patch version differs from the earlier static4.2.1
+library and is recorded explicitly. New binaries must receive fresh arithmetic
+and QCP validation; the prior108/110/115 object-overlay score is not assigned
+to this complete-source build. No new PR or main merge has occurred.
+
+R1691's preliminary link also exposes the non-PIC static GMP C++ wrapper and
+stops before reconfiguration. R1692 extracts the matching installed-GMP
+package libgmpxx4ldbl2:6.3.0+dfsg-5ubuntu2 into an isolated validation directory;
+the package SHA-256 matches the cached APT metadata. No system package is
+installed. R1693 then completes the standard all-target CMake build, including
+Python, and passes a native extension check of big integers, incremental
+contexts and nonlinear refutation. Runtime versions are GMP6.3.0/MPFR4.2.2;
+headers remain6.3.0/4.2.1. Source metadata also corrects submodule entries from
+git ls-tree HEAD and the unchanged native base manifest: git -C in an
+uninitialized local submodule had inherited the superproject HEAD.
+
+R1693 passes six selected CTests, but unit fails1992/1994: two existing array
+model tests cannot parse repository-relative fixture paths from CTest's
+default build/tests working directory. These are input-lookup failures, not
+opposite verdicts. tests/CMakeLists.txt now gives unit the repository-root
+working directory, matching direct invocation. R1695 applies this general
+harness fix and reruns the complete checks. Its native link configuration
+also uses DT_RPATH so the frozen math runtime remains selected under the QCP
+launcher's library path. Source/compiler objects are otherwise retained.
+R1690 was prepared only; its dependency API check is already covered by the
+selected SOMTParser.test_node_api CTest and is not submitted separately.
+
+## Complete-source qualification and one unconfirmed result settled (R1695–R1699)
+
+R1695 completes all standard CMake targets with Python enabled and no injected
+objects. All seven selected CTests pass, including1994 unit cases/1295886
+assertions; the big-integer/incremental/nonlinear Python extension check also
+passes. CLI is0ffc60cd, worker907a8b9b; qualification SHA-256 is
+`89a81c11dc1eb4d141eccb71ff9adbcc9df17bec63372886c50427002ae9fd2c`.
+The frozen shared math libraries resolve to the recorded versions even under
+the QCP launcher's library path. R1696 checks96 fresh six-logic cases,48
+original-model cross-replays and288 oracle results; all eight jobs exit0
+with PIDs gone. See [the canonical checkpoint](CANONICAL_FOUNDATIONS_STAGE_20261102.json).
+
+R1697 independently checks original115, input SHA-256
+`02a58b11df8951543940a1090a140592e24de41dcaeb6470e7a50d42e804be64`.
+The original positive conjunction requires a disequality contradicting the
+univariate identity10*y^6+6*y^5+7*y^4+y^2 ==0 modulo12. The existing Python
+checker verifies every residue by Horner arithmetic and direct source-AST
+evaluation, with exact integer declarations and simultaneous-let expansion.
+The [source-bound certificate](certificates/ps6_mod12_zero.json) SHA-256 is
+`48f5d0ca9b19679a48f3248ac1183c31d09e0c198bfda0a70b3b4272b6d1a5ba`;
+receipt SHA-256 isa43df2517da6f7af13805682dc413553d650bab450e17ac5993cb9a9b2d1fee3.
+No solver rerun, runtime oracle or original report modification is involved.
+This settles exactly115: the previous prototype160 score becomes109 parent/
+111 candidate/115 Z3 with certificate evidence, while its original oracle-only
+108/110/115 report remains unchanged. It is not a new algorithmic solve.
+
+The new canonical26-input pilot R1698 ends13 parent/15 candidate/24 verified
+Z3 when the checked115 certificate is included (oracle-only12/14/24).
+Gains are29/144, losses none. Original29 reproduces at22.468s UNSAT versus
+parent timeout60s; NRA144 is not attributed to the NIA scheduling change.
+R1699 completes the remaining134 originals with the same frozen binaries,
+runtime and60s/one physical core/16GiB protocol. The full160 score is109
+qualified parent/111 canonical candidate/115 independently verified Z3,
+including the checked original115 certificate; oracle-only counts remain
+108/110/115. Candidate gains29/144 and loses none. Verified PAR-2 sums are
+6595.076/6444.530/5633.259 seconds. Z3 has124 raw definite verdicts, with nine
+still unconfirmed:12,24,27,42,50,75,80,114,148. Do not count those as verified.
+All160 ExperimentOS jobs exit0 with PIDs gone; no protocol errors or opposite
+verdicts occur. The immutable full summary SHA-256 is
+`f03019484430794f5e8ca93f292aa7a6ae3821de1178b735ef8eec0adc8aa68c`.
+The source-qualified parent819 baseline is not the current main Git commit.
+Current canonical gaps to verified Z3 contain16 originals across LIA/NIA/
+LRA/NRA; their input/report hashes and logic/family grouping are preserved in
+that summary. Most still need profiles of this exact new frozen version.
+R1700 additionally passes all63 native SOMTParser CTests under an
+ExperimentOS physical-CPU lease; its source files match the qualified build.
+Current-worker actual QCP checks, source/dependency publication and PR/main
+CI remain pending. Protected sets are untouched; this stage does not beat Z3.
+
+## Canonical source publication and fresh main/QCP comparison (R1701–R1717)
+
+All2110 local native-source files match the R1695 source manifest exactly.
+The retained SOMTParser source changes are published as62b302c; Xolver pins
+that qualified source, while [dependency PR67](https://github.com/fuqi-jia/SOMTParser/pull/67)
+also incorporates newer upstream main on its review branch. Its latest
+[CI41364439174](https://github.com/fuqi-jia/SOMTParser/actions/runs/41364439174)
+passes all three jobs. GitHub ruleset5590872 requires independent approval;
+normal merge is rejected. Administrator override approval is pending, so
+neither a dependency merge nor postmerge CI is claimed.
+
+The R1699 parent819 comparison is not a main comparison. Current main26aca1b8
+has runtime source65c21b9b, verified by an empty build/source/test/dependency
+Git diff; its frozen qualified CLI is30965221. Fresh R1708 pilot15 yields
+8 main/11 candidate/12 verified Z3 including the checked115 source proof,
+gains29/51/131 and no losses. R1710 runs the other145 with the unchanged
+60s/one physical core/16GiB protocol, up to74 independent leased tasks.
+Five launches82/118/120/151/152 end137 without a case directory or solver
+observation; EOS labels them oom, but no solver-memory failure is established.
+Their PIDs and uniquely owned descendants are gone. R1717 retakes only these
+five missing measurements unchanged, preserving all155 valid original
+reports and all failed-launch evidence. Recovery receipt SHA-256:
+`2cdc02e74a3b4443643cab9fe14b8a2281b0d7c03638dea1d37397e93707d80b`.
+The completed full160 comparison gives104 main/111 candidate/116 verified Z3
+(raw104/111/125); the nine unconfirmed Z3 verdicts stay excluded. Gains
+are2/29/51/77/98/131/159, with no lost solves. Verified PAR-2 totals are
+7108.077/6448.467/5572.525 seconds. Only29 is directly attributed to the
+measured exact-before-encoding mechanism; the other gains belong to the
+combined stage. Full summary SHA-256:
+`5072ca0790c717d0d808b8bce97f50a13eb3938dcbead6319dcda86c1f6fb549`.
+The source is published as552fb46e in [PR93](https://github.com/fuqi-jia/Xolver/pull/93).
+
+Both QCP backends have fresh native annotation/independent VC analysis for
+branch,gcd,max3 with identical frozen original contracts and supplied proofs.
+All six runs now reach canonical done and pass independent source/query
+audits. Each backend verifies three programs/23 top-level VCs and executes
+2340 actual queries (2130 LIA,210 UFLIA;1188 SAT/1152 UNSAT). The final-check
+scope contains780 queries per backend. Per-program Xolver/Z3 seconds are
+branch28.284/32.354, gcd34.517/36.564 and max3 27.772/30.700; each pair runs
+sequentially on the same leased physical core with alternating backend order
+across programs. Totals are90.573/99.618 seconds,9.08% lower for Xolver in
+this one cohort. The [current QCP record](QCP_CANONICAL_PROOFS_STAGE_20261102.json)
+binds all six receipts and identical query traces; native summary SHA-256 is
+`2e120dd95119bdc78c125eac30a12778082b40035d124139baa31ab54b969a73`.
+This times complete provided-proof final validation; proof construction and
+controller orchestration are excluded. GCD remains partial correctness with
+the declared external abs assumption; max3 retains its upper-bound property.
+No protected set was used; no overall Z3 superiority or Xolver PR/main
+acceptance is claimed. PR93 CI is still running.
+
+R1719 instruments actual bounded-value and membership reads on original106.
+All5900 sampled calls read all58 bounded values; repeated read projections
+are zero. Whole-branch dependency memoization is therefore rejected for this
+mechanism, with no production cache added. The next prototype shares exact
+matrix row reduction while retaining the existing pivot and candidate order.

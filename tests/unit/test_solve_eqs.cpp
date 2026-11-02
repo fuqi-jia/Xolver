@@ -5,6 +5,7 @@
 #include "ir/NativeTerms.h"
 #include "frontend/preprocess/SolveEqs.h"
 #include "frontend/preprocess/ModelConverter.h"
+#include "base/EnvParam.h"
 #include <functional>
 
 using namespace xolver;
@@ -34,6 +35,126 @@ bool varInAssertions(const NativeTerms& ir, const std::string& n) {
     return false;
 }
 } // namespace
+
+TEST_CASE("SolveEqs: indexed chained definitions preserve exact reverse reconstruction") {
+    NativeTerms ir;
+    SortId b, i, r;
+    setupSorts(ir, b, i, r);
+    std::vector<ExprId> variables;
+    for (int index = 0; index <= 180; ++index)
+        variables.push_back(var(ir, i, ("v" + std::to_string(index)).c_str()));
+    const auto one = cint(ir, i, 1);
+    for (int index = 0; index < 180; ++index)
+        ir.addAssertion(bin(ir, Kind::Eq, b, variables[index],
+                            bin(ir, Kind::Add, i, variables[index + 1], one)));
+    ir.pushScope();
+    ir.addAssertion(bin(ir, Kind::Geq, b, variables.front(), cint(ir, i, 185)));
+    ModelConverter converter;
+    SolveEqs pass(ir, converter);
+    REQUIRE(pass.run());
+    CHECK(pass.eliminatedCount() == 180);
+    pass.commit();
+    REQUIRE(ir.getScopedAssertions().size() == 1);
+    CHECK(ir.getScopedAssertions().front().first == 1);
+    std::unordered_map<std::string, RealValue> numbers{{"v180", RealValue::fromInt(5)}};
+    std::unordered_map<std::string, std::string> values{{"v180", "5"}};
+    REQUIRE(converter.reconstruct(numbers, values, ir));
+    for (int index = 0; index <= 180; ++index)
+        CHECK(values.at("v" + std::to_string(index)) == std::to_string(185 - index));
+}
+
+TEST_CASE("SolveEqs: indexed occurrence checks retain self definitions and unrelated scoped roots") {
+    NativeTerms ir;
+    SortId b, i, r;
+    setupSorts(ir, b, i, r);
+    const auto x = var(ir, i, "x"), y = var(ir, i, "y"), z = var(ir, i, "z");
+    const auto one = cint(ir, i, 1);
+    const auto self = bin(ir, Kind::Eq, b, y, bin(ir, Kind::Add, i, y, one));
+    ir.addAssertion(self);
+    ir.addAssertion(bin(ir, Kind::Eq, b, x, bin(ir, Kind::Add, i, z, one)));
+    ir.pushScope();
+    const auto untouched = bin(ir, Kind::Geq, b, y, one);
+    ir.addAssertion(untouched);
+    ModelConverter converter;
+    SolveEqs pass(ir, converter);
+    REQUIRE(pass.run());
+    CHECK(pass.eliminatedCount() == 1);
+    pass.commit();
+    const auto& roots = ir.getScopedAssertions();
+    REQUIRE(roots.size() == 2);
+    CHECK(roots[0].second == self);
+    CHECK(roots[0].first == 0);
+    CHECK(roots[1].second == untouched);
+    CHECK(roots[1].first == 1);
+}
+
+TEST_CASE("SolveEqs: a changed definition reactivates an earlier rejected equality") {
+    NativeTerms ir;
+    SortId b, i, r;
+    setupSorts(ir, b, i, r);
+    const auto x = var(ir, i, "x"), y = var(ir, i, "y"), z = var(ir, i, "z");
+    ir.addAssertion(bin(ir, Kind::Eq, b, x, bin(ir, Kind::Mul, i, y, y)));
+    ir.addAssertion(bin(ir, Kind::Eq, b, z, bin(ir, Kind::Add, i, x, cint(ir, i, 1))));
+    ir.addAssertion(bin(ir, Kind::Eq, b, y, cint(ir, i, 2)));
+    ModelConverter converter;
+    SolveEqs pass(ir, converter);
+    REQUIRE(pass.run());
+    CHECK(pass.eliminatedCount() == 3);
+    pass.commit();
+    CHECK(ir.assertions().empty());
+    std::unordered_map<std::string, RealValue> numbers;
+    std::unordered_map<std::string, std::string> values;
+    REQUIRE(converter.reconstruct(numbers, values, ir));
+    CHECK(values.at("x") == "4");
+    CHECK(values.at("y") == "2");
+    CHECK(values.at("z") == "5");
+}
+
+TEST_CASE("SolveEqs: global nonlinear-use changes reactivate an unchanged polynomial definition") {
+    NativeTerms ir;
+    SortId b, i, r;
+    setupSorts(ir, b, i, r);
+    const auto x = var(ir, i, "x"), y = var(ir, i, "y"), z = var(ir, i, "z");
+    ir.addAssertion(bin(ir, Kind::Eq, b, x, bin(ir, Kind::Mul, i, y, y)));
+    ir.addAssertion(bin(ir, Kind::Gt, b, bin(ir, Kind::Mul, i, x, z), cint(ir, i, 1)));
+    ir.addAssertion(bin(ir, Kind::Eq, b, z, cint(ir, i, 2)));
+    ModelConverter converter;
+    SolveEqs pass(ir, converter, SolveEqs::DefinitionPolicy::PolynomialInLinearPositions);
+    REQUIRE(pass.run());
+    CHECK(pass.eliminatedCount() == 2);
+    pass.commit();
+    CHECK_FALSE(varInAssertions(ir, "x"));
+    CHECK_FALSE(varInAssertions(ir, "z"));
+    std::unordered_map<std::string, RealValue> numbers{{"y", RealValue::fromInt(3)}};
+    std::unordered_map<std::string, std::string> values{{"y", "3"}};
+    REQUIRE(converter.reconstruct(numbers, values, ir));
+    CHECK(values.at("x") == "9");
+    CHECK(values.at("z") == "2");
+}
+
+TEST_CASE("SolveEqs: repeated runs retain the complete preprocessing work allowance") {
+    env::Scope parameters(env::Snapshot::capture({{"XOLVER_PP_SOLVE_EQS_BUDGET", "100"}}));
+    NativeTerms ir;
+    SortId b, i, r;
+    setupSorts(ir, b, i, r);
+    const auto zero = cint(ir, i, 0);
+    ir.addAssertion(bin(ir, Kind::Eq, b, var(ir, i, "first"), zero));
+    for (int index = 0; index < 80; ++index)
+        ir.addAssertion(bin(ir, Kind::Geq, b,
+            var(ir, i, ("u" + std::to_string(index)).c_str()), zero));
+    ModelConverter converter;
+    SolveEqs pass(ir, converter);
+    pass.run();
+    pass.commit();
+    ir.clearAssertions();
+    ir.addAssertion(bin(ir, Kind::Eq, b, var(ir, i, "second"), zero));
+    CHECK_FALSE(pass.run());
+    CHECK(pass.eliminatedCount() == 0);
+    ModelConverter freshConverter;
+    SolveEqs fresh(ir, freshConverter);
+    REQUIRE(fresh.run());
+    CHECK(fresh.eliminatedCount() == 1);
+}
 
 TEST_CASE("SolveEqs: shared DAG traversal preserves reconstruction and UF context") {
     NativeTerms ir;

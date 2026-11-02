@@ -1,0 +1,94 @@
+{
+  "status": "prototype_not_promoted",
+  "source_head": "eb5235fc81f2aa9f3afcf8e03f47e8f7fc831c5b",
+  "server_evidence_root": "/pub/data/jiafq/xolver/validation/arithmetic-r103",
+  "implementation": {
+    "path": "src/frontend/preprocess/IntDivModLowerer.cpp",
+    "function": "emitQuotientOrderCuts",
+    "behavior": "Match a comparison between a dividend and a product containing its divisor. Emit quotient bounds guarded by both the original comparison and divisor sign. Preserve Euclidean division, arbitrary zero-divisor functions and the maximum premise/definition scope. No filename, answer heuristic, runtime external oracle or feature gate is used.",
+    "example": "For b>0, a>=b*t implies div(a,b)>=t; a<b*t implies div(a,b)<t. Negative divisors use the Euclidean ceiling quotient and reversed non-strict consequences.",
+    "source_manifest": "quotient-cuts-inputs-r1544/inputs.json",
+    "parent_qualification": "shared-form-lia-r1537/qualification.json"
+  },
+  "qualification": {
+    "path": "quotient-cuts-r1544/qualification.json",
+    "sha256": "4801d373d791afd607a5cf47880eeebfc2d0354e9fa91ffe543642e6d884be49",
+    "eos_experiment": "d3557f2e5c14",
+    "unit_cases_passed": 1951,
+    "unit_assertions_passed": 1276486,
+    "targeted_cases_passed": 21,
+    "targeted_assertions_passed": 25300,
+    "solver_sha256": "cbc11dad6c9edf29758fc505160b98fb6d5a49638d1be3fb8162d29291fc7f88",
+    "worker_sha256": "d613251305446be0c891d2608a15ccb0cc0be40d89ae86d3f7c94a52e2179b42",
+    "parent_solver_sha256": "12eb7570d80bacc4b1d6fbf413d73d41a8f765c50179304adc1e6366c849be75",
+    "boundary": "Qualified object overrides in the sole locked build tree, with the canonical source and core archive verified unchanged. This is a prototype qualification, not a main or CI acceptance record."
+  },
+  "formal_protocol": {
+    "timeout_seconds": 60,
+    "physical_cpus_per_case": 1,
+    "memory_bytes": 17179869184,
+    "z3_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+    "model_capture": "initial-solve-single-model",
+    "sat_validation": "Replay the actual exported timed witness; Z3 witnesses use independent cvc5 replay.",
+    "unsat_validation": "Independent decision on the identical input hash; unresolved results remain excluded."
+  },
+  "kernel_comparison": {
+    "eos_experiment": "b84b668407c6",
+    "summary": "quotient-order-fair-r1545/summary.json",
+    "summary_sha256": "67978bb93a35f53a83fc3c740d54d20f89530e49fee041b0644e6062510ba75d",
+    "cases": 7,
+    "verified_solves": {"parent": 5, "candidate": 7, "z3": 7},
+    "verified_par2": {"parent": 243.47763091139495, "candidate": 3.569618770852685, "z3": 0.33424949273467064},
+    "gains": [
+      {"case": "square-lower", "parent": "timeout", "candidate": "unsat", "candidate_seconds": 0.01760176382958889, "z3": "unsat"},
+      {"case": "square-upper", "parent": "timeout", "candidate": "unsat", "candidate_seconds": 0.0174625962972641, "z3": "unsat"}
+    ],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "boundary": "Generated general arithmetic kernels, separate from fixed160. These two gains do not increase fixed160 scores or establish an aggregate win over Z3."
+  },
+  "fixed160_pilot": {
+    "eos_experiment": "e895d68f0a50",
+    "summary": "fair-r1545/summary.json",
+    "summary_sha256": "066869bd50cb1d547efa8806409711855a816f6e2c2de711d6f4793bf09c8915",
+    "indices": [4, 24, 27, 42, 51, 84, 98, 115, 131],
+    "verified_solves": {"parent": 5, "candidate": 5, "z3": 5},
+    "raw_decisions": {"parent": 6, "candidate": 6, "z3": 8},
+    "verified_par2": {"parent": 629.516485799104, "candidate": 621.8939321059734, "z3": 488.157041458413},
+    "gained": [],
+    "lost": [],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "unconfirmed_indices": [24, 27, 42, 115],
+    "boundary": "No fixed160 solving gain has been demonstrated. The Newton-step inputs27/42 still time out. The small timing difference is not a proven whole-suite speedup. The new candidate has not run all160 cases."
+  },
+  "persistent_regressions": {
+    "eos_experiment": "dc1a5279e3a8",
+    "evidence": "quotient-regressions-r1546",
+    "passed": 4,
+    "repository_paths": [
+      "tests/regression/nia/quotient_product_lower_unsat.smt2",
+      "tests/regression/nia/quotient_product_upper_unsat.smt2",
+      "tests/regression/nia/quotient_inactive_product_bound_sat.smt2",
+      "tests/regression/nia/quotient_negative_product_boundary_sat.smt2"
+    ]
+  },
+  "full160_reference": {
+    "summary": "fair-r1538/summary.json",
+    "truth_supplement": "fair-r1538/truth-adjudication-r1544.json",
+    "verified_solves": {"retained": 106, "parent_r1537": 106, "z3": 118},
+    "boundary": "Older full round, not the new quotient candidate. Independent confirmation of input80 supplements its original60s Z3 result. Input115 remains unconfirmed after cvc5 interrupted at its1800s validation limit. Validation time never counts as formal solving time."
+  },
+  "qcp_parallel_stage": {
+    "summary": "qcp-controlled-r1518/paired-summary.json",
+    "summary_sha256": "a8c88071ac4439f155f6ca1fb5b3b50a9ff6e51e0e30024eab6bfee4c7ee6d71",
+    "programs_per_backend": 3,
+    "top_level_vcs_per_backend": 23,
+    "split_goals_per_backend": 3,
+    "native_smt_calls_per_backend": 2340,
+    "identical_query_and_verdict_traces": true,
+    "boundary": "Separate frozen NodeManager worker, not this quotient candidate. All six original-C controller runs reached done with fresh Rocq final checks. Branch/GCD manual proof bytes differ across backends, so callback timings do not establish end-to-end superiority. GCD assumes external abs; max3 proves an upper bound, not exact maximum membership."
+  },
+  "protected_sets_used": false,
+  "promotion": "No PR, main merge or CI claim for this prototype. Continue targeting verified original SAT gaps; main search dominates current routing probes77/106."
+}

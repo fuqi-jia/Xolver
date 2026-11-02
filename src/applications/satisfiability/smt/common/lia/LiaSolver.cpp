@@ -202,6 +202,7 @@ LiaSolver::AppliedBound LiaSolver::appliedKey(const LiaTrailEntry& entry) {
 }
 
 void LiaSolver::onBacktrack(int level) {
+    const auto previousInterfaces = interfaceEqualities_.size() + interfaceDisequalities_.size();
     currentLevel_ = level;
     repairModel_.reset();
     const auto revision = gs_.boundRevision();
@@ -269,6 +270,8 @@ void LiaSolver::onBacktrack(int level) {
         appliedBoundRevision_ = gs_.boundRevision();
     }
     clearEntailmentDedupForBacktrack(level);
+    if (previousInterfaces != interfaceEqualities_.size() + interfaceDisequalities_.size())
+        manager_.invalidateModelHints();
 }
 
 std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {

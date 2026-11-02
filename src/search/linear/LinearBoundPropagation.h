@@ -27,6 +27,9 @@ struct LinearBoundPropagationResult {
     size_t updates = 0;
     bool conflict = false;
     bool exhausted = false;
+    // A local shared form can be inconsistent before an original variable's
+    // domain becomes empty. Its complete explanation must reach the caller.
+    std::optional<std::vector<SatLit>> conflictReasons;
 };
 
 struct LinearAggregateConflict {
@@ -52,6 +55,13 @@ public:
 
     static LinearBoundPropagationResult run(const std::vector<LinearBoundRow>& rows,
         const Lookup& lookup, const Update& update, const IsInteger& isInteger,
+        WorkBudget& budget);
+
+    // Refute an active context without updating the client's variable store.
+    // The returned guards explain the contradiction, including local shared
+    // forms. Exhaustion or incomplete propagation supplies no conclusion.
+    static std::optional<std::vector<SatLit>> findConflict(
+        const std::vector<LinearBoundRow>& rows, const IsInteger& isInteger,
         WorkBudget& budget);
 
     // Cheap exact refutation before interval propagation or Boolean search.

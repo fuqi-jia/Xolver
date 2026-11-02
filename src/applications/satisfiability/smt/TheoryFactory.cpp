@@ -29,7 +29,6 @@ void buildLRA(BuildContext& c) {
     auto lra = std::make_unique<LraSolver>();
     lra->setRegistry(&registry);
     theoryManager.registerSolver(std::move(lra));
-    theoryManager.setRegistry(&registry);  // needed by cb_decide evalTheoryAtom
 }
 
 void buildNRA(BuildContext& c) {
@@ -88,7 +87,6 @@ void buildNIRA(BuildContext& c) {
     lira->setRegistry(&registry);
     lira->setNativeTerms(ir);
     theoryManager.registerSolver(std::move(lira));
-    theoryManager.setRegistry(&registry);
 }
 
 void buildIDL(BuildContext& c) {
@@ -183,7 +181,6 @@ void buildArrayLRA(BuildContext& c) {
     lra->setRegistry(&registry);
     theoryManager.registerSolver(std::move(lra));
     theoryManager.setSharedTermRegistry(sharedTermRegistry.get());
-    theoryManager.setRegistry(&registry);
     theoryManager.setCombinationMode(true);
     theoryManager.setArrayCombinationMode(true);
 }
@@ -213,7 +210,6 @@ void buildArrayLIA(BuildContext& c) {
     lia->setRegistry(&registry);
     theoryManager.registerSolver(std::move(lia));
     theoryManager.setSharedTermRegistry(sharedTermRegistry.get());
-    theoryManager.setRegistry(&registry);
     theoryManager.setCombinationMode(true);
     theoryManager.setNonConvexMode(true);
     theoryManager.setArrayCombinationMode(true);
@@ -243,7 +239,6 @@ void buildUFLRA(BuildContext& c) {
     lra->setRegistry(&registry);
     theoryManager.registerSolver(std::move(lra));
     theoryManager.setSharedTermRegistry(sharedTermRegistry.get());
-    theoryManager.setRegistry(&registry);
     theoryManager.setCombinationMode(true);
 }
 
@@ -274,7 +269,6 @@ void buildUFLIA(BuildContext& c) {
         lia->setRegistry(&registry);
         theoryManager.registerSolver(std::move(lia));
         theoryManager.setSharedTermRegistry(sharedTermRegistry.get());
-        theoryManager.setRegistry(&registry);
         theoryManager.setCombinationMode(true);
         theoryManager.setNonConvexMode(true);
     }
@@ -311,7 +305,6 @@ void buildUFNIA(BuildContext& c) {
     lia->setRegistry(&registry);
     theoryManager.registerSolver(std::move(lia));
     theoryManager.setSharedTermRegistry(sharedTermRegistry.get());
-    theoryManager.setRegistry(&registry);
     theoryManager.setCombinationMode(true);
     theoryManager.setNonConvexMode(true);
 }
@@ -350,7 +343,6 @@ void buildUFDTNIA(BuildContext& c) {
     lia->setRegistry(&registry);
     theoryManager.registerSolver(std::move(lia));
     theoryManager.setSharedTermRegistry(sharedTermRegistry.get());
-    theoryManager.setRegistry(&registry);
     theoryManager.setCombinationMode(true);
     theoryManager.setNonConvexMode(true);
 }
@@ -381,7 +373,6 @@ void buildUFDTLIA(BuildContext& c) {
     lia->setRegistry(&registry);
     theoryManager.registerSolver(std::move(lia));
     theoryManager.setSharedTermRegistry(sharedTermRegistry.get());
-    theoryManager.setRegistry(&registry);
     theoryManager.setCombinationMode(true);
     theoryManager.setNonConvexMode(true);
 }
@@ -416,7 +407,6 @@ void buildUFNRA(BuildContext& c) {
     lra->setRegistry(&registry);
     theoryManager.registerSolver(std::move(lra));
     theoryManager.setSharedTermRegistry(sharedTermRegistry.get());
-    theoryManager.setRegistry(&registry);
     theoryManager.setCombinationMode(true);
     theoryManager.setNonConvexMode(true);
 }
@@ -454,7 +444,6 @@ void buildArrayNIA(BuildContext& c) {
     lia->setRegistry(&registry);
     theoryManager.registerSolver(std::move(lia));
     theoryManager.setSharedTermRegistry(sharedTermRegistry.get());
-    theoryManager.setRegistry(&registry);
     theoryManager.setCombinationMode(true);
     theoryManager.setNonConvexMode(true);
     theoryManager.setArrayCombinationMode(true);
@@ -544,6 +533,10 @@ SolverSetupResult setupSolvers(
         boolSortId,
         &result};
 
+    // Every stack dispatches atoms through this registry, including pure and
+    // feature-routed theories. Wiring it in individual builders left some
+    // stacks unable to evaluate model-guided decisions or collect linear context.
+    theoryManager.setRegistry(&registry);
     if (const LogicBuilder* builder = SolverRegistry::builderFor(logic)) {
         (*builder)(ctx);
     } else {

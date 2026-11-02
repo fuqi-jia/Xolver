@@ -31,6 +31,7 @@
 #include <set>
 #include "search/nia/farkas/FarkasOrDetector.h"
 #include "search/nia/farkas/FarkasOrSolver.h"
+#include "search/nia/farkas/FarkasOrContext.h"
 #include "search/nia/farkas/FarkasOrModelAssembler.h"
 #include "base/MpqUtils.h"
 #include <chrono>
@@ -121,14 +122,16 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // before encoding so the first check sees its bounds and a retracted branch
     // cannot supply stale restrictions or explanation literals.
     add("nia.domain",         &NiaSolver::stageDomainInference);
-    // Bit-blast can examine the active constraints at partial and full effort.
-    add("nia.bit-blast-early", &NiaSolver::stageBitBlastEarly);
     // Complete-candidate linear integer decision. The stage checks that every
     // normalized constraint is linear, validates any integer witness exactly,
     // and otherwise leaves the obligation to the remaining NIA stages.
     addFull("nia.linear-decide", &NiaSolver::stageLinearDecide);
     add("nia.presolve", &NiaSolver::stagePresolveFixpoint);
     addFull("nia.sign-refute", &NiaSolver::stageSignRefute);
+    // Apply exact linear, presolve and sign reasoning before constructing a
+    // bounded candidate encoding. Infeasible integer boxes alone need not
+    // refute an unbounded problem, and must not starve these exact stages.
+    addFull("nia.bit-blast-early", &NiaSolver::stageBitBlastEarly);
     // Full-effort shape cuts derived from explained single-variable bounds.
     addFull("nia.nla-cuts",   &NiaSolver::stageNlaCuts);
     add("nia.poly-conflict",  &NiaSolver::stagePolyConflict);
@@ -182,7 +185,11 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // Standard+Full. cb_propagate now handles Unknown (mirrors
     // cb_check_found_model), so the streak-3 Unknown bail terminates
     // SAT and lets Cap. 10 promote the validated model.
-    add("nia.farkas-or", &NiaSolver::stageFarkasOr);
+    reasoners_.push_back(std::make_unique<CallbackReasoner>("nia.farkas-or",
+        [this, context = std::make_shared<farkas::FarkasOrContext>()]
+        (TheoryLemmaStorage& db, TheoryEffort effort) {
+            return stageFarkasOr(db, effort, *context);
+        }));
     addFull("nia.pending-lemma", &NiaSolver::stagePendingLemma);
     // The propagation callback does not install refinement lemmas. Registering
     // their atoms here would consume split identities and branch quotas before

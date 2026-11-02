@@ -1,0 +1,134 @@
+{
+  "source_head": "a677c3956715d6b850d9ff1fbe400ef8fabfb9d8",
+  "source_manifest_sha256": "1b977025cd3be3c68bde8525c70250f9671f2b5c8b9009ff6a5c199776d9aa1d",
+  "qualification_sha256": "ddab3a6709cfc7ee852fee785d46f9df53ed9cb0faa6fed0ceb5172baf54351d",
+  "candidate_sha256": "08088b5a77ba1f2e341449327a10b4e1f42b8a27d42bda91f403a015dee69e70",
+  "unit_cases": 1924,
+  "unit_assertions": 988394,
+  "python_tests": 31,
+  "acceptance_groups": 39,
+  "unit_log_sha256": "f46ee0496f0328d4c334cdc287f1215b577560397a3a6842991130576c839e7e",
+  "source_transitions": 528,
+  "transition_record_sha256": "6324e38700eb1c3a7021ef12740874ca70e7a66ce31929ccc3f59033d366da36",
+  "raw_summary_sha256": "d12470212b287d181151d4b8cb2917fcfee05ae1f6b6417923698c8157562721",
+  "verified_summary_sha256": "4aea9d5cfad1c40698c9c7902de83efd15d4608a422abdb7edf453c9fe87263d",
+  "counts": {
+    "baseline": {
+      "unsat": 47,
+      "decided": 105,
+      "verified_decided": 105,
+      "verified_par2": 7059.819155715406,
+      "raw_par2": 7059.819155715406,
+      "timeout": 54,
+      "sat": 58,
+      "unknown": 1
+    },
+    "candidate": {
+      "unsat": 47,
+      "decided": 106,
+      "verified_decided": 106,
+      "verified_par2": 6891.205505117774,
+      "raw_par2": 6891.205505117774,
+      "timeout": 53,
+      "sat": 59,
+      "unknown": 1
+    },
+    "z3": {
+      "unsat": 58,
+      "decided": 125,
+      "verified_decided": 117,
+      "verified_par2": 5473.371496120468,
+      "raw_par2": 4610.451474355534,
+      "sat": 67,
+      "timeout": 35
+    }
+  },
+  "changes": [
+    {
+      "index": 51,
+      "case": "QF_LRA/LassoRanker/CooperatingT2/ludcmp.c.i.ludcmp.pl.t2.fixed.t2.c_Iteration8_Loop_7-phaseTemplate.smt2",
+      "kind": "gained",
+      "truth": "sat",
+      "evidence": [
+        "candidate-exported-model-replay",
+        "z3-exported-model-replay"
+      ],
+      "observations": {
+        "baseline": {
+          "result": "timeout",
+          "seconds": 60.01975803077221
+        },
+        "candidate": {
+          "result": "sat",
+          "seconds": 17.06078558973968
+        },
+        "z3": {
+          "result": "sat",
+          "seconds": 0.7689929343760014
+        }
+      }
+    },
+    {
+      "index": 131,
+      "case": "QF_LRA/sc/sc-37.induction2.cvc.smt2",
+      "kind": "lost",
+      "truth": "sat",
+      "evidence": [
+        "z3-exported-model-replay",
+        "baseline-exported-model-replay"
+      ],
+      "observations": {
+        "z3": {
+          "result": "sat",
+          "seconds": 0.5690223630517721
+        },
+        "baseline": {
+          "result": "sat",
+          "seconds": 58.48965021036565
+        },
+        "candidate": {
+          "result": "timeout",
+          "seconds": 60.008129205554724
+        }
+      }
+    },
+    {
+      "index": 144,
+      "case": "QF_NRA/2019-ezsmt/reverseFolding/31-reverse_folding-0-0.smt2",
+      "kind": "gained",
+      "truth": "sat",
+      "evidence": [
+        "candidate-exported-model-replay",
+        "z3-exported-model-replay"
+      ],
+      "observations": {
+        "baseline": {
+          "result": "timeout",
+          "seconds": 60.14406728185713
+        },
+        "candidate": {
+          "result": "sat",
+          "seconds": 48.088099867105484
+        },
+        "z3": {
+          "result": "sat",
+          "seconds": 7.885651059448719
+        }
+      }
+    }
+  ],
+  "unconfirmed_indices": [
+    12,
+    24,
+    27,
+    42,
+    50,
+    80,
+    114,
+    159
+  ],
+  "wrong_verdicts": [],
+  "invalid_exported_models": [],
+  "protected_sets_used": false,
+  "outcome": "Full160 net gain1 (51 and144 gained,131 lost); verified105/106/117, Z3 raw125 with8 independently unconfirmed UNSATs excluded. Limited one-round benefit, not superiority or an end-to-end QCP result. Pilot gain98 does not reproduce. No new PR or merge."
+}

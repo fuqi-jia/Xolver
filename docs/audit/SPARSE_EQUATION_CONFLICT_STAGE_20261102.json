@@ -1,0 +1,130 @@
+{
+  "date": "2026-11-02",
+  "status": "closed_verified_conflicts_but_performance_regression_implementation_removed",
+  "selected_root": "Sparse combinations of active arithmetic equations expose rational zero-row or integer GCD contradictions missed by per-row checks before simplex. Shared algebra and source-adapter implementation supports both rational and integer domains.",
+  "core_files": [
+    "src/algebra/linear/SparseLinearEquations.h",
+    "src/algebra/linear/SparseLinearEquations.cpp",
+    "src/search/linear/LinearEquationReasoner.h",
+    "src/search/linear/LinearEquationReasoner.cpp",
+    "src/applications/satisfiability/smt/common/LinearEquationProof.h",
+    "src/applications/satisfiability/smt/common/lia/LiaSolver.cpp",
+    "src/applications/satisfiability/smt/qflra/LraSolver.cpp",
+    "src/runtime/Solver.cpp"
+  ],
+  "prototype_evidence": {
+    "experiment": "9b6d602f912a",
+    "run": "fe2ec8a7bd98",
+    "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/sparse-equation-evidence-r1650/report.json",
+    "sha256": "6ba1351b16b0473a161a794f0db4abfbaf18e217897e1422afd3870ce38c5148",
+    "conditional_conflicts": 41,
+    "zero_row_conflicts": 36,
+    "integer_gcd_conflicts": 5,
+    "oracle_checks": 173,
+    "integer_only_conflicts_real_models_cross_replayed": 5,
+    "derived_pins_checked": 2,
+    "boundary": "Prototype discovery on actual original input branches; logged conflicts were not installed, so no whole-input solve credit."
+  },
+  "qualification": {
+    "experiment": "4f2b2509b262",
+    "run": "c5d08e5aaa64",
+    "qualification_sha256": "dd4cc232efd8c085f4ba23134fe209f0e07d17cf1c4896809e6803deeaf65608",
+    "binary_sha256": "41ec8aa41fda47edd0e936cd6aa19121f8fb8aff53c74a1bf0243800a7c4aa13",
+    "worker_sha256": "ca918e6b3a768ca745303de52197b405a6243e2d468aefbc0dcf945ae237ebc9",
+    "inputs_sha256": "b83f229cb6440ddc790f932272fde2e07d71dd02a8f017de01a951ef2f8a2e8d",
+    "unit_cases": 1992,
+    "unit_assertions": 1322753
+  },
+  "pilot": {
+    "experiment": "3175e74721fe",
+    "per_solver_seconds": 60,
+    "physical_cpu_per_task": 1,
+    "memory_bytes": 17179869184,
+    "all_20_exit_zero_pid_gone": true,
+    "verified": {
+      "baseline": 13,
+      "candidate": 10,
+      "z3": 19
+    },
+    "verified_par2": {
+      "baseline": 1002.0724043454975,
+      "candidate": 1282.2350641619414,
+      "z3": 166.97746308334172
+    },
+    "gained": [],
+    "lost": [
+      7,
+      48,
+      131
+    ],
+    "reports": {
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/equation-conflicts-pilot-r1656/case-000/report.json": "8ba5019559f6abdc2c596b8688eda9048d5aecfa2829d95640563c137d48d342",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/equation-conflicts-pilot-r1656/case-001/report.json": "81efd3b06c405447965a80c8fff92f3e7645842ebf3cd25e9f87ddbe99671b4a",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/equation-conflicts-pilot-r1656/case-003/report.json": "a32801116a121df8663cb2b3bb5545c3ca91765ed0564aa58833bdc528c37065",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/equation-conflicts-pilot-r1656/case-006/report.json": "0b8620919fa58b05793b89e05588249363b10d973fd21f7d74fa73880b2e3b7f",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/equation-conflicts-pilot-r1656/case-007/report.json": "25a53aba03ca057532df06fea6cd97f8ed798a13d5a9c106fd40f114dc103611",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/equation-conflicts-pilot-r1656/case-011/report.json": "8667b9afc9033db076b12e26e943b0a8ddc37dbffd5606568386e84abe6a0154",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/equation-conflicts-pilot-r1656/case-013/report.json": "82be3782fa3f4a5e857c5f9119a6990e7248c830f898ad8cbf2dfb3329f183e6",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/equation-conflicts-pilot-r1656/case-020/report.json": "7bd7e4008a00254849b97b97a453e18c6808c6d130d112b7b1229b69edacb191",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/equation-conflicts-pilot-r1656/case-048/report.json": "f314243e07c72a3da57b099425ea6afcc65cdc0de78c5d2f2b2544821afdd95e",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/equation-conflicts-pilot-r1656/case-049/report.json": "1ac637b1653682dae128a34418c8b16a7ecf77ba3d88ac2a8353f3c0c85a656f",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/equation-conflicts-pilot-r1656/case-051/report.json": "8498380533184361c2c7db9490974bc64443e20a0dc457c4680835b4a01c8b31",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/equation-conflicts-pilot-r1656/case-058/report.json": "9dd0eab4b87bd5493bbdb76451e3d50ba46270c00530bcf90af31fcfb4adb981",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/equation-conflicts-pilot-r1656/case-059/report.json": "c00303ec842d9753a4c557137187e957fca33f934e265f117a548740c88fb0d3",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/equation-conflicts-pilot-r1656/case-089/report.json": "7ffba39bda5226c0813adca9f0012f5cad8c7b8772eff07bb6e25d8414173b92",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/equation-conflicts-pilot-r1656/case-091/report.json": "9a0cefe54985eea82d90999b3c27e5b47742a7d83c18d9feb68ba8ca8ae15f7b",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/equation-conflicts-pilot-r1656/case-094/report.json": "259bd90e36b6dd0d3ec1dae42d205c97e16124f678cd22182766624619573c82",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/equation-conflicts-pilot-r1656/case-098/report.json": "782e153674b800ac12347a29305f6585621fac2db0218f3b32684b334e797cfa",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/equation-conflicts-pilot-r1656/case-128/report.json": "29eb1124d72c80157acf1195ea38b983c64901ce0ee83d7eec4c996f9b14edbd",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/equation-conflicts-pilot-r1656/case-131/report.json": "e05ce85f61c7fa42e54c53c6f23eb1900bb046d073a26172ab322cf5d8b51a16",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/equation-conflicts-pilot-r1656/case-159/report.json": "d8a7470c7d96ea55647d917bc51a57762dd34deece4b6dced0902f7be90323f7"
+    },
+    "wrong": 0,
+    "protocol_errors": 0
+  },
+  "actual_conflict_observer": {
+    "initial_build_experiment": "fa37704cf89b",
+    "initial_run_experiment": "7dd6cc79285a",
+    "initial_observation_invalid": true,
+    "correction": "The quiet CLI redirects std::cerr. Empty initial logs did not establish absence of returned conflicts. Preserve them as failed observability evidence.",
+    "visible_experiment": "1c26b44cf354",
+    "visible_binary": "cce10eb9f6ba56278faf4b0425dfa0d67b4c896b2132392334bf7abfdd1de56e",
+    "indices": [
+      1,
+      7,
+      48,
+      59,
+      89,
+      131
+    ],
+    "seconds": 20,
+    "actual_returned_conflicts": 188,
+    "all_runs_exit_zero_pid_gone": true
+  },
+  "profile": {
+    "experiment": "8d002435b042",
+    "seconds": 15,
+    "samples_per_input": 37,
+    "case59_source_reasoner_inclusive_samples": 22,
+    "case59_equation_kernel_inclusive_samples": 13,
+    "boundary": "Inclusive stack sampling, not exact duration attribution. Investigate discovery/verification return boundary before concluding the original algebra is unhelpful."
+  },
+  "protected_sets_used": false,
+  "qcp_candidate_validated": false,
+  "pr_main_promoted": false,
+  "independent_actual_conflict_check": {
+    "experiment": "aa26f86b3ff1",
+    "run": "08a6b60763db",
+    "exit_code": 0,
+    "pid_gone": true,
+    "report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/equation-conflict-check-r1661/report.json",
+    "sha256": "5b088855a49c934c6370f16c0709a3d2445b9cc8e6c5d7f5b16b2d16b25653c4",
+    "conflicts": 188,
+    "exact_signed_farkas_checks": 187,
+    "integer_only_conflicts": 1,
+    "real_models_cross_replayed": 1,
+    "oracle_checks": 753,
+    "recovery": "R1655 checker stopped before its first oracle invocation because a local relation string shadowed the serializer. R1661 renames that local without changing original reports; failed inputs/output are preserved."
+  },
+  "boundary": "Initial fresh20 fixed pilot loses3 verified solves and adds none despite valid actual conflicts. Inclusive sampling places22/37 case59 samples in new source discovery,13/37 in its kernel. The candidate and nine tests are removed, keeping the retained qualified parent. No full160 expansion, new QCP comparison, protected-set use or PR/main promotion."
+}

@@ -47,6 +47,7 @@ GeneralSimplex::GeneralSimplex() {
 // ---------------------------------------------------------------------------
 
 int GeneralSimplex::addVar(const std::string& name) {
+    notePointChange();
     noteAnalysisChange();
     int id = static_cast<int>(vars_.size());
     VarState vs;
@@ -318,6 +319,7 @@ bool GeneralSimplex::assertUpper(int var, const BoundInfo& info, int level) {
 // ============================================================================
 
 void GeneralSimplex::recomputeBeta() {
+    notePointChange();
     // recomputeBeta is a full O(rows*nnz) rebuild fired on every backtrack /
     // new-var / reset (betaDirty_). The diagnostic below (env XOLVER_LRA_BETA_EVERY=N:
     // dump call count + cumulative time every N calls) confirms whether it — not
@@ -428,6 +430,7 @@ void GeneralSimplex::update(int nonBasicVar, const DeltaRational& value) {
     assert(vars_[nonBasicVar].basicRow == -1);
     DeltaRational delta = value - vars_[nonBasicVar].beta;
     if (delta.isZero()) return;
+    notePointChange();
 
     const auto& colEntries = tab_.col(nonBasicVar).entries;
     // snapshot copy to avoid issues if column is mutated (it shouldn't be here)
@@ -709,6 +712,7 @@ void GeneralSimplex::pivotAndUpdate(int leavingBasic, int enteringNonBasic,
     assert(aij != 0);
 
     DeltaRational theta = (target - vars_[leavingBasic].beta) / aij;
+    notePointChange();
 
 #ifdef XOLVER_LRA_PROFILE
     if (theta.isZero()) ++degeneratePivots_;
@@ -1046,6 +1050,7 @@ void GeneralSimplex::resetActiveBounds(AssignmentPolicy policy) {
 }
 
 void GeneralSimplex::reset() {
+    notePointChange();
     noteBoundChange();
     vars_.clear();
     boundedVars_.clear();

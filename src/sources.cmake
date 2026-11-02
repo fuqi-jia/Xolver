@@ -3,6 +3,7 @@
 set(XOLVER_BASE_SOURCES
     "base/CaseStats.cpp"
     "base/EnvParam.cpp"
+    "base/ExecutionStack.cpp"
     "base/RealValue.cpp"
     "base/RuntimeConfig.cpp"
     "base/SolveClock.cpp"
@@ -17,6 +18,7 @@ set(XOLVER_PARALLEL_SOURCES
 )
 
 set(XOLVER_IR_SOURCES
+    "ir/ActiveTermUses.cpp"
     "ir/NativeFeatures.cpp"
     "ir/NativeKind.cpp"
     "ir/NativeTerms.cpp"
@@ -34,6 +36,7 @@ set(XOLVER_ALGEBRA_SOURCES
     "algebra/interval/IntervalQRoots.cpp"
     "algebra/interval/ReasonedBox.cpp"
     "algebra/interval/ReasonedBoxQ.cpp"
+    "algebra/linear/AffineIntegerDomain.cpp"
     "algebra/linear/Formula.cpp"
     "algebra/linear/IntegerIntervalCombination.cpp"
     "algebra/linear/LinearConstraintNormalizer.cpp"
@@ -94,6 +97,7 @@ set(XOLVER_SEARCH_SOURCES
     "search/bitblast/BitBlastEncoder.cpp"
     "search/bitblast/BitBlastSolver.cpp"
     "search/bitblast/EagerBitBlastSolver.cpp"
+    "search/bitblast/IntegerRadixEncoder.cpp"
     "search/bitblast/PolyBitBlaster.cpp"
     "search/bitblast/PseudoBooleanEncoder.cpp"
     "search/bitblast/SpaceEstimator.cpp"
@@ -237,6 +241,7 @@ set(XOLVER_SEARCH_SOURCES
     "search/presolve/PresolveEngine.cpp"
     "search/presolve/PresolveSupport.cpp"
     "search/presolve/UnivariatePolySignAnalyzer.cpp"
+    "search/refute/MonomialSquares.cpp"
     "search/refute/PolynomialBooleanRefutation.cpp"
     "search/refute/PolynomialLinearRefutation.cpp"
     "search/refute/PolynomialResidueRefutation.cpp"

@@ -1,4 +1,5 @@
 #include "search/nia/farkas/FarkasOrBranchSolver.h"
+#include "algebra/linear/AffineIntegerDomain.h"
 
 #include <algorithm>
 #include <functional>
@@ -342,7 +343,8 @@ FarkasOrBranchSolver::extractIneqRow(
             case IneqRow::Rel::Gt:  row.rel = IneqRow::Rel::Lt;  break;
             case IneqRow::Rel::Eq:  break;
         }
-        row.constant = rhsValue;  // poly rel rhs → poly - rhs rel 0; rhs is on LHS here, so flip sign
+        // constant rel poly becomes poly (reversed rel) constant. The
+        // normalized polynomial remains poly - constant on either side.
     }
 
     std::function<bool(ExprId, int)> walk;
@@ -957,27 +959,7 @@ std::vector<BranchCandidate> FarkasOrBranchSolver::solveBranch(
         cand.lambdaRay = sol.lambdaValues;
         cand.scaleT = 1;
         cand.residValues = sol.residValues;
-        cand.ctBounds.reserve(ineqRows.size());
-        for (const auto& row : ineqRows) {
-            cand.ctBounds.push_back(deriveCtBound(row, sol.lambdaValues, branch.lambdas));
-        }
-        // Reject if any ctBound is infeasible at this λ ray.
-        bool feasible = true;
-        for (const auto& b : cand.ctBounds) {
-            if (b.hasInterval && b.ctLoFinite && b.ctHiFinite
-                && b.ctLo > b.ctHi) { feasible = false; break; }
-            if (!b.hasInterval) {
-                bool ctEmpty = b.residualCoefs.empty()
-                    || std::all_of(b.residualCoefs.begin(), b.residualCoefs.end(),
-                        [](const auto& p){ return p.second == 0; });
-                if (ctEmpty) {
-                    if (b.residualRel == CtBound::Rel::Geq && b.residualConst < 0) { feasible = false; break; }
-                    if (b.residualRel == CtBound::Rel::Leq && b.residualConst > 0) { feasible = false; break; }
-                    if (b.residualRel == CtBound::Rel::Eq  && b.residualConst != 0) { feasible = false; break; }
-                }
-            }
-        }
-        if (feasible) out.push_back(std::move(cand));
+        if (completeCandidate(eqRows, ineqRows, cand)) out.push_back(std::move(cand));
     }
     return out;
 }
@@ -1048,11 +1030,7 @@ std::vector<BranchCandidate> FarkasOrBranchSolver::solveBranchCore(
                 cand.lambdaNames = branch.lambdas;
                 cand.lambdaRay = ray;
                 cand.scaleT = 1;
-                cand.ctBounds.reserve(ineqRows.size());
-                for (const auto& row : ineqRows) {
-                    cand.ctBounds.push_back(deriveCtBound(row, ray, branch.lambdas));
-                }
-                out.push_back(std::move(cand));
+                if (completeCandidate(eqRows, ineqRows, cand)) out.push_back(std::move(cand));
             }
 
             // Next combination.
@@ -1071,6 +1049,65 @@ std::vector<BranchCandidate> FarkasOrBranchSolver::solveBranchCore(
     }
 
     return out;
+}
+
+bool FarkasOrBranchSolver::completeCandidate(
+    const std::vector<EqRow>& equalities, const std::vector<IneqRow>& inequalities,
+    BranchCandidate& candidate) const {
+    AffineIntegerDomain scales;
+    const auto dot = [&](const std::vector<mpq_class>& coefficients) {
+        mpq_class value = 0;
+        for (std::size_t i = 0; i < coefficients.size(); ++i)
+            value += coefficients[i] * candidate.lambdaRay[i];
+        return value;
+    };
+    for (const auto& row : equalities) {
+        mpq_class constant = row.constant;
+        for (const auto& [name, coefficient] : row.residCoeffs) {
+            const auto it = candidate.residValues.find(name);
+            if (it == candidate.residValues.end()) return false;
+            constant += coefficient * it->second;
+        }
+        // Nonzero RHS equations usually force scale=1. No homogeneity is
+        // assumed: every equality is imposed on the scale explicitly.
+        scales.constrain(dot(row.coeffs), constant, Relation::Eq);
+    }
+    for (const auto& row : inequalities) {
+        if (!row.residCoeffs.empty()) continue;
+        const auto nonzero = [](const auto& entry) { return entry.second != 0; };
+        if (std::any_of(row.ctCoeffs.begin(), row.ctCoeffs.end(), nonzero)) continue;
+        std::unordered_map<std::string, mpq_class> costSlope;
+        for (const auto& [index, name, coefficient] : row.bilinearCoeffs)
+            costSlope[name] += coefficient * candidate.lambdaRay[index];
+        if (std::any_of(costSlope.begin(), costSlope.end(), nonzero)) continue;
+        Relation relation = Relation::Eq;
+        switch (row.rel) {
+            case IneqRow::Rel::Geq: relation = Relation::Geq; break;
+            case IneqRow::Rel::Gt: relation = Relation::Gt; break;
+            case IneqRow::Rel::Leq: relation = Relation::Leq; break;
+            case IneqRow::Rel::Lt: relation = Relation::Lt; break;
+            case IneqRow::Rel::Eq: break;
+        }
+        scales.constrain(dot(row.lambdaCoeffs), row.constant, relation);
+    }
+    const auto scale = scales.leastAtLeast(1);
+    if (!scale) return false; // This ray has no feasible scale; not a refutation.
+    if (*scale != 1) for (auto& value : candidate.lambdaRay) value *= *scale;
+    candidate.ctBounds.reserve(inequalities.size());
+    for (const auto& row : inequalities)
+        candidate.ctBounds.push_back(deriveCtBound(row, candidate.lambdaRay,
+                                                 candidate.lambdaNames));
+    for (const auto& bound : candidate.ctBounds) {
+        if (bound.hasInterval && bound.ctLoFinite && bound.ctHiFinite
+            && bound.ctLo > bound.ctHi) return false;
+        const bool scalar = std::all_of(bound.residualCoefs.begin(), bound.residualCoefs.end(),
+            [](const auto& entry) { return entry.second == 0; });
+        if (!scalar) continue;
+        if (bound.residualRel == CtBound::Rel::Geq && bound.residualConst < 0) return false;
+        if (bound.residualRel == CtBound::Rel::Leq && bound.residualConst > 0) return false;
+        if (bound.residualRel == CtBound::Rel::Eq && bound.residualConst != 0) return false;
+    }
+    return true;
 }
 
 } // namespace xolver::farkas

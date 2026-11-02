@@ -1,4 +1,5 @@
 #include "search/nia/farkas/FarkasOrSolver.h"
+#include "search/candidate/BoundedSupportProduct.h"
 
 #include <algorithm>
 #include <functional>
@@ -45,8 +46,9 @@ SupportTable FarkasOrSolver::buildTable(
     std::size_t productSize = 1;
     bool overflow = false;
     for (const auto& v : t.boundedVarOrder) {
-        productSize *= t.initialBDomain[v].size();
-        if (productSize > maxBProduct) { overflow = true; break; }
+        const auto size = t.initialBDomain[v].size();
+        if (size && productSize > maxBProduct / size) { overflow = true; break; }
+        productSize *= size;
     }
     constexpr std::size_t kMaxNonZero = 2;  // sparse-mode: at most K non-zero coords
     const bool sparseMode = overflow;
@@ -54,57 +56,41 @@ SupportTable FarkasOrSolver::buildTable(
         // Estimate sparse-mode work: Σ_{k=0..K} C(n,k) × (D-1)^k where
         // n = #bounded-vars, D = avg domain size. Cap at 32× maxBProduct
         // — generous since each P1 call is fast.
-        std::size_t sparseEstimate = 1;  // the all-zero tuple
+        mpz_class sparseEstimate = 1;  // the all-zero tuple
         std::size_t n = t.boundedVarOrder.size();
         for (std::size_t k = 1; k <= kMaxNonZero && k <= n; ++k) {
-            std::size_t comb = 1;
+            mpz_class comb = 1;
             for (std::size_t i = 0; i < k; ++i) comb = comb * (n - i) / (i + 1);
             std::size_t nzVals = 1;
             for (const auto& v : t.boundedVarOrder) {
                 std::size_t d = t.initialBDomain[v].size();
-                nzVals = std::max(nzVals, (d > 0 ? d - 1 : 0));
+                const auto& domain = t.initialBDomain[v];
+                const bool hasZero = std::find(domain.begin(), domain.end(), mpz_class(0)) != domain.end();
+                nzVals = std::max(nzVals, d - size_t(hasZero));
             }
-            std::size_t term = comb;
+            mpz_class term = comb;
             for (std::size_t i = 0; i < k; ++i) term *= nzVals;
             sparseEstimate += term;
         }
-        if (sparseEstimate > 32 * maxBProduct) return SupportTable{};
+        if (sparseEstimate > mpz_class(32) * maxBProduct) return SupportTable{};
     }
 
     // Enumerate B-tuples and call P1 for every (block, branch, B).
-    std::vector<std::size_t> idx(t.boundedVarOrder.size(), 0);
-    bool done = t.boundedVarOrder.empty();
-    do {
-        std::unordered_map<std::string, mpz_class> B;
-        std::size_t nonZeroCount = 0;
-        for (std::size_t i = 0; i < t.boundedVarOrder.size(); ++i) {
-            const auto& v = t.boundedVarOrder[i];
-            B[v] = t.initialBDomain[v][idx[i]];
-            if (B[v] != 0) ++nonZeroCount;
-        }
-        // Sparsity filter (only in sparseMode).
-        if (sparseMode && nonZeroCount > kMaxNonZero) {
-            // Skip — advance odometer and continue.
-            std::size_t pos = 0;
-            while (pos < idx.size()) {
-                ++idx[pos];
-                if (idx[pos] < t.initialBDomain[t.boundedVarOrder[pos]].size()) break;
-                idx[pos] = 0;
-                ++pos;
-            }
-            if (pos == idx.size()) done = true;
-            continue;
-        }
-        // Cap total table rows to keep downstream CSP work bounded.
-        // sparseMode floods (many B-tuples × many residual-grid points)
-        // and the CSP can't usefully explore millions of rows.
-        constexpr std::size_t kMaxTableRows = 8000;
-        if (t.rows.size() >= kMaxTableRows) {
-            // Skip generating more rows but keep advancing the odometer
-            // (the early-exit below handles termination).
-        } else {
-            // Per (block, branch, B) cap to spread coverage broadly.
-            constexpr std::size_t kMaxRowsPerCell = 4;
+    std::vector<std::vector<mpz_class>> domains;
+    domains.reserve(t.boundedVarOrder.size());
+    for (const auto& variable : t.boundedVarOrder)
+        domains.push_back(t.initialBDomain.at(variable));
+    constexpr std::size_t kMaxTableRows = 8000;
+    constexpr std::size_t kMaxRowsPerCell = 4;
+    enumerateBoundedSupportProduct(domains,
+        sparseMode ? kMaxNonZero : domains.size(),
+        [](const mpz_class& value) { return value == 0; },
+        [&](const std::vector<size_t>& idx) {
+            std::unordered_map<std::string, mpz_class> B;
+            for (std::size_t i = 0; i < t.boundedVarOrder.size(); ++i)
+                B.emplace(t.boundedVarOrder[i], domains[i][idx[i]]);
+            // Preserve the existing per-cell and total row caps, and the
+            // order in which all blocks see each candidate tuple.
             for (std::size_t j = 0; j < profile.blocks.size(); ++j) {
                 const auto& block = profile.blocks[j];
                 for (std::size_t k = 0; k < block.branches.size(); ++k) {
@@ -129,25 +115,14 @@ SupportTable FarkasOrSolver::buildTable(
                 }
                 if (t.rows.size() >= kMaxTableRows) break;
             }
-        }
-        // Increment idx odometer-style.
-        if (done) break;
-        if (t.boundedVarOrder.empty()) break;
-        std::size_t pos = 0;
-        while (pos < idx.size()) {
-            ++idx[pos];
-            if (idx[pos] < t.initialBDomain[t.boundedVarOrder[pos]].size()) break;
-            idx[pos] = 0;
-            ++pos;
-        }
-        if (pos == idx.size()) done = true;
-    } while (!done);
+            // Further tuples cannot add a row after the existing table cap.
+            // Its candidate sequence and non-exhaustive status stay unchanged.
+            return t.rows.size() < kMaxTableRows;
+        }, [] {});
 
-    // iter-46: mark whether the enumeration was truly exhaustive (no
-    // sparseMode, no row-count cap hit). When true and feasibleTotal == 0,
-    // every (block, branch, B-tuple) was tested and NO Farkas certificate
-    // exists -- a sound UNSAT signal for pure Farkas-Or formulas.
-    t.exhaustive = !sparseMode && t.rows.size() < 8000;
+    // This describes B-tuple enumeration only. P1 constructs candidate rays;
+    // even an empty exhaustive table is not an independent UNSAT certificate.
+    t.exhaustive = !sparseMode && t.rows.size() < kMaxTableRows;
     return t;
 }
 

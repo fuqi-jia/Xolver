@@ -295,9 +295,19 @@ int CadicalTheoryPropagator::cb_decide() {
     // evaluate it at the current theory model, and decide it at the satisfying
     // phase. Heuristic only: a decision is backtrackable and the verdict stays
     // theory-gated + model-validated, so a wrong guess only costs a backtrack.
-    if (!theoryAtomVarsBuilt_) {
-        theoryAtomVars_ = registry_.linearAtomVars();
+    // Theory cuts and branch lemmas register atoms during solving. Their
+    // candidates must join the model-steered scan after its initial snapshot.
+    const auto atomCount = registry_.numAtomVars();
+    if (!theoryAtomVarsBuilt_ || cachedAtomCount_ != atomCount) {
+        if (!theoryAtomVarsBuilt_ || atomCount < cachedAtomCount_) {
+            theoryAtomVars_.clear();
+            cachedAtomCount_ = 0;
+        }
+        const auto added = registry_.linearAtomVars(cachedAtomCount_);
+        theoryAtomVars_.insert(theoryAtomVars_.end(), added.begin(), added.end());
         theoryAtomVarsBuilt_ = true;
+        cachedAtomCount_ = atomCount;
+        decideCursor_ = theoryAtomVars_.empty() ? 0 : decideCursor_ % theoryAtomVars_.size();
         if (xolver::config::read<xolver::config::ReadKind::Period>("XOLVER_DECIDE_PROBE"))
             std::cerr << "[DECIDE-STEER] theoryAtomVars=" << theoryAtomVars_.size() << std::endl;
     }

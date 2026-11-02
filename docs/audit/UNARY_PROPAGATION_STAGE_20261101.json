@@ -1,0 +1,335 @@
+{
+  "date": "2026-11-01",
+  "status": "performance_experiment_closed_prototype_removed",
+  "source_head": "eb5235fc81f2aa9f3afcf8e03f47e8f7fc831c5b",
+  "diagnosis": {
+    "examples": [
+      58,
+      128
+    ],
+    "sampling_round": "linear-gap-profile-r1590",
+    "propagation_frames": [
+      17,
+      24
+    ],
+    "samples_per_input": 35,
+    "counter_round": "linear-state-profile-r1592",
+    "finding": "LRA propagation dominated sampled work and repeatedly visited rows. Exact unary affine endpoint mapping was tested as a cheaper equivalent of generic aggregation.",
+    "boundary": "Diagnostic timing and counters were not scored. This identifies substantial cost, not a demonstrated missing algorithm responsible for all remaining gaps."
+  },
+  "prototype": {
+    "files": [
+      "src/search/lra/LraPropagationEngine.cpp",
+      "tests/unit/test_propagation_engine.cpp"
+    ],
+    "behavior": "Direct signed forward/backward unary affine endpoint propagation, preserving exact rational and infinitesimal values, explanations, quotas, callback timing, worklist scheduling and query-local state.",
+    "source_overrides": {
+      "src/search/lra/LraPropagationEngine.cpp": "400efbd94ec30ed2ba48e8e2033368f4882b8656d5f6e4605e451741f8fe44c2",
+      "tests/unit/test_propagation_engine.cpp": "49ea80c15e56fe5ff26f36941f11f3c09a028fc36c427cd8e399ea948b77fb22"
+    },
+    "qualification": {
+      "experiment": "c8f7f6de89a2",
+      "run": "7d3cddb1d74b",
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/unary-propagation-r1593/qualification.json",
+      "sha256": "9aad51fd77928866702e3863e447f6fbf2aa8d3610c92c5884a2d21b93703fe4",
+      "unit_cases": 1985,
+      "unit_assertions": 1293826,
+      "targeted_cases": 23,
+      "targeted_assertions": 9929,
+      "cli_sha256": "32b5cfb180a9a404b5f12830b698636ff11968920dec89f9b3f168fe0add8525",
+      "worker_sha256": "1ecc694770485e13799f3622b01e93193912a22e95bf026762e23dcb4827f6b9",
+      "boundary": "Frozen experimental source/object qualification. The removed prototype's 1985-case run is not a claim about a newly rebuilt retained tree or canonical PR CI."
+    },
+    "independent_validation": {
+      "experiment": "d89b0744f30e",
+      "jobs": 24,
+      "checks": 96,
+      "all_success_exit0_pid_gone": true,
+      "method": "Six signed rational coefficients, two directions and two endpoint sides. Both frozen Z3 and cvc5 check the negated implication as UNSAT and a pinned satisfying premise as SAT.",
+      "receipt": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/unary-proof-r1594/receipt.json",
+        "sha256": "cad8ea8cf76b9d0a650c6eda599736a79e2e1495662fbff3031e4a41cd20e0ff"
+      }
+    }
+  },
+  "fair_comparison": {
+    "rounds": [
+      "R1595",
+      "R1596"
+    ],
+    "cases": 160,
+    "seconds_per_solver": 60,
+    "physical_cpus_per_job": 1,
+    "memory_bytes": 17179869184,
+    "parent_cli_sha256": "cce9debc774347d77227393df0f51ff8d72a13c30a54c5f1311155f5911c273d",
+    "z3_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+    "counts": {
+      "baseline": {
+        "unsat": 48,
+        "decided": 110,
+        "verified_decided": 109,
+        "verified_par2": 6668.040089318529,
+        "raw_par2": 6548.049630010501,
+        "timeout": 49,
+        "sat": 62,
+        "unknown": 1
+      },
+      "candidate": {
+        "unsat": 48,
+        "decided": 110,
+        "verified_decided": 109,
+        "verified_par2": 6650.376034978777,
+        "raw_par2": 6530.394178457558,
+        "timeout": 49,
+        "sat": 62,
+        "unknown": 1
+      },
+      "z3": {
+        "unsat": 58,
+        "decided": 124,
+        "verified_decided": 119,
+        "verified_par2": 5201.592558780685,
+        "raw_par2": 4641.520441129804,
+        "sat": 66,
+        "timeout": 36
+      }
+    },
+    "by_logic": {
+      "QF_LIA": {
+        "baseline": {
+          "unsat": 15,
+          "decided": 35,
+          "verified_decided": 35,
+          "verified_par2": 1807.1952658649534,
+          "raw_par2": 1807.1952658649534,
+          "timeout": 13,
+          "sat": 20
+        },
+        "candidate": {
+          "unsat": 15,
+          "decided": 35,
+          "verified_decided": 35,
+          "verified_par2": 1809.3450805470347,
+          "raw_par2": 1809.3450805470347,
+          "timeout": 13,
+          "sat": 20
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 38,
+          "verified_decided": 37,
+          "verified_par2": 1359.5341586731374,
+          "raw_par2": 1278.7964264005423,
+          "sat": 23,
+          "timeout": 10
+        }
+      },
+      "QF_NIA": {
+        "baseline": {
+          "timeout": 19,
+          "decided": 29,
+          "verified_decided": 28,
+          "verified_par2": 2460.3178119771183,
+          "raw_par2": 2340.32735266909,
+          "unsat": 16,
+          "sat": 13
+        },
+        "candidate": {
+          "timeout": 19,
+          "decided": 29,
+          "verified_decided": 28,
+          "verified_par2": 2440.3913146816194,
+          "raw_par2": 2320.4094581604004,
+          "unsat": 16,
+          "sat": 13
+        },
+        "z3": {
+          "unsat": 22,
+          "decided": 34,
+          "verified_decided": 30,
+          "verified_par2": 2210.788696406409,
+          "raw_par2": 1731.454311028123,
+          "sat": 12,
+          "timeout": 14
+        }
+      },
+      "QF_LRA": {
+        "baseline": {
+          "unsat": 10,
+          "decided": 19,
+          "verified_decided": 19,
+          "verified_par2": 1668.471464542672,
+          "raw_par2": 1668.471464542672,
+          "timeout": 13,
+          "sat": 9
+        },
+        "candidate": {
+          "unsat": 10,
+          "decided": 19,
+          "verified_decided": 19,
+          "verified_par2": 1670.7408117707819,
+          "raw_par2": 1670.7408117707819,
+          "timeout": 13,
+          "sat": 9
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 26,
+          "verified_decided": 26,
+          "verified_par2": 815.8770800083876,
+          "raw_par2": 815.8770800083876,
+          "sat": 11,
+          "timeout": 6
+        }
+      },
+      "QF_NRA": {
+        "baseline": {
+          "sat": 20,
+          "decided": 27,
+          "verified_decided": 27,
+          "verified_par2": 732.0555469337851,
+          "raw_par2": 732.0555469337851,
+          "unsat": 7,
+          "timeout": 4,
+          "unknown": 1
+        },
+        "candidate": {
+          "sat": 20,
+          "decided": 27,
+          "verified_decided": 27,
+          "verified_par2": 729.8988279793411,
+          "raw_par2": 729.8988279793411,
+          "unsat": 7,
+          "timeout": 4,
+          "unknown": 1
+        },
+        "z3": {
+          "sat": 20,
+          "decided": 26,
+          "verified_decided": 26,
+          "verified_par2": 815.3926236927509,
+          "raw_par2": 815.3926236927509,
+          "timeout": 6,
+          "unsat": 6
+        }
+      }
+    },
+    "changes": [],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "par2_delta_seconds": -17.6640543397516,
+    "par2_delta_percent": -0.2649062408615012,
+    "largest_same_verdict_speedups": [
+      {
+        "index": 127,
+        "logic": "QF_NIA",
+        "result": "unsat",
+        "baseline_seconds": 19.979295145720243,
+        "candidate_seconds": 0.06620043888688087,
+        "delta": -19.913094706833363
+      },
+      {
+        "index": 144,
+        "logic": "QF_NRA",
+        "result": "sat",
+        "baseline_seconds": 45.223643496632576,
+        "candidate_seconds": 44.52122131548822,
+        "delta": -0.7024221811443567
+      },
+      {
+        "index": 146,
+        "logic": "QF_NRA",
+        "result": "sat",
+        "baseline_seconds": 33.09314857982099,
+        "candidate_seconds": 32.45071258023381,
+        "delta": -0.6424359995871782
+      }
+    ],
+    "largest_same_verdict_slowdowns": [
+      {
+        "index": 131,
+        "logic": "QF_LRA",
+        "result": "sat",
+        "baseline_seconds": 47.935398772358894,
+        "candidate_seconds": 49.68346841260791,
+        "delta": 1.748069640249014
+      },
+      {
+        "index": 51,
+        "logic": "QF_LRA",
+        "result": "sat",
+        "baseline_seconds": 15.502088582143188,
+        "candidate_seconds": 16.465137856081128,
+        "delta": 0.9630492739379406
+      },
+      {
+        "index": 4,
+        "logic": "QF_LIA",
+        "result": "sat",
+        "baseline_seconds": 54.150144431740046,
+        "candidate_seconds": 55.090864999219775,
+        "delta": 0.9407205674797297
+      }
+    ],
+    "protocol_repair": {
+      "index": 23,
+      "original_run": "4bbd39132b5e",
+      "original_report_sha256": "393cb862872f68a7d2865bcf8c3c73e33fd4ec08538925069ac6dd34fea7e538",
+      "failure": "Baseline wall-budget monitoring returned only at 589.367s rather than the 60s budget.",
+      "experiment": "4435aeaa6f98",
+      "replacement_run": "8e13dc92b50d",
+      "native_runs": 161,
+      "selected_runs": 160,
+      "policy": "Only the protocol-invalid whole triad was replaced, with identical input and all frozen versions/budgets. Original reports/timings remain immutable. No valid loss or timeout was retaken."
+    },
+    "unresolved_excluded": [
+      12,
+      24,
+      27,
+      42,
+      114,
+      115
+    ],
+    "truth_boundary": "Historical independently checked cvc5 records for 50/80 supplement truth only. Counts and times use fresh same-round solves.",
+    "conclusion": "109 verified results in each Xolver arm,119 in Z3. No new/lost solves. Nominal 0.265% total PAR-2 improvement is mostly one NIA input; target LRA PAR-2 increases. No demonstrated stable benefit and no reduced solve-count gap."
+  },
+  "decision": {
+    "action": "Remove the pure performance prototype and its two experimental tests; preserve frozen experimental sources and receipts.",
+    "restored_files": {
+      "src/search/lra/LraPropagationEngine.cpp": "78b40d9318da2ac7ca9a6704e14b8aaef8d8fd6a956b205a2c4529587d2de340",
+      "tests/unit/test_propagation_engine.cpp": "2e5fde0d6b9efb2f43322f8f2b3087df3063c00e82493724cab06ad9901d149f"
+    },
+    "verification": "Before restoration, both local files matched frozen R1593 sources; restored bytes match the canonical parent used by qualified R1586. No new native run is asserted for this exact restoration.",
+    "retained": "Assertion-scoped cache correctness, exact integer ray scaling, constant-left sign correction, positivity capability and all unrelated working changes remain.",
+    "retained_qualification_sha256": "e6add31b11591abc3a16070001586a9a43c0e741371043436a048c00e56f0184"
+  },
+  "evidence": {
+    "summary": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r1595-accepted-r1596/summary.json",
+      "sha256": "40ce1eaddca4ed466db0caac0f5e562985603ab060f5f662088a2b423e77803b"
+    },
+    "truth_adjudication": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r1595-accepted-r1596/truth-adjudication.json",
+      "sha256": "9ed7285bf6a6017b59783b0702f0c2eb049635a42d80e6924e1e4c316d734cbd"
+    },
+    "receipt": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r1595-accepted-r1596/receipt.json",
+      "sha256": "8379b45de354110f9ca779864cf40f87b29350eb4252009a798c19c3599d6351"
+    },
+    "selection": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r1595-accepted-r1596/selection.json",
+      "sha256": "9a895fbc0afd7af2f03a5e6b095e8fec3982234d071b5b0a6316f6d1709e6ba4"
+    },
+    "independent_checks": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/unary-proof-r1594/receipt.json",
+      "sha256": "cad8ea8cf76b9d0a650c6eda599736a79e2e1495662fbff3031e4a41cd20e0ff"
+    }
+  },
+  "qcp_boundary": "No new original-C QCP/Rocq result for the current frozen retained worker. Existing controlled branch/GCD/max3 checks remain the regression basis; query timings do not establish whole-workflow superiority.",
+  "protected_sets_used": false,
+  "main_promotion": false,
+  "next": [
+    "Run controlled original-C QCP validation with the retained frozen worker and common frozen proof materials.",
+    "Measure missing relational inference on representative gaps before another core implementation; structural difference-logic routing remains only a hypothesis."
+  ]
+}

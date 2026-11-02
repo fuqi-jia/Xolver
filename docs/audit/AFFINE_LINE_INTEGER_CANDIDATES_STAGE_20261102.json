@@ -1,0 +1,180 @@
+{
+  "date": "2026-11-02",
+  "status": "closed_no_demonstrated_gain_implementation_removed",
+  "core_files": [
+    "src/search/linear/IntegerAffineModel.h",
+    "src/search/linear/IntegerAffineModel.cpp",
+    "src/applications/satisfiability/smt/common/lia/LiaSolver_integrality.cpp",
+    "tests/unit/test_integer_affine_model.cpp"
+  ],
+  "implementation": "Primitive integer directions on affine lines through integer anchors and exact rational points. Reuse AffineIntegerDomain in both orientations, preserving offsets and all six affine relations. Fully re-evaluate each materialized point, then original active LIA atoms at the existing repair boundary. One shared bounded WorkBudget per optional proposal sequence; failure and exhaustion continue the old search. No class layout, LRA, rollback, Full replay, runtime oracle or feature gate change.",
+  "qualification": {
+    "experiment": "071dd748eb04",
+    "run": "3a9249dd25eb",
+    "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/affine-line-r1643/qualification.json",
+    "sha256": "8f8c5d02e19b0316eecd34bdae33ae9f00e1b97a7fe7f944769c0c6780b5eb18",
+    "unit_cases": 1987,
+    "unit_assertions": 1298986,
+    "targeted_cases": 4,
+    "targeted_assertions": 5259,
+    "existing_lia_cases": 19,
+    "existing_lia_assertions": 497,
+    "binary_sha256": "9662380bbc177f5830550290b15584d3c5ca05f6df9a70b2ab683bde02e73ce1",
+    "worker_sha256": "f14fcb802486b096e6773aa86304bd04fc0018e3be629dd98493a9901d023bc6",
+    "inputs_sha256": "8cfa73c7b27c8c05d0af5f9d9a6e92453ee3bdb317e49b514baceeb30c9ddebd",
+    "preimages": {
+      "src/search/linear/IntegerAffineModel.cpp": "5f308cdc3afcead1a6893343867e650090c39e9aa0b7ae8a934b1e92e8753cea",
+      "src/search/linear/IntegerAffineModel.h": "36238c8d6613a3fa3bd0bce6490d75fcee21bb96f3046555b67e17596527812c",
+      "src/applications/satisfiability/smt/common/lia/LiaSolver_integrality.cpp": "fc8ea17461ac3ae65e45e9d0ca374bf6b60f74b8acc9e807a770f1c3c310b243"
+    }
+  },
+  "recovery": {
+    "previous_experiment": "67a328505ab2",
+    "previous_exit_code": 1,
+    "previous_pid_gone": true,
+    "previous_metrics_sha256": "6a4bcd8026098dafa7ee16e9cf41d99bc5e4f0315c755f74e11203eef6ab0dd7",
+    "previous_inputs_sha256": "857eb5484a3c873dfa1d786187d3d5ce8252d44007cbfbffd1b6585a279d8924",
+    "reused_objects": {
+      "/pub/data/jiafq/xolver/build/diagnostics/affine-line-r1642/IntegerAffineModel.o": "4715d16ee02765e086cba83cb087819dce37fdd0f324643d99f5f21409ec9ab8",
+      "/pub/data/jiafq/xolver/build/diagnostics/affine-line-r1642/LiaSolver_integrality.o": "4301dacc513a648de67d46438b69e69640b9dd3eca9ac382ffcf84138cd70653"
+    },
+    "previous_logs": {
+      "compile-test.log": "904de2b7298c8eac28c8db0d32d5dd29f4c77bbe91e0e097ba80e14a4567e438",
+      "compile-IntegerAffineModel.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compile-LiaSolver_integrality.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "reason": "Production sources compiled successfully. The new test used a conjunction directly in CHECK_FALSE, which doctest rejects at compilation. Store the Boolean predicate before the assertion, preserve the failed source/logs and recompile only the corrected test. Production source/header bytes remain identical."
+  },
+  "pilot": {
+    "experiment": "dc2062c3f1b1",
+    "spec_path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/affine-line-pilot-r1644.yaml",
+    "spec_sha256": "7dfbe7073c18c0fd7bbe7dca059eb84a14ea1872d0bb297ac030893b8c3e2e09",
+    "inputs": [
+      0,
+      1,
+      3,
+      6,
+      7,
+      11,
+      13,
+      20,
+      48,
+      49,
+      51,
+      58,
+      59,
+      89,
+      91,
+      94,
+      98,
+      128,
+      131,
+      159
+    ],
+    "per_solver_seconds": 60,
+    "physical_cpu_per_task": 1,
+    "memory_bytes": 17179869184,
+    "independent_actual_model_replay": true,
+    "results_pending": false,
+    "terminal_runs": 20,
+    "all_exit_zero": true,
+    "all_pids_gone": true,
+    "score": {
+      "baseline": {
+        "verified": 13,
+        "par2": 1009.1505135539919
+      },
+      "candidate": {
+        "verified": 13,
+        "par2": 997.5099253673106
+      },
+      "z3": {
+        "verified": 20,
+        "par2": 97.65545668452978
+      }
+    },
+    "by_logic_par2": {
+      "QF_NRA": {
+        "baseline": 0.01830359175801277,
+        "candidate": 0.01749136857688427,
+        "z3": 0.3166297636926174
+      },
+      "QF_LRA": {
+        "baseline": 469.9059511553496,
+        "candidate": 457.4149835202843,
+        "z3": 27.082845022901893
+      },
+      "QF_LIA": {
+        "baseline": 539.2262588068843,
+        "candidate": 540.0774504784495,
+        "z3": 70.25598189793527
+      }
+    },
+    "reports": {
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/affine-line-pilot-r1644/case-000/report.json": "3a6f3ffd368d13f1a007330403d04e4fb8cca02cf63c1010d10c1e6f653b46a0",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/affine-line-pilot-r1644/case-001/report.json": "815070de551b63173118865b6b1c7e7ac8ec21526b74a76242ee96d0a50fda95",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/affine-line-pilot-r1644/case-003/report.json": "75dc0773cbb53db896a36536ca120fcbb65058e006eeffb2476041e857868989",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/affine-line-pilot-r1644/case-006/report.json": "270b31f9205b10d073ad32bec6d294a531a42be15d15364447906389e79470de",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/affine-line-pilot-r1644/case-007/report.json": "03c785b2ec5b5f6d7c982fb4ee4efc96a88ee309fdc27098392dacdf5f8cfceb",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/affine-line-pilot-r1644/case-011/report.json": "6cca0627f9fdaf91e60c13000b0197d3b030e895cfe40697bef9b049b2e38f0f",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/affine-line-pilot-r1644/case-013/report.json": "2d542f464d233eaa20e2b97d2f8813f21b2b3712eb60e28e989a8c55685aa610",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/affine-line-pilot-r1644/case-020/report.json": "d0c62ed3339b585100fb8f55063e8e1016ec41ce22c8295404865854bfcf2c06",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/affine-line-pilot-r1644/case-048/report.json": "e7b5ae4e9b84c06b9e289ff98678fc2cd6edc6ec16c709b8cdb3aa168f7f88d2",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/affine-line-pilot-r1644/case-049/report.json": "48838ee17d7342c0a0615260933a342dd583d7d9f230dccf767215dae5cf8ae8",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/affine-line-pilot-r1644/case-051/report.json": "732069f31e6965089aa8c995f160aa120dd0e9eabfd8db4154b2004d9305df5d",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/affine-line-pilot-r1644/case-058/report.json": "25a960a3f027a6e1154f7d8e9054e1e083dad3ee9e060164821e424721117501",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/affine-line-pilot-r1644/case-059/report.json": "f2c190a371a1becc2415379ed58ff537ebcb0512437d748e84b5871178448f67",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/affine-line-pilot-r1644/case-089/report.json": "00214781eb63036936032ae20241529b037fda32905572d7c782433c88161910",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/affine-line-pilot-r1644/case-091/report.json": "8ec27b4ca9cb1a33848049457c4f464766a536bf7c5fe4fd422d0d00b7285fa5",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/affine-line-pilot-r1644/case-094/report.json": "0ceb70c61d656c6cc86a4a467bbe5211920294964b6c5e701595fee17978ff80",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/affine-line-pilot-r1644/case-098/report.json": "deea3a82b8966af5ef41edb4721fe32faf1c1523e9f4e0e515410d2756371e80",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/affine-line-pilot-r1644/case-128/report.json": "2d1036861f0c0d8be2ecf1cf567e470c5ecde7bf3ce0e4ae158c572397c7d9a4",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/affine-line-pilot-r1644/case-131/report.json": "5f345fb1fed5425202228d9782456d6e691857136dc69b715ab80a98cdb08f67",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/affine-line-pilot-r1644/case-159/report.json": "30e8e9fafa371133146dfe0ddb68e063c328811185ef84180ec51e1b4e6dbacc"
+    },
+    "gained": [],
+    "lost": [],
+    "wrong": 0,
+    "protocol_errors": 0
+  },
+  "protected_sets_used": false,
+  "qcp_candidate_validated": false,
+  "pr_main_promoted": false,
+  "evidence_boundary": "No added or lost verified solve in the complete fresh20 pilot. The apparent total PAR-2 reduction occurs in unchanged LRA code; affected LIA is slightly slower (539.226 to540.077). The sampled ray proposals yield no model. Remove the candidate and its four tests, retaining all earlier qualified changes and frozen evidence. No full160 expansion, new QCP comparison, protected-set run or PR/main promotion is claimed.",
+  "usage_probe": {
+    "experiment": "4676ab5d889d",
+    "run_experiment": "d9bd669ebe89",
+    "inputs": [
+      1,
+      6,
+      13,
+      89,
+      94,
+      98
+    ],
+    "seconds_per_input": 10,
+    "all_exit_zero": true,
+    "all_pids_gone": true,
+    "case_1": {
+      "sampled_calls": 32,
+      "ray_models": 0,
+      "work": 262144,
+      "exhausted_every_sample": true
+    },
+    "case_6": {
+      "sampled_calls": 32,
+      "ray_attempts": 675,
+      "ray_models": 0,
+      "work": 203972,
+      "final_verdict": "sat"
+    },
+    "remaining_inputs": "No repair-entry events in these ten-second samples; not a claim of permanent unreachability.",
+    "timing_boundary": "Cumulative scope includes the existing affine fallback when reached; not ray-only timing or a formal comparison."
+  },
+  "restored_files": {
+    "src/search/linear/IntegerAffineModel.h": "36238c8d6613a3fa3bd0bce6490d75fcee21bb96f3046555b67e17596527812c",
+    "src/search/linear/IntegerAffineModel.cpp": "5f308cdc3afcead1a6893343867e650090c39e9aa0b7ae8a934b1e92e8753cea",
+    "src/applications/satisfiability/smt/common/lia/LiaSolver_integrality.cpp": "fc8ea17461ac3ae65e45e9d0ca374bf6b60f74b8acc9e807a770f1c3c310b243",
+    "tests/unit/test_integer_affine_model.cpp": "92a7af4c76ff64d5b853057e6aca3ea018b4de1d64abecfea652288318316dd6"
+  }
+}
