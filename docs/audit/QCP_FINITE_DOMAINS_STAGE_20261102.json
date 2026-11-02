@@ -1,0 +1,283 @@
+{
+  "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1597/finite-domain-fresh-r1862/summary-r1877.json",
+  "sha256": "b3b7bc91b282243b06b47cf09df4dd19f4206c0be8375a9f955d6a615bf5b041",
+  "data": {
+    "stage": "finite-domain-native-qcp-r1862-audited-r1877",
+    "source_head": "89921c9de6fb7d6670be71c893a448d610b938f0",
+    "worker_sha256": "bfd59873c3ddb09241ef2723bae62d30f87da58d799a1b3e411b9c9d6c6e1420",
+    "qualification": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/finite-domain-r1850/qualification.json",
+      "sha256": "03ecc596cc157bb1f66d3d9fa39fba0ef300888b6f9cbe5d5a0eb637751bfd71"
+    },
+    "programs_per_backend": 3,
+    "vcs_per_backend": 23,
+    "totals": {
+      "xolver": {
+        "programs": 3,
+        "vcs": 23,
+        "queries": 2340,
+        "final_queries": 780,
+        "verdicts": {
+          "sat": 1188,
+          "unsat": 1152
+        },
+        "logics": {
+          "QF_LIA": 2130,
+          "QF_UFLIA": 210
+        },
+        "final_seconds": 83.99349213391542
+      },
+      "z3": {
+        "programs": 3,
+        "vcs": 23,
+        "queries": 2340,
+        "final_queries": 780,
+        "verdicts": {
+          "sat": 1188,
+          "unsat": 1152
+        },
+        "logics": {
+          "QF_LIA": 2130,
+          "QF_UFLIA": 210
+        },
+        "final_seconds": 92.0963167976588
+      }
+    },
+    "pairs": {
+      "branch": {
+        "program": "branch",
+        "order": [
+          "xolver",
+          "z3"
+        ],
+        "backends": {
+          "xolver": {
+            "seconds": 26.409904016181827,
+            "cpu": "0",
+            "result": {
+              "status": "passed",
+              "phase": "done",
+              "errors": []
+            },
+            "solver_sha256": "bfd59873c3ddb09241ef2723bae62d30f87da58d799a1b3e411b9c9d6c6e1420",
+            "record_sha256": "d3ce74a3653da2351cabde911ae1cc2e3adea77fccfa57f6a100d41df524d3b7"
+          },
+          "z3": {
+            "seconds": 29.780587946996093,
+            "cpu": "0",
+            "result": {
+              "status": "passed",
+              "phase": "done",
+              "errors": []
+            },
+            "solver_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+            "record_sha256": "4b158869cabbe642975b9576d21416cdbfd35aaadb7ce6c860033428d59dc3e6"
+          }
+        },
+        "same_physical_cpu": "0",
+        "provided_proofs": true,
+        "protected_sets_used": false,
+        "boundary": "One fresh paired final-check cohort with provided frozen proofs: original C native symexec,actual selected SMT backend and full Rocq/safety/library/freshness checking. Does not time proof construction or orchestration and does not establish all-QCP superiority. Independent post-run source/session audit and terminal PID checks are still required."
+      },
+      "gcd": {
+        "program": "gcd",
+        "order": [
+          "z3",
+          "xolver"
+        ],
+        "backends": {
+          "z3": {
+            "seconds": 34.541019259020686,
+            "cpu": "1",
+            "result": {
+              "status": "passed",
+              "phase": "done",
+              "errors": []
+            },
+            "solver_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+            "record_sha256": "ef2072e4ddc4e3b23c5f72c293e722fc9a5cce5df0aad28a3d39996cf6126cc1"
+          },
+          "xolver": {
+            "seconds": 31.421066945418715,
+            "cpu": "1",
+            "result": {
+              "status": "passed",
+              "phase": "done",
+              "errors": []
+            },
+            "solver_sha256": "bfd59873c3ddb09241ef2723bae62d30f87da58d799a1b3e411b9c9d6c6e1420",
+            "record_sha256": "2b2100163b348541ab1fbbb3b1bcc0e6cf96a194f9a84016eec7f3590183f529"
+          }
+        },
+        "same_physical_cpu": "1",
+        "provided_proofs": true,
+        "protected_sets_used": false,
+        "boundary": "One fresh paired final-check cohort with provided frozen proofs: original C native symexec,actual selected SMT backend and full Rocq/safety/library/freshness checking. Does not time proof construction or orchestration and does not establish all-QCP superiority. Independent post-run source/session audit and terminal PID checks are still required."
+      },
+      "max3": {
+        "program": "max3",
+        "order": [
+          "xolver",
+          "z3"
+        ],
+        "backends": {
+          "xolver": {
+            "seconds": 26.162521172314882,
+            "cpu": "3",
+            "result": {
+              "status": "passed",
+              "phase": "done",
+              "errors": []
+            },
+            "solver_sha256": "bfd59873c3ddb09241ef2723bae62d30f87da58d799a1b3e411b9c9d6c6e1420",
+            "record_sha256": "af32572a157276a3ffb072c2dd4fa9cdcee32f12d7e3b2657aa40bdd8af18817"
+          },
+          "z3": {
+            "seconds": 27.774709591642022,
+            "cpu": "3",
+            "result": {
+              "status": "passed",
+              "phase": "done",
+              "errors": []
+            },
+            "solver_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+            "record_sha256": "6347ff659cc8bd391640e4a2d21d49f6030a1a3299b68e5f23e2f9578936d75d"
+          }
+        },
+        "same_physical_cpu": "3",
+        "provided_proofs": true,
+        "protected_sets_used": false,
+        "boundary": "One fresh paired final-check cohort with provided frozen proofs: original C native symexec,actual selected SMT backend and full Rocq/safety/library/freshness checking. Does not time proof construction or orchestration and does not establish all-QCP superiority. Independent post-run source/session audit and terminal PID checks are still required."
+      }
+    },
+    "receipt_hashes": {
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1597/finite-domain-fresh-r1862/branch/paired-final-r1862.json": "7ebd7e3333d5c6a856db72584c3b6005424800952ee23ebff8932fd4d1e104cf",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1597/finite-domain-fresh-r1862/branch/xolver/accepted-r1875/receipt.json": "4a101331b04c0e41d23987381102dafc3ed62e9248856c563b16c59b9e090954",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1597/finite-domain-fresh-r1862/branch/z3/accepted-r1875/receipt.json": "8d9d07ae89c0e0ff6b11861b37d91069a98c23fdf5b77e8a96b57e9038132251",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1597/finite-domain-fresh-r1862/gcd/paired-final-r1862.json": "4286a9de48a1cad78f7bcc875130696043c0abaa9310a2d83b1e36f912fffb26",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1597/finite-domain-fresh-r1862/gcd/xolver/accepted-r1875/receipt.json": "b8deeeccef7dec8791739b0543eab58d67a29a0c7ff9884a12b4306071fb13df",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1597/finite-domain-fresh-r1862/gcd/z3/accepted-r1875/receipt.json": "301b384fefe226be06ebf9479844c48c775c199a2e31d71fc394ce1cae3a7d1e",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1597/finite-domain-fresh-r1862/max3/paired-final-r1862.json": "91a413929ecb8ffdbf559aff3f453bc7b442b6331d5112e0c2a70dc908346345",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1597/finite-domain-fresh-r1862/max3/xolver/accepted-r1875/receipt.json": "10cc60ed97b679e2e3ebc9aa4c2753ce17ddc3e476eb52049c43bca6f6a65a17",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1597/finite-domain-fresh-r1862/max3/z3/accepted-r1875/receipt.json": "b33a5302d329e0120fb75766a3d64779e266cd38c402fb88d3e667c7d0738aea"
+    },
+    "gate_runs": [
+      {
+        "experiment_id": "2d56e4174d8d",
+        "input": "branch-z3",
+        "run": {
+          "id": "142651dcaa67",
+          "input": "branch-z3",
+          "status": "success",
+          "exit_code": 0,
+          "pid": 173462,
+          "resources_json": "{\"cpu_slots\": 1, \"cpu_ids\": [\"0\"]}"
+        }
+      },
+      {
+        "experiment_id": "4d0812c30d6f",
+        "input": "branch-xolver",
+        "run": {
+          "id": "2e996565a12b",
+          "input": "branch-xolver",
+          "status": "success",
+          "exit_code": 0,
+          "pid": 265150,
+          "resources_json": "{\"cpu_slots\": 1, \"cpu_ids\": [\"0\"]}"
+        }
+      },
+      {
+        "experiment_id": "4d0812c30d6f",
+        "input": "branch-z3",
+        "run": {
+          "id": "f965fd623191",
+          "input": "branch-z3",
+          "status": "success",
+          "exit_code": 0,
+          "pid": 265205,
+          "resources_json": "{\"cpu_slots\": 1, \"cpu_ids\": [\"1\"]}"
+        }
+      },
+      {
+        "experiment_id": "2d56e4174d8d",
+        "input": "gcd-xolver",
+        "run": {
+          "id": "a0e5d2cfba72",
+          "input": "gcd-xolver",
+          "status": "success",
+          "exit_code": 0,
+          "pid": 173533,
+          "resources_json": "{\"cpu_slots\": 1, \"cpu_ids\": [\"1\"]}"
+        }
+      },
+      {
+        "experiment_id": "4d0812c30d6f",
+        "input": "gcd-xolver",
+        "run": {
+          "id": "105c445a922d",
+          "input": "gcd-xolver",
+          "status": "success",
+          "exit_code": 0,
+          "pid": 265274,
+          "resources_json": "{\"cpu_slots\": 1, \"cpu_ids\": [\"2\"]}"
+        }
+      },
+      {
+        "experiment_id": "4d0812c30d6f",
+        "input": "gcd-z3",
+        "run": {
+          "id": "054a11564923",
+          "input": "gcd-z3",
+          "status": "success",
+          "exit_code": 0,
+          "pid": 265343,
+          "resources_json": "{\"cpu_slots\": 1, \"cpu_ids\": [\"3\"]}"
+        }
+      },
+      {
+        "experiment_id": "4e076c99d036",
+        "input": "max3-z3",
+        "run": {
+          "id": "83717a5c4123",
+          "input": "max3-z3",
+          "status": "success",
+          "exit_code": 0,
+          "pid": 3940335,
+          "resources_json": "{\"cpu_slots\": 1, \"cpu_ids\": [\"3\"]}"
+        }
+      },
+      {
+        "experiment_id": "4d0812c30d6f",
+        "input": "max3-xolver",
+        "run": {
+          "id": "4f56d9409e15",
+          "input": "max3-xolver",
+          "status": "success",
+          "exit_code": 0,
+          "pid": 265404,
+          "resources_json": "{\"cpu_slots\": 1, \"cpu_ids\": [\"4\"]}"
+        }
+      },
+      {
+        "experiment_id": "4d0812c30d6f",
+        "input": "max3-z3",
+        "run": {
+          "id": "eb5724aebdb3",
+          "input": "max3-z3",
+          "status": "success",
+          "exit_code": 0,
+          "pid": 265468,
+          "resources_json": "{\"cpu_slots\": 1, \"cpu_ids\": [\"5\"]}"
+        }
+      }
+    ],
+    "audit": {
+      "experiment": "4d0812c30d6f",
+      "boundary": "All six current source/session/program audits check external-oracle identity separately from the frozen Xolver build envelope; old done sessions are not executed again."
+    },
+    "protected_sets_used": false,
+    "promoted": false,
+    "boundary": "Fresh actual original C native symbolic execution plus supplied frozen proofs and complete Rocq canonical final-checks, both backends same programs/contracts/proof source and per-query60s/onephysicalCPU/16GiB. Each program pair executes sequentially on the same leased core; first backend alternates across programs. Measures supplied-proof final validation, not proof construction or orchestration. GCD is partial correctness with original external abs assumption; max3 retains upper-bound property. Qualifies89921c9d frozen CLIe94/workerbfd59873 only, not subsequent029c9a56 runtime recovery or the isolated Smith prototype. One provided-proof final-validation cohort does not establish general QCP or SMT superiority; both protected sets unused."
+  },
+  "evidence_note": "independently accepted; older frozen worker, current code worker checked by separate query regression"
+}

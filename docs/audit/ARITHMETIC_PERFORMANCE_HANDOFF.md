@@ -38,26 +38,53 @@ fix is retained under the user's explicit functionality-first instruction,
 including its known SAT59 timeout regression. No performance superiority is claimed.
 Older tables describe their own frozen versions and evidence boundaries.
 
-## Development recovery of original-formula witnesses
+## Qualified PR94 candidate
 
-PR94's first CI passes unit, proof, differential and model checks, but two
-nonlinear `to_int` regressions return `unknown`. Recovery was searching lowered
-assertions with semantic auxiliaries it does not assign. The new runtime patch
-uses original roots, retaining complete exact candidate evaluation. Both inputs
-recover SAT and their actual models replay through frozen Z3 and cvc5.
+[PR94](https://github.com/fuqi-jia/Xolver/pull/94) implementation `029c9a56`
+passes ordinary Panda1/ExperimentOS CMake qualification:2015 unit cases /
+1314260 assertions, seven CTests, Python smoke, three original soundness
+regressions and two recovered SAT models independently checked by Z3/cvc5.
+CLI `fa3588f2` and worker `74a581ae` bind all2122 build-bearing source files.
+[CI41432206017](https://github.com/fuqi-jia/Xolver/actions/runs/41432206017)
+passes build-test and proof-gate, including the complete CI regression suite.
 
-The isolated patch passes2014 existing unit cases/1314250 assertions. Its new
-model and push/pop regression fails on the parent and passes10 assertions on the
-patch. The whole948-case60s run matches946 and times out on two; this is retained
-as failed, not described as a full pass. Same-core60s controls give quadratic
-UNSAT20.042/19.850s on parent/patch and NRA timeout on both. The original failed
-CLI-order reproduction is also retained. See
-[the recovery evidence](ORIGINAL_FORMULA_RECOVERY_STAGE_20261102.json).
+Fresh R1880/R1882 fixed160 verifies **111 main /113 candidate /116 Z3**.
+The candidate gains89/106, loses none, and has no opposite verdict or protocol
+error. Verified PAR-2 is6428.483/6111.655/5554.762s. Z3 has125 raw decisions;
+nine unconfirmed12/24/27/42/50/75/80/114/148 remain excluded. All160 original
+triads are valid and were run once at60s/one physical core/16GiB per arm.
 
-Ordinary source qualification and new CI remain pending. The previous113
-verified fixed160 result and ongoing QCP R1862 workflow remain bound to the
-earlier frozen `e94da0c8` CLI/`bfd59873` worker, not this isolated patch. No
-protected-set or overall-superiority conclusion follows from this recovery.
+The `to_int` CI recovery searches original assertions, avoiding unassigned
+lowering auxiliaries while preserving complete exact candidate validation.
+Its model/push/pop test fails on the parent and passes on the patch. The earlier
+948-case60s diagnostic remains946 matches/two timeouts, not a full pass;
+same-budget controls preserve quadratic UNSAT on both and NRA timeout on both.
+See [source, binary and validation evidence](ORIGINAL_FORMULA_RECOVERY_STAGE_20261102.json).
+
+Fresh original-C QCP R1862/R1877 qualifies the prior `89921c9d`/`bfd59873`
+worker:3 programs,23 top-level VCs and2340 SMT queries per backend. Provided-proof
+final validation uses780 queries and totals83.993s Xolver/92.096s Z3 in one
+same-core paired cohort. GCD remains partial correctness with its original
+external `abs` assumption; max3 proves its original upper-bound property.
+The current `74a581ae` worker also matches both backends on all780 ordered
+queries, earning zero new program/VC or end-to-end timing credit. See
+[whole-program evidence](QCP_FINITE_DOMAINS_STAGE_20261102.json).
+
+The Smith/Bezout prototype is not promoted:2048 exact matrix checks and2015
+units pass, including a generated7x7 coefficient-growth counterexample, but
+R1873/R1879's11-input pilot stays4→4 verified, gains/loses none and slightly
+worsens PAR-2 (871.468→871.607s). Its fixed-suite performance experiment is
+closed; preserve the counterexample without repeating the trial.
+
+Fifteen independently verified Z3-only gaps remain in the R1882 evidence.
+One next investigation is the shared partial-linear model search: production
+NRA calls it, production NIA does not, and its integer completion rejects
+fractional LP points. Measure that path before choosing an implementation;
+do not repeat the closed affine-line or work-budget-only experiments. Standard
+theory `unknown` is already ignored unless explicitly requesting Farkas-model
+recovery; there is no evidence for a general premature-unknown termination bug.
+Neither protected set has been used. Overall superiority and126/160 remain
+unproved; merging and post-merge main CI are separate delivery gates.
 
 ## Latest canonical delivery
 
