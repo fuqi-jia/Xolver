@@ -83,17 +83,16 @@ R1873/R1879's11-input pilot stays4→4 verified, gains/loses none and slightly
 worsens PAR-2 (871.468→871.607s). Its fixed-suite performance experiment is
 closed; preserve the counterexample without repeating the trial.
 
-Fifteen independently verified Z3-only gaps remain in the R1882 evidence.
-One next investigation is the shared partial-linear model search: production
-NRA calls it, production NIA does not, and its integer completion rejects
-fractional LP points. Measure that path before choosing an implementation;
-do not repeat the closed affine-line or work-budget-only experiments. Standard
+Fifteen independently verified Z3-only gaps remain in the older R1882 evidence.
+The subsequent shared integer-completion investigation and its fresh evidence
+are recorded below; development NIA now calls the shared partial-linear search.
+Do not repeat the closed affine-line or work-budget-only experiments. Standard
 theory `unknown` is already ignored unless explicitly requesting Farkas-model
 recovery; there is no evidence for a general premature-unknown termination bug.
 Neither protected set has been used. Overall superiority and126/160 remain
 unproved. Draco/MaxSMT work remains paused.
 
-## Shared affine integer completion under qualification (R1883–R1894)
+## Shared affine integer completion on development (R1883–R1901)
 
 The shared partial-linear search rejected fractional LP vertices without
 completing the integer affine block. R1887 records the same `x0=C/2` after
@@ -118,14 +117,71 @@ no gains, losses, errors or opposite verdicts. PAR-2 is1888.703/1876.558/222.073
 the reduction is dominated by unchanged LRA131 and is not attributed to integer
 completion. Neither production root sources nor its archive were replaced.
 See [isolated capability and public-pilot evidence](INTEGER_MODEL_COMPLETION_STAGE_20261102.json).
-No new full160, current-worker QCP or protected-set result is claimed.
 
-The next private client is LIA, before disequality handling and split selection,
-so both inspect any changed LP point. Exact original-atom validation and the
-interface gate remain mandatory; applied-prefix identity may refresh only after
-all temporary bounds and explanations restore. R1893 fails in the Python build
-script before compilation; its unchanged source is retained and R1894 fixes
-only that script. LIA qualification and a fresh public pilot remain pending.
+Committed development `2f529557` subsequently passes ordinary R1897 CMake
+qualification:2021 unit cases/1314414 assertions, seven CTests, Python smoke
+and19 original soundness/model checks. CLI `3c2315bc` and worker `90377fd9`
+bind all2125 build-bearing files. R1900 replays all780 ordered QCP queries
+against both audited backend streams; it earns zero new program/VC or
+end-to-end timing credit.
+
+Fresh R1899/R1901 fixed160 verifies **112 main/112 candidate**, gains48 and
+loses131, with no wrong verdict or model/protocol error. Verified PAR-2 is
+6192.627/6184.616s. R1910/R1912 supplements two original timed Z3 models, giving
+**118 verified Z3/125 raw**, PAR-2 5318.221s. Seven UNSATs12/24/27/42/50/80/114
+remain unconfirmed and excluded. The immutable original summary records116
+verified Z3 before that supplement; no original solve/model/time is replaced.
+The candidate has no solve-count improvement and is not promoted. R1902 finds
+only `lra.core` on48/131, with no new integer-completion call; this observation
+does not explain their differing search trajectories. The earlier main113 is
+from a different round and must not be substituted into this comparison.
+
+The private global LIA client is closed without installation. R1894 passes
+2021 units, but R1895's eight-input pilot stays5→5 verified and SAT11 slows
+6.385→16.265s. R1896 input1 records305 completion calls/1596 nodes, no accepted
+model and297 exhausted calls. R1898 binds the negative evidence. Do not retry
+this global Full-check attachment by changing its budget alone; retain the
+shared helper and its NIA client. R1893's pre-compilation script failure is
+preserved separately. Neither protected set has been used and no new PR exists.
+
+## Exact algebraic replay and closed linear initialization (R1904–R1915)
+
+The independent model checker now translates Z3 `root-obj` constants into
+polynomial witnesses with exact, uniquely isolating open intervals. A bounded
+Sturm construction selects the increasing one-based root; unsupported values
+are rejected. Original assertions and interpretations are retained, including
+when the polynomial's bound variable is named like an original symbol.
+Existing real polynomial logics are preserved: indiscriminately widening
+`QF_NRA` to `ALL` makes cvc5 time out on both actual models75/148, whereas
+preserving `QF_NRA` independently verifies both in about34ms. R1912 passes31
+Python tests and binds the rendered queries byte for byte to those positive
+checks. R1904's misplaced-exit preparation failure and R1905's inconclusive
+checks remain in the evidence.
+
+R1907 attributes substantial time to row propagation on48/131. The private
+demand-driven initialization prototype replaces eager endpoint copies and the
+initial deque with a local lazy overlay and virtual initial queue. R1911
+passes2021 units and10368 reference comparisons/272576 exactly ordered bounds,
+including scopes, basis changes and an8192-row tableau. Its21-input R1913 pilot
+still verifies5→5, gains SAT51 but loses SAT131, and gives PAR-2
+2010.879→1987.035s. The lost valid result is retained as a loss. The prototype
+is closed and its production patch removed; do not expand it to fixed160 or
+repeat this initialization-only change. This is a performance rejection, with
+no observed incorrect verdict. Root sources/archive stay at qualified2f529.
+
+R1914 also tests a separate theory lead on original NIA116:111 independent
+monomial columns, with and without111 guarded nonnegative-product facts.
+Both relaxations are SAT in both independent solvers. These are weakened
+diagnostic inputs, not original SAT results; simple monomial signs alone do
+not provide a sufficient refutation mechanism. Seek evidence for stronger
+multiplicative consequences before integrating another reasoner.
+
+See [the checked native audit and original-model bindings](MODEL_REPLAY_AND_CLOSED_LINEAR_STAGE_20261102.json).
+R1915 is successful with its PID gone; the immutable native summary has
+SHA-256 `2858ea607a783ceec97b52b34427a0cd7f8968eea060310b463a7b69dcd29095`.
+Overall SMT/QCP superiority and126/160 remain unproved. Draco/MaxSMT remain
+paused; the independent verification-data collection agent owns the new
+LiteOS/QCP-source workspace.
 
 ## Previous canonical delivery (PR93)
 
