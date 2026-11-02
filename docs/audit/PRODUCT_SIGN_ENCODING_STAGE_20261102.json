@@ -1,0 +1,170 @@
+{
+  "stage": "product-sign-encoding-r1774-r1777",
+  "status": "prototype-tested-not-promoted",
+  "source_parent": "c5286cb905265709365adaeb01a3a4c85aa615ed",
+  "source_sha256": {
+    "src/search/bitblast/PolyBitBlaster.cpp": "b8995c527f11f428fc13eb6a7ea3bbc7c3533f5263c3f07c8d439969ce78ebf5",
+    "src/search/bitblast/PolyBitBlaster.h": "f0bfdb642e8d60fb82f175476584dd0c630eabc3bde9c9cebc2ebb3ee57f3862",
+    "src/search/bitblast/EagerBitBlastSolver.cpp": "50aa7f392112304158d322c9156d695156c51277777e6ec8d6b26c243e0590ef",
+    "tests/unit/test_bit_blast_product_signs.cpp": "05eeee9e3cfd17b8707209676dee7caa77ea50eec982dfe4bb512348db11c194"
+  },
+  "source_manifest": {
+    "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/product-sign-inputs-r1774/source.json",
+    "sha256": "2197c0b6aa0cd45869fbbfb953e3a3faca6b496f9a89e5bad0c9446c5622b246"
+  },
+  "mechanism": "A polynomial p=m*q compared with zero uses exact factor-zero and factor-sign literals, retaining every zero factor. The reduced q uses existing width-growing arithmetic. Whole-formula and conjunctive bit blasting share the same comparison entry; no gate, external oracle, case or answer heuristic is added.",
+  "native": {
+    "host": "Panda1",
+    "qualification": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/product-sign-r1774/qualification.json",
+      "sha256": "5cb49411f8f7ef7cbf3ba65be87d16768c7948764c43f4b73faf98a3fbd5a97d"
+    },
+    "experiment": "2cbfe69735c3",
+    "binary_sha256": "517c3f74a457e783934b78d562fcdc84f10800b96589db918f6db32cfce9f002",
+    "parent_core_sha256": "49b18a81da0b56bffbfe7ef15e4aa3b5e8fcd8be01e60585901e3cf1bb2a048a",
+    "unit_cases": 1998,
+    "unit_assertions": 1314081,
+    "unit_log_sha256": "9ba8f5476f07fb1b807849eb82b27a39722484cd1d44e7ce2c3eb33c4e077d51",
+    "old_control_sha256": "eb13a185f8868d585294fe8073b1c06be1c25c554911d00415a9fa0b0da175d8",
+    "old_control": "All signed 3-bit comparison cases pass both versions. Only the old high-degree product comparison exhausts its gate allocation."
+  },
+  "pilot": {
+    "summary": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/product-sign-pilot-r1775/summary.json",
+      "sha256": "78b1b4bfdbd189f7286698b6e942c749b67f61c53dc599fceca029aa411732d8"
+    },
+    "native_experiment": "ac2601a045d4",
+    "artifact_acceptance_experiment": "e80c3c026d91",
+    "binaries": {
+      "baseline": "a42bfd4c02845bf2e15eae183bc3e99792262d19b3cb51025d34095e8fed1233",
+      "candidate": "517c3f74a457e783934b78d562fcdc84f10800b96589db918f6db32cfce9f002",
+      "z3": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+    },
+    "scores": {
+      "baseline": {
+        "verified": 10,
+        "raw": {
+          "timeout": 18,
+          "sat": 7,
+          "unsat": 3
+        },
+        "unconfirmed": [],
+        "verified_par2": 2333.778427749872
+      },
+      "candidate": {
+        "verified": 11,
+        "raw": {
+          "timeout": 17,
+          "sat": 8,
+          "unsat": 3
+        },
+        "unconfirmed": [],
+        "verified_par2": 2213.1432306412607
+      },
+      "z3": {
+        "verified": 26,
+        "raw": {
+          "sat": 17,
+          "unsat": 9,
+          "timeout": 2
+        },
+        "unconfirmed": [],
+        "verified_par2": 358.5204880051315
+      }
+    },
+    "gained": [
+      106
+    ],
+    "lost": [],
+    "cases": 28,
+    "protocol": {
+      "seconds": 60,
+      "physical_cpus": 1,
+      "memory_bytes": 17179869184,
+      "model": "actual timed witness; immutable serializer regenerated and checked; original independent replay results inspected",
+      "repeated_solver_observations": 0
+    },
+    "measurement_recovery": "All 28 original jobs exited 0 with cases=1, wrong=errors=protocol_errors=0. EOS kept them invalid because the YAML referenced three nonexistent metric names. A separate leased acceptance job checked every frozen report/input/binary, resource budget, CPU, independent judgment and regenerated actual-model replay. No original artifact/status was changed; no solver observation was repeated."
+  },
+  "gained_witness": {
+    "index": 106,
+    "case": {
+      "path": "/pub/data/jiafq/smt-comp-2025/benchmark/non-incremental/QF_NIA/20170427-VeryMax/ITS/From_AProVE_2014__juLinkedListCreateAddAllAt.jar-obl-17__p9090_safety_0.smt2",
+      "member": "QF_NIA/20170427-VeryMax/ITS/From_AProVE_2014__juLinkedListCreateAddAllAt.jar-obl-17__p9090_safety_0.smt2",
+      "logic": "QF_NIA",
+      "family": "20170427-VeryMax",
+      "bytes": 52516,
+      "sha256": "c96b35bb3cae604115b99477562c4059c6e78ad16658f50d9dbb9ed8abad0a25",
+      "expected": "sat",
+      "shared_archive_member": "non-incremental/QF_NIA/20170427-VeryMax/ITS/From_AProVE_2014__juLinkedListCreateAddAllAt.jar-obl-17__p9090_safety_0.smt2",
+      "shared_archive_sha256": "0ec220292ed6c506b6c5dd9241e27ca7c74d8bda10a3db42249dc3f23c6d6078",
+      "archive_matches_server": true,
+      "repetitions": 1
+    },
+    "report": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/product-sign-pilot-r1775/case-106/report.json",
+      "sha256": "02c8bad3bee02df2a92098c1a73e54cb59d8c1a89aa8d47cefab635642887c48"
+    },
+    "baseline_seconds": 60.017711628228426,
+    "candidate_seconds": 13.00444970279932,
+    "candidate_result": "sat",
+    "candidate_verified": true,
+    "independent_replay": {
+      "result": "sat",
+      "seconds": 0.06683588214218616,
+      "launch_seconds": 0.002017434686422348,
+      "wait_seconds": 0.06481844745576382,
+      "returncode": 0,
+      "timeout_notified_seconds": null,
+      "cleanup_seconds": null,
+      "timed_out": false,
+      "budget_overrun": false,
+      "command": [
+        "prlimit",
+        "--as=17179869184",
+        "--cpu=62:63",
+        "--",
+        "dependencies/oracles/z3-5.3.2",
+        "-T:60",
+        "validation/arithmetic-r103/product-sign-pilot-r1775/case-106/candidate-replay.smt2"
+      ],
+      "cpu": 26
+    },
+    "model_stdout": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/product-sign-pilot-r1775/case-106/candidate.stdout",
+      "sha256": "6428c7e2db651c9e05db542308064c033cc3f678b5e55e231f3fb662fbf4576d"
+    },
+    "replay": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/product-sign-pilot-r1775/case-106/candidate-replay.smt2",
+      "sha256": "5d26dc97a650cc444df3c87860dd0527476f5af9d4f3c70265c05f1e90aca4c3"
+    }
+  },
+  "diagnostic": {
+    "report": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/product-sign-profile-r1777/report.json",
+      "sha256": "de69e7374b0aaa6ebc31f6b47e41fedca1a00c57625cda337271990a1a80b239"
+    },
+    "experiment": "4770f8f8b337",
+    "width8_sat_variables": {
+      "baseline": 78399,
+      "candidate": 77205
+    },
+    "width8_sat_result": {
+      "baseline": "unknown at arm allocation",
+      "candidate": "sat"
+    },
+    "boundary": "Observer-only 30-second prefixes retaining 60-second internal scheduling; diagnostics change timing. Encoding cost changes little; most observed benefit is in subsequent SAT search. This does not establish a universal search-time improvement."
+  },
+  "full160": {
+    "stage": "product-sign-full-r1778",
+    "status": "running",
+    "canonical_source_qualification": "pending",
+    "boundary": "Fresh all160 experiment, no substitution of pilot observations; final canonical CMake build, server acceptance and PR/main CI required before promotion."
+  },
+  "qcp": {
+    "status": "candidate-height canonical qualification still in fresh native validation; not a product-sign QCP result"
+  },
+  "protected_sets_used": false,
+  "promoted": false,
+  "boundary": "A selected training pilot verifies one added solve and no lost solve. Neither an overall fixed160 improvement nor superiority to Z3 is established. Both independent protected sets remain unused."
+}

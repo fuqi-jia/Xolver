@@ -726,7 +726,7 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
                                 if (!encoded) { encodeOk = false; break; }
                                 pl = *encoded;
                             } else
-                                pl = enc.relZero(blaster.encodePoly(part.first), part.second);
+                                pl = blaster.encodeConstraint({part.first, part.second, {}});
                             r = enc.andGate(r, pl);
                         }
                     } else if (e.kind == Kind::Eq) {  // boolean iff chain

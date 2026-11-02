@@ -5206,3 +5206,40 @@ Parent/candidate/Z3 verify9/9/15; gains and losses are empty. PAR-2 movement
 to this mechanism. Complete canonical-source qualification, full160, fresh
 QCP validation and PR/main CI remain pending for this prototype. The delivered
 score stays111; neither protected set is used.
+
+## Exact product comparisons without product magnitudes (R1774–R1778)
+
+The candidate-height implementation now has normal CMake qualification
+R1767 (CLI `a42bfd4c02845bf2e15eae183bc3e99792262d19b3cb51025d34095e8fed1233`),
+96 fresh independent correctness cases, and a complete fresh160 comparison.
+Parent/candidate both verify111, versus116 verified/125 raw for Z3. There are
+no gains or losses. Three invalid execution cohorts are preserved and replaced
+under unchanged budgets; the other157 complete valid triads are retained.
+Fresh native QCP workflows for both backends remain in progress. These facts
+update the earlier prototype-only status without claiming delivery or CI.
+
+The next implementation compares `p=m*q` with zero using factor-zero and
+factor-sign literals, rather than materializing the common monomial's
+magnitude. Zero factors are retained for every relation; odd/even exponents
+and negative coefficients use exact signed semantics. Both whole-formula and
+conjunctive integer encodings call the same comparison entry.
+
+All1998 native unit cases/1314081 assertions pass, including exhaustive
+signed3-bit inputs for six relations. The frozen old control passes those
+semantic cases but exhausts the new high-degree product gate allocation.
+The fresh28 pilot verifies10→11 for parent/candidate, with26 for Z3; gained106,
+lost none. Its actual timed SAT witness replays with frozen Z3: parent60s
+timeout, candidate13.004s SAT. Original EOS rows remain invalid because the
+pilot YAML used absent measurement names. Leased acceptance R1776 validates
+all original reports, budgets and regenerated actual-model replays; no valid
+observation is rerun or original state changed. Summary SHA-256:
+`78b1b4bfdbd189f7286698b6e942c749b67f61c53dc599fceca029aa411732d8`.
+
+Observer-only profiling reduces width8 SAT variables78399→77205; most observed
+benefit is subsequent SAT search, rather than encoding CPU time. The
+[stage record](PRODUCT_SIGN_ENCODING_STAGE_20261102.json) seals source,
+control, model and profile evidence. Fresh full160 R1778 is running using the
+unchanged frozen prototype. Canonical qualification, QCP checks and PR/main CI
+remain necessary before promotion. No overall fixed160 gain or superiority to
+Z3 is claimed, neither protected set is used, and the cancelled extra
+`validation/current-main.json` archive remains unnecessary.
