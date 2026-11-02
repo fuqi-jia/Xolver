@@ -1,0 +1,919 @@
+{
+  "date": "2026-11-01",
+  "status": "prototype_not_promoted",
+  "source_head": "eb5235fc81f2aa9f3afcf8e03f47e8f7fc831c5b",
+  "qualification_mode": "Qualified object overrides over the unchanged source-r1506/core archive. No new commit, PR, main merge or CI result is claimed.",
+  "implementation": {
+    "runtime": "src/runtime/Solver_impl_checksat.cpp",
+    "boolean_structure": "src/search/boolean/BooleanStructure.h",
+    "candidate": "src/search/bitblast/EagerBitBlastSolver.h",
+    "description": "Reuse the existing exact-validated whole-formula numeric SAT candidate engine for pure nonlinear reals with Boolean alternatives. Integer-valued real points are valid witnesses; an exhausted integral subset never refutes the real formula. Polarity-aware Boolean structure is theory-independent; real literal conjunctions use the existing real arithmetic path. No runtime oracle, input-name/answer rule, new gate or budget change.",
+    "source_overrides": {
+      "src/runtime/Solver_impl_checksat.cpp": "570f4bc15b112a1e5ac2b1d9842d736ddbe13b13b84499dab0bdd92880bb8623",
+      "src/search/bitblast/EagerBitBlastSolver.h": "127d894faa68d7f4de9df2ce717abe44ca4e6c23ae8fe089d22cb84ecf9d560d",
+      "src/search/boolean/BooleanStructure.h": "bfb7efb269453b0a3ab0106731470ad506547ea05dc93ed85a38b1b1103f121b",
+      "tests/unit/test_eager_affine_bounds.cpp": "8dc694ca4354061d3a1b2fea2f7106a3c5074056ef16e6961836626697ef6f2e",
+      "tests/unit/test_model_consistency.cpp": "fcf27afedaf3436a3bc2a712e17359bd9fd7dedc1aaef3d0dda8699293c18293",
+      "tests/unit/test_boolean_structure.cpp": "f6bfa0c3de79258f105c9ace45a5316bdf22b07f181ac96a4e97d20f32d1360b"
+    }
+  },
+  "frozen": {
+    "candidate_sha256": "d6bde65e28150fac18ffb5b00eb22f11494c5265b28b148f352104cbc29a7c6d",
+    "worker_sha256": "2abfb4037ae257d68aa194a6e813cbd83fc2259266bdbfbd65b74cfc830515ec",
+    "baseline": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/sparse-support-r1551/xolver",
+      "sha256": "073c940f81ecd404b8d3eacf82ed905f26d0144da01e2b2bd6572909099f66ae"
+    },
+    "z3": {
+      "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+      "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+    },
+    "core_archive_sha256": "9b2bdd3218deb1d6081d330ec9bfdf33a5026794d3e0dacb3dba59bb7cbdaeca",
+    "qualification_sha256": "e66ad9c878fca8de1f61805a4e1e6363e827bcd676ff62812b1dbe4492c86d4c"
+  },
+  "validation": {
+    "native_experiment": "b0a71039e115",
+    "native_run": "49103511cf08",
+    "unit_cases": 1962,
+    "unit_assertions": 1283340,
+    "targeted_cases": 92,
+    "targeted_assertions": 9316,
+    "architecture": {
+      "files": 699,
+      "layers": 11,
+      "violations": 0
+    },
+    "witness_check_record_sha256": "942530125564bb5f303354097297c77bf29794b960ea31d016a1f9ca4258bac9",
+    "witness_checkers": [
+      "Z3",
+      "cvc5"
+    ]
+  },
+  "fair_round": {
+    "directory": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r1561",
+    "experiments": [
+      {
+        "id": "7c86ba27f560",
+        "name": "xolver-integral-real-fixed160-priority-r1561-20261101",
+        "status": "done"
+      },
+      {
+        "id": "e2ff4b1f2634",
+        "name": "xolver-integral-real-fixed160-batch-a-r1561-20261101",
+        "status": "done"
+      },
+      {
+        "id": "8ac52419e98b",
+        "name": "xolver-integral-real-fixed160-batch-b-r1561-20261101",
+        "status": "done"
+      },
+      {
+        "id": "d9b8fb8203a7",
+        "name": "xolver-integral-real-fixed160-batch-c-r1561-20261101",
+        "status": "done"
+      },
+      {
+        "id": "f4521fe278a2",
+        "name": "xolver-integral-real-fixed160-batch-d-r1561-20261101",
+        "status": "done"
+      },
+      {
+        "id": "6f87389a8dd0",
+        "name": "xolver-integral-real-fixed160-batch-e-r1561-20261101",
+        "status": "done"
+      }
+    ],
+    "cases": 160,
+    "timeout_seconds": 60,
+    "physical_cpus_per_invocation": 1,
+    "memory_bytes": 17179869184,
+    "all_runs_successful": true,
+    "raw_summary_sha256": "291c71fccff1d499d217ff723f984ce4f904bf821ec42f89fb2546c8d8c27c4b",
+    "receipt_sha256": "fc06c13ab55fabc770606d895248f10e540e1daa4635994221b63fb4d010c39b",
+    "truth_record_sha256": "500c64c7b9fd8203c581aa868ec2ff9a307656d9ac0679e887a068bc058a5844",
+    "verified_counts": {
+      "baseline": {
+        "unsat": 47,
+        "decided": 108,
+        "verified_decided": 107,
+        "verified_par2": 6859.179517200217,
+        "raw_par2": 6739.197289252654,
+        "timeout": 51,
+        "sat": 61,
+        "unknown": 1
+      },
+      "candidate": {
+        "unsat": 47,
+        "decided": 109,
+        "verified_decided": 108,
+        "verified_par2": 6774.000048875809,
+        "raw_par2": 6654.0178541038185,
+        "timeout": 50,
+        "sat": 62,
+        "unknown": 1
+      },
+      "z3": {
+        "unsat": 57,
+        "decided": 122,
+        "verified_decided": 117,
+        "verified_par2": 5371.916380772367,
+        "raw_par2": 4811.847969762981,
+        "sat": 65,
+        "timeout": 38
+      }
+    },
+    "gains": [
+      {
+        "index": 77,
+        "case": "QF_NRA/UltimateAutomizer/InVarSynth_InvariantSynthesis_Disjunctive02.bpl_Iteration1_0.smt2",
+        "kind": "gained",
+        "truth": "sat",
+        "evidence": [
+          "z3-exported-model-replay",
+          "candidate-exported-model-replay"
+        ],
+        "observations": {
+          "z3": {
+            "result": "sat",
+            "seconds": 0.3669198006391525
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.529628375545144
+          },
+          "candidate": {
+            "result": "sat",
+            "seconds": 1.8197301160544157
+          }
+        }
+      }
+    ],
+    "losses": [],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "protocol_errors": [],
+    "par2_improvement_seconds": 85.17946832440794,
+    "boundary": "Only a one-case verified improvement over the same-round parent. Candidate 108/160 remains below same-round Z3 117/160 and the conservative target 126/160. Solver timing/decisions are never replaced by independent truth-validation time."
+  },
+  "certificate": {
+    "input_index": 159,
+    "input_sha256": "3b3f35580e39c21659d09f507edd67f5c0d5271a2957125d9e99cca86db44033",
+    "path": "docs/audit/certificates/mgc_07_sign.json",
+    "certificate_sha256": "2f18993d2382b196b4dba9b69219c7958f21d07c76a16f71656f20a6379c3762",
+    "checker": "tools/proof/check_polynomial_sign_certificate.py",
+    "checker_sha256": "668871451dcec312a5fef82483d4b074f48cdda33a19dbe8a3d3f4c6c1c34ae6",
+    "parser_sha256": "23e8b6001327ea2d0e4970bf4c1983b7a30ff53462f65f9c501b90b825932881",
+    "native_experiment": "e434ccb1814e",
+    "native_run": "ee2aff470bd6",
+    "python_tests": 10,
+    "record_sha256": "011367bad762d56dab0795d1f8e0c7ec7772231fb0c302da585c36de6a722012",
+    "result": "independently_checked_unsat",
+    "boundary": "Certifies truth of original159 only; Xolver still times out and gains no performance solve. The checker is offline and accepts only exact identities with unconditional sign/equality premises. It rejects tampering, weak/conditional sign premises, zero identities, macro shadowing and unsupported query scopes."
+  },
+  "closed_nia_experiment": {
+    "cases": 48,
+    "verified_counts": {
+      "baseline": 28,
+      "candidate": 28,
+      "z3": 29
+    },
+    "summary_sha256": "8df6e786329f352524f2b608ae20e25ef45db7d7dcdf09ebb89cef2bb2f9a7ed",
+    "boundary": "Sparse bounded-support enumeration fixes actual exponential traversal/row-cap work, but gives no solved-count improvement on this NIA slice. No further budget tuning is claimed."
+  },
+  "unsuccessful_pilots": {
+    "record_sha256": "8056c63db1b26b4c69e5604dae30def8b83ee088ea904acfed08bbcc7d652fcb",
+    "directories": [
+      "fair-r1556",
+      "fair-r1559"
+    ],
+    "boundary": "Protocol failures and the broad real-candidate overhead remain recorded. Their timings never substitute into the accepted fresh full round. Case146 is still slower: about11.24s parent versus33.49s candidate."
+  },
+  "remaining_verified_gaps": {
+    "z3_only_verified": [
+      {
+        "index": 1,
+        "input_sha256": "df42f9cdbe66be22d8b5f55d904ae308677681d21cf6ba13801a6c1bcc7d712b",
+        "logic": "QF_LIA",
+        "family": "convert",
+        "member": "QF_LIA/convert/convert-jpg2gif-query-1470.smt2",
+        "truth": "sat",
+        "observations": {
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.02107005007565
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 0.767803244292736
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.01862162165344
+          }
+        },
+        "failure_mechanism": "timeout; hot path not localized in this stage",
+        "next_action": "Sample existing stage counters before choosing another algorithm change."
+      },
+      {
+        "index": 13,
+        "input_sha256": "d9c546291b74c1b0021e19bff6aa4e9fbbb220fdcd253de67479375572f913f6",
+        "logic": "QF_LIA",
+        "family": "tropical-matrix",
+        "member": "QF_LIA/tropical-matrix/constraint-517804.smt2",
+        "truth": "sat",
+        "observations": {
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.02591819129884
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 0.8172292280942202
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.02620744891465
+          }
+        },
+        "failure_mechanism": "timeout; hot path not localized in this stage",
+        "next_action": "Sample existing stage counters before choosing another algorithm change."
+      },
+      {
+        "index": 29,
+        "input_sha256": "0d5e3d04305e393bfd392b8652ba33f37220c4ff420054acffb70d61df5c89e7",
+        "logic": "QF_NIA",
+        "family": "UltimateLassoRanker",
+        "member": "QF_NIA/UltimateLassoRanker/CookSeeZuleger-2013TACAS-Fig7a-alloca_true-termination.c.i_Iteration8_Lasso+nonterminationTemplate.smt2",
+        "truth": "unsat",
+        "observations": {
+          "z3": {
+            "result": "unsat",
+            "seconds": 0.2670607175678015
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.06545849330723
+          },
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.06635242514312
+          }
+        },
+        "failure_mechanism": "timeout; hot path not localized in this stage",
+        "next_action": "Sample existing stage counters before choosing another algorithm change."
+      },
+      {
+        "index": 34,
+        "input_sha256": "ecf140bb267be14f595da4be5a54940f0a71fc7e4348aaa027bff1d7166f1ec3",
+        "logic": "QF_NIA",
+        "family": "20210219-Dartagnan",
+        "member": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/ps6-ll_valuebound5-O0.smt2",
+        "truth": "unsat",
+        "observations": {
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.078010035678744
+          },
+          "z3": {
+            "result": "unsat",
+            "seconds": 0.8678179532289505
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.08654355816543
+          }
+        },
+        "failure_mechanism": "timeout; hot path not localized in this stage",
+        "next_action": "Sample existing stage counters before choosing another algorithm change."
+      },
+      {
+        "index": 49,
+        "input_sha256": "d4baea957f7fe792713edbaf3edc6769274ab0aafe5e86182d023e858037d615",
+        "logic": "QF_LRA",
+        "family": "2019-ezsmt",
+        "member": "QF_LRA/2019-ezsmt/travellingSalesperson/rand_80_340_1159656267_16.lp.smt2",
+        "truth": "sat",
+        "observations": {
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.01290498115122
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 1.7208157274872065
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.01642432436347
+          }
+        },
+        "failure_mechanism": "timeout; hot path not localized in this stage",
+        "next_action": "Sample existing stage counters before choosing another algorithm change."
+      },
+      {
+        "index": 56,
+        "input_sha256": "49761967d8071fc4d32d82165bcd7ef4fcdfe436b7634da8d42a9be673087218",
+        "logic": "QF_LRA",
+        "family": "miplib",
+        "member": "QF_LRA/miplib/pp08a-3000.smt2",
+        "truth": "unsat",
+        "observations": {
+          "z3": {
+            "result": "unsat",
+            "seconds": 4.3760456293821335
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.00395861081779
+          },
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.00360484421253
+          }
+        },
+        "failure_mechanism": "timeout; hot path not localized in this stage",
+        "next_action": "Sample existing stage counters before choosing another algorithm change."
+      },
+      {
+        "index": 58,
+        "input_sha256": "64f223bcde0c40ca731ab7443a27e55abf89d82d240cb58aed03a32ff50b15e8",
+        "logic": "QF_LRA",
+        "family": "uart",
+        "member": "QF_LRA/uart/uart-26.base.cvc.smt2",
+        "truth": "unsat",
+        "observations": {
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.00628497451544
+          },
+          "z3": {
+            "result": "unsat",
+            "seconds": 19.871799195185304
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.00690712593496
+          }
+        },
+        "failure_mechanism": "timeout; hot path not localized in this stage",
+        "next_action": "Sample existing stage counters before choosing another algorithm change."
+      },
+      {
+        "index": 72,
+        "input_sha256": "cc66abe5f5716404298fd97cb383e65487d9277ea2611ee41add8e324e7eb2c4",
+        "logic": "QF_NRA",
+        "family": "2019-ezsmt",
+        "member": "QF_NRA/2019-ezsmt/reverseFolding/39-reverse_folding-0-0.smt2",
+        "truth": "sat",
+        "observations": {
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.2975165322423
+          },
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.290254106745124
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 9.238898605108261
+          }
+        },
+        "failure_mechanism": "timeout; hot path not localized in this stage",
+        "next_action": "Sample existing stage counters before choosing another algorithm change."
+      },
+      {
+        "index": 80,
+        "input_sha256": "1bcb3b052ef1f9ebe04cf76147f19dc54fb0678342d72b829a38a936c56959fe",
+        "logic": "QF_LIA",
+        "family": "cut_lemmas",
+        "member": "QF_LIA/cut_lemmas/20-vars/cut_lemma_03_004.smt2",
+        "truth": "unsat",
+        "observations": {
+          "z3": {
+            "result": "unsat",
+            "seconds": 0.16694560088217258
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.00249747186899
+          },
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.001356437802315
+          }
+        },
+        "failure_mechanism": "timeout; hot path not localized in this stage",
+        "next_action": "Sample existing stage counters before choosing another algorithm change."
+      },
+      {
+        "index": 89,
+        "input_sha256": "5b983ea0194c5b7fcdee4a87c0de44da99828561d82d288a89fd99da128f4c5f",
+        "logic": "QF_LIA",
+        "family": "RWS",
+        "member": "QF_LIA/RWS/Example_16.txt.smt2",
+        "truth": "sat",
+        "observations": {
+          "z3": {
+            "result": "sat",
+            "seconds": 0.7688729949295521
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.006677033379674
+          },
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.0059034563601
+          }
+        },
+        "failure_mechanism": "timeout; hot path not localized in this stage",
+        "next_action": "Sample existing stage counters before choosing another algorithm change."
+      },
+      {
+        "index": 106,
+        "input_sha256": "c96b35bb3cae604115b99477562c4059c6e78ad16658f50d9dbb9ed8abad0a25",
+        "logic": "QF_NIA",
+        "family": "20170427-VeryMax",
+        "member": "QF_NIA/20170427-VeryMax/ITS/From_AProVE_2014__juLinkedListCreateAddAllAt.jar-obl-17__p9090_safety_0.smt2",
+        "truth": "sat",
+        "observations": {
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.01759578846395
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 0.6694349236786366
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.02197969518602
+          }
+        },
+        "failure_mechanism": "Parent sparse-support profile reaches repeated Farkas branch feasibility solves; complete-Cartesian enumeration defect already removed.",
+        "next_action": "Measure repeated branch-local projections and augmented-Farkas calls; do not repeat sparse enumeration or propagation memory-pool experiments."
+      },
+      {
+        "index": 108,
+        "input_sha256": "26d6012f717dec2f43e57be63e8638d1a13b6bc9cb5fcc963c08476793385786",
+        "logic": "QF_NIA",
+        "family": "20250331-elster",
+        "member": "QF_NIA/20250331-elster/B_2.smt2",
+        "truth": "sat",
+        "observations": {
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.36088577657938
+          },
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.36717980913818
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 4.576347617432475
+          }
+        },
+        "failure_mechanism": "timeout; hot path not localized in this stage",
+        "next_action": "Sample existing stage counters before choosing another algorithm change."
+      },
+      {
+        "index": 116,
+        "input_sha256": "f6e90d9f987771e1dd41731a7fedef9cb83d38cd6c3e8131ac254e47e5c57cdc",
+        "logic": "QF_NIA",
+        "family": "AProVE",
+        "member": "QF_NIA/AProVE/aproveSMT5381466618694630101.smt2",
+        "truth": "unsat",
+        "observations": {
+          "z3": {
+            "result": "unsat",
+            "seconds": 1.6216657869517803
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.017122868448496
+          },
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.016245698556304
+          }
+        },
+        "failure_mechanism": "timeout; hot path not localized in this stage",
+        "next_action": "Sample existing stage counters before choosing another algorithm change."
+      },
+      {
+        "index": 122,
+        "input_sha256": "c88289f0453a6bbe098b4c5f092dfc50cd9e0ac21d799c6ccfc0a61b5a974389",
+        "logic": "QF_NIA",
+        "family": "20250331-elster",
+        "member": "QF_NIA/20250331-elster/D_1.smt2",
+        "truth": "sat",
+        "observations": {
+          "z3": {
+            "result": "sat",
+            "seconds": 18.11281155049801
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.027057990431786
+          },
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.027645172551274
+          }
+        },
+        "failure_mechanism": "timeout; hot path not localized in this stage",
+        "next_action": "Sample existing stage counters before choosing another algorithm change."
+      },
+      {
+        "index": 128,
+        "input_sha256": "718a1e36294547bf1605cbbbcc01dc2bbf4ae1682c8d30fc7f246f6f031d3bdf",
+        "logic": "QF_LRA",
+        "family": "uart",
+        "member": "QF_LRA/uart/uart-19.base.cvc.smt2",
+        "truth": "unsat",
+        "observations": {
+          "z3": {
+            "result": "unsat",
+            "seconds": 4.176947865635157
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.00620386749506
+          },
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.00592623651028
+          }
+        },
+        "failure_mechanism": "timeout; hot path not localized in this stage",
+        "next_action": "Sample existing stage counters before choosing another algorithm change."
+      },
+      {
+        "index": 129,
+        "input_sha256": "a7dc84671c8b4907afe99c6e0156f36462f3a89a666b25926d92511f963fe476",
+        "logic": "QF_LRA",
+        "family": "LassoRanker",
+        "member": "QF_LRA/LassoRanker/CooperatingT2/polyrank4.t2.c_Iteration8_Loop_4-pieceTemplate.smt2",
+        "truth": "unsat",
+        "observations": {
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.006257481873035
+          },
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.00584824569523
+          },
+          "z3": {
+            "result": "unsat",
+            "seconds": 5.533764040097594
+          }
+        },
+        "failure_mechanism": "timeout; hot path not localized in this stage",
+        "next_action": "Sample existing stage counters before choosing another algorithm change."
+      },
+      {
+        "index": 130,
+        "input_sha256": "2606855399c6a9008140acb6c981d3f41d03194cab8075b68f2b198a20b2935a",
+        "logic": "QF_LRA",
+        "family": "TM",
+        "member": "QF_LRA/TM/p-3-bucket_s10.smt2",
+        "truth": "sat",
+        "observations": {
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.012283470481634
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 5.0292385164648294
+          },
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.01289747282863
+          }
+        },
+        "failure_mechanism": "timeout; hot path not localized in this stage",
+        "next_action": "Sample existing stage counters before choosing another algorithm change."
+      },
+      {
+        "index": 159,
+        "input_sha256": "3b3f35580e39c21659d09f507edd67f5c0d5271a2957125d9e99cca86db44033",
+        "logic": "QF_NRA",
+        "family": "20161105-Sturm-MGC",
+        "member": "QF_NRA/20161105-Sturm-MGC/mgc_07.smt2",
+        "truth": "unsat",
+        "observations": {
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.00491838902235
+          },
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.00445806235075
+          },
+          "z3": {
+            "result": "unsat",
+            "seconds": 0.31671459041535854
+          }
+        },
+        "failure_mechanism": "Missing discovery of an exact explained polynomial positivity certificate before nonlinear covering.",
+        "next_action": "Generalize equality elimination and weighted-square sign discovery for real/integer constraints; validate with the independent certificate checker.",
+        "certificate": "docs/audit/certificates/mgc_07_sign.json"
+      }
+    ],
+    "xolver_only_verified": [
+      {
+        "index": 23,
+        "input_sha256": "6018fe57d6d3d2f4afc2aac0255d4f5b025b218380a036fb7322c37b1f656dac",
+        "logic": "QF_LIA",
+        "family": "pidgeons",
+        "member": "QF_LIA/pidgeons/pigeon-hole-14.smt2",
+        "truth": "unsat",
+        "observations": {
+          "z3": {
+            "result": "timeout",
+            "seconds": 60.01211429387331
+          },
+          "baseline": {
+            "result": "unsat",
+            "seconds": 0.16631827503442764
+          },
+          "candidate": {
+            "result": "unsat",
+            "seconds": 0.16707996279001236
+          }
+        }
+      },
+      {
+        "index": 31,
+        "input_sha256": "3e01441fa3c53f04c824ed92c8e4e2ea25090c048ad7ff44b455d328c4f1d967",
+        "logic": "QF_NIA",
+        "family": "20220315-MathProblems",
+        "member": "QF_NIA/20220315-MathProblems/STC_0548.smt2",
+        "truth": "sat",
+        "observations": {
+          "candidate": {
+            "result": "sat",
+            "seconds": 1.5699361395090818
+          },
+          "z3": {
+            "result": "timeout",
+            "seconds": 60.01082422211766
+          },
+          "baseline": {
+            "result": "sat",
+            "seconds": 1.4185546282678843
+          }
+        }
+      },
+      {
+        "index": 45,
+        "input_sha256": "e7f43b6d3895f8d5b42b6d316da3eeb12f139e84bf2c062d3fb5aa6537df84ac",
+        "logic": "QF_NIA",
+        "family": "leipzig",
+        "member": "QF_NIA/leipzig/term-fRkVkk.smt2",
+        "truth": "sat",
+        "observations": {
+          "baseline": {
+            "result": "sat",
+            "seconds": 2.8232313450425863
+          },
+          "candidate": {
+            "result": "sat",
+            "seconds": 2.824019780382514
+          },
+          "z3": {
+            "result": "timeout",
+            "seconds": 60.01092768087983
+          }
+        }
+      },
+      {
+        "index": 65,
+        "input_sha256": "bf86296d7a4a9f4366182360877d75d53dbbd3fda7210dedfdb8a8b882a52a11",
+        "logic": "QF_NRA",
+        "family": "hong",
+        "member": "QF_NRA/hong/hong_18.smt2",
+        "truth": "unsat",
+        "observations": {
+          "z3": {
+            "result": "timeout",
+            "seconds": 60.00610336102545
+          },
+          "baseline": {
+            "result": "unsat",
+            "seconds": 0.5671676360070705
+          },
+          "candidate": {
+            "result": "unsat",
+            "seconds": 0.5673609469085932
+          }
+        }
+      },
+      {
+        "index": 66,
+        "input_sha256": "aee7553b57477bdc9b89075d193694b9df77293def12299dbcb42bb14e3ab1d3",
+        "logic": "QF_NRA",
+        "family": "20240407-pPDA-Chiari-Pontiggia-Winkler",
+        "member": "QF_NRA/20240407-pPDA-Chiari-Pontiggia-Winkler/certificate_no_hints/escape25_POMC_no_hints.smt2",
+        "truth": "sat",
+        "observations": {
+          "baseline": {
+            "result": "sat",
+            "seconds": 0.26736737973988056
+          },
+          "candidate": {
+            "result": "sat",
+            "seconds": 0.266819192096591
+          },
+          "z3": {
+            "result": "timeout",
+            "seconds": 60.005903827026486
+          }
+        }
+      },
+      {
+        "index": 81,
+        "input_sha256": "1e6b7dfab7532f37e13635705d19a6262662e2aa6c4d56eedfd13be74e182106",
+        "logic": "QF_LIA",
+        "family": "pidgeons",
+        "member": "QF_LIA/pidgeons/pigeon-hole-13.smt2",
+        "truth": "unsat",
+        "observations": {
+          "baseline": {
+            "result": "unsat",
+            "seconds": 0.16694223135709763
+          },
+          "candidate": {
+            "result": "unsat",
+            "seconds": 0.1675944309681654
+          },
+          "z3": {
+            "result": "timeout",
+            "seconds": 60.01065391302109
+          }
+        }
+      },
+      {
+        "index": 104,
+        "input_sha256": "597eaeaaa8119a504c913b00e7aa13f73384d07798f1410ed11e2411f509fee0",
+        "logic": "QF_NIA",
+        "family": "20220315-MathProblems",
+        "member": "QF_NIA/20220315-MathProblems/STC_0450.smt2",
+        "truth": "sat",
+        "observations": {
+          "z3": {
+            "result": "timeout",
+            "seconds": 60.00907103717327
+          },
+          "baseline": {
+            "result": "sat",
+            "seconds": 0.6173146460205317
+          },
+          "candidate": {
+            "result": "sat",
+            "seconds": 0.6178686283528805
+          }
+        }
+      },
+      {
+        "index": 119,
+        "input_sha256": "ef3fb793971602a5d647e6248f22da5f90e94de960f7285af48fd4105305374c",
+        "logic": "QF_NIA",
+        "family": "20220315-MathProblems",
+        "member": "QF_NIA/20220315-MathProblems/STC_0780.smt2",
+        "truth": "sat",
+        "observations": {
+          "z3": {
+            "result": "timeout",
+            "seconds": 60.01085506007075
+          },
+          "baseline": {
+            "result": "sat",
+            "seconds": 0.7674461919814348
+          },
+          "candidate": {
+            "result": "sat",
+            "seconds": 0.7686269152909517
+          }
+        }
+      },
+      {
+        "index": 121,
+        "input_sha256": "35ab2651535352842d3c2960bcd8879d4355ec2e9038c64586830f403aa45069",
+        "logic": "QF_NIA",
+        "family": "mcm",
+        "member": "QF_NIA/mcm/117.smt2",
+        "truth": "sat",
+        "observations": {
+          "candidate": {
+            "result": "sat",
+            "seconds": 0.568385437130928
+          },
+          "z3": {
+            "result": "timeout",
+            "seconds": 60.010374965146184
+          },
+          "baseline": {
+            "result": "sat",
+            "seconds": 0.5174042172729969
+          }
+        }
+      }
+    ],
+    "counts": {
+      "z3_only": 18,
+      "xolver_only": 9
+    },
+    "unconfirmed": [
+      12,
+      24,
+      27,
+      42,
+      114,
+      115
+    ],
+    "protected_sets_used": false
+  },
+  "unconfirmed": [
+    {
+      "index": 12,
+      "case": "QF_LIA/fft/Sz128_2823.smt2",
+      "results": {
+        "baseline": "timeout",
+        "candidate": "timeout",
+        "z3": "unsat"
+      },
+      "reasons": {
+        "z3": "no independent confirmation within budget"
+      }
+    },
+    {
+      "index": 24,
+      "case": "QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+      "results": {
+        "baseline": "timeout",
+        "candidate": "timeout",
+        "z3": "unsat"
+      },
+      "reasons": {
+        "z3": "no independent confirmation within budget"
+      }
+    },
+    {
+      "index": 27,
+      "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+      "results": {
+        "baseline": "timeout",
+        "candidate": "timeout",
+        "z3": "unsat"
+      },
+      "reasons": {
+        "z3": "no independent confirmation within budget"
+      }
+    },
+    {
+      "index": 42,
+      "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep2a.smt2",
+      "results": {
+        "baseline": "timeout",
+        "candidate": "timeout",
+        "z3": "unsat"
+      },
+      "reasons": {
+        "z3": "no independent confirmation within budget"
+      }
+    },
+    {
+      "index": 114,
+      "case": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+      "results": {
+        "baseline": "timeout",
+        "candidate": "timeout",
+        "z3": "unsat"
+      },
+      "reasons": {
+        "z3": "no independent confirmation within budget"
+      }
+    },
+    {
+      "index": 115,
+      "case": "QF_NIA/20230321-UltimateAutomizerSvcomp2023/ps6.c_7.smt2",
+      "results": {
+        "candidate": "unsat",
+        "z3": "timeout",
+        "baseline": "unsat"
+      },
+      "reasons": {
+        "candidate": "no independent confirmation within budget",
+        "baseline": "no independent confirmation within budget"
+      }
+    }
+  ],
+  "qcp_boundary": "The previous R1518 original-C/symexec/Rocq cohort is unchanged and uses its older NodeManager worker, not this new worker. This stage establishes no new QCP end-to-end win.",
+  "protected_sets_used": false,
+  "extra_server_archive_required": false
+}

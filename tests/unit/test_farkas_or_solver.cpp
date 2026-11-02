@@ -122,6 +122,18 @@ TEST_CASE("FarkasOrSolver: end-to-end Stroeder-shape 1-block 2-branch") {
     ExprId orBlock = b.mk(Kind::Or, {branch0, branch1});
     b.ir.addAssertion(orBlock);
 
+    bool largeSparseDomain = false;
+    SUBCASE("complete small bounded domains") {}
+    SUBCASE("sparse global domains do not traverse the complete Cartesian product") {
+        largeSparseDomain = true;
+        for (size_t i = 0; i < 56; ++i) {
+            const auto variable = b.v("padding_" + std::to_string(i), b.intSort);
+            b.ir.addAssertion(b.mk(Kind::And, {
+                b.mk(Kind::Leq, {negOne, variable}),
+                b.mk(Kind::Leq, {variable, b.c(1)})}));
+        }
+    }
+
     // Detect.
     FarkasOrDetector det(b.ir);
     auto profile = det.detect();
@@ -135,6 +147,12 @@ TEST_CASE("FarkasOrSolver: end-to-end Stroeder-shape 1-block 2-branch") {
     FarkasOrSolver solver(b.ir);
     auto table = solver.buildTable(profile);
     CHECK(table.feasibleTotal > 0);
+    if (largeSparseDomain) {
+        CHECK(table.boundedVarOrder.size() == 58);
+        CHECK(table.rows.size() == 8000);
+        CHECK_FALSE(table.exhaustive);
+        return;
+    }
 
     auto assignment = solver.solveCsp(table, profile);
     REQUIRE(assignment.has_value());

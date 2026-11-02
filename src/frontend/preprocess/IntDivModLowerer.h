@@ -71,6 +71,7 @@ private:
 
     void emitConstDivisorConstraints(const DivModDef& def, const mpz_class& k, ScopeLevel level);
     void emitRemainderRelations();
+    void emitQuotientOrderCuts(const std::vector<std::pair<ScopeLevel, ExprId>>& assertions);
     void emitVariableDivisorConstraints(const DivModDef& def, ScopeLevel level);
     void emitUndefZeroConstraints(const DivModDef& def, ScopeLevel level);
 

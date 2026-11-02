@@ -1,0 +1,565 @@
+{
+  "date": "2026-11-01",
+  "status": "prototype_not_promoted",
+  "source_head": "eb5235fc81f2aa9f3afcf8e03f47e8f7fc831c5b",
+  "implementation": {
+    "files": [
+      "src/search/refute/MonomialSquares.h",
+      "src/search/refute/MonomialSquares.cpp",
+      "src/search/refute/PolynomialSignClosure.cpp",
+      "src/sources.cmake"
+    ],
+    "call_paths": [
+      "Solver::Impl::checkSatGround -> refutePolynomialBoolean -> refuteByPolynomialSignClosure",
+      "NiaSolver::stageSignRefute -> refuteByPolynomialSignClosure",
+      "NraSolver::stageSignRefute -> refuteByPolynomialSignClosure"
+    ],
+    "behavior": "Discover exact monomial-weighted binomial squares after reducing equations in a local query context. One immutable structural variable order prioritizes globally linear parameters coupling high-degree rows. Exact monomial division creates polynomial identities even at zero leading factors; cancellation of common factors separately retains proven nonzero guards. Existing sign-closure propagation/projection ordering,100000-work/10ms allocation, LRA/LIA backtracking and API semantics remain.",
+    "source_overrides": {
+      "src/search/refute/MonomialSquares.h": "f673d433e1c8d6a71e5174584ef365921bd86949af2ad764f14c6a24ab6a0ce5",
+      "src/search/refute/MonomialSquares.cpp": "be362125dbb8d21588b96987f10012c96ee0b25129bb3e5b1d2bc82a38709fcc",
+      "src/search/refute/PolynomialSignClosure.cpp": "d7d924952c2bbeb7b8cfb5e8306a8f3ac75b06e9f9d8f4c22e7d1a474fa20d69",
+      "tests/unit/test_monomial_squares.cpp": "8c0a000c10bad100a8d1c3ceac7e163963ef23eede3f0511e7606e3e7343ad6d",
+      "tests/unit/test_polynomial_sign_closure.cpp": "bf2d6e4908c054878ec7d98c93471018f3c11af3dbcc5c2cf83ded9cdce0c4cc"
+    },
+    "boundary": "Proof-only reasoning shared by real and integer arithmetic. No runtime external oracle, benchmark-name/answer rule, compatibility entry or new gate."
+  },
+  "frozen": {
+    "candidate_sha256": "f1fd6f5125564f0425d6ce72c7e17e1a19c2608dea987ef312b4cdec7caf934b",
+    "worker_sha256": "f19db8dc2c274565a4f18cb764e09cdce6dd0de03f99e4fe7ec57c7183f2aaff",
+    "baseline": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/integral-real-r1558/xolver",
+      "sha256": "d6bde65e28150fac18ffb5b00eb22f11494c5265b28b148f352104cbc29a7c6d"
+    },
+    "z3": {
+      "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+      "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+    },
+    "core_archive_sha256": "9b2bdd3218deb1d6081d330ec9bfdf33a5026794d3e0dacb3dba59bb7cbdaeca",
+    "qualification_sha256": "231695b5ea41304e418e246446aa9d46fe09abd6c0882826d68c8877f6ed2643",
+    "qualification_mode": "Qualified object overrides over unchanged source-r1506/core archive; no new commit or main CI result is claimed."
+  },
+  "validation": {
+    "native_experiment": "014fdf77660b",
+    "native_run": "60bc5ed64d52",
+    "unit_cases": 1973,
+    "unit_assertions": 1283468,
+    "targeted_cases": 27,
+    "targeted_assertions": 1601,
+    "covers": [
+      "exact identities and rational weights",
+      "negative/unknown/zero weights and weak bounds",
+      "partial monomial division and zero leading factors",
+      "parameterized elimination with powers2/3/7 and permuted variable IDs",
+      "existing rational-model and incremental API regressions"
+    ],
+    "architecture": {
+      "files": 701,
+      "layers": 11,
+      "violations": 0
+    },
+    "reference_weighted_record_sha256": "ff4ad2bc25cef346ecf86be1df5c7962d9d6b9851626314e62b880c432377517",
+    "boundary": "The new weighted-square regression fails against the unchanged parent sign-closure implementation, demonstrating missing capability. This expected regression failure is not a parent solver wrong verdict."
+  },
+  "diagnosis": {
+    "index": 159,
+    "diagnostic_record_sha256": "10c6351d0e638940f54c07135b9aa85e6a7df88271dfe6f0c095653db8670876",
+    "boolean_trace_sha256": "5a3ffd941b8d322055aeb41523620d2cf95ae19525c510f5755a52565a0074f1",
+    "boolean_trace": "atoms=13 assignments=1 conflicts=1 theory_calls=1 largest_context=13 theory_us=1561 sign_exhaustions=0 residue_calls=0 residue_assignments=0 residue_exhaustions=0 linear_calls=1 linear_rows=13 linear_exhaustions=0 linear_us=532 exhausted=0 refuted=1 us=2769",
+    "variable_order_trace_sha256": "ca7acb2db284e77ed0d858f2c12c526134fcb9c56b550a74f7bde131b10ca5a3",
+    "variable_order_record_sha256": "600fd6033a7fef04491969eaba43c2afac37b824067e09b1fbfc63df041dba3c",
+    "boundary": "The earlier trace uses a diagnostic200ms allocation solely for I/O observation; none of its timings enters the formal round. Production retains10ms. Native IDs selected only y in the failed prototype; structural order finds the needed equations."
+  },
+  "fair_round": {
+    "directory": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r1573-accepted-r1575",
+    "experiments": [
+      {
+        "id": "debf59986c87",
+        "name": "xolver-monomial-squares-fixed160-priority-r1573-20261101",
+        "status": "done"
+      },
+      {
+        "id": "1f859141bb8f",
+        "name": "xolver-monomial-squares-fixed160-batch-a-r1573-20261101",
+        "status": "done"
+      },
+      {
+        "id": "22eb27a67a19",
+        "name": "xolver-monomial-squares-fixed160-batch-b-r1573-20261101",
+        "status": "done"
+      },
+      {
+        "id": "5bf2a3423796",
+        "name": "xolver-monomial-squares-fixed160-batch-c-r1573-20261101",
+        "status": "done"
+      },
+      {
+        "id": "89a6c1caf730",
+        "name": "xolver-monomial-squares-fixed160-batch-d-r1573-20261101",
+        "status": "done"
+      },
+      {
+        "id": "00c60ae80648",
+        "name": "xolver-monomial-squares-protocol-retry-r1574-20261101",
+        "status": "done"
+      },
+      {
+        "id": "c5e30d58ac47",
+        "name": "xolver-monomial-squares-protocol-retries-r1575-20261101",
+        "status": "done"
+      }
+    ],
+    "cases": 160,
+    "timeout_seconds": 60,
+    "physical_cpus_per_invocation": 1,
+    "memory_bytes": 17179869184,
+    "selected_runs_successful": 160,
+    "raw_native_runs": 166,
+    "protocol_repairs": {
+      "indices": [
+        10,
+        11,
+        23,
+        27,
+        44,
+        45
+      ],
+      "selection_sha256": "bf241714cfcb4f377bc4e7ca676725f111dc58a8ead7f7d6e65fb377f5468d0f",
+      "boundary": "Six original complete triads violated the wall-budget protocol and remain immutable. Each was replaced by a fresh full triad with the same frozen versions/input/budget on an EOS physical lease. No valid lost solve is replaced. Original violations, replacement run IDs and both report hashes are retained."
+    },
+    "raw_summary_sha256": "33fd66a13180076c6cc8e850e6fc86217731078cd150c985214c015459bd188a",
+    "receipt_sha256": "99a673a2c38fc0e02ec50c6c47ba96ce3ad1cfb5ffaa175a91125e309d5d75e8",
+    "truth_record_sha256": "ee5074991560a48737e503c7ad51150c78dab3eb522f9845bb4222dc0f252c49",
+    "counts": {
+      "baseline": {
+        "unsat": 47,
+        "decided": 109,
+        "verified_decided": 108,
+        "verified_par2": 6813.007386662066,
+        "raw_par2": 6693.025368474424,
+        "timeout": 50,
+        "sat": 62,
+        "unknown": 1
+      },
+      "candidate": {
+        "unsat": 48,
+        "decided": 110,
+        "verified_decided": 109,
+        "verified_par2": 6685.202871888876,
+        "raw_par2": 6565.212981028482,
+        "timeout": 49,
+        "sat": 62,
+        "unknown": 1
+      },
+      "z3": {
+        "unsat": 58,
+        "decided": 125,
+        "verified_decided": 120,
+        "verified_par2": 5137.44923084043,
+        "raw_par2": 4578.287428338081,
+        "sat": 67,
+        "timeout": 35
+      }
+    },
+    "gains": [
+      {
+        "index": 159,
+        "case": "QF_NRA/20161105-Sturm-MGC/mgc_07.smt2",
+        "kind": "gained",
+        "truth": "unsat",
+        "evidence": [
+          "independent-z3-xolver-agreement"
+        ],
+        "observations": {
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.00530642643571
+          },
+          "candidate": {
+            "result": "unsat",
+            "seconds": 0.0173695869743824
+          },
+          "z3": {
+            "result": "unsat",
+            "seconds": 0.31613315641880035
+          }
+        }
+      }
+    ],
+    "losses": [],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "selected_protocol_errors": [],
+    "par2_improvement_seconds": 127.80451477319002,
+    "boundary": "One additional verified solve over the same-round parent, not overall superiority: candidate109/160 remains below Z3 verified120/160 and the conservative126/160 target. Z3 has125 raw decisions, five still unconfirmed."
+  },
+  "independent_truth": {
+    "supplements": [
+      {
+        "index": 80,
+        "input_sha256": "1bcb3b052ef1f9ebe04cf76147f19dc54fb0678342d72b829a38a936c56959fe",
+        "independent_record": "/pub/data/jiafq/xolver/validation/arithmetic-r103/independent-unsat-r1496/80/record.json",
+        "record_sha256": "9f111aee9411aadd3a9f32de8310734424a7cdc02fc326718beb4952f6fb4d23",
+        "checker_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+        "validation_seconds": 643.5456116814166,
+        "boundary": "Historical independent truth only; every performance count/time comes from this fresh same-budget round."
+      },
+      {
+        "index": 50,
+        "input_sha256": "7e71a151d917978f1b5afc2791abf589e30c8ff97e930979df6ef82ad72dcdc0",
+        "independent_record": "/pub/data/jiafq/xolver/validation/arithmetic-r103/independent-unsat-r1496/50/record.json",
+        "record_sha256": "fb1f06b6fd64b28bb2d167508f5cb37db82df0568c516dc68da96ddb02619c1b",
+        "checker_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+        "validation_seconds": 127.20317284949124,
+        "formal_seconds": 54.97857504338026,
+        "boundary": "Historical independent truth validation only; score/time comes solely from this fresh60s formal solve. Never a replacement timing."
+      }
+    ],
+    "additional_certificate": {
+      "index": 159,
+      "record_sha256": "011367bad762d56dab0795d1f8e0c7ec7772231fb0c302da585c36de6a722012",
+      "certificate_sha256": "2f18993d2382b196b4dba9b69219c7958f21d07c76a16f71656f20a6379c3762",
+      "checker_sha256": "668871451dcec312a5fef82483d4b074f48cdda33a19dbe8a3d3f4c6c1c34ae6",
+      "boundary": "Additional independent support; current Xolver/Z3 agreement already confirms the same result. No duplicate score adjustment."
+    },
+    "boundary": "Original159 agrees with fresh Z3 and has the previously checked offline polynomial certificate. Historical cvc5 checks50/80 establish truth only; formal counts/times always use this round60s observations."
+  },
+  "unconfirmed": [
+    {
+      "index": 12,
+      "case": "QF_LIA/fft/Sz128_2823.smt2",
+      "results": {
+        "baseline": "timeout",
+        "candidate": "timeout",
+        "z3": "unsat"
+      },
+      "reasons": {
+        "z3": "no independent confirmation within budget"
+      }
+    },
+    {
+      "index": 24,
+      "case": "QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+      "results": {
+        "baseline": "timeout",
+        "candidate": "timeout",
+        "z3": "unsat"
+      },
+      "reasons": {
+        "z3": "no independent confirmation within budget"
+      }
+    },
+    {
+      "index": 27,
+      "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+      "results": {
+        "baseline": "timeout",
+        "candidate": "timeout",
+        "z3": "unsat"
+      },
+      "reasons": {
+        "z3": "no independent confirmation within budget"
+      }
+    },
+    {
+      "index": 42,
+      "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep2a.smt2",
+      "results": {
+        "baseline": "timeout",
+        "candidate": "timeout",
+        "z3": "unsat"
+      },
+      "reasons": {
+        "z3": "no independent confirmation within budget"
+      }
+    },
+    {
+      "index": 114,
+      "case": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+      "results": {
+        "baseline": "timeout",
+        "candidate": "timeout",
+        "z3": "unsat"
+      },
+      "reasons": {
+        "z3": "no independent confirmation within budget"
+      }
+    },
+    {
+      "index": 115,
+      "case": "QF_NIA/20230321-UltimateAutomizerSvcomp2023/ps6.c_7.smt2",
+      "results": {
+        "candidate": "unsat",
+        "z3": "timeout",
+        "baseline": "unsat"
+      },
+      "reasons": {
+        "candidate": "no independent confirmation within budget",
+        "baseline": "no independent confirmation within budget"
+      }
+    }
+  ],
+  "remaining_z3_only_verified": [
+    {
+      "index": 1,
+      "logic": "QF_LIA",
+      "family": "convert",
+      "member": "QF_LIA/convert/convert-jpg2gif-query-1470.smt2",
+      "input_sha256": "df42f9cdbe66be22d8b5f55d904ae308677681d21cf6ba13801a6c1bcc7d712b",
+      "truth": "sat",
+      "result": "timeout",
+      "failure_mechanism": "not localized in this stage",
+      "next_action": "Use existing stage/call counters before another algorithm change."
+    },
+    {
+      "index": 13,
+      "logic": "QF_LIA",
+      "family": "tropical-matrix",
+      "member": "QF_LIA/tropical-matrix/constraint-517804.smt2",
+      "input_sha256": "d9c546291b74c1b0021e19bff6aa4e9fbbb220fdcd253de67479375572f913f6",
+      "truth": "sat",
+      "result": "timeout",
+      "failure_mechanism": "not localized in this stage",
+      "next_action": "Use existing stage/call counters before another algorithm change."
+    },
+    {
+      "index": 29,
+      "logic": "QF_NIA",
+      "family": "UltimateLassoRanker",
+      "member": "QF_NIA/UltimateLassoRanker/CookSeeZuleger-2013TACAS-Fig7a-alloca_true-termination.c.i_Iteration8_Lasso+nonterminationTemplate.smt2",
+      "input_sha256": "0d5e3d04305e393bfd392b8652ba33f37220c4ff420054acffb70d61df5c89e7",
+      "truth": "unsat",
+      "result": "timeout",
+      "failure_mechanism": "not localized in this stage",
+      "next_action": "Use existing stage/call counters before another algorithm change."
+    },
+    {
+      "index": 34,
+      "logic": "QF_NIA",
+      "family": "20210219-Dartagnan",
+      "member": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/ps6-ll_valuebound5-O0.smt2",
+      "input_sha256": "ecf140bb267be14f595da4be5a54940f0a71fc7e4348aaa027bff1d7166f1ec3",
+      "truth": "unsat",
+      "result": "timeout",
+      "failure_mechanism": "not localized in this stage",
+      "next_action": "Use existing stage/call counters before another algorithm change."
+    },
+    {
+      "index": 47,
+      "logic": "QF_NIA",
+      "family": "20250331-elster",
+      "member": "QF_NIA/20250331-elster/D_2.smt2",
+      "input_sha256": "2c37069c8324458e8f3ad46cc6dbe0cc3a6c2f31012ed504123e660bfdf7aba4",
+      "truth": "sat",
+      "result": "timeout",
+      "failure_mechanism": "not localized in this stage",
+      "next_action": "Use existing stage/call counters before another algorithm change."
+    },
+    {
+      "index": 49,
+      "logic": "QF_LRA",
+      "family": "2019-ezsmt",
+      "member": "QF_LRA/2019-ezsmt/travellingSalesperson/rand_80_340_1159656267_16.lp.smt2",
+      "input_sha256": "d4baea957f7fe792713edbaf3edc6769274ab0aafe5e86182d023e858037d615",
+      "truth": "sat",
+      "result": "timeout",
+      "failure_mechanism": "not localized in this stage",
+      "next_action": "Use existing stage/call counters before another algorithm change."
+    },
+    {
+      "index": 50,
+      "logic": "QF_LRA",
+      "family": "2017-Heizmann-UltimateInvariantSynthesis",
+      "member": "QF_LRA/2017-Heizmann-UltimateInvariantSynthesis/_jain_5.i_2_4_3.bpl_7.smt2",
+      "input_sha256": "7e71a151d917978f1b5afc2791abf589e30c8ff97e930979df6ef82ad72dcdc0",
+      "truth": "unsat",
+      "result": "timeout",
+      "failure_mechanism": "not localized in this stage",
+      "next_action": "Use existing stage/call counters before another algorithm change."
+    },
+    {
+      "index": 56,
+      "logic": "QF_LRA",
+      "family": "miplib",
+      "member": "QF_LRA/miplib/pp08a-3000.smt2",
+      "input_sha256": "49761967d8071fc4d32d82165bcd7ef4fcdfe436b7634da8d42a9be673087218",
+      "truth": "unsat",
+      "result": "timeout",
+      "failure_mechanism": "not localized in this stage",
+      "next_action": "Use existing stage/call counters before another algorithm change."
+    },
+    {
+      "index": 58,
+      "logic": "QF_LRA",
+      "family": "uart",
+      "member": "QF_LRA/uart/uart-26.base.cvc.smt2",
+      "input_sha256": "64f223bcde0c40ca731ab7443a27e55abf89d82d240cb58aed03a32ff50b15e8",
+      "truth": "unsat",
+      "result": "timeout",
+      "failure_mechanism": "not localized in this stage",
+      "next_action": "Use existing stage/call counters before another algorithm change."
+    },
+    {
+      "index": 72,
+      "logic": "QF_NRA",
+      "family": "2019-ezsmt",
+      "member": "QF_NRA/2019-ezsmt/reverseFolding/39-reverse_folding-0-0.smt2",
+      "input_sha256": "cc66abe5f5716404298fd97cb383e65487d9277ea2611ee41add8e324e7eb2c4",
+      "truth": "sat",
+      "result": "timeout",
+      "failure_mechanism": "not localized in this stage",
+      "next_action": "Use existing stage/call counters before another algorithm change."
+    },
+    {
+      "index": 80,
+      "logic": "QF_LIA",
+      "family": "cut_lemmas",
+      "member": "QF_LIA/cut_lemmas/20-vars/cut_lemma_03_004.smt2",
+      "input_sha256": "1bcb3b052ef1f9ebe04cf76147f19dc54fb0678342d72b829a38a936c56959fe",
+      "truth": "unsat",
+      "result": "timeout",
+      "failure_mechanism": "not localized in this stage",
+      "next_action": "Use existing stage/call counters before another algorithm change."
+    },
+    {
+      "index": 89,
+      "logic": "QF_LIA",
+      "family": "RWS",
+      "member": "QF_LIA/RWS/Example_16.txt.smt2",
+      "input_sha256": "5b983ea0194c5b7fcdee4a87c0de44da99828561d82d288a89fd99da128f4c5f",
+      "truth": "sat",
+      "result": "timeout",
+      "failure_mechanism": "not localized in this stage",
+      "next_action": "Use existing stage/call counters before another algorithm change."
+    },
+    {
+      "index": 94,
+      "logic": "QF_LIA",
+      "family": "20210219-Dartagnan",
+      "member": "QF_LIA/20210219-Dartagnan/ConcurrencySafety-Main/fib_bench_longer-2-O0.smt2",
+      "input_sha256": "a6b68604187a341c570d8bd76135552ece1bbf958a1d7e9d4ff7f3eae998fd8f",
+      "truth": "sat",
+      "result": "timeout",
+      "failure_mechanism": "not localized in this stage",
+      "next_action": "Use existing stage/call counters before another algorithm change."
+    },
+    {
+      "index": 106,
+      "logic": "QF_NIA",
+      "family": "20170427-VeryMax",
+      "member": "QF_NIA/20170427-VeryMax/ITS/From_AProVE_2014__juLinkedListCreateAddAllAt.jar-obl-17__p9090_safety_0.smt2",
+      "input_sha256": "c96b35bb3cae604115b99477562c4059c6e78ad16658f50d9dbb9ed8abad0a25",
+      "truth": "sat",
+      "result": "timeout",
+      "failure_mechanism": "not localized in this stage",
+      "next_action": "Use existing stage/call counters before another algorithm change."
+    },
+    {
+      "index": 108,
+      "logic": "QF_NIA",
+      "family": "20250331-elster",
+      "member": "QF_NIA/20250331-elster/B_2.smt2",
+      "input_sha256": "26d6012f717dec2f43e57be63e8638d1a13b6bc9cb5fcc963c08476793385786",
+      "truth": "sat",
+      "result": "timeout",
+      "failure_mechanism": "not localized in this stage",
+      "next_action": "Use existing stage/call counters before another algorithm change."
+    },
+    {
+      "index": 116,
+      "logic": "QF_NIA",
+      "family": "AProVE",
+      "member": "QF_NIA/AProVE/aproveSMT5381466618694630101.smt2",
+      "input_sha256": "f6e90d9f987771e1dd41731a7fedef9cb83d38cd6c3e8131ac254e47e5c57cdc",
+      "truth": "unsat",
+      "result": "timeout",
+      "failure_mechanism": "not localized in this stage",
+      "next_action": "Use existing stage/call counters before another algorithm change."
+    },
+    {
+      "index": 122,
+      "logic": "QF_NIA",
+      "family": "20250331-elster",
+      "member": "QF_NIA/20250331-elster/D_1.smt2",
+      "input_sha256": "c88289f0453a6bbe098b4c5f092dfc50cd9e0ac21d799c6ccfc0a61b5a974389",
+      "truth": "sat",
+      "result": "timeout",
+      "failure_mechanism": "not localized in this stage",
+      "next_action": "Use existing stage/call counters before another algorithm change."
+    },
+    {
+      "index": 128,
+      "logic": "QF_LRA",
+      "family": "uart",
+      "member": "QF_LRA/uart/uart-19.base.cvc.smt2",
+      "input_sha256": "718a1e36294547bf1605cbbbcc01dc2bbf4ae1682c8d30fc7f246f6f031d3bdf",
+      "truth": "unsat",
+      "result": "timeout",
+      "failure_mechanism": "not localized in this stage",
+      "next_action": "Use existing stage/call counters before another algorithm change."
+    },
+    {
+      "index": 129,
+      "logic": "QF_LRA",
+      "family": "LassoRanker",
+      "member": "QF_LRA/LassoRanker/CooperatingT2/polyrank4.t2.c_Iteration8_Loop_4-pieceTemplate.smt2",
+      "input_sha256": "a7dc84671c8b4907afe99c6e0156f36462f3a89a666b25926d92511f963fe476",
+      "truth": "unsat",
+      "result": "timeout",
+      "failure_mechanism": "not localized in this stage",
+      "next_action": "Use existing stage/call counters before another algorithm change."
+    },
+    {
+      "index": 130,
+      "logic": "QF_LRA",
+      "family": "TM",
+      "member": "QF_LRA/TM/p-3-bucket_s10.smt2",
+      "input_sha256": "2606855399c6a9008140acb6c981d3f41d03194cab8075b68f2b198a20b2935a",
+      "truth": "sat",
+      "result": "timeout",
+      "failure_mechanism": "not localized in this stage",
+      "next_action": "Use existing stage/call counters before another algorithm change."
+    }
+  ],
+  "xolver_only_verified_indices": [
+    23,
+    31,
+    45,
+    65,
+    66,
+    81,
+    104,
+    119,
+    121
+  ],
+  "unpromoted_experiments": [
+    {
+      "stage": "R1565",
+      "result": "direct decomposition works; full elimination exhausts existing allocation"
+    },
+    {
+      "stage": "R1566/R1567",
+      "result": "compile-only container/test-macro API errors corrected"
+    },
+    {
+      "stage": "R1568/R1569",
+      "result": "global intermediate-fact propagation fails existing proof-capability checks; ended and replaced"
+    },
+    {
+      "stage": "R1570",
+      "result": "1973 tests pass but native-variable ordering still misses original159"
+    },
+    {
+      "stage": "R1571",
+      "result": "diagnostic only; no formal performance claim"
+    }
+  ],
+  "qcp_boundary": "No new original-C QCP end-to-end comparison has yet used this worker. Reuse the controlled native symexec/Rocq checks and identical frozen proof materials for the next application comparison; callback timings alone do not prove a workflow win.",
+  "next_work": [
+    "Validate the frozen worker on the original-C QCP controlled regressions before promotion.",
+    "Prioritize remaining verified gaps from stage/call evidence; do not repeat closed memory-pool or early-quadratic/elster gate experiments.",
+    "Audit the previously observed raw-NativeTerms-pointer Farkas memo under reset/reused contexts before promotion; no opposite verdict has been reproduced."
+  ],
+  "protected_sets_used": false,
+  "extra_server_archive_required": false
+}

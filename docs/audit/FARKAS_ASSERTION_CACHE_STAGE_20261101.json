@@ -1,0 +1,492 @@
+{
+  "date": "2026-11-01",
+  "status": "correctness_fix_qualified_not_promoted",
+  "source_head": "eb5235fc81f2aa9f3afcf8e03f47e8f7fc831c5b",
+  "root_cause": {
+    "call_path": "NiaSolver registered nia.farkas-or callback -> stageFarkasOr -> detector/support table and tryBoundedBRefutation",
+    "bug": "Two static thread_local caches used NativeTerms* as their entire key. Assertion replacement/pop leaves that address unchanged, and later solver contexts can reuse addresses. A cached profile can refer to an old bounded coefficient domain; a cached not-refutable result can suppress reasoning for a new formula.",
+    "reproduction": {
+      "experiment": "0d9acd09576a",
+      "run": "75e6c5f85e3e",
+      "record": "/pub/data/jiafq/xolver/validation/arithmetic-r103/farkas-cache-r1577/report.json",
+      "record_sha256": "9b2f56504301cbd67561b6fcccb9da5cc37c6bc117136f70301fba214dc6bb5b",
+      "log_sha256": "b5225812ffe47974c1da52007242f846c14702a4d67bbc84e32fcf637da39f9e",
+      "source_sha256": "69bede088d33ef9e8fea45df7418592701486eed0e52dae2daa8f9ed963c77a9",
+      "parent_cli_sha256": "f1fd6f5125564f0425d6ce72c7e17e1a19c2608dea987ef312b4cdec7caf934b",
+      "parent_test_returncode": 1,
+      "formula": [
+        "l0 >= 0",
+        "l1 >= 0",
+        "-4*l0 + x*l1 = 0",
+        "5*l0 + y*l1 = 0",
+        "l0 - 1 > 0"
+      ],
+      "first_domain": {
+        "x": [
+          -1,
+          1
+        ],
+        "y": [
+          -1,
+          1
+        ]
+      },
+      "first_truth": "unsat",
+      "second_domain": {
+        "x": [
+          4,
+          4
+        ],
+        "y": [
+          -5,
+          -5
+        ]
+      },
+      "second_truth": "sat",
+      "exact_sat_witness": {
+        "x": 4,
+        "y": -5,
+        "l0": 2,
+        "l1": 2
+      },
+      "observed": "Registered parent callback returns Conflict after clearAssertions and solver reset on the same NativeTerms object, despite the second formula having the checked integer witness.",
+      "boundary": "Direct real theory callback reproduction; no public CLI opposite verdict or QCP program failure is claimed."
+    }
+  },
+  "implementation": {
+    "files": [
+      "src/ir/NativeTerms.h",
+      "src/ir/NativeTerms.cpp",
+      "src/ir/AssertionSnapshot.h",
+      "src/search/nia/farkas/FarkasOrContext.h",
+      "src/applications/satisfiability/smt/qfnia/NiaSolver.h",
+      "src/applications/satisfiability/smt/qfnia/NiaSolver.cpp",
+      "src/applications/satisfiability/smt/qfnia/NiaSolver_farkas.cpp"
+    ],
+    "source_overrides": {
+      "src/ir/NativeTerms.h": "55c93baad54cbd905010376c2576f6992f9f90223d20239cc789266178edde1f",
+      "src/ir/NativeTerms.cpp": "98504a3c60b4a268e27e6b7b7933a6aabcd72b7fa4e7a9f9d801c9dfd4b93de4",
+      "src/ir/AssertionSnapshot.h": "16bc0b7f6c7fe063cbea139b063bcba7630c9e67ae09a753f49ebfbaa403f419",
+      "src/search/nia/farkas/FarkasOrContext.h": "95803f1c66686819758d0efd52fdf855740af0055d284328d32573ed8ba9f5a2",
+      "src/applications/satisfiability/smt/qfnia/NiaSolver.h": "720be80c5d7f9d706d84573aa7da75720a82f21f0792319ef175b4c4a84052d1",
+      "src/applications/satisfiability/smt/qfnia/NiaSolver.cpp": "8d06b52032b50f31f9f74815bc4b4b956c2b68d2678478ef2d53380bd516cb26",
+      "src/applications/satisfiability/smt/qfnia/NiaSolver_farkas.cpp": "2c02c2aa19395d1c26cd20c3d577943db60612734cd89fe5e3f2ce5dde7ca419",
+      "tests/unit/test_nia_farkas_cache.cpp": "acbe1b48ded3977f7ae047744d9a2e135da68eeff0ca62a07de6f3140925e493",
+      "tests/unit/test_assertion_snapshot.cpp": "fd9e49f536a97ea5e1acd057dd9b69137bcbe4511e91151fb94f8e9e81d2786d"
+    },
+    "behavior": "NativeTerms provides an opaque lifetime token for its immutable expression-index space. Generic AssertionSnapshot compares that identity and the complete scope-tagged assertion roots exactly, without hash collisions. FarkasOrContext belongs to one registered reasoner; profile, support table and negative refutation memo are replaced together on a snapshot mismatch. Copies have fresh index identities; moves transfer the same index space.",
+    "generic_boundary": "AssertionSnapshot is independent of arithmetic and can key analyses in other theories. SAT trails, external settings and mutable theory metadata require separate keys. Only the Farkas client is migrated in this stage.",
+    "preserves": "Existing exact arithmetic, LRA/LIA rollback, public API semantics, theory schedules and allocations. No runtime external oracle, answer/filename rule, new feature gate or compatibility overload.",
+    "abi_boundary": "NativeTerms and NiaSolver object layouts stay unchanged; NativeTerms opaque Storage is recompiled in full. Private stage signatures change. Qualified object provenance is recorded; a canonical full build and PR/main CI remain necessary before promotion."
+  },
+  "qualification": {
+    "experiment": "095fa3b72004",
+    "run": "43c33f558faf",
+    "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/farkas-cache-r1582/qualification.json",
+    "sha256": "7701bc98d5595f9b501c8e8616fb0e10b08dacd4d0b74eb6c84bd8666f3a09ba",
+    "unit_cases": 1977,
+    "unit_assertions": 1283496,
+    "targeted_cases": 4,
+    "targeted_assertions": 28,
+    "cli_sha256": "41e9f2be9f25f9d3500835c01f8f8ff73cab9f26ff7378ffe39abf177a3f71f4",
+    "worker_sha256": "a9a9075c702d1f761c29da042b898b6dc4aafb03c8bed2eefa2b839e44ccde93",
+    "core_archive_sha256": "9b2bdd3218deb1d6081d330ec9bfdf33a5026794d3e0dacb3dba59bb7cbdaeca",
+    "covers": [
+      "UNSAT to SAT assertion replacement must not emit a false conflict",
+      "SAT to UNSAT replacement must retry refutation",
+      "scope pop withdraws the old profile",
+      "same assertion count with different roots",
+      "clear/replace/restore assertions",
+      "equal ExprIds after replacing an index space",
+      "copy and move identities",
+      "unasserted expression append preserves reuse",
+      "independent exact SAT witness evaluation"
+    ],
+    "architecture": {
+      "files": 703,
+      "layers": 11,
+      "violations": 0
+    },
+    "test_boundary": "Farkas is an incomplete candidate/refutation stage. For the SAT transition it may return nullopt and leave model construction to later stages; the regression requires absence of a false conflict and separately checks the concrete witness. The UNSAT transition must still return Conflict in the qualified libpoly build.",
+    "retained_pilots": [
+      {
+        "stage": "R1578",
+        "experiment": "679e1e80165f",
+        "run": "3d023a666639",
+        "result": "Production compilation succeeded; independent snapshot test used the nonexistent getBoolSortId accessor. Corrected to boolSortId."
+      },
+      {
+        "stage": "R1579",
+        "experiment": "866929886011",
+        "run": "2971c727852b",
+        "result": "Snapshot tests passed; Farkas test wrongly required incomplete candidate construction to return SAT. Corrected to test the no-false-conflict contract; witness and reverse UNSAT checks remain."
+      },
+      {
+        "stage": "R1581",
+        "experiment": "4c43805b3337",
+        "run": "d9c151cd523e",
+        "result": "doctest rejected an unparenthesized composite && assertion; test syntax corrected."
+      }
+    ],
+    "reuse": "All final production source/header pins match the successful R1578 compilation; final qualification reuses those objects with verified source pins and records their hashes. Both corrected tests and all 1977 unit cases run in R1582."
+  },
+  "independent_truth": {
+    "experiment": "5827d46883bb",
+    "run": "d5acd1b9311f",
+    "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/farkas-cache-truth-r1580/report.json",
+    "sha256": "abd66e4fd7bd662727186f8d79b073d93e677998de05165017abe5a5664b6a6a",
+    "checks": 6,
+    "oracles": [
+      "cvc5",
+      "z3"
+    ],
+    "input_hashes": {
+      "unsat": "5918137719f662d79fc029a40d762d46d4bcd944ce08cb707e1aef65b307a0d5",
+      "sat": "a3e8dc9d550c9b42c996197aeeb0da32a03d151c1d348472622e82fd03f15807",
+      "sat-witness": "8594a06d645cb5b09f6002198a60825dd8ea23624c3d876ebb2b7dfef028b76e"
+    },
+    "checks_detail": "Both frozen Z3 and cvc5 confirm the UNSAT formula, SAT formula and SAT formula additionally pinned to the exact witness. Offline validation only."
+  },
+  "comparison": {
+    "directory": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r1583",
+    "experiments": [
+      {
+        "id": "723f81e60aa7",
+        "name": "xolver-farkas-cache-fixed160-priority-r1583-20261101",
+        "status": "done"
+      },
+      {
+        "id": "5392df127e05",
+        "name": "xolver-farkas-cache-fixed160-batch-a-r1583-20261101",
+        "status": "done"
+      },
+      {
+        "id": "b54b450e13cb",
+        "name": "xolver-farkas-cache-fixed160-batch-b-r1583-20261101",
+        "status": "done"
+      },
+      {
+        "id": "0c4776434fa8",
+        "name": "xolver-farkas-cache-fixed160-batch-c-r1583-20261101",
+        "status": "done"
+      },
+      {
+        "id": "5a4b63653985",
+        "name": "xolver-farkas-cache-fixed160-batch-d-r1583-20261101",
+        "status": "done"
+      },
+      {
+        "id": "55d93cb255cb",
+        "name": "xolver-farkas-cache-fixed160-batch-e-r1583-20261101",
+        "status": "done"
+      }
+    ],
+    "native_case_runs": 160,
+    "selected_cases": 160,
+    "retries": 0,
+    "all_terminal_success_exit0_pid_gone": true,
+    "timeout_seconds": 60,
+    "memory_bytes": 17179869184,
+    "physical_cpus_per_case": 1,
+    "model_capture": "initial-solve-single-model",
+    "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+    "binaries": {
+      "baseline": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/monomial-squares-r1572/xolver",
+        "sha256": "f1fd6f5125564f0425d6ce72c7e17e1a19c2608dea987ef312b4cdec7caf934b"
+      },
+      "candidate": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/farkas-cache-r1582/xolver",
+        "sha256": "41e9f2be9f25f9d3500835c01f8f8ff73cab9f26ff7378ffe39abf177a3f71f4"
+      },
+      "z3": {
+        "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+        "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      }
+    },
+    "counts": {
+      "baseline": {
+        "unsat": 48,
+        "decided": 110,
+        "verified_decided": 109,
+        "verified_par2": 6658.252184109762,
+        "raw_par2": 6538.270015180111,
+        "timeout": 49,
+        "sat": 62,
+        "unknown": 1
+      },
+      "candidate": {
+        "unsat": 48,
+        "decided": 110,
+        "verified_decided": 109,
+        "verified_par2": 6677.683921514079,
+        "raw_par2": 6557.702360615134,
+        "timeout": 49,
+        "sat": 62,
+        "unknown": 1
+      },
+      "z3": {
+        "unsat": 58,
+        "decided": 124,
+        "verified_decided": 119,
+        "verified_par2": 5201.628450164571,
+        "raw_par2": 4642.579728929326,
+        "sat": 66,
+        "timeout": 36
+      }
+    },
+    "by_logic": {
+      "QF_LIA": {
+        "baseline": {
+          "unsat": 15,
+          "decided": 35,
+          "verified_decided": 35,
+          "verified_par2": 1810.226094668731,
+          "raw_par2": 1810.226094668731,
+          "timeout": 13,
+          "sat": 20
+        },
+        "candidate": {
+          "unsat": 15,
+          "decided": 35,
+          "verified_decided": 35,
+          "verified_par2": 1816.3923020586371,
+          "raw_par2": 1816.3923020586371,
+          "timeout": 13,
+          "sat": 20
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 38,
+          "verified_decided": 37,
+          "verified_par2": 1359.576956115663,
+          "raw_par2": 1279.8628862835467,
+          "sat": 23,
+          "timeout": 10
+        }
+      },
+      "QF_NIA": {
+        "baseline": {
+          "timeout": 19,
+          "decided": 29,
+          "verified_decided": 28,
+          "verified_par2": 2440.1559216454625,
+          "raw_par2": 2320.173752715811,
+          "unsat": 16,
+          "sat": 13
+        },
+        "candidate": {
+          "timeout": 19,
+          "decided": 29,
+          "verified_decided": 28,
+          "verified_par2": 2439.684615744278,
+          "raw_par2": 2319.703054845333,
+          "unsat": 16,
+          "sat": 13
+        },
+        "z3": {
+          "unsat": 22,
+          "decided": 34,
+          "verified_decided": 30,
+          "verified_par2": 2210.8608410898596,
+          "raw_par2": 1731.5261896867305,
+          "sat": 12,
+          "timeout": 14
+        }
+      },
+      "QF_LRA": {
+        "baseline": {
+          "unsat": 10,
+          "decided": 19,
+          "verified_decided": 19,
+          "verified_par2": 1665.1138047650456,
+          "raw_par2": 1665.1138047650456,
+          "timeout": 13,
+          "sat": 9
+        },
+        "candidate": {
+          "unsat": 10,
+          "decided": 19,
+          "verified_decided": 19,
+          "verified_par2": 1685.4485688619316,
+          "raw_par2": 1685.4485688619316,
+          "timeout": 13,
+          "sat": 9
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 26,
+          "verified_decided": 26,
+          "verified_par2": 815.4111257083714,
+          "raw_par2": 815.4111257083714,
+          "sat": 11,
+          "timeout": 6
+        }
+      },
+      "QF_NRA": {
+        "baseline": {
+          "sat": 20,
+          "decided": 27,
+          "verified_decided": 27,
+          "verified_par2": 742.7563630305231,
+          "raw_par2": 742.7563630305231,
+          "unsat": 7,
+          "timeout": 4,
+          "unknown": 1
+        },
+        "candidate": {
+          "sat": 20,
+          "decided": 27,
+          "verified_decided": 27,
+          "verified_par2": 736.1584348492324,
+          "raw_par2": 736.1584348492324,
+          "unsat": 7,
+          "timeout": 4,
+          "unknown": 1
+        },
+        "z3": {
+          "sat": 20,
+          "decided": 26,
+          "verified_decided": 26,
+          "verified_par2": 815.7795272506773,
+          "raw_par2": 815.7795272506773,
+          "timeout": 6,
+          "unsat": 6
+        }
+      }
+    },
+    "changes": [],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "protocol_errors": 0,
+    "par2_delta_seconds": 19.431737404316664,
+    "par2_delta_percent": 0.29184441903073954,
+    "largest_observed_time_change": {
+      "index": 131,
+      "logic": "QF_LRA",
+      "baseline_seconds": 33.27725416980684,
+      "candidate_seconds": 53.14750501140952,
+      "delta_seconds": 19.870250841602683,
+      "boundary": "Observed timing change; causal attribution is unproven. Farkas does not run for this logic; do not repeat the closed clock-gate experiment."
+    },
+    "unconfirmed": [
+      {
+        "index": 12,
+        "case": "QF_LIA/fft/Sz128_2823.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 24,
+        "case": "QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 27,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 42,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep2a.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 114,
+        "case": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 115,
+        "case": "QF_NIA/20230321-UltimateAutomizerSvcomp2023/ps6.c_7.smt2",
+        "results": {
+          "candidate": "unsat",
+          "z3": "timeout",
+          "baseline": "unsat"
+        },
+        "reasons": {
+          "candidate": "no independent confirmation within budget",
+          "baseline": "no independent confirmation within budget"
+        }
+      }
+    ],
+    "independent_truth_supplements": [
+      {
+        "index": 50,
+        "input_sha256": "7e71a151d917978f1b5afc2791abf589e30c8ff97e930979df6ef82ad72dcdc0",
+        "independent_record": "/pub/data/jiafq/xolver/validation/arithmetic-r103/independent-unsat-r1496/50/record.json",
+        "record_sha256": "fb1f06b6fd64b28bb2d167508f5cb37db82df0568c516dc68da96ddb02619c1b",
+        "checker_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+        "validation_seconds": 127.20317284949124,
+        "boundary": "Historical independent truth only; every performance count/time comes from this fresh same-budget round."
+      },
+      {
+        "index": 80,
+        "input_sha256": "1bcb3b052ef1f9ebe04cf76147f19dc54fb0678342d72b829a38a936c56959fe",
+        "independent_record": "/pub/data/jiafq/xolver/validation/arithmetic-r103/independent-unsat-r1496/80/record.json",
+        "record_sha256": "9f111aee9411aadd3a9f32de8310734424a7cdc02fc326718beb4952f6fb4d23",
+        "checker_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+        "validation_seconds": 643.5456116814166,
+        "boundary": "Historical independent truth only; every performance count/time comes from this fresh same-budget round."
+      }
+    ],
+    "z3_round_boundary": "Same frozen Z3 verifies 119/124 raw this round; previous R1573/R1575 had 120/125. Original94 is a valid timeout here after SAT in the previous round. No retake or historical timing substitution is used.",
+    "conclusion": "No fixed160 gain/loss or established speed improvement. Preserve the independently reproduced correctness fix; overall superiority over Z3 is not achieved."
+  },
+  "evidence": {
+    "full-summary.json": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r1583/summary.json",
+      "sha256": "ca15cfd98b0a2f002a122e04f283e65500395a1acaa62bf3f24c07e7e77e66fe"
+    },
+    "truth-adjudication.json": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r1583/truth-adjudication.json",
+      "sha256": "b8b1e2609ae3306099b7e69ec6a83c75878f137c5b854308118b5fdf9be71edc"
+    },
+    "receipt.json": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r1583/receipt.json",
+      "sha256": "486df17c2c56bebdde25001743802e1976dc1fe30441a578ed6a36e4f4ae0442"
+    }
+  },
+  "qcp_boundary": "No fresh original-C QCP end-to-end result for the new worker. Existing controlled program checks remain the regression basis; initial Z3 integration prompt has been supplied for the separate agent.",
+  "protected_sets_used": false,
+  "main_promotion": false,
+  "next": [
+    "Qualify the frozen worker on original-C QCP controller workflows with common frozen proof materials.",
+    "Investigate exact homogeneous integer-ray scaling: this regression has a valid scaled ray l0=l1=2 while primitive-ray candidate construction can give up. Scaling must preserve zero equality RHS and check every inequality; no benchmark-specific rule.",
+    "Continue the remaining verified SMT gaps, then freeze the final versions for a fresh fair comparison and the still-unread independent program/SMT protected sets."
+  ]
+}

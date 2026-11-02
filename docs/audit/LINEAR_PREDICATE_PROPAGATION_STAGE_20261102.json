@@ -1,0 +1,200 @@
+{
+  "schema_version": 1,
+  "status": "rejected",
+  "title": "Linear predicate propagation experiment",
+  "date": "2026-11-02",
+  "root_observation": "Sources and difference paths can imply registered predicates absent from current propagation output. Some diagnostic targets were already assigned, so raw diagnostic counts are not counts of useful missing SAT propagations.",
+  "variants": [
+    {
+      "build": "r1606",
+      "qualification_sha256": "0aee895751e36f19658bed8057c2833011d8cd67cf647d3344ac6ecbbca5ebf4",
+      "binary_sha256": "e4c9770b2a013e3e17cbe32efca5ae26eb0743d68bb9b1062dd6d91ca77b580b",
+      "worker_sha256": "1acebc0deaea4979f67da25cac4d3665ae41fc2f48bd4f1ee95696bf529f028e",
+      "unit_cases": 1995,
+      "unit_assertions": 1296089,
+      "source_overrides": {
+        "src/search/linear/LinearPredicatePropagation.h": "3a27f3c4b1a6bcca743d62eb9782ad0f179c49846f8d8c0a7076e35d74e3f354",
+        "src/search/linear/LinearPredicatePropagation.cpp": "1af4bda5b3fdc21facfa46a4f3bd4a594979510f51cfe65839e6f6dbcdafbd97",
+        "src/applications/satisfiability/smt/qflra/LraSolver.cpp": "ae1abb434e1df264464848dd85937516c46224417b1facfa529e19929c1cf369",
+        "src/applications/satisfiability/smt/common/lia/LiaSolver_entailment.cpp": "4b0d70815f2230811f60ef48e17244f938c2324185aaeae98432d59683d383e1",
+        "src/sources.cmake": "c8b4a6818050c0174619ec19df5757b4ff912e9c27e9105274ca4f352abcea14",
+        "tests/unit/test_linear_predicate_propagation.cpp": "3c7a8d725238ad7bc03e1ce36e9efaae6c044b1c9112ae5b330eb18e7707f46b"
+      },
+      "evidence_path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/linear-predicates-r1606/stage-evidence.json",
+      "evidence_sha256": "375aa400e33efe4c9ce11cfae507d03900943864f4e7034d5c9d93dfca8dc5a1",
+      "pilot": "r1607",
+      "pilot_indices": [
+        0,
+        1,
+        3,
+        6,
+        13,
+        20,
+        49,
+        58,
+        89,
+        128,
+        159
+      ],
+      "pilot_totals": {
+        "baseline": {
+          "verified": 5,
+          "par2": 721.0354669261724,
+          "unknown": 0,
+          "timeouts": 6
+        },
+        "candidate": {
+          "verified": 5,
+          "par2": 721.8352265525609,
+          "unknown": 1,
+          "timeouts": 5
+        },
+        "z3": {
+          "verified": 11,
+          "par2": 29.408681454136968,
+          "unknown": 0,
+          "timeouts": 0
+        }
+      },
+      "independent_actual_clauses": 16,
+      "oracle_refutation_and_exact_witness_checks": 64
+    },
+    {
+      "build": "r1611",
+      "qualification_sha256": "9c8313403f65cd71f1ff2f4977cf7e8ca7bb9e52ef74f511e34b524c5a37da4d",
+      "binary_sha256": "c1bb0f2422450a94d8c0941d3b53726c7aa92a9ef20f578d5159a39a0ce08a3e",
+      "worker_sha256": "da5a01d4b899aa5f15eb55fec08de54c827f1a5a9ce104df9f185f678683a40d",
+      "unit_cases": 1998,
+      "unit_assertions": 1296105,
+      "source_overrides": {
+        "src/search/linear/LinearPredicatePropagation.h": "3a27f3c4b1a6bcca743d62eb9782ad0f179c49846f8d8c0a7076e35d74e3f354",
+        "src/search/linear/LinearPredicatePropagation.cpp": "77a02e93f95ce604b26aaad922134fbca044717c1c6f4874aea0c09d2b75bd57",
+        "src/applications/satisfiability/smt/qflra/LraSolver.cpp": "ae1abb434e1df264464848dd85937516c46224417b1facfa529e19929c1cf369",
+        "src/applications/satisfiability/smt/common/lia/LiaSolver_entailment.cpp": "4b0d70815f2230811f60ef48e17244f938c2324185aaeae98432d59683d383e1",
+        "src/sources.cmake": "c8b4a6818050c0174619ec19df5757b4ff912e9c27e9105274ca4f352abcea14",
+        "tests/unit/test_linear_predicate_propagation.cpp": "43e0652f9bb62f47d4fd9c6b3a15fea21d2c80225c680af654073a3d4a259474"
+      },
+      "evidence_path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/linear-predicates-r1611/stage-evidence.json",
+      "evidence_sha256": "281bc9ab09b8faf9e6852fc5fe55ceae565c30bfca05734acf6be77d44d99955",
+      "pilot": "r1614",
+      "pilot_indices": [
+        0,
+        1,
+        3,
+        6,
+        13,
+        20,
+        49,
+        58,
+        89,
+        128,
+        159
+      ],
+      "pilot_totals": {
+        "baseline": {
+          "verified": 5,
+          "par2": 721.0358172375709,
+          "unknown": 0,
+          "timeouts": 6
+        },
+        "candidate": {
+          "verified": 5,
+          "par2": 721.7363295257092,
+          "unknown": 0,
+          "timeouts": 6
+        },
+        "z3": {
+          "verified": 11,
+          "par2": 28.75099167227745,
+          "unknown": 0,
+          "timeouts": 0
+        }
+      },
+      "independent_actual_clauses": 16,
+      "oracle_refutation_and_exact_witness_checks": 64
+    },
+    {
+      "build": "r1616",
+      "qualification_sha256": "2632b7f0070fdca1c1ce3be4d08adba8978a786a66371b0fba813e97e34f5795",
+      "binary_sha256": "47fb188e1541a8bf2a59dfeb30f7a0db393e3cffc562cd4d39d75becf5be3286",
+      "worker_sha256": "10264497fe88547a3760b7d1d64f1ab0a20a3a14dfb7fcbdd847f885a560280f",
+      "unit_cases": 1999,
+      "unit_assertions": 1296798,
+      "source_overrides": {
+        "src/search/linear/LinearPredicatePropagation.h": "3a27f3c4b1a6bcca743d62eb9782ad0f179c49846f8d8c0a7076e35d74e3f354",
+        "src/search/linear/LinearPredicatePropagation.cpp": "855cd8c1eaa8d6999edf8e936b69c26a317751f897d2efd7435b0667b3f3a842",
+        "src/applications/satisfiability/smt/qflra/LraSolver.cpp": "87b56b5cce75929c9c55c849375c5323279c5774c9bba18eda37c2174575b08f",
+        "src/applications/satisfiability/smt/common/lia/LiaSolver_entailment.cpp": "a8eaa62d35c40776b9bb207f25169f8e6f6a027e8a504b5665682b6e13fccae6",
+        "src/sources.cmake": "c8b4a6818050c0174619ec19df5757b4ff912e9c27e9105274ca4f352abcea14",
+        "tests/unit/test_linear_predicate_propagation.cpp": "5d9aa0201a9ea7288c66dd4bb13276a793285d173d9338c60b36ca7c4ebe9774"
+      },
+      "evidence_path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/linear-predicates-r1616/stage-evidence.json",
+      "evidence_sha256": "0f7a6caaaaea22f4cb576224e6e70ccd719cdc3c116cf55e6abc3d65a467d1c2",
+      "pilot": "r1619",
+      "pilot_indices": [
+        0,
+        1,
+        3,
+        6,
+        13,
+        20,
+        49,
+        58,
+        89,
+        128,
+        159
+      ],
+      "pilot_totals": {
+        "baseline": {
+          "verified": 5,
+          "par2": 721.0345308016986,
+          "unknown": 0,
+          "timeouts": 6
+        },
+        "candidate": {
+          "verified": 5,
+          "par2": 721.3862740863115,
+          "unknown": 0,
+          "timeouts": 6
+        },
+        "z3": {
+          "verified": 11,
+          "par2": 29.592383423820138,
+          "unknown": 0,
+          "timeouts": 0
+        }
+      },
+      "independent_actual_clauses": 16,
+      "oracle_refutation_and_exact_witness_checks": 64
+    }
+  ],
+  "changes": [
+    "Primitive rational form normalization, sort-correct integer lattices, explicit reasons, source-bound projection and resumable difference paths.",
+    "Predicate endpoint cutoffs preserve strict ties and integer rounding; later weaker predicates resume the frontier.",
+    "Deliver existing and direct source conclusions to SAT before relational closure."
+  ],
+  "decision": "All three variants have zero new or lost verified solve on their fresh 11-case pilots and worse PAR-2 than the retained parent. Remove the experimental component, client hooks and tests. Do not claim full160 or QCP gains.",
+  "parent": {
+    "build": "r1586",
+    "binary_sha256": "cce9debc774347d77227393df0f51ff8d72a13c30a54c5f1311155f5911c273d",
+    "worker_sha256": "f71ac0756383264323b081479d87238c26705d02ec18887ab8243e2e450626c4",
+    "latest_full160_verified": {
+      "xolver": 109,
+      "z3": 119
+    }
+  },
+  "preserved": "Earlier exact-arithmetic, assertion-cache, sign, integer-ray and positivity fixes remain.",
+  "boundaries": {
+    "full160_run_for_these_candidates": false,
+    "new_qcp_validation": false,
+    "protected_sets_used": false,
+    "pr_created": false,
+    "main_promoted": false
+  },
+  "next": "Measure missed multi-equation integer divisibility conflicts on real active contexts before integrating another generic reasoner.",
+  "restored_source_sha256": {
+    "src/applications/satisfiability/smt/qflra/LraSolver.cpp": "9c2fda2f42e3bc43621310c9069db8b7e57d9f152cb10081d27f71449e649ee9",
+    "src/applications/satisfiability/smt/common/lia/LiaSolver_entailment.cpp": "e2d0671c7437fb0851a64677da743cf4ea0575e813a92357360e3dc88df82c7a",
+    "AGENTS.md": "48685d88916933bc062ceba976aae6dc813f0e99c1a5b3c780a2143f195ceeaf"
+  }
+}

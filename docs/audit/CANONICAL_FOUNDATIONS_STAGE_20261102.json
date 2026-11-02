@@ -1,0 +1,286 @@
+{
+  "date": "2026-11-02",
+  "status": "complete_source_native_checks_and_fresh_full160_passed_QCP_CI_pending",
+  "qualification": {
+    "unit_cases": 1994,
+    "unit_assertions": 1295886,
+    "ctest_configuration_sha256": "96a22947b16d3e443a76302fa255bbb8303f3010cb735383c7752c3e1d892ca2",
+    "worktree_head": "eb5235fc81f2aa9f3afcf8e03f47e8f7fc831c5b",
+    "source_manifest_sha256": "5f71fc233c04a7442ab16ec8f01632f377c71527fc74713840504e2d15b59c33",
+    "inputs_sha256": "5e270c8a5d05a3c1fe0358efe0595c02db8c36250ed482a25acd37f870483b19",
+    "binary_sha256": "0ffc60cda9e73d6418f49584398537b7d869ec9e58dd21f34e34e5e22a07065d",
+    "worker_sha256": "907a8b9b5685396a6f660b1056b87140855a61b6d0f8115e6c663615924c8428",
+    "python_extension_sha256": "73a795f369be7f08cc8a292164a9d81990b39de11bbf0bcb158023769050e4d4",
+    "library_sha256": "be95d3447971b8998a50dbd4e4df9e299e28f81508d0f1120843d8877a4fc55a",
+    "cmake_cache_sha256": "058ace917584cc4e3dc284c33d6600cbfb1dfbac95a8b71e168b83d19d9275cb",
+    "runtime_manifest_sha256": "e811d8240987be216c72d7fce5eb9916c7750c49b7a4306ff490ffa61fed5618",
+    "runtime_libraries": {
+      "libgmp.so.10": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/canonical-foundations-recovery-r1695/runtime/libgmp.so.10",
+        "sha256": "fda9699eef15deda5f1c626e9140377a7f5d88c41516a54278ac02429cb20fa5"
+      },
+      "libmpfr.so.6": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/canonical-foundations-recovery-r1695/runtime/libmpfr.so.6",
+        "sha256": "1aed080b3143049fbe016cd82cdc5fb47db386386556cc1bb37cfccc133c0fae"
+      },
+      "libgmpxx.so.4": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/canonical-foundations-recovery-r1695/runtime/libgmpxx.so.4",
+        "sha256": "c6261b838536ec28a47008433227aaaf2573f408b54bfa79bea8c9c98c4acaa6"
+      }
+    },
+    "runtime_versions": {
+      "gmp_runtime": "6.3.0",
+      "mpfr_runtime": "4.2.2",
+      "gmp_headers": "6.3.0",
+      "mpfr_headers": "4.2.1",
+      "gmpxx_package": "libgmpxx4ldbl 2:6.3.0+dfsg-5ubuntu2"
+    },
+    "reused_compilation_plan_sha256": "dcbdac1c25cabe9ccd9389a3c755a7d6db6119d652e8b217bcbd55f691a2c394",
+    "reused_compilation_runs_sha256": "7ffca6d2bc7feb4ad03ea3e13094e06b68b88981a0eacc27bb397e7bbb435714",
+    "logs": {
+      "worker-runtime.log": "a358f16a31d3668f51731bec12a188818f55f1e89b89dc8adb35ec67dbb5c958",
+      "xolver-runtime.log": "c66dbcddadd19a8614d6b05cb8dbdf62370c985ebdc077a96549c8a7e59fa1e9",
+      "ctest-detailed.log": "f66cf4bc99957c73e38ca2c7694749c6a0edc49b9d274203ee6e15dee548cb8d",
+      "build.log": "73ef943b03b4882cc38e68afb277f49555eb8e8f1a9c762525c640cb9b148ec6",
+      "python-smoke.log": "def6b5c617eff28bfa0956f904db2898374b36790df08e17dfd154eacc439e8f",
+      "python-runtime.log": "3aa694df490716787adc6357995be4cb396871599a293680d891bbde5a02c564",
+      "configure.log": "468a9d31164c4a3847869dbae512f1481659705f5cfe5a5f172b5e4af063c086",
+      "acceptance.log": "0bc74adf4b471e66da9d32874220b37d0a6f8c3b0d0770eb347184c26d17cf43"
+    },
+    "canonical_complete_source_build": true,
+    "injected_object_overrides": false,
+    "physical_cpu": "0",
+    "protected_sets_used": false,
+    "boundary": "Complete canonical CMake build with Python still enabled, reusing541 independently leased successful compilation units. Fix native library selection to frozen shared GMP/GMPXX/MPFR (GMPXX package matches installed GMP exactly); preserve C++ sources and headers. Set the unit CTest working directory to the repository root to resolve its two existing array-model fixtures. Use DT_RPATH to preserve the frozen math runtime under the QCP launcher library path. Seven CTests plus a native Python-extension functional check. New frozen binary/runtime versions require fresh fair-suite and QCP validation; prior object-overlay scores are not attributed to them. No PR/main CI or protected-set acceptance yet."
+  },
+  "qualification_sha256": "89a81c11dc1eb4d141eccb71ff9adbcc9df17bec63372886c50427002ae9fd2c",
+  "canonical_source_hashes": 2110,
+  "canonical_compilation_units": 541,
+  "build_experiments": {
+    "initial": "0a5db2b98ca2",
+    "shared_runtime_probe": "c5ab7973b0b6",
+    "complete_build_fixture_failure": "48c392b22950",
+    "qualified": "5000156ccf58"
+  },
+  "independent": {
+    "experiment": "d589e68bf176",
+    "cases": 96,
+    "models_cross_replayed": 48,
+    "oracle_checks": 288,
+    "fresh_results": true,
+    "all_success_exit0_pid_gone": true
+  },
+  "prototype_evidence_boundary": "The prior object-overlay160 result is109/111/115 after checking exactly source115. It is not this canonical version performance score.",
+  "canonical_pilot": {
+    "experiment": "115ef799eca6",
+    "cases": 26,
+    "oracle_verified": {
+      "baseline": 12,
+      "candidate": 14,
+      "z3": 24
+    },
+    "with_checked_source115": {
+      "baseline": 13,
+      "candidate": 15,
+      "z3": 24
+    },
+    "gained": [
+      29,
+      144
+    ],
+    "lost": [],
+    "case29": {
+      "parent": "timeout60",
+      "candidate_seconds": 22.468,
+      "verdict": "unsat",
+      "independent_match": "Z3"
+    },
+    "attribution": "NIA29 matches the exact-before-encoding mechanism. NRA144 is recorded without attributing it to this scheduling change."
+  },
+  "qcp_new_worker_end_to_end_validated": false,
+  "pr_main_ci_complete": false,
+  "protected_sets_used": false,
+  "boundary": "Complete canonical CMake targets, native Python functionality,1994 unit cases,63 SOMTParser CTests and96 fresh independently checked cases pass. The fresh160 comparison is109 parent/111 candidate/115 independently verified Z3, including one checked source certificate; gains29/144, no losses. Verified PAR-2 sums are6595.076/6444.530/5633.259 seconds. Nine raw Z3 verdicts remain unconfirmed. No current-worker QCP final result, PR/main CI, protected-set acceptance or overall superiority is claimed.",
+  "full_comparison": {
+    "stage": "R1698-R1699",
+    "cases": 160,
+    "experiments": [
+      "115ef799eca6",
+      "20227a9e361a",
+      "7ce9ba584164",
+      "e7614644473d"
+    ],
+    "summary_path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/canonical-foundations-full-r1699/summary.json",
+    "summary_sha256": "f03019484430794f5e8ca93f292aa7a6ae3821de1178b735ef8eec0adc8aa68c",
+    "score": {
+      "baseline": {
+        "oracle_verified": 108,
+        "certificate_augmented": 109,
+        "raw_definite": 109,
+        "oracle_verified_par2": 6715.058180231601,
+        "verified_par2": 6595.076406704262,
+        "results": {
+          "unsat": 48,
+          "sat": 61,
+          "timeout": 50,
+          "unknown": 1
+        },
+        "unconfirmed": []
+      },
+      "candidate": {
+        "oracle_verified": 110,
+        "certificate_augmented": 111,
+        "raw_definite": 111,
+        "oracle_verified_par2": 6564.511441344395,
+        "verified_par2": 6444.529898585752,
+        "results": {
+          "unsat": 49,
+          "sat": 62,
+          "timeout": 48,
+          "unknown": 1
+        },
+        "unconfirmed": []
+      },
+      "z3": {
+        "oracle_verified": 115,
+        "certificate_augmented": 115,
+        "raw_definite": 124,
+        "oracle_verified_par2": 5633.259446926415,
+        "verified_par2": 5633.259446926415,
+        "results": {
+          "unsat": 58,
+          "sat": 66,
+          "timeout": 36
+        },
+        "unconfirmed": [
+          12,
+          24,
+          27,
+          42,
+          50,
+          75,
+          80,
+          114,
+          148
+        ]
+      }
+    },
+    "gained": [
+      29,
+      144
+    ],
+    "lost": [],
+    "opposite_verdicts": 0,
+    "protocol_errors": 0,
+    "all_success_exit0_pid_gone": true,
+    "seconds": 60,
+    "physical_cores_per_solver": 1,
+    "memory_gib": 16,
+    "confirmed_z3_gap_cases": 16,
+    "confirmed_z3_gap_groups": {
+      "QF_LIA/convert": 1,
+      "QF_LIA/tropical-matrix": 1,
+      "QF_NIA/20210219-Dartagnan": 1,
+      "QF_NIA/20250331-elster": 3,
+      "QF_LRA/2019-ezsmt": 1,
+      "QF_LRA/miplib": 1,
+      "QF_LRA/uart": 2,
+      "QF_NRA/2019-ezsmt": 1,
+      "QF_LIA/RWS": 1,
+      "QF_NIA/20170427-VeryMax": 1,
+      "QF_NIA/AProVE": 1,
+      "QF_LRA/LassoRanker": 1,
+      "QF_LRA/TM": 1
+    },
+    "certificate_boundary": "Only original115 is supplemented by the independently checked exact-source residue proof. Original reports are unchanged; the nine unconfirmed Z3 verdicts remain excluded.",
+    "attribution": "29 matches the measured exact-before-encoding presolve conflict. NRA144 is recorded without assigning it to the NIA scheduling change.",
+    "baseline_boundary": "The baseline is qualified frozen parent819, not the current main Git commit."
+  },
+  "parser_native_acceptance": {
+    "experiment": "9ea76aa67336",
+    "tests": 63,
+    "returncode": 0,
+    "all_success_exit0_pid_gone": true,
+    "report_sha256": "521aac9a76903b4140b1c46e23f64c405a00a592d4278adaeb54ac7e54bbaef4",
+    "logs": {
+      "ctest-detailed.log": "1aada3dc6ccee7fb2b24ede1343c34f270353313fe0ef42f1a10ce584d8c3265",
+      "ctest.log": "660ce13d115e8a6af4fef4b1d6670761713644e5a0f3891c0da6e2f930246f4c"
+    },
+    "source_files": {
+      "/pub/data/jiafq/xolver/third_party/SOMTParser/src/ir/dag.cpp": "04df48dbda82b8218f9fefcf8ed0ef21f47608baaecd8999f57505bc746485d4",
+      "/pub/data/jiafq/xolver/third_party/SOMTParser/test/api/test_node_api.cpp": "cb917e486caf8f4d9218e5708a0177b6879f1e5b5983bb101e30e8e39eea7c10"
+    }
+  },
+  "published_source_binding": {
+    "local_matches_native_source_files": 2110,
+    "mismatches": [],
+    "native_source_manifest_sha256": "5f71fc233c04a7442ab16ec8f01632f377c71527fc74713840504e2d15b59c33",
+    "dependency_source_commit": "62b302c655f45d65d96ced8a826dfedb72cd4fac",
+    "dependency_pr": "https://github.com/fuqi-jia/SOMTParser/pull/67",
+    "dependency_pr_updated_head": "eb947c0ca523532fa738194581d278eb479bc329",
+    "dependency_pr_ci": "https://github.com/fuqi-jia/SOMTParser/actions/runs/41364439174",
+    "dependency_pr_checks": "All three pass",
+    "dependency_merge": "Pending required independent review; normal merge rejected by ruleset5590872,admin override approval requested and not yet received.",
+    "boundary": "Xolver pins62b302c,whose source files equal the native-qualified b9063fa plus two retained modifications. The later upstream-main merge in the dependency PR is not substituted into this frozen Xolver build."
+  },
+  "current_main_comparison": {
+    "main": "26aca1b816bdcdd02c070164bf2193c2b3483e56",
+    "runtime_source": "65c21b9b7946ce025f9c8397d278fc24537c35ed",
+    "runtime_source_equivalence": "Git diff across CMakeLists,app,include,src,python,tools,tests,third_party between65c21b9b and origin/main is empty.",
+    "baseline_sha256": "30965221fc2a3b37177a7e79c771b6fb4d9f738d4a524357aee2448b5b3ba07f",
+    "pilot_experiment": "365527400dc8",
+    "pilot_cases": 15,
+    "pilot_verified_with_source115": {
+      "main": 8,
+      "candidate": 11,
+      "z3": 12
+    },
+    "pilot_gained": [
+      29,
+      51,
+      131
+    ],
+    "pilot_lost": [],
+    "full_experiments": [
+      "659c66e8ed5b",
+      "bedeb6bb5c1a",
+      "907fc7833b57"
+    ],
+    "preserved_valid_reports": 155,
+    "incomplete_launches": [
+      82,
+      118,
+      120,
+      151,
+      152
+    ],
+    "recovery_receipt_sha256": "2cdc02e74a3b4443643cab9fe14b8a2281b0d7c03638dea1d37397e93707d80b",
+    "recovery_stage": "R1717",
+    "full_score": "pending",
+    "boundary": "Exactly5 launches produced no case directory or solver observation and ended137. Raw EOS oom statuses are preserved,not attributed to solver memory exhaustion. Only those5 missing cohorts are retaken unchanged. All155 valid originals remain immutable; no full160 main improvement claimed yet."
+  },
+  "current_qcp": {
+    "stage": "R1701-R1715",
+    "worker_sha256": "907a8b9b5685396a6f660b1056b87140855a61b6d0f8115e6c663615924c8428",
+    "original_programs": [
+      "branch",
+      "gcd",
+      "max3"
+    ],
+    "both_backends_fresh_annotation_and_independent_VC_analysis": true,
+    "max3_paired_final_check": {
+      "experiment": "532ec8c1b986",
+      "xolver_seconds": 27.77197995223105,
+      "z3_seconds": 30.700320871546865,
+      "same_physical_cpu": "0",
+      "both_canonical_done": true,
+      "independent_post_run_audit": "pending"
+    },
+    "remaining_paired_final_checks": [
+      "branch",
+      "gcd"
+    ],
+    "provided_proof_bytes_frozen": true,
+    "boundary": "Original C/native symexec,actual selected backend and full Rocq final-check. Supplied frozen proofs; excludes proof construction/orchestration. No protected-set or all-QCP speed claim."
+  }
+}

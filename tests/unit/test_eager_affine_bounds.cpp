@@ -6,24 +6,63 @@ using namespace xolver;
 namespace {
 struct EagerFixture {
     NativeTerms terms;
-    EagerFixture() {
+    SortId numericSort;
+    explicit EagerFixture(bool real = false) : numericSort(real ? 2 : 1) {
         terms.registerSort(0, SortKind::Bool);
         terms.registerSort(1, SortKind::Int);
+        terms.registerSort(2, SortKind::Real);
         terms.setBoolSortId(0);
         terms.setIntSortId(1);
+        terms.setRealSortId(2);
     }
     ExprId variable(const std::string& name) {
-        return terms.add({Kind::Variable, 1, {}, Payload(name)});
+        return terms.add({Kind::Variable, numericSort, {}, Payload(name)});
     }
     ExprId integer(const mpz_class& value) {
-        return terms.add({Kind::ConstInt, 1, {}, Payload(value.get_str())});
+        return terms.add({numericSort == 1 ? Kind::ConstInt : Kind::ConstReal,
+                          numericSort, {}, Payload(value.get_str())});
     }
     ExprId binary(Kind kind, ExprId a, ExprId b) {
         const bool predicate = kind == Kind::Eq || kind == Kind::Leq || kind == Kind::Geq ||
             kind == Kind::Or || kind == Kind::Implies;
-        return terms.add({kind, predicate ? SortId(0) : SortId(1), {a, b}, {}});
+        return terms.add({kind, predicate ? SortId(0) : numericSort, {a, b}, {}});
     }
 };
+}
+
+TEST_CASE("Eager numeric candidates: integral points satisfy real Boolean formulas") {
+    EagerFixture fixture(true);
+    const auto x = fixture.variable("x"), y = fixture.variable("y");
+    const std::vector<ExprId> roots{
+        fixture.binary(Kind::Or,
+            fixture.binary(Kind::Eq, fixture.binary(Kind::Mul, x, x), fixture.integer(4)),
+            fixture.binary(Kind::Eq, fixture.binary(Kind::Mul, y, y), fixture.integer(9))),
+        fixture.binary(Kind::Eq, y, fixture.integer(0)),
+        fixture.binary(Kind::Geq, x, fixture.integer(0))};
+    bitblast::EagerBitBlastSolver solver;
+    solver.setFarkasBudget(33, 500);
+    const auto result = solver.solve(fixture.terms, roots);
+    REQUIRE(result.status == bitblast::EagerBitBlastSolver::Status::Sat);
+    CHECK(result.model.at("x") == 2);
+    CHECK(result.model.at("y") == 0);
+}
+
+TEST_CASE("Eager numeric candidates: fractional and irrational real points remain open") {
+    EagerFixture fixture(true);
+    const auto x = fixture.variable("x");
+    const auto half = fixture.terms.add({Kind::ConstReal, 2, {}, Payload(std::string("1/2"))});
+    bitblast::EagerBitBlastSolver solver;
+    solver.setFarkasBudget(33, 500);
+    CHECK(solver.solve(fixture.terms, {fixture.binary(Kind::Eq, x, half)}).status ==
+          bitblast::EagerBitBlastSolver::Status::Unknown);
+    CHECK(solver.solve(fixture.terms, {
+        fixture.binary(Kind::Eq, fixture.binary(Kind::Mul, x, x), fixture.integer(2))}).status ==
+          bitblast::EagerBitBlastSolver::Status::Unknown);
+    const auto result = solver.solve(fixture.terms, {
+        fixture.binary(Kind::Eq, fixture.binary(Kind::Mul, x, x), fixture.integer(4)),
+        fixture.binary(Kind::Geq, x, fixture.integer(0))});
+    REQUIRE(result.status == bitblast::EagerBitBlastSolver::Status::Sat);
+    CHECK(result.model.at("x") == 2);
 }
 
 TEST_CASE("Eager affine bounds: derived wide integer models survive the cascade") {

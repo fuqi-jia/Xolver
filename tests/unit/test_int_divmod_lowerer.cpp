@@ -115,15 +115,132 @@ static mpz_class evaluateLoweredInteger(const NativeTerms& ir, ExprId root,
             return mpz_class(std::get<std::string>(e.payload.value));
         case Kind::Add: return visit(e.children[0]) + visit(e.children[1]);
         case Kind::Sub: return visit(e.children[0]) - visit(e.children[1]);
-        case Kind::Mul: return visit(e.children[0]) * visit(e.children[1]);
+        case Kind::Mul: {
+            mpz_class result = 1;
+            for (const auto child : e.children) result *= visit(child);
+            return result;
+        }
         case Kind::Neg: return -visit(e.children[0]);
         case Kind::Eq: return mpz_class(visit(e.children[0]) == visit(e.children[1]));
         case Kind::Leq: return mpz_class(visit(e.children[0]) <= visit(e.children[1]));
+        case Kind::Lt: return mpz_class(visit(e.children[0]) < visit(e.children[1]));
+        case Kind::Geq: return mpz_class(visit(e.children[0]) >= visit(e.children[1]));
+        case Kind::Gt: return mpz_class(visit(e.children[0]) > visit(e.children[1]));
+        case Kind::Not: return mpz_class(visit(e.children[0]) == 0);
+        case Kind::UFApply: return values.at(id);
         case Kind::Or: return mpz_class(visit(e.children[0]) != 0 || visit(e.children[1]) != 0);
         default: FAIL("unexpected expression in independent integer evaluator"); return 0;
         }
     };
     return visit(root);
+}
+
+TEST_CASE("IntDivModLowerer: guarded quotient cuts preserve signed and zero-divisor witnesses") {
+    for (const auto relation : {Kind::Eq, Kind::Leq, Kind::Lt, Kind::Geq, Kind::Gt}) {
+        for (bool reverse : {false, true}) {
+            for (long scale : {-2L, 1L, 3L}) {
+                NativeTerms ir = makeIrWithInt();
+                const auto a = mkIntVar(ir, "a"), b = mkIntVar(ir, "b"), t = mkIntVar(ir, "t");
+                const auto quotient = mkDiv(ir, a, b);
+                ir.addAssertion(mkEq(ir, quotient, quotient));
+                // Visit a nested, n-ary product under a Boolean tautology.
+                // The bound predicate is not an assumed positive fact.
+                const auto tail = ir.add({Kind::Mul, ir.intSortId(),
+                    {t, mkIntConst(ir, scale), mkIntConst(ir, 1)}, {}});
+                const auto product = ir.add({Kind::Mul, ir.intSortId(), {b, tail}, {}});
+                const auto predicate = ir.add({relation, ir.boolSortId(),
+                    reverse ? std::initializer_list<ExprId>{product, a}
+                            : std::initializer_list<ExprId>{a, product}, {}});
+                const auto opposite = ir.add({Kind::Not, ir.boolSortId(), {predicate}, {}});
+                ir.addAssertion(ir.add({Kind::Or, ir.boolSortId(), {predicate, opposite}, {}}), 2);
+                IntDivModLowerer lowerer(ir);
+                REQUIRE(lowerer.run());
+                lowerer.commit();
+                // Two source assertions, ten variable-divisor constraints,
+                // and both signed quotient consequences at the source scope.
+                REQUIRE(ir.getScopedAssertions().size() == 14);
+                size_t higherScope = 0;
+                for (const auto& [level, assertion] : ir.getScopedAssertions()) {
+                    (void)assertion;
+                    if (level == 2) ++higherScope;
+                }
+                CHECK(higherScope == 3);
+                for (long dividend = -7; dividend <= 7; ++dividend) {
+                    for (long divisor = -3; divisor <= 3; ++divisor) {
+                        for (long threshold = -3; threshold <= 3; ++threshold) {
+                            std::unordered_map<ExprId, mpz_class> values{{a, dividend}, {b, divisor}, {t, threshold}};
+                            mpz_class q = threshold, r = dividend;
+                            if (divisor != 0) {
+                                const mpz_class magnitude = divisor < 0 ? -divisor : divisor;
+                                mpz_mod(r.get_mpz_t(), mpz_class(dividend).get_mpz_t(), magnitude.get_mpz_t());
+                                q = (mpz_class(dividend) - r) / divisor;
+                            }
+                            for (const auto& origin : lowerer.origins()) {
+                                values[origin.q] = q;
+                                values[origin.r] = r;
+                            }
+                            // At zero the SMT functions stay arbitrary and
+                            // congruent; no sign/order fact may restrict q/r.
+                            for (ExprId id = 0; id < ir.size(); ++id) {
+                                const auto node = ir.get(id);
+                                if (node.kind != Kind::UFApply) continue;
+                                const auto name = std::get<std::string>(ir.get(node.children[0]).payload.value);
+                                values[id] = name.find("undef_div") != std::string::npos ? q : r;
+                            }
+                            bool satisfies = true;
+                            for (const auto& [level, assertion] : ir.getScopedAssertions()) {
+                                (void)level;
+                                satisfies &= evaluateLoweredInteger(ir, assertion, values) != 0;
+                            }
+                            CHECK(satisfies);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+TEST_CASE("IntDivModLowerer: composite divisor cuts retain the quotient definition scope") {
+    NativeTerms ir = makeIrWithInt();
+    const auto a = mkIntVar(ir, "a"), b = mkIntVar(ir, "b"), t = mkIntVar(ir, "t");
+    const auto denominator = ir.add({Kind::Mul, ir.intSortId(), {b, mkIntConst(ir, 2)}, {}});
+    const auto quotient = mkDiv(ir, a, denominator);
+    ir.addAssertion(mkEq(ir, quotient, quotient), 3);
+    const auto product = ir.add({Kind::Mul, ir.intSortId(), {denominator, t}, {}});
+    const auto predicate = ir.add({Kind::Lt, ir.boolSortId(), {a, product}, {}});
+    const auto opposite = ir.add({Kind::Not, ir.boolSortId(), {predicate}, {}});
+    ir.addAssertion(ir.add({Kind::Or, ir.boolSortId(), {predicate, opposite}, {}}), 1);
+    IntDivModLowerer lowerer(ir);
+    REQUIRE(lowerer.run());
+    lowerer.commit();
+    REQUIRE(ir.getScopedAssertions().size() == 14);
+    size_t definitionScope = 0;
+    for (const auto& [level, assertion] : ir.getScopedAssertions()) {
+        (void)assertion;
+        if (level == 3) ++definitionScope;
+    }
+    CHECK(definitionScope == 13);
+    for (long dividend = -7; dividend <= 7; ++dividend) {
+        for (long divisor : {-3L, -2L, -1L, 1L, 2L, 3L}) {
+            for (long threshold = -3; threshold <= 3; ++threshold) {
+                std::unordered_map<ExprId, mpz_class> values{{a, dividend}, {b, divisor}, {t, threshold}};
+                mpz_class remainder;
+                const mpz_class magnitude = divisor < 0 ? -2*divisor : 2*divisor;
+                mpz_mod(remainder.get_mpz_t(), mpz_class(dividend).get_mpz_t(), magnitude.get_mpz_t());
+                for (const auto& origin : lowerer.origins()) {
+                    values[origin.r] = remainder;
+                    values[origin.q] = (mpz_class(dividend) - remainder)/(2*divisor);
+                }
+                bool satisfies = true;
+                for (const auto& [level, assertion] : ir.getScopedAssertions()) {
+                    (void)level;
+                    satisfies &= evaluateLoweredInteger(ir, assertion, values) != 0;
+                }
+                CHECK(satisfies);
+            }
+        }
+    }
 }
 
 TEST_CASE("IntDivModLowerer: divisible remainder relations preserve integer witnesses") {

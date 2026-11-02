@@ -3,13 +3,21 @@
 #include "algebra/linear/LinearExpr.h"
 #include "base/EnvParam.h"
 #include "base/MpqUtils.h"
+#include "ir/ActiveTermUses.h"
 
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <gmpxx.h>
+#include <set>
 
 namespace xolver {
+
+struct SolveEqs::RunState {
+    explicit RunState(const NativeTerms& ir) : uses(ir) {}
+    ActiveTermUses uses;
+    std::unordered_map<ExprId, bool> reconstructable[2];
+};
 
 SolveEqs::SolveEqs(NativeTerms& ir, ModelConverter& mc, DefinitionPolicy policy)
     : ir_(ir), mc_(mc), policy_(policy),
@@ -29,37 +37,21 @@ std::optional<std::string> SolveEqs::asNumericVar(ExprId e) const {
     return std::nullopt;
 }
 
-bool SolveEqs::occurs(const std::string& name, ExprId root) const {
-    std::vector<ExprId> stack{root};
-    std::unordered_set<ExprId> seen;
+bool SolveEqs::isReconstructable(ExprId root, bool polynomial, RunState& state) const {
+    auto& memo = state.reconstructable[polynomial ? 1 : 0];
+    struct Frame { ExprId id; bool processed; };
+    std::vector<Frame> stack{{root, false}};
     while (!stack.empty()) {
-        const auto id = stack.back();
-        stack.pop_back();
-        if (!seen.insert(id).second) continue;
+        const auto id = stack.back().id;
+        if (memo.contains(id)) { stack.pop_back(); continue; }
         const auto& node = ir_.get(id);
-        if (node.kind == Kind::Variable) {
-            if (auto* nm = std::get_if<std::string>(&node.payload.value)) {
-                if (*nm == name) return true;
-            }
-        }
-        for (ExprId c : node.children) stack.push_back(c);
-    }
-    return false;
-}
-
-bool SolveEqs::isReconstructable(ExprId root, bool polynomial) const {
-    std::vector<ExprId> stack{root};
-    std::unordered_set<ExprId> seen;
-    while (!stack.empty()) {
-        const auto id = stack.back();
-        stack.pop_back();
-        if (!seen.insert(id).second) continue;
-        const auto& node = ir_.get(id);
+        std::vector<ExprId> children;
+        bool allowed = true;
         switch (node.kind) {
             case Kind::ConstInt: case Kind::ConstReal: case Kind::Variable:
                 break;
             case Kind::Add: case Kind::Sub: case Kind::Neg: case Kind::ToReal:
-                for (ExprId c : node.children) stack.push_back(c);
+                children.assign(node.children.begin(), node.children.end());
                 break;
             case Kind::Mul: {
                 // Linear: at most one non-constant operand.
@@ -68,48 +60,63 @@ bool SolveEqs::isReconstructable(ExprId root, bool polynomial) const {
                     Kind ck = ir_.get(c).kind;
                     if (ck != Kind::ConstInt && ck != Kind::ConstReal) ++nonConst;
                 }
-                if (!polynomial && nonConst > 1) return false;
-                for (ExprId c : node.children) stack.push_back(c);
+                if (!polynomial && nonConst > 1) allowed = false;
+                children.assign(node.children.begin(), node.children.end());
                 break;
             }
             case Kind::Div: {
                 // A real polynomial may have rational coefficients written as
                 // division. Variable/zero divisors and integer div stay outside
                 // this reconstruction policy.
-                if (!polynomial || node.sort != realSortId_ || node.children.size() != 2)
-                    return false;
+                if (!polynomial || node.sort != realSortId_ || node.children.size() != 2) {
+                    allowed = false;
+                    break;
+                }
                 const auto& divisor = ir_.get(node.children[1]);
-                if (divisor.kind != Kind::ConstInt && divisor.kind != Kind::ConstReal)
-                    return false;
+                if (divisor.kind != Kind::ConstInt && divisor.kind != Kind::ConstReal) {
+                    allowed = false;
+                    break;
+                }
                 try {
                     if (const auto* value = std::get_if<int64_t>(&divisor.payload.value)) {
-                        if (*value == 0) return false;
+                        if (*value == 0) allowed = false;
                     } else if (const auto* value = std::get_if<std::string>(&divisor.payload.value)) {
-                        if (mpqFromString(*value) == 0) return false;
-                    } else return false;
-                } catch (const std::exception&) { return false; }
-                stack.push_back(node.children[0]);
+                        if (mpqFromString(*value) == 0) allowed = false;
+                    } else allowed = false;
+                } catch (const std::exception&) { allowed = false; }
+                children.push_back(node.children[0]);
                 break;
             }
             default:
-                return false;  // mod/pow/to_int/uf/ite/array/... not reconstructable here
+                allowed = false;
+        }
+        if (!allowed) { memo[id] = false; stack.pop_back(); continue; }
+        if (!stack.back().processed) {
+            stack.back().processed = true;
+            for (const auto child : children)
+                if (!memo.contains(child)) stack.push_back({child, false});
+        } else {
+            memo[id] = std::all_of(children.begin(), children.end(),
+                [&](ExprId child) { return memo.at(child); });
+            stack.pop_back();
         }
     }
-    return true;
+    return memo.at(root);
 }
 
-bool SolveEqs::admissibleDefinition(const std::string& name, ExprId e, SortId targetSort) {
-    if (isReconstructable(e, false)) return true;
+bool SolveEqs::admissibleDefinition(const std::string& name, ExprId e, SortId targetSort, RunState& state) {
+    if (isReconstructable(e, false, state)) return true;
     if (policy_ == DefinitionPolicy::PolynomialReals &&
-        targetSort == realSortId_ && isReconstructable(e, true)) return true;
+        targetSort == realSortId_ && isReconstructable(e, true, state)) return true;
     return policy_ == DefinitionPolicy::PolynomialInLinearPositions &&
-           isReconstructable(e, true) && hasOnlyLinearUses(name);
+           isReconstructable(e, true, state) && hasOnlyLinearUses(name);
 }
 
 bool SolveEqs::hasOnlyLinearUses(const std::string& name) {
     struct Frame { ExprId e; bool nonlinear; };
     std::vector<Frame> stack;
-    for (const auto& conjunct : conjuncts_) stack.push_back({conjunct.second, false});
+    for (const auto& conjunct : conjuncts_)
+        if (conjunct.second != NullExpr) stack.push_back({conjunct.second, false});
     std::unordered_map<ExprId, unsigned char> seen;
     while (!stack.empty()) {
         if (++substWork_ > workBudget_) return false;
@@ -148,7 +155,9 @@ bool SolveEqs::hasOnlyLinearUses(const std::string& name) {
     return true;
 }
 
-ExprId SolveEqs::substitute(ExprId root, const std::string& name, ExprId replacement) {
+ExprId SolveEqs::substitute(ExprId root, const std::string& name, ExprId replacement,
+                          const std::unordered_set<ExprId>& affected) {
+    if (!affected.contains(root)) return root;
     if (auto it = substMemo_.find(root); it != substMemo_.end()) return it->second;
 
     struct Frame { ExprId e; bool processed; };
@@ -176,7 +185,8 @@ ExprId SolveEqs::substitute(ExprId root, const std::string& name, ExprId replace
             if (node.children.empty()) { substMemo_[e] = e; stack.pop_back(); continue; }
             for (int i = static_cast<int>(node.children.size()) - 1; i >= 0; --i) {
                 ExprId c = node.children[i];
-                if (substMemo_.find(c) == substMemo_.end()) stack.push_back({c, false});
+                if (!affected.contains(c)) substMemo_.try_emplace(c, c);
+                else if (substMemo_.find(c) == substMemo_.end()) stack.push_back({c, false});
             }
             continue;
         }
@@ -228,6 +238,9 @@ bool SolveEqs::run() {
     didRun_ = true;
     eliminated_ = 0;
     conjuncts_.clear();
+    // One object can run repeatedly around polynomial rewriting. Its budget
+    // belongs to that complete preprocessing sequence, not to an individual run.
+    if (substWork_ > workBudget_) return false;
 
     // Flatten top-level conjunctions into atomic conjuncts (keeping levels).
     for (const auto& [level, a] : ir_.getScopedAssertions()) {
@@ -269,20 +282,25 @@ bool SolveEqs::run() {
     // terms in Nelson-Oppen combination; eliminating them is unsound. Pin them.
     computeUnsafeVars();
 
+    RunState state(ir_);
+    std::set<size_t> equalitySlots;
+    for (size_t index = 0; index < conjuncts_.size(); ++index) {
+        const auto root = conjuncts_[index].second;
+        state.uses.setRoot(index, root);
+        const auto& node = ir_.get(root);
+        if (node.kind == Kind::Eq && node.children.size() == 2 &&
+            (asNumericVar(node.children[0]) || asNumericVar(node.children[1])))
+            equalitySlots.insert(index);
+    }
+    auto ready = equalitySlots;
+    substWork_ += state.uses.work();
+    auto indexWork = state.uses.work();
+
     bool progress = true;
     while (progress) {
-        // Substitution-work budget. run() re-substitutes across ALL conjuncts
-        // after EVERY elimination, so the pass is O(eliminations × formula-size).
-        // On small formulas (e.g. QF_LIA convert) this is cheap, but on large
-        // chained-equality systems (SMPT/nec Petri-nets: thousands of `aᵢ = Σx`
-        // aux-defs over tens of thousands of conjuncts) it explodes into
-        // billions of node-visits and burns the whole solve budget in
-        // preprocessing — turning fast UNSATs into timeouts. When the work cap
-        // is hit we stop eliminating and proceed with what we have: every
-        // elimination performed so far is independently equisatisfiable and
-        // registered for model replay, so a partial pass is SOUND (it is not a
-        // verdict, only a simplification). Budget is generous enough to complete
-        // the small formulas the pass actually helps; env-overridable for tuning.
+        // Stop only between complete eliminations. The reverse-use index
+        // excludes inactive parents and visits only the chosen variable's
+        // ancestors, including all distinct IR leaves carrying its name.
         if (substWork_ > workBudget_) {
             if (eliminated_ > 0 && xolver::config::read<xolver::config::ReadKind::Presence>("XOLVER_PP_SOLVE_EQS_DIAG"))
                 std::fprintf(stderr, "[SolveEqs] work budget hit after %zu elims; stopping\n",
@@ -290,7 +308,9 @@ bool SolveEqs::run() {
             break;
         }
         progress = false;
-        for (size_t idx = 0; idx < conjuncts_.size(); ++idx) {
+        while (!ready.empty()) {
+            const auto idx = *ready.begin();
+            ready.erase(ready.begin());
             ExprId c = conjuncts_[idx].second;
             const auto& node = ir_.get(c);
             if (node.kind != Kind::Eq || node.children.size() != 2) continue;
@@ -299,28 +319,57 @@ bool SolveEqs::run() {
             std::string varName;
             ExprId defExpr = NullExpr;
             SortId varSort = NullSort;
-            if (auto n = asNumericVar(lhs); n && !occurs(*n, rhs) && admissibleDefinition(*n, rhs, ir_.get(lhs).sort)) {
-                varName = *n; defExpr = rhs; varSort = ir_.get(lhs).sort;
-            } else if (auto n2 = asNumericVar(rhs); n2 && !occurs(*n2, lhs) && admissibleDefinition(*n2, lhs, ir_.get(rhs).sort)) {
-                varName = *n2; defExpr = lhs; varSort = ir_.get(rhs).sort;
-            } else {
-                continue;
-            }
+            ActiveTermUses::Closure affected;
+            auto select = [&](ExprId variable, ExprId definition) {
+                const auto name = asNumericVar(variable);
+                if (!name) return false;
+                affected = state.uses.variableClosure(*name);
+                substWork_ += state.uses.work() - indexWork;
+                indexWork = state.uses.work();
+                const auto sort = ir_.get(variable).sort;
+                if (affected.terms.contains(definition) ||
+                    !admissibleDefinition(*name, definition, sort, state)) return false;
+                varName = *name;
+                varSort = sort;
+                defExpr = definition;
+                return true;
+            };
+            if (!select(lhs, rhs) && !select(rhs, lhs)) continue;
 
             // Never eliminate a variable shared into a UF/array argument: doing
             // so severs a Nelson-Oppen shared term (false-SAT in combination).
             if (unsafeVars_.count(varName)) continue;
 
             // Eliminate: drop this equality, substitute var -> defExpr everywhere else.
-            conjuncts_.erase(conjuncts_.begin() + static_cast<long>(idx));
+            // Stable root slots retain assertion order without shifting every
+            // remaining conjunct after each definition is removed.
+            conjuncts_[idx].second = NullExpr;
+            state.uses.setRoot(idx, NullExpr);
+            equalitySlots.erase(idx);
             substMemo_.clear();
-            for (auto& cj : conjuncts_) cj.second = substitute(cj.second, varName, defExpr);
+            for (const auto slot : affected.roots) {
+                auto& root = conjuncts_[slot].second;
+                if (root == NullExpr) continue;
+                root = substitute(root, varName, defExpr, affected.terms);
+                state.uses.setRoot(slot, root);
+                if (equalitySlots.contains(slot)) ready.insert(slot);
+            }
+            substWork_ += state.uses.work() - indexWork;
+            indexWork = state.uses.work();
             mc_.registerElimination(varName, varSort, defExpr);
             ++eliminated_;
             progress = true;
-            break;  // indices shifted; restart scan
+            // This policy additionally depends on nonlinear uses elsewhere:
+            // substituting another variable can change those uses without
+            // changing the defining equality itself. Other policies depend
+            // only on the current defining term and the fixed unsafe set.
+            if (policy_ == DefinitionPolicy::PolynomialInLinearPositions)
+                ready = equalitySlots;
+            break;  // restart in the original assertion order
         }
     }
+    conjuncts_.erase(std::remove_if(conjuncts_.begin(), conjuncts_.end(),
+        [](const auto& conjunct) { return conjunct.second == NullExpr; }), conjuncts_.end());
     if (diag) {
         const uint64_t dag1 = dagSize();
         std::fprintf(stderr, "[SolveEqs] elim=%zu dag %llu->%llu ratio=%.2f work=%llu\n",

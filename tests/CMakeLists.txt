@@ -35,7 +35,11 @@ if(UNIT_TEST_SOURCES)
     )
     target_include_directories(xolver_unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
     add_test(NAME unit COMMAND xolver_unit_tests)
-    set_tests_properties(unit PROPERTIES LABELS "unit")
+    # Unit fixtures use paths relative to the repository root, as when the
+    # executable is invoked directly from that directory.
+    set_tests_properties(unit PROPERTIES
+        LABELS "unit"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
 endif()
 
 add_executable(xolver_checker_tests checker/main.cpp)

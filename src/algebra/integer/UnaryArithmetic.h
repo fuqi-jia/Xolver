@@ -1,5 +1,6 @@
 #pragma once
 #include "contracts/PresburgerFormula.h"
+#include "algebra/linear/AffineIntegerDomain.h"
 #include <optional>
 #include <stdexcept>
 #include <utility>
@@ -54,7 +55,7 @@ public:
     // numerical bound or a loop proportional to a modulus. Its exponential
     // dependence on the number of exclusions consumes the normal work budget.
     std::optional<mpz_class> solve(const Cube& cube, Var variable) {
-        std::optional<mpz_class> lower, upper;
+        AffineIntegerDomain interval;
         Congruence positive;
         std::vector<Congruence> negative;
         for (const auto& literal : cube) {
@@ -80,16 +81,11 @@ public:
                     positive = std::move(*combined);
                 }
             } else {
-                mpz_class bound, rhs = -constant;
-                if (coefficient > 0) {
-                    mpz_fdiv_q(bound.get_mpz_t(), rhs.get_mpz_t(), coefficient.get_mpz_t());
-                    if (!upper || bound < *upper) upper = bound;
-                } else {
-                    mpz_cdiv_q(bound.get_mpz_t(), rhs.get_mpz_t(), coefficient.get_mpz_t());
-                    if (!lower || bound > *lower) lower = bound;
-                }
+                interval.constrain(mpq_class(coefficient), mpq_class(constant), Relation::Leq);
             }
         }
+        const auto& lower = interval.lowerBound();
+        const auto& upper = interval.upperBound();
         if (lower && upper && *lower > *upper) return {};
         std::optional<mpz_class> first, last;
         if (lower) {

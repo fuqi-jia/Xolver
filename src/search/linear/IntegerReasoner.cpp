@@ -1,6 +1,7 @@
 #include "search/linear/IntegerReasoner.h"
 #include "algebra/linear/LinearConstraintNormalizer.h"
 #include "algebra/linear/IntegerIntervalCombination.h"
+#include "search/linear/LinearBoundPropagation.h"
 #include <algorithm>
 #include <unordered_map>
 
@@ -109,11 +110,12 @@ std::optional<TheoryConflict> IntegerReasoner::checkIntervalCombinationConflict(
         return TheoryConflict{std::move(reasons)};
     };
     try {
+        std::vector<LinearBoundRow> propagationRows;
         for (const auto& atom : activeAtoms) {
             budget.tick();
-            if (atom.lhs.terms.size() < 2) continue;
             auto nc = normalize(atom.lhs, atom.rhs, atom.rel, atom.value);
             if (!nc || (nc->rel != Relation::Eq && nc->rel != Relation::Leq)) continue;
+            propagationRows.push_back({nc->lhs, nc->rel, nc->rhs, {atom.lit}});
             auto& form = nc->lhs;
             form.terms.erase(std::remove_if(form.terms.begin(), form.terms.end(),
                 [](const auto& term) { return term.second == 0; }), form.terms.end());
@@ -145,6 +147,13 @@ std::optional<TheoryConflict> IntegerReasoner::checkIntervalCombinationConflict(
             if (band.lower && band.upper && *band.lower > *band.upper)
                 return conflict(band, band);
         }
+        // Interval closure can refute several coupled forms before a branch
+        // lemma is installed. It uses only this active context, so backtracking
+        // needs no additional state and the simplex assignment is untouched.
+        WorkBudget propagationBudget(262144);
+        if (auto reasons = LinearBoundPropagation::findConflict(propagationRows,
+                [](const std::string&) { return true; }, propagationBudget))
+            return TheoryConflict{std::move(*reasons)};
         struct Bounded {
             const LinearFormKey* key;
             const Band* reasons;

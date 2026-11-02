@@ -13,7 +13,7 @@ namespace xolver::bitblast {
 
 // Whole-formula eager bit-blaster (BLAN-style) as a SOUND PORTFOLIO ARM.
 //
-// Translates the ENTIRE lowered integer formula — boolean skeleton via Tseitin
+// Translates the ENTIRE lowered numeric formula — boolean skeleton via Tseitin
 // gates + each arithmetic atom reified via the ported bit-blaster (Int vars ->
 // two's-complement bit-vectors) — into ONE SAT instance and solves it once.
 //
@@ -21,7 +21,10 @@ namespace xolver::bitblast {
 // CANDIDATE; it is accepted only after EXACT integer re-evaluation of every
 // assertion (kernel arithmetic + the boolean structure). It NEVER returns Unsat
 // (a bit-blast UNSAT at a heuristic width proves nothing about the unbounded
-// integer problem) and NEVER returns an unvalidated Sat. Finite-domain LIA
+// integer problem) and NEVER returns an unvalidated Sat. Real polynomial
+// inputs use the same integer-valued candidate points and exact validation;
+// failure of that subset search leaves the original real problem open.
+// Finite-domain LIA
 // enters through solveLinear and uses fully reified pseudo-Boolean constraints
 // for arbitrary finite signed integer domains.
 // Any encoding mistake
@@ -41,7 +44,7 @@ public:
         // Without this, evalBool's missing-var default to false caused wrong
         // Ite-branch selection during reconstruction (test_model_consistency).
         Status status = Status::Unknown;
-        std::unordered_map<std::string, mpz_class> model;     // validated int model
+        std::unordered_map<std::string, mpz_class> model;     // validated integral numeric point
         std::unordered_map<std::string, bool> boolModel;      // Bool variables
     };
 
@@ -95,8 +98,8 @@ private:
     void tryExtractBound(PolyId diff, Relation rel);
 
 
-    // Walk the DAG: reject unsupported constructs (UF/array/quantifier/real),
-    // convert every arith atom, collect int vars. Returns false => bail Unknown.
+    // Walk the DAG: reject unsupported constructs (UF/array/quantifier),
+    // convert every polynomial atom, collect numeric vars. False => Unknown.
     bool collect(const NativeTerms& ir, const std::vector<ExprId>& assertions);
 
     bool isBoolTyped(ExprId eid, const NativeTerms& ir) const;

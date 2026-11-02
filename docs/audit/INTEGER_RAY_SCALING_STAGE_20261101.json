@@ -1,0 +1,552 @@
+{
+  "date": "2026-11-01",
+  "status": "capability_qualified_performance_experiment_closed",
+  "source_head": "eb5235fc81f2aa9f3afcf8e03f47e8f7fc831c5b",
+  "root_causes": [
+    {
+      "problem": "P1 only tried primitive nonnegative integer rays. Strict scalar inequalities may require a larger integer multiple even when every equality is homogeneous.",
+      "example": "p=q, p>1, p<=2: primitive (1,1) is invalid; the integer multiple (2,2) is valid.",
+      "parent_reproduction": {
+        "record": "/pub/data/jiafq/xolver/validation/arithmetic-r103/ray-scale-r1585/reference-scaling.json",
+        "record_sha256": "39fc2957a9e496d106b838d1f43d75a31d3d73b77e9194bbd5803eae3fd8c9f9",
+        "log_sha256": "09cf70dc0d1ee3095e899263d30728a80b711b72f6b9cc4ac3fdb69f39d34b37",
+        "returncode": 1,
+        "boundary": "Expected missing-capability failure of candidate construction, not an unsound parent solver verdict."
+      }
+    },
+    {
+      "problem": "extractIneqRow changed the constant sign when a constant appeared on the left side. c < p became p+c>0 after reversing the relation; it must remain p-c>0.",
+      "evidence": "R1585 passed all compilation and 31/34 targeted tests; three new tests failed with eight assertions. Fixing the existing sign error, without relaxing tests, makes all 34 pass.",
+      "failed_experiment": "764edbbcc7b5",
+      "failed_run": "0a025a646cb6",
+      "failed_records_preserved": true
+    }
+  ],
+  "implementation": {
+    "files": [
+      "src/algebra/linear/AffineIntegerDomain.h",
+      "src/algebra/linear/AffineIntegerDomain.cpp",
+      "src/algebra/integer/UnaryArithmetic.h",
+      "src/search/nia/farkas/FarkasOrBranchSolver.h",
+      "src/search/nia/farkas/FarkasOrBranchSolver.cpp",
+      "src/applications/verification/pa/Presburger.cpp",
+      "src/applications/satisfiability/smt/lia/Solver.cpp"
+    ],
+    "source_overrides": {
+      "src/algebra/linear/AffineIntegerDomain.h": "02499ec6bb2d87916da29831ac9d65af224244a018b6c3188575132b5c374cd1",
+      "src/algebra/linear/AffineIntegerDomain.cpp": "fbc46c887f63ce840d0716f8d62d55cafbc37cb7bfe2ab5dfc8acfe9519361a5",
+      "src/algebra/integer/UnaryArithmetic.h": "53339f3340f4167ab16f36a4d5f75c127cde0c1575f71d7830a1e2890d48598a",
+      "src/search/nia/farkas/FarkasOrBranchSolver.h": "eaa238f128adffaabdc2bf00820393d04cf93c2ad659cd64e6ecc7b406df9aec",
+      "src/search/nia/farkas/FarkasOrBranchSolver.cpp": "4e0e12ae60793ec626107cb95c00d01134bdbbed2fa4cbfff90f56abb6dc9514",
+      "src/applications/verification/pa/Presburger.cpp": "eb4c5c308cc9b2539c99411274672166c56e440e2691369e1a03fb4117c08775",
+      "src/applications/satisfiability/smt/lia/Solver.cpp": "61f232f00e1788eec61c3333d25f9f300e50f53f7c20c5754fc77614e7d4136c",
+      "tests/unit/test_affine_integer_domain.cpp": "ad840857c27edffb9f48dd27bbac23a4db0e65e56a4967a185a51e6e2abf47af",
+      "tests/unit/test_farkas_or_branch_solver.cpp": "67c4109173ad67b6bfa9986cd1a92bcba6f217133a3f038a41d0d8281695bc4e",
+      "tests/unit/test_nia_farkas_cache.cpp": "e990f6fdc71c4a894a39dfa44e58f71e48f371e4fd2b55177a76d7920dff2fe8",
+      "tests/unit/test_native_presburger.cpp": "dd830a49b5ffafd009a66402fdc27bd33ad7881ab27a968b777e89057e99a91f"
+    },
+    "behavior": "AffineIntegerDomain intersects exact rational affine constraints over one integer, including strict bounds, equalities and excluded points. Farkas completeCandidate constrains a positive integer multiplier by every equality and each CT-independent inequality. It chooses the least feasible multiplier, materializes GMP integer lambda values and recomputes every symbolic cost bound before CSP/model validation. Nonzero equality RHS is explicitly enforced and generally fixes the multiplier at one.",
+    "shared_clients": [
+      "FarkasOrBranchSolver core support enumeration",
+      "FarkasOrBranchSolver augmented residual path",
+      "existing Presburger UnaryArithmetic interval calculation used in elimination and model reconstruction"
+    ],
+    "sharing_boundary": "One algebra primitive replaces the Presburger interval-rounding code and serves candidate scaling. CRT and divisibility reasoning remain in the existing unary arithmetic kernel. This is integer scale selection; no real-variable scaling rule or universal boundary-search completeness claim follows.",
+    "inference_boundary": "CT-dependent inequalities remain symbolic downstream. Failure to scale one ray is not a refutation. Every SAT model is still checked against original assertions. No external runtime oracle, benchmark/answer rule, new feature gate, compatibility overload or LRA/LIA rollback-policy change.",
+    "abi_boundary": "Existing object layouts unchanged. The P1 implementation, both application clients of the changed Presburger header, and all directly affected unit objects are rebuilt. Source/object provenance is qualified; a canonical build and PR/main CI are still required for promotion."
+  },
+  "qualification": {
+    "experiment": "103e3d75eed7",
+    "run": "96cdefbc609d",
+    "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/ray-scale-r1586/qualification.json",
+    "sha256": "e6add31b11591abc3a16070001586a9a43c0e741371043436a048c00e56f0184",
+    "unit_cases": 1983,
+    "unit_assertions": 1293727,
+    "targeted_cases": 34,
+    "targeted_assertions": 14887,
+    "cli_sha256": "cce9debc774347d77227393df0f51ff8d72a13c30a54c5f1311155f5911c273d",
+    "worker_sha256": "f71ac0756383264323b081479d87238c26705d02ec18887ab8243e2e450626c4",
+    "core_archive_sha256": "9b2bdd3218deb1d6081d330ec9bfdf33a5026794d3e0dacb3dba59bb7cbdaeca",
+    "architecture": {
+      "files": 705,
+      "layers": 11,
+      "violations": 0
+    },
+    "covers": [
+      "all six affine relations against independent bounded integer enumeration",
+      "rational signs and strict endpoints",
+      "equality/disequality composition",
+      "bounds beyond machine integers",
+      "required scales beyond 32-bit integers",
+      "conflicting lower and upper bounds",
+      "preserving nonzero equality RHS",
+      "cost intervals recomputed using scaled multipliers",
+      "SAT/UNSAT replacement and pop now construct the formerly missing SAT witness",
+      "existing Presburger elimination/model/evidence regressions"
+    ],
+    "reuse": "R1585 compiled all sources and tests. R1586 recompiles the corrected P1 implementation; all other reused source/header/test pins are identical. The expected parent missing-capability log and failed R1585 targeted record remain immutable."
+  },
+  "independent_truth": {
+    "experiment": "f4ab462ed920",
+    "receipt": "/pub/data/jiafq/xolver/validation/arithmetic-r103/ray-scale-truth-r1587/receipt.json",
+    "receipt_sha256": "3f704ae44f903e15e69b40196fc93f23ae87dc74bf2d8e7ad6dfa0587f5f8388",
+    "cases": 8,
+    "checks": 16,
+    "all_terminal_exit0_pid_gone": true,
+    "records": [
+      {
+        "case": "constant-on-left",
+        "input_sha256": "4fe2cdc5bfa4e3bbf0d2ac82ba98fa9ec1779bf9d8d82b9325ed62618cb29122",
+        "oracles": [
+          "z3",
+          "cvc5"
+        ],
+        "expected": "sat"
+      },
+      {
+        "case": "nonzero-rhs",
+        "input_sha256": "9f7f2047322fa006a692fa9ff8ff37815c445eea9c19377da996b2ee6d28f631",
+        "oracles": [
+          "z3",
+          "cvc5"
+        ],
+        "expected": "unsat"
+      },
+      {
+        "case": "scale-1",
+        "input_sha256": "dee750251d2d05c4ac18be7c7b516aeed866d0e868ef96709344df1bd403411c",
+        "oracles": [
+          "z3",
+          "cvc5"
+        ],
+        "expected": "sat"
+      },
+      {
+        "case": "scale-1099511627776",
+        "input_sha256": "7373b4920163f07793cb940ec0a3489ed2b2dc7e46736f9a51adbc7080f22175",
+        "oracles": [
+          "z3",
+          "cvc5"
+        ],
+        "expected": "sat"
+      },
+      {
+        "case": "scale-2147483649",
+        "input_sha256": "5b31d10e8f6a948a686b1163b5a38338ead5b403218713f4114ee049841ad0ae",
+        "oracles": [
+          "z3",
+          "cvc5"
+        ],
+        "expected": "sat"
+      },
+      {
+        "case": "scale-7",
+        "input_sha256": "ef3c27be7043cff2ffccc73138fc3b9fa1068854e9b8757b548b419a4ac7384a",
+        "oracles": [
+          "z3",
+          "cvc5"
+        ],
+        "expected": "sat"
+      },
+      {
+        "case": "scaled-cost",
+        "input_sha256": "40a08411feae441d5135fe95740b191cd528cc64f20cebdc4ffc2dd0d42f53d4",
+        "oracles": [
+          "z3",
+          "cvc5"
+        ],
+        "expected": "sat"
+      },
+      {
+        "case": "upper-conflict",
+        "input_sha256": "6699f7da9b724497d4a8790a08003990910dabee1a4ada85e1f1c2128630e6d9",
+        "oracles": [
+          "z3",
+          "cvc5"
+        ],
+        "expected": "unsat"
+      }
+    ],
+    "boundary": "Both frozen Z3 and cvc5 check the generic kernels, including explicit scaled-cost witness and impossible upper/RHS constraints. These are capability checks, not additional fixed160 solves or QCP program proofs."
+  },
+  "comparison": {
+    "directory": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r1588",
+    "experiments": [
+      {
+        "id": "8b1a28cfdbf2",
+        "name": "xolver-ray-scale-fixed160-priority-r1588-20261101",
+        "status": "done"
+      },
+      {
+        "id": "9527d3f0cda0",
+        "name": "xolver-ray-scale-fixed160-batch-a-r1588-20261101",
+        "status": "done"
+      },
+      {
+        "id": "88da564256ac",
+        "name": "xolver-ray-scale-fixed160-batch-b-r1588-20261101",
+        "status": "done"
+      },
+      {
+        "id": "bed23274ce5f",
+        "name": "xolver-ray-scale-fixed160-batch-c-r1588-20261101",
+        "status": "done"
+      },
+      {
+        "id": "bad909b24fbe",
+        "name": "xolver-ray-scale-fixed160-batch-d-r1588-20261101",
+        "status": "done"
+      },
+      {
+        "id": "b7cdff22de70",
+        "name": "xolver-ray-scale-fixed160-batch-e-r1588-20261101",
+        "status": "done"
+      },
+      {
+        "id": "3a8f1875e81e",
+        "name": "xolver-ray-scale-fixed160-batch-f-r1588-20261101",
+        "status": "done"
+      }
+    ],
+    "native_case_runs": 160,
+    "selected_cases": 160,
+    "retries": 0,
+    "all_success_exit0_pid_gone": true,
+    "timeout_seconds": 60,
+    "memory_bytes": 17179869184,
+    "physical_cpus_per_case": 1,
+    "model_capture": "initial-solve-single-model",
+    "manifest_sha256": "09c122ac12b52b62736579c475af8ad806f5cd41be66a51e928a0a32e7750321",
+    "binaries": {
+      "baseline": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/farkas-cache-r1582/xolver",
+        "sha256": "41e9f2be9f25f9d3500835c01f8f8ff73cab9f26ff7378ffe39abf177a3f71f4"
+      },
+      "candidate": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/ray-scale-r1586/xolver",
+        "sha256": "cce9debc774347d77227393df0f51ff8d72a13c30a54c5f1311155f5911c273d"
+      },
+      "z3": {
+        "path": "/pub/data/jiafq/xolver/dependencies/oracles/z3-5.3.2",
+        "sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e"
+      }
+    },
+    "counts": {
+      "baseline": {
+        "unsat": 48,
+        "decided": 109,
+        "verified_decided": 108,
+        "verified_par2": 6767.814984403551,
+        "raw_par2": 6647.832687636837,
+        "timeout": 50,
+        "sat": 61,
+        "unknown": 1
+      },
+      "candidate": {
+        "unsat": 48,
+        "decided": 109,
+        "verified_decided": 108,
+        "verified_par2": 6763.298053059727,
+        "raw_par2": 6643.3179634753615,
+        "timeout": 50,
+        "sat": 61,
+        "unknown": 1
+      },
+      "z3": {
+        "unsat": 58,
+        "decided": 124,
+        "verified_decided": 119,
+        "verified_par2": 5207.654746523127,
+        "raw_par2": 4648.692888123915,
+        "sat": 66,
+        "timeout": 36
+      }
+    },
+    "by_logic": {
+      "QF_LIA": {
+        "baseline": {
+          "unsat": 15,
+          "decided": 35,
+          "verified_decided": 35,
+          "verified_par2": 1812.6065363548696,
+          "raw_par2": 1812.6065363548696,
+          "timeout": 13,
+          "sat": 20
+        },
+        "candidate": {
+          "unsat": 15,
+          "decided": 35,
+          "verified_decided": 35,
+          "verified_par2": 1815.1157789118588,
+          "raw_par2": 1815.1157789118588,
+          "timeout": 13,
+          "sat": 20
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 38,
+          "verified_decided": 37,
+          "verified_par2": 1360.005800370127,
+          "raw_par2": 1280.378498379141,
+          "sat": 23,
+          "timeout": 10
+        }
+      },
+      "QF_NIA": {
+        "baseline": {
+          "timeout": 19,
+          "decided": 29,
+          "verified_decided": 28,
+          "verified_par2": 2447.57717291452,
+          "raw_par2": 2327.5948761478066,
+          "unsat": 16,
+          "sat": 13
+        },
+        "candidate": {
+          "timeout": 19,
+          "decided": 29,
+          "verified_decided": 28,
+          "verified_par2": 2447.6843320596963,
+          "raw_par2": 2327.704242475331,
+          "unsat": 16,
+          "sat": 13
+        },
+        "z3": {
+          "unsat": 22,
+          "decided": 34,
+          "verified_decided": 30,
+          "verified_par2": 2212.228488193825,
+          "raw_par2": 1732.8939317855984,
+          "sat": 12,
+          "timeout": 14
+        }
+      },
+      "QF_LRA": {
+        "baseline": {
+          "unsat": 10,
+          "decided": 19,
+          "verified_decided": 19,
+          "verified_par2": 1694.2379913069308,
+          "raw_par2": 1694.2379913069308,
+          "timeout": 13,
+          "sat": 9
+        },
+        "candidate": {
+          "unsat": 10,
+          "decided": 19,
+          "verified_decided": 19,
+          "verified_par2": 1683.2869107089937,
+          "raw_par2": 1683.2869107089937,
+          "timeout": 13,
+          "sat": 9
+        },
+        "z3": {
+          "unsat": 15,
+          "decided": 26,
+          "verified_decided": 26,
+          "verified_par2": 814.8863303456455,
+          "raw_par2": 814.8863303456455,
+          "sat": 11,
+          "timeout": 6
+        }
+      },
+      "QF_NRA": {
+        "baseline": {
+          "sat": 19,
+          "decided": 26,
+          "verified_decided": 26,
+          "verified_par2": 813.3932838272303,
+          "raw_par2": 813.3932838272303,
+          "unsat": 7,
+          "timeout": 5,
+          "unknown": 1
+        },
+        "candidate": {
+          "sat": 19,
+          "decided": 26,
+          "verified_decided": 26,
+          "verified_par2": 817.2110313791782,
+          "raw_par2": 817.2110313791782,
+          "unsat": 7,
+          "timeout": 5,
+          "unknown": 1
+        },
+        "z3": {
+          "sat": 20,
+          "decided": 26,
+          "verified_decided": 26,
+          "verified_par2": 820.5341276135296,
+          "raw_par2": 820.5341276135296,
+          "timeout": 6,
+          "unsat": 6
+        }
+      }
+    },
+    "changes": [],
+    "wrong_verdicts": [],
+    "invalid_exported_models": [],
+    "protocol_errors": 0,
+    "candidate_minus_parent_par2_seconds": -4.516931343823671,
+    "candidate_minus_parent_par2_percent": -0.06674135380817817,
+    "representative_gaps": [
+      {
+        "index": 29,
+        "baseline": "timeout",
+        "candidate": "timeout",
+        "z3": "unsat"
+      },
+      {
+        "index": 106,
+        "baseline": "timeout",
+        "candidate": "timeout",
+        "z3": "sat"
+      },
+      {
+        "index": 116,
+        "baseline": "timeout",
+        "candidate": "timeout",
+        "z3": "unsat"
+      }
+    ],
+    "round_variation": {
+      "index": 144,
+      "logic": "QF_NRA",
+      "previous_round_same_frozen_parent": "sat",
+      "current_baseline": "timeout",
+      "current_candidate": "timeout",
+      "boundary": "Both valid current60s timeouts are retained. No retake or old performance substitution. The previous109 count is not the count of this fresh round."
+    },
+    "largest_observed_time_changes": [
+      {
+        "index": 131,
+        "logic": "QF_LRA",
+        "baseline_seconds": 58.934899715706706,
+        "candidate_seconds": 48.34934157691896
+      },
+      {
+        "index": 146,
+        "logic": "QF_NRA",
+        "baseline_seconds": 38.37788685597479,
+        "candidate_seconds": 42.8920953925699
+      }
+    ],
+    "independent_truth_supplements": [
+      {
+        "index": 50,
+        "input_sha256": "7e71a151d917978f1b5afc2791abf589e30c8ff97e930979df6ef82ad72dcdc0",
+        "independent_record": "/pub/data/jiafq/xolver/validation/arithmetic-r103/independent-unsat-r1496/50/record.json",
+        "record_sha256": "fb1f06b6fd64b28bb2d167508f5cb37db82df0568c516dc68da96ddb02619c1b",
+        "checker_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+        "validation_seconds": 127.20317284949124,
+        "boundary": "Historical independent truth only; every performance count/time comes from this fresh same-budget round."
+      },
+      {
+        "index": 80,
+        "input_sha256": "1bcb3b052ef1f9ebe04cf76147f19dc54fb0678342d72b829a38a936c56959fe",
+        "independent_record": "/pub/data/jiafq/xolver/validation/arithmetic-r103/independent-unsat-r1496/80/record.json",
+        "record_sha256": "9f111aee9411aadd3a9f32de8310734424a7cdc02fc326718beb4952f6fb4d23",
+        "checker_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+        "validation_seconds": 643.5456116814166,
+        "boundary": "Historical independent truth only; every performance count/time comes from this fresh same-budget round."
+      }
+    ],
+    "unconfirmed": [
+      {
+        "index": 12,
+        "case": "QF_LIA/fft/Sz128_2823.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 24,
+        "case": "QF_NIA/LassoRanker/ChawdharyCookGulwaniSagivYang-ESOP2008-aaron4_true-termination.c_Iteration1_Loop+nonterminationTemplate_0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 27,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 42,
+        "case": "QF_NIA/20230328-sqrtmodinv-hoenicke/sqrtStep2a.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 114,
+        "case": "QF_NIA/20210219-Dartagnan/ReachSafety-Loops/bresenham-ll_unwindbound20-O0.smt2",
+        "results": {
+          "baseline": "timeout",
+          "candidate": "timeout",
+          "z3": "unsat"
+        },
+        "reasons": {
+          "z3": "no independent confirmation within budget"
+        }
+      },
+      {
+        "index": 115,
+        "case": "QF_NIA/20230321-UltimateAutomizerSvcomp2023/ps6.c_7.smt2",
+        "results": {
+          "candidate": "unsat",
+          "z3": "timeout",
+          "baseline": "unsat"
+        },
+        "reasons": {
+          "candidate": "no independent confirmation within budget",
+          "baseline": "no independent confirmation within budget"
+        }
+      }
+    ],
+    "conclusion": "108 verified solves for each Xolver version versus119 for same-round Z3. No gain/loss. Approximately0.067% nominal PAR-2 improvement does not establish a general speed benefit; close this scaling performance experiment without tuning budgets or extending it on the same cases. Retain the independently verified capability and constant-sign fixes."
+  },
+  "evidence": {
+    "full-summary.json": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r1588/summary.json",
+      "sha256": "1472fc04f3ec6f3ec28fd6b80982dc4342764dd9addbadb2fe794be961ee9801"
+    },
+    "truth-adjudication.json": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r1588/truth-adjudication.json",
+      "sha256": "c19304ebd0f7dacd6735c103cb81526e5ec3263c909601126c18405996ced3c0"
+    },
+    "receipt.json": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/fair-r1588/receipt.json",
+      "sha256": "036be75112be60425af37cde2ca35f00e9799137b5d6353a1dfce425e7e8c165"
+    }
+  },
+  "qcp_boundary": "No new original-C QCP controller result for workerf71ac075. Existing controlled QCP program checks remain the regression basis. Neither extracted queries nor the new arithmetic kernels establish end-to-end superiority.",
+  "protected_sets_used": false,
+  "main_promotion": false,
+  "next": [
+    "Measure the remaining real gap mechanisms before the next implementation; do not continue scale/budget-only tuning after this closed no-gain experiment.",
+    "Qualify the frozen current worker in real original-C QCP workflows with common frozen proof materials.",
+    "Canonical build, PR/main CI and the final fresh frozen comparison plus the still-unused independent program/SMT protected sets remain required."
+  ]
+}

@@ -37,6 +37,7 @@ bool IntDivModLowerer::run() {
     }
 
     emitRemainderRelations();
+    emitQuotientOrderCuts(loweredScoped);
     for (const auto& gen : generatedAssertions_) {
         loweredScoped.push_back({gen.level, gen.expr});
     }
@@ -390,6 +391,96 @@ void IntDivModLowerer::emitRemainderRelations() {
                     mkLe(large.variable, mkAdd(small.variable, mkIntConst(span)))});
             }
             break;
+        }
+    }
+}
+
+void IntDivModLowerer::emitQuotientOrderCuts(
+    const std::vector<std::pair<ScopeLevel, ExprId>>& assertions) {
+    struct Quotient { ScopeLevel level; ExprId value; };
+    std::unordered_map<ExprId, std::unordered_map<ExprId, std::vector<Quotient>>> quotients;
+    for (const auto& [key, def] : registry_) {
+        if (evalIntConstTerm(def.b)) continue;
+        quotients[def.a][def.b].push_back({key.level, def.q});
+    }
+    if (quotients.empty()) return;
+    for (auto& [dividend, divisors] : quotients) {
+        (void)dividend;
+        for (auto& [divisor, values] : divisors) {
+            (void)divisor;
+            std::sort(values.begin(), values.end(), [](const auto& a, const auto& b) {
+                return a.value < b.value;
+            });
+        }
+    }
+
+    // Preserve the source predicate as a premise, including below negation or
+    // disjunction. These are valid consequences of Euclidean division, not
+    // assumptions about the Boolean polarity of an observed product bound.
+    std::unordered_map<ScopeLevel, std::unordered_set<ExprId>> seen;
+    for (const auto& [level, assertion] : assertions) {
+        std::vector<ExprId> pending{assertion};
+        while (!pending.empty()) {
+            const auto id = pending.back();
+            pending.pop_back();
+            if (!seen[level].insert(id).second) continue;
+            const auto node = ir_.get(id);
+            pending.insert(pending.end(), node.children.begin(), node.children.end());
+            if (node.children.size() != 2 ||
+                (node.kind != Kind::Eq && node.kind != Kind::Leq && node.kind != Kind::Lt &&
+                 node.kind != Kind::Geq && node.kind != Kind::Gt)) continue;
+            for (bool productFirst : {false, true}) {
+                const auto dividend = node.children[productFirst ? 1 : 0];
+                const auto found = quotients.find(dividend);
+                if (found == quotients.end()) continue;
+                const auto product = node.children[productFirst ? 0 : 1];
+                if (ir_.get(product).kind != Kind::Mul) continue;
+                std::vector<ExprId> factors, work{product};
+                while (!work.empty()) {
+                    const auto factor = work.back();
+                    work.pop_back();
+                    const auto expression = ir_.get(factor);
+                    if (expression.kind == Kind::Mul && !found->second.contains(factor)) {
+                        for (size_t child = expression.children.size(); child-- > 0;)
+                            work.push_back(expression.children[child]);
+                    } else factors.push_back(factor);
+                }
+                std::unordered_set<ExprId> usedDivisors;
+                for (size_t index = 0; index < factors.size(); ++index) {
+                    const auto divisor = factors[index];
+                    const auto entry = found->second.find(divisor);
+                    if (entry == found->second.end() || !usedDivisors.insert(divisor).second) continue;
+                    ExprId threshold = NullExpr;
+                    for (size_t other = 0; other < factors.size(); ++other) {
+                        if (other == index) continue;
+                        threshold = threshold == NullExpr ? factors[other] : mkMul(threshold, factors[other]);
+                    }
+                    if (threshold == NullExpr) threshold = mkIntConst(1);
+                    // Orient the comparison as a R b*t. For b>0, q=floor(a/b):
+                    // a<b*t gives q<t, while a>b*t only gives q>=t.
+                    bool below = node.kind == Kind::Leq || node.kind == Kind::Lt;
+                    if (productFirst) below = !below;
+                    const bool strictBelow = (!productFirst && node.kind == Kind::Lt) ||
+                                             (productFirst && node.kind == Kind::Gt);
+                    const auto zero = mkIntConst(0);
+                    const auto positive = mkLt(zero, divisor), negative = mkLt(divisor, zero);
+                    for (const auto& quotient : entry->second) {
+                        const auto q = quotient.value;
+                        const auto positiveBound = node.kind == Kind::Eq ? mkEq(q, threshold)
+                            : below ? (strictBelow ? mkLt(q, threshold) : mkLe(q, threshold))
+                                    : mkLe(threshold, q);
+                        // For b<0 the Euclidean quotient is ceil(a/b), so the
+                        // reversed consequence is non-strict on both sides.
+                        const auto negativeBound = node.kind == Kind::Eq ? mkEq(q, threshold)
+                            : below ? mkLe(threshold, q) : mkLe(q, threshold);
+                        const auto scope = std::max(level, quotient.level);
+                        generatedAssertions_.push_back({scope,
+                            mkOr(mkNot(positive), mkOr(mkNot(id), positiveBound))});
+                        generatedAssertions_.push_back({scope,
+                            mkOr(mkNot(negative), mkOr(mkNot(id), negativeBound))});
+                    }
+                }
+            }
         }
     }
 }

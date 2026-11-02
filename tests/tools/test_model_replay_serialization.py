@@ -33,6 +33,46 @@ class ModelReplaySerialization(unittest.TestCase):
             replay('(declare-const x Int)',
                    'sat (model (define-fun x () Int 3)(define-fun |x| () Int 3))')
 
+    def test_unused_model_universe_can_be_projected_out(self):
+        source = '(set-logic QF_LIA)(declare-const x Int)(assert (= x 3))'
+        output = '''sat (model
+            (declare-fun U!val!0 () U)
+            (forall ((u U)) (= u U!val!0))
+            (define-fun x () Int 3))'''
+        pinned = replay(source, output)
+        self.assertIn('(define-fun x () Int 3)', pinned)
+        self.assertIn('(assert (= x 3))', pinned)
+        self.assertNotIn('U!val!0', pinned)
+        self.assertNotIn('forall', pinned)
+
+    def test_referenced_universe_element_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, 'uses auxiliary universe element'):
+            replay('(declare-sort U 0)(declare-const x U)', '''sat (model
+                (declare-fun U!val!0 () U)
+                (define-fun x () U U!val!0))''')
+
+    def test_universe_constraint_on_original_symbol_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, 'references original symbol'):
+            replay('(declare-const x Int)', '''sat (model
+                (forall ((u Int)) (= x u))
+                (define-fun x () Int 3))''')
+
+    def test_auxiliary_declaration_cannot_shadow_original_symbol(self):
+        with self.assertRaisesRegex(ValueError, 'shadows original symbol'):
+            replay('(declare-const x Int)',
+                   'sat (model (declare-fun |x| () Int))')
+
+    def test_auxiliary_declaration_cannot_duplicate_definition(self):
+        with self.assertRaisesRegex(ValueError, 'duplicate model definition'):
+            replay('(declare-const x Int)', '''sat (model
+                (declare-fun a () Int)(define-fun |a| () Int 0)
+                (define-fun x () Int 3))''')
+
+    def test_unsupported_model_command_is_still_rejected(self):
+        with self.assertRaisesRegex(ValueError, 'unsupported model binding'):
+            replay('(declare-const x Int)', '''sat (model
+                (assert true)(define-fun x () Int 3))''')
+
 
 if __name__ == '__main__':
     unittest.main()

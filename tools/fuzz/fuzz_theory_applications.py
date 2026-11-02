@@ -56,16 +56,53 @@ def replay(prefix, output):
         raise ValueError('expected model bindings')
     if bindings and isinstance(bindings[0], Atom) and emit(bindings[0]) == 'model':
         bindings = bindings[1:]
-    definitions = {}
+    original_commands = parse(prefix)
+    original_symbols = {symbol_name(command[1]) for command in original_commands
+                        if emit(command[0]) in ('declare-const', 'declare-fun',
+                                                'declare-sort', 'define-fun', 'define-sort')}
+    definitions, auxiliary_declarations, universe_constraints = {}, {}, []
     for binding in bindings:
-        if (not isinstance(binding, list) or len(binding) != 5
-                or emit(binding[0]) != 'define-fun'):
+        if not isinstance(binding, list) or not binding:
+            raise ValueError('unsupported model binding')
+        op = emit(binding[0])
+        if op == 'forall' and len(binding) == 3 and isinstance(binding[1], list):
+            universe_constraints.append(binding)
+            continue
+        if not ((op == 'define-fun' and len(binding) == 5)
+                or (op == 'declare-fun' and len(binding) == 4
+                    and isinstance(binding[2], list))):
             raise ValueError('unsupported model binding')
         name = symbol_name(binding[1])
-        if name in definitions:
+        if name in definitions or name in auxiliary_declarations:
             raise ValueError('duplicate model definition')
-        definitions[name] = binding
-    original_commands = parse(prefix)
+        if op == 'define-fun':
+            definitions[name] = binding
+        else:
+            if name in original_symbols:
+                raise ValueError('model declaration shadows original symbol ' + name)
+            auxiliary_declarations[name] = binding
+
+    def atom_names(node):
+        names, pending = set(), [node]
+        while pending:
+            item = pending.pop()
+            if isinstance(item, list):
+                pending.extend(item)
+            elif isinstance(item, Atom) and item.kind != 'string':
+                names.add(item.text)
+        return names
+
+    # Z3 may print model-only universe elements and a finite-universe axiom.
+    # Project these out only when original interpretations do not use them and
+    # the axiom does not constrain an original symbol. The replay still pins
+    # every original declaration and checks every original assertion.
+    auxiliary_names = auxiliary_declarations.keys()
+    for name in original_symbols & definitions.keys():
+        if atom_names(definitions[name]) & auxiliary_names:
+            raise ValueError('model interpretation uses auxiliary universe element: ' + name)
+    for constraint in universe_constraints:
+        if atom_names(constraint) & original_symbols:
+            raise ValueError('model universe constraint references original symbol')
     algebraic_prelude = []
     if 'root-of-with-interval' in output:
         names = [symbol_name(command[1]) for command in original_commands

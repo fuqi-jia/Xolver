@@ -1,0 +1,95 @@
+{
+  "date": "2026-11-02",
+  "status": "closed_no_new_solve_one_lost_implementation_removed",
+  "qualification": {
+    "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-child-handles-r1675/qualification.json",
+    "sha256": "065b1fb00d836754011aa94a68e5add8fb3a0be204e78de6e7fedf2f9eacc746",
+    "binary_sha256": "0d107b7ff62fe4e3d7019f62cb0d01c950250fdfedb524b707a2c0cf4a21ad16",
+    "worker_sha256": "84c56414226676814c0944317a589f3bdb2260ebb04cda5876c2899ae4aa167a",
+    "unit_cases": 1994,
+    "unit_assertions": 1295885
+  },
+  "pilot": {
+    "experiment": "1b9eff8479a7",
+    "cases": 25,
+    "score": {
+      "baseline": {
+        "verified": 13,
+        "par2": 1772.631077516824
+      },
+      "candidate": {
+        "verified": 12,
+        "par2": 1824.1540298964828
+      },
+      "z3": {
+        "verified": 24,
+        "par2": 248.41719079948962
+      }
+    },
+    "gained": [],
+    "lost": [
+      131
+    ],
+    "wrong": 0,
+    "protocol_errors": 0,
+    "reports": {
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-child-handles-pilot-r1677/case-159/report.json": "2bc53170181b3fd6e42c0c6036b3c2ff248e0c6d9e82e209b2fa5e7d18a9b3b3",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-child-handles-pilot-r1677/case-131/report.json": "037454a1633c087a44aefc47715ba591f9b912d01842711f630b23dc2f2b0b45",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-child-handles-pilot-r1677/case-116/report.json": "6e7696f55a528f6a9d4c4d595bfccb646a6812e7bcc78fcfb0a5d43b533c5042",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-child-handles-pilot-r1677/case-144/report.json": "c53adba69e6e022b99dbfb7982de4d8feed68848068418a132bee6fe4554fb21",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-child-handles-pilot-r1677/case-089/report.json": "1af484057e2411042d1ce6104b033a96d5e5f7d244f2f163272b4ca502bec645",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-child-handles-pilot-r1677/case-034/report.json": "edc726a8b35199539d488ebc592fc652937ade4d729139f543b5e869f07c8745",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-child-handles-pilot-r1677/case-146/report.json": "bea79216bbedfbdacbf79d4969147418b559e5d4774e1a0bffcbbdaa1e1f3deb",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-child-handles-pilot-r1677/case-013/report.json": "23082458c72a3ea4affb617b56f863d7e63da34276c368491f74ac100775dd71",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-child-handles-pilot-r1677/case-029/report.json": "28b7323b58011712ce7ff0e17a939b893b8d7d0c947e454e06b62aa02f152f53",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-child-handles-pilot-r1677/case-047/report.json": "14fc900379dff389b66ee9b82111ecb434ee44ea07d124a8e52bed55474498ef",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-child-handles-pilot-r1677/case-058/report.json": "744530aea01e85efc04ff3ec80b7cb523543dc158b9bd2ae27bb372e2a4cc954",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-child-handles-pilot-r1677/case-000/report.json": "936bf74a9a8729bf534363cadf2bd2abcddc661fccba98a7ad76c3124f6f3f82",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-child-handles-pilot-r1677/case-049/report.json": "051cb080dabbbb7b65a526cba67dc4ae028b6f1401e67d236abca3050123826c",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-child-handles-pilot-r1677/case-072/report.json": "b37c0c29c1b2b9874f53d0a82f985e501d9eef399d938a9d34e814f36152433b",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-child-handles-pilot-r1677/case-094/report.json": "6a0ae2ec4c264b0dcd17c75c38b2b4ab4ba19a2efed4c6951de4d0c0bcdb67b3",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-child-handles-pilot-r1677/case-007/report.json": "8a3243ecc69a391f1be39caecd4d1ab2258747560f6ba24cfa4d7c2d170bd607",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-child-handles-pilot-r1677/case-011/report.json": "5bff60445cd70eac6da242603cf8d8aeec8a819a9972cc27a8f90197f70cb4c4",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-child-handles-pilot-r1677/case-059/report.json": "71da1c93e1644b431d4a38cd587dd942b360667dddf4a09acbd6dbc7a61042db",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-child-handles-pilot-r1677/case-048/report.json": "ae3940d83a598c215887f2c3da9b8cd352fb3635c13a8f199c9b6d97fb2884b0",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-child-handles-pilot-r1677/case-001/report.json": "d231bff8fa1c43c57629f492baad13685bed8c7ba00ae089a47e27999e44aff0",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-child-handles-pilot-r1677/case-006/report.json": "cfaf42f1b074cdc00f3d3f159052d19f8087d4df3fcd53a3903dd1ea962ef72e",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-child-handles-pilot-r1677/case-108/report.json": "4d7f8510a95d0c20d4ebbcd3626fd7e0e16d2976dfa90bebcffdd4b5188e8e7d",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-child-handles-pilot-r1677/case-098/report.json": "b5fb91fde1ea287f9305ce37df11ec60a93ed90d4c1b1fb3cad7d1993d0f701f",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-child-handles-pilot-r1677/case-002/report.json": "3c1c52aee32863a9b296e34958217329085dfb3266a21d388ad77385f0dc0055",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-child-handles-pilot-r1677/case-004/report.json": "49c63ad28a63b42c58e0a735d79f499a3142af736eabc91470b261853512c025"
+    },
+    "all_exit_zero_pid_gone": true
+  },
+  "independent": {
+    "experiment": "8934f1f9a5cc",
+    "cases": 96,
+    "sat_models_cross_replayed": 48,
+    "oracle_checks": 288,
+    "fresh_xolver_results": true,
+    "reports": {
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-child-handles-check-r1676/3/report.json": "84d7d90653517bde9d0365e73e60cbc02d95acf61bec8e55bcc9e310625fd77f",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-child-handles-check-r1676/5/report.json": "f4a8bc9efc594e08ff99b778d29e585d9c7fa9fb1534fc330baaca2710135567",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-child-handles-check-r1676/0/report.json": "50fe1124ba4dcc00633a489973f13379eb3d4716d6ad95435145bfb714aa3931",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-child-handles-check-r1676/1/report.json": "a450a9f173c58671bab1fa58b84de91aa445563297b0eb1d58d85c548c125a55",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-child-handles-check-r1676/7/report.json": "a13dd98bd27ed80bb9329a03a978d9e6fe6c377992537ce04557f5c6300434e0",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-child-handles-check-r1676/6/report.json": "6166d5f3ef7457be77ec214733b11fab5f39436e67cfd45bdce7640875acdc95",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-child-handles-check-r1676/2/report.json": "69c6964eb6ca93e13806f4142c8f256b7991678d0c818916e7ea76a68dd8435c",
+      "/pub/data/jiafq/xolver/validation/arithmetic-r103/native-child-handles-check-r1676/4/report.json": "ae79087bc5a24b7c815dbcfaeaeb44c2d7e85b855024e5e3f96b0586c9439837"
+    }
+  },
+  "profile": {
+    "experiment": "4a15a947cf5a",
+    "case94_samples_each": 37,
+    "parent_native_get_samples": 15,
+    "candidate_native_get_samples": 10,
+    "preprocessing_eliminations_each": 538,
+    "preprocessing_work_each": 532123
+  },
+  "restored_native_source_sha256": "98504a3c60b4a268e27e6b7b7933a6aabcd72b7fa4e7a9f9d801c9dfd4b93de4",
+  "restoration_boundary": "Restore the qualified R1578 source, not Git HEAD: it retains the existing per-index lifetime identity fix. Remove only this child-handle experiment and its two tests. No prior correctness fix is reverted.",
+  "protected_sets_used": false,
+  "qcp_candidate_validated": false,
+  "pr_main_promoted": false,
+  "evidence_boundary": "Native correctness tests and fresh independent models pass, but the fixed25 pilot loses131 at60s (parent59.024s SAT). Root cause of that crossing is not established; the observed sample reduction is not a verified whole-suite benefit. No full160 expansion or win claim."
+}

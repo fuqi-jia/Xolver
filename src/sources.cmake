@@ -18,6 +18,7 @@ set(XOLVER_PARALLEL_SOURCES
 )
 
 set(XOLVER_IR_SOURCES
+    "ir/ActiveTermUses.cpp"
     "ir/NativeFeatures.cpp"
     "ir/NativeKind.cpp"
     "ir/NativeTerms.cpp"
@@ -35,6 +36,7 @@ set(XOLVER_ALGEBRA_SOURCES
     "algebra/interval/IntervalQRoots.cpp"
     "algebra/interval/ReasonedBox.cpp"
     "algebra/interval/ReasonedBoxQ.cpp"
+    "algebra/linear/AffineIntegerDomain.cpp"
     "algebra/linear/Formula.cpp"
     "algebra/linear/IntegerIntervalCombination.cpp"
     "algebra/linear/LinearConstraintNormalizer.cpp"
@@ -239,6 +241,7 @@ set(XOLVER_SEARCH_SOURCES
     "search/presolve/PresolveEngine.cpp"
     "search/presolve/PresolveSupport.cpp"
     "search/presolve/UnivariatePolySignAnalyzer.cpp"
+    "search/refute/MonomialSquares.cpp"
     "search/refute/PolynomialBooleanRefutation.cpp"
     "search/refute/PolynomialLinearRefutation.cpp"
     "search/refute/PolynomialResidueRefutation.cpp"

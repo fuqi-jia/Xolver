@@ -880,6 +880,62 @@ TEST_CASE("IntegerReasoner soundness: LIA core preserves a rational-bound counte
     REQUIRE(solver.check(lemmas, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Consistent);
 }
 
+TEST_CASE("IntegerReasoner soundness: coupled interval closure cites active guards after context changes") {
+    for (const mpq_class& scale : {mpq_class(1), mpq_class(1, 2), mpq_class(-2)}) {
+        Fixture f;
+        std::vector<ActiveLinearAtom> atoms;
+        const std::vector<std::string> names{"x", "y", "z"};
+        for (const auto& name : names) {
+            atoms.push_back(f.atom({{{name, 1}}}, Relation::Geq, 0));
+            atoms.push_back(f.atom({{{name, 1}}}, Relation::Leq, 3));
+        }
+        for (size_t i = 0; i < names.size(); ++i) {
+            const int weight = i == 2 ? 2 : 1;
+            LinearFormKey form;
+            for (size_t j = 0; j < names.size(); ++j)
+                form.terms.emplace_back(names[j], scale * (weight - (i == j ? 5 : 0)));
+            atoms.push_back(f.atom(std::move(form), scale < 0 ? Relation::Geq : Relation::Leq, 0));
+        }
+        const LinearFormKey sum{{{"x", 1}, {"y", 1}, {"z", 1}}};
+        atoms.push_back(f.atom(sum, Relation::Leq, 0, false));
+        atoms.push_back(f.atom(sum, Relation::Leq, 3));
+        const auto registered = f.registry.numAtomVars();
+        const auto conflict = f.reasoner.checkIntervalCombinationConflict(atoms);
+        REQUIRE(conflict);
+        REQUIRE_FALSE(conflict->clause.empty());
+        CHECK(f.registry.numAtomVars() == registered);
+        for (const SatLit literal : conflict->clause)
+            CHECK(std::any_of(atoms.begin(), atoms.end(), [&](const auto& atom) { return atom.lit == literal; }));
+        for (int x = -1; x <= 4; ++x) for (int y = -1; y <= 4; ++y) for (int z = -1; z <= 4; ++z) {
+            const Values values{{"x", x}, {"y", y}, {"z", z}};
+            CHECK_FALSE(std::all_of(conflict->clause.begin(), conflict->clause.end(),
+                [&](SatLit literal) { return f.holds(literal, values); }));
+        }
+        auto popped = atoms;
+        popped.erase(popped.begin() + 8); // Remove one coupled row, leaving a concrete model.
+        const Values poppedWitness{{"x", 1}, {"y", 1}, {"z", 0}};
+        for (const auto& atom : popped) REQUIRE(f.holds(atom.lit, poppedWitness));
+        CHECK_FALSE(f.reasoner.checkIntervalCombinationConflict(popped));
+        CHECK(f.reasoner.checkIntervalCombinationConflict(atoms).has_value());
+        auto relaxed = atoms;
+        relaxed.back() = f.atom(sum, Relation::Leq, 5);
+        const Values relaxedWitness{{"x", 1}, {"y", 1}, {"z", 2}};
+        for (const auto& atom : relaxed) REQUIRE(f.holds(atom.lit, relaxedWitness));
+        CHECK_FALSE(f.reasoner.checkIntervalCombinationConflict(relaxed));
+
+        LiaSolver solver;
+        solver.setRegistry(&f.registry);
+        for (const auto& atom : atoms)
+            solver.assertLit(*f.registry.findBySatVar(atom.lit.var), atom.value, 0, atom.lit);
+        TheoryLemmaDatabase lemmas;
+        const auto checked = solver.check(lemmas, TheoryEffort::Full);
+        REQUIRE(checked.kind == TheoryCheckResult::Kind::Conflict);
+        REQUIRE(checked.conflictOpt);
+        for (const SatLit literal : checked.conflictOpt->clause)
+            CHECK(std::any_of(atoms.begin(), atoms.end(), [&](const auto& atom) { return atom.lit == literal; }));
+    }
+}
+
 TEST_CASE("IntegerReasoner soundness: shared integer atom normalization preserves witnesses") {
     for (const auto rel : {Relation::Lt, Relation::Gt}) {
         ZeroLinearConstraint c;

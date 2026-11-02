@@ -5,6 +5,7 @@
 #include "ir/NativeTerms.h"
 #include "search/nia/farkas/FarkasOrBranchSolver.h"
 #include "search/nia/farkas/FarkasOrTypes.h"
+#include "evidence/ArithModelValidator.h"
 
 #include <doctest/doctest.h>
 
@@ -245,4 +246,68 @@ TEST_CASE("FarkasOrBranchSolver: truly infeasible non-homogeneous (P1 v2)") {
     FarkasOrBranchSolver solver(b.ir);
     auto cands = solver.solveBranch(branch, {}, {});
     CHECK(cands.empty());
+}
+
+TEST_CASE("FarkasOrBranchSolver: exact ray scaling reaches strict integer boundaries") {
+    for (int64_t lower : {int64_t(1), int64_t(7), int64_t(2147483649),
+                          int64_t(1099511627776)}) {
+        CAPTURE(lower);
+        IrBuilder b;
+        const auto p = b.mkVar("p", b.intSort), q = b.mkVar("q", b.intSort);
+        const auto zero = b.mkConst(0);
+        const auto equation = b.mk(Kind::Eq, {b.mk(Kind::Sub, {p, q}), zero});
+        const auto strict = b.mk(Kind::Gt, {p, b.mkConst(lower)});
+        const auto upper = b.mk(Kind::Leq, {p, b.mkConst(lower + 1)});
+        FarkasBranch branch;
+        branch.lambdas = {"p", "q"}; branch.equalities = {equation};
+        branch.inequalities = {strict, upper};
+        b.ir.addAssertion(b.mk(Kind::And, {equation, strict, upper}));
+        const auto candidates = FarkasOrBranchSolver(b.ir).solveBranch(branch, {}, {});
+        bool verified = false;
+        for (const auto& candidate : candidates) {
+            REQUIRE(candidate.lambdaRay.size() == 2);
+            const ArithModelValidator::NumAssignment model{
+                {"p", mpq_class(candidate.lambdaRay[0])},
+                {"q", mpq_class(candidate.lambdaRay[1])}};
+            const ArithModelValidator::BoolAssignment booleans;
+            if (ArithModelValidator(b.ir, model, booleans).validate(b.ir.assertions())
+                == ArithModelValidator::Verdict::Satisfied) verified = true;
+        }
+        CHECK(verified);
+    }
+}
+
+TEST_CASE("FarkasOrBranchSolver: scaling respects upper bounds and nonzero equality RHS") {
+    IrBuilder b;
+    const auto p = b.mkVar("p", b.intSort), q = b.mkVar("q", b.intSort);
+    const auto zero = b.mkConst(0);
+    FarkasBranch branch;
+    branch.lambdas = {"p", "q"};
+    branch.equalities = {b.mk(Kind::Eq, {b.mk(Kind::Sub, {p, q}), zero})};
+    branch.inequalities = {b.mk(Kind::Gt, {p, b.mkConst(3)}),
+                           b.mk(Kind::Leq, {p, b.mkConst(3)})};
+    CHECK(FarkasOrBranchSolver(b.ir).solveBranch(branch, {}, {}).empty());
+    branch.equalities = {b.mk(Kind::Eq, {p, b.mkConst(1)})};
+    branch.lambdas = {"p"};
+    branch.inequalities = {b.mk(Kind::Gt, {p, b.mkConst(1)})};
+    CHECK(FarkasOrBranchSolver(b.ir).solveBranch(branch, {}, {}).empty());
+}
+
+TEST_CASE("FarkasOrBranchSolver: cost intervals are rebuilt at the scaled ray") {
+    IrBuilder b;
+    const auto p = b.mkVar("p", b.intSort), q = b.mkVar("q", b.intSort);
+    const auto cost = b.mkVar("cost", b.intSort), zero = b.mkConst(0);
+    FarkasBranch branch;
+    branch.lambdas = {"p", "q"};
+    branch.equalities = {b.mk(Kind::Eq, {b.mk(Kind::Sub, {p, q}), zero})};
+    branch.inequalities = {b.mk(Kind::Gt, {p, b.mkConst(3)}),
+        b.mk(Kind::Lt, {b.mk(Kind::Mul, {p, cost}), b.mkConst(7)})};
+    const auto candidates = FarkasOrBranchSolver(b.ir).solveBranch(branch, {}, {"cost"});
+    REQUIRE_FALSE(candidates.empty());
+    for (const auto& candidate : candidates) {
+        REQUIRE(candidate.lambdaRay.size() == 2);
+        CHECK(candidate.lambdaRay[0] == 4);
+        REQUIRE(candidate.ctBounds.size() == 2);
+        CHECK(candidate.ctBounds[1].ctHi == mpq_class(3, 2));
+    }
 }

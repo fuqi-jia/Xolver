@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 #include "search/refute/PolynomialSignClosure.h"
 #include <algorithm>
+#include <array>
 #include <random>
 
 using namespace xolver;
@@ -321,4 +322,97 @@ TEST_CASE("Polynomial sign closure: coupled affine factors admit an explained st
     const std::unordered_map<VarId, mpq_class> point{{0, 0}, {1, 0}, {2, 0}, {3, 0}, {4, 0}};
     for (const auto& constraint : constraints) REQUIRE(holds(constraint, point));
     CHECK_FALSE(refuteByPolynomialSignClosure(constraints));
+}
+
+TEST_CASE("Polynomial sign closure: weighted squares retain weak and strict sign premises") {
+    const auto x = variable(0), y = variable(1);
+    auto cross = x * y;
+    cross *= 5;
+    const auto positive = x * x * y + x * y * y + x * x + y * y + x + y - cross;
+    std::vector<SignRefuteConstraint> constraints;
+    constraint(constraints, x, Relation::Gt);
+    constraint(constraints, y, Relation::Gt);
+    constraint(constraints, positive, Relation::Eq);
+    const auto conflict = refuteByPolynomialSignClosure(constraints);
+    REQUIRE(conflict);
+    checkReasons(constraints, *conflict);
+    for (const auto& premise : constraints)
+        CHECK(std::find(conflict->begin(), conflict->end(), premise.reason) != conflict->end());
+    constraints[0].rel = constraints[1].rel = Relation::Geq;
+    CHECK(positive.evaluateRational({{0, 0}, {1, 0}}) == 0);
+    CHECK_FALSE(refuteByPolynomialSignClosure(constraints));
+}
+
+TEST_CASE("Polynomial sign closure: weighted squares cannot discard zero or negative weights") {
+    const auto x = variable(0), y = variable(1);
+    const auto square = x * (y - constant(1)).pow(2);
+    std::vector<SignRefuteConstraint> constraints;
+    constraint(constraints, square, Relation::Lt);
+    CHECK_FALSE(refuteByPolynomialSignClosure(constraints)); // x=-1,y=0
+    constraint(constraints, x, Relation::Geq);
+    REQUIRE(refuteByPolynomialSignClosure(constraints));
+    constraints[0].rel = Relation::Eq;
+    CHECK_FALSE(refuteByPolynomialSignClosure(constraints)); // x=0
+}
+
+TEST_CASE("Polynomial sign closure: elimination and weighted squares share explained factors") {
+    for (const auto& order : {std::array<VarId, 9>{0, 1, 2, 3, 4, 5, 6, 7, 8},
+                              std::array<VarId, 9>{6, 4, 8, 2, 3, 1, 5, 7, 0}}) {
+        const auto v = variable(order[0]), r = variable(order[1]), y = variable(order[2]);
+        const auto g = variable(order[3]), theta = variable(order[4]), mu = variable(order[5]);
+        const auto lambda = variable(order[6]), a = variable(order[7]), d = variable(order[8]);
+        for (unsigned exponent : {2u, 3u, 7u}) {
+            CAPTURE(exponent);
+            CAPTURE(order[0]);
+            auto A = a * v * r.pow(exponent - 1);
+            A *= 13;
+            const auto B = theta * (r.pow(exponent) + constant(1));
+            auto mixed = d * theta * lambda * v * r.pow(exponent - 1);
+            mixed *= 7;
+            auto target = A * A + A * d * B + A * d + A * d + A * B + A * B + A +
+                d * d * B + d * d + d * B * B + d * B + d * B + d + B * B + B - mixed;
+            std::vector<SignRefuteConstraint> constraints;
+            for (const auto& positive : {v, r, y, g, theta, mu, a, d})
+                constraint(constraints, positive, Relation::Gt);
+            constraint(constraints, theta * (g - v * (r.pow(exponent) + constant(1))), Relation::Eq);
+            constraint(constraints, g * mu + lambda * v - y, Relation::Eq);
+            constraint(constraints, a * (g - v * (r.pow(exponent) + constant(1))) + d * (y - r), Relation::Eq);
+            constraint(constraints, target, Relation::Eq);
+            PolynomialSignStatistics stats;
+            const auto conflict = refuteByPolynomialSignClosure(constraints, &stats);
+            CAPTURE(stats.rounds);
+            CAPTURE(stats.inferredFacts);
+            CAPTURE(stats.exhausted);
+            REQUIRE(conflict);
+            CHECK_FALSE(stats.exhausted);
+            checkReasons(constraints, *conflict);
+        }
+    }
+}
+
+TEST_CASE("Polynomial sign closure: projected zero factors keep their original models") {
+    const auto u = variable(0), x = variable(1), y = variable(2), lambda = variable(3);
+    std::vector<SignRefuteConstraint> constraints;
+    constraint(constraints, x, Relation::Gt);
+    constraint(constraints, y, Relation::Gt);
+    constraint(constraints, u, Relation::Geq);
+    constraint(constraints, u * (lambda - x), Relation::Eq);
+    constraint(constraints, u * (lambda + y), Relation::Eq);
+    const std::unordered_map<VarId, mpq_class> model{{0, 0}, {1, 1}, {2, 1}, {3, 0}};
+    for (const auto& premise : constraints) REQUIRE(holds(premise, model));
+    CHECK_FALSE(refuteByPolynomialSignClosure(constraints));
+    constraints[2].rel = Relation::Gt;
+    REQUIRE(refuteByPolynomialSignClosure(constraints));
+}
+
+TEST_CASE("Polynomial sign closure: exact monomial division needs no nonzero premise") {
+    const auto x = variable(0), y = variable(1), z = variable(2);
+    std::vector<SignRefuteConstraint> constraints;
+    constraint(constraints, x * z - y, Relation::Eq);
+    constraint(constraints, x * x * z - x * y, Relation::Lt);
+    const auto conflict = refuteByPolynomialSignClosure(constraints);
+    REQUIRE(conflict);
+    checkReasons(constraints, *conflict);
+    constraints[1].rel = Relation::Eq;
+    CHECK_FALSE(refuteByPolynomialSignClosure(constraints)); // x=y=0,z=7
 }

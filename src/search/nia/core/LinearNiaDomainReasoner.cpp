@@ -177,8 +177,11 @@ NiaReasoningResult LinearNiaDomainReasoner::run(
             return domains.isEmpty(variable) ? LinearBoundUpdate::Conflict : LinearBoundUpdate::Changed;
         },
         [](const std::string&) { return true; }, budget);
-    if (propagated.conflict)
+    if (propagated.conflict) {
+        if (propagated.conflictReasons)
+            return {NiaReasoningKind::Conflict, TheoryConflict{*propagated.conflictReasons}, std::nullopt};
         return {NiaReasoningKind::Conflict, domains.buildEmptyDomainConflict(), std::nullopt};
+    }
     updated |= propagated.updates != 0;
 
     if (updated) {
