@@ -2,6 +2,7 @@
 #include "base/EnvParam.h"
 #include "runtime/SolverImpl.h"
 #include "ir/NativeFeatures.h"
+#include "ir/TermFeatureIndex.h"
 #include "applications/satisfiability/smt/Solver.h"
 #include "applications/verification/sl/Solver.h"
 #include "search/array/ArrayModelCompletion.h"
@@ -250,6 +251,10 @@ Result Solver::Impl::checkSatGround() {
 
         // Reset SAT solver for fresh query.
         phase("solve-eqs-done");
+        TermFeatureIndex syntax(*ir);
+        auto hasOperators = [&](std::initializer_list<Kind> kinds) {
+            return syntax.containsAny(ir->assertions(), kinds);
+        };
         sat = createSatSolver();
 
 #ifdef XOLVER_ENABLE_PROOFS
@@ -283,7 +288,7 @@ Result Solver::Impl::checkSatGround() {
         // opaque to the rewrite. Sound, general; no-op unless a non-constant
         // modulus is present. (The same pass runs again after lowering for
         // constant div/mod folding.)
-        {
+        if (hasOperators({Kind::Div, Kind::Mod})) {
             IntDivModConstantFold preMod(*ir);
             preMod.run();
             preMod.commit();
@@ -294,7 +299,7 @@ Result Solver::Impl::checkSatGround() {
         // Lower ITEs before any theory processing or atomization.
         // IteLowerer is a pure IR-to-IR pass: no SatLit, no theory atom
         // registration, no SAT clause insertion.
-        {
+        if (hasOperators({Kind::Ite})) {
             IteLowerer lowerer(*ir);
             auto originalScoped = ir->getScopedAssertions();
             std::vector<std::pair<ScopeLevel, ExprId>> loweredScoped;
@@ -346,14 +351,14 @@ Result Solver::Impl::checkSatGround() {
         // (to_real ConstReal r) unwrapped, and (/ ConstReal a ConstReal b)
         // folded to ConstReal (a/b) when b != 0. Runs after Cap. 8a so
         // it sees the constant-propagated to_real arguments.
-        {
+        if (hasOperators({Kind::ToReal, Kind::Div})) {
             ToRealLiteralFold fold(*ir);
             fold.run();
             fold.commit();
         }
 
         // Eliminate read-only arrays only when the fragment check succeeds.
-        {
+        if (hasOperators({Kind::Select})) {
             ReadOnlyArrayElim roae(*ir);
             if (roae.run()) {
                 roae.commit();
@@ -376,7 +381,7 @@ Result Solver::Impl::checkSatGround() {
         // Closes UNSAT cases by direct contradiction and pins SAT cases with
         // a unique witness in a finite bound. Mod patterns hidden inside
         // boolean composites are deferred to the standard pipeline.
-        {
+        if (hasOperators({Kind::Mod})) {
             ModularConsistencyChecker crt(*ir);
             crt.run();
         }
@@ -386,7 +391,7 @@ Result Solver::Impl::checkSatGround() {
         // to literal ConstInt results under SMT-LIB integer-division
         // semantics. Runs BEFORE IntDivModLowerer so that constant-only
         // div/mod do not allocate fresh quotient/remainder variables.
-        {
+        if (hasOperators({Kind::Div, Kind::Mod})) {
             IntDivModConstantFold dmFold(*ir);
             dmFold.run();
             dmFold.commit();
@@ -394,7 +399,7 @@ Result Solver::Impl::checkSatGround() {
         }
 
         // Lower integer div/mod before arithmetic extraction.
-        {
+        if (hasOperators({Kind::Div, Kind::Mod})) {
             IntDivModLowerer dmLowerer(*ir);
             if (!dmLowerer.run()) {
                 lastUnknownReason_ = "IntDivModLowerer: unsupported or internal error";
@@ -488,7 +493,7 @@ Result Solver::Impl::checkSatGround() {
         phase("integer-divmod-done");
 
         // Lower n-ary distinct to pairwise binary distinct
-        {
+        if (hasOperators({Kind::Distinct})) {
             NaryDistinctLowerer distinctLowerer(*ir);
             distinctLowerer.run();
             distinctLowerer.commit();
@@ -502,7 +507,7 @@ Result Solver::Impl::checkSatGround() {
         }
 
         // Bridge UF applications inside arithmetic expressions
-        {
+        if (hasOperators({Kind::UFApply})) {
             UfInArithPurifier ufPurifier(*ir);
             ufPurifier.run();
             ufPurifier.commit();
@@ -512,8 +517,8 @@ Result Solver::Impl::checkSatGround() {
         // plus a guarded polynomial defining constraint, so CDCAC can reason
         // about it (promoted default-ON; gated to nonlinear-real logics where
         // variable real division is in-fragment).
-        if (logic.find("NRA") != std::string::npos ||
-            logic.find("NIRA") != std::string::npos) {
+        if ((logic.find("NRA") != std::string::npos ||
+             logic.find("NIRA") != std::string::npos) && hasOperators({Kind::Div})) {
             RealDivLowerer rdLowerer(*ir);
             if (rdLowerer.run()) rdLowerer.commit();
         }
@@ -534,28 +539,25 @@ Result Solver::Impl::checkSatGround() {
         //   (<= (to_real i_t) r_t)  and  (< r_t (+ (to_real i_t) 1)).
         // Unlike LinearToIntPurifier this pass succeeds on NONLINEAR `t`;
         // the bridge equality is routed to NRA/NIRA by the atomizer. If
-        // the introduced bridges are nonlinear, the declared logic is
-        // upgraded (QF_LIA -> QF_NIA, QF_LRA -> QF_NRA, QF_LIRA -> QF_NIRA,
-        // etc.) so the LogicFeatureDetector mismatch guard does not fire.
-        {
+        // the introduced bridges are nonlinear, widen arithmetic logics to
+        // NIRA so both the floor's integrality and the nonlinear bridge are
+        // enforced. Linear bridges similarly require mixed arithmetic.
+        if (hasOperators({Kind::ToInt, Kind::IsInt})) {
             ToIntDefinitionalLowerer t2i(*ir);
             t2i.run();
             t2i.commit();
-            phase("preprocess-done");
 
             if (t2i.hadNonlinearBridge()) {
                 // Upgrade declared logic to the nonlinear counterpart.
                 // The new bridge equality `r_t = nonlinear_t` cannot be
                 // handled by a linear theory, so we widen the theory scope.
-                // NIRA subsumes NIA/NRA/LIA/LRA/LIRA. Any logic that
-                // already permits nonlinear (NRA/NIA/NIRA) stays unchanged.
+                // The floor witness and its Real proxy require both domains;
+                // allowing nonlinearity alone does not preserve integrality.
                 auto upgrade = [](const std::string& l) -> std::string {
-                    if (l == "QF_LIA")   return "QF_NIA";
-                    if (l == "LIA")      return "NIA";
-                    if (l == "QF_LRA")   return "QF_NRA";
-                    if (l == "LRA")      return "NRA";
-                    if (l == "QF_LIRA")  return "QF_NIRA";
-                    if (l == "LIRA")     return "NIRA";
+                    if (l == "QF_LIA" || l == "QF_LRA" || l == "QF_LIRA" ||
+                        l == "QF_NIA" || l == "QF_NRA") return "QF_NIRA";
+                    if (l == "LIA" || l == "LRA" || l == "LIRA" ||
+                        l == "NIA" || l == "NRA") return "NIRA";
                     if (l == "QF_UFLIA") return "QF_UFNIA";
                     if (l == "UFLIA")    return "UFNIA";
                     if (l == "QF_UFLRA") return "QF_UFNRA";
@@ -580,6 +582,7 @@ Result Solver::Impl::checkSatGround() {
                 logic = upgrade(logic);
             }
         }
+        phase("preprocess-done");
 
         // Apply solver options (seed, etc.)
         auto itSeed = options.find("seed");
@@ -611,7 +614,7 @@ Result Solver::Impl::checkSatGround() {
         // cannot handle the equalities linking a UF application to its value.
         if (logic == "ALL" && features.hasUF && !features.hasArray && !features.hasDatatype) {
             const auto domain = nativeFeatures(ir->native(originalAssertions_));
-            if (domain.integerValue && domain.realValue) {
+            if (features.hasMixedIntReal || (domain.integerValue && domain.realValue)) {
                 lastUnknownReason_ = "automatic UF/mixed-arithmetic combination is unavailable";
                 return Result::Unknown;
             }
@@ -742,8 +745,11 @@ Result Solver::Impl::checkSatGround() {
             if (features.hasIntVar || features.hasNonlinear || features.hasMixedIntReal) logicMismatch = true;
         } else if (logic == "QF_UF" || logic == "UF") {
             if (features.hasInterpretedArithmetic) logicMismatch = true;
-        } else if (logic == "QF_UFLRA" || logic == "UFLRA") {
+        } else if (logic == "QF_UFLRA" || logic == "UFLRA" ||
+                   logic == "QF_UFNRA" || logic == "UFNRA") {
             if (features.hasIntVar || features.hasMixedIntReal) logicMismatch = true;
+        } else if (logic == "QF_UFNIA" || logic == "UFNIA") {
+            if (features.hasRealVar || features.hasMixedIntReal) logicMismatch = true;
         } else if (logic == "QF_LIRA" || logic == "LIRA") {
             if (features.hasNonlinear || features.hasUF) logicMismatch = true;
         } else if (logic == "QF_NIRA" || logic == "NIRA") {

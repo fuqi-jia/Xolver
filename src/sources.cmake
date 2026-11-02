@@ -24,6 +24,7 @@ set(XOLVER_IR_SOURCES
     "ir/NativeTerms.cpp"
     "ir/NumericLiteral.cpp"
     "ir/Smt2Dumper.cpp"
+    "ir/TermFeatureIndex.cpp"
 )
 
 set(XOLVER_CONTRACTS_SOURCES

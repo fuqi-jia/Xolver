@@ -1,0 +1,7 @@
+(set-logic ALL)
+(set-info :status unsat)
+(declare-const y Real)
+(assert (>= y (/ 1 2)))
+(assert (<= y (/ 1 2)))
+(assert (is_int (* y y)))
+(check-sat)

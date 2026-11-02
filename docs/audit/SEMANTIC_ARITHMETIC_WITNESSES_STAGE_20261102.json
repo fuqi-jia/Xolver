@@ -1,0 +1,409 @@
+{
+  "stage": "semantic-arithmetic-witnesses-and-active-preprocess-summaries-r1811-r1827",
+  "status": "prototype-correctness-accepted-not-promoted",
+  "source_parent": "63b60f23c5a69550368d3480e6227fe4f91f9a4d",
+  "source_sha256": {
+    "src/ir/TermFeatureIndex.h": "0cbbd2fd4c37300dbcfbc0647e5431e89d93660d41e1ed28572d6ed2052de574",
+    "src/ir/TermFeatureIndex.cpp": "0cde02807ba746048c46b68ea5cc16d15c434d33dc2bb4bf7ed723ecc9085f0b",
+    "src/runtime/Solver_impl_checksat.cpp": "83feb01e513f3fa74c31fa0980fe12db221c8b05aca54a4feea614106514dc71",
+    "src/search/boolean/TheoryRefutation.cpp": "45f28546018969da241fd22850e8535a31c7c5df28a8eab3c246c534745f5e08",
+    "src/frontend/preprocess/ToIntDefinitionalLowerer.h": "faf4a9f78f143e7aea37f409c2968928ac8861d258e15c4a8d9e39aa1796ee16",
+    "src/frontend/preprocess/ToIntDefinitionalLowerer.cpp": "23418d69361d5b2630f56f08c20b85e3df9c5e76a38e9b50b032af1577cc29f3",
+    "src/frontend/preprocess/IntDivModLowerer.cpp": "2c0006d00fcee524dedd66528ff4131e0af3f3ab14b6398ad07c00b829d763cc",
+    "src/applications/satisfiability/smt/qfnira/NiraSolver.h": "5d77d6473e66188c8c3b6f004ebbe72341f0d1a45d2bd8d728be692cde160e07",
+    "src/applications/satisfiability/smt/qfnira/NiraSolver.cpp": "1f83abf6d6d54c4aa24a707aa2fbe9b2446e332657d1d9da0c3683c2d37f81ca",
+    "tests/unit/test_boolean_theory_refutation.cpp": "d08234bb983a2405b6271c0f16e78db65f86dd4dc988f9a7b1610cb97b02b7aa",
+    "tests/unit/test_term_feature_index.cpp": "02b46b9d092b76e0193428ee4788c0904447bf7cfeb54b6dc244a06e29c4899e",
+    "tests/unit/test_semantic_arithmetic_witnesses.cpp": "3266431159e15da6289d2c913ea04d51236b9863d4dfe2014952421c3b80bf31",
+    "tests/regression/lira/is_int_boolean_equivalence_unsat.smt2": "8e3deb90ca8ec9e8113a3666f9b60a15100d0149c7cb93d14b94f74438cda58d",
+    "tests/regression/lira/boolean_integer_dividend_fractional_quotient_unsat.smt2": "5cd4393c553a59e5f81709ddaf2becb88a437b3c00187398ddc65da757254d90",
+    "tests/regression/nira/is_int_nonlinear_fraction_unsat.smt2": "1ad79645cffce89150964d2eb884f2f615cedfbd55e848c3eabcaec9468c8348",
+    "src/sources.cmake": "fc8d0d0acc8ad4b6dd7f1654bc5a5c779ff9be1fa05e6cca257a1c26f4e9a86d"
+  },
+  "native_prototype_source": {
+    "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/semantic-witness-inputs-r1825/source.json",
+    "sha256": "bd67c897276232914659cf818c68e58f99639d2fb80bcea417126ea553c6e1f7"
+  },
+  "native_prototype_comment_only_differences": {
+    "src/applications/satisfiability/smt/qfnira/NiraSolver.h": {
+      "native": "a410956be360dac9e5619301e93f6fd245193698620088f4af83a790e91c430f",
+      "current": "5d77d6473e66188c8c3b6f004ebbe72341f0d1a45d2bd8d728be692cde160e07"
+    },
+    "src/applications/satisfiability/smt/qfnira/NiraSolver.cpp": {
+      "native": "6e82036cef03665d788ec6f39b221f6ec2b12ec444e95b31c1212b4bc29e34ea",
+      "current": "1f83abf6d6d54c4aa24a707aa2fbe9b2446e332657d1d9da0c3683c2d37f81ca"
+    }
+  },
+  "mechanisms": [
+    "Semantic floor, quotient and remainder variables remain internal but retain their integer/real domains during routing; generated floor triples require mixed arithmetic.",
+    "NIRA normalizes literal polarity, explains singleton-bound substitutions with all active premises, and sends conditional linear residuals to the existing LIRA engine.",
+    "Delegated or integer-instantiated real residuals solve polynomial and linear constraints jointly and preserve the actual witness. Unfixed coupled integers leave the obligation open; no per-constraint SAT shortcut.",
+    "A shared immutable-DAG operator index skips preprocessing passes whose required syntax is absent from current assertion roots, including syntax introduced by earlier passes.",
+    "Generic Boolean refutation checks clauses from the last allowed theory conflict without allocating another theory assignment."
+  ],
+  "native": {
+    "host": "Panda1",
+    "experiment": "a02eb38b2a6e",
+    "run": "78e5a7955c3a",
+    "qualification": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/semantic-witness-r1825/qualification.json",
+      "sha256": "02d1274110f25c82eeee98f72835c290c180260eafb2c700e7fa357379a4b9a3"
+    },
+    "binary_sha256": "50260526aabdd1e0c480c3d1cf06fcd5cb8ebc5aca9075b4ecfc29dd64385bf0",
+    "unit_cases": 2008,
+    "unit_assertions": 1314157,
+    "targeted_cases": 48,
+    "targeted_assertions": 25464,
+    "old_control_log_sha256": "e6f03c302228728e021af2b9888aaca75ebf0ea099d1b23232c38416364805af",
+    "canonical_complete_source_build": false,
+    "injected_object_overrides": true
+  },
+  "independent_acceptance": {
+    "experiment": "a5bbaf976bc2",
+    "run": "b44f6dacb1a1",
+    "summary": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/semantic-witness-acceptance-r1827/summary.json",
+      "sha256": "0479e4c093a8c3de925bafba2a7ae324cdbff1b17bcd85c840300af934a5fef5"
+    },
+    "executions": 304,
+    "actual_sat_models": 171,
+    "oracle_checks": 950,
+    "distinct_original_inputs": 230,
+    "checks": {
+      "check": {
+        "experiment": "33c46730de62",
+        "runs": [
+          {
+            "id": "dbd2891f0c56",
+            "input": "0",
+            "pid": 332611,
+            "status": "success",
+            "exit_code": 0
+          },
+          {
+            "id": "95327423b6eb",
+            "input": "1",
+            "pid": 332688,
+            "status": "success",
+            "exit_code": 0
+          },
+          {
+            "id": "83adcd9c7578",
+            "input": "2",
+            "pid": 332757,
+            "status": "success",
+            "exit_code": 0
+          },
+          {
+            "id": "d69f9016b745",
+            "input": "3",
+            "pid": 332844,
+            "status": "success",
+            "exit_code": 0
+          },
+          {
+            "id": "2428c4a359d7",
+            "input": "4",
+            "pid": 332944,
+            "status": "success",
+            "exit_code": 0
+          },
+          {
+            "id": "a642112905ba",
+            "input": "5",
+            "pid": 333134,
+            "status": "success",
+            "exit_code": 0
+          },
+          {
+            "id": "a8f709182670",
+            "input": "6",
+            "pid": 333612,
+            "status": "success",
+            "exit_code": 0
+          },
+          {
+            "id": "2a9ac1eba175",
+            "input": "7",
+            "pid": 333975,
+            "status": "success",
+            "exit_code": 0
+          }
+        ],
+        "reports": [
+          {
+            "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/semantic-witness-check-r1826/0/report.json",
+            "sha256": "2fe01086db6bf9ead837227ed8eb1bb3b2d9db6eca2042b32bb4aaf55b2f48ba"
+          },
+          {
+            "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/semantic-witness-check-r1826/1/report.json",
+            "sha256": "6b3339db7de51a4d99d8dee37aabdc124c77bfd84d8e974552885aa6c13031e1"
+          },
+          {
+            "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/semantic-witness-check-r1826/2/report.json",
+            "sha256": "5b679e75cff4a8cd459e980b0a106ef2a3bca96e6633ce6c9cbc100d02792553"
+          },
+          {
+            "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/semantic-witness-check-r1826/3/report.json",
+            "sha256": "2161e275e8cd7a76adcdea945077e1d0cfb78e9040d5d2f7d7050b10ea32b13a"
+          },
+          {
+            "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/semantic-witness-check-r1826/4/report.json",
+            "sha256": "5a8f8402305567d53e149761b244f116dcc8a1a198329a876094cb533e1cdafd"
+          },
+          {
+            "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/semantic-witness-check-r1826/5/report.json",
+            "sha256": "98fd9599e3c5c5882e22816bfa37ecfd3e307af587b5db31ad0498935ad38d88"
+          },
+          {
+            "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/semantic-witness-check-r1826/6/report.json",
+            "sha256": "6dd91955fbb6e5a2787f7092f058671eb2e71133eb4e679a371c17122a97e7c2"
+          },
+          {
+            "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/semantic-witness-check-r1826/7/report.json",
+            "sha256": "72c0158f8bc4a9074937ecf5c40d81ad64fcb45c1ec0a9a4250ad4830bf1ff09"
+          }
+        ],
+        "distinct_original_inputs": 144,
+        "executions": 144,
+        "actual_sat_models": 91,
+        "oracle_checks": 470
+      },
+      "integration": {
+        "experiment": "929c56265246",
+        "runs": [
+          {
+            "id": "1875ced1e5f7",
+            "input": "0",
+            "pid": 342078,
+            "status": "success",
+            "exit_code": 0
+          },
+          {
+            "id": "9a82bd97193d",
+            "input": "1",
+            "pid": 342141,
+            "status": "success",
+            "exit_code": 0
+          },
+          {
+            "id": "c75e1aabbbdf",
+            "input": "2",
+            "pid": 342210,
+            "status": "success",
+            "exit_code": 0
+          },
+          {
+            "id": "c5e27d44bcf8",
+            "input": "3",
+            "pid": 342278,
+            "status": "success",
+            "exit_code": 0
+          }
+        ],
+        "reports": [
+          {
+            "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/semantic-witness-integration-r1826/0/report.json",
+            "sha256": "6e9dc26214c806c3f17fd106f6aec23afaf4062c01c239fd1909f3144dd01a66"
+          },
+          {
+            "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/semantic-witness-integration-r1826/1/report.json",
+            "sha256": "87756e27dd6819b5995c1759a914ee58f2b14e2d195bbb63b687c0216606d83c"
+          },
+          {
+            "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/semantic-witness-integration-r1826/2/report.json",
+            "sha256": "0af433fdcb4a294c43096b0a5ebed358d3ea998074000eeeb619966a4674d256"
+          },
+          {
+            "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/semantic-witness-integration-r1826/3/report.json",
+            "sha256": "a0499e3ca5047b3a79c1565bf7f3dc052085a1fa23451a58a675a89fc8c5d7a0"
+          }
+        ],
+        "distinct_original_inputs": 31,
+        "executions": 32,
+        "actual_sat_models": 16,
+        "oracle_checks": 96
+      },
+      "extra": {
+        "experiment": "e4a5925dc787",
+        "runs": [
+          {
+            "id": "9185fc52b35a",
+            "input": "0",
+            "pid": 349501,
+            "status": "success",
+            "exit_code": 0
+          },
+          {
+            "id": "077bdb6c594a",
+            "input": "1",
+            "pid": 349566,
+            "status": "success",
+            "exit_code": 0
+          },
+          {
+            "id": "95a1df05953e",
+            "input": "2",
+            "pid": 349628,
+            "status": "success",
+            "exit_code": 0
+          },
+          {
+            "id": "0de5c8d7016c",
+            "input": "3",
+            "pid": 349696,
+            "status": "success",
+            "exit_code": 0
+          },
+          {
+            "id": "b08754ea3dfe",
+            "input": "4",
+            "pid": 349780,
+            "status": "success",
+            "exit_code": 0
+          },
+          {
+            "id": "c7544fe4ea54",
+            "input": "5",
+            "pid": 349858,
+            "status": "success",
+            "exit_code": 0
+          },
+          {
+            "id": "2977084f722a",
+            "input": "6",
+            "pid": 349950,
+            "status": "success",
+            "exit_code": 0
+          },
+          {
+            "id": "d3f1fc31d061",
+            "input": "7",
+            "pid": 350061,
+            "status": "success",
+            "exit_code": 0
+          }
+        ],
+        "reports": [
+          {
+            "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/semantic-witness-extra-r1826/0/report.json",
+            "sha256": "3123ac4d9759ccf97148f52b01112fe37db6c273ac8795e99d93a44a4c2df404"
+          },
+          {
+            "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/semantic-witness-extra-r1826/1/report.json",
+            "sha256": "1c0f3c36a36781a62fb968d17e07197863a78c66c7e4cafa207536b54dd41a52"
+          },
+          {
+            "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/semantic-witness-extra-r1826/2/report.json",
+            "sha256": "4d6e853bef34c3ca2eabcedb63a402eeae677a781bb4b49213d8d685b5e21dea"
+          },
+          {
+            "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/semantic-witness-extra-r1826/3/report.json",
+            "sha256": "75dad31597bbb50d3c6dbdfa03c0fe9358cbcaa2202cbe4efabe9f5c8f171fc7"
+          },
+          {
+            "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/semantic-witness-extra-r1826/4/report.json",
+            "sha256": "e5c118a4ead5c27722679d3296b6510fceeee508d7456ad6918aca2b92ea9392"
+          },
+          {
+            "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/semantic-witness-extra-r1826/5/report.json",
+            "sha256": "daadfc007acd3170c370b6fb21a8adb0b9451ca6e85ea7247edcca62be01b93e"
+          },
+          {
+            "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/semantic-witness-extra-r1826/6/report.json",
+            "sha256": "c799e7155b9aa2f59789a19ce00fe297ed98c710dcef37d4723e6902cdf792db"
+          },
+          {
+            "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/semantic-witness-extra-r1826/7/report.json",
+            "sha256": "c87ae2ef9382f0bf012687ed7e41cc59275623a8c037c7d2088618e1aac4b586"
+          }
+        ],
+        "distinct_original_inputs": 58,
+        "executions": 128,
+        "actual_sat_models": 64,
+        "oracle_checks": 384
+      }
+    },
+    "existing_main_counterexamples": {
+      "floor": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/semantic-domain-confirmation-r1821/floor/report.json",
+        "sha256": "c2da3556cc2d5da24356fa433f3bc94b1148bea27b67ba33654300601eb1d042",
+        "source_sha256": "1edb96a927783163eaeaa2fb2144962a8e558ee4ec63319175d7608d77f843cc",
+        "main_false_sat": true
+      },
+      "div": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/semantic-domain-confirmation-r1821/div/report.json",
+        "sha256": "42bb4591161296d297561524002e3fc7756d13de46aa2a35ff7a95150ac2d842",
+        "source_sha256": "de3a50f422122da4747d4323169ab02f841f25a70b6c51f4f0fa7af948d5ee61",
+        "main_false_sat": true
+      }
+    }
+  },
+  "previous_complete_canonical160": {
+    "summary": "/pub/data/jiafq/xolver/validation/arithmetic-r103/product-sign-canonical-full-r1786/summary.json",
+    "summary_sha256": "4f8ab841dcb9b421b279b2d2244814014a98a7962778a2e6fac885d0c5e399e1",
+    "baseline_verified": 111,
+    "candidate_verified": 111,
+    "z3_verified": 116,
+    "z3_raw": 124,
+    "z3_unconfirmed_excluded": [
+      12,
+      24,
+      27,
+      42,
+      75,
+      80,
+      114,
+      148
+    ],
+    "gained": [
+      106
+    ],
+    "lost": [
+      113
+    ],
+    "promoted": false
+  },
+  "previous_operator_index_observations": {
+    "binary_sha256": "0bc903bc5920e9bcce420fd3a721fe8870ff20694cb28ede88e57bf1e81c6fe0",
+    "boundary": "Different pre-soundness-repair prototype; cannot stand in for this version's fresh full160.",
+    "valid_pilot_triads": 30,
+    "parent_verified": 14,
+    "candidate_verified": 14,
+    "z3_verified": 28,
+    "gained": [],
+    "lost": [],
+    "invalid_input": 49,
+    "invalid_reason": "Original candidate timing443.912s exceeded60s; excluded, not counted as valid timeout or proven OOM.",
+    "input144": {
+      "formal_parent_seconds": 48.2531,
+      "formal_candidate_seconds": 45.3343,
+      "models_independently_replayed": true,
+      "profile_parent_seconds": 46.601,
+      "profile_candidate_seconds": 42.036,
+      "removed_preprocessing_scan_seconds_approx": 4.4
+    }
+  },
+  "closed_factor_sign_boolean_refutation": {
+    "status": "removed-no-solved-count-gain",
+    "experiments": [
+      "R1795-R1801",
+      "R1800-R1807",
+      "R1805-R1812"
+    ],
+    "regression": "One12-case candidate lost144; subsequent budget revision recovered it but added no solves. Do not reopen as an accepted optimization."
+  },
+  "qcp_boundary": "Existing fresh original-program/Rocq acceptance is version-specific to c528; three programs and23VCs per backend. No end-to-end claim for this new prototype or query replay substitution.",
+  "pending": [
+    "ordinary complete-source CMake CLI/worker/Python qualification",
+    "fresh same-round60s/physical-core/16GiB fixed160",
+    "new-version QCP validation",
+    "PR and post-merge main CI",
+    "final independent program and SMT protected-set checks once"
+  ],
+  "protected_sets_used": false,
+  "external_runtime_oracle": false,
+  "new_feature_gates": false,
+  "promoted": false,
+  "overall_goal_achieved": false
+}

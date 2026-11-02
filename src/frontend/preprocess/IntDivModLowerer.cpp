@@ -133,8 +133,10 @@ ExprId IntDivModLowerer::lowerMod(ExprId a, ExprId b, ScopeLevel level) {
         DivModDef def;
         def.a = a;
         def.b = b;
-        def.q = ir_.makeFreshVariable(intSortId_, "__nlc_div_q", /*routingAuxiliary=*/true);
-        def.r = ir_.makeFreshVariable(intSortId_, "__nlc_mod_r", /*routingAuxiliary=*/true);
+        // Quotient and remainder are integer witnesses, not aliases whose
+        // domains can be ignored when selecting an arithmetic solver.
+        def.q = ir_.makeFreshVariable(intSortId_, "__nlc_div_q");
+        def.r = ir_.makeFreshVariable(intSortId_, "__nlc_mod_r");
         auto [insertedIt, _] = registry_.emplace(key, def);
         it = insertedIt;
     }

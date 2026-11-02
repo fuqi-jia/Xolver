@@ -4,11 +4,47 @@
 #include "algebra/linear/LinearExpr.h"
 #include "search/nra/core/CdcacSolver.h"
 #include "ir/NativeTerms.h"
+#include "base/WorkBudget.h"
 #include <algorithm>
 #include <functional>
 #include <iostream>
 
 namespace xolver {
+
+namespace {
+std::optional<std::pair<LinearFormKey, mpq_class>> polyToLinearForm(
+    const PolynomialKernel* kernel, PolyId poly);
+
+// Closed singleton intervals are equalities too. Preserve all participating
+// literals in the caller's explanation when using these substitutions.
+template<class Assignments>
+std::unordered_map<std::string, mpq_class> fixedLinearValues(
+    const Assignments& assignments, const std::vector<ActiveLinearConstraint>* context) {
+    struct Bounds { std::optional<mpq_class> lower, upper; };
+    std::unordered_map<std::string, Bounds> bounds;
+    auto collect = [&](const LinearAtomPayload& p) {
+        if (p.lhs.terms.size() != 1) return;
+        const auto& [name, coefficient] = p.lhs.terms.front();
+        const auto rhs = p.rhs.tryAsRational();
+        if (!rhs || coefficient == 0) return;
+        const mpq_class value = *rhs / coefficient;
+        auto& b = bounds[name];
+        const bool lower = p.rel == Relation::Eq ||
+            (coefficient > 0 ? p.rel == Relation::Geq : p.rel == Relation::Leq);
+        const bool upper = p.rel == Relation::Eq ||
+            (coefficient > 0 ? p.rel == Relation::Leq : p.rel == Relation::Geq);
+        if (lower && (!b.lower || value > *b.lower)) b.lower = value;
+        if (upper && (!b.upper || value < *b.upper)) b.upper = value;
+    };
+    for (const auto& a : assignments)
+        if (auto* p = std::get_if<LinearAtomPayload>(&a.atom.payload)) collect(*p);
+    if (context) for (const auto& a : *context) collect(a.payload);
+    std::unordered_map<std::string, mpq_class> result;
+    for (const auto& [name, b] : bounds)
+        if (b.lower && b.upper && *b.lower == *b.upper) result.emplace(name, *b.lower);
+    return result;
+}
+} // namespace
 
 NiraSolver::NiraSolver(std::unique_ptr<PolynomialKernel> kernel)
     : kernel_(std::move(kernel)) {
@@ -18,6 +54,18 @@ NiraSolver::NiraSolver(std::unique_ptr<PolynomialKernel> kernel)
 }
 
 NiraSolver::~NiraSolver() = default;
+
+void NiraSolver::assertLit(const TheoryAtomRecord& atom, bool value,
+                           int level, SatLit assertedLit) {
+    auto effective = atom;
+    if (!value) {
+        if (auto* p = std::get_if<PolynomialAtomPayload>(&effective.payload))
+            p->rel = negateRelation(p->rel);
+        if (auto* p = std::get_if<LinearAtomPayload>(&effective.payload))
+            p->rel = negateRelation(p->rel);
+    }
+    ArithSolverBase::assertLit(effective, true, level, assertedLit);
+}
 
 void NiraSolver::onPush() {
     gsRelax_.push();
@@ -35,6 +83,7 @@ void NiraSolver::onBacktrack(int targetLevel) {
 }
 
 TheoryCheckResult NiraSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
+    currentModel_.reset();
     // Check if there are any active polynomial constraints
     bool hasPoly = false;
     for (const auto& a : trail()) {
@@ -50,75 +99,58 @@ TheoryCheckResult NiraSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort ef
         return TheoryCheckResult::consistent();
     }
 
-    // --- Presolve: fixed-value substitution ---
+    // Simplify polynomial obligations under exact, explained linear facts.
+    // A residual linear obligation belongs to the existing LIRA engine; it
+    // must not be independently declared satisfiable by a nonlinear engine.
     if (kernel_) {
-        std::cerr << "[NIRA] check: hasPoly=" << hasPoly
-                  << " activeLinearCtx=" << (activeLinearContext_ ? activeLinearContext_->size() : 0)
-                  << "\n";
-        std::unordered_map<std::string, mpq_class> fixedValues;
-
-        // Step 1a: collect fixed values from active NIRA linear equalities
+        const auto fixedValues = fixedLinearValues(trail(), activeLinearContext_);
+        bool allLinear = true;
         for (const auto& a : trail()) {
-            if (!std::holds_alternative<LinearAtomPayload>(a.atom.payload)) continue;
-            if (!a.value) continue;
-
-            const auto& payload = std::get<LinearAtomPayload>(a.atom.payload);
-            if (payload.rel != Relation::Eq) continue;
-            if (payload.lhs.terms.size() != 1) continue;
-
-            const auto& term = payload.lhs.terms[0];
-            if (term.second == 0) continue;
-            auto rq = payload.rhs.tryAsRational();
-            if (!rq) continue;
-            fixedValues[term.first] = *rq / term.second;
-        }
-
-        // Step 1b: collect fixed values from active LIRA linear equalities
-        if (activeLinearContext_) {
-            for (const auto& alc : *activeLinearContext_) {
-                const auto& p = alc.payload;
-                if (p.rel != Relation::Eq) continue;
-                if (p.lhs.terms.size() != 1) continue;
-
-                const auto& term = p.lhs.terms[0];
-                if (term.second == 0) continue;
-                auto rq = p.rhs.tryAsRational();
-                if (!rq) continue;
-                fixedValues[term.first] = *rq / term.second;
-            }
-        }
-
-        // Step 2: substitute into polynomial constraints
-        for (const auto& a : trail()) {
-            if (!std::holds_alternative<PolynomialAtomPayload>(a.atom.payload)) continue;
-            if (!a.value) continue;
-
-            const auto& payload = std::get<PolynomialAtomPayload>(a.atom.payload);
-            PolyId current = payload.poly;
-
+            const auto* payload = std::get_if<PolynomialAtomPayload>(&a.atom.payload);
+            if (!payload) continue;
+            const auto rhs = payload->rhs.tryAsRational();
+            if (!rhs) return TheoryCheckResult::unknown("NIRA: algebraic polynomial rhs");
+            PolyId current = kernel_->sub(payload->poly, kernel_->mkConst(*rhs));
             for (const auto& [name, value] : fixedValues) {
-                auto varIdOpt = kernel_->findVar(name);
-                if (!varIdOpt) continue;
-                auto substituted = kernel_->substituteRational(current, *varIdOpt, value);
-                if (substituted) current = *substituted;
+                if (auto variable = kernel_->findVar(name))
+                    if (auto substituted = kernel_->substituteRational(current, *variable, value))
+                        current = *substituted;
             }
-
             if (kernel_->isConstant(current)) {
-                mpq_class val = kernel_->toConstant(current);
-                bool satisfied = false;
-                switch (payload.rel) {
-                    case Relation::Eq:  satisfied = (val == 0); break;
-                    case Relation::Neq: satisfied = (val != 0); break;
-                    case Relation::Lt:  satisfied = (val < 0); break;
-                    case Relation::Leq: satisfied = (val <= 0); break;
-                    case Relation::Gt:  satisfied = (val > 0); break;
-                    case Relation::Geq: satisfied = (val >= 0); break;
+                const auto value = kernel_->toConstant(current);
+                const bool holds = payload->rel == Relation::Eq ? value == 0 :
+                    payload->rel == Relation::Neq ? value != 0 :
+                    payload->rel == Relation::Lt ? value < 0 :
+                    payload->rel == Relation::Leq ? value <= 0 :
+                    payload->rel == Relation::Gt ? value > 0 : value >= 0;
+                if (!holds)
+                    return TheoryCheckResult::mkConflict(TheoryConflict{allActiveReasons()});
+                continue;
+            }
+            const auto linear = polyToLinearForm(kernel_.get(), current);
+            if (!linear) { allLinear = false; continue; }
+            bool active = false;
+            if (activeLinearContext_) for (const auto& fact : *activeLinearContext_) {
+                if (fact.payload.lhs == linear->first &&
+                    fact.payload.rel == payload->rel &&
+                    fact.payload.rhs.tryAsRational() == std::optional<mpq_class>(linear->second)) {
+                    active = true;
+                    break;
                 }
-                if (!satisfied) {
-                    return TheoryCheckResult::mkConflict(TheoryConflict{{a.lit}});
-                }
+            }
+            if (!active) {
+                if (!registry_)
+                    return TheoryCheckResult::unknown("NIRA: linear residual needs registry");
+                auto reasons = allActiveReasons();
+                const auto consequence = registry_->getOrCreateLinearBoundAtom(
+                    linear->first, payload->rel, linear->second, TheoryId::LIRA);
+                for (auto& reason : reasons) reason = reason.negated();
+                reasons.push_back(consequence);
+                return TheoryCheckResult::mkLemma(
+                    TheoryLemma{std::move(reasons), LemmaKind::Entailment});
             }
         }
+        if (allLinear) return TheoryCheckResult::consistent();
     }
 
     // --- Pure-subproblem delegation (cheap; runs at Full effort).
@@ -154,217 +186,76 @@ bool isIntegerVar(const NativeTerms* nativeTerms, const std::string& name);
 } // namespace
 
 TheoryCheckResult NiraSolver::checkPureSubproblems(TheoryLemmaStorage& /*lemmaDb*/) {
-    // After substituting fixed integer values into polynomial constraints,
-    // some polynomials may collapse into pure-real form (no integer variables
-    // remaining). For those, NIRA's bounded-complete enumeration over integer
-    // assignments is the wrong tool — we just need NRA on the residual
-    // polynomial system. Spin up a fresh CdcacSolver, push the surviving
-    // real-only constraints, and forward its verdict.
-    //
-    // The path is needed for:
-    //   * inputs that are pure-NRA in disguise (`r²=-1`, `2r²-3r+1=0`),
-    //   * NIRA inputs whose integer variables vanish post-substitution
-    //     (`r² ≥ 1 ∧ i ≤ 5`, where i is otherwise irrelevant).
-    if (!nativeTerms_ || !kernel_) {
-        return TheoryCheckResult::unknown(
-            "NIRA: pure-subproblem delegation requires kernel and nativeTerms");
-    }
-
-    // Step 1: collect fixed-value substitutions (single-variable linear
-    // equalities, from active NIRA atoms and the LIRA linear context).
-    std::unordered_map<std::string, mpq_class> fixedValues;
-    auto collectFixed = [&](const LinearAtomPayload& p) {
-        if (p.rel != Relation::Eq) return;
-        if (p.lhs.terms.size() != 1) return;
-        const auto& [name, coeff] = p.lhs.terms[0];
-        if (coeff == 0) return;
-        auto rq = p.rhs.tryAsRational();
-        if (!rq) return;
-        fixedValues[name] = *rq / coeff;
-    };
+    if (!nativeTerms_ || !kernel_)
+        return TheoryCheckResult::unknown("NIRA: pure delegation requires terms and kernel");
+    const auto fixedValues = fixedLinearValues(trail(), activeLinearContext_);
+    CdcacSolver residual(kernel_.get());
     for (const auto& a : trail()) {
-        if (!a.value) continue;
-        if (auto* p = std::get_if<LinearAtomPayload>(&a.atom.payload)) collectFixed(*p);
+        const auto* p = std::get_if<PolynomialAtomPayload>(&a.atom.payload);
+        if (!p) continue;
+        const auto rhs = p->rhs.tryAsRational();
+        if (!rhs) return TheoryCheckResult::unknown("NIRA: algebraic polynomial rhs");
+        auto current = kernel_->sub(p->poly, kernel_->mkConst(*rhs));
+        for (const auto& [name, value] : fixedValues)
+            if (auto variable = kernel_->findVar(name))
+                if (auto sub = kernel_->substituteRational(current, *variable, value)) current = *sub;
+        for (const auto& name : kernel_->variables(current))
+            if (isIntegerVar(nativeTerms_, name))
+                return TheoryCheckResult::unknown("NIRA: mixed integer/real residual");
+        residual.assertConstraint(current, p->rel, a.lit, a.level);
     }
-    if (activeLinearContext_) {
-        for (const auto& alc : *activeLinearContext_) collectFixed(alc.payload);
-    }
-
-    // Step 2: substitute into each polynomial constraint and classify.
-    struct RealConstraint {
-        PolyId poly;
-        Relation rel;
-        SatLit reason;
-        int level;
-    };
-    std::vector<RealConstraint> realPolys;
-    bool sawMixed = false;
-    for (const auto& a : trail()) {
-        if (!a.value) continue;
-        if (!std::holds_alternative<PolynomialAtomPayload>(a.atom.payload)) continue;
-        const auto& payload = std::get<PolynomialAtomPayload>(a.atom.payload);
-        PolyId current = payload.poly;
-        for (const auto& [name, value] : fixedValues) {
-            auto varIdOpt = kernel_->findVar(name);
-            if (!varIdOpt) continue;
-            if (auto sub = kernel_->substituteRational(current, *varIdOpt, value)) {
-                current = *sub;
+    // Linear and polynomial witnesses must agree. An unfixed integer coupled
+    // to a real variable cannot be dropped from a delegated real problem.
+    bool forwardable = true;
+    auto forward = [&](const LinearAtomPayload& p, SatLit reason) {
+        const auto rhs = p.rhs.tryAsRational();
+        if (!rhs) { forwardable = false; return; }
+        auto poly = kernel_->mkConst(-*rhs);
+        bool real = false, unfixedInt = false;
+        for (const auto& [name, coefficient] : p.lhs.terms) {
+            if (coefficient == 0) continue;
+            if (auto it = fixedValues.find(name); it != fixedValues.end()) {
+                poly = kernel_->add(poly, kernel_->mkConst(coefficient * it->second));
+            } else if (isIntegerVar(nativeTerms_, name)) {
+                unfixedInt = true;
+            } else {
+                real = true;
+                poly = kernel_->add(poly, kernel_->mul(kernel_->mkConst(coefficient),
+                    kernel_->mkVar(kernel_->getOrCreateVar(name))));
             }
         }
-        // Constant polynomials are already covered by check()'s presolve.
-        if (kernel_->isConstant(current)) continue;
-
-        bool hasInt = false;
-        for (const auto& v : kernel_->variables(current)) {
-            if (isIntegerVar(nativeTerms_, v)) { hasInt = true; break; }
+        if (unfixedInt) {
+            if (real) forwardable = false;
+            return; // Independent pure-integer obligations remain with LIRA.
         }
-        if (hasInt) {
-            sawMixed = true;
-            continue;
-        }
-        realPolys.push_back({current, payload.rel, a.lit, a.level});
-    }
-
-    if (sawMixed) {
-        return TheoryCheckResult::unknown("NIRA: mixed int/real polys remain");
-    }
-
-    // Step 2b: also gather the active LINEAR constraints on the real
-    // variables, so the delegated CDCAC picks a root CONSISTENT with them
-    // (e.g. `r > 0` selects +√3 over −√3, `r ≤ 10` excludes spurious large
-    // roots). Single-variable equalities are already in fixedValues and are
-    // skipped. If a real-var linear constraint cannot be forwarded
-    // (involves an unfixed Int variable, or an algebraic rhs), we set
-    // `cannotForwardReal` and decline to publish a witness — exposing an
-    // unvalidated model would be worse than falling back.
-    std::vector<RealConstraint> realLinears;
-    bool cannotForwardReal = false;
-    auto forwardLinear = [&](const LinearAtomPayload& p) {
-        if (p.lhs.terms.size() == 1) {
-            // Single-var equality already consumed via fixedValues.
-            const auto& [nm, cf] = p.lhs.terms[0];
-            if (p.rel == Relation::Eq && cf != 0 && fixedValues.count(nm)) return;
-        }
-        auto rhsQ = p.rhs.tryAsRational();
-        if (!rhsQ) return;  // algebraic rhs on a linear atom — leave it
-        PolyId poly = kernel_->mkConst(-(*rhsQ));   // accumulate (lhs - rhs)
-        bool involvesRealVar = false;
-        bool involvesUnfixedInt = false;
-        for (const auto& [name, coeff] : p.lhs.terms) {
-            auto fv = fixedValues.find(name);
-            if (fv != fixedValues.end()) {
-                poly = kernel_->add(poly, kernel_->mkConst(coeff * fv->second));
-                continue;
-            }
-            if (isIntegerVar(nativeTerms_, name)) { involvesUnfixedInt = true; continue; }
-            involvesRealVar = true;
-            VarId v = kernel_->getOrCreateVar(name);
-            poly = kernel_->add(poly, kernel_->mul(kernel_->mkConst(coeff), kernel_->mkVar(v)));
-        }
-        if (!involvesRealVar) return;       // pure-int constraint — doesn't bind the real witness
-        if (involvesUnfixedInt) {           // couples a real var to an unfixed int → can't forward
-            cannotForwardReal = true;
-            return;
-        }
-        realLinears.push_back({poly, p.rel, SatLit{}, 0});
+        residual.assertConstraint(poly, p.rel, reason, 0);
     };
-    for (const auto& a : trail()) {
-        if (!a.value) continue;
-        if (auto* p = std::get_if<LinearAtomPayload>(&a.atom.payload)) forwardLinear(*p);
+    for (const auto& a : trail())
+        if (const auto* p = std::get_if<LinearAtomPayload>(&a.atom.payload)) forward(*p, a.lit);
+    if (activeLinearContext_)
+        for (const auto& fact : *activeLinearContext_) forward(fact.payload, fact.reasonLit);
+    if (!forwardable)
+        return TheoryCheckResult::unknown("NIRA: residual couples unfixed integer and real values");
+    const auto result = residual.check();
+    if (result.kind == TheoryCheckResult::Kind::Conflict)
+        return TheoryCheckResult::mkConflict(TheoryConflict{allActiveReasons()});
+    if (result.kind != TheoryCheckResult::Kind::Consistent) return result;
+    const auto sample = residual.getModel();
+    if (!sample) return TheoryCheckResult::unknown("NIRA: no joint residual witness");
+    TheoryModel model;
+    for (const auto& [name, value] : fixedValues) {
+        model.numericAssignments.emplace(name, RealValue::fromMpq(value));
+        model.assignments.emplace(name, value.get_str());
     }
-    if (activeLinearContext_) {
-        for (const auto& alc : *activeLinearContext_) forwardLinear(alc.payload);
+    for (size_t i = 0; i < sample->varOrder.size(); ++i) {
+        const std::string name(kernel_->varName(sample->varOrder[i]));
+        const auto value = residual.sampleValueToRealValue(sample->values[i]);
+        model.numericAssignments.insert_or_assign(name, value);
+        model.assignments.insert_or_assign(name,
+            value.isRational() ? value.asRational().get_str() : value.toSmtLib2());
     }
-
-    // Helper: seed a model with the fixed (integer/rational) values.
-    auto seedFixed = [&](TheoryModel& m) {
-        for (const auto& [name, val] : fixedValues) {
-            m.numericAssignments.insert({name, RealValue::fromMpq(val)});
-            m.assignments.insert({name, val.get_str()});
-        }
-    };
-
-    // Only publish a witness if every real-var constraint was forwardable
-    // to CDCAC (so its model provably satisfies them). Otherwise leave
-    // currentModel_ unset — a partially-constrained CDCAC sample could
-    // violate an un-forwarded constraint (e.g. nira_008's floor relation
-    // couples r to an Int var), and an unvalidated model is worse than the
-    // fallback.
-    bool publishWitness = !cannotForwardReal;
-
-    if (realPolys.empty()) {
-        // All polynomials collapsed under the fixed values; the witness is
-        // the fixed assignment (only safe when there are no un-forwardable
-        // real constraints left to satisfy).
-        if (publishWitness) {
-            TheoryModel m;
-            seedFixed(m);
-            if (!m.numericAssignments.empty()) currentModel_ = std::move(m);
-        }
-        return TheoryCheckResult::consistent();
-    }
-
-    // Step 3: the VERDICT comes from CDCAC on the polynomial residual only
-    // — exactly as before, so adding linear constraints can never change a
-    // sat/unsat/unknown decision.
-    CdcacSolver cdcac(kernel_.get());
-    for (const auto& rp : realPolys) {
-        cdcac.assertConstraint(rp.poly, rp.rel, rp.reason, rp.level);
-    }
-    auto res = cdcac.check();
-    if (res.kind != TheoryCheckResult::Kind::Consistent || !publishWitness) {
-        return res;
-    }
-
-    // For the MODEL, solve a SEPARATE CDCAC instance that ALSO includes the
-    // forwarded linear constraints, so the chosen root is consistent with
-    // them (e.g. r > 0 → +√3). If that richer solve does not cleanly return
-    // a model (too complex, etc.), fall back to the poly-only sample, and if
-    // even that is missing, publish nothing (the aggregation keeps the
-    // linear helper's model). The verdict is unaffected either way.
-    auto extractFrom = [&](CdcacSolver& src) -> bool {
-        auto sp = src.getModel();
-        if (!sp) return false;
-        TheoryModel m;
-        seedFixed(m);
-        for (size_t i = 0; i < sp->varOrder.size(); ++i) {
-            std::string name(kernel_->varName(sp->varOrder[i]));
-            if (name.empty()) continue;
-            RealValue rv = src.sampleValueToRealValue(sp->values[i]);
-            m.numericAssignments[name] = rv;
-            // String channel holds the RAW rational (e.g. "-2") for the
-            // CLI's sort-aware formatter; algebraic values flow through the
-            // typed channel (CLI emits root-obj from it).
-            m.assignments[name] = rv.isRational()
-                ? rv.asRational().get_str()
-                : rv.toSmtLib2();
-        }
-        if (m.numericAssignments.empty()) return false;
-        currentModel_ = std::move(m);
-        return true;
-    };
-
-    if (realLinears.empty()) {
-        // No linear constraints to respect — the poly-only sample is a
-        // complete witness of the real subsystem.
-        extractFrom(cdcac);
-        return res;
-    }
-    // Linear constraints present: only publish a model the richer solve
-    // verified against them. If it doesn't cleanly solve, publish nothing
-    // (the poly-only sample could violate the linear constraints, and the
-    // aggregation's linear-helper model is at least linearly feasible).
-    CdcacSolver cdcacModel(kernel_.get());
-    for (const auto& rp : realPolys) {
-        cdcacModel.assertConstraint(rp.poly, rp.rel, rp.reason, rp.level);
-    }
-    for (const auto& rl : realLinears) {
-        cdcacModel.assertConstraint(rl.poly, rl.rel, rl.reason, rl.level);
-    }
-    if (cdcacModel.check().kind == TheoryCheckResult::Kind::Consistent) {
-        extractFrom(cdcacModel);
-    }
-    return res;
+    currentModel_ = std::move(model);
+    return result;
 }
 
 TheoryCheckResult NiraSolver::checkRelaxationAndValidate(TheoryLemmaStorage& /*lemmaDb*/) {
@@ -415,281 +306,64 @@ std::optional<std::pair<LinearFormKey, mpq_class>> polyToLinearForm(
     return std::make_pair(lhs, rhs);
 }
 
-// Standalone enum for the free-function helper (avoids private member access).
-enum class UvCheckResult { Sat, Unsat, Unknown };
-
-// Check a univariate polynomial (after integer substitution) for satisfiability.
-// Handles quadratics and odd-degree polynomials directly without NRA delegation.
-static UvCheckResult checkUnivariatePoly(
-    const PolynomialKernel* kernel, PolyId poly, Relation rel) {
-    auto termsOpt = kernel->terms(poly);
-    if (!termsOpt) return UvCheckResult::Unknown;
-
-    // Identify the single variable and collect coefficients by degree.
-    std::optional<VarId> varId;
-    std::unordered_map<int, mpq_class> coeffsByDegree;
-    for (const auto& term : *termsOpt) {
-        if (term.powers.empty()) {
-            coeffsByDegree[0] += mpq_class(term.coefficient);
-        } else if (term.powers.size() == 1) {
-            if (!varId) {
-                varId = term.powers[0].first;
-            } else if (*varId != term.powers[0].first) {
-                return UvCheckResult::Unknown; // multivariate
-            }
-            coeffsByDegree[term.powers[0].second] += mpq_class(term.coefficient);
-        } else {
-            return UvCheckResult::Unknown; // multivariate
-        }
-    }
-
-    if (!varId) {
-        // Constant — should have been handled by caller.
-        return UvCheckResult::Unknown;
-    }
-
-    // Determine degree.
-    int degree = 0;
-    for (const auto& [d, _] : coeffsByDegree) {
-        if (d > degree) degree = d;
-    }
-    if (degree == 0) {
-        return UvCheckResult::Unknown;
-    }
-
-    // For odd degree ≥ 1: polynomial goes to ±∞ on opposite sides,
-    // so >0 and <0 are always satisfiable; =0 always has a real root.
-    if (degree % 2 == 1) {
-        switch (rel) {
-            case Relation::Eq:
-            case Relation::Neq:
-            case Relation::Gt:
-            case Relation::Lt:
-                return UvCheckResult::Sat;
-            case Relation::Geq:
-            case Relation::Leq:
-                // Touching zero is guaranteed for odd degree.
-                return UvCheckResult::Sat;
-        }
-    }
-
-    // Even degree: need more analysis.  For degree 2 we use discriminant.
-    if (degree == 2) {
-        mpq_class a = coeffsByDegree.count(2) ? coeffsByDegree[2] : mpq_class(0);
-        mpq_class b = coeffsByDegree.count(1) ? coeffsByDegree[1] : mpq_class(0);
-        mpq_class c = coeffsByDegree.count(0) ? coeffsByDegree[0] : mpq_class(0);
-
-        if (a == 0) {
-            // Degenerate to linear — should not reach here.
-            return UvCheckResult::Unknown;
-        }
-
-        // Discriminant D = b² - 4ac
-        mpq_class D = b * b - 4 * a * c;
-
-        switch (rel) {
-            case Relation::Eq:
-                return (D >= 0) ? UvCheckResult::Sat : UvCheckResult::Unsat;
-            case Relation::Neq:
-                // Non-constant polynomial is non-zero almost everywhere.
-                return UvCheckResult::Sat;
-            case Relation::Gt:
-                // p(x) > 0 for some x?  Unsat only if always negative.
-                // Always negative: a < 0 and D < 0.
-                if (a < 0 && D < 0) return UvCheckResult::Unsat;
-                return UvCheckResult::Sat;
-            case Relation::Lt:
-                // p(x) < 0 for some x?  Unsat only if always positive.
-                // Always positive: a > 0 and D < 0.
-                if (a > 0 && D < 0) return UvCheckResult::Unsat;
-                return UvCheckResult::Sat;
-            case Relation::Geq:
-                // p(x) ≥ 0 for some x?  Unsat only if always negative.
-                if (a < 0 && D < 0) return UvCheckResult::Unsat;
-                return UvCheckResult::Sat;
-            case Relation::Leq:
-                // p(x) ≤ 0 for some x?  Unsat only if always positive.
-                if (a > 0 && D < 0) return UvCheckResult::Unsat;
-                return UvCheckResult::Sat;
-        }
-    }
-
-    // Even degree > 2: conservative.
-    return UvCheckResult::Unknown;
-}
-
 } // anonymous namespace
 
-// Check whether a single linear/polynomial assignment satisfies all constraints
-// using a fresh GeneralSimplex instance.
-NiraSolver::AssignmentCheckResult NiraSolver::checkAssignmentWithSimplex(
-    const std::vector<ActiveAssignment>& activeAssignments,
+// Check all polynomial and linear obligations under one integer assignment.
+NiraSolver::AssignmentCheckResult NiraSolver::checkAssignmentWithRealSolver(
+    const std::vector<ActiveAssignment>& assignments,
     const std::vector<ActiveLinearConstraint>* linearCtx,
     const std::unordered_map<std::string, mpq_class>& fixedValues,
-    PolynomialKernel* kernel) {
-
-    GeneralSimplex gs;
-    LinearAtomManager manager;
-
-    // Helper to assert bounds on an aux var
-    auto assertRel = [&](int aux, Relation rel) -> bool {
-        switch (rel) {
-            case Relation::Eq:
-                return gs.assertLower(aux, BoundInfo(BoundValue(DeltaRational(0)))) &&
-                       gs.assertUpper(aux, BoundInfo(BoundValue(DeltaRational(0))));
-            case Relation::Leq:
-                return gs.assertUpper(aux, BoundInfo(BoundValue(DeltaRational(0))));
-            case Relation::Lt:
-                return gs.assertUpper(aux, BoundInfo(BoundValue(DeltaRational(0, -1))));
-            case Relation::Geq:
-                return gs.assertLower(aux, BoundInfo(BoundValue(DeltaRational(0))));
-            case Relation::Gt:
-                return gs.assertLower(aux, BoundInfo(BoundValue(DeltaRational(0, 1))));
-            default:
-                return true; // Neq not handled here
+    PolynomialKernel* kernel, TheoryModel* model) {
+    // Every integer in this residual was assigned by the bounded enumerator.
+    // Decide the remaining real conjunction together, including disequalities.
+    CdcacSolver residual(kernel);
+    auto linear = [&](const LinearAtomPayload& p) {
+        const auto rhs = p.rhs.tryAsRational();
+        if (!rhs) return false;
+        auto poly = kernel->mkConst(-*rhs);
+        for (const auto& [name, coefficient] : p.lhs.terms) {
+            if (coefficient == 0) continue;
+            const auto it = fixedValues.find(name);
+            const auto term = it != fixedValues.end() ? kernel->mkConst(coefficient * it->second)
+                : kernel->mul(kernel->mkConst(coefficient),
+                    kernel->mkVar(kernel->getOrCreateVar(name)));
+            poly = kernel->add(poly, term);
         }
+        residual.assertConstraint(poly, p.rel, {}, 0);
+        return true;
     };
-
-    // Helper to process a LinearAtomPayload with substitution
-    auto processLinearPayload = [&](const LinearAtomPayload& p) -> AssignmentCheckResult {
-        LinearFormKey newLhs;
-        // Linear RHS is rational (algebraic never arises from inputs).
-        mpq_class newRhs = p.rhs.asRational();
-        for (const auto& [name, coeff] : p.lhs.terms) {
-            auto it = fixedValues.find(name);
-            if (it != fixedValues.end()) {
-                newRhs -= it->second * coeff;
-            } else {
-                newLhs.terms.push_back({name, coeff});
-            }
-        }
-
-        if (newLhs.terms.empty()) {
-            bool sat = false;
-            switch (p.rel) {
-                case Relation::Eq:  sat = (newRhs == 0); break;
-                case Relation::Neq: sat = (newRhs != 0); break;
-                case Relation::Lt:  sat = (newRhs > 0); break;   // 0 < newRhs
-                case Relation::Leq: sat = (newRhs >= 0); break;  // 0 <= newRhs
-                case Relation::Gt:  sat = (newRhs < 0); break;   // 0 > newRhs
-                case Relation::Geq: sat = (newRhs <= 0); break;  // 0 >= newRhs
-            }
-            if (!sat) return AssignmentCheckResult::Unsat;
-            return AssignmentCheckResult::Sat;
-        }
-
-        std::sort(newLhs.terms.begin(), newLhs.terms.end(),
-                  [](auto& a, auto& b) { return a.first < b.first; });
-
-        int aux = manager.getOrCreateAuxVar(gs, newLhs, newRhs);
-        if (!assertRel(aux, p.rel)) return AssignmentCheckResult::Unsat;
-        return AssignmentCheckResult::Sat;
-    };
-
-    // Process linear constraints from NIRA active assignments
-    for (const auto& a : activeAssignments) {
-        if (!a.value) continue;
-        if (!std::holds_alternative<LinearAtomPayload>(a.atom.payload)) continue;
-
-        const auto& p = std::get<LinearAtomPayload>(a.atom.payload);
-        auto r = processLinearPayload(p);
-        if (r != AssignmentCheckResult::Sat) return r;
-    }
-
-    // Process linear constraints from LIRA active context
-    if (linearCtx) {
-        for (const auto& alc : *linearCtx) {
-            auto r = processLinearPayload(alc.payload);
-            if (r != AssignmentCheckResult::Sat) return r;
+    for (const auto& a : assignments) {
+        if (const auto* p = std::get_if<LinearAtomPayload>(&a.atom.payload)) {
+            if (!linear(*p)) return AssignmentCheckResult::Unknown;
+        } else if (const auto* p = std::get_if<PolynomialAtomPayload>(&a.atom.payload)) {
+            const auto rhs = p->rhs.tryAsRational();
+            if (!rhs) return AssignmentCheckResult::Unknown;
+            auto poly = kernel->sub(p->poly, kernel->mkConst(*rhs));
+            for (const auto& [name, value] : fixedValues)
+                if (const auto variable = kernel->findVar(name))
+                    if (const auto sub = kernel->substituteRational(poly, *variable, value)) poly = *sub;
+            residual.assertConstraint(poly, p->rel, {}, 0);
         }
     }
-
-    // First pass: count distinct nonlinear polynomial constraints (those that
-    // remain non-linear after integer substitution).  If there is more than one
-    // *distinct* polynomial, checkUnivariatePoly's per-constraint Sat is unsound
-    // — we must fall back to Unknown because we cannot verify their conjunction.
-    // Use the *original* poly id for deduplication — two active assignments
-    // with the same original polynomial, relation and rhs are the same atom
-    // registered twice (e.g. by different theory solvers).
-    std::set<std::tuple<PolyId, Relation, RealValue>> distinctNonlinearPolys;
-    for (const auto& a : activeAssignments) {
-        if (!a.value) continue;
-        if (!std::holds_alternative<PolynomialAtomPayload>(a.atom.payload)) continue;
-
-        const auto& p = std::get<PolynomialAtomPayload>(a.atom.payload);
-        PolyId current = p.poly;
-        for (const auto& [name, value] : fixedValues) {
-            auto varIdOpt = kernel->findVar(name);
-            if (!varIdOpt) continue;
-            auto substituted = kernel->substituteRational(current, *varIdOpt, value);
-            if (substituted) current = *substituted;
-        }
-        if (kernel->isConstant(current)) continue;
-        if (!polyToLinearForm(kernel, current)) {
-            distinctNonlinearPolys.insert({p.poly, p.rel, p.rhs});
-        }
+    if (linearCtx) for (const auto& a : *linearCtx)
+        if (!linear(a.payload)) return AssignmentCheckResult::Unknown;
+    const auto result = residual.check();
+    if (result.kind == TheoryCheckResult::Kind::Conflict) return AssignmentCheckResult::Unsat;
+    if (result.kind != TheoryCheckResult::Kind::Consistent) return AssignmentCheckResult::Unknown;
+    const auto sample = residual.getModel();
+    if (!sample) return AssignmentCheckResult::Unknown;
+    for (const auto& [name, value] : fixedValues) {
+        model->numericAssignments.emplace(name, RealValue::fromMpq(value));
+        model->assignments.emplace(name, value.get_str());
     }
-    int nonlinearPolyCount = static_cast<int>(distinctNonlinearPolys.size());
-
-    // Process polynomial constraints (substitute fixed integer values)
-    for (const auto& a : activeAssignments) {
-        if (!a.value) continue;
-        if (!std::holds_alternative<PolynomialAtomPayload>(a.atom.payload)) continue;
-
-        const auto& p = std::get<PolynomialAtomPayload>(a.atom.payload);
-        PolyId current = p.poly;
-
-        for (const auto& [name, value] : fixedValues) {
-            auto varIdOpt = kernel->findVar(name);
-            if (!varIdOpt) continue;
-            auto substituted = kernel->substituteRational(current, *varIdOpt, value);
-            if (substituted) current = *substituted;
-        }
-
-        if (kernel->isConstant(current)) {
-            mpq_class val = kernel->toConstant(current);
-            bool sat = false;
-            switch (p.rel) {
-                case Relation::Eq:  sat = (val == 0); break;
-                case Relation::Neq: sat = (val != 0); break;
-                case Relation::Lt:  sat = (val < 0); break;
-                case Relation::Leq: sat = (val <= 0); break;
-                case Relation::Gt:  sat = (val > 0); break;
-                case Relation::Geq: sat = (val >= 0); break;
-            }
-            if (!sat) return AssignmentCheckResult::Unsat;
-            continue;
-        }
-
-        auto linearOpt = polyToLinearForm(kernel, current);
-        if (!linearOpt) {
-            // Try univariate quadratic / odd-degree analysis before giving up.
-            auto uvRes = checkUnivariatePoly(kernel, current, p.rel);
-            if (uvRes != UvCheckResult::Unknown) {
-                if (uvRes == UvCheckResult::Unsat) return AssignmentCheckResult::Unsat;
-                // Soundness fix: per-constraint Sat is only trustworthy when there
-                // is exactly one *distinct* nonlinear polynomial.  With multiple
-                // different polynomials each may be individually satisfiable while
-                // their conjunction is not (e.g. x^2=2 ∧ x^2=3).
-                if (nonlinearPolyCount > 1) {
-                    return AssignmentCheckResult::Unknown;
-                }
-                continue;
-            }
-            // Polynomial still contains real variables after integer substitution.
-            // Without full NRA delegation we cannot decide feasibility.
-            return AssignmentCheckResult::Unknown;
-        }
-
-        auto [lhs, rhs] = *linearOpt;
-        int aux = manager.getOrCreateAuxVar(gs, lhs, rhs);
-        if (!assertRel(aux, p.rel)) return AssignmentCheckResult::Unsat;
+    for (size_t i = 0; i < sample->varOrder.size(); ++i) {
+        const std::string name(kernel->varName(sample->varOrder[i]));
+        const auto value = residual.sampleValueToRealValue(sample->values[i]);
+        model->numericAssignments.insert_or_assign(name, value);
+        model->assignments.insert_or_assign(name,
+            value.isRational() ? value.asRational().get_str() : value.toSmtLib2());
     }
-
-    auto r = gs.check();
-    if (r == GeneralSimplex::Result::Sat) return AssignmentCheckResult::Sat;
-    if (r == GeneralSimplex::Result::Unsat) return AssignmentCheckResult::Unsat;
-    return AssignmentCheckResult::Unknown;
+    return AssignmentCheckResult::Sat;
 }
 
 TheoryCheckResult NiraSolver::checkBoundedComplete(TheoryLemmaStorage& /*lemmaDb*/) {
@@ -882,7 +556,7 @@ TheoryCheckResult NiraSolver::checkBoundedComplete(TheoryLemmaStorage& /*lemmaDb
         }
     }
 
-    if (enumVars.empty()) {
+    if (enumVars.empty() || enumVars.size() != allIntVars.size()) {
         // No bounded variables to enumerate; cannot make progress.
         return TheoryCheckResult::unknown("NIRA: unbounded integer variable(s)");
     }
@@ -890,11 +564,18 @@ TheoryCheckResult NiraSolver::checkBoundedComplete(TheoryLemmaStorage& /*lemmaDb
     std::sort(enumVars.begin(), enumVars.end());
     std::unordered_map<std::string, mpq_class> fixedValues;
     bool sawUnknown = false;
+    WorkBudget deadline(0);
 
     std::function<bool(int)> enumerate = [&](int idx) -> bool {
+        deadline.tick();
         if (idx == (int)enumVars.size()) {
-            auto r = NiraSolver::checkAssignmentWithSimplex(trail(), activeLinearContext_, fixedValues, kernel_.get());
-            if (r == AssignmentCheckResult::Sat) return true;
+            TheoryModel witness;
+            auto r = NiraSolver::checkAssignmentWithRealSolver(
+                trail(), activeLinearContext_, fixedValues, kernel_.get(), &witness);
+            if (r == AssignmentCheckResult::Sat) {
+                currentModel_ = std::move(witness);
+                return true;
+            }
             if (r == AssignmentCheckResult::Unknown) {
                 sawUnknown = true;
             }
@@ -932,18 +613,8 @@ TheoryCheckResult NiraSolver::checkBoundedComplete(TheoryLemmaStorage& /*lemmaDb
             "NIRA: heuristic pin exhausted without SAT, true range unexplored");
     }
 
-    // All enumerated combinations lead to contradiction.
-    // Build a conflict clause from the active nonlinear atoms.
-    std::vector<SatLit> conflictReasons;
-    for (const auto& a : trail()) {
-        if (a.value && std::holds_alternative<PolynomialAtomPayload>(a.atom.payload)) {
-            conflictReasons.push_back(a.lit);
-        }
-    }
-    if (conflictReasons.empty()) {
-        conflictReasons = allActiveReasons();
-    }
-    return TheoryCheckResult::mkConflict(TheoryConflict{std::move(conflictReasons)});
+    // Bounds and linear side constraints are part of this refutation too.
+    return TheoryCheckResult::mkConflict(TheoryConflict{allActiveReasons()});
 }
 
 bool NiraSolver::validateOriginalConstraints() const {
@@ -971,6 +642,10 @@ std::vector<SatLit> NiraSolver::allActiveReasons() const {
     for (const auto& a : trail()) {
         reasons.push_back(a.lit);
     }
+    if (activeLinearContext_)
+        for (const auto& fact : *activeLinearContext_)
+            if (std::find(reasons.begin(), reasons.end(), fact.reasonLit) == reasons.end())
+                reasons.push_back(fact.reasonLit);
     return reasons;
 }
 

@@ -5265,3 +5265,58 @@ timed result is reused. All five recoveries and acceptance exit0 with PIDs
 gone. Core implementation is8a553f49 on feat/qcp-foundations; this remains an
 experimental prototype with canonical CMake/new-version QCP/CI gates pending,
 and it still falls short of Z3 and the126 target.
+
+## Semantic arithmetic witnesses and active preprocessing (R1782–R1827)
+
+Ordinary complete-source qualification R1782 now passes1998 units, seven
+native CTests and Python checks. Its fresh160 comparison R1786, sealed by
+R1798, verifies111/111/116 for main/candidate/Z3; Z3 has124 raw decisions and
+eight unconfirmed results, excluded at indices12/24/27/42/75/80/114/148.
+Candidate gains106 but loses113 (main0.034s UNSAT, candidate60s timeout).
+Later113 diagnostics do not reproduce that timeout and do not replace its
+formal observation. The source113 regression remains a promotion concern.
+Summary SHA-256: `4f8ab841dcb9b421b279b2d2244814014a98a7962778a2e6fac885d0c5e399e1`.
+
+Three factor-sign Boolean-refutation variants add no verified solves; one
+loses144 before a later variant recovers it. Their encoder and scheduling
+changes are removed. Only the independently tested generic final SAT check
+after the last allocated theory conflict remains.
+
+Profiling144 identifies repeated whole-DAG preprocessing scans. The shared
+operator index caches immutable-node syntax summaries and queries current
+roots, observing new terms while forgetting inactive roots. It skips eleven
+inapplicable passes; cast normalization and unconditional propagation remain.
+The pre-soundness-repair prototype removes about4.4s of measured scanning.
+Its30 valid pilot triads preserve14 verified solves, versus28 for Z3; actual
+144 model-checked SAT time falls48.253→45.334s. Input49's443.912s budget
+overrun is invalid and excluded; there is no complete31-case pilot claim.
+
+Additional integration tests uncover existing main false-SATs: Boolean
+equivalence to `is_int(y)` with `y=1` asserted nonintegral, and a generated
+integer quotient forced to3/2. Frozen main, parent and index prototype all
+return SAT; independent Z3 and cvc5 return UNSAT. Floor/quotient/remainder
+witnesses were incorrectly hidden from arithmetic domain routing. They now
+remain internal while enforcing their semantic types; floor triples widen
+arithmetic routing to LIRA/NIRA.
+
+Nonlinear coverage exposes NIRA's separate polarity, explanation and joint
+feasibility defects. The repair normalizes negative literals, recognizes
+closed singleton intervals, explains substitutions, and derives conditional
+linear residuals for the existing LIRA solver. Remaining real polynomial
+and linear constraints are checked together, including after integer
+enumeration; separate satisfiable constraints cannot certify a conjunction.
+Unfixed coupled integers remain open, and successful delegation exports its
+joint witness.
+
+Panda1/ExperimentOS R1825 passes2008 units/1314157 assertions, including48
+targeted cases/25464 assertions; frozen old control fails the new regressions.
+R1826/R1827 independently accept304 executions covering230 distinct original
+inputs,171 exported SAT models and950 original-query/model-replay judgments
+by frozen Z3 and cvc5. Repeated parametrizations are explicit, never solve
+credit. The [stage record](SEMANTIC_ARITHMETIC_WITNESSES_STAGE_20261102.json)
+pins source, binary, controls and all reports. Its CLI is an injected-object
+prototype, not ordinary CMake qualification; two subsequent edits only correct
+comments about the residual engine. Fresh canonical qualification,160 and
+new-version QCP validation remain pending. Prior c528 QCP acceptance remains
+version-specific. Neither protected set is read; the cancelled
+`validation/current-main.json` archive is still unnecessary.

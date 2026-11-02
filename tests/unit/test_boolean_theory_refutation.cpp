@@ -145,3 +145,43 @@ TEST_CASE("Polynomial refutation: runtime explanations respect assumptions and s
         }
     }
 }
+
+TEST_CASE("Boolean refutation: the last allowed theory conflict receives a final SAT check") {
+    // inconsistent() is an optional construction-time shortcut; the interface
+    // permits a backend to report contradictions only through solve().
+    class SolveOnlyBackend final : public SatSolver {
+        std::unique_ptr<SatSolver> backend_ = createSatSolver();
+    public:
+        size_t solveCalls = 0;
+        SatVar newVar() override { return backend_->newVar(); }
+        void addClause(const std::vector<SatLit>& clause) override { backend_->addClause(clause); }
+        void addTheoryClause(const std::vector<SatLit>& clause) override { backend_->addTheoryClause(clause); }
+        SolveResult solve() override { ++solveCalls; return backend_->solve(); }
+        SolveResult solve(const std::vector<SatLit>& assumptions) override {
+            ++solveCalls;
+            return backend_->solve(assumptions);
+        }
+        bool value(SatVar variable) const override { return backend_->value(variable); }
+        bool limit(const char* name, int value) override { return backend_->limit(name, value); }
+        void setDeadline(std::chrono::steady_clock::time_point deadline) override {
+            backend_->setDeadline(deadline);
+        }
+    };
+    for (size_t allocation : {size_t(3), size_t(4)}) {
+        auto sat = std::make_unique<SolveOnlyBackend>();
+        const auto a = sat->newVar(), b = sat->newVar();
+        BooleanRefutationLimits limits;
+        limits.assignments = allocation;
+        limits.deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+        const auto result = refuteBooleanTheory(*sat, [=](const SatSolver& model) {
+            return std::vector<SatLit>{{a, model.value(a)}, {b, model.value(b)}};
+        }, [](std::span<const SatLit> assignment) -> std::optional<std::vector<SatLit>> {
+            return std::vector<SatLit>(assignment.begin(), assignment.end());
+        }, limits);
+        CHECK(result.refuted == (allocation == 4));
+        CHECK(result.exhausted == (allocation == 3));
+        CHECK(result.assignments == allocation);
+        CHECK(result.conflicts == allocation);
+        CHECK(sat->solveCalls == allocation + 1);
+    }
+}
