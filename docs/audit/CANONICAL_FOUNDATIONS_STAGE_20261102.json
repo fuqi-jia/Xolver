@@ -1,6 +1,6 @@
 {
   "date": "2026-11-02",
-  "status": "complete_source_native_checks_and_fresh_full160_passed_QCP_CI_pending",
+  "status": "canonical_native_full160_and_three_QCP_pairs_passed_PR_CI_pending",
   "qualification": {
     "unit_cases": 1994,
     "unit_assertions": 1295886,
@@ -97,10 +97,10 @@
     },
     "attribution": "NIA29 matches the exact-before-encoding mechanism. NRA144 is recorded without attributing it to this scheduling change."
   },
-  "qcp_new_worker_end_to_end_validated": false,
+  "qcp_new_worker_end_to_end_validated": true,
   "pr_main_ci_complete": false,
   "protected_sets_used": false,
-  "boundary": "Complete canonical CMake targets, native Python functionality,1994 unit cases,63 SOMTParser CTests and96 fresh independently checked cases pass. The fresh160 comparison is109 parent/111 candidate/115 independently verified Z3, including one checked source certificate; gains29/144, no losses. Verified PAR-2 sums are6595.076/6444.530/5633.259 seconds. Nine raw Z3 verdicts remain unconfirmed. No current-worker QCP final result, PR/main CI, protected-set acceptance or overall superiority is claimed.",
+  "boundary": "Complete canonical native build,1994 unit cases,63 parser CTests,96 fresh independently checked cases and three original-C QCP paired final validations pass. Fresh main/candidate/Z3 verified scores104/111/116; raw Z3 score125 includes nine unconfirmed verdicts. Candidate gains seven with no losses. QCP provided-proof final validation totals90.573s/99.618s for the same three programs/23VCs,one fresh paired cohort. PR/main CI and protected-set acceptance are incomplete; overall Z3 superiority is not established.",
   "full_comparison": {
     "stage": "R1698-R1699",
     "cases": 160,
@@ -221,7 +221,9 @@
     "dependency_pr_ci": "https://github.com/fuqi-jia/SOMTParser/actions/runs/41364439174",
     "dependency_pr_checks": "All three pass",
     "dependency_merge": "Pending required independent review; normal merge rejected by ruleset5590872,admin override approval requested and not yet received.",
-    "boundary": "Xolver pins62b302c,whose source files equal the native-qualified b9063fa plus two retained modifications. The later upstream-main merge in the dependency PR is not substituted into this frozen Xolver build."
+    "boundary": "Xolver pins62b302c,whose source files equal the native-qualified b9063fa plus two retained modifications. The later upstream-main merge in the dependency PR is not substituted into this frozen Xolver build.",
+    "root_source_commit": "552fb46e00f78a3e19ca59c2848506cc80921ee2",
+    "root_pr": "https://github.com/fuqi-jia/Xolver/pull/93"
   },
   "current_main_comparison": {
     "main": "26aca1b816bdcdd02c070164bf2193c2b3483e56",
@@ -256,31 +258,113 @@
     ],
     "recovery_receipt_sha256": "2cdc02e74a3b4443643cab9fe14b8a2281b0d7c03638dea1d37397e93707d80b",
     "recovery_stage": "R1717",
-    "full_score": "pending",
-    "boundary": "Exactly5 launches produced no case directory or solver observation and ended137. Raw EOS oom statuses are preserved,not attributed to solver memory exhaustion. Only those5 missing cohorts are retaken unchanged. All155 valid originals remain immutable; no full160 main improvement claimed yet."
+    "full_score": {
+      "baseline": {
+        "oracle_verified": 103,
+        "certificate_augmented": 104,
+        "raw_definite": 104,
+        "oracle_verified_par2": 7228.043211353943,
+        "verified_par2": 7108.076974783093,
+        "results": {
+          "timeout": 55,
+          "sat": 57,
+          "unsat": 47,
+          "unknown": 1
+        },
+        "unconfirmed": []
+      },
+      "candidate": {
+        "oracle_verified": 110,
+        "certificate_augmented": 111,
+        "raw_definite": 111,
+        "oracle_verified_par2": 6568.4482440166175,
+        "verified_par2": 6448.466950360686,
+        "results": {
+          "sat": 62,
+          "timeout": 48,
+          "unsat": 49,
+          "unknown": 1
+        },
+        "unconfirmed": []
+      },
+      "z3": {
+        "oracle_verified": 116,
+        "certificate_augmented": 116,
+        "raw_definite": 125,
+        "oracle_verified_par2": 5572.5252448339015,
+        "verified_par2": 5572.5252448339015,
+        "results": {
+          "sat": 67,
+          "unsat": 58,
+          "timeout": 35
+        },
+        "unconfirmed": [
+          12,
+          24,
+          27,
+          42,
+          50,
+          75,
+          80,
+          114,
+          148
+        ]
+      }
+    },
+    "boundary": "Fresh frozen main/candidate/Z3 comparison:60 seconds,one physical core,16GiB per solver. Only five pre-solver invalid launch cohorts were recovered;155 valid originals and failed-launch evidence remain immutable. Source115 certificate adds one verified result to both Xolver variants; nine Z3 raw verdicts remain unconfirmed and excluded. Combined-stage gains are not all attributed to the NIA scheduling change. No protected-set or overall-superiority claim.",
+    "summary_path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/canonical-main-full-r1710/summary.json",
+    "summary_sha256": "5072ca0790c717d0d808b8bce97f50a13eb3938dcbead6319dcda86c1f6fb549",
+    "gained": [
+      2,
+      29,
+      51,
+      77,
+      98,
+      131,
+      159
+    ],
+    "lost": [],
+    "recovery_experiment": "213446a9ab7a",
+    "all_success_exit0_pid_gone": true
   },
   "current_qcp": {
-    "stage": "R1701-R1715",
+    "stage": "R1701-R1718",
+    "summary_path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-canonical-paired-r1718/summary.json",
+    "summary_sha256": "2e120dd95119bdc78c125eac30a12778082b40035d124139baa31ab54b969a73",
     "worker_sha256": "907a8b9b5685396a6f660b1056b87140855a61b6d0f8115e6c663615924c8428",
-    "original_programs": [
-      "branch",
-      "gcd",
-      "max3"
-    ],
-    "both_backends_fresh_annotation_and_independent_VC_analysis": true,
-    "max3_paired_final_check": {
-      "experiment": "532ec8c1b986",
-      "xolver_seconds": 27.77197995223105,
-      "z3_seconds": 30.700320871546865,
-      "same_physical_cpu": "0",
-      "both_canonical_done": true,
-      "independent_post_run_audit": "pending"
+    "programs": 3,
+    "top_level_vcs": 23,
+    "verified_programs": {
+      "xolver": 3,
+      "z3": 3
     },
-    "remaining_paired_final_checks": [
-      "branch",
-      "gcd"
-    ],
+    "all_queries_per_backend": {
+      "xolver": 2340,
+      "z3": 2340
+    },
+    "final_validation_queries_per_backend": {
+      "xolver": 780,
+      "z3": 780
+    },
+    "provided_proof_final_validation_seconds": {
+      "xolver": 90.5727766174823,
+      "z3": 99.61799624934793
+    },
+    "relative_seconds_change": -0.09079905210324712,
     "provided_proof_bytes_frozen": true,
-    "boundary": "Original C/native symexec,actual selected backend and full Rocq final-check. Supplied frozen proofs; excludes proof construction/orchestration. No protected-set or all-QCP speed claim."
+    "independent_source_query_post_run_audits_passed": true,
+    "boundary": "One fresh same-physical-core paired cohort per original C program using pinned closed QCP native symbolic execution, actual selected persistent backend with fresh query contexts, identical provided contracts/proofs, and complete canonical Rocq final-check. Timed scope is provided-proof final validation; proof construction and controller orchestration are excluded. GCD partial correctness and assumed external abs contract are unchanged; max3 proves its original upper-bound property, not maximum membership. Native-session program_verified=false and generic program-audit backend_qualified=false do not independently establish endpoint correctness/backend coverage: composite source, query-session, public final-check and post-run receipts establish those distinct facts. No independent protected set or general QCP superiority."
+  },
+  "next_root_cause_probe": {
+    "stage": "R1719",
+    "experiment": "49425bdf80dd",
+    "case": 106,
+    "actual_value_reads_per_call": 58,
+    "bounded_variables": 58,
+    "sampled_calls": 5900,
+    "repeated_read_projections": 0,
+    "report_sha256": "d67a8b5fddf6bf061cc0c60e5bb9104abffea3e549af66470eae892c0d82acf1",
+    "decision": "Reject whole-branch read-projection memoization for this mechanism; no production cache added. Investigate repeated exact matrix arithmetic with fixed pivot selection.",
+    "protected_sets_used": false
   }
 }

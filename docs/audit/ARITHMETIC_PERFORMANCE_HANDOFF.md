@@ -5107,13 +5107,35 @@ Their PIDs and uniquely owned descendants are gone. R1717 retakes only these
 five missing measurements unchanged, preserving all155 valid original
 reports and all failed-launch evidence. Recovery receipt SHA-256:
 `2cdc02e74a3b4443643cab9fe14b8a2281b0d7c03638dea1d37397e93707d80b`.
-The new full160 main score is pending.
+The completed full160 comparison gives104 main/111 candidate/116 verified Z3
+(raw104/111/125); the nine unconfirmed Z3 verdicts stay excluded. Gains
+are2/29/51/77/98/131/159, with no lost solves. Verified PAR-2 totals are
+7108.077/6448.467/5572.525 seconds. Only29 is directly attributed to the
+measured exact-before-encoding mechanism; the other gains belong to the
+combined stage. Full summary SHA-256:
+`5072ca0790c717d0d808b8bce97f50a13eb3938dcbead6319dcda86c1f6fb549`.
+The source is published as552fb46e in [PR93](https://github.com/fuqi-jia/Xolver/pull/93).
 
 Both QCP backends have fresh native annotation/independent VC analysis for
 branch,gcd,max3 with identical frozen original contracts and supplied proofs.
-New-worker max3 paired final-check reaches canonical done on both backends
-on the same leased CPU:27.772s Xolver/30.700s Z3. Its independent source/query
-audit and the other two final pairs are pending. This times complete
-provided-proof final validation, not proof construction or orchestration.
+All six runs now reach canonical done and pass independent source/query
+audits. Each backend verifies three programs/23 top-level VCs and executes
+2340 actual queries (2130 LIA,210 UFLIA;1188 SAT/1152 UNSAT). The final-check
+scope contains780 queries per backend. Per-program Xolver/Z3 seconds are
+branch28.284/32.354, gcd34.517/36.564 and max3 27.772/30.700; each pair runs
+sequentially on the same leased physical core with alternating backend order
+across programs. Totals are90.573/99.618 seconds,9.08% lower for Xolver in
+this one cohort. The [current QCP record](QCP_CANONICAL_PROOFS_STAGE_20261102.json)
+binds all six receipts and identical query traces; native summary SHA-256 is
+`2e120dd95119bdc78c125eac30a12778082b40035d124139baa31ab54b969a73`.
+This times complete provided-proof final validation; proof construction and
+controller orchestration are excluded. GCD remains partial correctness with
+the declared external abs assumption; max3 retains its upper-bound property.
 No protected set was used; no overall Z3 superiority or Xolver PR/main
-acceptance is claimed.
+acceptance is claimed. PR93 CI is still running.
+
+R1719 instruments actual bounded-value and membership reads on original106.
+All5900 sampled calls read all58 bounded values; repeated read projections
+are zero. Whole-branch dependency memoization is therefore rejected for this
+mechanism, with no production cache added. The next prototype shares exact
+matrix row reduction while retaining the existing pivot and candidate order.
