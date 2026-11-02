@@ -26,7 +26,7 @@ namespace xolver {
  *
  *   10d. Try uniform assignments x = y = ... = c for c in {0, 1, -1, 2, -2}.
  *   10c. Try active interval endpoints and unit offsets.
- *   10a. Enumerate per-variable priority lists in increasing total height.
+ *   10a. Enumerate priority lists by height above their per-variable minima.
  *
  * Default budgets:
  *   - candidates per strategy:        5000

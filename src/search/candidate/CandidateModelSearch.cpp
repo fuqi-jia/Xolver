@@ -24,10 +24,12 @@ CandidateModelSearch::Result CandidateModelSearch::run() {
     if (!isLogicEnabled()) return result_;
 
     collectFreeVariables();
+    if (std::chrono::steady_clock::now() >= deadline_) return result_;
     collectApplicationSlots();
     if (vars_.empty()) return result_;
 
     pinForcedAppSlots();
+    if (std::chrono::steady_clock::now() >= deadline_) return result_;
     if (xolver::config::read<xolver::config::ReadKind::Presence>("XOLVER_DIAG_CMS")) {
         size_t napp = 0;
         for (const auto& v : vars_) if (v.isApp) ++napp;
@@ -44,7 +46,9 @@ CandidateModelSearch::Result CandidateModelSearch::run() {
     // forced to a single value (lower==upper, e.g. from (= v c)) to a singleton,
     // so the enumeration is over genuinely-free vars only.
     detectActiveBounds();
+    if (std::chrono::steady_clock::now() >= deadline_) return result_;
     buildPriorityList();
+    if (std::chrono::steady_clock::now() >= deadline_) return result_;
 
     // Run strategies in order. Each returns true if a validated witness
     // was found (early termination).
@@ -381,6 +385,7 @@ void CandidateModelSearch::buildPriorityList() {
         }
 
     for (size_t i = 0; i < vars_.size(); ++i) {
+        if (std::chrono::steady_clock::now() >= deadline_) return;
         const auto& var = vars_[i];
         if (var.isApp) {
             if (var.pinnedValue) {                      // pinned base case
@@ -435,7 +440,11 @@ void CandidateModelSearch::buildPriorityList() {
                     // {lo..hi}, height-sorted (runStrategy10a's envelope assumes
                     // monotonic height). Complete: every integer in range tried.
                     std::vector<mpq_class> rng;
-                    for (mpq_class v = lo; v <= hi; v += 1) rng.push_back(v);
+                    for (mpq_class v = lo; v <= hi; v += 1) {
+                        if ((rng.size() & 0x3Fu) == 0 &&
+                            std::chrono::steady_clock::now() >= deadline_) return;
+                        rng.push_back(v);
+                    }
                     std::sort(rng.begin(), rng.end(),
                               [](const mpq_class& a, const mpq_class& b) {
                                   return heightOf(a) < heightOf(b);
@@ -669,77 +678,58 @@ bool CandidateModelSearch::runStrategy10c() {
 }
 
 bool CandidateModelSearch::runStrategy10a() {
-    // Low-height-first enumeration over the Cartesian product of
-    // per-variable priority lists. We bound the search by per-strategy
-    // candidate budget and the global wall-clock.
-    size_t n = vars_.size();
+    // Order complete candidates by height above each dimension's minimum.
+    // Absolute heights would spend at least one unit per free variable and
+    // exclude every candidate as soon as that unavoidable cost exceeds 30.
+    const size_t n = vars_.size();
     if (n == 0) return false;
-    std::vector<size_t> idx(n, 0);
-    std::vector<size_t> listSize(n);
-    for (size_t i = 0; i < n; ++i) listSize[i] = perVar_[i].size();
+    std::vector<std::vector<int64_t>> heights(n);
+    for (size_t i = 0; i < n; ++i) {
+        if (perVar_[i].empty() || std::chrono::steady_clock::now() >= deadline_) return false;
+        const int64_t minimum = heightOf(perVar_[i].front());
+        heights[i].reserve(perVar_[i].size());
+        for (const auto& value : perVar_[i]) heights[i].push_back(heightOf(value) - minimum);
+    }
 
-    // We iterate by increasing total-height. For each candidate (idx[i])
-    // the height is sum(heightOf(perVar_[i][idx[i]])).
-    // Implemented as: iterate all combinations within a bounded total-
-    // height envelope, expand envelope until budget is hit.
-    size_t budget = cfg_.maxCandidatesPerStrategy;
+    const size_t budget = cfg_.maxCandidatesPerStrategy;
     size_t produced = 0;
-
-    // Wall-clock guard for the ENUMERATION TREE itself. tryAcceptCandidate only
-    // checks the deadline when a leaf (full assignment) is reached, but with many
-    // variables/app slots the traversal explores an astronomical number of
-    // INTERIOR nodes that never reach a leaf — so without an in-recursion check
-    // the search runs far past wallClockBudget (the UF-recovery hang on large
-    // Wisa-class QF_UFLIA formulas, which burned the whole solve budget). Check
-    // the deadline every 1024 recursion nodes and unwind on expiry. Sound: a
-    // timed-out search just yields no witness (Result.found stays false) → the
-    // caller returns Unknown, identical to a genuine no-witness outcome.
     size_t nodes = 0;
-    bool timedOut = false;
-
-    // For up to maxHeight 30 (loose envelope), enumerate combinations
-    // whose total height equals the current envelope.
-    for (int64_t envelope = 0; envelope <= 30 && produced < budget && !timedOut; ++envelope) {
-        // Iterate per-variable index combinations using a stack.
-        std::vector<size_t> cursor(n, 0);
-        // For low-height-first, iterate every per-variable index that has
-        // height <= envelope, then dispatch only those whose total height
-        // equals the envelope.
-        std::function<bool(size_t, int64_t)> recurse =
-            [&](size_t pos, int64_t remainingHeight) -> bool {
-                if ((++nodes & 0x3FFu) == 0u &&
-                    std::chrono::steady_clock::now() > deadline_) {
-                    timedOut = true;
-                    return true;  // unwind immediately; no witness recorded
-                }
-                if (produced >= budget) return false;
-                if (pos == n) {
-                    if (remainingHeight != 0) return false;
-                    // Build assignment and try.
+    std::vector<size_t> cursor(n, 0), next(n, 0);
+    std::vector<int64_t> remaining(n + 1, 0);
+    // A complete candidate may contain thousands of dimensions. Keep both
+    // descent and backtracking on an explicit stack, observing the deadline
+    // during interior traversal as well as at each validated leaf.
+    for (int64_t envelope = 0; envelope <= 30 && produced < budget; ++envelope) {
+        size_t pos = 0;
+        remaining[0] = envelope;
+        std::fill(next.begin(), next.end(), 0);
+        while (produced < budget) {
+            if ((++nodes & 0x3FFu) == 0u &&
+                std::chrono::steady_clock::now() >= deadline_) return false;
+            if (pos == n) {
+                if (remaining[pos] == 0) {
                     std::unordered_map<std::string, mpq_class> partial;
-                    for (size_t i = 0; i < n; ++i) {
-                        partial[vars_[i].name] = perVar_[i][cursor[i]];
-                    }
+                    partial.reserve(n);
+                    for (size_t i = 0; i < n; ++i)
+                        partial.emplace(vars_[i].name, perVar_[i][cursor[i]]);
                     ++produced;
                     if (tryAcceptCandidate(partial, "10a-rational")) return true;
-                    return false;
                 }
-                for (size_t j = 0; j < listSize[pos]; ++j) {
-                    // A SINGLETON dim is a FIXED value (a pinned/derived UF-app
-                    // slot, e.g. pow2(3)=8), not part of the search — it must NOT
-                    // consume the height envelope. Otherwise the pinned base cases
-                    // (pow2(0..3) = 1,2,4,8 → ~19 fixed height) starve the budget
-                    // (30), excluding witnesses whose FREE vars need more height
-                    // (int_check: k=4,x0=5,t=6,pow2(k)=8 ≈ 29 free).
-                    int64_t h = (listSize[pos] == 1)
-                                    ? 0 : heightOf(perVar_[pos][j]);
-                    if (h > remainingHeight) break;  // priority list grows in height
-                    cursor[pos] = j;
-                    if (recurse(pos + 1, remainingHeight - h)) return true;
-                }
-                return false;
-            };
-        if (recurse(0, envelope)) return true;
+                --pos;
+                continue;
+            }
+            if (next[pos] == heights[pos].size() ||
+                heights[pos][next[pos]] > remaining[pos]) {
+                next[pos] = 0;
+                if (pos == 0) break;
+                --pos;
+                continue;
+            }
+            cursor[pos] = next[pos]++;
+            remaining[pos + 1] = remaining[pos] - heights[pos][cursor[pos]];
+            ++pos;
+            if (pos < n) next[pos] = 0;
+        }
     }
     return false;
 }

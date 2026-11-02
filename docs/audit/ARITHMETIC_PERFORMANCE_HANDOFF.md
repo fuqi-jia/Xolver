@@ -5176,3 +5176,33 @@ still times out60s. Its PAR-2 movement is chiefly unrelated LIA131, so this
 prototype is also unselected. All original reports and failed test setup
 evidence remain intact; no follow-up prototype enters main or uses protected
 sets. The canonical111 verified score is unchanged.
+
+## Candidate enumeration and preparation budgets (R1751–R1765)
+
+The eager simplex interval-conflict prototype passes1998 unit cases and
+independent exact Fraction certificates/ordered-point checks, but its fresh16
+pilot drops8→7 verified solves, losing7 and gaining none. The measured scan
+cost is small relative to the changed search trajectory; the prototype is
+removed. Its immutable pilot summary is
+`simplex-interval-conflict-pilot-r1752/summary.json`, SHA-256
+`3c8baf3aa86bf95fc682caf4e76501114e8ad1a750c90e4705b75c0d677658c4`.
+A separate monomial-cone diagnostic adds164 valid consequences to original116;
+Z3 and cvc5 still find the real relaxation SAT. No cone implementation is added.
+
+CandidateModelSearch counted at least one height unit per free variable while
+stopping at30, excluding every full candidate beyond30 free dimensions.
+The new native prototype enumerates height above each dimension's minimum,
+uses an explicit traversal stack, and applies the existing deadline during
+priority-list construction. All1996 unit cases/1296152 assertions pass. Frozen
+parent fails both new sparse-witness tests; the candidate finds the64-integer
+and32-real witnesses in0.572s/0.029s. Both actual exported models replay SAT
+with frozen Z3 and cvc5. With a1ms API allocation, the512-variable preparation
+probe drops6.183s→0.001098s; this is an API budget check, not a fixed-suite solve.
+
+The [native stage record](CANDIDATE_HEIGHT_SEARCH_STAGE_20261102.json) seals
+the sources, binaries, unit control, four API probes and fresh17-case triads.
+Parent/candidate/Z3 verify9/9/15; gains and losses are empty. PAR-2 movement
+1122.166→1104.888s chiefly reflects variable control131 and is not credited
+to this mechanism. Complete canonical-source qualification, full160, fresh
+QCP validation and PR/main CI remain pending for this prototype. The delivered
+score stays111; neither protected set is used.
