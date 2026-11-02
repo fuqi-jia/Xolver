@@ -1,0 +1,228 @@
+{
+  "stage": "original-formula witness recovery",
+  "date": "2026-11-02",
+  "status": "isolated implementation checks complete; ordinary source qualification and PR CI pending",
+  "parent_commit": "89921c9de6fb7d6670be71c893a448d610b938f0",
+  "implementation": {
+    "path": "src/runtime/Solver_impl_checksat.cpp",
+    "sha256": "d357c1cd8272030a9999155a49f39489a986d749dc22da4ab0db522b295be9d9",
+    "trigger": "Unknown recovery searched lowered roots containing unassigned semantic auxiliaries.",
+    "change": "Search original assertions and accept only a complete positively evaluated user-variable witness; no change to UNSAT reasoning, arithmetic routing, solver API or budget."
+  },
+  "frozen_binaries": {
+    "parent": "e94da0c8a9100dd414c2e926d5f276aa223d16512644ddb2b4d89169167c9900",
+    "isolated_candidate": "fa3588f2a79e7301eff192b29f88082c8a0dd33831f123dfc41e2362c07355bb"
+  },
+  "validation": {
+    "host": "Panda1",
+    "scheduler": "ExperimentOS",
+    "full_units": {
+      "cases": 2014,
+      "assertions": 1314250,
+      "passed": true,
+      "log_sha256": "3a65e7e7192cc2e25ed911cdfebe8b719de622ee9f51f1e6ef1e11cff371e618"
+    },
+    "new_regression": {
+      "cases": 1,
+      "assertions": 10,
+      "parent_fails": true,
+      "candidate_passes": true,
+      "covers": [
+        "nonlinear floor outside/inside square",
+        "positive exact original-model validation",
+        "push conflict and pop restoration"
+      ],
+      "candidate_log_sha256": "62b7646d89c1efda5fc31cc032ea5cb4be9cd3994365678b58ca5a5ff91b0a36"
+    },
+    "independent": {
+      "cases": [
+        {
+          "input": "nira_008_sat_to_int_nonlinear_real.smt2",
+          "original_sha256": "40a8eb53240fbecfa703a445923d80165527d7a29d6b9240f162c34487a3e55e",
+          "runs": {
+            "parent": {
+              "verdict": "unknown",
+              "stdout_sha256": "7f51b4fb44dbc72708fac0a474600c2e9d8af4ce3a8b8f1680330454f6a8d68f"
+            },
+            "candidate": {
+              "verdict": "sat",
+              "stdout_sha256": "098076fa53695e73093e69ab2d8e44adbce34fb4c6ac57752f351a97961b5290"
+            }
+          },
+          "replay_sha256": "f101189115d1ff32c93bbc5e48f8e21c41c7ab3a49d654cb5ec284c28aeb5eda",
+          "independent": {
+            "z3": {
+              "binary_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+              "checks": {
+                "original": {
+                  "verdict": "sat",
+                  "stdout": "sat\n",
+                  "stderr": ""
+                },
+                "actual_model": {
+                  "verdict": "sat",
+                  "stdout": "sat\n",
+                  "stderr": ""
+                }
+              }
+            },
+            "cvc5": {
+              "binary_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+              "checks": {
+                "original": {
+                  "verdict": "sat",
+                  "stdout": "sat\n",
+                  "stderr": ""
+                },
+                "actual_model": {
+                  "verdict": "sat",
+                  "stdout": "sat\n",
+                  "stderr": ""
+                }
+              }
+            }
+          }
+        },
+        {
+          "input": "nira_018_sat_nonlinear_real_to_int.smt2",
+          "original_sha256": "c9a6fa737545dba2d7e7bff6616f4f94c2314fa3e43934539c10f55fe73312a5",
+          "runs": {
+            "parent": {
+              "verdict": "unknown",
+              "stdout_sha256": "7f51b4fb44dbc72708fac0a474600c2e9d8af4ce3a8b8f1680330454f6a8d68f"
+            },
+            "candidate": {
+              "verdict": "sat",
+              "stdout_sha256": "77848111db1b22ff64bb6aec09a5b4ff7ff6d63774f8a63c3b18e48891db1d8c"
+            }
+          },
+          "replay_sha256": "397dd8140558daa2a5884c5c14dd37e2322b891a995dcc5a0194eb7bd6f006a3",
+          "independent": {
+            "z3": {
+              "binary_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+              "checks": {
+                "original": {
+                  "verdict": "sat",
+                  "stdout": "sat\n",
+                  "stderr": ""
+                },
+                "actual_model": {
+                  "verdict": "sat",
+                  "stdout": "sat\n",
+                  "stderr": ""
+                }
+              }
+            },
+            "cvc5": {
+              "binary_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+              "checks": {
+                "original": {
+                  "verdict": "sat",
+                  "stdout": "sat\n",
+                  "stderr": ""
+                },
+                "actual_model": {
+                  "verdict": "sat",
+                  "stdout": "sat\n",
+                  "stderr": ""
+                }
+              }
+            }
+          }
+        }
+      ],
+      "report_sha256": "a03e85b49fb9edbff42f61bc437181762f4d80df6a70c11a54f899f306bd5006"
+    },
+    "whole_regression": {
+      "total": 948,
+      "budget_seconds": 60,
+      "matched": 946,
+      "timeouts": 2,
+      "opposite_verdicts": 0,
+      "report_sha256": "880fa43c9574031327a22b7958b71d0972293e88b4829f64e56eb309fb9213fc",
+      "eos": "3bc68bdfa5bc",
+      "run": "ab1807682a6c",
+      "status": "failed; retained without replacing its results"
+    },
+    "timeout_controls": [
+      {
+        "report_sha256": "9cd517259074285c609a09e70ca085c576bf1e4f5d2360bca25aa1069a4d5188",
+        "input": "/pub/data/jiafq/xolver/tests/regression/nia/nia_quadratic_known_factor_unsat.smt2",
+        "source_sha256": "8d5ed1aac2d38ce0918a35b1f89268b9157344cfb76b0f9509f870aab7d24530",
+        "order": [
+          "parent",
+          "candidate"
+        ],
+        "runs": [
+          {
+            "label": "parent",
+            "verdict": "unsat",
+            "seconds": 20.042103700339794,
+            "returncode": 0,
+            "stdout": "unsat\n",
+            "stderr": "",
+            "binary_sha256": "e94da0c8a9100dd414c2e926d5f276aa223d16512644ddb2b4d89169167c9900"
+          },
+          {
+            "label": "candidate",
+            "verdict": "unsat",
+            "seconds": 19.84953011572361,
+            "returncode": 0,
+            "stdout": "unsat\n",
+            "stderr": "",
+            "binary_sha256": "fa3588f2a79e7301eff192b29f88082c8a0dd33831f123dfc41e2362c07355bb"
+          }
+        ],
+        "physical_cpu": "0",
+        "budget_seconds": 60,
+        "memory_gib": 16,
+        "protected_sets_used": false,
+        "boundary": "Focused old/new observation of the two whole-regression timeouts, not substitute fixed160 or extra solve credit."
+      },
+      {
+        "report_sha256": "637f26e5456ae486bda0a8a8f6cc288586a402dd318742cf264d31030fd61c78",
+        "input": "/pub/data/jiafq/xolver/tests/regression/nra/nra_216_unsat_hycomp_etcs_braking_201seq_la.smt2",
+        "source_sha256": "f0d55f282106bd54f27a2baca8bdcc3fce738a22168dc253ab1811ff25b1f4b9",
+        "order": [
+          "candidate",
+          "parent"
+        ],
+        "runs": [
+          {
+            "label": "candidate",
+            "verdict": "timeout",
+            "seconds": 60.06436431594193,
+            "returncode": null,
+            "stdout": "",
+            "stderr": "",
+            "binary_sha256": "fa3588f2a79e7301eff192b29f88082c8a0dd33831f123dfc41e2362c07355bb"
+          },
+          {
+            "label": "parent",
+            "verdict": "timeout",
+            "seconds": 60.06505400314927,
+            "returncode": null,
+            "stdout": "",
+            "stderr": "",
+            "binary_sha256": "e94da0c8a9100dd414c2e926d5f276aa223d16512644ddb2b4d89169167c9900"
+          }
+        ],
+        "physical_cpu": "1",
+        "budget_seconds": 60,
+        "memory_gib": 16,
+        "protected_sets_used": false,
+        "boundary": "Focused old/new observation of the two whole-regression timeouts, not substitute fixed160 or extra solve credit."
+      }
+    ],
+    "control_eos": "d973eb0d9782",
+    "failed_build_harness": {
+      "eos": "e0511413ef8e",
+      "run": "310ad2489555",
+      "reason": "Full old unit suite passed; subsequent reproduction command incorrectly placed CLI option before required input. Failed record retained; R1865 uses correct argv and independently checks both actual models.",
+      "metrics_sha256": "20dd2821e7301682da7020cfb4fe4930d88e3d4c49e6dc45057de8f1bf9178b5"
+    }
+  },
+  "evidence_root": "/pub/data/jiafq/xolver/validation/arithmetic-r103",
+  "boundary": "This isolated candidate is not yet a complete ordinary CMake qualification or a fresh fixed160 score. The 113 versus 111/115 verified comparison remains bound to the previous e94 frozen candidate. The ongoing original-C QCP R1862 run also uses that previous frozen worker. No protected set has been used.",
+  "protected_sets_used": false
+}

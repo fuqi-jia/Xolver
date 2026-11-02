@@ -38,6 +38,27 @@ fix is retained under the user's explicit functionality-first instruction,
 including its known SAT59 timeout regression. No performance superiority is claimed.
 Older tables describe their own frozen versions and evidence boundaries.
 
+## Development recovery of original-formula witnesses
+
+PR94's first CI passes unit, proof, differential and model checks, but two
+nonlinear `to_int` regressions return `unknown`. Recovery was searching lowered
+assertions with semantic auxiliaries it does not assign. The new runtime patch
+uses original roots, retaining complete exact candidate evaluation. Both inputs
+recover SAT and their actual models replay through frozen Z3 and cvc5.
+
+The isolated patch passes2014 existing unit cases/1314250 assertions. Its new
+model and push/pop regression fails on the parent and passes10 assertions on the
+patch. The whole948-case60s run matches946 and times out on two; this is retained
+as failed, not described as a full pass. Same-core60s controls give quadratic
+UNSAT20.042/19.850s on parent/patch and NRA timeout on both. The original failed
+CLI-order reproduction is also retained. See
+[the recovery evidence](ORIGINAL_FORMULA_RECOVERY_STAGE_20261102.json).
+
+Ordinary source qualification and new CI remain pending. The previous113
+verified fixed160 result and ongoing QCP R1862 workflow remain bound to the
+earlier frozen `e94da0c8` CLI/`bfd59873` worker, not this isolated patch. No
+protected-set or overall-superiority conclusion follows from this recovery.
+
 ## Latest canonical delivery
 
 [PR93](https://github.com/fuqi-jia/Xolver/pull/93) is merged as main

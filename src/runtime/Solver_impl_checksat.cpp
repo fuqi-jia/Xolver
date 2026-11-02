@@ -1591,7 +1591,13 @@ Result Solver::Impl::checkSatGround() {
                 }
             }
             if (!theoryFlipped) {
-                CandidateModelSearch cms(*ir, logic);
+                // Recover a witness for the original query. Definitional
+                // lowering adds semantic auxiliaries that this search does
+                // not assign; checking those lowered roots would reject even
+                // a complete, satisfying assignment to every user variable.
+                CandidateModelSearch::Config cfg;
+                cfg.assertionRootsOverride = originalAssertions_;
+                CandidateModelSearch cms(*ir, logic, cfg);
                 auto cmsResult = cms.run();
                 if (cmsResult.found) {
                     lastModel_ = cmsResult.model;

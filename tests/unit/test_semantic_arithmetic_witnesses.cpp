@@ -122,6 +122,35 @@ TEST_CASE("Arithmetic witnesses: NIRA checks polynomial and linear conjunctions 
     }
 }
 
+TEST_CASE("Arithmetic witnesses: model recovery evaluates the original nonlinear casts") {
+    for (bool squareInsideFloor : {false, true}) {
+        CAPTURE(squareInsideFloor);
+        Solver solver;
+        solver.setLogic("QF_NIRA");
+        const auto r = solver.mkConst(solver.realSort(), "r");
+        const auto i = solver.mkConst(solver.intSort(), "i");
+        auto op = [&](Kind kind, std::vector<Term> children) {
+            return solver.mkOp(static_cast<uint32_t>(kind), std::move(children));
+        };
+        const auto square = op(Kind::Mul, {r, r});
+        const auto argument = squareInsideFloor
+            ? op(Kind::Add, {square, solver.mkReal("1")}) : r;
+        if (!squareInsideFloor)
+            solver.assertFormula(op(Kind::Eq, {square, solver.mkReal("4")}));
+        solver.assertFormula(op(Kind::Eq, {i, op(Kind::ToInt, {argument})}));
+        solver.assertFormula(op(Kind::Geq, {i, solver.mkInt(squareInsideFloor ? 1 : 0)}));
+        REQUIRE((solver.checkSat() == Result::Sat));
+        CHECK(solver.validateModel() == Solver::ModelValidation::Satisfied);
+
+        solver.push();
+        solver.assertFormula(op(Kind::Lt, {i, solver.mkInt(0)}));
+        CHECK((solver.checkSat() == Result::Unsat));
+        solver.pop();
+        REQUIRE((solver.checkSat() == Result::Sat));
+        CHECK(solver.validateModel() == Solver::ModelValidation::Satisfied);
+    }
+}
+
 TEST_CASE("Arithmetic witnesses: Boolean integer dividend cannot yield a fractional quotient") {
     Solver solver;
     solver.setLogic("ALL");
