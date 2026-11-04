@@ -10,6 +10,7 @@ never prove integer equality. Unsupported syntax fails closed.
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 import sys
 import time
@@ -63,16 +64,20 @@ def evaluate(node, env, m):
     if isinstance(node, Atom):
         if node.kind == 'string':
             raise Unsupported('string literal')
+        # Numerals are lexical literals. A quoted declaration such as |0|
+        # denotes a symbol and cannot change the meaning of the literal 0.
+        if node.kind != 'quoted':
+            if re.fullmatch(r'0|[1-9][0-9]*', node.text):
+                return integer(int(node.text), True)
+            if node.text[:1] in '0123456789' or node.text.startswith(('#b', '#x')):
+                raise Unsupported('unsupported numeric literal')
         if node.text in env:
             return env[node.text]
         if node.kind != 'quoted' and node.text in ('true', 'false'):
             return boolean(node.text == 'true')
         if node.kind == 'quoted':
             raise Unsupported('unknown quoted symbol')
-        try:
-            return integer(int(node.text), True)
-        except ValueError:
-            raise Unsupported('unknown atom')
+        raise Unsupported('unknown atom')
     if not isinstance(node, list) or not node:
         raise Unsupported('malformed term')
     op = name(node[0])
@@ -165,6 +170,10 @@ def problem(source):
     (variables, roots, seen_check) = ([], [], False)
     for command in nodes:
         op = name(command[0])
+        if op in ('check-sat', 'get-model', 'exit') and len(command) != 1:
+            raise Unsupported('query command arity')
+        if op in ('get-model', 'exit') and not seen_check:
+            raise Unsupported('response or exit before query')
         if seen_check and op not in ('get-model', 'exit', 'set-info', 'set-option'):
             raise Unsupported('commands after query')
         if op == 'check-sat':

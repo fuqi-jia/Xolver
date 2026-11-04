@@ -5669,3 +5669,12 @@ No protected-set or original-C end-to-end verification result is claimed.
 - Private inputs, certificates and per-input evidence remain off GitHub. The
   qualification chain uses Git, CI, source manifests and frozen binary hashes;
   the cancelled `validation/current-main.json` archive is not a requirement.
+
+
+The residue checker now resolves numeral literals before looking up identifiers,
+so quoted numeric names cannot shadow constants. Query commands also enforce
+arity and ordering. A satisfiable quoted-name counterexample was added and
+accepted by Z3, CVC5 and both frozen Xolver versions with checked models. The
+repaired checker passed all four Python groups, nine reference fixtures and
+reverification of the private certificate. The verification supplement now
+binds this repaired checker; solver timing and frozen reports are unchanged.

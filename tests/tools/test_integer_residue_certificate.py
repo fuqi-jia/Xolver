@@ -42,6 +42,8 @@ class IntegerResidueCertificateTests(unittest.TestCase):
             '(declare-const x Int)(assert (= (mod x 2) 0))(check-sat)',
             '(assert true)(check-sat)',
             '(declare-const x Int)(assert (let ((x 1) (y x)) (= y 0)))(check-sat)',
+            '(declare-const |0| Int)(assert (= |0| 1))'
+            '(assert (= (+ 0 1) 1))(check-sat)',
         ]
         for source in cases:
             for modulus in [2, 3, 4]:
@@ -61,6 +63,8 @@ class IntegerResidueCertificateTests(unittest.TestCase):
             '(declare-const x Int)(assert (= (mod x x) 0))(check-sat)',
             '(assert false)(check-sat)(check-sat)',
             '(check-sat)(assert false)',
+            '(exit)(assert false)(check-sat)',
+            '(assert false)(check-sat x)',
             '(declare-const x Int)(declare-const x Int)(assert false)(check-sat)',
         ]
         for source in sources:
