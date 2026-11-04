@@ -5588,3 +5588,29 @@ about an earlier131 loss without changing any report, score or timing. See the
 Current-version original-C/Rocq QCP acceptance and PR/main CI remain pending.
 Neither protected set is used; no overall Z3 superiority is established, and
 the target remains at least126 verified results.
+
+
+### Required-fact model completion (2026-11-05)
+
+Candidate construction now shares polarity-aware required-fact extraction with
+unconditional constant propagation. It computes acyclic numeric definitions,
+projects their dependent coordinates, retains independent UF results, and uses
+required bounds for integer endpoints and exact rational interior points. Cyclic
+definitions remain searchable; full assertion and function-table checks remain.
+
+Panda9 / ExperimentOS qualification passed all 2,107 unit cases and 1,324,751
+assertions, including 38 targeted cases / 929 assertions. Six constructed
+witness regressions fail with the predecessor and pass with the new constructor.
+All 2,155 qualified source files match the frozen CLI
+`1b6d133e81e72dd7136119fbefa2150a5b7344afcf1a8c69319694c515279790`.
+
+A fresh 30-query diagnostic comparison independently accepted every actual
+timed model in both versions: 30 to 30 verified SAT, no gains or losses. Total
+solver time was 495.070 to 463.391 seconds; the same-round Z3 total was 1.107
+seconds. This narrow observed reduction does not establish an overall speed
+advantage. Repeated pre-solve candidate enumeration still dominates the
+representative trace, despite its newly recognized required definitions.
+
+The new full160 and 587-query comparisons are pending. The ongoing full14408
+round uses an older candidate and cannot establish this version's coverage.
+No protected-set or original-C end-to-end verification result is claimed.
