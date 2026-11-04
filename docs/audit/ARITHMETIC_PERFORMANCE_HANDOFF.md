@@ -5611,8 +5611,9 @@ seconds. This narrow observed reduction does not establish an overall speed
 advantage. Repeated pre-solve candidate enumeration still dominates the
 representative trace, despite its newly recognized required definitions.
 
-The new full160 and 587-query comparisons are pending. The ongoing full14408
-round uses an older candidate and cannot establish this version's coverage.
+Those candidate-construction comparisons finished at 109 to 108 verified on
+fixed160 and 576 to 576 on development587. The ongoing full14408 round uses an
+older candidate and cannot establish this version's coverage.
 No protected-set or original-C end-to-end verification result is claimed.
 
 
@@ -5634,11 +5635,37 @@ No protected-set or original-C end-to-end verification result is claimed.
   increased verified models from zero to six. Both Z3 and CVC5 accepted every
   actual timed candidate model; there were no losses, wrong results, or protocol
   errors. This measures model coverage, not six newly discovered SAT verdicts.
-- Fresh full fixed160 and development587 comparisons are running against the
-  immediately qualified parent and Z3, at 60 seconds, one physical core and
-  16 GiB per input. This stage does not establish overall superiority. The prior
-  candidate-construction fixed160 round had one gain and two timeout losses
-  (109 to 108 verified); those losses remain under investigation.
+- Complete fresh comparisons against the immediately qualified parent verified
+  108 to 110 results on fixed160 (Z3: 115), and 576 to 582 on development587
+  (Z3: 580), with no losses. Each input used 60 seconds, one physical core and
+  16 GiB. The two fixed160 timing gains occurred in linear theories and are not
+  attributed to UF completion. These are separate fresh rounds; development587
+  is a selected analysis cohort and does not establish overall superiority.
+- Commit 1e5b0500 passed the complete GitHub CI run 41922130322, including the
+  build, regression and proof gates. Main promotion still requires PR CI.
 - Private queries, models, individual identifiers and evidence remain off GitHub.
   Protected sets were not used. FULINA remains the development branch; main
   promotion requires complete server acceptance and CI.
+
+
+### Independent integer residue certificates
+
+- `tools/proof/check_integer_residue_certificate.py` checks an input-bound
+  finite residue refutation. Every residue tuple must falsify an original
+  assertion. Unknown integer equalities remain unknown; unsupported syntax,
+  mismatched input digests and incomplete enumeration cannot verify a proof.
+- The checker supports integer polynomials, positive constant moduli, Boolean
+  combinations and parallel `let` bindings. It is an offline verifier and is
+  never called by the solver to obtain an answer. Run it with
+  `--input query.smt2 --certificate certificate.json --timeout 60`.
+- Four Python test groups and eight public reference fixtures were qualified
+  on Panda. Both references were attempted on complete formulas; a CVC5 timeout
+  is retained as unconfirmed. Each fixture has a correct independent decision,
+  no opposite decision, and accepted finite proof domains were checked by both.
+- One previously unconfirmed integer UNSAT now has an independently checked
+  certificate. An explicit supplement applies the same proof to both actual
+  UNSAT arms, taking fixed160 from 108/110 to 109/111 verified (Z3: 115).
+  Frozen comparison reports remain unchanged; no timeout or unknown is upgraded.
+- Private inputs, certificates and per-input evidence remain off GitHub. The
+  qualification chain uses Git, CI, source manifests and frozen binary hashes;
+  the cancelled `validation/current-main.json` archive is not a requirement.
