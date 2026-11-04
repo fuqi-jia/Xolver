@@ -183,3 +183,151 @@ TEST_CASE("Model reconciliation: completed numeric classes reach function tables
         CHECK(validator.validate({equality, aliasEquality}) == ArithModelValidator::Verdict::Satisfied);
     }
 }
+
+TEST_CASE("Model completion: numeric congruence propagates through nested functions") {
+    for (const bool real : {false, true}) {
+        CAPTURE(real);
+        const std::string domain = real ? "Real" : "Int";
+        const mpq_class input = real ? mpq_class(7, 3) : mpq_class(7);
+        NativeTerms ir;
+        ir.registerSort(0, real ? SortKind::Real : SortKind::Int);
+        ir.registerSort(1, SortKind::Bool);
+        SharedTermRegistry shared;
+        shared.setNativeTerms(&ir);
+        auto variable = [&](const std::string& name) {
+            const auto id = ir.add({Kind::Variable, 0, {}, Payload(name)});
+            shared.getOrCreate(id, 0, name, false);
+            return id;
+        };
+        const auto x = variable("x"), y = variable("y"), z = variable("z");
+        const auto f = ir.add({Kind::UFApply, 0, {x}, Payload(std::string("f"))});
+        const auto g = ir.add({Kind::UFApply, 0, {f}, Payload(std::string("g"))});
+        const auto first = ir.add({Kind::Eq, 1, {f, y}, Payload{}});
+        const auto second = ir.add({Kind::Eq, 1, {g, z}, Payload{}});
+        auto arithmetic = std::make_unique<ModelTheory>(real ? TheoryId::LRA : TheoryId::LIA);
+        arithmetic->model.assignments = {{"x", input.get_str()}};
+        arithmetic->model.numericAssignments = {{"x", RealValue::fromMpq(input)}};
+        auto euf = std::make_unique<ModelTheory>(TheoryId::EUF);
+        euf->model.assignments = {{"x", "@e4"}, {"y", "@e9"}, {"z", "@e12"}};
+        euf->model.functionInterps["f"] = {{domain}, domain,
+            {{{"@e4"}, "@e9"}, {{"#n:" + input.get_str()}, "#n:17"}}, "#n:0"};
+        euf->model.functionInterps["g"] = {{domain}, domain,
+            {{{"@e9"}, "@e12"}, {{"#n:17"}, "#n:23"}}, "#n:0"};
+        const auto* arithmeticView = arithmetic.get();
+        const auto* eufView = euf.get();
+        TheoryManager manager;
+        manager.setSharedTermRegistry(&shared);
+        manager.registerSolver(std::move(arithmetic));
+        manager.registerSolver(std::move(euf));
+        int validations = 0;
+        const auto model = manager.getModel([&](TheoryModel& candidate) {
+            ++validations;
+            ArithModelValidator validator(ir, {{"x", input}, {"y", 17}, {"z", 23}}, {});
+            validator.setRealAssignments(&candidate.numericAssignments);
+            validator.setFunctionInterps(&candidate.functionInterps);
+            return validator.validate({first, second}) == ArithModelValidator::Verdict::Satisfied;
+        });
+        REQUIRE(model);
+        CHECK(validations == 1);
+        CHECK(arithmeticView->reads == 1);
+        CHECK(eufView->reads == 1);
+        CHECK(model->numericAssignments.at("x").tryAsRational() == input);
+        CHECK(model->numericAssignments.at("y").tryAsRational() == 17);
+        CHECK(model->numericAssignments.at("z").tryAsRational() == 23);
+        REQUIRE(model->functionInterps.count("f"));
+        REQUIRE(model->functionInterps.count("g"));
+        for (const auto& entry : model->functionInterps.at("f").entries)
+            CHECK(entry.value == "17");
+        for (const auto& entry : model->functionInterps.at("g").entries) {
+            CHECK(entry.args == std::vector<std::string>{"17"});
+            CHECK(entry.value == "23");
+        }
+    }
+}
+
+TEST_CASE("Model completion: free results coalesce before fresh numbers are assigned") {
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Int);
+    SharedTermRegistry shared;
+    shared.setNativeTerms(&ir);
+    for (const std::string name : {"x", "y"}) {
+        const auto variable = ir.add({Kind::Variable, 0, {}, Payload(name)});
+        shared.getOrCreate(variable, 0, name, false);
+    }
+    auto euf = std::make_unique<ModelTheory>(TheoryId::EUF);
+    euf->model.assignments = {{"x", "@e4"}, {"y", "@e9"}};
+    euf->model.functionInterps["f"] = {{"Int"}, "Int",
+        {{{"#n:7"}, "@e4"}, {{"#n:7"}, "@e9"}}, "#n:0"};
+    TheoryManager manager;
+    manager.setSharedTermRegistry(&shared);
+    manager.registerSolver(std::move(euf));
+    const auto model = manager.getModel([](TheoryModel& candidate) {
+        return candidate.numericAssignments.at("x") == candidate.numericAssignments.at("y");
+    });
+    REQUIRE(model);
+    CHECK(model->numericAssignments.at("x") == model->numericAssignments.at("y"));
+    const auto& entries = model->functionInterps.at("f").entries;
+    REQUIRE(entries.size() == 2);
+    CHECK(entries[0].value == entries[1].value);
+    CHECK(entries[0].value[0] != '@');
+}
+
+TEST_CASE("Model completion: rejection restores quarantine without rereading theories") {
+    auto euf = std::make_unique<ModelTheory>(TheoryId::EUF);
+    euf->model.assignments = {{"x", "@e4"}};
+    euf->model.functionInterps["f"] = {{"Int"}, "Int",
+        {{{"#n:7"}, "@e4"}, {{"#n:7"}, "#n:17"}}, "#n:0"};
+    const auto* view = euf.get();
+    TheoryManager manager;
+    manager.registerSolver(std::move(euf));
+    int validations = 0;
+    const auto model = manager.getModel([&](TheoryModel& candidate) {
+        ++validations;
+        CHECK(candidate.functionInterps.count("f") == 1);
+        candidate.assignments["rejected"] = "17";
+        return false;
+    });
+    REQUIRE(model);
+    CHECK(validations == 1);
+    CHECK(view->reads == 1);
+    CHECK(model->functionInterps.count("f") == 0);
+    CHECK(model->assignments.at("x") == "@e4");
+    CHECK(model->assignments.count("rejected") == 0);
+}
+
+TEST_CASE("Model completion: conflicting fixed witnesses are never replaced") {
+    for (const bool sourceConflict : {false, true}) {
+        auto arithmetic = std::make_unique<ModelTheory>(TheoryId::LIA);
+        arithmetic->model.assignments = {{"x", "3"}, {"y", "5"}};
+        auto euf = std::make_unique<ModelTheory>(TheoryId::EUF);
+        euf->model.assignments = {{"x", "@e4"}, {"y", sourceConflict ? "@e4" : "@e9"}};
+        euf->model.functionInterps["f"] = {{"Int"}, "Int",
+            {{{"#n:7"}, "@e4"}, {{"#n:7"}, sourceConflict ? "#n:17" : "@e9"}}, "#n:0"};
+        TheoryManager manager;
+        manager.registerSolver(std::move(arithmetic));
+        manager.registerSolver(std::move(euf));
+        int validations = 0;
+        const auto model = manager.getModel([&](TheoryModel&) { ++validations; return true; });
+        REQUIRE(model);
+        CHECK(validations == 0);
+        CHECK(model->assignments.at("x") == "3");
+        CHECK(model->assignments.at("y") == "5");
+        CHECK(model->functionInterps.count("f") == 0);
+    }
+}
+
+TEST_CASE("Model completion: equivalent real argument spellings use exact rationals") {
+    auto euf = std::make_unique<ModelTheory>(TheoryId::EUF);
+    euf->model.assignments = {{"x", "@e4"}};
+    euf->model.functionInterps["f"] = {{"Real"}, "Real",
+        {{{"#n:7/3"}, "@e4"}, {{"#n:14/6"}, "#n:17/5"}}, "#n:0"};
+    TheoryManager manager;
+    manager.registerSolver(std::move(euf));
+    const auto model = manager.getModel([](TheoryModel&) { return true; });
+    REQUIRE(model);
+    CHECK(model->numericAssignments.at("x").tryAsRational() == mpq_class(17, 5));
+    for (const auto& entry : model->functionInterps.at("f").entries) {
+        CHECK(entry.args == std::vector<std::string>{"7/3"});
+        CHECK(entry.value == "17/5");
+    }
+}

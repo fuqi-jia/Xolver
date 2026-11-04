@@ -5614,3 +5614,31 @@ representative trace, despite its newly recognized required definitions.
 The new full160 and 587-query comparisons are pending. The ongoing full14408
 round uses an older candidate and cannot establish this version's coverage.
 No protected-set or original-C end-to-end verification result is claimed.
+
+
+### Validated numeric function model completion
+
+- Numeric UF table assembly now closes equal-argument result classes before
+  allocating fresh scalar values. Forced values propagate through nested
+  functions, using exact integer or rational arithmetic. Distinct fixed values
+  and conflicted source classes remain quarantined.
+- Each theory still supplies one model snapshot. A completion is adopted only
+  after positive validation against all original assertions and assumptions,
+  including reconstructed definitions. Rejected completions restore model
+  state and retain the existing quarantine path.
+- Proof-enabled Panda qualification passed all 2,112 unit tests and 1,324,809
+  assertions, including 13 targeted model and combination tests. Five new test
+  groups cover nested functions, free classes, exact rationals, fixed conflicts,
+  and rejection without rereading theory state.
+- A fresh six-query development comparison retained the same SAT verdicts and
+  increased verified models from zero to six. Both Z3 and CVC5 accepted every
+  actual timed candidate model; there were no losses, wrong results, or protocol
+  errors. This measures model coverage, not six newly discovered SAT verdicts.
+- Fresh full fixed160 and development587 comparisons are running against the
+  immediately qualified parent and Z3, at 60 seconds, one physical core and
+  16 GiB per input. This stage does not establish overall superiority. The prior
+  candidate-construction fixed160 round had one gain and two timeout losses
+  (109 to 108 verified); those losses remain under investigation.
+- Private queries, models, individual identifiers and evidence remain off GitHub.
+  Protected sets were not used. FULINA remains the development branch; main
+  promotion requires complete server acceptance and CI.

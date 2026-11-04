@@ -1505,9 +1505,37 @@ Result Solver::Impl::checkSatGround() {
         // Disconnecting CaDiCaL can notify a backtrack/reset and discard
         // active simplex bounds. Freeze the model first: choosing a concrete
         // infinitesimal after that reset can falsify strict inequalities.
+        auto captureTheoryModel = [&] {
+            return theoryManager.getModel([&](TheoryModel& candidate) {
+                auto savedModel = std::move(lastModel_);
+                auto savedPartial = std::move(partialFuncModel_);
+                auto restore = [&] {
+                    lastModel_ = std::move(savedModel);
+                    partialFuncModel_ = std::move(savedPartial);
+                };
+                try {
+                    lastModel_ = std::move(candidate);
+                    for (const auto& [name, value] : boolVarVals)
+                        lastModel_->assignments.emplace(name, value);
+                    mergeFixedBindings();
+                    if (!modelConverter_.empty())
+                        modelConverter_.reconstruct(lastModel_->numericAssignments,
+                                                   lastModel_->assignments, *ir);
+                    if (features.hasArray)
+                        completeArrayModel(*ir, originalAssertions_, *lastModel_);
+                    const bool valid = modelPositivelyValidates();
+                    candidate = std::move(*lastModel_);
+                    restore();
+                    return valid;
+                } catch (...) {
+                    restore();
+                    throw;
+                }
+            });
+        };
         std::optional<TheorySolver::TheoryModel> solvedTheoryModel;
         if (result == SatSolver::SolveResult::Sat && !cmsPrePassFound)
-            solvedTheoryModel = theoryManager.getModel();
+            solvedTheoryModel = captureTheoryModel();
         cadicalBackend->disconnectPropagator();
         propagator.stats().print(std::cerr);
 
@@ -1598,7 +1626,7 @@ Result Solver::Impl::checkSatGround() {
             // points at a valid witness. Validate it against the original
             // assertions; accept on Satisfied. Sound: only ever
             // Unknown -> Sat with a positively-validated model.
-            auto theoryCandidate = theoryManager.getModel();
+            auto theoryCandidate = captureTheoryModel();
             bool theoryFlipped = false;
             if (theoryCandidate && !theoryCandidate->assignments.empty()) {
                 auto saved = std::move(lastModel_);
@@ -1686,7 +1714,7 @@ Result Solver::Impl::checkSatGround() {
         // happens here independently of modelRequestedImpl() so the same
         // validator runs on every array sat verdict.
         if (ret == Result::Sat && features.hasArray) {
-            if (!lastModel_) lastModel_ = theoryManager.getModel();
+            if (!lastModel_) lastModel_ = captureTheoryModel();
             mergeFixedBindings();
             if (arrayModelDefinitelyViolates()) {
                 lastUnknownReason_ =
@@ -1750,7 +1778,7 @@ Result Solver::Impl::checkSatGround() {
         bool validateSat = niaSatFloor || divModSatFloor || realDivPurifySatFloor ||
                            arrayCombSatFloor;
         if (ret == Result::Sat && validateSat) {
-            if (!lastModel_) lastModel_ = theoryManager.getModel();
+            if (!lastModel_) lastModel_ = captureTheoryModel();
             // Theory models do not track pure-boolean VARIABLES (those values
             // live in the SAT assignment). Populate them from the SAT solver so
             // the validator checks the same model that would be printed and only
