@@ -1,5 +1,30 @@
 # Arithmetic validation and continuation record
 
+## Development checkpoint: numeric UF model completion (2026-11-05)
+
+The unmerged `FULINA` branch follows
+[`465639b1`](https://github.com/fuqi-jia/Xolver/commit/465639b1cd2609b9b67a1f77be0ec4ed4925eb99),
+whose [branch CI](https://github.com/fuqi-jia/Xolver/actions/runs/41888071229)
+passes both jobs. Completed numeric equality classes now use the same value
+in scalar assignments and numeric UF table cells. Primary arithmetic witnesses,
+conflict guards, nonnumeric interpretations and array model handling are preserved.
+
+Panda9/ExperimentOS qualifies the ordinary GCC13 proof-enabled build with
+**2,091 unit cases / 1,324,718 assertions**. The added Int/Real alias regression
+fails against the frozen parent; all 15 independent public regressions pass.
+A same-host focused development round recovers **30 unknowns as 30 verified SAT
+results**, with no losses. Independent checkers replay the actual timed models;
+each solver receives 60 seconds, one physical CPU and 16 GiB.
+The new Xolver decisions total 491.526 seconds versus Z3's 1.108 seconds on that
+cohort, so arithmetic performance remains a substantial gap.
+
+Frozen CLI SHA-256:
+`8f1a2d294592551334f65275eb4f9ecd582bf343bed59050893d6fd891e8c0a7`.
+Full fixed160/development-corpus acceptance and original-C QCP verification remain
+in progress; no overall superiority is established. Both protection sets remain
+unused, and the cancelled extra server archive remains unnecessary.
+
+
 This is an operational handoff and an evidence index. Current capabilities and
 API contracts are described in [the architecture reference](../ARCHITECTURE.md),
 [application interfaces](../../src/applications/README.md) and

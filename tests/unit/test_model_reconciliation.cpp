@@ -126,3 +126,60 @@ TEST_CASE("Model reconciliation: conflicting class values remain unconfirmed") {
     validator.setFunctionInterps(&model->functionInterps);
     CHECK(validator.validate({equality}) == ArithModelValidator::Verdict::Indeterminate);
 }
+
+TEST_CASE("Model reconciliation: completed numeric classes reach function tables") {
+    for (const bool real : {false, true}) {
+        CAPTURE(real);
+        const std::string domain = real ? "Real" : "Int";
+        NativeTerms ir;
+        ir.registerSort(0, real ? SortKind::Real : SortKind::Int);
+        ir.registerSort(1, SortKind::Bool);
+        SharedTermRegistry shared;
+        shared.setNativeTerms(&ir);
+        auto variable = [&](const std::string& name) {
+            const auto id = ir.add({Kind::Variable, 0, {}, Payload(name)});
+            shared.getOrCreate(id, 0, name, false);
+            return id;
+        };
+        const auto x = variable("x");
+        const auto alias = variable("alias");
+        const auto y = variable("y");
+        auto euf = std::make_unique<ModelTheory>(TheoryId::EUF);
+        euf->model.assignments = {{"x", "@e4"}, {"alias", "@e4"}, {"y", "@e9"}};
+        euf->model.functionInterps["f"] = {{domain}, domain,
+            {{{"@e4"}, "@e9"}, {{"#n:7"}, "#n:11"}}, "#n:0"};
+        TheoryManager manager;
+        manager.setSharedTermRegistry(&shared);
+        manager.registerSolver(std::move(euf));
+        const auto model = manager.getModel();
+        REQUIRE(model);
+        const auto xValue = model->numericAssignments.at("x").tryAsRational();
+        const auto aliasValue = model->numericAssignments.at("alias").tryAsRational();
+        const auto yValue = model->numericAssignments.at("y").tryAsRational();
+        REQUIRE(xValue);
+        REQUIRE(aliasValue);
+        REQUIRE(yValue);
+        CHECK(*xValue == *aliasValue);
+        CHECK(*xValue != *yValue);
+        CHECK(*xValue != 0);
+        CHECK(*xValue != 7);
+        CHECK(*xValue != 11);
+        const auto& function = model->functionInterps.at("f");
+        REQUIRE(function.entries.size() == 2);
+        CHECK(function.entries[0].args == std::vector<std::string>{xValue->get_str()});
+        CHECK(function.entries[0].value == yValue->get_str());
+        CHECK(function.entries[1].args == std::vector<std::string>{"7"});
+        CHECK(function.entries[1].value == "11");
+        CHECK(function.deflt == "0");
+        const auto application = ir.add({Kind::UFApply, 0, {x}, Payload(std::string("f"))});
+        const auto aliasApplication = ir.add({Kind::UFApply, 0, {alias}, Payload(std::string("f"))});
+        const auto equality = ir.add({Kind::Eq, 1, {application, y}, Payload{}});
+        const auto aliasEquality = ir.add({Kind::Eq, 1, {aliasApplication, y}, Payload{}});
+        ArithModelValidator::NumAssignment numbers{{"x", *xValue}, {"alias", *aliasValue}, {"y", *yValue}};
+        ArithModelValidator::BoolAssignment booleans;
+        ArithModelValidator validator(ir, numbers, booleans, model->arrayInterps, model->assignments);
+        validator.setFunctionInterps(&model->functionInterps, &model->arrayValues);
+        validator.setRealAssignments(&model->numericAssignments);
+        CHECK(validator.validate({equality, aliasEquality}) == ArithModelValidator::Verdict::Satisfied);
+    }
+}

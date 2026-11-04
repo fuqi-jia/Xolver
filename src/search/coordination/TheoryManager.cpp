@@ -1383,6 +1383,30 @@ std::optional<TheorySolver::TheoryModel> TheoryManager::getModel() const {
                     name, RealValue::fromMpq(mpq_class(num.substr(3))));
             } catch (...) {}
         }
+
+        // A completed numeric class denotes one value in scalar assignments
+        // and function tables. Table normalization above precedes completion,
+        // so newly allocated values must also reach numeric argument/result
+        // cells. Array handles and nonnumeric domains retain their own models.
+        auto completeCell = [&](std::string& value) {
+            const auto found = mint.find(value);
+            if (found == mint.end()) return;
+            const auto original = tokenToNum.find(value);
+            if (original != tokenToNum.end() && original->second == "@CONFLICT") return;
+            value = found->second.substr(3);
+        };
+        auto numericSort = [](const std::string& sort) {
+            return sort == "Int" || sort == "Real";
+        };
+        for (auto& [name, function] : aggregated.functionInterps) {
+            (void)name;
+            for (auto& entry : function.entries) {
+                for (size_t i = 0; i < entry.args.size() && i < function.argSorts.size(); ++i)
+                    if (numericSort(function.argSorts[i])) completeCell(entry.args[i]);
+                if (numericSort(function.retSort)) completeCell(entry.value);
+            }
+            if (numericSort(function.retSort)) completeCell(function.deflt);
+        }
     }
 
     if (aggregated.assignments.empty() && aggregated.numericAssignments.empty() &&
