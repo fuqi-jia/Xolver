@@ -1,4 +1,5 @@
 #include "frontend/preprocess/UnconditionalConstantPropagation.h"
+#include "ir/RequiredFacts.h"
 #include <stdexcept>
 
 namespace xolver {
@@ -471,53 +472,15 @@ void UnconditionalConstantPropagation::collectFromConjunct(ExprId conjunct) {
         return tryRecordBinding(*name, *valueOpt);
     };
 
-    // POLARITY-AWARE unit extraction (NNF). A unconditionally-true assertion's
-    // boolean skeleton yields more unconditional facts than a top-level And:
-    //   ¬(a => b)            → a true,  b false        (a ∧ ¬b)
-    //   ¬(=> c0 … cn)        → c0…c_{n-1} true, cn false
-    //   ¬(a ∨ b)             → a false, b false        (De Morgan)
-    //   ¬¬x                  → x same polarity
-    // Variable=const bindings are recorded ONLY at POSITIVE polarity (a negative
-    // `(= v c)` is a disequality, not a binding). This closes the nested-fact
-    // pattern `¬(=> A (=> (= f5 1) C))` (TwoSquares z3.704124): f5=1 is buried in
-    // an implication, not a top-level conjunct, so the plain And-flatten missed
-    // it. SOUND: every extracted fact is entailed by the (true) assertion.
-    struct WI { ExprId e; bool pos; };
-    std::vector<WI> work;
-    work.push_back({conjunct, true});
-    while (!work.empty()) {
+    const std::vector<ExprId> roots{conjunct};
+    for (const auto& fact : requiredFacts(ir_, roots)) {
         if (contradiction_) return;
-        WI it = work.back();
-        work.pop_back();
-        const auto& node = ir_.get(it.e);
-        if (node.kind == Kind::Not && node.children.size() == 1) {
-            work.push_back({node.children[0], !it.pos});
-            continue;
-        }
-        if (it.pos && node.kind == Kind::And) {
-            for (int i = static_cast<int>(node.children.size()) - 1; i >= 0; --i)
-                work.push_back({node.children[i], true});
-            continue;
-        }
-        if (!it.pos && node.kind == Kind::Or) {              // ¬(∨) → all false
-            for (int i = static_cast<int>(node.children.size()) - 1; i >= 0; --i)
-                work.push_back({node.children[i], false});
-            continue;
-        }
-        if (!it.pos && node.kind == Kind::Implies && node.children.size() >= 2) {
-            // ¬(c0 ⇒ … ⇒ cn) → c0…c_{n-1} true, cn false
-            work.push_back({node.children.back(), false});
-            for (int i = static_cast<int>(node.children.size()) - 2; i >= 0; --i)
-                work.push_back({node.children[i], true});
-            continue;
-        }
-        if (it.pos && node.kind == Kind::Eq && node.children.size() == 2) {
+        const auto node = ir_.get(fact.expression);
+        if (fact.positive && node.kind == Kind::Eq && node.children.size() == 2) {
             if (tryRecord(node.children[0], node.children[1])) continue;
             tryRecord(node.children[1], node.children[0]);
             continue;
         }
-        // Anything else (Or at positive, And at negative, a UF/arith atom, …)
-        // is not an unconditional unit binding — skip.
     }
 }
 
@@ -580,6 +543,17 @@ ExprId UnconditionalConstantPropagation::substituteRec(ExprId root) {
 
         if (!frame.processed) {
             frame.processed = true;
+
+            // Collection also finds required equalities below negated
+            // implications and disjunctions. Keep their defining atoms here,
+            // not only in substituteAssertion's positive And traversal. Bare
+            // UF arguments deliberately remain variables, so removing x = c
+            // would otherwise disconnect f(x) from the propagated constant.
+            if (isSourceOfBinding(e)) {
+                substMemo_[e] = e;
+                stack.pop_back();
+                continue;
+            }
 
             // UF applications: substitute under the app ONLY when it has a
             // COMPOUND argument (an arithmetic expression like `(+ a c)`). There,

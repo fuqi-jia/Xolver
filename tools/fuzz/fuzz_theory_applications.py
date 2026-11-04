@@ -104,7 +104,7 @@ def replay(prefix, output):
         if atom_names(constraint) & original_symbols:
             raise ValueError('model universe constraint references original symbol')
     algebraic_prelude = []
-    if 'root-of-with-interval' in output:
+    if 'root-of-with-interval' in output or 'root-obj' in output:
         names = [symbol_name(command[1]) for command in original_commands
                  if emit(command[0]) in ('declare-const', 'declare-fun')]
         from algebraic_model import expand_algebraic_roots
@@ -115,9 +115,12 @@ def replay(prefix, output):
     for command in original_commands:
         op = emit(command[0])
         if algebraic_prelude and op == 'set-logic':
-            # Witness polynomials may exceed the original problem's logic;
-            # widening the replay language preserves every original assertion.
-            commands.append('(set-logic ALL)')
+            # Keep an existing real polynomial logic: widening QF_NRA to ALL
+            # can disable the independent checker's specialized arithmetic
+            # procedure. Other source logics may need a wider replay language.
+            commands.append(emit(command) if len(command) == 2 and
+                            emit(command[1]) in ('ALL', 'QF_NRA', 'NRA')
+                            else '(set-logic ALL)')
             continue
         if (algebraic_prelude and not inserted_roots
                 and op not in ('set-option', 'set-info')):

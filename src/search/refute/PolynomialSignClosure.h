@@ -1,6 +1,7 @@
 #pragma once
 
 #include "search/refute/SignDefinitenessRefuter.h"
+#include "contracts/PolynomialDomain.h"
 
 namespace xolver {
 
@@ -17,11 +18,15 @@ struct PolynomialSignStatistics {
     bool exhausted = false;
 };
 
-// Explained, bounded sign closure over Q-polynomials. All rules hold over the
-// reals and therefore also over integers. Zero factors are retained unless
+// Explained, bounded sign closure over Q-polynomials. Variables are real unless
+// declared integer in the supplied domain. Zero factors are retained unless
 // nonzeroness has been proved. Failure leaves the caller's obligation open.
+// An optional output receives explained new/strengthened facts even when the
+// bounded search is incomplete. It is cleared on every call and on conflict.
 std::optional<std::vector<SatLit>> refuteByPolynomialSignClosure(
     const std::vector<SignRefuteConstraint>& constraints,
-    PolynomialSignStatistics* statistics = nullptr);
+    PolynomialSignStatistics* statistics = nullptr,
+    PolynomialDomain domain = {},
+    std::vector<PolynomialConsequence>* consequences = nullptr);
 
 } // namespace xolver

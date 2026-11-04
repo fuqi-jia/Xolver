@@ -27,12 +27,15 @@ struct BooleanRefutationResult {
 using RefutationAssignment = std::function<std::vector<SatLit>(const SatSolver&)>;
 using TheoryRefutationOracle =
     std::function<std::optional<std::vector<SatLit>>(std::span<const SatLit>)>;
+using TheoryClauseConsumer = std::function<void(std::span<const SatLit>)>;
 
 // Bounded Boolean/theory refutation, independent of any particular theory.
 // The caller supplies an already encoded Boolean abstraction and exact theory
 // explanations. Unsupported/invalid explanations leave the obligation open.
+// The consumer receives each validated theory clause even when the bounded
+// search cannot close the whole formula. Its literals use this SAT instance.
 BooleanRefutationResult refuteBooleanTheory(
     SatSolver&, const RefutationAssignment&, const TheoryRefutationOracle&,
-    const BooleanRefutationLimits&);
+    const BooleanRefutationLimits&, const TheoryClauseConsumer& = {});
 
 } // namespace xolver

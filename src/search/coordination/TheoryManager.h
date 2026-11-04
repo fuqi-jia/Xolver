@@ -87,8 +87,11 @@ public:
         return it == solverByTheory_.end() ? nullptr : it->second;
     }
 
-    /** Aggregate models from all registered theory solvers. */
-    std::optional<TheorySolver::TheoryModel> getModel() const;
+    // Read each theory once. A caller may positively validate a numeric UF
+    // completion against its original formula; rejection keeps the ordinary
+    // model, including quarantine of conflicting function tables.
+    using ModelValidator = std::function<bool(TheorySolver::TheoryModel&)>;
+    std::optional<TheorySolver::TheoryModel> getModel(const ModelValidator& validate = {}) const;
 
     // Phase 0 combination SAT certificate (positive completeness proof). Returns
     // true ONLY if every registered solver positively certifies completeness

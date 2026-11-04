@@ -1,17 +1,21 @@
 #include "search/boolean/TheoryRefutation.h"
 #include <algorithm>
 #include "base/WorkBudget.h"
+#include "base/SolveClock.h"
 
 namespace xolver {
 BooleanRefutationResult refuteBooleanTheory(
     SatSolver& sat, const RefutationAssignment& select,
-    const TheoryRefutationOracle& oracle, const BooleanRefutationLimits& limits) {
+    const TheoryRefutationOracle& oracle, const BooleanRefutationLimits& limits,
+    const TheoryClauseConsumer& consume) {
     BooleanRefutationResult result;
     if (!select || !oracle) return result;
-    sat.setDeadline(limits.deadline);
+    wall::DeadlineScope scope(limits.deadline);
+    const auto until = wall::deadline();
+    sat.setDeadline(until);
     try {
         for (size_t trial = 0; trial < limits.assignments; ++trial) {
-            if (std::chrono::steady_clock::now() >= limits.deadline) {
+            if (std::chrono::steady_clock::now() >= until) {
                 result.exhausted = true;
                 return result;
             }
@@ -39,6 +43,7 @@ BooleanRefutationResult refuteBooleanTheory(
             // The learned clause is a theory tautology, never original Boolean input.
             sat.addTheoryClause(clause);
             ++result.conflicts;
+            if (consume) consume(clause);
             if (sat.inconsistent()) {
                 result.refuted = true;
                 return result;
@@ -47,7 +52,7 @@ BooleanRefutationResult refuteBooleanTheory(
         // The allocation counts theory assignments, not the SAT check of the
         // clauses just learned. The last allowed conflict may complete the
         // refutation without creating a construction-time unit contradiction.
-        if (limits.assignments && std::chrono::steady_clock::now() < limits.deadline) {
+        if (limits.assignments && std::chrono::steady_clock::now() < until) {
             sat.limit("conflicts", limits.satConflicts);
             if (sat.solve() == SatSolver::SolveResult::Unsat) {
                 result.refuted = true;

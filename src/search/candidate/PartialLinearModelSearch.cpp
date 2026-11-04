@@ -2,6 +2,7 @@
 #include "search/candidate/BoundaryCandidates.h"
 #include "search/candidate/CandidateDomains.h"
 #include "search/candidate/WeightedGreedyCover.h"
+#include "search/linear/IntegerModelCompletion.h"
 #include "search/lra/GeneralSimplex.h"
 #include "base/WorkBudget.h"
 #include <algorithm>
@@ -258,6 +259,12 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
                 tick();
                 columns[var] = simplex.addVar(std::string(kernel.varName(var)));
             }
+            std::vector<int> integerColumns;
+            if (integerDomain)
+                for (const auto& [var, column] : columns) {
+                    (void)var;
+                    integerColumns.push_back(column);
+                }
             if (parameters.size() > static_cast<size_t>(std::numeric_limits<int>::max()) ||
                 parameters.size() >= std::numeric_limits<SatVar>::max() ||
                 atoms.size() >= std::numeric_limits<SatVar>::max() - parameters.size()) return std::nullopt;
@@ -507,11 +514,32 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
                     const auto value = simplex.value(column);
                     point.emplace(var, value.a + value.b * delta);
                 }
-                if (integerDomain)
+                if (integerDomain) {
+                    bool fractional = false;
                     for (const auto& [var, q] : point) {
                         (void)var;
-                        if (q.get_den() != 1) return std::nullopt;
+                        fractional |= q.get_den() != 1;
                     }
+                    if (fractional) {
+                        // A fractional LP vertex does not exhaust this parameter
+                        // assignment. Complete the affine block before changing
+                        // nonlinear choices; keep every repair local to it.
+                        if (activeCount != atoms.size()) return std::nullopt;
+                        IntegerCompletionStatistics completion;
+                        ++stats.integerCompletions;
+                        auto integral = completeIntegerModel(simplex, integerColumns,
+                            deadline, 64, tick, &completion);
+                        stats.integerCompletionNodes += completion.nodes;
+                        if (!integral) {
+                            // Failed pins retain assignments, so repair the parent
+                            // relaxation before any later point or singleton query.
+                            (void)check();
+                            return std::nullopt;
+                        }
+                        for (const auto& [var, column] : columns) point[var] = integral->at(column);
+                        ++stats.integerCompletionModels;
+                    }
+                }
                 for (const auto& constraint : constraints) {
                     tick();
                     const int sign = kernel.sgnVarId(constraint.poly, point);

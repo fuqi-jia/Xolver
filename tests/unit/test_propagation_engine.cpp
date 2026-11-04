@@ -34,6 +34,100 @@ static int countBounds(const std::vector<LraPropagationEngine::ExplainedBound>& 
     return c;
 }
 
+TEST_CASE("LraPropagationEngine: circular pending seeds coalesce exact chain explanations") {
+    for (const bool lower : {false, true}) {
+        for (int start = 0; start < 6; ++start) {
+            CAPTURE(lower);
+            CAPTURE(start);
+            GeneralSimplex gs;
+            const int x = gs.addVar("seed-chain-x"), y = gs.addVar("seed-chain-y");
+            const int z = gs.addVar("seed-chain-z");
+            const int first = gs.addConstraint({{x, 1}, {y, -1}}, 0);
+            const int second = gs.addConstraint({{y, 1}, {z, -1}}, 0);
+            const int last = gs.addConstraint({{z, 1}}, 0);
+            const DeltaRational value(3, mpq_class(lower ? 1 : -1, 2));
+            auto assertBound = [&](int var, const DeltaRational& endpoint, SatVar reason) {
+                const BoundInfo bound(BoundValue(endpoint), SatLit::positive(reason));
+                REQUIRE((lower ? gs.assertLower(var, bound) : gs.assertUpper(var, bound)));
+            };
+            assertBound(first, DeltaRational(0), 1);
+            assertBound(second, DeltaRational(0), 2);
+            assertBound(last, value, 3);
+            LraPropagationEngine engine;
+            if (start != 0) engine.propagateAll(gs, {64, start, 12, 1000});
+            LraPropagationEngine::Statistics statistics;
+            const auto derived = engine.propagateAll(gs, {64, 64, 12, 1000}, &statistics);
+            // A late row can update an already-visited direction or one still
+            // waiting in the circular seed suffix. Both must reach the same
+            // closure without duplicate pending visits or stale local facts.
+            REQUIRE(derived.size() == 3);
+            const int expected[] = {z, y, x};
+            for (std::size_t i = 0; i < derived.size(); ++i) {
+                CHECK(derived[i].var == expected[i]);
+                CHECK(derived[i].isLower == lower);
+                CHECK(derived[i].value == value);
+                std::vector<SatLit> reasons;
+                for (SatVar reason = 3 - static_cast<SatVar>(i); reason <= 3; ++reason)
+                    reasons.push_back(SatLit::positive(reason));
+                CHECK(derived[i].reasons == reasons);
+            }
+            if (start == 0) CHECK(statistics.rowVisits == (lower ? 13 : 16));
+            for (int var : {x, y, z}) {
+                CHECK_FALSE(gs.varState(var).lower.bound.isFinite());
+                CHECK_FALSE(gs.varState(var).upper.bound.isFinite());
+            }
+        }
+    }
+}
+
+TEST_CASE("LraPropagationEngine: bounded scans read fresh premises after tableau growth and rollback") {
+    for (const auto policy : {GeneralSimplex::AssignmentPolicy::Preserve,
+                              GeneralSimplex::AssignmentPolicy::Reinitialize}) {
+        GeneralSimplex gs;
+        // Most variables and their large rational endpoints are irrelevant to
+        // the one-direction scan; later calls must still see changed premises.
+        mpz_class huge = 1;
+        huge <<= 140;
+        for (int i = 0; i < 4096; ++i) {
+            const int unused = gs.addVar("unvisited-" + std::to_string(i));
+            mpq_class value(huge + i, 3);
+            value.canonicalize();
+            REQUIRE(gs.assertLower(unused, mkBound(value, 100 + i)));
+        }
+        const int x = gs.addVar("fresh-target"), y = gs.addVar("fresh-premise");
+        const int s = gs.addConstraint({{x, -2}, {y, 1}}, 0);
+        REQUIRE(gs.assertUpper(y, mkBound(4, 1)));
+        REQUIRE(gs.assertLower(s, mkBound(0, 2)));
+        LraPropagationEngine engine;
+        auto checkCurrent = [&](bool child) {
+            bool reached = false;
+            for (int call = 0; call < 6; ++call) {
+                LraPropagationEngine::Statistics statistics;
+                const auto derived = engine.propagateAll(gs, {1, 1, 12, 1000}, &statistics);
+                CHECK(statistics.rowVisits <= 1);
+                for (const auto& bound : derived) {
+                    if (bound.var != x || bound.isLower) continue;
+                    CHECK(bound.value == (child ? DeltaRational(mpq_class(1, 2), mpq_class(-1, 2))
+                                               : DeltaRational(2)));
+                    CHECK((bound.reasons == std::vector<SatLit>{SatLit::positive(1),
+                                                               SatLit::positive(child ? 3 : 2)}));
+                    reached = true;
+                }
+            }
+            CHECK(reached);
+            CHECK_FALSE(gs.varState(x).upper.bound.isFinite());
+        };
+        checkCurrent(false);
+        gs.push();
+        REQUIRE(gs.assertLower(s, BoundInfo(BoundValue(DeltaRational(3, 1)), SatLit::positive(3)), 1));
+        const int added = gs.addVar("new-after-scan");
+        gs.addConstraint({{added, 1}}, 0);
+        checkCurrent(true);
+        gs.backtrackToLevel(0, policy);
+        checkCurrent(false);
+    }
+}
+
 TEST_CASE("LraPropagationEngine: unavailable extrema skip arithmetic until bounds arrive") {
     GeneralSimplex gs;
     const int x = gs.addVar("availability-x"), y = gs.addVar("availability-y"), z = gs.addVar("availability-z");

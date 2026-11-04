@@ -1,6 +1,8 @@
 #include "base/RuntimeConfig.h"
 #include "search/candidate/CandidateModelSearch.h"
 #include "base/EnvParam.h"
+#include "ir/RequiredFacts.h"
+#include "ir/NumericLiteral.h"
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
@@ -29,6 +31,7 @@ CandidateModelSearch::Result CandidateModelSearch::run() {
     if (vars_.empty()) return result_;
 
     pinForcedAppSlots();
+    collectDefinitions();
     if (std::chrono::steady_clock::now() >= deadline_) return result_;
     if (xolver::config::read<xolver::config::ReadKind::Presence>("XOLVER_DIAG_CMS")) {
         size_t napp = 0;
@@ -37,8 +40,9 @@ CandidateModelSearch::Result CandidateModelSearch::run() {
         for (const auto& v : vars_) if (v.pinnedValue) ++npin;
         // fprintf, not std::cerr: this runs on the solver worker thread where
         // std::cerr is suppressed (see file-based-diag rule).
-        std::fprintf(stderr, "[CMS] enabled=%d vars=%zu appSlots=%zu pinned=%zu arith=%zu\n",
-                     (int)isLogicEnabled(), vars_.size(), napp, npin, vars_.size() - napp);
+        std::fprintf(stderr, "[CMS] enabled=%d vars=%zu appSlots=%zu pinned=%zu arith=%zu definitions=%zu\n",
+                     (int)isLogicEnabled(), vars_.size(), napp, npin, vars_.size() - napp,
+                     definitions_.size());
         std::fflush(stderr);
     }
 
@@ -52,14 +56,13 @@ CandidateModelSearch::Result CandidateModelSearch::run() {
 
     // Run strategies in order. Each returns true if a validated witness
     // was found (early termination).
-    if (runStrategy10d()) return result_;
-    if (runStrategy10c()) return result_;
-    if (runStrategy10a()) return result_;
+    if (!runStrategy10d() && !runStrategy10c()) runStrategy10a();
 
     if (xolver::config::read<xolver::config::ReadKind::Presence>("XOLVER_DIAG_CMS")) {
         std::fprintf(stderr,
-                     "[CMS] no-witness: tried=%lld fcReject=%lld evalFalse=%lld "
+                     "[CMS] %s: tried=%lld fcReject=%lld evalFalse=%lld "
                      "evalIndet=%lld accept=%lld\n",
+                     result_.found ? "witness" : "no-witness",
                      (long long)diagTried_, (long long)diagFcReject_,
                      (long long)diagEvalFalse_, (long long)diagEvalIndet_,
                      (long long)diagAccept_);
@@ -171,33 +174,16 @@ void CandidateModelSearch::collectApplicationSlots() {
 }
 
 void CandidateModelSearch::pinForcedAppSlots() {
-    auto extractConst = [&](ExprId eid) -> std::optional<mpq_class> {
-        const auto& n = ir_.get(eid);
-        if (n.kind == Kind::ConstInt) {
-            if (auto* p = std::get_if<int64_t>(&n.payload.value)) return mpq_class(*p);
-        } else if (n.kind == Kind::ConstReal) {
-            if (auto* s = std::get_if<std::string>(&n.payload.value)) return mpq_class(*s);
-        }
-        return std::nullopt;
-    };
-    // Descend only through top-level And (asserted-true conjuncts); never Or/Not.
-    std::vector<ExprId> work = assertionRoots();
-    std::unordered_set<ExprId> seen;
-    while (!work.empty()) {
-        ExprId e = work.back();
-        work.pop_back();
-        if (e >= ir_.size() || !seen.insert(e).second) continue;
-        const auto& n = ir_.get(e);
-        if (n.kind == Kind::And) {
-            for (ExprId c : n.children) work.push_back(c);
-            continue;
-        }
+    const auto roots = assertionRoots();
+    for (const auto& fact : requiredFacts(ir_, roots)) {
+        if (!fact.positive) continue;
+        const auto n = ir_.get(fact.expression);
         if (n.kind == Kind::Eq && n.children.size() == 2) {
             ExprId a = n.children[0], b = n.children[1];
             ExprId app = NullExpr;
             std::optional<mpq_class> cst;
-            if (ir_.get(a).kind == Kind::UFApply) { if (auto c = extractConst(b)) { app = a; cst = c; } }
-            if (app == NullExpr && ir_.get(b).kind == Kind::UFApply) { if (auto c = extractConst(a)) { app = b; cst = c; } }
+            if (ir_.get(a).kind == Kind::UFApply) { if (auto c = numericLiteral(ir_, b)) { app = a; cst = c; } }
+            if (app == NullExpr && ir_.get(b).kind == Kind::UFApply) { if (auto c = numericLiteral(ir_, a)) { app = b; cst = c; } }
             if (app != NullExpr && cst) {
                 auto it = varIndexByName_.find("__ufapp#" + std::to_string(app));
                 if (it != varIndexByName_.end()) {
@@ -253,6 +239,96 @@ void CandidateModelSearch::deriveAppValues(
             }
         }
         if (!changed) break;
+    }
+}
+
+void CandidateModelSearch::collectDefinitions() {
+    std::unordered_map<ExprId, size_t> slots;
+    for (size_t i = 0; i < vars_.size(); ++i) slots.emplace(vars_[i].exprId, i);
+    auto slotFor = [&](ExprId id) -> std::optional<size_t> {
+        if (const auto slot = slots.find(id); slot != slots.end()) return slot->second;
+        const auto node = ir_.get(id);
+        if (node.kind == Kind::Variable) {
+            if (const auto* name = std::get_if<std::string>(&node.payload.value)) {
+                const auto slot = varIndexByName_.find(*name);
+                if (slot != varIndexByName_.end() && !vars_[slot->second].isApp &&
+                    vars_[slot->second].sort == node.sort) return slot->second;
+            }
+        }
+        return std::nullopt;
+    };
+    const auto roots = assertionRoots();
+    const auto facts = requiredFacts(ir_, roots);
+
+    std::vector<Definition> selected;
+    std::unordered_map<size_t, size_t> byVariable;
+    for (const auto& fact : facts) {
+        if (std::chrono::steady_clock::now() >= deadline_) return;
+        if (!fact.positive) continue;
+        const auto node = ir_.get(fact.expression);
+        if (node.kind != Kind::Eq || node.children.size() != 2) continue;
+        ExprId target = node.children[0], value = node.children[1];
+        // Prefer completing a function result from its ordinary arguments,
+        // leaving those arguments available to the existing search strategies.
+        if (ir_.get(value).kind == Kind::UFApply || !slotFor(target))
+            std::swap(target, value);
+        const auto slot = slotFor(target);
+        if (!slot || target == value || byVariable.count(*slot)) continue;
+        byVariable.emplace(*slot, selected.size());
+        selected.push_back({*slot, value});
+    }
+
+    std::vector<size_t> dependencies(selected.size(), 0);
+    std::vector<std::vector<size_t>> dependents(selected.size());
+    for (size_t i = 0; i < selected.size(); ++i) {
+        std::vector<ExprId> pending{selected[i].value};
+        std::unordered_set<ExprId> visited;
+        std::unordered_set<size_t> required;
+        while (!pending.empty()) {
+            if (std::chrono::steady_clock::now() >= deadline_) return;
+            const auto id = pending.back();
+            pending.pop_back();
+            if (!visited.insert(id).second) continue;
+            if (const auto slot = slotFor(id)) {
+                const auto definition = byVariable.find(*slot);
+                if (definition != byVariable.end()) required.insert(definition->second);
+                // An application's value is its slot. Its argument expressions
+                // are checked later by functional consistency, not substituted
+                // into that value during completion.
+                continue;
+            }
+            for (ExprId child : ir_.get(id).children) pending.push_back(child);
+        }
+        dependencies[i] = required.size();
+        for (size_t dependency : required) dependents[dependency].push_back(i);
+    }
+    std::vector<size_t> ready;
+    for (size_t i = 0; i < selected.size(); ++i)
+        if (dependencies[i] == 0) ready.push_back(i);
+    for (size_t i = 0; i < ready.size(); ++i) {
+        const auto next = ready[i];
+        definitions_.push_back(selected[next]);
+        for (size_t dependent : dependents[next])
+            if (--dependencies[dependent] == 0) ready.push_back(dependent);
+    }
+    // Cycles and their dependents retain the original candidate assignments.
+    // Every required equality is retained for final validation.
+}
+
+void CandidateModelSearch::completeDefinedValues(
+    std::unordered_map<std::string, mpq_class>& full) const {
+    evalMemo_.clear();
+    for (const auto& definition : definitions_) {
+        if (std::chrono::steady_clock::now() >= deadline_) return;
+        const auto value = evalTermTop(definition.value, full);
+        const auto& variable = vars_[definition.variable];
+        if (value.kind != TermVerdict::Number ||
+            (variable.sort == ir_.intSortId() && value.numValue.get_den() != 1)) continue;
+        auto& current = full[variable.name];
+        if (current != value.numValue) {
+            current = value.numValue;
+            evalMemo_.clear();
+        }
     }
 }
 
@@ -368,42 +444,38 @@ void CandidateModelSearch::buildPriorityList() {
 
     perVar_.clear();
     perVar_.resize(vars_.size());
-    // A UF-app slot is DERIVABLE (its value follows by functional consistency
-    // from a pinned base case of the same function — e.g. pow2(k)@k=1 == pow2(1))
-    // exactly when its function has at least one pinned app. Such slots are NOT
-    // enumerated (singleton seed; deriveAppValues overrides them in
-    // tryAcceptCandidate) — that is what tames the UFNIA Cartesian blow-up. Apps
-    // of a function with NO pinned base case are FREE (e.g. intand, an arbitrary
-    // squaring fun) and MUST be enumerated like ordinary variables, or we lose
-    // the models the legacy enumeration found (ufnia_001 fun_sq).
-    std::unordered_set<std::string> pinnedFuncs;
+    std::vector<bool> defined(vars_.size(), false);
+    for (const auto& definition : definitions_) defined[definition.variable] = true;
+    // A fixed function value constrains only applications with equal argument
+    // tuples. Other tuples remain independent, even for the same symbol.
     std::unordered_map<std::string, std::vector<mpq_class>> funcPinnedValues;
     for (const auto& v : vars_)
         if (v.isApp && v.pinnedValue) {
-            pinnedFuncs.insert(v.funcName);
             funcPinnedValues[v.funcName].push_back(*v.pinnedValue);
         }
 
     for (size_t i = 0; i < vars_.size(); ++i) {
         if (std::chrono::steady_clock::now() >= deadline_) return;
         const auto& var = vars_[i];
+        if (defined[i]) {
+            // Acyclic required equalities determine this value from the free
+            // coordinates. Completion runs before congruence and validation;
+            // enumerating this coordinate would only repeat the same point.
+            perVar_[i].push_back(0);
+            continue;
+        }
         if (var.isApp) {
             if (var.pinnedValue) {                      // pinned base case
                 perVar_[i].push_back(*var.pinnedValue);
                 continue;
             }
-            if (pinnedFuncs.count(var.funcName)) {
-                // Non-pinned app of a pinned function (e.g. pow2(k) with k not a
-                // pinned base-case arg). deriveAppValues OVERRIDES this when the
-                // args match a pinned app (pow2(k)@k=1 -> 2). When they do NOT
-                // (pow2(k)@k=4, a FREE value in pure QF_UFNIA where pow2 is
-                // uninterpreted), enumerate a SMALL set — the function's own
-                // pinned values (plausible) + small ints — so a feasible value
-                // (e.g. pow2(k) >= 1 for in_range; int_check_*) is reachable
-                // without the full Cartesian blow-up.
+            if (funcPinnedValues.count(var.funcName)) {
+                // Congruence derives matching applications at each candidate.
+                // Unmatched applications retain the full numeric domain;
+                // known values supplement it without excluding free values.
                 std::set<mpq_class> cand;
+                for (const auto& q : priority_) cand.insert(q);
                 for (const auto& pv : funcPinnedValues[var.funcName]) cand.insert(pv);
-                for (int s : {0, 1, -1, 2}) cand.insert(mpq_class(s));
                 std::vector<mpq_class> lst;
                 for (const auto& q : cand) {
                     if (var.sort == ir_.intSortId() && q.get_den() != 1) continue;
@@ -412,8 +484,7 @@ void CandidateModelSearch::buildPriorityList() {
                 // MUST be height-sorted: runStrategy10a's height-ordered
                 // enumeration breaks on the first element whose height exceeds the
                 // remaining envelope (it assumes monotonic height). A value-sorted
-                // list (std::set) breaks prematurely and SKIPS high-height values
-                // (e.g. pow2(k)=8), which int_check's witness needs.
+                // list (std::set) breaks prematurely and skips valid values.
                 std::sort(lst.begin(), lst.end(),
                           [](const mpq_class& a, const mpq_class& b) {
                               return heightOf(a) < heightOf(b);
@@ -468,39 +539,34 @@ void CandidateModelSearch::buildPriorityList() {
 }
 
 void CandidateModelSearch::detectActiveBounds() {
-    // Lightweight syntactic scan: look for top-level conjuncts of the
-    // form (rel var const) or (rel const var) and record them as bounds.
-    auto extractConst = [&](ExprId eid) -> std::optional<mpq_class> {
-        const auto& n = ir_.get(eid);
-        if (n.kind == Kind::ConstInt) {
-            if (auto* v = std::get_if<int64_t>(&n.payload.value)) return mpq_class(*v);
-            // Large literal (e.g. EVM 2^256) carried via ConstInt with a
-            // string payload — without this branch the bound is silently
-            // dropped (completeness loss on big constants).
-            if (auto* s = std::get_if<std::string>(&n.payload.value))
-                return mpq_class(*s);
-        }
-        if (n.kind == Kind::ConstReal) {
-            if (auto* s = std::get_if<std::string>(&n.payload.value)) return mpq_class(*s);
-        }
-        return std::nullopt;
-    };
-    auto extractVarName = [&](ExprId eid) -> std::optional<std::string> {
+    auto extractSlotName = [&](ExprId eid) -> std::optional<std::string> {
         const auto& n = ir_.get(eid);
         if (n.kind == Kind::Variable) {
             if (auto* s = std::get_if<std::string>(&n.payload.value)) return *s;
         }
+        if (n.kind == Kind::UFApply &&
+            (n.sort == ir_.intSortId() || n.sort == ir_.realSortId())) return appSlotName(eid);
         return std::nullopt;
     };
 
-    auto consumeAtom = [&](ExprId atomId) {
+    auto consumeAtom = [&](ExprId atomId, bool positive) {
         const auto& a = ir_.get(atomId);
         if (a.children.size() != 2) return;
+        auto relation = a.kind;
+        if (!positive) {
+            switch (relation) {
+                case Kind::Leq: relation = Kind::Gt; break;
+                case Kind::Lt: relation = Kind::Geq; break;
+                case Kind::Geq: relation = Kind::Lt; break;
+                case Kind::Gt: relation = Kind::Leq; break;
+                default: return;
+            }
+        }
         ExprId lhs = a.children[0], rhs = a.children[1];
-        auto lhsVar = extractVarName(lhs);
-        auto rhsConst = extractConst(rhs);
-        auto rhsVar = extractVarName(rhs);
-        auto lhsConst = extractConst(lhs);
+        auto lhsVar = extractSlotName(lhs);
+        auto rhsConst = numericLiteral(ir_, rhs);
+        auto rhsVar = extractSlotName(rhs);
+        auto lhsConst = numericLiteral(ir_, lhs);
 
         // Normalize so the variable is on the left.
         std::string varName;
@@ -511,57 +577,39 @@ void CandidateModelSearch::detectActiveBounds() {
         else return;
         if (!varIndexByName_.count(varName)) return;
         BoundInfo& bd = activeBounds_[varName];
+        auto lower = [&](bool strict) {
+            if (!bd.lower || c > *bd.lower) { bd.lower = c; bd.lowerStrict = strict; }
+            else if (c == *bd.lower) bd.lowerStrict = bd.lowerStrict || strict;
+        };
+        auto upper = [&](bool strict) {
+            if (!bd.upper || c < *bd.upper) { bd.upper = c; bd.upperStrict = strict; }
+            else if (c == *bd.upper) bd.upperStrict = bd.upperStrict || strict;
+        };
 
-        switch (a.kind) {
+        switch (relation) {
             case Kind::Leq:
-                if (!flipped) {
-                    // var <= c -> upper bound c
-                    if (!bd.upper || c < *bd.upper) { bd.upper = c; bd.upperStrict = false; }
-                } else {
-                    // c <= var -> lower bound c
-                    if (!bd.lower || c > *bd.lower) { bd.lower = c; bd.lowerStrict = false; }
-                }
+                if (!flipped) upper(false); else lower(false);
                 break;
             case Kind::Lt:
-                if (!flipped) {
-                    if (!bd.upper || c < *bd.upper) { bd.upper = c; bd.upperStrict = true; }
-                } else {
-                    if (!bd.lower || c > *bd.lower) { bd.lower = c; bd.lowerStrict = true; }
-                }
+                if (!flipped) upper(true); else lower(true);
                 break;
             case Kind::Geq:
-                if (!flipped) {
-                    if (!bd.lower || c > *bd.lower) { bd.lower = c; bd.lowerStrict = false; }
-                } else {
-                    if (!bd.upper || c < *bd.upper) { bd.upper = c; bd.upperStrict = false; }
-                }
+                if (!flipped) lower(false); else upper(false);
                 break;
             case Kind::Gt:
-                if (!flipped) {
-                    if (!bd.lower || c > *bd.lower) { bd.lower = c; bd.lowerStrict = true; }
-                } else {
-                    if (!bd.upper || c < *bd.upper) { bd.upper = c; bd.upperStrict = true; }
-                }
+                if (!flipped) lower(true); else upper(true);
                 break;
             case Kind::Eq:
-                if (!bd.lower || c > *bd.lower) { bd.lower = c; bd.lowerStrict = false; }
-                if (!bd.upper || c < *bd.upper) { bd.upper = c; bd.upperStrict = false; }
+                lower(false);
+                upper(false);
                 break;
             default:
                 break;
         }
     };
 
-    for (ExprId aid : assertionRoots()) {
-        const auto& a = ir_.get(aid);
-        if (a.kind == Kind::And) {
-            for (ExprId c : a.children) {
-                consumeAtom(c);
-            }
-        } else {
-            consumeAtom(aid);
-        }
-    }
+    const auto roots = assertionRoots();
+    for (const auto& fact : requiredFacts(ir_, roots)) consumeAtom(fact.expression, fact.positive);
 }
 
 int64_t CandidateModelSearch::heightOf(const mpq_class& q) {
@@ -611,7 +659,9 @@ bool CandidateModelSearch::tryAcceptCandidate(
     // Derive UF-app slot values from the arith assignment (functional
     // consistency with pinned base cases) — this is what makes pow2(k)@k=1
     // become 2 without enumerating it (cvc5/z3 model construction).
+    completeDefinedValues(full);
     deriveAppValues(full);
+    completeDefinedValues(full);
 
     ++diagTried_;
     // Reject candidates that would make a function multi-valued before we
@@ -653,7 +703,7 @@ bool CandidateModelSearch::runStrategy10d() {
 }
 
 bool CandidateModelSearch::runStrategy10c() {
-    // Boundary points for variables with active integer bounds.
+    // Exact boundary and interior points for bounded numeric slots.
     for (const auto& v : vars_) {
         if (std::chrono::steady_clock::now() > deadline_) return false;
         auto it = activeBounds_.find(v.name);
@@ -668,7 +718,10 @@ bool CandidateModelSearch::runStrategy10c() {
             candidates.push_back(*b.upper);
             candidates.push_back(*b.upper - 1);
         }
+        if (b.lower && b.upper && *b.lower < *b.upper)
+            candidates.push_back((*b.lower + *b.upper) / 2);
         for (const auto& cv : candidates) {
+            if (v.sort == ir_.intSortId() && cv.get_den() != 1) continue;
             std::unordered_map<std::string, mpq_class> partial;
             partial[v.name] = cv;
             if (tryAcceptCandidate(partial, "10c-boundary")) return true;

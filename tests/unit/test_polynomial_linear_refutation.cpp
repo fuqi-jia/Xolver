@@ -166,14 +166,14 @@ TEST_CASE("Polynomial linear refutation: cached definitions survive withdrawal b
         {product, Relation::Lt, SatLit::positive(2)}};
     PolynomialLinearStatistics stats;
     REQUIRE(refuter.check(constraints, deadline(), &stats));
-    CHECK(stats.newRows == 2);
+    CHECK(stats.newRows == 0); // Direct monomial bounds need no slack definitions.
     CHECK(stats.reusedRows == 0);
     constraints[0].rel = Relation::Lt;
     constraints[0].reason = SatLit::negative(1);
     CHECK_FALSE(refuter.check(constraints, deadline(), &stats));
     CHECK(stats.newRows == 0);
     CHECK(stats.reusedRows == 2);
-    CHECK(stats.retainedRows == 2);
+    CHECK(stats.retainedRows == 0);
     constraints.erase(constraints.begin());
     CHECK_FALSE(refuter.check(constraints, deadline()));
     CHECK_FALSE(refuter.check({}, deadline()));
@@ -191,6 +191,29 @@ TEST_CASE("Polynomial linear refutation: cached definitions survive withdrawal b
     CHECK_FALSE(refuter.check({}, deadline(), &stats));
     CHECK(stats.retainedRows == 0);
     CHECK(stats.variables == 0);
+}
+
+TEST_CASE("Polynomial linear refutation: direct monomial endpoints preserve exact signed strict bounds") {
+    const auto product = variable(0) * variable(1);
+    const mpq_class point((mpz_class(1) << 130) + 7, mpz_class(3));
+    const mpq_class width(1, mpz_class(1) << 256);
+    for (const mpq_class& coefficient : {mpq_class(1, 3), mpq_class(-2, 7)}) {
+        PolynomialLinearRefuter refuter;
+        std::vector<SignRefuteConstraint> sources{
+            {(product - constant(point)) * constant(coefficient),
+                coefficient > 0 ? Relation::Gt : Relation::Lt, SatLit::negative(1)},
+            {product - constant(point + width), Relation::Lt, SatLit::positive(2)}};
+        CHECK_FALSE(refuter.check(sources, deadline()));
+        sources[1].poly = product - constant(point);
+        sources[1].rel = Relation::Leq;
+        const auto conflict = refuter.check(sources, deadline());
+        REQUIRE(conflict);
+        REQUIRE(conflict->size() == 2);
+        for (auto literal : *conflict)
+            CHECK((literal == sources[0].reason || literal == sources[1].reason));
+        sources.erase(sources.begin());
+        CHECK_FALSE(refuter.check(sources, deadline()));
+    }
 }
 
 TEST_CASE("Polynomial linear refutation: source identity cannot alias a changed polynomial") {
@@ -218,6 +241,60 @@ TEST_CASE("Polynomial linear refutation: constant disequalities retain their exa
     REQUIRE(conflict);
     CHECK(*conflict == std::vector<SatLit>{SatLit::negative(9)});
     CHECK_FALSE(refuter.check({}, deadline()));
+}
+
+TEST_CASE("Polynomial consequences: nonlinear premises lift through a coupled linear conflict") {
+    const auto x = variable(0), z = variable(1), a = variable(2), b = variable(3), c = variable(4);
+    std::vector<SignRefuteConstraint> constraints{
+        {x, Relation::Geq, SatLit::positive(1)},
+        {z, Relation::Geq, SatLit::negative(2)},
+        {x * z - constant(1), Relation::Geq, SatLit::positive(3)},
+        {a + b - x, Relation::Geq, SatLit::positive(4)},
+        {b + c, Relation::Leq, SatLit::negative(5)},
+        {a - c, Relation::Leq, SatLit::positive(6)}};
+    // z>=0 and x*z>=1 imply x>0. The three coupled affine rows imply
+    // x<=0, while the original monomial relaxation can retain x=0.
+    const std::vector<PolynomialConsequence> consequences{
+        {x, Relation::Gt, {SatLit::negative(2), SatLit::positive(3), SatLit::negative(2)}}};
+    PolynomialLinearRefuter refuter;
+    CHECK_FALSE(refuter.check(constraints, deadline()));
+    const auto conflict = refuteByPolynomialConsequences(refuter, constraints, consequences, deadline());
+    REQUIRE(conflict);
+    CHECK(std::find(conflict->begin(), conflict->end(), SatLit::positive(3)) != conflict->end());
+    CHECK(std::find(conflict->begin(), conflict->end(), SatLit::negative(2)) != conflict->end());
+    for (auto premise : *conflict)
+        CHECK(std::any_of(constraints.begin(), constraints.end(),
+            [&](const auto& source) { return source.reason == premise; }));
+
+    // Withdraw x>=0 and reverse the z premise. x=z=-1,a=b=c=0 is
+    // feasible; a retained explanation for the opposite polarity is unusable.
+    constraints.erase(constraints.begin(), constraints.begin() + 2);
+    constraints.push_back({z, Relation::Leq, SatLit::positive(2)});
+    const std::unordered_map<VarId, mpq_class> point{{0, -1}, {1, -1}, {2, 0}, {3, 0}, {4, 0}};
+    for (const auto& source : constraints) {
+        const auto value = source.poly.evaluateRational(point);
+        if (source.rel == Relation::Geq) CHECK(value >= 0);
+        else { REQUIRE(source.rel == Relation::Leq); CHECK(value <= 0); }
+    }
+    CHECK_FALSE(refuteByPolynomialConsequences(refuter, constraints, consequences, deadline()));
+    CHECK_FALSE(refuteByPolynomialConsequences(refuter, {}, consequences, deadline()));
+}
+
+TEST_CASE("Polynomial consequences: unconditional facts and exhausted checks preserve source explanations") {
+    const auto x = variable(0);
+    const std::vector<SignRefuteConstraint> constraints{
+        {x * x, Relation::Lt, SatLit::negative(5)}};
+    const std::vector<PolynomialConsequence> consequences{{x * x, Relation::Geq, {}}};
+    PolynomialLinearRefuter refuter;
+    REQUIRE_FALSE(refuter.check(constraints, deadline()));
+    const auto conflict = refuteByPolynomialConsequences(refuter, constraints, consequences, deadline());
+    REQUIRE(conflict);
+    CHECK(*conflict == std::vector<SatLit>{SatLit::negative(5)});
+    CHECK_FALSE(refuteByPolynomialConsequences(refuter, {}, consequences, deadline()));
+    PolynomialLinearStatistics statistics;
+    CHECK_FALSE(refuteByPolynomialConsequences(refuter, constraints, consequences,
+        std::chrono::steady_clock::now(), &statistics));
+    CHECK(statistics.exhausted);
 }
 
 TEST_CASE("Polynomial linear refutation: reused branch contexts and their conflicts match fresh monomial systems") {

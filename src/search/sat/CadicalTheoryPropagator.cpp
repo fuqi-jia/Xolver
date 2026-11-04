@@ -809,11 +809,18 @@ int CadicalTheoryPropagator::cb_propagate() {
         return 0;
     }
 
-    // NOTE: Lemmas from partial assignments (e.g. NIA branch lemmas) can
-    // be based on incomplete information and may prune valid SAT branches.
-    // Only propagate lemmas from complete model checks (cb_check_found_model).
-    // Early conflicts are still returned because they are sound pruning.
-    (void)isLemma;
+    // Proved implications remain valid under partial assignments. Speculative
+    // branch lemmas still require the complete-model path.
+    if (isLemma && tr.lemmaOpt && tr.lemmaOpt->kind == LemmaKind::Entailment &&
+        !tr.lemmaOpt->lits.empty()) {
+        if (user_) user_->onPropagate(clauseToInts(tr.lemmaOpt->lits));
+        enqueuePendingClause(tr.lemmaOpt->lits);
+        if (config::read<config::ReadKind::Presence>("XOLVER_ENTAIL_DIAG")) {
+            std::fprintf(stderr, "[ENTAIL] partial-check queued=%zu\n",
+                         tr.lemmaOpt->lits.size());
+            std::fflush(stderr);
+        }
+    }
 
     // Theory entailment propagation: pull each theory solver's entailed literals
     // (EUF e-propagation under XOLVER_EUF_PROP; explained LRA row bounds)
@@ -871,21 +878,8 @@ bool CadicalTheoryPropagator::cb_has_external_clause(bool& is_forgettable) {
         }
     } _het{satProf3, _he0};
     is_forgettable = false;
-    // If current clause exhausted, mark installed and pop
-    while (hasPendingClause_ && currentPendingClausePos_ >= currentPendingClause_.size()) {
-        if (!currentPendingClause_.empty()) {
-            lemmaDb_.markInstalled(TheoryLemma{currentPendingClause_});
-        }
-        pendingClauses_.pop_front();
-        if (pendingClauses_.empty()) {
-            hasPendingClause_ = false;
-            currentPendingClause_.clear();
-            currentPendingClausePos_ = 0;
-        } else {
-            currentPendingClause_ = pendingClauses_.front();
-            currentPendingClausePos_ = 0;
-        }
-    }
+    // Installation is acknowledged only when the clause's terminating zero
+    // has been delivered, not when its last nonzero literal was read.
     return hasPendingClause_;
 }
 
@@ -906,6 +900,9 @@ int CadicalTheoryPropagator::cb_add_external_clause_lit() {
         }
         currentPendingClause_ = pendingClauses_.front();
         currentPendingClausePos_ = 0;
+        // Every queued clause needs its own terminator. Continuing here would
+        // merge separate implications into one weaker disjunction.
+        return 0;
     }
     SatLit lit = currentPendingClause_[currentPendingClausePos_++];
     return lit.sign ? static_cast<int>(lit.var) : -static_cast<int>(lit.var);

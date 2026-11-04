@@ -15,8 +15,106 @@
 #include <doctest/doctest.h>
 
 #include "base/SolveClock.h"
+#include <xolver/Solver.h>
+#include <limits>
+#include <thread>
 
 using namespace xolver;
+
+TEST_CASE("wall::deadline scopes inherit an absolute deadline and restore after exceptions") {
+    using Clock = std::chrono::steady_clock;
+    wall::endSolve();
+    CHECK(wall::deadline() == Clock::time_point::max());
+    wall::beginSolve(60000);
+    const auto parent = wall::deadline();
+    CHECK(wall::deadline() == parent);
+    {
+        wall::DeadlineScope longer(Clock::time_point::max());
+        CHECK(wall::deadline() == parent);
+        const auto child = parent - std::chrono::seconds(1);
+        try {
+            wall::DeadlineScope shorter(child);
+            CHECK(wall::deadline() == child);
+            throw 1;
+        } catch (int) {}
+        CHECK(wall::deadline() == parent);
+    }
+    CHECK(wall::deadline() == parent);
+    wall::endSolve();
+}
+
+TEST_CASE("wall::deadline scope works without a feature gate and bounds nested solves") {
+    using Clock = std::chrono::steady_clock;
+    wall::endSolve();
+    const auto expired = Clock::now() - std::chrono::seconds(1);
+    {
+        wall::DeadlineScope outer(expired);
+        CHECK(wall::hasDeadline());
+        CHECK(wall::remainingMs() == 0);
+        {
+            // The public solver uses this guard around beginSolve/endSolve.
+            wall::DeadlineScope nested;
+            wall::beginSolve(60000);
+            CHECK(wall::deadline() == expired);
+            CHECK(wall::remainingMs() == 0);
+            wall::endSolve();
+        }
+        CHECK(wall::deadline() == expired);
+        CHECK(wall::remainingMs() == 0);
+    }
+    CHECK_FALSE(wall::hasDeadline());
+    CHECK(wall::remainingMs() == wall::NO_DEADLINE);
+}
+
+TEST_CASE("wall::deadline scopes remain local to their solve thread") {
+    using Clock = std::chrono::steady_clock;
+    wall::endSolve();
+    const auto parent = Clock::now() - std::chrono::seconds(1);
+    wall::DeadlineScope scope(parent);
+    bool workerUnbounded = false, workerRestored = false;
+    std::thread worker([&] {
+        workerUnbounded = !wall::hasDeadline() && wall::deadline() == Clock::time_point::max();
+        {
+            wall::DeadlineScope child(Clock::now() - std::chrono::seconds(1));
+            if (wall::remainingMs() != 0) workerUnbounded = false;
+        }
+        workerRestored = !wall::hasDeadline();
+    });
+    worker.join();
+    CHECK(workerUnbounded);
+    CHECK(workerRestored);
+    CHECK(wall::deadline() == parent);
+}
+
+TEST_CASE("wall::deadline conversion saturates without extending a caller scope") {
+    using Clock = std::chrono::steady_clock;
+    wall::endSolve();
+    wall::beginSolve(std::numeric_limits<long>::max());
+    CHECK(wall::hasDeadline());
+    CHECK(wall::deadline() > Clock::now());
+    const auto requested = Clock::now() - std::chrono::seconds(1);
+    {
+        wall::DeadlineScope scope(requested);
+        CHECK(wall::deadline() == requested);
+        CHECK(wall::remainingMs() == 0);
+    }
+    CHECK(wall::remainingMs() > 0);
+    wall::endSolve();
+}
+
+TEST_CASE("wall::deadline caller survives a public solver check") {
+    using Clock = std::chrono::steady_clock;
+    wall::endSolve();
+    const auto caller = Clock::now() + std::chrono::hours(1);
+    {
+        wall::DeadlineScope scope(caller);
+        Solver solver;
+        CHECK((solver.checkSat() == Result::Sat));
+        CHECK(wall::deadline() == caller);
+        CHECK(wall::hasDeadline());
+    }
+    CHECK_FALSE(wall::hasDeadline());
+}
 
 TEST_CASE("wall::scaledCount returns base when no deadline is set") {
     wall::endSolve();

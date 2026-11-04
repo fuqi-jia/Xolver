@@ -1,0 +1,10 @@
+; The inactive application disappears, but its declaration still needs a model.
+(set-option :produce-models true)
+(set-logic QF_UFLIA)
+(set-info :status sat)
+(declare-const x Int)
+(declare-fun unused (Int) Int)
+(assert (> x 0))
+(assert (= (unused x) (unused x)))
+(check-sat)
+(get-model)

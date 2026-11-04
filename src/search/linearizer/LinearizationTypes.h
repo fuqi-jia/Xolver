@@ -87,10 +87,7 @@ struct LinearizationBounds {
     bool lowerReasonComplete = false;
     bool upperReasonComplete = false;
 
-    // Strict-bound markers (NEW). `lowerStrict=true` means the constraint
-    // is `x > lower` (not `x >= lower`); same for upper. Required for the
-    // sign-only Family 0 cut: without these, `x > 0` would register as
-    // `lower=0` and the strict-positive sign check would silently fail.
+    // Open endpoints remain strict over the reals, including at zero.
     bool lowerStrict = false;
     bool upperStrict = false;
 
@@ -117,6 +114,7 @@ struct LinearizationBounds {
 struct CutCacheKey {
     NonlinearTermKey term;
     SatLit nonlinearReason;
+    // Exact cut parameters, including endpoint availability and signed support.
     std::vector<mpq_class> boundValues;
     int cutIndex;
 

@@ -327,6 +327,39 @@ TEST_CASE("partial linear model: integer clients reject fractional completions a
     CHECK_FALSE(PartialLinearModelSearch::trySolve({{NullPoly, Relation::Eq}}, *kernel));
 }
 
+TEST_CASE("partial linear model: integer completion avoids changing unrelated nonlinear choices") {
+    auto kernel = createPolynomialKernel();
+    std::vector<PartialLinearModelSearch::Constraint> constraints;
+    auto sum = kernel->mkZero();
+    for (int i = 0; i < 16; ++i) {
+        const auto p = kernel->mkVar(kernel->getOrCreateVar("p" + std::to_string(i)));
+        const auto x = kernel->mkVar(kernel->getOrCreateVar("x" + std::to_string(i)));
+        constraints.push_back({kernel->sub(p, kernel->mkOne()), Relation::Geq});
+        constraints.push_back({kernel->sub(p, kernel->mkConst(2)), Relation::Leq});
+        constraints.push_back({x, Relation::Geq});
+        sum = kernel->add(sum, kernel->mul(p, x));
+    }
+    const mpq_class constant(mpz_class("10000000000000000000000000000000000000000000017"));
+    constraints.push_back({kernel->sub(sum, kernel->mkConst(constant)), Relation::Eq});
+    PartialLinearModelSearch::Statistics stats;
+    std::optional<PartialLinearModelSearch::RootRefutation> refutation;
+    const auto model = PartialLinearModelSearch::trySolve(constraints, *kernel, true, &stats,
+        PartialLinearModelSearch::Allocation(std::chrono::milliseconds(1000), 100000), &refutation);
+    REQUIRE(model.has_value());
+    CHECK_FALSE(refutation.has_value());
+    CHECK(stats.integerCompletionModels > 0);
+    CHECK(stats.choices < 100);
+    for (const auto& [var, value] : *model) {
+        (void)var;
+        CHECK(value.get_den() == 1);
+    }
+    for (const auto& constraint : constraints) {
+        const int sign = kernel->sgnVarId(constraint.poly, *model);
+        CHECK((constraint.rel == Relation::Eq ? sign == 0 :
+              constraint.rel == Relation::Geq ? sign >= 0 : sign <= 0));
+    }
+}
+
 TEST_CASE("GeneralSimplex: local model-search deadline leaves ordinary feasibility resumable") {
     GeneralSimplex simplex;
     const int x = simplex.addVar("x");

@@ -164,6 +164,10 @@ public:
     // True iff the SMT-LIB input set :produce-models / issued (get-model).
     bool modelRequestedImpl() const;
 
+    // Complete irrelevant declared functions from original-query dependencies.
+    // Before assertion restoration, a true residual also admits an empty model.
+    void completeUnusedFunctionModels();
+
     // Merge UCP fixedBindings_ into lastModel_'s string + numeric channels for
     // any var not already present. Called at every site that sets lastModel_
     // so validators (modelViolatesOriginal, combinationModelDefinitelyViolates,

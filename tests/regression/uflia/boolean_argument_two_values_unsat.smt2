@@ -1,0 +1,11 @@
+; Boolean variables appearing only below numeric applications still need truth values.
+(set-logic QF_UFLIA)
+(set-info :status unsat)
+(declare-const p Bool)
+(declare-const q Bool)
+(declare-const r Bool)
+(declare-fun f (Bool) Int)
+(assert (distinct (f p) (f q)))
+(assert (distinct (f q) (f r)))
+(assert (distinct (f p) (f r)))
+(check-sat)

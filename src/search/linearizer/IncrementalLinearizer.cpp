@@ -3,9 +3,32 @@
 #include "base/EnvParam.h"
 #include "search/linearizer/IncrementalLinearizer.h"
 #include "search/linearizer/BoundStore.h"
+#include <algorithm>
+#include <cstdint>
 #include <unordered_set>
 
 namespace xolver {
+namespace {
+// Equal endpoints can have different availability or explanations after a
+// backtrack. A previously emitted conditional lemma cannot cover a new proof.
+void appendCutSupport(std::vector<mpq_class>& parameters,
+                      std::initializer_list<const LinearizationBounds*> bounds,
+                      const std::vector<SatLit>& reasons) {
+    for (const auto* b : bounds) {
+        const unsigned flags = b ? b->hasLower | (b->hasUpper << 1) |
+            (b->lowerIsGlobal << 2) | (b->upperIsGlobal << 3) |
+            (b->lowerReasonComplete << 4) | (b->upperReasonComplete << 5) |
+            (b->lowerStrict << 6) | (b->upperStrict << 7) : 0;
+        parameters.emplace_back(flags);
+    }
+    std::vector<uint64_t> support;
+    for (auto literal : reasons)
+        support.push_back((uint64_t(literal.var) << 1) | literal.sign);
+    std::sort(support.begin(), support.end());
+    support.erase(std::unique(support.begin(), support.end()), support.end());
+    for (auto literal : support) parameters.emplace_back(std::to_string(literal));
+}
+} // namespace
 
 IncrementalLinearizer::IncrementalLinearizer(PolynomialKernel& kernel,
                                                TheoryAtomRegistry* registry)
@@ -98,6 +121,7 @@ LinearizationResult IncrementalLinearizer::run(
                         xBounds->lower, xBounds->upper,
                         yBounds->lower, yBounds->upper
                     };
+                    appendCutSupport(boundVals, {&*xBounds, &*yBounds}, cut.reasons);
 
                     if (cache_.hasEmitted(aux.key, c.reason, boundVals, idx)) {
                         ++idx;
@@ -211,6 +235,7 @@ LinearizationResult IncrementalLinearizer::run(
                             : (xBounds->lower + xBounds->upper) / 2;
                         boundVals.push_back(point);
                     }
+                    appendCutSupport(boundVals, {xBounds ? &*xBounds : nullptr}, cut.reasons);
 
                     if (cache_.hasEmitted(aux.key, c.reason, boundVals, idx)) {
                         ++idx;

@@ -20,6 +20,8 @@
 #include "search/linearizer/McCormickGenerator.h"
 #include "search/linearizer/SquareCutGenerator.h"
 #include "search/linearizer/LinearizationTypes.h"
+#include "search/linearizer/IncrementalLinearizer.h"
+#include "search/linearizer/BoundStore.h"
 #include "search/lra/GeneralSimplex.h"
 #include <type_traits>
 
@@ -75,6 +77,115 @@ TEST_CASE("Linearizer: McCormick emits 4 cuts on finite bounds") {
     auto cuts = gen.generate(aux, "x", "y", xb, yb, SatLit{0, false});
     // Standard McCormick relaxation produces 4 cuts (2 under, 2 over).
     CHECK(cuts.size() == 4);
+}
+
+TEST_CASE("Linearizer: McCormick faces require only their own justified endpoints") {
+    McCormickGenerator gen;
+    const auto aux = mkAuxProduct("t", VarId{1}, VarId{2});
+    for (bool xLower : {false, true}) for (bool yLower : {false, true}) {
+        auto xb = mkBounds(mpq_class(-2, 3), mpq_class(7, 3));
+        auto yb = mkBounds(mpq_class(-5, 2), mpq_class(3, 2));
+        xb.hasLower = xLower; xb.hasUpper = !xLower;
+        yb.hasLower = yLower; yb.hasUpper = !yLower;
+        xb.lowerReasons = {SatLit::positive(11)};
+        xb.upperReasons = {SatLit::negative(12)};
+        yb.lowerReasons = {SatLit::positive(13)};
+        yb.upperReasons = {SatLit::negative(14)};
+        auto cuts = gen.generate(aux, "x", "y", xb, yb, SatLit::positive(10), SortKind::Real);
+        REQUIRE(cuts.size() == 1);
+        const auto& cut = cuts.front();
+        REQUIRE(cut.reasons.size() == 3);
+        CHECK(cut.reasons[1] == (xLower ? xb.lowerReasons[0] : xb.upperReasons[0]));
+        CHECK(cut.reasons[2] == (yLower ? yb.lowerReasons[0] : yb.upperReasons[0]));
+        for (int i = 0; i <= 4; ++i) for (int j = 0; j <= 4; ++j) {
+            const mpq_class x = xLower ? mpq_class(xb.lower + mpq_class(i, 3))
+                                      : mpq_class(xb.upper - mpq_class(i, 3));
+            const mpq_class y = yLower ? mpq_class(yb.lower + mpq_class(j, 3))
+                                      : mpq_class(yb.upper - mpq_class(j, 3));
+            mpq_class value = cut.constraint.expr.constant;
+            for (const auto& term : cut.constraint.expr.terms)
+                value += term.coeff * (term.var == "x" ? x : term.var == "y" ? y : mpq_class(x * y));
+            CHECK(value <= 0);
+        }
+        (xLower ? xb.lowerReasonComplete : xb.upperReasonComplete) = false;
+        CHECK(gen.generate(aux, "x", "y", xb, yb, SatLit::positive(10)).empty());
+        (xLower ? xb.lowerIsGlobal : xb.upperIsGlobal) = true;
+        CHECK(gen.generate(aux, "x", "y", xb, yb, SatLit::positive(10)).size() == 1);
+    }
+}
+
+TEST_CASE("Linearizer: open zero product endpoints preserve strict real signs") {
+    McCormickGenerator gen;
+    const auto aux = mkAuxProduct("t", VarId{1}, VarId{2});
+    for (bool positiveX : {false, true}) for (bool positiveY : {false, true}) {
+        auto xb = mkBounds(positiveX ? 0 : -2, positiveX ? 2 : 0);
+        auto yb = mkBounds(positiveY ? 0 : -3, positiveY ? 3 : 0);
+        (positiveX ? xb.lowerStrict : xb.upperStrict) = true;
+        (positiveY ? yb.lowerStrict : yb.upperStrict) = true;
+        auto cuts = gen.generate(aux, "x", "y", xb, yb, SatLit::positive(10), SortKind::Real);
+        REQUIRE(cuts.size() == 4);
+        const auto& strict = cuts.back().constraint;
+        CHECK(strict.rel == Relation::Lt);
+        REQUIRE(strict.expr.terms.size() == 1);
+        CHECK(strict.expr.terms[0].coeff == (positiveX == positiveY ? -1 : 1));
+        CHECK(strict.expr.constant == 0);
+        (positiveY ? yb.lowerStrict : yb.upperStrict) = false;
+        cuts = gen.generate(aux, "x", "y", xb, yb, SatLit::positive(10), SortKind::Real);
+        CHECK(cuts.size() == 4);
+        for (const auto& cut : cuts) CHECK(cut.constraint.rel == Relation::Leq);
+    }
+}
+
+TEST_CASE("Linearizer: emitted cuts track changed bound explanations and availability") {
+#ifdef XOLVER_HAS_LIBPOLY
+    auto kernel = createPolynomialKernel();
+    REQUIRE(kernel);
+    struct Allocator : SatSolver, DynamicAtomRegistrar {
+        SatVar next = 0;
+        SatVar newVar() override { return ++next; }
+        void addClause(const std::vector<SatLit>&) override {}
+        SolveResult solve() override { throw std::logic_error("allocation only"); }
+        SolveResult solve(const std::vector<SatLit>&) override { return solve(); }
+        bool value(SatVar) const override { throw std::logic_error("allocation only"); }
+        void setDeadline(std::chrono::steady_clock::time_point) override {}
+        SatLit registerDynamicAtom(ExprId, TheoryId) override {
+            return SatLit::positive(newVar());
+        }
+    } allocator;
+    TheoryAtomRegistry registry;
+    registry.setContext(&allocator, &allocator);
+    const auto x = kernel->getOrCreateVar("x"), y = kernel->getOrCreateVar("y");
+    struct Bounds : BoundStore {
+        LinearizationBounds x, y;
+        std::optional<LinearizationBounds> get(const std::string& name) const override {
+            return name == "x" ? x : y;
+        }
+    } bounds;
+    bounds.x = mkBounds(0, 0); bounds.x.hasUpper = false;
+    bounds.y = mkBounds(0, 0); bounds.y.hasUpper = false;
+    bounds.x.lowerReasons = {SatLit::positive(allocator.newVar())};
+    bounds.y.lowerReasons = {SatLit::positive(allocator.newVar())};
+    const auto reason = SatLit::positive(allocator.newVar());
+    IncrementalLinearizer linearizer(*kernel, &registry);
+    const std::vector<LinearizationConstraint> source{
+        {kernel->mul(kernel->mkVar(x), kernel->mkVar(y)), Relation::Eq, reason}};
+    auto run = [&] { return linearizer.run(source, bounds, TheoryId::NRA, {100, 4}); };
+    auto count = [&](const LinearizationResult& result) {
+        size_t n = 0;
+        for (const auto& pending : result.lemmas) if (pending.cacheKey) {
+            ++n;
+            linearizer.markEmitted(*pending.cacheKey);
+        }
+        return n;
+    };
+    CHECK(count(run()) == 1);
+    CHECK(count(run()) == 0);
+    bounds.x.lowerReasons = {SatLit::negative(allocator.newVar())};
+    CHECK(count(run()) == 1);
+    bounds.x.hasLower = false; bounds.x.hasUpper = true;
+    bounds.x.upperReasons = {SatLit::positive(allocator.newVar())};
+    CHECK(count(run()) == 1);
+#endif
 }
 
 TEST_CASE("Linearizer: McCormick degenerate bounds (point box)") {

@@ -8,14 +8,16 @@ namespace xolver {
 
 /**
  * BoolSubtermPurifier: eliminates boolean composite expressions from
- * non-boolean-atomic positions (e.g. UFApply arguments, equality arguments).
+ * term argument positions (e.g. UFApply arguments and array indices).
+ * Boolean equality/distinct operands remain logical subformulas.
  *
  * Example:
  *   (Q (not a))  →  (Q b)  with  b = (not a)
  *
  * Invariant:
  *   - Pure IR-to-IR, no SAT/theory interaction.
- *   - Generated assertions are added at scope 0 (global).
+ *   - Original assertion scopes are preserved; fresh definitions live at the
+ *     earliest scope that uses them, including through other definitions.
  */
 class BoolSubtermPurifier {
 public:

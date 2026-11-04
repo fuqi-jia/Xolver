@@ -7,6 +7,7 @@
 #include "contracts/DynamicAtomRegistrar.h"
 #include <cassert>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace xolver {
@@ -68,11 +69,12 @@ public:
 
 private:
     SatLit atomizeRec(ExprId eid, const NativeTerms& ir);
-    // Bottom-up iterative pre-pass over boolean-sorted subformulas: memoizes
-    // every nested sub-formula before atomizeRec is invoked on its parent, so
+    // Bottom-up iterative pre-pass including Boolean arguments of theory terms:
+    // memoizes every nested sub-formula before atomizeRec invokes its parent, so
     // the (recursive) atomizeRec never recurses deeper than one memo lookup.
     // Eliminates the deep-formula stack overflow without touching the encoding.
     void preAtomizeIterative(ExprId root, const NativeTerms& ir);
+    void bridgeBooleanArgument(ExprId argument, const NativeTerms& ir);
     SatVar freshVar();
 
     // Which halves of a connective's defining biconditional to emit for `eid`:
@@ -106,6 +108,9 @@ private:
     SatSolver& sat_;
     std::vector<AtomRecord> atoms_;
     std::unordered_map<ExprId, SatLit> memo_;
+    // Non-Boolean DAG nodes have no SAT literal, but their Boolean arguments
+    // must still be visited once, including arguments nested below numeric UFs.
+    std::unordered_set<ExprId> visitedTerms_;
     SatVar nextVar_ = 1;
     TheoryAtomRegistry* registry_ = nullptr;
     TheoryId defaultTheory_ = TheoryId::LRA;

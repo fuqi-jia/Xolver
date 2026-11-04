@@ -324,6 +324,163 @@ TEST_CASE("Polynomial sign closure: coupled affine factors admit an explained st
     CHECK_FALSE(refuteByPolynomialSignClosure(constraints));
 }
 
+TEST_CASE("Polynomial sign closure: integer gaps connect product support to affine factor proofs") {
+    const auto x = variable(0), y = variable(1), z = variable(2);
+    std::vector<SignRefuteConstraint> constraints;
+    constraint(constraints, x, Relation::Geq);
+    constraint(constraints, z, Relation::Geq);
+    constraint(constraints, x * z - constant(1), Relation::Geq);
+    constraint(constraints, y - constant(1), Relation::Geq);
+    constraint(constraints, x * y - y + constant(1), Relation::Leq);
+    const std::unordered_map<VarId, mpq_class> realPoint{{0, mpq_class(1, 2)}, {1, 2}, {2, 2}};
+    for (const auto& c : constraints) REQUIRE(holds(c, realPoint));
+    CHECK_FALSE(refuteByPolynomialSignClosure(constraints));
+    PolynomialSignStatistics statistics;
+    const std::array<VarId, 1> integerX{0}, integerZ{2};
+    CHECK_FALSE(refuteByPolynomialSignClosure(constraints, nullptr, {.integerVariables = integerZ}));
+    const auto conflict = refuteByPolynomialSignClosure(constraints, &statistics, {.integerVariables = integerX});
+    REQUIRE(conflict);
+    CHECK_FALSE(statistics.exhausted);
+    checkReasons(constraints, *conflict);
+    REQUIRE(refuteByPolynomialSignClosure(constraints, nullptr, {.allInteger = true}));
+}
+
+TEST_CASE("Polynomial sign closure: negative integer support yields an exact upper endpoint") {
+    const auto x = variable(0), y = variable(1), z = variable(2);
+    std::vector<SignRefuteConstraint> constraints;
+    constraint(constraints, x, Relation::Leq);
+    constraint(constraints, z, Relation::Geq);
+    constraint(constraints, -x * z - constant(1), Relation::Geq);
+    constraint(constraints, y - constant(1), Relation::Geq);
+    constraint(constraints, x * y + y - constant(1), Relation::Geq);
+    const std::unordered_map<VarId, mpq_class> realPoint{{0, mpq_class(-1, 2)}, {1, 2}, {2, 2}};
+    for (const auto& c : constraints) REQUIRE(holds(c, realPoint));
+    CHECK_FALSE(refuteByPolynomialSignClosure(constraints));
+    const std::array<VarId, 1> integers{0};
+    const auto conflict = refuteByPolynomialSignClosure(constraints, nullptr, {.integerVariables = integers});
+    REQUIRE(conflict);
+    checkReasons(constraints, *conflict);
+}
+
+TEST_CASE("Polynomial sign closure: rational integer endpoints retain the original explanations") {
+    const auto x = variable(0), z = variable(1);
+    const auto third = Polynomial::fromConstant(mpq_class(1, 3));
+    std::vector<SignRefuteConstraint> constraints;
+    constraint(constraints, x + third, Relation::Gt);
+    constraint(constraints, third - x, Relation::Gt);
+    constraint(constraints, x * z - constant(1), Relation::Eq);
+    const std::unordered_map<VarId, mpq_class> realPoint{{0, mpq_class(1, 4)}, {1, 4}};
+    for (const auto& c : constraints) REQUIRE(holds(c, realPoint));
+    CHECK_FALSE(refuteByPolynomialSignClosure(constraints));
+    const std::array<VarId, 1> integers{0};
+    const auto conflict = refuteByPolynomialSignClosure(constraints, nullptr, {.integerVariables = integers});
+    REQUIRE(conflict);
+    checkReasons(constraints, *conflict);
+}
+
+TEST_CASE("Polynomial sign closure: integer polynomial lattices retain rational gaps and signs") {
+    const auto x = variable(0), y = variable(1), z = variable(2);
+    const auto gap = mpq_class(2, 3);
+    const auto polynomial = Polynomial::fromConstant(gap) * x * y +
+        Polynomial::fromConstant(2 * gap) * z;
+    for (bool negative : {false, true}) {
+        std::vector<SignRefuteConstraint> constraints;
+        constraint(constraints, polynomial, negative ? Relation::Lt : Relation::Gt);
+        constraint(constraints, polynomial + Polynomial::fromConstant(negative ? gap : -gap),
+            negative ? Relation::Gt : Relation::Lt);
+        const std::unordered_map<VarId, mpq_class> realPoint{
+            {0, mpq_class(negative ? -1 : 1, 2)}, {1, 1}, {2, 0}};
+        for (const auto& c : constraints) REQUIRE(holds(c, realPoint));
+        CHECK_FALSE(refuteByPolynomialSignClosure(constraints));
+        const std::array<VarId, 2> integerFactors{0, 1};
+        CHECK_FALSE(refuteByPolynomialSignClosure(constraints, nullptr,
+            {.integerVariables = integerFactors})); // Real z keeps the range continuous.
+        const auto conflict = refuteByPolynomialSignClosure(constraints, nullptr, {.allInteger = true});
+        REQUIRE(conflict);
+        checkReasons(constraints, *conflict);
+    }
+}
+
+TEST_CASE("Polynomial sign closure: rational constant offsets preserve integer witnesses") {
+    const auto x = variable(0), y = variable(1);
+    const auto polynomial = x * y + Polynomial::fromConstant(mpq_class(1, 2));
+    std::vector<SignRefuteConstraint> constraints;
+    constraint(constraints, polynomial, Relation::Gt);
+    constraint(constraints, polynomial - constant(1), Relation::Lt);
+    const std::unordered_map<VarId, mpq_class> point{{0, 0}, {1, 7}};
+    for (const auto& c : constraints) REQUIRE(holds(c, point));
+    CHECK_FALSE(refuteByPolynomialSignClosure(constraints, nullptr, {.allInteger = true}));
+}
+
+TEST_CASE("Polynomial sign closure: fixed substitutions reach reversed equation chains") {
+    std::vector<SignRefuteConstraint> constraints;
+    for (VarId id = 100; id < 116; ++id) {
+        const auto noise = variable(id);
+        constraint(constraints, noise, Relation::Geq);
+        constraint(constraints, (noise - constant(1)).pow(2), Relation::Geq);
+    }
+    const auto noiseCount = constraints.size();
+    for (VarId id = 12; id > 0; --id)
+        constraint(constraints, variable(id) - variable(id - 1) - constant(1), Relation::Eq);
+    constraint(constraints, variable(12) - constant(13), Relation::Leq);
+    constraint(constraints, variable(0) - constant(2), Relation::Eq);
+    const auto conflict = refuteByPolynomialSignClosure(constraints);
+    REQUIRE(conflict);
+    checkReasons(constraints, *conflict);
+    for (size_t i = 0; i < noiseCount; ++i)
+        CHECK(std::find(conflict->begin(), conflict->end(), constraints[i].reason) == conflict->end());
+
+    constraints[constraints.size() - 2].poly = variable(12) - constant(15);
+    std::unordered_map<VarId, mpq_class> point;
+    for (VarId id = 0; id <= 12; ++id) point.emplace(id, 2 + id);
+    for (VarId id = 100; id < 116; ++id) point.emplace(id, 0);
+    for (const auto& c : constraints) REQUIRE(holds(c, point));
+    CHECK_FALSE(refuteByPolynomialSignClosure(constraints));
+}
+
+TEST_CASE("Polynomial sign closure: exported facts retain current premises and clear between queries") {
+    const auto x = variable(0), z = variable(1);
+    std::vector<SignRefuteConstraint> constraints;
+    constraint(constraints, x, Relation::Geq);
+    constraint(constraints, z, Relation::Geq);
+    constraint(constraints, x * z - constant(1), Relation::Geq);
+    const std::array<VarId, 1> integerX{0};
+    std::vector<PolynomialConsequence> consequences;
+    CHECK_FALSE(refuteByPolynomialSignClosure(constraints, nullptr,
+        {.integerVariables = integerX}, &consequences));
+    const auto endpoint = x - constant(1);
+    REQUIRE(std::any_of(consequences.begin(), consequences.end(), [&](const auto& fact) {
+        return (fact.rel == Relation::Geq && fact.poly.terms() == endpoint.terms()) ||
+            (fact.rel == Relation::Leq && fact.poly.terms() == (-endpoint).terms());
+    }));
+    const std::unordered_map<VarId, mpq_class> point{{0, 1}, {1, 1}};
+    for (const auto& fact : consequences) {
+        for (auto premise : fact.premises)
+            CHECK(std::any_of(constraints.begin(), constraints.end(),
+                [&](const auto& c) { return c.reason == premise; }));
+        CHECK(holds({fact.poly, fact.rel, {}}, point));
+    }
+
+    constraints.clear();
+    constraint(constraints, x * z, Relation::Geq);
+    constraint(constraints, x * z, Relation::Neq);
+    CHECK_FALSE(refuteByPolynomialSignClosure(constraints, nullptr, {}, &consequences));
+    REQUIRE(std::any_of(consequences.begin(), consequences.end(), [&](const auto& fact) {
+        return fact.rel == Relation::Gt && fact.poly.terms() == (x * z).terms() && fact.premises.size() == 2;
+    }));
+
+    std::vector<SignRefuteConstraint> oversized(129, {x, Relation::Geq, SatLit::positive(1)});
+    PolynomialSignStatistics statistics;
+    CHECK_FALSE(refuteByPolynomialSignClosure(oversized, &statistics, {}, &consequences));
+    CHECK(statistics.exhausted);
+    CHECK(consequences.empty());
+    constraints.clear();
+    constraint(constraints, x, Relation::Eq);
+    constraint(constraints, x, Relation::Gt);
+    REQUIRE(refuteByPolynomialSignClosure(constraints, nullptr, {}, &consequences));
+    CHECK(consequences.empty());
+}
+
 TEST_CASE("Polynomial sign closure: weighted squares retain weak and strict sign premises") {
     const auto x = variable(0), y = variable(1);
     auto cross = x * y;

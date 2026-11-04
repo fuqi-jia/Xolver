@@ -23,6 +23,7 @@
 #include "search/refute/SignDefinitenessRefuter.h"       // sign-definiteness refutation
 #include "search/refute/PolynomialSignClosure.h"
 #include "search/refute/PolynomialLinearRefutation.h"
+#include "search/refute/PolynomialConeRefutation.h"
 #include "search/nra/core/CdcacCore.h"
 #include "search/nra/core/CdcacConstraint.h"
 #include "search/nra/engine/ReasonManager.h"
@@ -245,6 +246,8 @@ std::optional<TheoryCheckResult> NraSolver::stageSignRefute(TheoryLemmaStorage& 
                 << std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started).count() << '\n';
         }
     }
+    if (!conflict && effort == TheoryEffort::Full)
+        conflict = refuteByPolynomialCone(cs, wall::deadline());
     if (!conflict && effort == TheoryEffort::Full) {
         QuadraticSignStatistics stats;
         const auto started = std::chrono::steady_clock::now();

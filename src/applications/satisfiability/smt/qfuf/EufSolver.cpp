@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include "search/array/AniaProfile.h"
 #include "search/combination/CareGraph.h"
+#include "search/combination/SharedEqualityBasis.h"
 #include "contracts/DebugTrace.h"
 #include "search/coordination/TheoryLemmaDatabase.h"
 #include "search/coordination/TheoryAtomRegistry.h"
@@ -645,25 +646,57 @@ EufSolver::getDeducedSharedEqualities() {
         interned[k] = internSharedConstant(allShared[k]);
     }
 
+    // Preserve first-occurrence order while grouping by the current e-class.
+    // Publishing a star shares the same equality relation as a clique, with
+    // k-1 explanations instead of k*(k-1)/2 for a class of k shared terms.
+    std::unordered_map<EClassId, size_t> classIndex;
+    std::vector<std::vector<size_t>> classes;
+    classIndex.reserve(N);
     for (size_t i = 0; i < N; ++i) {
-        EufTermId ti = interned[i];
-        if (ti == NullEufTerm) continue;
-        for (size_t j = i + 1; j < N; ++j) {
-            EufTermId tj = interned[j];
-            if (tj == NullEufTerm) continue;
-            // Care-graph prune (XOLVER_COMB_CAREGRAPH): skip pairs no theory
-            // cares about. Done AFTER interning (so egraph state is identical
-            // to the unpruned path) but before the expensive same/explain. An
-            // EUF-merged pair is always care-relevant (it was connected via an
-            // Eq/Distinct or a congruence arg), so this prunes only inert,
-            // never-equal pairs — no real propagation is lost.
-            if (careGraph_ && !careGraph_->caresPair(allShared[i], allShared[j]))
+        if (interned[i] == NullEufTerm) continue;
+        const auto [it, inserted] = classIndex.emplace(egraph_.rep(interned[i]), classes.size());
+        if (inserted) classes.emplace_back();
+        classes[it->second].push_back(i);
+    }
+
+    for (const auto& members : classes) {
+        if (members.size() < 2) continue;
+        size_t anchor = members.front();
+        if (careGraph_) {
+            auto it = std::find_if(members.begin(), members.end(), [&](size_t i) {
+                return careGraph_->cares(allShared[i]);
+            });
+            if (it == members.end()) continue;
+            // Every star edge then passes the existing care-pair filter,
+            // including edges connecting otherwise uncared members.
+            anchor = *it;
+        }
+        const size_t firstResult = result.size();
+        bool missingExplanation = false;
+        for (size_t i : members) {
+            if (i == anchor) continue;
+            auto er = egraph_.explainEquality(interned[anchor], interned[i]);
+            if (!er.ok) {
+                missingExplanation = true;
                 continue;
-            if (egraph_.same(ti, tj)) {
-                auto er = egraph_.explainEquality(ti, tj);
-                if (er.ok) {
+            }
+            result.push_back({allShared[anchor], allShared[i], std::move(er.reasons)});
+        }
+        if (!missingExplanation) continue;
+
+        // An unavailable anchor explanation must not hide facts explainable
+        // between other members. Retain a basis of those proved edges too;
+        // never substitute an unexplained equality for a failed proof.
+        SharedEqualityBasis basis;
+        for (size_t i = firstResult; i < result.size(); ++i)
+            basis.insert(result[i].a, result[i].b);
+        for (size_t p = 0; p < members.size(); ++p) {
+            for (size_t q = p + 1; q < members.size(); ++q) {
+                const size_t i = members[p], j = members[q];
+                if (careGraph_ && !careGraph_->caresPair(allShared[i], allShared[j])) continue;
+                auto er = egraph_.explainEquality(interned[i], interned[j]);
+                if (er.ok && basis.insert(allShared[i], allShared[j]))
                     result.push_back({allShared[i], allShared[j], std::move(er.reasons)});
-                }
             }
         }
     }

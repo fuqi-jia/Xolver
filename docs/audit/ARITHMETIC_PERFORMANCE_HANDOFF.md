@@ -1,5 +1,30 @@
 # Arithmetic validation and continuation record
 
+## Development checkpoint: numeric UF model completion (2026-11-05)
+
+The unmerged `FULINA` branch follows
+[`465639b1`](https://github.com/fuqi-jia/Xolver/commit/465639b1cd2609b9b67a1f77be0ec4ed4925eb99),
+whose [branch CI](https://github.com/fuqi-jia/Xolver/actions/runs/41888071229)
+passes both jobs. Completed numeric equality classes now use the same value
+in scalar assignments and numeric UF table cells. Primary arithmetic witnesses,
+conflict guards, nonnumeric interpretations and array model handling are preserved.
+
+Panda9/ExperimentOS qualifies the ordinary GCC13 proof-enabled build with
+**2,091 unit cases / 1,324,718 assertions**. The added Int/Real alias regression
+fails against the frozen parent; all 15 independent public regressions pass.
+A same-host focused development round recovers **30 unknowns as 30 verified SAT
+results**, with no losses. Independent checkers replay the actual timed models;
+each solver receives 60 seconds, one physical CPU and 16 GiB.
+The new Xolver decisions total 491.526 seconds versus Z3's 1.108 seconds on that
+cohort, so arithmetic performance remains a substantial gap.
+
+Frozen CLI SHA-256:
+`8f1a2d294592551334f65275eb4f9ecd582bf343bed59050893d6fd891e8c0a7`.
+Full fixed160/development-corpus acceptance and original-C QCP verification remain
+in progress; no overall superiority is established. Both protection sets remain
+unused, and the cancelled extra server archive remains unnecessary.
+
+
 This is an operational handoff and an evidence index. Current capabilities and
 API contracts are described in [the architecture reference](../ARCHITECTURE.md),
 [application interfaces](../../src/applications/README.md) and
@@ -38,7 +63,14 @@ fix is retained under the user's explicit functionality-first instruction,
 including its known SAT59 timeout regression. No performance superiority is claimed.
 Older tables describe their own frozen versions and evidence boundaries.
 
-## Qualified PR94 candidate
+## Latest canonical delivery (PR94)
+
+[PR94](https://github.com/fuqi-jia/Xolver/pull/94) is merged as main
+`5dfaeadec1f00e34139b0ba5d558f34f506f06dd`. Both final
+[PR CI41439898323](https://github.com/fuqi-jia/Xolver/actions/runs/41439898323)
+and [post-merge main CI41443736430](https://github.com/fuqi-jia/Xolver/actions/runs/41443736430)
+pass build-test and proof-gate. The evidence-only final head `7b9a0f54`
+matches every qualified build-bearing file of implementation `029c9a56`.
 
 [PR94](https://github.com/fuqi-jia/Xolver/pull/94) implementation `029c9a56`
 passes ordinary Panda1/ExperimentOS CMake qualification:2015 unit cases /
@@ -76,17 +108,107 @@ R1873/R1879's11-input pilot stays4→4 verified, gains/loses none and slightly
 worsens PAR-2 (871.468→871.607s). Its fixed-suite performance experiment is
 closed; preserve the counterexample without repeating the trial.
 
-Fifteen independently verified Z3-only gaps remain in the R1882 evidence.
-One next investigation is the shared partial-linear model search: production
-NRA calls it, production NIA does not, and its integer completion rejects
-fractional LP points. Measure that path before choosing an implementation;
-do not repeat the closed affine-line or work-budget-only experiments. Standard
+Fifteen independently verified Z3-only gaps remain in the older R1882 evidence.
+The subsequent shared integer-completion investigation and its fresh evidence
+are recorded below; development NIA now calls the shared partial-linear search.
+Do not repeat the closed affine-line or work-budget-only experiments. Standard
 theory `unknown` is already ignored unless explicitly requesting Farkas-model
 recovery; there is no evidence for a general premature-unknown termination bug.
 Neither protected set has been used. Overall superiority and126/160 remain
-unproved; merging and post-merge main CI are separate delivery gates.
+unproved. Draco/MaxSMT work remains paused.
 
-## Latest canonical delivery
+## Shared affine integer completion on development (R1883–R1901)
+
+The shared partial-linear search rejected fractional LP vertices without
+completing the integer affine block. R1887 records the same `x0=C/2` after
+changing a different sampled coefficient from2 to1, even though an integer
+completion exists. A new shared `completeIntegerModel` uses scoped neighboring
+integer pins, bounded work and the caller's deadline. It emits no refutation;
+clients still validate every original obligation. NIA calls the existing shared
+partial-linear search before expensive bounded encoding. Real-domain behavior
+and existing LRA/LIA rollback policies are retained.
+
+R1888's isolated native binary `71e7e1b3` passes2019 cases/1314387 assertions;
+the new85-assertion regression fails on the old shared implementation and passes
+on the patch. R1891's five helper cases include cancellation, restored caller
+levels, strict bounds, mixed integer/real columns, negative rounding and budget
+exhaustion. R1889 checks eight generated inputs: main/integration-only/completion
+verify6/7/8, and all nine actual SAT models pass both frozen independent solvers.
+The16-parameter input changes from60s timeout to0.116s SAT; profiled nonlinear
+choices fall5297→17. These generated diagnostics earn no fixed160 credit.
+
+R1890/R1892's fresh20-input public pilot remains5→5 verified, with19 for Z3,
+no gains, losses, errors or opposite verdicts. PAR-2 is1888.703/1876.558/222.073s;
+the reduction is dominated by unchanged LRA131 and is not attributed to integer
+completion. Neither production root sources nor its archive were replaced.
+See [isolated capability and public-pilot evidence](INTEGER_MODEL_COMPLETION_STAGE_20261102.json).
+
+Committed development `2f529557` subsequently passes ordinary R1897 CMake
+qualification:2021 unit cases/1314414 assertions, seven CTests, Python smoke
+and19 original soundness/model checks. CLI `3c2315bc` and worker `90377fd9`
+bind all2125 build-bearing files. R1900 replays all780 ordered QCP queries
+against both audited backend streams; it earns zero new program/VC or
+end-to-end timing credit.
+
+Fresh R1899/R1901 fixed160 verifies **112 main/112 candidate**, gains48 and
+loses131, with no wrong verdict or model/protocol error. Verified PAR-2 is
+6192.627/6184.616s. R1910/R1912 supplements two original timed Z3 models, giving
+**118 verified Z3/125 raw**, PAR-2 5318.221s. Seven UNSATs12/24/27/42/50/80/114
+remain unconfirmed and excluded. The immutable original summary records116
+verified Z3 before that supplement; no original solve/model/time is replaced.
+The candidate has no solve-count improvement and is not promoted. R1902 finds
+only `lra.core` on48/131, with no new integer-completion call; this observation
+does not explain their differing search trajectories. The earlier main113 is
+from a different round and must not be substituted into this comparison.
+
+The private global LIA client is closed without installation. R1894 passes
+2021 units, but R1895's eight-input pilot stays5→5 verified and SAT11 slows
+6.385→16.265s. R1896 input1 records305 completion calls/1596 nodes, no accepted
+model and297 exhausted calls. R1898 binds the negative evidence. Do not retry
+this global Full-check attachment by changing its budget alone; retain the
+shared helper and its NIA client. R1893's pre-compilation script failure is
+preserved separately. Neither protected set has been used and no new PR exists.
+
+## Exact algebraic replay and closed linear initialization (R1904–R1915)
+
+The independent model checker now translates Z3 `root-obj` constants into
+polynomial witnesses with exact, uniquely isolating open intervals. A bounded
+Sturm construction selects the increasing one-based root; unsupported values
+are rejected. Original assertions and interpretations are retained, including
+when the polynomial's bound variable is named like an original symbol.
+Existing real polynomial logics are preserved: indiscriminately widening
+`QF_NRA` to `ALL` makes cvc5 time out on both actual models75/148, whereas
+preserving `QF_NRA` independently verifies both in about34ms. R1912 passes31
+Python tests and binds the rendered queries byte for byte to those positive
+checks. R1904's misplaced-exit preparation failure and R1905's inconclusive
+checks remain in the evidence.
+
+R1907 attributes substantial time to row propagation on48/131. The private
+demand-driven initialization prototype replaces eager endpoint copies and the
+initial deque with a local lazy overlay and virtual initial queue. R1911
+passes2021 units and10368 reference comparisons/272576 exactly ordered bounds,
+including scopes, basis changes and an8192-row tableau. Its21-input R1913 pilot
+still verifies5→5, gains SAT51 but loses SAT131, and gives PAR-2
+2010.879→1987.035s. The lost valid result is retained as a loss. The prototype
+is closed and its production patch removed; do not expand it to fixed160 or
+repeat this initialization-only change. This is a performance rejection, with
+no observed incorrect verdict. Root sources/archive stay at qualified2f529.
+
+R1914 also tests a separate theory lead on original NIA116:111 independent
+monomial columns, with and without111 guarded nonnegative-product facts.
+Both relaxations are SAT in both independent solvers. These are weakened
+diagnostic inputs, not original SAT results; simple monomial signs alone do
+not provide a sufficient refutation mechanism. Seek evidence for stronger
+multiplicative consequences before integrating another reasoner.
+
+See [the checked native audit and original-model bindings](MODEL_REPLAY_AND_CLOSED_LINEAR_STAGE_20261102.json).
+R1915 is successful with its PID gone; the immutable native summary has
+SHA-256 `2858ea607a783ceec97b52b34427a0cd7f8968eea060310b463a7b69dcd29095`.
+Overall SMT/QCP superiority and126/160 remain unproved. Draco/MaxSMT remain
+paused; the independent verification-data collection agent owns the new
+LiteOS/QCP-source workspace.
+
+## Previous canonical delivery (PR93)
 
 [PR93](https://github.com/fuqi-jia/Xolver/pull/93) is merged as main
 `c062a6fc`. PR CI and post-merge CI41371989502 both pass build-test and proof-gate. The fresh
@@ -5466,3 +5588,93 @@ about an earlier131 loss without changing any report, score or timing. See the
 Current-version original-C/Rocq QCP acceptance and PR/main CI remain pending.
 Neither protected set is used; no overall Z3 superiority is established, and
 the target remains at least126 verified results.
+
+
+### Required-fact model completion (2026-11-05)
+
+Candidate construction now shares polarity-aware required-fact extraction with
+unconditional constant propagation. It computes acyclic numeric definitions,
+projects their dependent coordinates, retains independent UF results, and uses
+required bounds for integer endpoints and exact rational interior points. Cyclic
+definitions remain searchable; full assertion and function-table checks remain.
+
+Panda9 / ExperimentOS qualification passed all 2,107 unit cases and 1,324,751
+assertions, including 38 targeted cases / 929 assertions. Six constructed
+witness regressions fail with the predecessor and pass with the new constructor.
+All 2,155 qualified source files match the frozen CLI
+`1b6d133e81e72dd7136119fbefa2150a5b7344afcf1a8c69319694c515279790`.
+
+A fresh 30-query diagnostic comparison independently accepted every actual
+timed model in both versions: 30 to 30 verified SAT, no gains or losses. Total
+solver time was 495.070 to 463.391 seconds; the same-round Z3 total was 1.107
+seconds. This narrow observed reduction does not establish an overall speed
+advantage. Repeated pre-solve candidate enumeration still dominates the
+representative trace, despite its newly recognized required definitions.
+
+Those candidate-construction comparisons finished at 109 to 108 verified on
+fixed160 and 576 to 576 on development587. The ongoing full14408 round uses an
+older candidate and cannot establish this version's coverage.
+No protected-set or original-C end-to-end verification result is claimed.
+
+
+### Validated numeric function model completion
+
+- Numeric UF table assembly now closes equal-argument result classes before
+  allocating fresh scalar values. Forced values propagate through nested
+  functions, using exact integer or rational arithmetic. Distinct fixed values
+  and conflicted source classes remain quarantined.
+- Each theory still supplies one model snapshot. A completion is adopted only
+  after positive validation against all original assertions and assumptions,
+  including reconstructed definitions. Rejected completions restore model
+  state and retain the existing quarantine path.
+- Proof-enabled Panda qualification passed all 2,112 unit tests and 1,324,809
+  assertions, including 13 targeted model and combination tests. Five new test
+  groups cover nested functions, free classes, exact rationals, fixed conflicts,
+  and rejection without rereading theory state.
+- A fresh six-query development comparison retained the same SAT verdicts and
+  increased verified models from zero to six. Both Z3 and CVC5 accepted every
+  actual timed candidate model; there were no losses, wrong results, or protocol
+  errors. This measures model coverage, not six newly discovered SAT verdicts.
+- Complete fresh comparisons against the immediately qualified parent verified
+  108 to 110 results on fixed160 (Z3: 115), and 576 to 582 on development587
+  (Z3: 580), with no losses. Each input used 60 seconds, one physical core and
+  16 GiB. The two fixed160 timing gains occurred in linear theories and are not
+  attributed to UF completion. These are separate fresh rounds; development587
+  is a selected analysis cohort and does not establish overall superiority.
+- Commit 1e5b0500 passed the complete GitHub CI run 41922130322, including the
+  build, regression and proof gates. Main promotion still requires PR CI.
+- Private queries, models, individual identifiers and evidence remain off GitHub.
+  Protected sets were not used. FULINA remains the development branch; main
+  promotion requires complete server acceptance and CI.
+
+
+### Independent integer residue certificates
+
+- `tools/proof/check_integer_residue_certificate.py` checks an input-bound
+  finite residue refutation. Every residue tuple must falsify an original
+  assertion. Unknown integer equalities remain unknown; unsupported syntax,
+  mismatched input digests and incomplete enumeration cannot verify a proof.
+- The checker supports integer polynomials, positive constant moduli, Boolean
+  combinations and parallel `let` bindings. It is an offline verifier and is
+  never called by the solver to obtain an answer. Run it with
+  `--input query.smt2 --certificate certificate.json --timeout 60`.
+- Four Python test groups and eight public reference fixtures were qualified
+  on Panda. Both references were attempted on complete formulas; a CVC5 timeout
+  is retained as unconfirmed. Each fixture has a correct independent decision,
+  no opposite decision, and accepted finite proof domains were checked by both.
+- One previously unconfirmed integer UNSAT now has an independently checked
+  certificate. An explicit supplement applies the same proof to both actual
+  UNSAT arms, taking fixed160 from 108/110 to 109/111 verified (Z3: 115).
+  Frozen comparison reports remain unchanged; no timeout or unknown is upgraded.
+- Private inputs, certificates and per-input evidence remain off GitHub. The
+  qualification chain uses Git, CI, source manifests and frozen binary hashes;
+  the cancelled `validation/current-main.json` archive is not a requirement.
+
+
+The residue checker now resolves numeral literals before looking up identifiers,
+so quoted numeric names cannot shadow constants. Query commands also enforce
+arity and ordering. A satisfiable quoted-name counterexample was added and
+accepted by Z3, CVC5 and both frozen Xolver versions with checked models. The
+repaired checker passed all four Python groups, nine reference fixtures and
+reverification of the private certificate. The verification supplement now
+binds this repaired checker; solver timing and frozen reports are unchanged.

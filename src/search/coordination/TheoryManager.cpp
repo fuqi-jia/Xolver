@@ -3,6 +3,7 @@
 #include "base/EnvParam.h"
 #include "search/coordination/TheoryAtomRegistry.h"
 #include "search/coordination/TheoryLemmaDatabase.h"
+#include "search/combination/SharedEqualityBasis.h"
 #include "contracts/DebugTrace.h"
 #include "algebra/linear/LinearExpr.h"
 #include "contracts/SatSolver.h"
@@ -628,17 +629,9 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
     }
 
     // 3. Collect theory-propagated shared equalities.
-    // ARRAY-INDEX scoping (read2 fix): an array-index pair's deduced equality
-    // (e.g. a computed store index = a read index) must reach the array's pending
-    // Row1/Row2. But an early-derivable deduced equality generated at STANDARD
-    // effort is dropped by cb_propagate AND cached (deducedEqCache_ + lemmaDb dedup),
-    // which permanently blocks its re-emission at FULL effort where propagation is
-    // sound. So DEFER array-index-pair deduced equalities to Full effort only — we
-    // skip them at Standard so they are neither cached nor lemmaDb-recorded, then
-    // emit cleanly at Full. Scoped to array-index pairs (which are few): propagating
-    // EVERY deduced equality at Full instead floods the SAT core (broad regressions
-    // + a new false-SAT, observed on the blanket attempt). Non-array pairs keep
-    // their exact existing behavior (no UFLIA/UFNIA change).
+    // Array index and value equalities retain Full-effort scheduling to stay
+    // synchronized with pending array axioms. Other proved shared equalities
+    // use the entailment channel during partial-assignment propagation.
     std::unordered_set<SharedTermId> arrayIdxSet;
     for (auto& s : solvers_) {
         auto v = s->arrayIndexSharedTerms();
@@ -655,9 +648,8 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
     for (size_t i = 0; i < solvers_.size(); ++i) {
         auto* solver = solvers_[i].get();
         if (!solver->supportsCombination()) continue;
-        // EUF equalities are obligations of congruence, datatype and array
-        // reasoning. Standard's return value is not installed by cb_propagate;
-        // don't record these clauses as emitted there and lose them forever.
+        // Keep EUF's existing Full-effort schedule for congruence, datatype,
+        // and array obligations.
         if (solver->id() == TheoryId::EUF && effort != TheoryEffort::Full) continue;
         auto props = solver->getDeducedSharedEqualities();
         // At Full effort, augment with bounded atom-level Gaussian implied
@@ -686,6 +678,7 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
                          (int)solver->id(), (int)effort, props.size(), arrayPair, deferred);
             std::fflush(stderr);
         }
+        SharedEqualityBasis equalityBasis;
         for (auto& prop : props) {
             // Defer array-index-pair deduced equalities to Full effort (see above).
             if (effort != TheoryEffort::Full &&
@@ -703,6 +696,12 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
                        << stName(sharedTermRegistry_, prop.b) << "\n";
                 continue;
             }
+            // A connected basis shares every proved equality transitively.
+            // Select it after scheduling/care filters, before creating SAT
+            // atoms: publishing a whole equality clique adds quadratic search
+            // state. Keep this local to the current producer/check so changed
+            // explanations after backtracking remain eligible for delivery.
+            if (!equalityBasis.insert(prop.a, prop.b)) continue;
             // EUF having merged a pair does not discharge the arithmetic
             // obligation: always publish the shared equality to the SAT core.
             SatLit eqLit = registry_->getOrCreateSharedEqualityAtom(prop.a, prop.b);
@@ -722,9 +721,8 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
                 NO_DBG << "  cached, skip\n";
                 continue;
             }
-            deducedEqCache_.insert(key);
-
             TheoryLemma lemma;
+            lemma.kind = LemmaKind::Entailment;
             for (auto& reason : prop.reasons) {
                 lemma.lits.push_back(reason.negated());
             }
@@ -733,18 +731,28 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
             ConflictMinimizer::dedup(lemma.lits);
             lemma.lits.push_back(eqLit);
             NO_DBG << "[NO-RET-8] lemma=" << debug::fmtClause(lemma.lits) << "\n";
-            if (lemmaDb.insertIfNew(lemma)) {
-                if (g_combDiag()) {
-                    ++g_cd.dedEqLemma;
-                    auto eufIt2 = solverByTheory_.find(TheoryId::EUF);
-                    if (eufIt2 != solverByTheory_.end() &&
-                        eufIt2->second->sharedTermsMerged(prop.a, prop.b))
-                        ++g_cd.dedEqEufMerged;
-                    else
-                        ++g_cd.dedEqAtomFresh;
-                }
-                return TheoryCheckResult::mkLemma(std::move(lemma));
+            if (lemmaDb.isInstalled(lemma)) {
+                deducedEqCache_.insert(key);
+                continue;
             }
+            // Generation is not installation. A consumer that has not yet
+            // installed a clause must still be able to receive it again.
+            (void)lemmaDb.insertIfNew(lemma);
+            if (config::read<config::ReadKind::Presence>("XOLVER_ENTAIL_DIAG")) {
+                std::fprintf(stderr, "[ENTAIL] shared effort=%d literals=%zu\n",
+                             static_cast<int>(effort), lemma.lits.size());
+                std::fflush(stderr);
+            }
+            if (g_combDiag()) {
+                ++g_cd.dedEqLemma;
+                auto eufIt2 = solverByTheory_.find(TheoryId::EUF);
+                if (eufIt2 != solverByTheory_.end() &&
+                    eufIt2->second->sharedTermsMerged(prop.a, prop.b))
+                    ++g_cd.dedEqEufMerged;
+                else
+                    ++g_cd.dedEqAtomFresh;
+            }
+            return TheoryCheckResult::mkLemma(std::move(lemma));
         }
     }
 
@@ -1114,79 +1122,124 @@ bool TheoryManager::hasCompleteSatCertificate(std::string* reason) const {
     return true;
 }
 
-std::optional<TheorySolver::TheoryModel> TheoryManager::getModel() const {
-    // First-registered solver wins per variable. Solvers are registered with
-    // the PRIMARY theory first (e.g. NIA before the LIA-linearization helper
-    // for QF_NIA), so the authoritative theory's validated witness is kept
-    // and helper solvers (whose models are linear-only / incomplete and can
-    // violate nonlinear constraints) only fill in variables the primary did
-    // not assign. Without this, the LIA mirror's linear-feasible point
-    // overrode NIA's witness, producing models that satisfy the linear part
-    // but not the nonlinear constraints (e.g. nia_089: sum=20 ok, product<100).
-    TheorySolver::TheoryModel aggregated;
-    // For array-combination logics (QF_ALIA/ALRA/AUFLIA/AUFLRA) the array
-    // theory (EUF) and the arithmetic theory each model the index/element
-    // scalars differently: EUF assigns opaque equality tokens ("@e..."), arith
-    // assigns concrete numbers. EUF's array interps reference those tokens, but
-    // the index/element scalar's TRUE value (subject to arith bounds like
-    // i > 1) lives in the arith model. We must reconcile: a token's numeric
-    // value is the arith value of any scalar EUF placed in that token's class.
-    // Collect the arith numeric assignments separately so we can rewrite the
-    // EUF tokens to those numbers before aggregating. Without this, dumping an
-    // EUF opaque token as a freshly-minted number can violate an arith bound
-    // (unsound printed model) while the validator sees Indeterminate and lets
-    // it through.
-    std::unordered_map<std::string, std::string> arithNum;  // var -> numeric str
-    for (const auto& solver : solvers_) {
-        auto m = solver->getModelWithInternal();
-        if (!m) continue;
-        if (solver->id() == TheoryId::EUF) continue;  // tokens, not numbers
-        for (const auto& [name, value] : m->assignments) {
-            if (value == "true" || value == "false") continue;
-            if (value.empty() || value[0] == '@') continue;  // not a number
-            arithNum.emplace(name, value);  // first arith wins
+
+namespace {
+// Closing a concrete argument equality may identify previously free numeric
+// result classes. Propagate those identities before assigning fresh values.
+// This proposes a witness, never an entailment: the caller must validate the
+// completed interpretation against every original assertion.
+std::optional<bool> completeNumericFunctionClasses(
+    TheoryModel& model, const std::unordered_map<std::string, std::string>& anchors) {
+    std::unordered_map<std::string, std::string> aliases;
+    auto numeric = [](const std::string& sort) { return sort == "Int" || sort == "Real"; };
+    auto freeClass = [&](const std::string& value) {
+        const auto anchor = anchors.find(value);
+        return value.rfind("@e", 0) == 0 &&
+            (anchor == anchors.end() || anchor->second != "@CONFLICT");
+    };
+    auto resolve = [&](std::string value) {
+        std::vector<std::string> path;
+        while (aliases.count(value)) {
+            path.push_back(value);
+            value = aliases.at(value);
+        }
+        for (const auto& token : path) aliases[token] = value;
+        return value;
+    };
+    auto canonical = [&](std::string& value, const std::string& sort) {
+        if (!numeric(sort) || (!value.empty() && value[0] == '@')) return true;
+        try {
+            mpq_class q(value);
+            if (q.get_den() == 0) return false;
+            q.canonicalize();
+            if (sort == "Int" && q.get_den() != 1) return false;
+            value = q.get_str();
+            return true;
+        } catch (...) { return false; }
+    };
+    for (auto& [name, function] : model.functionInterps) {
+        (void)name;
+        for (auto& entry : function.entries) {
+            if (entry.args.size() != function.argSorts.size()) return std::nullopt;
+            for (size_t i = 0; i < entry.args.size(); ++i)
+                if (!canonical(entry.args[i], function.argSorts[i])) return std::nullopt;
+            if (!canonical(entry.value, function.retSort)) return std::nullopt;
         }
     }
-
-    for (const auto& solver : solvers_) {
-        auto m = solver->getModelWithInternal();
-        if (m) {
-            for (const auto& [name, value] : m->assignments) {
-                aggregated.assignments.insert({name, value});  // first wins
+    bool changed = false;
+    bool progress;
+    do {
+        progress = false;
+        for (const auto& [name, function] : model.functionInterps) {
+            (void)name;
+            if (!numeric(function.retSort)) continue;
+            std::map<std::vector<std::string>, std::string> outputs;
+            for (const auto& entry : function.entries) {
+                auto args = entry.args;
+                for (size_t i = 0; i < args.size(); ++i)
+                    if (numeric(function.argSorts[i])) args[i] = resolve(args[i]);
+                const auto value = resolve(entry.value);
+                const auto [it, inserted] = outputs.emplace(std::move(args), value);
+                if (inserted) continue;
+                auto previous = resolve(it->second);
+                auto current = resolve(value);
+                if (previous == current) continue;
+                const bool previousFree = freeClass(previous), currentFree = freeClass(current);
+                // Distinct fixed witnesses, including a conflicted source
+                // class, must not be repaired by picking either value.
+                if (!previousFree && !currentFree) return std::nullopt;
+                if (!previousFree || (currentFree && previous < current))
+                    std::swap(previous, current);
+                aliases[previous] = current;
+                progress = changed = true;
             }
-            for (const auto& [name, value] : m->numericAssignments) {
-                aggregated.numericAssignments.insert({name, value});  // first wins
-            }
-            for (const auto& [name, interp] : m->functionInterps) {
-                aggregated.functionInterps.insert({name, interp});  // first wins
-            }
-            for (const auto& [name, interp] : m->arrayInterps) {
-                aggregated.arrayInterps.insert({name, interp});  // first wins
-            }
-            for (const auto& [value, interp] : m->arrayValues)
-                aggregated.arrayValues.insert({value, interp});
         }
+    } while (progress); // Every merge removes one free class; no search cap.
+    if (!changed) return false;
+    auto complete = [&](std::string& value, const std::string& sort, bool tagged) {
+        if (!numeric(sort)) return;
+        const auto original = value;
+        value = resolve(value);
+        if (tagged && value != original && !value.empty() && value[0] != '@')
+            value = "#n:" + value;
+    };
+    for (auto& [name, function] : model.functionInterps) {
+        (void)name;
+        for (auto& entry : function.entries) {
+            for (size_t i = 0; i < entry.args.size(); ++i)
+                complete(entry.args[i], function.argSorts[i], false);
+            complete(entry.value, function.retSort, false);
+        }
+        complete(function.deflt, function.retSort, false);
     }
-
-    // Build token -> "#n:<rational>" using each scalar that has BOTH an EUF
-    // token and an arith numeric value. (Numeric tokens "#n:.." already carry
-    // their value and need no remap.)
-    std::unordered_map<std::string, std::string> tokenToNum;
-    for (const auto& [name, tok] : aggregated.assignments) {
-        if (tok.empty() || tok[0] != '@') continue;     // only opaque tokens
-        auto it = arithNum.find(name);
-        if (it == arithNum.end()) continue;
-        std::string canon;
-        try { canon = "#n:" + mpq_class(it->second).get_str(); } catch (...) { continue; }
-        // If a token already maps to a DIFFERENT number, the model is
-        // internally inconsistent (two arith values in one EUF class). Leave
-        // it opaque so the validator/gate can catch the violation rather than
-        // silently picking one — soundness over a guessed model.
-        auto e = tokenToNum.find(tok);
-        if (e != tokenToNum.end()) { if (e->second != canon) e->second = "@CONFLICT"; }
-        else tokenToNum.emplace(tok, canon);
+    for (auto& [name, value] : model.assignments) {
+        const auto completed = resolve(value);
+        if (completed == value) continue;
+        if (!completed.empty() && completed[0] == '@') { value = completed; continue; }
+        try {
+            const auto number = RealValue::fromMpq(mpq_class(completed));
+            const auto typed = model.numericAssignments.find(name);
+            if (typed != model.numericAssignments.end() && typed->second != number)
+                return std::nullopt;
+            model.numericAssignments.insert_or_assign(name, number);
+            value = "#n:" + completed;
+        } catch (...) { return std::nullopt; }
     }
+    auto completeArray = [&](auto& array) {
+        complete(array.defaultVal, array.elemSort, true);
+        for (auto& [index, value] : array.entries) {
+            complete(index, array.indexSort, true);
+            complete(value, array.elemSort, true);
+        }
+    };
+    for (auto& [name, array] : model.arrayInterps) { (void)name; completeArray(array); }
+    for (auto& [name, array] : model.arrayValues) { (void)name; completeArray(array); }
+    return true;
+}
 
+std::optional<TheoryModel> assembleModel(
+    TheoryModel aggregated, const std::unordered_map<std::string, std::string>& tokenToNum,
+    const SharedTermRegistry* sharedTermRegistry, bool completeCongruence, bool& changed) {
     // Separate e-classes do not assert disequality. Different classes may
     // legitimately receive the same arithmetic value. Discarding those values
     // loses constrained witnesses (including UF results) and later invents
@@ -1227,14 +1280,22 @@ std::optional<TheorySolver::TheoryModel> TheoryManager::getModel() const {
             else if (v == "#b:1") v = "1";
             else if (v == "#b:0") v = "0";
         };
-        std::vector<std::string> dropFns;
         const bool diagFi = xolver::config::read<xolver::config::ReadKind::Presence>("XOLVER_DIAG_FI");
-        for (auto& [fname, fi] : aggregated.functionInterps) {
-            for (auto& e : fi.entries) {
-                for (auto& a : e.args) toBare(a);
-                toBare(e.value);
+        for (auto& [name, fi] : aggregated.functionInterps) {
+            (void)name;
+            for (auto& entry : fi.entries) {
+                for (auto& arg : entry.args) toBare(arg);
+                toBare(entry.value);
             }
             toBare(fi.deflt);
+        }
+        if (completeCongruence) {
+            const auto completion = completeNumericFunctionClasses(aggregated, tokenToNum);
+            if (!completion) return std::nullopt;
+            changed = *completion;
+        }
+        std::vector<std::string> dropFns;
+        for (auto& [fname, fi] : aggregated.functionInterps) {
             // Soundness backstop: if after the remap two entries share an identical
             // argument tuple but disagree on the value, the table is not a function
             // (distinct EUF classes collapsed onto one arith number despite the
@@ -1284,12 +1345,12 @@ std::optional<TheorySolver::TheoryModel> TheoryManager::getModel() const {
     //
     // integration): a RECOVERY change validated against A5's strict-validation
     // build. Flag OFF => getModel byte-identical to before.
-    if (sharedTermRegistry_) {
-        const NativeTerms* ir = sharedTermRegistry_->nativeTerms();
+    if (sharedTermRegistry) {
+        const NativeTerms* ir = sharedTermRegistry->nativeTerms();
         std::unordered_map<std::string, bool> numericScalar;
         if (ir) {
-            for (SharedTermId st : sharedTermRegistry_->allSharedTerms()) {
-                const auto* s = sharedTermRegistry_->get(st);
+            for (SharedTermId st : sharedTermRegistry->allSharedTerms()) {
+                const auto* s = sharedTermRegistry->get(st);
                 if (!s || s->name.empty()) continue;
                 auto sk = ir->sortKind(s->sort);
                 if (sk && (*sk == SortKind::Int || *sk == SortKind::Real))
@@ -1316,6 +1377,21 @@ std::optional<TheorySolver::TheoryModel> TheoryManager::getModel() const {
         for (auto& [n, ai] : aggregated.arrayInterps) {
             (void)n; noteNum(ai.defaultVal);
             for (auto& [ix, el] : ai.entries) { noteNum(ix); noteNum(el); }
+        }
+        for (const auto& [handle, ai] : aggregated.arrayValues) {
+            (void)handle; noteNum(ai.defaultVal);
+            for (const auto& [ix, el] : ai.entries) { noteNum(ix); noteNum(el); }
+        }
+        for (const auto& [name, fi] : aggregated.functionInterps) {
+            (void)name; noteNum(fi.deflt);
+            for (const auto& entry : fi.entries) {
+                for (const auto& arg : entry.args) noteNum(arg);
+                noteNum(entry.value);
+            }
+        }
+        for (const auto& [name, value] : aggregated.numericAssignments) {
+            (void)name;
+            if (auto q = value.tryAsRational()) noteNum(q->get_str());
         }
 
         long long nextFree = 0;
@@ -1351,6 +1427,30 @@ std::optional<TheorySolver::TheoryModel> TheoryManager::getModel() const {
                     name, RealValue::fromMpq(mpq_class(num.substr(3))));
             } catch (...) {}
         }
+
+        // A completed numeric class denotes one value in scalar assignments
+        // and function tables. Table normalization above precedes completion,
+        // so newly allocated values must also reach numeric argument/result
+        // cells. Array handles and nonnumeric domains retain their own models.
+        auto completeCell = [&](std::string& value) {
+            const auto found = mint.find(value);
+            if (found == mint.end()) return;
+            const auto original = tokenToNum.find(value);
+            if (original != tokenToNum.end() && original->second == "@CONFLICT") return;
+            value = found->second.substr(3);
+        };
+        auto numericSort = [](const std::string& sort) {
+            return sort == "Int" || sort == "Real";
+        };
+        for (auto& [name, function] : aggregated.functionInterps) {
+            (void)name;
+            for (auto& entry : function.entries) {
+                for (size_t i = 0; i < entry.args.size() && i < function.argSorts.size(); ++i)
+                    if (numericSort(function.argSorts[i])) completeCell(entry.args[i]);
+                if (numericSort(function.retSort)) completeCell(entry.value);
+            }
+            if (numericSort(function.retSort)) completeCell(function.deflt);
+        }
     }
 
     if (aggregated.assignments.empty() && aggregated.numericAssignments.empty() &&
@@ -1358,6 +1458,98 @@ std::optional<TheorySolver::TheoryModel> TheoryManager::getModel() const {
         aggregated.arrayValues.empty())
         return std::nullopt;
     return aggregated;
+}
+} // namespace
+
+std::optional<TheorySolver::TheoryModel> TheoryManager::getModel(const ModelValidator& validate) const {
+    // First-registered solver wins per variable. Solvers are registered with
+    // the PRIMARY theory first (e.g. NIA before the LIA-linearization helper
+    // for QF_NIA), so the authoritative theory's validated witness is kept
+    // and helper solvers (whose models are linear-only / incomplete and can
+    // violate nonlinear constraints) only fill in variables the primary did
+    // not assign. Without this, the LIA mirror's linear-feasible point
+    // overrode NIA's witness, producing models that satisfy the linear part
+    // but not the nonlinear constraints (e.g. nia_089: sum=20 ok, product<100).
+    TheorySolver::TheoryModel aggregated;
+    // For array-combination logics (QF_ALIA/ALRA/AUFLIA/AUFLRA) the array
+    // theory (EUF) and the arithmetic theory each model the index/element
+    // scalars differently: EUF assigns opaque equality tokens ("@e..."), arith
+    // assigns concrete numbers. EUF's array interps reference those tokens, but
+    // the index/element scalar's TRUE value (subject to arith bounds like
+    // i > 1) lives in the arith model. We must reconcile: a token's numeric
+    // value is the arith value of any scalar EUF placed in that token's class.
+    // Collect the arith numeric assignments separately so we can rewrite the
+    // EUF tokens to those numbers before aggregating. Without this, dumping an
+    // EUF opaque token as a freshly-minted number can violate an arith bound
+    // (unsound printed model) while the validator sees Indeterminate and lets
+    // it through.
+    std::vector<std::pair<TheoryId, TheorySolver::TheoryModel>> models;
+    models.reserve(solvers_.size());
+    for (const auto& solver : solvers_) {
+        auto m = solver->getModelWithInternal();
+        if (m) models.emplace_back(solver->id(), std::move(*m));
+    }
+    std::unordered_map<std::string, std::string> arithNum;  // var -> numeric str
+    std::unordered_map<std::string, std::string> eufTokens; // var -> class token
+    for (const auto& [theory, model] : models) {
+        if (theory == TheoryId::EUF) {
+            eufTokens.insert(model.assignments.begin(), model.assignments.end());
+            continue;
+        }
+        for (const auto& [name, value] : model.assignments) {
+            if (value == "true" || value == "false") continue;
+            if (value.empty() || value[0] == '@') continue;  // not a number
+            arithNum.emplace(name, value);  // first arith wins
+        }
+    }
+
+    for (const auto& [theory, model] : models) {
+        (void)theory;
+        for (const auto& [name, value] : model.assignments) {
+            aggregated.assignments.insert({name, value});  // first wins
+        }
+        for (const auto& [name, value] : model.numericAssignments) {
+            aggregated.numericAssignments.insert({name, value});  // first wins
+        }
+        for (const auto& [name, interp] : model.functionInterps) {
+            aggregated.functionInterps.insert({name, interp});  // first wins
+        }
+        for (const auto& [name, interp] : model.arrayInterps) {
+            aggregated.arrayInterps.insert({name, interp});  // first wins
+        }
+        for (const auto& [value, interp] : model.arrayValues)
+            aggregated.arrayValues.insert({value, interp});
+    }
+
+    // Build token -> "#n:<rational>" using each scalar that has BOTH an EUF
+    // token and an arith numeric value. (Numeric tokens "#n:.." already carry
+    // their value and need no remap.)
+    std::unordered_map<std::string, std::string> tokenToNum;
+    // First-wins aggregation preserves the primary numeric witness and can
+    // hide EUF's assignment for the same name. Keep that source correspondence
+    // separately so tables and arrays use the same values as their arguments.
+    for (const auto& [name, tok] : eufTokens) {
+        if (tok.empty() || tok[0] != '@') continue;     // only opaque tokens
+        auto it = arithNum.find(name);
+        if (it == arithNum.end()) continue;
+        std::string canon;
+        try { canon = "#n:" + mpq_class(it->second).get_str(); } catch (...) { continue; }
+        // If a token already maps to a DIFFERENT number, the model is
+        // internally inconsistent (two arith values in one EUF class). Leave
+        // it opaque so the validator/gate can catch the violation rather than
+        // silently picking one — soundness over a guessed model.
+        auto e = tokenToNum.find(tok);
+        if (e != tokenToNum.end()) { if (e->second != canon) e->second = "@CONFLICT"; }
+        else tokenToNum.emplace(tok, canon);
+    }
+
+    if (validate && !aggregated.functionInterps.empty()) {
+        bool changed = false;
+        auto candidate = assembleModel(aggregated, tokenToNum, sharedTermRegistry_, true, changed);
+        if (candidate && changed && validate(*candidate)) return candidate;
+    }
+    bool changed = false;
+    return assembleModel(std::move(aggregated), tokenToNum, sharedTermRegistry_, false, changed);
 }
 
 } // namespace xolver

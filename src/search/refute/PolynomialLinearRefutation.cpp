@@ -115,7 +115,40 @@ std::optional<std::vector<SatLit>> PolynomialLinearRefuter::check(
             }
             auto found = rows_.find(constraint.reason.var);
             int row;
-            if (found != rows_.end() &&
+            auto rel = constraint.rel;
+            mpq_class endpoint = 0;
+            const auto& polynomialTerms = constraint.poly.terms();
+            const bool unary = (polynomialTerms.size() == 1 && !polynomialTerms.front().first.empty()) ||
+                (polynomialTerms.size() == 2 && polynomialTerms.front().first.empty());
+            if (unary) {
+                const auto& [monomial, coefficient] = polynomialTerms.back();
+                const mpq_class constant = polynomialTerms.front().first.empty()
+                    ? polynomialTerms.front().second : mpq_class(0);
+                tick(1 + monomial.size() + mpz_sizeinbase(coefficient.get_num_mpz_t(), 2) +
+                     mpz_sizeinbase(coefficient.get_den_mpz_t(), 2) +
+                     mpz_sizeinbase(constant.get_num_mpz_t(), 2) +
+                     mpz_sizeinbase(constant.get_den_mpz_t(), 2));
+                auto variable = variables_.find(monomial);
+                if (variable == variables_.end())
+                    variable = variables_.emplace(monomial,
+                        simplex_.addVar("m" + std::to_string(variables_.size()))).first;
+                row = variable->second;
+                endpoint = -constant / coefficient;
+                if (coefficient < 0) {
+                    switch (rel) {
+                        case Relation::Geq: rel = Relation::Leq; break;
+                        case Relation::Gt: rel = Relation::Lt; break;
+                        case Relation::Leq: rel = Relation::Geq; break;
+                        case Relation::Lt: rel = Relation::Gt; break;
+                        default: break;
+                    }
+                }
+                // A bound on one canonical monomial needs no defining slack
+                // row. All signed sources still receive independent labels.
+                if (found != rows_.end() && found->second.polynomial.terms() == polynomialTerms)
+                    ++stats.reusedRows;
+                else rows_.insert_or_assign(constraint.reason.var, Row{constraint.poly, row});
+            } else if (found != rows_.end() &&
                 found->second.polynomial.terms() == constraint.poly.terms()) {
                 row = found->second.variable;
                 ++stats.reusedRows;
@@ -147,13 +180,12 @@ std::optional<std::vector<SatLit>> PolynomialLinearRefuter::check(
             ++stats.constraints;
             activeReasons.insert(reasonKey(constraint.reason));
             const auto internal = label(row, {constraint.reason});
-            const auto rel = constraint.rel;
             if (rel == Relation::Eq || rel == Relation::Geq || rel == Relation::Gt)
                 bounds.push_back({row, true, BoundInfo(
-                    BoundValue(DeltaRational(0, rel == Relation::Gt ? 1 : 0)), internal)});
+                    BoundValue(DeltaRational(endpoint, rel == Relation::Gt ? 1 : 0)), internal)});
             if (rel == Relation::Eq || rel == Relation::Leq || rel == Relation::Lt)
                 bounds.push_back({row, false, BoundInfo(
-                    BoundValue(DeltaRational(0, rel == Relation::Lt ? -1 : 0)), internal)});
+                    BoundValue(DeltaRational(endpoint, rel == Relation::Lt ? -1 : 0)), internal)});
         }
         auto updateStats = [&] {
             stats.variables = variables_.size();
@@ -268,6 +300,64 @@ std::optional<std::vector<SatLit>> PolynomialLinearRefuter::check(
         }
     } catch (const ResourceExhausted&) {
         stats.exhausted = true;
+    }
+    return std::nullopt;
+}
+
+std::optional<std::vector<SatLit>> refuteByPolynomialConsequences(
+    PolynomialLinearRefuter& refuter, const std::vector<SignRefuteConstraint>& sources,
+    const std::vector<PolynomialConsequence>& consequences,
+    std::chrono::steady_clock::time_point deadline, PolynomialLinearStatistics* statistics) {
+    if (statistics) *statistics = {};
+    try {
+        WorkBudget work(100000);
+        auto tick = [&](size_t amount = 1) {
+            work.tick(amount);
+            if (std::chrono::steady_clock::now() >= deadline)
+                throw ResourceExhausted("polynomial consequence allocation exhausted");
+        };
+        auto key = [](SatLit literal) { return (uint64_t(literal.var) << 1) | literal.sign; };
+        std::unordered_set<uint64_t> active;
+        std::vector<SignRefuteConstraint> combined;
+        SatVar largest = 0;
+        for (const auto& source : sources) {
+            tick(1 + source.poly.terms().size());
+            active.insert(key(source.reason));
+            largest = std::max(largest, source.reason.var);
+            combined.push_back(source);
+        }
+        std::unordered_map<SatVar, const std::vector<SatLit>*> explanations;
+        for (const auto& consequence : consequences) {
+            tick();
+            bool supported = true;
+            for (auto premise : consequence.premises) {
+                tick();
+                supported &= active.contains(key(premise));
+            }
+            if (!supported || largest == std::numeric_limits<SatVar>::max()) continue;
+            tick(consequence.poly.terms().size());
+            const auto label = SatLit::positive(++largest);
+            explanations.emplace(label.var, &consequence.premises);
+            combined.push_back({consequence.poly, consequence.rel, label});
+        }
+        auto conflict = refuter.check(combined, deadline, statistics);
+        if (!conflict) return std::nullopt;
+        std::vector<SatLit> lifted;
+        auto append = [&](SatLit premise) {
+            if (!active.contains(key(premise))) return false;
+            if (std::find(lifted.begin(), lifted.end(), premise) == lifted.end()) lifted.push_back(premise);
+            return true;
+        };
+        for (auto premise : *conflict) {
+            tick();
+            if (const auto found = explanations.find(premise.var); found != explanations.end()) {
+                if (!premise.sign) return std::nullopt;
+                for (auto source : *found->second) if (!append(source)) return std::nullopt;
+            } else if (!append(premise)) return std::nullopt;
+        }
+        if (!lifted.empty()) return lifted;
+    } catch (const ResourceExhausted&) {
+        if (statistics) statistics->exhausted = true;
     }
     return std::nullopt;
 }

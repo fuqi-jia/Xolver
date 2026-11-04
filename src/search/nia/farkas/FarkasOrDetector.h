@@ -42,10 +42,8 @@ private:
 
     // Classify a single Farkas branch inside an Or. `resolve` maps a
     // boolpur/Tseitin proxy Variable to its defining ExprId (identity for
-    // non-proxies); it is applied recursively to every conjunct so a doubly-
-    // purified branch `(and proxy_a proxy_b ...)` is classified by the real
-    // atoms the proxies stand for — otherwise every conjunct is unclassified
-    // and the whole Or-block is wrongly rejected (Stroeder loop3 / NO_23).
+    // non-proxies). Shared conjunctions are expanded iteratively; cyclic
+    // equivalences remain unclassified constraints.
     FarkasBranch classifyAnd(
         ExprId andId,
         const std::function<ExprId(ExprId)>& resolve = [](ExprId e) { return e; }) const;

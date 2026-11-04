@@ -97,18 +97,24 @@ private:
         // the variable assignment, on accept.
         bool isApp = false;
         std::string funcName;
-        // Value forced by a top-level equality (= f(consts) c) — the base-case
-        // axioms (pow2(0)=1 ...). Pinned slots seed the DERIVATION of symbolic
-        // apps (pow2(k) with k=1 matches pow2(1) by functional consistency).
-        // This is the cvc5/z3 model-construction idea (assignFunctionDefault /
-        // func_interp): a UF app whose evaluated args match a known app takes
-        // that value; otherwise it keeps a default. See deriveAppValues.
+        // Value forced by an unconditional equality to a numeric literal.
+        // Applications whose evaluated argument tuples match this point take
+        // its value. Other tuples remain free. See deriveAppValues.
         std::optional<mpq_class> pinnedValue;
     };
 
     void collectFreeVariables();
-    // Pin UF-app slots whose value a top-level equality forces to a constant.
+    // Pin UF-app slots whose value a required equality forces to a constant.
     void pinForcedAppSlots();
+    // Compile unconditional numeric definitions into dependency order. Cycles
+    // keep their enumerated values; every completed point is still validated.
+    void collectDefinitions();
+    void completeDefinedValues(std::unordered_map<std::string, mpq_class>& full) const;
+    struct Definition {
+        size_t variable;
+        ExprId value;
+    };
+    std::vector<Definition> definitions_;
     // cvc5/z3-style model construction: DERIVE each UF-app slot's value from the
     // arith assignment (pinned base cases + functional consistency) instead of
     // ENUMERATING it. Mutates `full`. Sound: re-validated by evaluateAssertions.

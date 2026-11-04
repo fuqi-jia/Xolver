@@ -7,6 +7,34 @@
 
 using namespace xolver;
 
+TEST_CASE("Boolean refutation: inherited caller cancellation precedes private search") {
+    auto sat = createSatSolver();
+    const auto a = sat->newVar();
+    sat->addClause({SatLit::positive(a)});
+    BooleanRefutationLimits limits;
+    limits.deadline = std::chrono::steady_clock::now() + std::chrono::hours(1);
+    size_t selected = 0, queried = 0;
+    wall::endSolve();
+    {
+        const auto expired = std::chrono::steady_clock::now() - std::chrono::seconds(1);
+        wall::DeadlineScope caller(expired);
+        const auto result = refuteBooleanTheory(*sat, [&](const SatSolver&) {
+            ++selected;
+            return std::vector<SatLit>{SatLit::positive(a)};
+        }, [&](std::span<const SatLit>) -> std::optional<std::vector<SatLit>> {
+            ++queried;
+            return std::vector<SatLit>{SatLit::positive(a)};
+        }, limits);
+        CHECK(result.exhausted);
+        CHECK_FALSE(result.refuted);
+        CHECK(result.assignments == 0);
+        CHECK(selected == 0);
+        CHECK(queried == 0);
+        CHECK(wall::deadline() == expired);
+    }
+    CHECK_FALSE(wall::hasDeadline());
+}
+
 TEST_CASE("Boolean refutation: explained alternatives close the abstraction") {
     auto sat = createSatSolver();
     const auto a = sat->newVar(), b = sat->newVar();
@@ -30,15 +58,38 @@ TEST_CASE("Boolean refutation: open and invalid explanations cannot prove UNSAT"
         const auto a = sat->newVar();
         sat->addClause({SatLit::positive(a)});
         BooleanRefutationLimits limits;
+        size_t published = 0;
         auto result = refuteBooleanTheory(*sat, [=](const SatSolver&) {
             return std::vector<SatLit>{SatLit::positive(a)};
         }, [=](std::span<const SatLit>) -> std::optional<std::vector<SatLit>> {
             if (invalid) return std::vector<SatLit>{SatLit::negative(a)};
             return std::nullopt;
-        }, limits);
+        }, limits, [&](std::span<const SatLit>) { ++published; });
         CHECK_FALSE(result.refuted);
         CHECK(result.conflicts == 0);
+        CHECK(published == 0);
     }
+}
+
+TEST_CASE("Boolean refutation: partial conflicts survive an exhausted search") {
+    auto sat = createSatSolver();
+    const auto a = sat->newVar(), b = sat->newVar();
+    sat->addClause({SatLit::positive(a), SatLit::positive(b)});
+    BooleanRefutationLimits limits;
+    limits.assignments = 1;
+    std::vector<std::vector<SatLit>> learned;
+    const auto result = refuteBooleanTheory(*sat, [=](const SatSolver& model) {
+        return std::vector<SatLit>{{a, model.value(a)}, {b, model.value(b)}};
+    }, [](std::span<const SatLit> assignment) -> std::optional<std::vector<SatLit>> {
+        for (auto literal : assignment) if (literal.sign) return std::vector<SatLit>{literal};
+        return std::nullopt;
+    }, limits, [&](std::span<const SatLit> clause) { learned.emplace_back(clause.begin(), clause.end()); });
+    CHECK_FALSE(result.refuted);
+    CHECK(result.exhausted);
+    REQUIRE(learned.size() == 1);
+    REQUIRE(learned.front().size() == 1);
+    CHECK_FALSE(learned.front().front().sign);
+    CHECK(sat->solve() == SatSolver::SolveResult::Sat);
 }
 
 TEST_CASE("Polynomial refutation: Boolean alternatives share real and integer explanations") {
@@ -64,6 +115,21 @@ TEST_CASE("Polynomial refutation: Boolean alternatives share real and integer ex
         CHECK(refutePolynomialBoolean(terms, {positiveX, positiveY, impossible}, limits, &stats));
         CHECK(stats.boolean.conflicts == 2);
         CHECK_FALSE(refutePolynomialBoolean(terms, {positiveX, positiveY, feasible}, limits));
+        limits.assignments = 1;
+        std::vector<PolynomialTheoryClause> learned;
+        CHECK_FALSE(refutePolynomialBoolean(terms, {positiveX, positiveY, impossible}, limits, &stats,
+            [&](const PolynomialTheoryClause& clause) { learned.push_back(clause); }));
+        REQUIRE(learned.size() == 1);
+        for (int vx : {-1, 0, 1}) for (int vy : {-1, 0, 1}) {
+            bool valid = false;
+            for (const auto& [expression, sign] : learned.front()) {
+                REQUIRE((expression == positiveX || expression == positiveY || expression == equal || expression == negative));
+                const bool value = expression == positiveX ? vx > 0 : expression == positiveY ? vy > 0 :
+                    expression == equal ? vx * vy == 0 : vx * vy < 0;
+                valid |= value == sign;
+            }
+            CHECK(valid);
+        }
         limits.deadline = std::chrono::steady_clock::now();
         CHECK_FALSE(refutePolynomialBoolean(terms, {positiveX, positiveY, impossible}, limits));
     }
@@ -89,6 +155,75 @@ TEST_CASE("Polynomial refutation: unsupported products remain open and Boolean e
     auto truth = terms.add(TermExpr{Kind::ConstBool, 1, {}, Payload(true)});
     auto equivalence = terms.add(TermExpr{Kind::Eq, 1, {positive, truth}, {}});
     CHECK(refutePolynomialBoolean(terms, {negative, equivalence}, limits));
+}
+
+TEST_CASE("Polynomial refutation: inferred integer endpoints respect native variable sorts") {
+    for (unsigned integerMask : {0u, 1u, 4u, 7u}) {
+        CAPTURE(integerMask);
+        NativeTerms terms;
+        terms.registerSort(0, SortKind::Int);
+        terms.registerSort(1, SortKind::Real);
+        terms.registerSort(2, SortKind::Bool);
+        terms.setBoolSortId(2);
+        const SortId arithmeticSort = integerMask == 7 ? 0 : 1;
+        auto op = [&](Kind kind, std::initializer_list<ExprId> children, SortId sort) {
+            TermExpr node{kind, sort, {}, {}};
+            for (auto child : children) node.children.push_back(child);
+            return terms.add(std::move(node));
+        };
+        auto variable = [&](const char* name, unsigned bit) {
+            const SortId sort = integerMask & bit ? 0 : 1;
+            const auto value = terms.add({Kind::Variable, sort, {}, Payload(std::string(name))});
+            return sort == arithmeticSort ? value : op(Kind::ToReal, {value}, arithmeticSort);
+        };
+        const auto x = variable("x", 1), y = variable("y", 2), z = variable("z", 4);
+        const auto zero = terms.add({Kind::ConstInt, arithmeticSort, {}, Payload(int64_t(0))});
+        const auto one = terms.add({Kind::ConstInt, arithmeticSort, {}, Payload(int64_t(1))});
+        const auto product = op(Kind::Mul, {x, y}, arithmeticSort);
+        const auto target = op(Kind::Add,
+            {op(Kind::Sub, {product, y}, arithmeticSort), one}, arithmeticSort);
+        const std::vector<ExprId> roots{
+            op(Kind::Geq, {x, zero}, 2), op(Kind::Geq, {z, zero}, 2),
+            op(Kind::Geq, {op(Kind::Mul, {x, z}, arithmeticSort), one}, 2),
+            op(Kind::Geq, {y, one}, 2), op(Kind::Leq, {target, zero}, 2)};
+        BooleanRefutationLimits limits;
+        limits.deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+        CHECK(refutePolynomialBoolean(terms, roots, limits) == bool(integerMask & 1));
+        // With real x, x=1/2,y=z=2 remains a witness even when z is Int.
+    }
+}
+
+TEST_CASE("Polynomial refutation: integer endpoint explanations withdraw with assumptions and scopes") {
+    Solver solver;
+    solver.setLogic("QF_NIA");
+    auto op = [&](Kind kind, std::vector<Term> children) {
+        return solver.mkOp(static_cast<uint32_t>(kind), std::move(children));
+    };
+    const auto x = solver.mkConst(solver.intSort(), "x");
+    const auto y = solver.mkConst(solver.intSort(), "y");
+    const auto z = solver.mkConst(solver.intSort(), "z");
+    const auto p = solver.mkConst(solver.boolSort(), "p");
+    const auto notP = op(Kind::Not, {p});
+    const auto zero = solver.mkInt(0), one = solver.mkInt(1);
+    solver.assertFormula(op(Kind::Geq, {x, zero}));
+    solver.assertFormula(op(Kind::Geq, {z, zero}));
+    solver.assertFormula(op(Kind::Geq, {op(Kind::Mul, {x, z}), one}));
+    solver.assertFormula(op(Kind::Geq, {y, one}));
+    const auto target = op(Kind::Add, {op(Kind::Sub, {op(Kind::Mul, {x, y}), y}), one});
+    solver.assertFormula(op(Kind::Implies, {p, op(Kind::Leq, {target, zero})}));
+    for (int repeat = 0; repeat < 2; ++repeat) {
+        REQUIRE((solver.checkSatAssuming({p}) == Result::Unsat));
+        const auto core = solver.getUnsatCore();
+        CHECK(std::find(core.begin(), core.end(), p) != core.end());
+        REQUIRE((solver.checkSatAssuming({notP}) == Result::Sat));
+        CHECK(solver.validateModel() == Solver::ModelValidation::Satisfied);
+        solver.push();
+        solver.assertFormula(p);
+        REQUIRE((solver.checkSat() == Result::Unsat));
+        solver.pop();
+        REQUIRE((solver.checkSat() == Result::Sat));
+        CHECK(solver.validateModel() == Solver::ModelValidation::Satisfied);
+    }
 }
 
 TEST_CASE("Polynomial conversion: bounded expansion and unrepresentable powers stay open") {

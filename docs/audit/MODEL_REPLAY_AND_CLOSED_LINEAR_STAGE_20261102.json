@@ -1,0 +1,651 @@
+{
+  "schema": "xolver-model-replay-and-closed-linear-stage/1",
+  "date": "2026-11-02",
+  "status": "closed_negative_linear_initialization_pilot",
+  "ordinary_source_head": "2f52955765ece8f52ba5e311d7bdfffc5e662037",
+  "ordinary_qualification_sha256": "5b14681580e0f6750b99d575df749e5d52f6ae1da7db1a6c52974339e8d92791",
+  "ordinary_native": {
+    "unit_cases": 2021,
+    "unit_assertions": 1314414,
+    "binary_sha256": "3c2315bc93a216c3097158995e3a0b0786d92380e08e978a70b1631b162478e0",
+    "worker_sha256": "90377fd953d2469c75f4b01ee7187d5757d7c15eeb5ae319105f39eb51781b9e",
+    "library_sha256": "5686300eaf4ca293927e8c476cb3ec4932e4d06ae5bb17c1f9f624451c8626e9",
+    "source_manifest_sha256": "2605707ad0b0ea65e0c6826975cc27311d64644c233a0fdbb6f190903e484f71"
+  },
+  "native_summary": "/pub/data/jiafq/xolver/validation/arithmetic-r103/completion-and-linear-audit-r1915/summary.json",
+  "native_summary_sha256": "2858ea607a783ceec97b52b34427a0cd7f8968eea060310b463a7b69dcd29095",
+  "native_audit": {
+    "experiment": "24553f13c3ab",
+    "run": "24ae24cfd40c",
+    "success": true,
+    "pid_gone": true
+  },
+  "original_full160_summary_sha256": "aaa61f9fa90facb1efe4022eb9474d86c96f3fe579c4fc25bc7c125825113e98",
+  "scores_after_original_timed_model_supplement": {
+    "baseline": {
+      "verified": 112,
+      "raw": {
+        "unsat": 48,
+        "timeout": 47,
+        "sat": 64,
+        "unknown": 1
+      },
+      "unconfirmed": [],
+      "verified_par2": 6192.62744789198
+    },
+    "candidate": {
+      "verified": 112,
+      "raw": {
+        "unsat": 49,
+        "timeout": 47,
+        "sat": 63,
+        "unknown": 1
+      },
+      "unconfirmed": [],
+      "verified_par2": 6184.616149973124
+    },
+    "z3": {
+      "verified": 118,
+      "raw": {
+        "unsat": 58,
+        "sat": 67,
+        "timeout": 35
+      },
+      "unconfirmed": [
+        12,
+        24,
+        27,
+        42,
+        50,
+        80,
+        114
+      ],
+      "verified_par2": 5318.220812758431
+    }
+  },
+  "ordinary_gained": [
+    48
+  ],
+  "ordinary_lost": [
+    131
+  ],
+  "model_tools": {
+    "qualification_sha256": "e5105cd7a4562a9d7f16bcaed8c69677376893aed04ce16a6c9d01e0aba0655d",
+    "unit_tests": 31,
+    "supplementary_original_models": {
+      "75": {
+        "binding": {
+          "prior_report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/indexed-algebraic-replay-r1910/75/report.json",
+          "prior_report_sha256": "2ba869722124e742f7f9e77a4d2c9d8f67288c28b839e7755aff91eb962a504c",
+          "original_input_sha256": "e27d26cd1b9a1f348a64b8f8c7bdb6f2a35f0bff0a003f449901e806bec17e37",
+          "original_timed_model_sha256": "7c4e6ecbea21fe9d8b7bb4150b31cf2f717fdb7f3fd2171094be628546532492",
+          "original_timed_report_sha256": "eb4ad882afb24837c330878a377e609e411f2a846648eb3114ecd7977ca1504e",
+          "new_replay_sha256": "9911b4cc354373110a162cc3651be9d0608c274d2f787f86f01710558f6b0db3",
+          "byte_identical_to_independently_checked_query": true,
+          "original_timed_z3_seconds": 0.06610221974551678,
+          "independently_confirmed": true
+        },
+        "checks": {
+          "z3": {
+            "result": "sat",
+            "seconds": 0.03430359438061714,
+            "binary_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+            "stdout_sha256": "d9dbf94b05b8314af9ca7f2034e92685c33447917605a7243b1099c693a12e5e"
+          },
+          "cvc5": {
+            "result": "sat",
+            "seconds": 0.03363952785730362,
+            "binary_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+            "stdout_sha256": "d9dbf94b05b8314af9ca7f2034e92685c33447917605a7243b1099c693a12e5e"
+          }
+        }
+      },
+      "148": {
+        "binding": {
+          "prior_report": "/pub/data/jiafq/xolver/validation/arithmetic-r103/indexed-algebraic-replay-r1910/148/report.json",
+          "prior_report_sha256": "ddabbb7a7da3d8d194963f20dac855e092d663d0bcf258e51be758c61e419064",
+          "original_input_sha256": "4f9ef64958113d079eca3adc2023c206c8bc2a42b7f02e6acb0f11ce0a2af4be",
+          "original_timed_model_sha256": "2bf8f563a1035aa586b7bfd26d8fd74ac1f55fbee53900a3b42de1294ddced6c",
+          "original_timed_report_sha256": "ee1e75e750e0ff52469bebacdca64965c9214a232cb406f402609c54a11a34ec",
+          "new_replay_sha256": "4b1d52424c89b197c9c3d795ae36f61ad9a70d5cd7934b63c77ae025a158a903",
+          "byte_identical_to_independently_checked_query": true,
+          "original_timed_z3_seconds": 0.06648661941289902,
+          "independently_confirmed": true
+        },
+        "checks": {
+          "z3": {
+            "result": "sat",
+            "seconds": 0.03381838835775852,
+            "binary_sha256": "44d6ba3c78204de660489b282a6b2159fafbf57813e6795ca8b2e2b83257328e",
+            "stdout_sha256": "d9dbf94b05b8314af9ca7f2034e92685c33447917605a7243b1099c693a12e5e"
+          },
+          "cvc5": {
+            "result": "sat",
+            "seconds": 0.03355917148292065,
+            "binary_sha256": "6aecddf466552b83bb5883756c7955e0c9d5ddcc6d7f45b48c2f6e06a741b102",
+            "stdout_sha256": "d9dbf94b05b8314af9ca7f2034e92685c33447917605a7243b1099c693a12e5e"
+          }
+        }
+      }
+    },
+    "preparation_failure": "R1904 retained exit before appended check; fixed parsed original prefix in R1905.",
+    "logic_experiment": "R1905 ALL-logic replay timed out in independent cvc5 for both. R1910 preserved original QF_NRA, both independent replays SAT in about34ms. R1912 qualified tool produces byte-identical checked queries. Original timed inputs, models and timings remain immutable."
+  },
+  "closed_lia_client": {
+    "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/lia-integer-completion-closed-r1898/summary.json",
+    "sha256": "49dc820b525addf61e67768de212995fda01a903e5c901480523bbf544b35505",
+    "status": "closed; global LIA attachment is not promoted",
+    "pilot": {
+      "inputs": 8,
+      "budget": "60s / one physical core /16GiB",
+      "totals": {
+        "baseline": {
+          "verified": 5,
+          "par2": 373.5174925085157,
+          "raw": {
+            "timeout": 3,
+            "sat": 5
+          }
+        },
+        "candidate": {
+          "verified": 5,
+          "par2": 383.7505507618189,
+          "raw": {
+            "timeout": 3,
+            "sat": 5
+          }
+        },
+        "z3": {
+          "verified": 8,
+          "par2": 67.10845293477178,
+          "raw": {
+            "sat": 8
+          }
+        }
+      },
+      "gains": [],
+      "losses": [],
+      "wrong": 0,
+      "errors": 0,
+      "protocol_errors": 0,
+      "details": [
+        {
+          "index": 1,
+          "report_sha256": "b032241a47e744b7ca1d926d3f9df4f2596ca82bb745fd407fb9ce4ba72f6dbe",
+          "observations": {
+            "candidate": {
+              "result": "timeout",
+              "seconds": 60.0171677172184,
+              "verified": false
+            },
+            "z3": {
+              "result": "sat",
+              "seconds": 0.7175968158990145,
+              "verified": true
+            },
+            "baseline": {
+              "result": "timeout",
+              "seconds": 60.01698425039649,
+              "verified": false
+            }
+          }
+        },
+        {
+          "index": 6,
+          "report_sha256": "5c821f5cad4b897dbe5083d1fc73017cc6ed7aea014afc5055d7fd168a3fe8a9",
+          "observations": {
+            "baseline": {
+              "result": "sat",
+              "seconds": 0.31659791618585587,
+              "verified": true
+            },
+            "candidate": {
+              "result": "sat",
+              "seconds": 0.5176924355328083,
+              "verified": true
+            },
+            "z3": {
+              "result": "sat",
+              "seconds": 0.11691832728683949,
+              "verified": true
+            }
+          }
+        },
+        {
+          "index": 11,
+          "report_sha256": "a4fd15cc162f5c19812184bd38e80761ebbb15de4403778e6e3c1931e5d24593",
+          "observations": {
+            "z3": {
+              "result": "sat",
+              "seconds": 7.684585638344288,
+              "verified": true
+            },
+            "baseline": {
+              "result": "sat",
+              "seconds": 6.384530261158943,
+              "verified": true
+            },
+            "candidate": {
+              "result": "sat",
+              "seconds": 16.265071043744683,
+              "verified": true
+            }
+          }
+        },
+        {
+          "index": 13,
+          "report_sha256": "39c51af695e4a9d630460162f3159d1c18e07c2696b4630a667572f4581f408c",
+          "observations": {
+            "candidate": {
+              "result": "timeout",
+              "seconds": 60.02285752259195,
+              "verified": false
+            },
+            "z3": {
+              "result": "sat",
+              "seconds": 0.8175282143056393,
+              "verified": true
+            },
+            "baseline": {
+              "result": "timeout",
+              "seconds": 60.025143230333924,
+              "verified": false
+            }
+          }
+        },
+        {
+          "index": 59,
+          "report_sha256": "78e0dfe31f4b1be9fa78ed7d73e582e253c2a9d7975e49ef7b076b350808b63c",
+          "observations": {
+            "z3": {
+              "result": "sat",
+              "seconds": 0.36681604757905006,
+              "verified": true
+            },
+            "baseline": {
+              "result": "sat",
+              "seconds": 2.071724284440279,
+              "verified": true
+            },
+            "candidate": {
+              "result": "sat",
+              "seconds": 2.121285432949662,
+              "verified": true
+            }
+          }
+        },
+        {
+          "index": 89,
+          "report_sha256": "382412a9090756a857840fb4775bb0fa2450ed628f1f66e2b673b53d0021fbbf",
+          "observations": {
+            "z3": {
+              "result": "sat",
+              "seconds": 0.7679769303649664,
+              "verified": true
+            },
+            "baseline": {
+              "result": "sat",
+              "seconds": 1.4201345834881067,
+              "verified": true
+            },
+            "candidate": {
+              "result": "sat",
+              "seconds": 1.469705455005169,
+              "verified": true
+            }
+          }
+        },
+        {
+          "index": 91,
+          "report_sha256": "34fc8e2aa85ebd7b707c870e7f314049525463991a484add3d2b9b6688123322",
+          "observations": {
+            "candidate": {
+              "result": "sat",
+              "seconds": 3.376796394586563,
+              "verified": true
+            },
+            "z3": {
+              "result": "sat",
+              "seconds": 0.16741648688912392,
+              "verified": true
+            },
+            "baseline": {
+              "result": "sat",
+              "seconds": 3.324505463242531,
+              "verified": true
+            }
+          }
+        },
+        {
+          "index": 94,
+          "report_sha256": "fd421c40d0c2ac22f6128eec983cc87a943a4a8eea4864dc1ef96cd9a8fc7a44",
+          "observations": {
+            "candidate": {
+              "result": "timeout",
+              "seconds": 60.093858767300844,
+              "verified": false
+            },
+            "z3": {
+              "result": "sat",
+              "seconds": 56.469614474102855,
+              "verified": true
+            },
+            "baseline": {
+              "result": "timeout",
+              "seconds": 60.10182951763272,
+              "verified": false
+            }
+          }
+        }
+      ]
+    },
+    "boundary": "Separate private global LIA attachment, not present in current2f529557; do not repeat by budget-only changes."
+  },
+  "qcp_query_regression": {
+    "queries": 780,
+    "programs_verified": 0,
+    "new_end_to_end": false,
+    "reports": [
+      {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/integer-completion-qcp-query-r1900/branch/report.json",
+        "sha256": "da1a07ba2928ee5e3a6bda4b034d0f7716bbce67380300015630ab2026520d94"
+      },
+      {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/integer-completion-qcp-query-r1900/gcd/report.json",
+        "sha256": "b43b9fb128df6364a91a6fd21a4186b4b9fd64e199d9c6de7cda7ace43df0c9c"
+      },
+      {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/integer-completion-qcp-query-r1900/max3/report.json",
+        "sha256": "3406053d04a30045d812751deb1608267dac0148cf2666ade3de296f1c7839d4"
+      }
+    ]
+  },
+  "prior_whole_program_qcp": {
+    "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/qcp-controlled-r1597/finite-domain-fresh-r1862/summary-r1877.json",
+    "sha256": "b3b7bc91b282243b06b47cf09df4dd19f4206c0be8375a9f955d6a615bf5b041",
+    "source_head": "89921c9de6fb7d6670be71c893a448d610b938f0",
+    "totals": {
+      "xolver": {
+        "programs": 3,
+        "vcs": 23,
+        "queries": 2340,
+        "final_queries": 780,
+        "verdicts": {
+          "sat": 1188,
+          "unsat": 1152
+        },
+        "logics": {
+          "QF_LIA": 2130,
+          "QF_UFLIA": 210
+        },
+        "final_seconds": 83.99349213391542
+      },
+      "z3": {
+        "programs": 3,
+        "vcs": 23,
+        "queries": 2340,
+        "final_queries": 780,
+        "verdicts": {
+          "sat": 1188,
+          "unsat": 1152
+        },
+        "logics": {
+          "QF_LIA": 2130,
+          "QF_UFLIA": 210
+        },
+        "final_seconds": 92.0963167976588
+      }
+    },
+    "boundary": "Prior89921c9d actual native original-C/Rocq cohort, not current2f529557 whole-program timing."
+  },
+  "closed_linear_initialization": {
+    "qualification": {
+      "parent_commit": "2f52955765ece8f52ba5e311d7bdfffc5e662037",
+      "parent_qualification_sha256": "5b14681580e0f6750b99d575df749e5d52f6ae1da7db1a6c52974339e8d92791",
+      "parent_source_manifest_sha256": "2605707ad0b0ea65e0c6826975cc27311d64644c233a0fdbb6f190903e484f71",
+      "candidate_binary": "/pub/data/jiafq/xolver/validation/arithmetic-r103/lazy-propagation-r1909/candidate",
+      "candidate_binary_sha256": "924be8429bd0fb9e5d36ab8a47d6a46e5f65a7ae1b68005821183c4c50de2dcc",
+      "candidate_archive_sha256": "3191a1c6755eba18cee939e61cc33a59c2b3888aea50640b7044657b3aad2b95",
+      "source_pins": {
+        "LraPropagationEngine.cpp": "a5f4923ba207b4fb32d48a315f691a5bbc04999a45bfbabef6e17f8d2ddf63bc",
+        "probe.cpp": "1c483694663afbc695ba552cbdfa170935ec662a8ad0d569fa96467be4cf4c1b",
+        "build.py": "bfb11bbe11cca1bcacf1e206fc31378e9e95503e1d4d6a81b572605410215c42"
+      },
+      "differential": {
+        "calls": 10368,
+        "exact_ordered_bounds": 272576,
+        "large_rows": 8192,
+        "random_seed": 1908,
+        "failures": 0
+      },
+      "unit_cases": 2021,
+      "logs": {
+        "full-unit.log": "fef52b64befde6356d3fd6a47d74f26f4eba832ed37e65c918e3513af986b429",
+        "prefix-differential.log": "5d5840de77cb964931674987dec7d382ab26702bc15723dcba4e9df63723b679",
+        "link-unit.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "identity_byte_identical": true,
+      "archive_order_preserved": true,
+      "header_abi_unchanged": true,
+      "root_sources_unchanged": true,
+      "protected_sets_used": false,
+      "prior_failed_experiments": [
+        "16b694cb14e5",
+        "4fc55752f89a"
+      ],
+      "boundary": "Qualification resumes immutable already compiled candidate after preserving both preparation failures: duplicate reference-budget definition, then missing unit-link GMP search path. Only unit linking is retried with the pinned native library path; no valid solver benchmark is repeated. Prefix differential checks exact ordered implications across scope, basis and structural changes; full native suite qualifies the candidate before performance comparison."
+    },
+    "qualification_sha256": "f450b8eab81bf4789438a483b30c5d466492d2b8e9b0286aecddcf3380439145",
+    "pilot_scores": {
+      "baseline": {
+        "verified": 5,
+        "raw": {
+          "timeout": 16,
+          "unsat": 1,
+          "sat": 4
+        },
+        "unconfirmed": [],
+        "verified_par2": 2010.878627249971
+      },
+      "candidate": {
+        "verified": 5,
+        "raw": {
+          "timeout": 16,
+          "unsat": 1,
+          "sat": 4
+        },
+        "unconfirmed": [],
+        "verified_par2": 1987.0349731128663
+      },
+      "z3": {
+        "verified": 20,
+        "raw": {
+          "sat": 13,
+          "unsat": 7,
+          "timeout": 1
+        },
+        "unconfirmed": [],
+        "verified_par2": 267.97988038137555
+      }
+    },
+    "gained": [
+      51
+    ],
+    "lost": [
+      131
+    ],
+    "experiment": "1907c788dea2",
+    "valid_inputs": 21,
+    "critical_inputs": {
+      "48": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/lazy-propagation-pilot-r1913/case-048/report.json",
+        "sha256": "580b62566938f8be529541009ac5f8b19ea0f7540f4c5b0482587c5264987569",
+        "input_sha256": "1db0853aaa0f355969a8b7e17778b10137081d30ee7f98e6ff8d94039a55b85b",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "22"
+          ]
+        },
+        "observations": {
+          "baseline": {
+            "result": "unsat",
+            "seconds": 29.141951765865088,
+            "verified": true
+          },
+          "candidate": {
+            "result": "unsat",
+            "seconds": 30.314761385321617,
+            "verified": true
+          },
+          "z3": {
+            "result": "unsat",
+            "seconds": 0.11706750839948654,
+            "verified": true
+          }
+        }
+      },
+      "51": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/lazy-propagation-pilot-r1913/case-051/report.json",
+        "sha256": "c28bc143c8e6913358f4997c1492742d6c31c319173bc484afdee1a7d2bac41b",
+        "input_sha256": "8fb5c2cfe016233a2f76c3d3b103066448f0f1d3faa1c9d9493c55c304d877cb",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "33"
+          ]
+        },
+        "observations": {
+          "baseline": {
+            "result": "timeout",
+            "seconds": 60.019889671355486,
+            "verified": false
+          },
+          "candidate": {
+            "result": "sat",
+            "seconds": 18.77307967096567,
+            "verified": true
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 0.6678946632891893,
+            "verified": true
+          }
+        }
+      },
+      "59": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/lazy-propagation-pilot-r1913/case-059/report.json",
+        "sha256": "2fc0d945d831d7b4a11b7adf9f6b90bc41c80186dfc2bda00b5493844ad30e38",
+        "input_sha256": "e7d41e4ed6b69d1613794e79af7f3ad4a8e22ad90763a9973a2feba93ed58e27",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "51"
+          ]
+        },
+        "observations": {
+          "z3": {
+            "result": "sat",
+            "seconds": 0.4171060547232628,
+            "verified": true
+          },
+          "baseline": {
+            "result": "sat",
+            "seconds": 2.0723415091633797,
+            "verified": true
+          },
+          "candidate": {
+            "result": "sat",
+            "seconds": 1.970119472593069,
+            "verified": true
+          }
+        }
+      },
+      "106": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/lazy-propagation-pilot-r1913/case-106/report.json",
+        "sha256": "99e131ec74403cd20081f09cf0404e36d615c7643d6de3e943941ec73ffc77d7",
+        "input_sha256": "c96b35bb3cae604115b99477562c4059c6e78ad16658f50d9dbb9ed8abad0a25",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "89"
+          ]
+        },
+        "observations": {
+          "candidate": {
+            "result": "sat",
+            "seconds": 14.507556544616818,
+            "verified": true
+          },
+          "z3": {
+            "result": "sat",
+            "seconds": 1.3730494268238544,
+            "verified": true
+          },
+          "baseline": {
+            "result": "sat",
+            "seconds": 12.199257208034396,
+            "verified": true
+          }
+        }
+      },
+      "131": {
+        "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/lazy-propagation-pilot-r1913/case-131/report.json",
+        "sha256": "54c43746ae0274e33a4c06d81b9e8b07b6d2e707a40f56a9521d6b30a80f2cce",
+        "input_sha256": "8b660dc1debe27fe09a0eb3ca9e4e3833f075f89a66e71b90dfe102e250bc962",
+        "resources": {
+          "cpu_slots": 1,
+          "cpu_ids": [
+            "114"
+          ]
+        },
+        "observations": {
+          "z3": {
+            "result": "sat",
+            "seconds": 0.5165022853761911,
+            "verified": true
+          },
+          "baseline": {
+            "result": "sat",
+            "seconds": 45.996366990730166,
+            "verified": true
+          },
+          "candidate": {
+            "result": "timeout",
+            "seconds": 60.00778051652014,
+            "verified": false
+          }
+        }
+      }
+    },
+    "production_code_retained": false,
+    "full160_expanded": false,
+    "new_qcp_validation": false
+  },
+  "monomial_relaxation_probe": {
+    "free": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/monomial-relaxation-probe-r1914/free/report.json",
+      "sha256": "df17db7e5a106fc2a40dfc8fea10966be501b74148b9aaa898cbb36ad344c249",
+      "result": {
+        "z3": "sat",
+        "cvc5": "sat"
+      },
+      "monomial_columns": 111,
+      "sign_facts": 0
+    },
+    "nonnegative": {
+      "path": "/pub/data/jiafq/xolver/validation/arithmetic-r103/monomial-relaxation-probe-r1914/nonnegative/report.json",
+      "sha256": "1acf8ce314527fe8cb34313c47241b32da0c552cc3b36dbea456b2888022d56c",
+      "result": {
+        "z3": "sat",
+        "cvc5": "sat"
+      },
+      "monomial_columns": 111,
+      "sign_facts": 111
+    }
+  },
+  "protected_sets_used": false,
+  "new_pr_created": false,
+  "promoted": false,
+  "boundary": "The fresh ordinary2f529 fixed160 round remains112 main/112 candidate. Two supplemental original-timed-model confirmations raise only same-round verified Z3 from116 to118; original files/models/timings remain unchanged.7 unconfirmed UNSATs are excluded. The demand-driven initialization experiment is a separate21-input pilot, not a new160 score; every lost valid verdict remains a loss despite trajectory variability. Prior native QCP program/proof evidence keeps its prior version; current780-query replay earns no new program/VC or end-to-end timing credit. Both polynomial relaxations are SAT and therefore do not establish a sufficient refutation mechanism for original116; stronger reasoning needs evidence before implementation."
+}
