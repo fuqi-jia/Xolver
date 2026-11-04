@@ -4,6 +4,7 @@
 #include "applications/verification/sl/NativeSeparation.h"
 #include "base/MpqUtils.h"
 #include "quantifiers/FiniteFormula.h"
+#include <cctype>
 #include <type_traits>
 #include <functional>
 #ifdef XOLVER_ENABLE_PROOFS
@@ -1146,6 +1147,7 @@ Result Solver::checkSat() {
     }
     // Start this thread's solve wall-clock so per-engine budgets can scale to the
     // time remaining (P0-A). Unset / 0 => no deadline => no behavior change.
+    wall::DeadlineScope solveClockScope;
     wall::beginSolve(config::read<config::ReadKind::Long>("XOLVER_WALLCLOCK_MS", 0));
     Result r;
     // Top-level bad_alloc firewall (iter#18, pre-existing class). A pathological
@@ -1192,7 +1194,7 @@ Result Solver::checkSat() {
         pImpl->lastModel_.reset();
         r = Result::Unknown;
     }
-    wall::endSolve();
+    // solveClockScope restores the caller's clock on every return path.
     if (r == Result::Unknown) pImpl->lastProof_.clear();
 #ifdef XOLVER_ENABLE_PROOFS
     // The ground Boolean/arith proof exporters do not encode a heap signature
@@ -1906,9 +1908,10 @@ void Solver::dumpModel(std::ostream& os) const {
         // Pre-scan: record every explicit numeric token so minted integers
         // never collide with a real value the formula constrained.
         void noteToken(const std::string& tok) {
-            if (tok.rfind("#n:", 0) == 0) {
+            if (tok.rfind("#n:", 0) == 0 ||
+                (!tok.empty() && (std::isdigit(static_cast<unsigned char>(tok[0])) || tok[0] == '-'))) {
                 try {
-                    mpq_class q(tok.substr(3));
+                    mpq_class q(tok.rfind("#n:", 0) == 0 ? tok.substr(3) : tok);
                     if (q.get_den() == 1 && q.get_num().fits_slong_p())
                         usedNums.insert(q.get_num().get_si());
                 } catch (...) {}
@@ -1977,6 +1980,34 @@ void Solver::dumpModel(std::ostream& os) const {
         }
     }
     if (tm) {
+        for (const auto& [name, value] : tm->assignments) {
+            emit.noteToken(value);
+            if (!value.starts_with('@')) continue;
+            const auto numeric = tm->numericAssignments.find(name);
+            if (numeric == tm->numericAssignments.end()) continue;
+            const auto rational = numeric->second.tryAsRational();
+            if (!rational) continue;
+            // ModelConverter reconstructs aliases from this exact numeric
+            // channel. Reuse its class interpretation instead of choosing a
+            // second number while printing the original variable or UF table.
+            const auto number = rational->get_str();
+            const auto [entry, inserted] = emit.numericOpaque.emplace(value, number);
+            if (!inserted && entry->second != number) {
+                os << "(error \"inconsistent numeric model class\")\n";
+                return;
+            }
+        }
+        for (const auto& [name, value] : tm->numericAssignments) {
+            (void)name;
+            if (auto q = value.tryAsRational()) emit.noteToken(q->get_str());
+        }
+        for (const auto& [name, fi] : tm->functionInterps) {
+            (void)name; emit.noteToken(fi.deflt);
+            for (const auto& entry : fi.entries) {
+                for (const auto& arg : entry.args) emit.noteToken(arg);
+                emit.noteToken(entry.value);
+            }
+        }
         for (const auto& [aname, ai] : tm->arrayInterps) {
             emit.noteToken(ai.defaultVal);
             for (const auto& [ix, vl] : ai.entries) { emit.noteToken(ix); emit.noteToken(vl); }

@@ -1,6 +1,7 @@
 #include "base/RuntimeConfig.h"
 #include "search/nia/farkas/FarkasOrDetector.h"
 #include "base/EnvParam.h"
+#include "ir/ResolvedConjunction.h"
 
 #include <cstdlib>
 #include <functional>
@@ -220,30 +221,13 @@ FarkasBranch FarkasOrDetector::classifyAnd(
         return br;
     }
 
-    // Flatten nested Ands: Stroeder VeryMax encodes some Or-branches as
-    // `(and (and a b) (and c d) ...)`. Walk all nested And children and
-    // collect atoms into a single flat list. Each node is first proxy-
-    // resolved (to a fixpoint) so a boolpur-purified conjunct `proxy_i`
-    // standing for a real Farkas atom is classified by that atom, not
-    // dropped as an unclassified Variable.
-    std::vector<ExprId> flat;
-    std::function<void(ExprId)> collect;
-    collect = [&](ExprId aid) {
-        ExprId rid = aid;
-        for (int guard = 0; guard < 16; ++guard) {
-            ExprId next = resolve(rid);
-            if (next == rid) break;
-            rid = next;
-        }
-        const auto& ne = ir_.get(rid);
-        if (ne.kind == Kind::And) {
-            for (ExprId c : ne.children) collect(c);
-        } else {
-            flat.push_back(rid);
-        }
-    };
-    collect(andId);
-    return classifyAtomList(flat, andId);
+    const auto flat = resolvedConjuncts(ir_, std::span<const ExprId>(&andId, 1), resolve);
+    if (!flat) {
+        // A cyclic equivalence is a constraint, not an expandable definition.
+        br.unclassified.push_back(andId);
+        return br;
+    }
+    return classifyAtomList(*flat, andId);
 }
 
 FarkasBranch FarkasOrDetector::classifyAtomList(
@@ -464,10 +448,12 @@ FarkasProfile FarkasOrDetector::detect() const {
         const auto& lhs = ir_.get(e.children[0]);
         const auto& rhs = ir_.get(e.children[1]);
         // Either side may be the Variable proxy.
-        if (lhs.kind == Kind::Variable && rhs.kind != Kind::Variable) {
+        if (lhs.kind == Kind::Variable && ir_.sortKind(lhs.sort) == SortKind::Bool &&
+            rhs.kind != Kind::Variable) {
             auto* s = std::get_if<std::string>(&lhs.payload.value);
             if (s) tseitinDefs[*s] = e.children[1];
-        } else if (rhs.kind == Kind::Variable && lhs.kind != Kind::Variable) {
+        } else if (rhs.kind == Kind::Variable && ir_.sortKind(rhs.sort) == SortKind::Bool &&
+                   lhs.kind != Kind::Variable) {
             auto* s = std::get_if<std::string>(&rhs.payload.value);
             if (s) tseitinDefs[*s] = e.children[0];
         }
@@ -608,18 +594,17 @@ FarkasProfile FarkasOrDetector::detect() const {
     // not per-leaf arithmetic constraints. Bound atoms that survive are
     // harmless (constant after B-substitution).
     {
-        std::function<void(ExprId)> collectResidual;
-        collectResidual = [&](ExprId aid0) {
-            ExprId aid = aid0;
-            for (int g = 0; g < 16; ++g) { ExprId n = resolve(aid); if (n == aid) break; aid = n; }
+        const auto flat = resolvedConjuncts(ir_, p.outerAssertions, resolve);
+        if (!flat) {
+            p.blocks.clear();
+            closeRejectDump();
+            return p;
+        }
+        for (ExprId aid : *flat) {
             const auto& ce = ir_.get(aid);
-            if (ce.kind == Kind::And) {
-                for (ExprId c : ce.children) collectResidual(c);
-                return;
-            }
             if (ce.kind != Kind::Leq && ce.kind != Kind::Geq && ce.kind != Kind::Lt
                 && ce.kind != Kind::Gt && ce.kind != Kind::Eq) {
-                return;  // Or / Not / bare proxy Variable / Bool — drop
+                continue;  // Or / Not / bare proxy Variable / Bool — drop
             }
             // Keep only when BOTH operands are arithmetic terms (no Bool proxy,
             // no nested relational/combinator child ⇒ not a `proxy == atom` def).
@@ -643,8 +628,7 @@ FarkasProfile FarkasOrDetector::detect() const {
                 if (!arith) break;
             }
             if (arith) p.residualConstraints.push_back(aid);
-        };
-        for (ExprId aid : p.outerAssertions) collectResidual(aid);
+        }
     }
 
     classifyBilinearCovars(p);

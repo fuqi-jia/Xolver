@@ -12,6 +12,118 @@ bool Solver::Impl::modelRequestedImpl() const {
         auto opts = parser->getOptions();
         return opts && opts->get_model;
 }
+
+void Solver::Impl::completeUnusedFunctionModels() {
+    if (!ir) return;
+    if (!lastModel_) {
+        // A proof that a nontrivial query is SAT does not supply its witness.
+        // Only the empty/true residual formula admits an empty model directly.
+        for (const auto root : ir->assertions()) {
+            const auto& node = ir->get(root);
+            const auto* value = std::get_if<bool>(&node.payload.value);
+            if (node.kind != Kind::ConstBool || !value || !*value) return;
+        }
+        lastModel_ = TheorySolver::TheoryModel{};
+        mergeFixedBindings();
+    }
+    if (!parser || lastModel_->separation) return;
+
+    std::vector<std::shared_ptr<SOMTParser::DAGNode>> candidates;
+    for (const auto& declaration : parser->getFunctions()) {
+        if (!declaration || !declaration->isFuncDec() ||
+            lastModel_->functionInterps.contains(declaration->getName())) continue;
+        const auto parameters = declaration->getFuncParams();
+        if (parameters.empty()) continue;
+        if (parser->getDtFunctionKind(declaration->getSort(), declaration->getName(), parameters) ==
+            SOMTParser::NODE_KIND::NT_UF_APPLY) candidates.push_back(declaration);
+    }
+    if (candidates.empty()) return;
+
+    std::unordered_set<std::string> activeFunctions;
+    std::unordered_set<ExprId> visited;
+    // An equisatisfiable abstraction may remove a constrained UF application
+    // while retaining only its numeric auxiliary. Its absence from the reduced
+    // DAG does not authorize a guessed interpretation. Use original roots and
+    // discard only expressions whose value is independent of their children.
+    std::vector<ExprId> pending = originalAssertions_;
+    while (!pending.empty()) {
+        const auto id = pending.back();
+        pending.pop_back();
+        if (!visited.insert(id).second) continue;
+        const auto& node = ir->get(id);
+        if (node.kind == Kind::Eq && node.children.size() >= 2 &&
+            std::all_of(node.children.begin() + 1, node.children.end(),
+                [&](ExprId child) { return child == node.children.front(); })) continue;
+        if (node.kind == Kind::And || node.kind == Kind::Or) {
+            const bool absorbing = node.kind == Kind::Or;
+            const bool constant = std::any_of(node.children.begin(), node.children.end(),
+                [&](ExprId child) {
+                    const auto& value = ir->get(child);
+                    const auto* boolean = std::get_if<bool>(&value.payload.value);
+                    return value.kind == Kind::ConstBool && boolean && *boolean == absorbing;
+                });
+            if (constant) continue;
+        }
+        if (node.kind == Kind::Ite && node.children.size() == 3) {
+            const auto& condition = ir->get(node.children[0]);
+            const auto* boolean = std::get_if<bool>(&condition.payload.value);
+            if (condition.kind == Kind::ConstBool && boolean) {
+                pending.push_back(node.children[*boolean ? 1 : 2]);
+                continue;
+            }
+            if (node.children[1] == node.children[2]) {
+                pending.push_back(node.children[1]);
+                continue;
+            }
+        }
+        if (node.kind == Kind::UFApply) {
+            if (const auto* name = std::get_if<std::string>(&node.payload.value))
+                activeFunctions.insert(*name);
+        }
+        for (auto child : node.children) pending.push_back(child);
+    }
+
+    using NativeSort = std::shared_ptr<SOMTParser::Sort>;
+    std::function<std::optional<std::string>(const NativeSort&)> defaultValue;
+    defaultValue = [&](const NativeSort& sort) -> std::optional<std::string> {
+        if (!sort) return std::nullopt;
+        if (sort->isBool() || sort->isInt() || sort->isReal()) return "0";
+        if (sort->isBv()) return "#smt:(_ bv0 " + std::to_string(sort->getBitWidth()) + ")";
+        if (sort->isFp())
+            return "#smt:(_ +zero " + std::to_string(sort->getExponentWidth()) + " " +
+                   std::to_string(sort->getSignificandWidth()) + ")";
+        if (sort->isStr()) return "#smt:\"\"";
+        if (sort->isRoundingMode()) return "#smt:RNE";
+        if (sort->isArray()) {
+            const auto element = defaultValue(sort->getElemSort());
+            if (!element) return std::nullopt;
+            const auto handle = "@unused-function-array:" + sort->toString();
+            TheorySolver::TheoryModel::ArrayInterp array;
+            array.indexSort = sort->getIndexSort()->toString();
+            array.elemSort = sort->getElemSort()->toString();
+            array.defaultVal = *element;
+            lastModel_->arrayValues.try_emplace(handle, std::move(array));
+            return handle;
+        }
+        if (sort->isDec() || sort->isUF())
+            return "@unused-function-value:" + sort->toString();
+        // Other interpreted sorts require their own ground-value constructor.
+        return std::nullopt;
+    };
+    for (const auto& declaration : candidates) {
+        const auto& name = declaration->getName();
+        if (activeFunctions.contains(name)) continue;
+        const auto parameters = declaration->getFuncParams();
+        const auto value = defaultValue(declaration->getSort());
+        if (!value) continue;
+        TheorySolver::TheoryModel::FuncInterp function;
+        function.retSort = declaration->getSort()->toString();
+        function.deflt = *value;
+        for (const auto& parameter : parameters)
+            function.argSorts.push_back(parameter->getSort()->toString());
+        lastModel_->functionInterps.emplace(name, std::move(function));
+    }
+}
     // Merge UCP fixedBindings_ into lastModel_'s string + numeric channels for
     // any var not already present. Called at every site that sets lastModel_
     // so validators (modelViolatesOriginal, combinationModelDefinitelyViolates,
@@ -157,6 +269,7 @@ bool Solver::Impl::arrayModelDefinitelyViolates() const {
     // user variables with the same 0/false defaults dumpModel emits, so the
     // model checked here is exactly the one that would be printed.
 bool Solver::Impl::modelPositivelyValidates() {
+        completeUnusedFunctionModels();
         if (!reconstructReadOnlyArrays()) return false;
         if (!ir || !lastModel_) return false;
         if (!divModOrigins_.empty()) {

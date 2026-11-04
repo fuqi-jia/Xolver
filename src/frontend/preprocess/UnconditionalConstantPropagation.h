@@ -17,7 +17,8 @@ namespace xolver {
  *   1. Collection. Walk every top-level assertion. If the assertion is
  *      a Kind::And, flatten the top-level conjunction; otherwise treat
  *      the assertion itself as a single unconditional conjunct.
- *      Among those unconditional conjuncts, collect every
+ *      Follow required truth values through negations, false disjunctions,
+ *      and false implications as well. Among the required true atoms, collect
  *      (= var ConstNumeric) where var is a Kind::Variable and the RHS
  *      is a numeric literal (ConstInt, or ConstReal whose rational
  *      string is an integer/rational literal). Build a map
@@ -26,7 +27,9 @@ namespace xolver {
  *      constant, that equality holds in every model of the formula,
  *      so we substitute occurrences of the variable by the constant
  *      *globally*, including occurrences nested under or / =>  / not
- *      / ite / mod / div / to_real / to_int / arithmetic ops.
+ *      / ite / mod / div / to_real / to_int / arithmetic ops. Preserve the
+ *      defining equality atoms at every depth: bare UF arguments retain their
+ *      variables and still need these equalities for congruence.
  *
  * On contradictory bindings (e.g. (= x 2) AND (= x 3) both
  * unconditionally asserted), `hadContradiction()` returns true and the

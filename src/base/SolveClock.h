@@ -1,22 +1,14 @@
 #pragma once
+#include <chrono>
 
 namespace xolver {
 namespace wall {
 
-// Per-thread solve wall-clock. Lets the solver's per-engine budgets scale
-// to the time actually remaining instead of using isolated hardcoded cutoffs,
-// so the solver can use its full competition timeout rather than giving up
-// early (P0-A; see docs/REMEDIATION-SMTCOMP-FINAL.md §1).
-//
-// FOUNDATION ONLY. By itself this changes nothing: the deadline is unset by
-// default, so remainingMs() == NO_DEADLINE (effectively infinite) and every
-// consumer behaves exactly as before. The deadline is set once at solve entry
-// from XOLVER_WALLCLOCK_MS (which run.sh / the competition wrapper can pass);
-// 0 or unset => no deadline.
-//
-// Wiring budgets to actually scale against remainingMs() is a SEPARATE,
-// panda-gated change — it alters verdicts/timing and must be measured on the
-// differential harness, never flipped blind on WSL.
+// Per-thread solve wall-clock. Solve entry sets the caller's timeout; nested
+// proof/search helpers inherit its absolute deadline. Scoped caller limits
+// may narrow that deadline and restore the parent clock when they leave.
+// Zero or unset timeout means unbounded time. The legacy scaling helpers below
+// retain their explicit configuration contract.
 
 constexpr long NO_DEADLINE = -1;
 
@@ -30,6 +22,24 @@ void endSolve();
 
 // True iff a positive budget is set and a solve is active.
 bool hasDeadline();
+
+// Absolute deadline inherited by every stage of the current solve. An unset
+// deadline is time_point::max(); helpers must not start an unrelated timer.
+std::chrono::steady_clock::time_point deadline();
+
+// A caller may narrow the current deadline, never extend it. Restore the full
+// calling clock on exit, including exceptions and nested solver invocations.
+class DeadlineScope {
+    long long previousStartNs_;
+    long previousBudgetMs_;
+    std::chrono::steady_clock::time_point previousOverride_;
+public:
+    explicit DeadlineScope(std::chrono::steady_clock::time_point requested =
+        std::chrono::steady_clock::time_point::max());
+    ~DeadlineScope();
+    DeadlineScope(const DeadlineScope&) = delete;
+    DeadlineScope& operator=(const DeadlineScope&) = delete;
+};
 
 // Milliseconds elapsed since beginSolve(); 0 if no solve is active.
 long elapsedMs();

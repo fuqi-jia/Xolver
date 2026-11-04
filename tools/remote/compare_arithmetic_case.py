@@ -16,14 +16,68 @@ def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def source_commands(source):
+    """Yield command heads and original text without building an assertion AST."""
+    depth = start = 0
+    head = None
+    i = 0
+    while i < len(source):
+        ch = source[i]
+        if ch.isspace():
+            i += 1
+        elif ch == ';':
+            end = source.find('\n', i)
+            i = len(source) if end < 0 else end + 1
+        elif ch in '|"':
+            if depth == 0:
+                raise ValueError('expected SMT-LIB command')
+            quote = ch
+            i += 1
+            while i < len(source):
+                if source[i] == quote:
+                    if quote == '"' and i + 1 < len(source) and source[i + 1] == '"':
+                        i += 2
+                        continue
+                    break
+                if quote == '|' and source[i] == '\\':
+                    raise ValueError('backslash in quoted symbol')
+                i += 1
+            if i == len(source):
+                raise ValueError('unterminated SMT-LIB token')
+            if depth == 1 and head is None:
+                head = ''  # A quoted name is not a command keyword.
+            i += 1
+        elif ch == '(':
+            if depth == 0:
+                start, head = i, None
+            elif depth == 1 and head is None:
+                head = ''
+            depth += 1
+            i += 1
+        elif ch == ')':
+            if depth == 0:
+                raise ValueError('unmatched closing parenthesis')
+            depth -= 1
+            i += 1
+            if depth == 0:
+                yield head, source[start:i]
+        else:
+            if depth == 0:
+                raise ValueError('expected SMT-LIB command')
+            end = i + 1
+            while end < len(source) and not source[end].isspace() and source[end] not in '();|"':
+                end += 1
+            if depth == 1 and head is None:
+                head = source[i:end]
+            i = end
+    if depth:
+        raise ValueError('unclosed parenthesis')
+
+
 def model_arguments(name, source):
     if name != 'z3':
         return ['--produce-models']
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'tools/proof'))
-    from isabelle_pa import Atom, parse
-    requests = sum(isinstance(command, list) and bool(command)
-                   and isinstance(command[0], Atom) and command[0].kind == 'symbol'
-                   and command[0].text == 'get-model' for command in parse(source))
+    requests = sum(head == 'get-model' for head, _ in source_commands(source))
     if requests > 1:
         raise ValueError('comparison requires at most one explicit get-model request')
     # Z3 -model adds an export to check-sat. An existing get-model already
@@ -110,9 +164,8 @@ def main():
     report['protocol_errors'] = protocol_errors
     if args.validate_models:
         sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'fuzz'))
-        from fuzz_theory_applications import parse, emit, replay
-        prefix = '\n'.join(emit(c) for c in parse(Path(case['path']).read_text())
-                           if emit(c[0]) not in ('check-sat', 'get-model', 'exit', 'set-info', 'set-option'))
+        from fuzz_theory_applications import replay
+        prefix = None
         for name in ('baseline', 'candidate', 'z3'):
             observation = report['observations'][name]
             observation['verified'] = False
@@ -131,6 +184,9 @@ def main():
                 observation['verified'] = not wrong and independent
             elif observation['result'] == 'sat':
                 try:
+                    if prefix is None:
+                        prefix = '\n'.join(text for head, text in source_commands(source)
+                            if head not in ('check-sat', 'get-model', 'exit', 'set-info', 'set-option'))
                     pinned = out / (name + '-replay.smt2')
                     # Validate the witness from the actual timed decision;
                     # another search need not reproduce that decision in budget.

@@ -18,35 +18,84 @@ SatLit Atomizer::atomize(ExprId root, const NativeTerms& ir) {
 }
 
 void Atomizer::preAtomizeIterative(ExprId root, const NativeTerms& ir) {
-    // Two-visit post-order over boolean-sorted children only: those are exactly
-    // the sub-formulas atomizeRec recurses into (And/Or/Not/Implies/Xor, bool
-    // Eq/Distinct, bool-term-in-formula-position). Arithmetic/EUF operand terms
-    // are NOT boolean-sorted, so they are left for atomizeRec's atom handling.
-    // Processing children before parents means atomizeRec(parent) finds every
-    // nested SatLit already in memo_ and never recurses deeply.
+    // Boolean arguments may sit below non-Boolean terms, e.g. f(p):Int. They
+    // need a SAT assignment even when p never occurs as a formula. Visit the
+    // complete reachable DAG, but create literals only for Boolean nodes.
     struct Frame { ExprId eid; bool processed; };
     std::vector<Frame> stack;
     stack.push_back({root, false});
     while (!stack.empty()) {
         Frame& fr = stack.back();
         ExprId eid = fr.eid;
-        if (eid == NullExpr || memo_.find(eid) != memo_.end()) { stack.pop_back(); continue; }
+        if (eid == NullExpr || memo_.contains(eid) || visitedTerms_.contains(eid)) {
+            stack.pop_back();
+            continue;
+        }
         const TermExpr& e = ir.get(eid);
         if (!fr.processed) {
             fr.processed = true;
             for (ExprId c : e.children) {
-                if (c != NullExpr && memo_.find(c) == memo_.end() &&
-                    ir.get(c).sort == boolSortId_) {
+                if (c != NullExpr && !memo_.contains(c) && !visitedTerms_.contains(c)) {
                     stack.push_back({c, false});
                 }
             }
             continue;
         }
         stack.pop_back();
-        // All boolean-sorted children memoized → atomizeRec emits this node's
-        // clauses reading children from memo_, recursing at most one level.
-        atomizeRec(eid, ir);
+        switch (e.kind) {
+            case Kind::UFApply:
+            case Kind::Select:
+            case Kind::Store:
+            case Kind::ConstArray:
+            case Kind::Constructor:
+            case Kind::Selector:
+            case Kind::Tester:
+                for (ExprId child : e.children)
+                    if (isProvablyBool(child, ir)) bridgeBooleanArgument(child, ir);
+                break;
+            default:
+                break;
+        }
+        // Children precede parents, retaining stack-safe formula encoding.
+        if (isProvablyBool(eid, ir)) atomizeRec(eid, ir);
+        else visitedTerms_.insert(eid);
     }
+}
+
+void Atomizer::bridgeBooleanArgument(ExprId argument, const NativeTerms& ir) {
+    if (!registry_) return;
+    const auto e = ir.get(argument);
+    if (e.kind == Kind::ConstBool) return; // EUF interns the actual true/false.
+    switch (e.kind) {
+        case Kind::Variable:
+        case Kind::UFApply:
+        case Kind::Select:
+        case Kind::Selector:
+        case Kind::Tester:
+            break;
+        default:
+            // Logical/comparison arguments must first pass through Boolean
+            // purification; treating an unlifted formula as opaque is unsound.
+            registry_->setUnsupportedTheorySeen();
+            return;
+    }
+    const SatLit literal = memo_.at(argument);
+    if (const auto* record = registry_->findBySatVar(literal.var)) {
+        const auto* payload = std::get_if<EufAtomPayload>(&record->payload);
+        if (record->theory == TheoryId::EUF && payload &&
+            payload->kind == EufAtomKind::BoolTermAsFormula &&
+            payload->lhs == argument) return;
+        registry_->setUnsupportedTheorySeen();
+        return;
+    }
+    // Reuse the propositional literal, including when a previous assertion
+    // already encoded this variable. Its true/false assignments now merge the
+    // same EUF term with true/false, with the original literal as explanation.
+    assert(literal.sign);
+    registry_->registerParsedTheoryAtom(literal.var, argument, TheoryId::EUF,
+        EufAtomPayload{argument, TrueSentinelExpr, Relation::Eq,
+                       EufAtomKind::BoolTermAsFormula});
+    atoms_.push_back({literal.var, argument, true, TheoryId::EUF});
 }
 
 SatVar Atomizer::freshVar() {
@@ -289,8 +338,9 @@ SatLit Atomizer::atomizeRec(ExprId eid, const NativeTerms& ir) {
     //     them in every combination logic: `((_ is red) c)` in QF_UFDTNIA and
     //     `(select a i)` in QF_ALIA both escaped as opaque bool vars → false-SAT.)
     //   - A bare Bool VARIABLE is not owned by any theory; it stays a plain SAT
-    //     var except under pure QF_UF (defaultTheory_ == EUF), preserving the
-    //     combination behaviour for boolean structure.
+    //     var except under pure QF_UF (defaultTheory_ == EUF). When it is also
+    //     a theory-term argument, bridgeBooleanArgument observes that same
+    //     literal in EUF, preserving its propositional truth in mixed logics.
     bool eufOwnedBoolPred = (e.kind == Kind::UFApply ||
                             e.kind == Kind::Tester ||
                             e.kind == Kind::Select);

@@ -1,129 +1,70 @@
-#include "base/RuntimeConfig.h"
 #include "search/linearizer/McCormickGenerator.h"
-#include "base/EnvParam.h"
+#include <algorithm>
 
 namespace xolver {
 
 std::vector<LinearCut> McCormickGenerator::generate(
     const AuxTerm& t,
     const std::string& x, const std::string& y,
-    const LinearizationBounds& xBounds,
-    const LinearizationBounds& yBounds,
-    SatLit nonlinearReason,
-    SortKind sort) {
-
-    std::vector<LinearCut> cutsEarly;
-
-    // Family 0 (NEW) — sign-only cut for sign-pinned factors.
-    // For `t = x · y` with x sign-pinned (lo > 0 or hi < 0) and y same,
-    // the product's strict sign is determined. Emit `t > 0` or `t < 0`.
-    // Independent of upper bounds — closes the cvc5 NL_COMPARISON gap.
-    {
-        auto signOf = [](const LinearizationBounds& b) -> int {
-            if (b.hasLower && b.lower > 0) return 1;
-            if (b.hasUpper && b.upper < 0) return -1;
-            return 0;
-        };
-        int xs = signOf(xBounds);
-        int ys = signOf(yBounds);
-        if (xs != 0 && ys != 0) {
-            int prodSign = xs * ys;
-            std::vector<SatLit> signReasons{nonlinearReason};
-            if (xs > 0) signReasons.insert(signReasons.end(),
-                                           xBounds.lowerReasons.begin(),
-                                           xBounds.lowerReasons.end());
-            else        signReasons.insert(signReasons.end(),
-                                           xBounds.upperReasons.begin(),
-                                           xBounds.upperReasons.end());
-            if (ys > 0) signReasons.insert(signReasons.end(),
-                                           yBounds.lowerReasons.begin(),
-                                           yBounds.lowerReasons.end());
-            else        signReasons.insert(signReasons.end(),
-                                           yBounds.upperReasons.begin(),
-                                           yBounds.upperReasons.end());
-            ZeroLinearConstraint z;
-            z.expr.terms.push_back({t.name, mpq_class(prodSign > 0 ? -1 : 1)});
-            z.expr.constant = 0;
-            z.rel = Relation::Lt;
-            z.sort = sort;
-            z.debugTag = "mccormick_sign_only";
-            cutsEarly.push_back({std::move(z), signReasons, "mccormick_sign_only"});
-        }
-    }
-
-    if (!xBounds.hasFiniteCompleteBounds() || !yBounds.hasFiniteCompleteBounds())
-        return cutsEarly;
-
-    const mpq_class& lx = xBounds.lower;
-    const mpq_class& ux = xBounds.upper;
-    const mpq_class& ly = yBounds.lower;
-    const mpq_class& uy = yBounds.upper;
-
-    std::vector<SatLit> baseReasons;
-    baseReasons.push_back(nonlinearReason);
-    baseReasons.insert(baseReasons.end(),
-                       xBounds.lowerReasons.begin(), xBounds.lowerReasons.end());
-    baseReasons.insert(baseReasons.end(),
-                       xBounds.upperReasons.begin(), xBounds.upperReasons.end());
-    baseReasons.insert(baseReasons.end(),
-                       yBounds.lowerReasons.begin(), yBounds.lowerReasons.end());
-    baseReasons.insert(baseReasons.end(),
-                       yBounds.upperReasons.begin(), yBounds.upperReasons.end());
-
+    const LinearizationBounds& xb, const LinearizationBounds& yb,
+    SatLit nonlinearReason, SortKind sort) {
+    auto lower = [](const LinearizationBounds& b) {
+        return b.hasLower && (b.lowerIsGlobal || b.lowerReasonComplete);
+    };
+    auto upper = [](const LinearizationBounds& b) {
+        return b.hasUpper && (b.upperIsGlobal || b.upperReasonComplete);
+    };
+    auto openSign = [&](const LinearizationBounds& b) {
+        if (lower(b) && b.lower == 0 && b.lowerStrict) return 1;
+        if (upper(b) && b.upper == 0 && b.upperStrict) return -1;
+        return 0;
+    };
+    const int xs = openSign(xb), ys = openSign(yb);
+    auto reasons = [&](const std::vector<SatLit>& first, const std::vector<SatLit>& second) {
+        std::vector<SatLit> result{nonlinearReason};
+        for (const auto* sources : {&first, &second})
+            for (auto premise : *sources)
+                if (std::find(result.begin(), result.end(), premise) == result.end()) result.push_back(premise);
+        return result;
+    };
     std::vector<LinearCut> cuts;
+    auto face = [&](const mpq_class& bx, const mpq_class& by, bool over,
+                    const std::vector<SatLit>& whyX, const std::vector<SatLit>& whyY,
+                    const char* tag) {
+        // The strict sign below subsumes this closed zero face.
+        if (xs && ys && bx == 0 && by == 0 && over == (xs != ys)) return;
+        ZeroLinearConstraint constraint;
+        // Under-estimator: -t + bx*y + by*x - bx*by <= 0.
+        // Each face needs only its own pair of justified endpoints.
+        const mpq_class sign = over ? 1 : -1;
+        constraint.expr.terms = {{t.name, sign}, {y, -sign * bx}, {x, -sign * by}};
+        constraint.expr.constant = sign * bx * by;
+        constraint.rel = Relation::Leq;
+        constraint.sort = sort;
+        constraint.debugTag = tag;
+        cuts.push_back({std::move(constraint), reasons(whyX, whyY), tag});
+    };
+    if (lower(xb) && lower(yb))
+        face(xb.lower, yb.lower, false, xb.lowerReasons, yb.lowerReasons, "mccormick_lower1");
+    if (upper(xb) && upper(yb))
+        face(xb.upper, yb.upper, false, xb.upperReasons, yb.upperReasons, "mccormick_lower2");
+    if (upper(xb) && lower(yb))
+        face(xb.upper, yb.lower, true, xb.upperReasons, yb.lowerReasons, "mccormick_upper1");
+    if (lower(xb) && upper(yb))
+        face(xb.lower, yb.upper, true, xb.lowerReasons, yb.upperReasons, "mccormick_upper2");
 
-    // Cut 1: -t + lx*y + ly*x - lx*ly <= 0
-    {
-        ZeroLinearConstraint z;
-        z.expr.terms.push_back({t.name, mpq_class(-1)});
-        z.expr.terms.push_back({y, lx});
-        z.expr.terms.push_back({x, ly});
-        z.expr.constant = -(lx * ly);
-        z.rel = Relation::Leq;
-        z.sort = sort;
-        z.debugTag = "mccormick_lower1";
-        cuts.push_back({std::move(z), baseReasons, "mccormick_lower1"});
+    // Two open zero endpoints prove the strict product sign over the reals.
+    // No integer unit gap is applied to a real endpoint.
+    if (xs && ys) {
+        ZeroLinearConstraint constraint;
+        constraint.expr.terms = {{t.name, mpq_class(xs == ys ? -1 : 1)}};
+        constraint.rel = Relation::Lt;
+        constraint.sort = sort;
+        constraint.debugTag = "mccormick_strict_sign";
+        cuts.push_back({std::move(constraint),
+            reasons(xs > 0 ? xb.lowerReasons : xb.upperReasons,
+                    ys > 0 ? yb.lowerReasons : yb.upperReasons), "mccormick_strict_sign"});
     }
-
-    // Cut 2: -t + ux*y + uy*x - ux*uy <= 0
-    {
-        ZeroLinearConstraint z;
-        z.expr.terms.push_back({t.name, mpq_class(-1)});
-        z.expr.terms.push_back({y, ux});
-        z.expr.terms.push_back({x, uy});
-        z.expr.constant = -(ux * uy);
-        z.rel = Relation::Leq;
-        z.sort = sort;
-        z.debugTag = "mccormick_lower2";
-        cuts.push_back({std::move(z), baseReasons, "mccormick_lower2"});
-    }
-
-    // Cut 3: t - ux*y - ly*x + ux*ly <= 0
-    {
-        ZeroLinearConstraint z;
-        z.expr.terms.push_back({t.name, mpq_class(1)});
-        z.expr.terms.push_back({y, -ux});
-        z.expr.terms.push_back({x, -ly});
-        z.expr.constant = ux * ly;
-        z.rel = Relation::Leq;
-        z.sort = sort;
-        z.debugTag = "mccormick_upper1";
-        cuts.push_back({std::move(z), baseReasons, "mccormick_upper1"});
-    }
-
-    // Cut 4: t - lx*y - uy*x + lx*uy <= 0
-    {
-        ZeroLinearConstraint z;
-        z.expr.terms.push_back({t.name, mpq_class(1)});
-        z.expr.terms.push_back({y, -lx});
-        z.expr.terms.push_back({x, -uy});
-        z.expr.constant = lx * uy;
-        z.rel = Relation::Leq;
-        z.sort = sort;
-        z.debugTag = "mccormick_upper2";
-        cuts.push_back({std::move(z), baseReasons, "mccormick_upper2"});
-    }
-
     return cuts;
 }
 

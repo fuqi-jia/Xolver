@@ -3,6 +3,7 @@
 #include "base/EnvParam.h"
 #include "search/coordination/TheoryAtomRegistry.h"
 #include "search/coordination/TheoryLemmaDatabase.h"
+#include "search/combination/SharedEqualityBasis.h"
 #include "contracts/DebugTrace.h"
 #include "algebra/linear/LinearExpr.h"
 #include "contracts/SatSolver.h"
@@ -628,17 +629,9 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
     }
 
     // 3. Collect theory-propagated shared equalities.
-    // ARRAY-INDEX scoping (read2 fix): an array-index pair's deduced equality
-    // (e.g. a computed store index = a read index) must reach the array's pending
-    // Row1/Row2. But an early-derivable deduced equality generated at STANDARD
-    // effort is dropped by cb_propagate AND cached (deducedEqCache_ + lemmaDb dedup),
-    // which permanently blocks its re-emission at FULL effort where propagation is
-    // sound. So DEFER array-index-pair deduced equalities to Full effort only — we
-    // skip them at Standard so they are neither cached nor lemmaDb-recorded, then
-    // emit cleanly at Full. Scoped to array-index pairs (which are few): propagating
-    // EVERY deduced equality at Full instead floods the SAT core (broad regressions
-    // + a new false-SAT, observed on the blanket attempt). Non-array pairs keep
-    // their exact existing behavior (no UFLIA/UFNIA change).
+    // Array index and value equalities retain Full-effort scheduling to stay
+    // synchronized with pending array axioms. Other proved shared equalities
+    // use the entailment channel during partial-assignment propagation.
     std::unordered_set<SharedTermId> arrayIdxSet;
     for (auto& s : solvers_) {
         auto v = s->arrayIndexSharedTerms();
@@ -655,9 +648,8 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
     for (size_t i = 0; i < solvers_.size(); ++i) {
         auto* solver = solvers_[i].get();
         if (!solver->supportsCombination()) continue;
-        // EUF equalities are obligations of congruence, datatype and array
-        // reasoning. Standard's return value is not installed by cb_propagate;
-        // don't record these clauses as emitted there and lose them forever.
+        // Keep EUF's existing Full-effort schedule for congruence, datatype,
+        // and array obligations.
         if (solver->id() == TheoryId::EUF && effort != TheoryEffort::Full) continue;
         auto props = solver->getDeducedSharedEqualities();
         // At Full effort, augment with bounded atom-level Gaussian implied
@@ -686,6 +678,7 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
                          (int)solver->id(), (int)effort, props.size(), arrayPair, deferred);
             std::fflush(stderr);
         }
+        SharedEqualityBasis equalityBasis;
         for (auto& prop : props) {
             // Defer array-index-pair deduced equalities to Full effort (see above).
             if (effort != TheoryEffort::Full &&
@@ -703,6 +696,12 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
                        << stName(sharedTermRegistry_, prop.b) << "\n";
                 continue;
             }
+            // A connected basis shares every proved equality transitively.
+            // Select it after scheduling/care filters, before creating SAT
+            // atoms: publishing a whole equality clique adds quadratic search
+            // state. Keep this local to the current producer/check so changed
+            // explanations after backtracking remain eligible for delivery.
+            if (!equalityBasis.insert(prop.a, prop.b)) continue;
             // EUF having merged a pair does not discharge the arithmetic
             // obligation: always publish the shared equality to the SAT core.
             SatLit eqLit = registry_->getOrCreateSharedEqualityAtom(prop.a, prop.b);
@@ -722,9 +721,8 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
                 NO_DBG << "  cached, skip\n";
                 continue;
             }
-            deducedEqCache_.insert(key);
-
             TheoryLemma lemma;
+            lemma.kind = LemmaKind::Entailment;
             for (auto& reason : prop.reasons) {
                 lemma.lits.push_back(reason.negated());
             }
@@ -733,18 +731,28 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
             ConflictMinimizer::dedup(lemma.lits);
             lemma.lits.push_back(eqLit);
             NO_DBG << "[NO-RET-8] lemma=" << debug::fmtClause(lemma.lits) << "\n";
-            if (lemmaDb.insertIfNew(lemma)) {
-                if (g_combDiag()) {
-                    ++g_cd.dedEqLemma;
-                    auto eufIt2 = solverByTheory_.find(TheoryId::EUF);
-                    if (eufIt2 != solverByTheory_.end() &&
-                        eufIt2->second->sharedTermsMerged(prop.a, prop.b))
-                        ++g_cd.dedEqEufMerged;
-                    else
-                        ++g_cd.dedEqAtomFresh;
-                }
-                return TheoryCheckResult::mkLemma(std::move(lemma));
+            if (lemmaDb.isInstalled(lemma)) {
+                deducedEqCache_.insert(key);
+                continue;
             }
+            // Generation is not installation. A consumer that has not yet
+            // installed a clause must still be able to receive it again.
+            (void)lemmaDb.insertIfNew(lemma);
+            if (config::read<config::ReadKind::Presence>("XOLVER_ENTAIL_DIAG")) {
+                std::fprintf(stderr, "[ENTAIL] shared effort=%d literals=%zu\n",
+                             static_cast<int>(effort), lemma.lits.size());
+                std::fflush(stderr);
+            }
+            if (g_combDiag()) {
+                ++g_cd.dedEqLemma;
+                auto eufIt2 = solverByTheory_.find(TheoryId::EUF);
+                if (eufIt2 != solverByTheory_.end() &&
+                    eufIt2->second->sharedTermsMerged(prop.a, prop.b))
+                    ++g_cd.dedEqEufMerged;
+                else
+                    ++g_cd.dedEqAtomFresh;
+            }
+            return TheoryCheckResult::mkLemma(std::move(lemma));
         }
     }
 
@@ -1136,43 +1144,52 @@ std::optional<TheorySolver::TheoryModel> TheoryManager::getModel() const {
     // EUF opaque token as a freshly-minted number can violate an arith bound
     // (unsound printed model) while the validator sees Indeterminate and lets
     // it through.
-    std::unordered_map<std::string, std::string> arithNum;  // var -> numeric str
+    std::vector<std::pair<TheoryId, TheorySolver::TheoryModel>> models;
+    models.reserve(solvers_.size());
     for (const auto& solver : solvers_) {
         auto m = solver->getModelWithInternal();
-        if (!m) continue;
-        if (solver->id() == TheoryId::EUF) continue;  // tokens, not numbers
-        for (const auto& [name, value] : m->assignments) {
+        if (m) models.emplace_back(solver->id(), std::move(*m));
+    }
+    std::unordered_map<std::string, std::string> arithNum;  // var -> numeric str
+    std::unordered_map<std::string, std::string> eufTokens; // var -> class token
+    for (const auto& [theory, model] : models) {
+        if (theory == TheoryId::EUF) {
+            eufTokens.insert(model.assignments.begin(), model.assignments.end());
+            continue;
+        }
+        for (const auto& [name, value] : model.assignments) {
             if (value == "true" || value == "false") continue;
             if (value.empty() || value[0] == '@') continue;  // not a number
             arithNum.emplace(name, value);  // first arith wins
         }
     }
 
-    for (const auto& solver : solvers_) {
-        auto m = solver->getModelWithInternal();
-        if (m) {
-            for (const auto& [name, value] : m->assignments) {
-                aggregated.assignments.insert({name, value});  // first wins
-            }
-            for (const auto& [name, value] : m->numericAssignments) {
-                aggregated.numericAssignments.insert({name, value});  // first wins
-            }
-            for (const auto& [name, interp] : m->functionInterps) {
-                aggregated.functionInterps.insert({name, interp});  // first wins
-            }
-            for (const auto& [name, interp] : m->arrayInterps) {
-                aggregated.arrayInterps.insert({name, interp});  // first wins
-            }
-            for (const auto& [value, interp] : m->arrayValues)
-                aggregated.arrayValues.insert({value, interp});
+    for (const auto& [theory, model] : models) {
+        (void)theory;
+        for (const auto& [name, value] : model.assignments) {
+            aggregated.assignments.insert({name, value});  // first wins
         }
+        for (const auto& [name, value] : model.numericAssignments) {
+            aggregated.numericAssignments.insert({name, value});  // first wins
+        }
+        for (const auto& [name, interp] : model.functionInterps) {
+            aggregated.functionInterps.insert({name, interp});  // first wins
+        }
+        for (const auto& [name, interp] : model.arrayInterps) {
+            aggregated.arrayInterps.insert({name, interp});  // first wins
+        }
+        for (const auto& [value, interp] : model.arrayValues)
+            aggregated.arrayValues.insert({value, interp});
     }
 
     // Build token -> "#n:<rational>" using each scalar that has BOTH an EUF
     // token and an arith numeric value. (Numeric tokens "#n:.." already carry
     // their value and need no remap.)
     std::unordered_map<std::string, std::string> tokenToNum;
-    for (const auto& [name, tok] : aggregated.assignments) {
+    // First-wins aggregation preserves the primary numeric witness and can
+    // hide EUF's assignment for the same name. Keep that source correspondence
+    // separately so tables and arrays use the same values as their arguments.
+    for (const auto& [name, tok] : eufTokens) {
         if (tok.empty() || tok[0] != '@') continue;     // only opaque tokens
         auto it = arithNum.find(name);
         if (it == arithNum.end()) continue;
@@ -1316,6 +1333,21 @@ std::optional<TheorySolver::TheoryModel> TheoryManager::getModel() const {
         for (auto& [n, ai] : aggregated.arrayInterps) {
             (void)n; noteNum(ai.defaultVal);
             for (auto& [ix, el] : ai.entries) { noteNum(ix); noteNum(el); }
+        }
+        for (const auto& [handle, ai] : aggregated.arrayValues) {
+            (void)handle; noteNum(ai.defaultVal);
+            for (const auto& [ix, el] : ai.entries) { noteNum(ix); noteNum(el); }
+        }
+        for (const auto& [name, fi] : aggregated.functionInterps) {
+            (void)name; noteNum(fi.deflt);
+            for (const auto& entry : fi.entries) {
+                for (const auto& arg : entry.args) noteNum(arg);
+                noteNum(entry.value);
+            }
+        }
+        for (const auto& [name, value] : aggregated.numericAssignments) {
+            (void)name;
+            if (auto q = value.tryAsRational()) noteNum(q->get_str());
         }
 
         long long nextFree = 0;

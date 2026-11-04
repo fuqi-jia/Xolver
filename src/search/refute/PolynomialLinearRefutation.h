@@ -55,4 +55,14 @@ private:
     std::map<LinearRow, int> productRows_;
 };
 
+// Combine trusted consequences with the current source context. A consequence
+// whose premises were withdrawn (including a polarity change) is ignored.
+// Internal explanation labels never escape into the returned source conflict.
+std::optional<std::vector<SatLit>> refuteByPolynomialConsequences(
+    PolynomialLinearRefuter&,
+    const std::vector<SignRefuteConstraint>&,
+    const std::vector<PolynomialConsequence>&,
+    std::chrono::steady_clock::time_point deadline,
+    PolynomialLinearStatistics* = nullptr);
+
 } // namespace xolver

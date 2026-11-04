@@ -581,6 +581,17 @@ ExprId UnconditionalConstantPropagation::substituteRec(ExprId root) {
         if (!frame.processed) {
             frame.processed = true;
 
+            // Collection also finds required equalities below negated
+            // implications and disjunctions. Keep their defining atoms here,
+            // not only in substituteAssertion's positive And traversal. Bare
+            // UF arguments deliberately remain variables, so removing x = c
+            // would otherwise disconnect f(x) from the propagated constant.
+            if (isSourceOfBinding(e)) {
+                substMemo_[e] = e;
+                stack.pop_back();
+                continue;
+            }
+
             // UF applications: substitute under the app ONLY when it has a
             // COMPOUND argument (an arithmetic expression like `(+ a c)`). There,
             // propagating `c=0` and folding `(+ a 0) -> a` (constantFoldRec runs

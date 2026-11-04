@@ -413,9 +413,12 @@ void EufSolver::collectFunctionInterps(TheoryModel& model) const {
 
         auto& fi = model.functionInterps[fname];
         if (fi.argSorts.empty() && !n.args.empty()) {
-            for (EufTermId a : n.args)
-                fi.argSorts.push_back(sortName(termManager_.node(a).sort));
-            fi.retSort = sortName(n.sort);
+            // Internal true/false sentinel nodes intentionally have NullSort.
+            // The original application's children retain the declared sorts;
+            // export those rather than an egraph implementation marker.
+            for (ExprId child : oe.children)
+                fi.argSorts.push_back(sortName(nativeTerms_->get(child).sort));
+            fi.retSort = sortName(oe.sort);
             // Empty default: a tuple absent from the table -> the validator's
             // UFApply lookup sees an empty value -> Indeterminate (sound floor),
             // never a guessed value. Every UFApply in the ground assertions was

@@ -21,10 +21,16 @@ struct PolynomialBooleanStatistics {
     bool exhausted = false;
 };
 
+// Each pair denotes an original arithmetic atom and its clause polarity.
+// Clauses are theory tautologies, independent of the current Boolean model.
+using PolynomialTheoryClause = std::vector<std::pair<ExprId, bool>>;
+using PolynomialClauseConsumer = std::function<void(const PolynomialTheoryClause&)>;
+
 // Whole-formula Boolean abstraction with explained polynomial conflicts. The
 // sign calculus holds over reals and integers alike. Modular conflicts use
 // only atoms whose polynomial variables are explicitly integer-sorted.
 // Only UNSAT is concluded; an open relaxation never establishes feasibility.
 bool refutePolynomialBoolean(const NativeTerms&, const std::vector<ExprId>&,
-    const BooleanRefutationLimits&, PolynomialBooleanStatistics* = nullptr);
+    const BooleanRefutationLimits&, PolynomialBooleanStatistics* = nullptr,
+    const PolynomialClauseConsumer& = {});
 } // namespace xolver

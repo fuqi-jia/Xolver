@@ -1,4 +1,5 @@
 #include "base/RuntimeConfig.h"
+#include "base/SolveClock.h"
 #include "base/EnvParam.h"
 #include "runtime/SolverImpl.h"
 #include "ir/NativeFeatures.h"
@@ -57,10 +58,14 @@ Result Solver::Impl::checkSatInternal() {
         const auto traceOption = options.find("produce-pa-certificate");
         const bool recordPA = traceOption != options.end() &&
             traceOption->second.kind == OptionValue::Bool && traceOption->second.b;
-        if (!ir && !recordPA) return Result::Sat;
+        if (!ir && !recordPA) {
+            lastModel_ = TheorySolver::TheoryModel{};
+            return Result::Sat;
+        }
         if (!ir) ensureIr();
         if (ir->assertions().empty() && assumptionRoots_.empty() && !recordPA) {
             lastModel_ = TheorySolver::TheoryModel{};
+            completeUnusedFunctionModels();
             return Result::Sat;
         }
 
@@ -104,6 +109,11 @@ Result Solver::Impl::checkSatInternal() {
         lastUnknownReason_ = std::move(answer.reason);
         lastModel_ = std::move(answer.model);
         lastProof_ = std::move(answer.proof);
+        // Model conversions have run; the true residual can supply an empty
+        // model before AssertionRestore fires. Function freedom is checked
+        // against original-query dependencies, not abstraction auxiliaries.
+        if (usedGround && answer.result == Result::Sat)
+            completeUnusedFunctionModels();
         if (!usedGround) {
             originalAssertions_ = quantifiedRoots;
             // A full-assertion core is conservative until the logical backend
@@ -846,9 +856,11 @@ Result Solver::Impl::checkSatGround() {
             roots.insert(roots.end(), indicatorRoots_.begin(), indicatorRoots_.end());
             const auto started = std::chrono::steady_clock::now();
             BooleanRefutationLimits limits;
-            limits.deadline = started + std::chrono::milliseconds(50);
+            limits.deadline = wall::deadline();
             PolynomialBooleanStatistics stats;
-            const bool refuted = refutePolynomialBoolean(*ir, roots, limits, &stats);
+            std::vector<PolynomialTheoryClause> learned;
+            const bool refuted = refutePolynomialBoolean(*ir, roots, limits, &stats,
+                [&](const PolynomialTheoryClause& clause) { learned.push_back(clause); });
             const auto profile = config::read<config::ReadKind::ProfilePath>("ARITH_STAGE_PROF", "/tmp/xolver_stageprof.txt");
             if (!profile.empty()) {
                 std::ofstream out(profile.string() + ".boolean-refutation.log", std::ios::app);
@@ -870,6 +882,19 @@ Result Solver::Impl::checkSatGround() {
                 finalizeCaseStats(Result::Unsat, 0.0, nullptr, nullptr, cadicalBackend);
 #endif
                 return Result::Unsat;
+            }
+            // Preserve completed theory work when the bounded abstraction
+            // remains open. These clauses contain the original signed atoms,
+            // not private SAT variables. AssertionRestore confines them to
+            // this check, including checks under assumptions and push/pop.
+            for (const auto& clause : learned) {
+                TermExpr disjunction{Kind::Or, ir->boolSortId(), {}, Payload{}};
+                for (const auto& [expression, positive] : clause)
+                    disjunction.children.push_back(positive ? expression :
+                        ir->add(TermExpr{Kind::Not, ir->boolSortId(), {expression}, Payload{}}));
+                if (!disjunction.children.empty())
+                    ir->addAssertion(disjunction.children.size() == 1 ? disjunction.children.front() :
+                        ir->add(std::move(disjunction)));
             }
         }
 
@@ -1513,6 +1538,7 @@ Result Solver::Impl::checkSatGround() {
                                            lastModel_->assignments, *ir);
             if (features.hasArray && lastModel_)
                 completeArrayModel(*ir, originalAssertions_, *lastModel_);
+            completeUnusedFunctionModels();
             // NOTE: we intentionally do NOT gate the SAT verdict on
             // re-validating the extracted model against the original
             // assertions. Verdict soundness ("a model exists", derived by

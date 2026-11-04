@@ -196,8 +196,7 @@ class QuadraticSignContext {
     const std::vector<SignRefuteConstraint>& constraints_;
     VarSigns variables_;
     WorkBudget budget_{200000};
-    std::chrono::steady_clock::time_point deadline_ =
-        std::chrono::steady_clock::now() + std::chrono::milliseconds(20);
+    std::chrono::steady_clock::time_point deadline_ = wall::deadline();
     QuadraticSignStatistics& stats_;
 
     void tick(size_t amount = 1) {

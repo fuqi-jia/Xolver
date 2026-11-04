@@ -40,6 +40,15 @@ struct SignRefuteConstraint {
     SatLit reason;
 };
 
+// A derived polynomial fact with its complete original SAT premises. The
+// producer must establish the implication; consumers retain the explanation
+// when combining the fact with another arithmetic relaxation.
+struct PolynomialConsequence {
+    RationalPolynomial poly;
+    Relation rel;
+    std::vector<SatLit> premises;
+};
+
 // The conflict reason lits if some constraint is refuted by sign-definiteness;
 // nullopt otherwise.
 std::optional<std::vector<SatLit>>

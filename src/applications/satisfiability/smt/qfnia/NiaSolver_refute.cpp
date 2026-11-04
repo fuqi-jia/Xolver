@@ -1,6 +1,8 @@
 #include "base/RuntimeConfig.h"
+#include "base/SolveClock.h"
 #include "search/refute/SignDefinitenessRefuter.h"
 #include "search/refute/PolynomialSignClosure.h"
+#include "search/refute/PolynomialConeRefutation.h"
 #include "applications/satisfiability/smt/qfnia/NiaSolver.h"
 #include <algorithm>
 #include "search/dl/DifferenceGraph.h"
@@ -61,7 +63,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageSignRefute(TheoryLemmaStorage&,
     if (!conflict) {
         PolynomialSignStatistics stats;
         const auto started = std::chrono::steady_clock::now();
-        conflict = refuteByPolynomialSignClosure(constraints, &stats);
+        conflict = refuteByPolynomialSignClosure(constraints, &stats, {.allInteger = true});
         const auto profile = config::read<config::ReadKind::ProfilePath>("ARITH_STAGE_PROF", "/tmp/xolver_stageprof.txt");
         if (!profile.empty()) {
             std::ofstream out(profile.string() + ".polynomial-sign.log", std::ios::app);
@@ -75,6 +77,8 @@ std::optional<TheoryCheckResult> NiaSolver::stageSignRefute(TheoryLemmaStorage&,
                 << std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started).count() << '\n';
         }
     }
+    if (!conflict) conflict = refuteByPolynomialCone(constraints,
+        wall::deadline(), {.allInteger = true});
     if (!conflict) conflict = refuteByQuadraticSigns(constraints);
     if (!conflict) return std::nullopt;
     return TheoryCheckResult::mkConflict(TheoryConflict{std::move(*conflict)});

@@ -1,0 +1,10 @@
+; Equal Boolean arguments must have equal UF images in mixed arithmetic.
+(set-logic QF_UFLIA)
+(set-info :status unsat)
+(declare-const p Bool)
+(declare-const x Int)
+(declare-const y Int)
+(declare-fun f (Bool) Int)
+(assert (= p (< x y)))
+(assert (distinct (f p) (f (< x y))))
+(check-sat)

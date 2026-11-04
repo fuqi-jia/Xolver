@@ -12,12 +12,14 @@
 // Expected: solveCsp finds B = (0, 0), choice 0 → ray (0, 1), CT ≥ 2.
 
 #include "ir/NativeTerms.h"
+#include "ir/ResolvedConjunction.h"
 #include "search/nia/farkas/FarkasOrDetector.h"
 #include "search/nia/farkas/FarkasOrSolver.h"
 #include "search/nia/farkas/FarkasOrTypes.h"
 
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -60,6 +62,55 @@ struct IrB {
 };
 
 } // namespace
+
+TEST_CASE("FarkasOrDetector: cyclic Boolean expansions remain residual") {
+    IrB b;
+    const auto p = b.v("p", b.boolSort);
+    const auto q = b.v("q", b.boolSort);
+    const auto lambda = b.v("lambda", b.intSort);
+    const auto nonnegative = b.mk(Kind::Geq, {lambda, b.c(0)});
+    ExprId body = b.mk(Kind::And, {p, nonnegative});
+    SUBCASE("self dependency") {}
+    SUBCASE("mutual dependency") {
+        body = b.mk(Kind::And, {q, nonnegative});
+        b.ir.addAssertion(b.mk(Kind::Eq, {q, b.mk(Kind::And, {p, nonnegative})}));
+    }
+    b.ir.addAssertion(b.mk(Kind::Eq, {p, body}));
+    const auto branch = b.mk(Kind::Or, {p, body});
+    b.ir.addAssertion(branch);
+    b.ir.addAssertion(b.mk(Kind::And, {p, nonnegative}));
+    const auto profile = FarkasOrDetector(b.ir).detect();
+    CHECK(profile.blocks.empty());
+    CHECK(std::find(profile.outerAssertions.begin(), profile.outerAssertions.end(), branch) !=
+          profile.outerAssertions.end());
+}
+
+TEST_CASE("Resolved conjunctions: alias cycles reject partial expansions") {
+    IrB b;
+    const auto p = b.v("p", b.boolSort);
+    const auto q = b.v("q", b.boolSort);
+    const auto atom = b.mk(Kind::Geq, {b.v("x", b.intSort), b.c(0)});
+    const std::vector<ExprId> roots{atom, p};
+    CHECK_FALSE(resolvedConjuncts(b.ir, roots, [&](ExprId id) {
+        if (id == p) return q;
+        if (id == q) return p;
+        return id;
+    }));
+}
+
+TEST_CASE("Resolved conjunctions: deep shared DAGs preserve distinct atoms in order") {
+    IrB b;
+    const auto x = b.v("x", b.intSort);
+    const auto first = b.mk(Kind::Geq, {x, b.c(0)});
+    const auto second = b.mk(Kind::Leq, {x, b.c(3)});
+    auto nested = first;
+    for (size_t i = 0; i < 20000; ++i)
+        nested = b.mk(Kind::And, {nested, nested});
+    const std::vector<ExprId> roots{nested, second, first};
+    const auto flat = resolvedConjuncts(b.ir, roots);
+    REQUIRE(flat);
+    CHECK((*flat == std::vector<ExprId>{first, second}));
+}
 
 TEST_CASE("FarkasOrSolver: end-to-end Stroeder-shape 1-block 2-branch") {
     IrB b;

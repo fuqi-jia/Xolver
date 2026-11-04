@@ -1,0 +1,10 @@
+; Typed defaults also cover unconstrained functions returning arrays.
+(set-option :produce-models true)
+(set-logic QF_AUFLRA)
+(set-info :status sat)
+(declare-const x Real)
+(declare-fun unused (Real) (Array Real Real))
+(assert (> x 0))
+(assert (= (unused x) (unused x)))
+(check-sat)
+(get-model)

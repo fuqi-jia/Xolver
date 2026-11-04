@@ -1,8 +1,10 @@
 #include "search/refute/PolynomialSignClosure.h"
 #include "search/refute/MonomialSquares.h"
+#include "base/RationalLattice.h"
 #include "base/WorkBudget.h"
 #include <algorithm>
 #include <chrono>
+#include <deque>
 #include <iterator>
 #include <map>
 #include <set>
@@ -117,12 +119,19 @@ std::optional<Affine> affine(const RationalPolynomial& polynomial) {
 
 class SignClosure {
     PolynomialSignStatistics& stats_;
+    bool allInteger_;
+    std::unordered_set<VarId> integerVariables_;
     WorkBudget budget_{100000};
-    const std::chrono::steady_clock::time_point deadline_ =
-        std::chrono::steady_clock::now() + std::chrono::milliseconds(10);
+    const std::chrono::steady_clock::time_point deadline_ = wall::deadline();
     std::vector<Fact> facts_;
     std::unordered_map<std::string, size_t> index_;
     std::unordered_map<VarId, size_t> variableIndex_;
+    std::map<MonomialKey, Proof> monomialProofs_;
+    std::unordered_map<VarId, std::vector<size_t>> occurrences_;
+    std::deque<size_t> urgent_, pending_;
+    std::vector<bool> scheduled_, urgentFacts_;
+    std::vector<unsigned> initialSigns_;
+    size_t originalFacts_ = 0;
     std::unordered_set<size_t> substitutedFacts_;
     std::map<VarId, Range> ranges_;
     std::map<VarId, Fixed> fixed_;
@@ -169,6 +178,16 @@ class SignClosure {
         }
         return key;
     }
+    void schedule(size_t position) {
+        if (scheduled_[position]) return;
+        scheduled_[position] = true;
+        (urgentFacts_[position] ? urgent_ : pending_).push_back(position);
+    }
+    void variableChanged(VarId variable) {
+        monomialProofs_.clear();
+        if (const auto found = occurrences_.find(variable); found != occurrences_.end())
+            for (const auto position : found->second) schedule(position);
+    }
     bool add(RationalPolynomial polynomial, unsigned signs, Reasons reasons) {
         tick();
         const auto key = canonical(polynomial, signs);
@@ -178,8 +197,13 @@ class SignClosure {
             if (!(actual & signs)) throw Conflict{std::move(reasons)};
             return false;
         }
+        const bool variableFact = polynomial.terms().size() == 1 &&
+            polynomial.terms().begin()->first.size() == 1 &&
+            polynomial.terms().begin()->first.front().second == 1;
         const auto it = index_.find(key);
+        size_t position;
         if (it != index_.end()) {
+            position = it->second;
             auto& old = facts_[it->second];
             const unsigned intersection = old.signs & signs;
             if (intersection == old.signs) return false;
@@ -192,7 +216,12 @@ class SignClosure {
             if (!signs) throw Conflict{std::move(reasons)};
             if (signs == Any) return false;
             if (facts_.size() >= 256) throw ResourceExhausted("sign closure fact allocation exhausted");
-            index_.emplace(key, facts_.size());
+            position = facts_.size();
+            index_.emplace(key, position);
+            scheduled_.push_back(false);
+            initialSigns_.push_back(signs);
+            urgentFacts_.push_back(polynomial.terms().size() == 1 || affine(polynomial).has_value());
+            for (const auto variable : polynomial.variables()) occurrences_[variable].push_back(position);
             if (polynomial.terms().size() == 1) {
                 const auto& [monomial, coefficient] = *polynomial.terms().begin();
                 if (coefficient == 1 && monomial.size() == 1 && monomial[0].second == 1) {
@@ -202,6 +231,8 @@ class SignClosure {
             }
             facts_.push_back({std::move(polynomial), signs, std::move(reasons)});
         }
+        schedule(position);
+        if (variableFact) variableChanged(facts_[position].poly.terms().begin()->first.front().first);
         changed_ = true;
         ++stats_.inferredFacts;
         return true;
@@ -219,7 +250,18 @@ class SignClosure {
     }
     Proof monomialSign(const MonomialKey& monomial, const mpq_class& coefficient,
                        std::optional<std::pair<VarId, unsigned>> assumption = std::nullopt) {
-        Proof result{coefficient > 0 ? Pos : coefficient < 0 ? Neg : Zero, {}};
+        tick();
+        if (coefficient == 0) return {Zero, {}};
+        // A trial sign can reuse an ordinary proof only when its variable is
+        // absent. Conditional proofs must never enter the unconditional cache.
+        const bool conditional = assumption && std::any_of(monomial.begin(), monomial.end(),
+            [&](const auto& power) { return power.first == assumption->first; });
+        if (!conditional) if (const auto found = monomialProofs_.find(monomial); found != monomialProofs_.end()) {
+            auto result = found->second;
+            if (coefficient < 0) result.signs = negate(result.signs);
+            return result;
+        }
+        Proof result{Pos, {}};
         for (const auto& [variable, exponent] : monomial) {
             tick();
             auto factor = assumption && assumption->first == variable
@@ -229,6 +271,8 @@ class SignClosure {
             result.signs = combine(result.signs, factor.signs, true);
             include(result.reasons, factor.reasons);
         }
+        if (!conditional) monomialProofs_.emplace(monomial, result);
+        if (coefficient < 0) result.signs = negate(result.signs);
         return result;
     }
     Proof polynomialSign(const RationalPolynomial& polynomial) {
@@ -274,11 +318,27 @@ class SignClosure {
         return result;
     }
     void bound(VarId variable, bool lower, const mpq_class& value, bool strict, const Reasons& reasons) {
+        mpq_class endpoint = value;
+        const bool integral = allInteger_ || integerVariables_.contains(variable);
+        bool rounded = false;
+        if (integral) {
+            mpz_class integer;
+            // Closed lower and open upper endpoints use ceil; their duals
+            // use floor. Strict integer endpoints then move inward by one.
+            if (lower != strict)
+                mpz_cdiv_q(integer.get_mpz_t(), value.get_num_mpz_t(), value.get_den_mpz_t());
+            else
+                mpz_fdiv_q(integer.get_mpz_t(), value.get_num_mpz_t(), value.get_den_mpz_t());
+            if (strict) integer += lower ? 1 : -1;
+            endpoint = integer;
+            rounded = strict || endpoint != value;
+            strict = false;
+        }
         auto& range = ranges_[variable];
         auto& previous = lower ? range.lower : range.upper;
-        if (!previous || (lower ? value > previous->value : value < previous->value) ||
-            (value == previous->value && strict && !previous->strict))
-            previous = Bound{value, strict, reasons};
+        const bool tightened = !previous || (lower ? endpoint > previous->value : endpoint < previous->value) ||
+            (endpoint == previous->value && strict && !previous->strict);
+        if (tightened) previous = Bound{endpoint, strict, reasons};
         if (range.lower && range.upper) {
             Reasons support = range.lower->reasons;
             include(support, range.upper->reasons);
@@ -286,13 +346,21 @@ class SignClosure {
                 (range.lower->value == range.upper->value && (range.lower->strict || range.upper->strict)))
                 throw Conflict{std::move(support)};
             if (range.lower->value == range.upper->value && !fixed_.contains(variable)) {
-                fixed_.emplace(variable, Fixed{value, std::move(support)});
+                fixed_.emplace(variable, Fixed{range.lower->value, std::move(support)});
+                variableChanged(variable);
                 changed_ = true;
             }
         }
-        const auto polynomial = RationalPolynomial::fromVar(variable, 1, 1);
-        if (lower && value >= 0) add(polynomial, value > 0 || strict ? Pos : Pos | Zero, reasons);
-        if (!lower && value <= 0) add(polynomial, value < 0 || strict ? Neg : Neg | Zero, reasons);
+        auto polynomial = RationalPolynomial::fromVar(variable, 1, 1);
+        if (lower && endpoint >= 0) add(polynomial, endpoint > 0 || strict ? Pos : Pos | Zero, reasons);
+        if (!lower && endpoint <= 0) add(polynomial, endpoint < 0 || strict ? Neg : Neg | Zero, reasons);
+        if (tightened && rounded) {
+            // Qualitative product reasoning can establish x>0 without an
+            // original unary bound. Publish x>=1 (for Int x) as an explained
+            // affine fact so factor and remainder proofs can consume it.
+            polynomial -= RationalPolynomial::fromConstant(endpoint);
+            add(std::move(polynomial), lower ? Zero | Pos : Neg | Zero, reasons);
+        }
     }
     void linearBounds(const Fact& fact) {
         const auto form = affine(fact.poly);
@@ -300,6 +368,19 @@ class SignClosure {
         const mpq_class value = -form->constant / form->coefficient;
         if (!(fact.signs & Neg)) bound(form->variable, form->coefficient > 0, value, !(fact.signs & Zero), fact.reasons);
         if (!(fact.signs & Pos)) bound(form->variable, form->coefficient < 0, value, !(fact.signs & Zero), fact.reasons);
+    }
+    void integerGap(const Fact& fact) {
+        if ((!allInteger_ && integerVariables_.empty()) || (fact.signs != Pos && fact.signs != Neg)) return;
+        const auto gap = rationalLatticeStep(fact.poly.terms(),
+            [&](VarId variable) { return allInteger_ || integerVariables_.contains(variable); },
+            [&](size_t amount) { tick(amount); });
+        if (!gap) return;
+        // Every monomial, including the constant monomial, is an integer.
+        // Rational coefficients therefore place P on this exact lattice.
+        // A strict sign excludes zero and gives an explained closed endpoint.
+        auto shifted = fact.poly;
+        shifted.addConstant(fact.signs == Pos ? -*gap : *gap);
+        add(std::move(shifted), fact.signs | Zero, fact.reasons);
     }
     void necessarySupport(const Fact& fact, const std::vector<Proof>& terms, const Reasons& support) {
         const bool positive = fact.signs == Pos ||
@@ -645,6 +726,7 @@ class SignClosure {
             substitutedFacts_.insert(position);
             return;
         }
+        integerGap(fact);
         linearBounds(fact);
         Proof sum{Zero, {}};
         std::vector<Proof> terms;
@@ -787,21 +869,33 @@ class SignClosure {
         }
     }
 public:
-    explicit SignClosure(PolynomialSignStatistics& statistics) : stats_(statistics) { facts_.reserve(256); }
+    SignClosure(PolynomialSignStatistics& statistics, PolynomialDomain domain)
+        : stats_(statistics), allInteger_(domain.allInteger),
+          integerVariables_(domain.integerVariables.begin(), domain.integerVariables.end()) {
+        facts_.reserve(256);
+    }
     void run(const std::vector<SignRefuteConstraint>& constraints) {
         if (constraints.size() > 128) throw ResourceExhausted("sign closure input allocation exhausted");
         for (const auto& constraint : constraints) add(constraint.poly, signsOf(constraint.rel), {constraint.reason});
+        originalFacts_ = facts_.size();
         stats_.inferredFacts = 0;
         bool certificatesTried = false;
         for (size_t round = 0; round < 32; ++round) {
             ++stats_.rounds;
             changed_ = false;
-            const size_t limit = facts_.size();
-            for (size_t i = 0; i < limit; ++i) {
+            // Analyze only new/strengthened facts or facts whose variable
+            // signs/fixed values changed. Drain cheap boundary and monomial
+            // propagation before returning to polynomial decompositions.
+            while (!urgent_.empty() || !pending_.empty()) {
                 tick();
-                if (!substitutedFacts_.contains(i)) analyze(facts_[i], i);
+                auto& queue = urgent_.empty() ? pending_ : urgent_;
+                const auto position = queue.front();
+                queue.pop_front();
+                scheduled_[position] = false;
+                if (!substitutedFacts_.contains(position)) analyze(facts_[position], position);
             }
-            if (changed_) continue;
+            const size_t limit = facts_.size();
+            changed_ = false;
             if (!certificatesTried) {
                 certificatesTried = true;
                 equationalSquareProof();
@@ -843,17 +937,39 @@ public:
         }
         throw ResourceExhausted("sign closure round allocation exhausted");
     }
+    void releaseConsequences(std::vector<PolynomialConsequence>& output) {
+        output.reserve(facts_.size());
+        for (size_t i = 0; i < facts_.size(); ++i) {
+            auto& fact = facts_[i];
+            if (substitutedFacts_.contains(i) || (i < originalFacts_ && fact.signs == initialSigns_[i])) continue;
+            Relation relation;
+            switch (fact.signs) {
+                case Neg: relation = Relation::Lt; break;
+                case Zero: relation = Relation::Eq; break;
+                case Pos: relation = Relation::Gt; break;
+                case Neg | Zero: relation = Relation::Leq; break;
+                case Neg | Pos: relation = Relation::Neq; break;
+                case Zero | Pos: relation = Relation::Geq; break;
+                default: continue;
+            }
+            output.push_back({std::move(fact.poly), relation, std::move(fact.reasons)});
+        }
+    }
 };
 } // namespace
 
 std::optional<std::vector<SatLit>> refuteByPolynomialSignClosure(
-    const std::vector<SignRefuteConstraint>& constraints, PolynomialSignStatistics* statistics) {
+    const std::vector<SignRefuteConstraint>& constraints, PolynomialSignStatistics* statistics,
+    PolynomialDomain domain, std::vector<PolynomialConsequence>* consequences) {
     PolynomialSignStatistics local;
     auto& stats = statistics ? *statistics : local;
     stats = {};
-    try { SignClosure(stats).run(constraints); }
+    if (consequences) consequences->clear();
+    SignClosure closure(stats, domain);
+    try { closure.run(constraints); }
     catch (Conflict& conflict) { return std::move(conflict.reasons); }
     catch (const ResourceExhausted&) { stats.exhausted = true; }
+    if (consequences) closure.releaseConsequences(*consequences);
     return std::nullopt;
 }
 } // namespace xolver

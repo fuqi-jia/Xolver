@@ -1,6 +1,8 @@
 #include "frontend/preprocess/BoolSubtermPurifier.h"
 #include <cassert>
+#include <algorithm>
 #include <iostream>
+#include <unordered_set>
 
 namespace xolver {
 
@@ -121,7 +123,14 @@ static bool isAtomicBoolPos(Kind k, size_t i) {
         case Kind::And:
         case Kind::Or:
         case Kind::Implies:
-        case Kind::Xor:     return true;        // every operand is a bool position
+        case Kind::Xor:
+        case Kind::Eq:
+        case Kind::Distinct:
+            // Boolean equality/distinct are logical equivalence/XOR, encoded
+            // directly by the atomizer. Numeric operands cannot themselves be
+            // Boolean composites. An equality used as a UF argument is still
+            // lifted through the inherited argument context.
+            return true;
         case Kind::Ite:     return i == 0;      // only the condition
         default:            return false;
     }
@@ -216,21 +225,57 @@ bool BoolSubtermPurifier::run() {
     memo_.clear();
     generatedAssertions_.clear();
 
-    // Process all current assertions at scope 0 (they are in formula position)
-    auto assertions = ir_.assertions();
-    std::vector<ExprId> newAssertions;
-    newAssertions.reserve(assertions.size());
-    for (ExprId a : assertions) {
-        newAssertions.push_back(purifyRec(a, false));
+    // Formula position is independent of the assertion's lifetime. Rewriting
+    // must retain each source level, including when run in an inner scope.
+    auto assertions = ir_.getScopedAssertions();
+    for (auto& [level, expression] : assertions) {
+        (void)level;
+        expression = purifyRec(expression, false);
     }
-    ir_.replaceAssertions(newAssertions);
+    if (changed_) {
+        ir_.clearAssertions();
+        for (const auto& [level, expression] : assertions)
+            ir_.addAssertion(expression, level);
+    }
 
     return changed_;
 }
 
 void BoolSubtermPurifier::commit() {
-    for (ExprId a : generatedAssertions_) {
-        ir_.addAssertion(a);
+    if (generatedAssertions_.empty()) return;
+
+    // A shared argument may first be visited in a child scope and subsequently
+    // reused by a parent assertion. Its definition, and any nested fresh
+    // definitions it uses, must live at the earliest scope of those users.
+    std::unordered_map<ExprId, ExprId> definitions;
+    for (auto definition : generatedAssertions_) {
+        const auto node = ir_.get(definition);
+        assert(node.children.size() == 2);
+        definitions.emplace(node.children[0], definition);
+    }
+    auto roots = ir_.getScopedAssertions();
+    std::stable_sort(roots.begin(), roots.end(), [](const auto& a, const auto& b) {
+        return a.first < b.first;
+    });
+    std::unordered_set<ExprId> visited;
+    std::unordered_map<ExprId, ScopeLevel> definitionLevels;
+    for (const auto& [level, root] : roots) {
+        std::vector<ExprId> pending{root};
+        while (!pending.empty()) {
+            const auto expression = pending.back();
+            pending.pop_back();
+            if (!visited.insert(expression).second) continue;
+            if (const auto found = definitions.find(expression); found != definitions.end()) {
+                definitionLevels.emplace(found->second, level);
+                pending.push_back(found->second);
+            }
+            const auto node = ir_.get(expression);
+            for (auto child : node.children) pending.push_back(child);
+        }
+    }
+    for (auto definition : generatedAssertions_) {
+        const auto found = definitionLevels.find(definition);
+        if (found != definitionLevels.end()) ir_.addAssertion(definition, found->second);
     }
 }
 

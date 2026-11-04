@@ -3,6 +3,8 @@
 #include "ir/NativeTerms.h"
 #include "applications/satisfiability/smt/qfuf/EufSolver.h"
 #include "search/coordination/TheoryLemmaDatabase.h"
+#include "search/combination/CareGraph.h"
+#include <algorithm>
 #include <fstream>
 #include <filesystem>
 #include <cstdlib>
@@ -424,6 +426,109 @@ static TheoryAtomRecord makeEufRecord(ExprId lhs, ExprId rhs,
                                        EufAtomKind kind = EufAtomKind::Equality) {
     return TheoryAtomRecord{SatVar(1), TheoryId::EUF, false, NullExpr,
                             EufAtomPayload{lhs, rhs, rel, kind}};
+}
+
+TEST_CASE("EUF sharing: equality bases preserve explanations across class splits") {
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Int);
+    SharedTermRegistry registry;
+    registry.setNativeTerms(&ir);
+    constexpr SharedTermId count = 12;
+    std::vector<SharedTermId> terms;
+    for (SharedTermId i = 0; i < count; ++i) {
+        const auto name = "shared_" + std::to_string(i);
+        const auto expression = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(name)});
+        terms.push_back(registry.getOrCreate(expression, 0, name, false));
+    }
+    EufSolver solver;
+    solver.setNativeTerms(&ir);
+    solver.setSharedTermRegistry(&registry);
+    TheoryLemmaDatabase database;
+    struct Edge { SharedTermId a, b; SatLit reason; };
+    std::vector<Edge> sources;
+    for (SharedTermId i = 1; i < count; ++i) {
+        if (i == count / 2) continue;
+        SatLit reason{i, true};
+        sources.push_back({terms[i - 1], terms[i], reason});
+        REQUIRE(solver.assertInterfaceEquality(terms[i - 1], terms[i], reason, 0).kind ==
+                TheoryCheckResult::Kind::Consistent);
+    }
+    REQUIRE(solver.check(database, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Consistent);
+
+    auto verify = [&](bool joined) {
+        const auto facts = solver.getDeducedSharedEqualities();
+        CHECK(facts.size() == count - (joined ? 1 : 2));
+        for (const auto& fact : facts) {
+            std::vector<bool> proved(count, false);
+            proved[fact.a] = true;
+            for (SharedTermId pass = 0; pass < count; ++pass) {
+                for (const auto& edge : sources) {
+                    if (std::find(fact.reasons.begin(), fact.reasons.end(), edge.reason) == fact.reasons.end())
+                        continue;
+                    if (proved[edge.a] || proved[edge.b]) proved[edge.a] = proved[edge.b] = true;
+                }
+            }
+            CHECK(proved[fact.b]);
+        }
+        for (SharedTermId start = 0; start < count; ++start) {
+            std::vector<bool> reached(count, false);
+            reached[start] = true;
+            for (SharedTermId pass = 0; pass < count; ++pass) {
+                for (const auto& fact : facts)
+                    if (reached[fact.a] || reached[fact.b]) reached[fact.a] = reached[fact.b] = true;
+            }
+            for (SharedTermId i = 0; i < count; ++i)
+                CHECK(reached[i] == (joined || start / (count / 2) == i / (count / 2)));
+        }
+    };
+    verify(false);
+    const SatLit bridge{count, true};
+    sources.push_back({terms[count / 2 - 1], terms[count / 2], bridge});
+    REQUIRE(solver.assertInterfaceEquality(terms[count / 2 - 1], terms[count / 2], bridge, 1).kind ==
+            TheoryCheckResult::Kind::Consistent);
+    REQUIRE(solver.check(database, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Consistent);
+    verify(true);
+    solver.backtrackToLevel(0);
+    sources.pop_back();
+    verify(false);
+    for (const auto& fact : solver.getDeducedSharedEqualities())
+        CHECK(std::find(fact.reasons.begin(), fact.reasons.end(), bridge) == fact.reasons.end());
+}
+
+TEST_CASE("EUF sharing: a cared anchor connects every relevant class member") {
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Int);
+    ir.registerSort(1, SortKind::Bool);
+    SharedTermRegistry registry;
+    registry.setNativeTerms(&ir);
+    std::vector<ExprId> expressions;
+    std::vector<SharedTermId> terms;
+    for (int i = 0; i < 3; ++i) {
+        const auto name = "argument_" + std::to_string(i);
+        expressions.push_back(ir.add(TermExpr{Kind::Variable, 0, {}, Payload(name)}));
+        terms.push_back(registry.getOrCreate(expressions.back(), 0, name, false));
+    }
+    const auto application = ir.add(TermExpr{Kind::UFApply, 0, {expressions.back()}, Payload(std::string("f"))});
+    const auto zero = ir.add(TermExpr{Kind::ConstInt, 0, {}, Payload(int64_t(0))});
+    ir.addAssertion(ir.add(TermExpr{Kind::Eq, 1, {application, zero}, Payload{}}));
+    CareGraph care;
+    care.build(ir, registry);
+    CHECK_FALSE(care.cares(terms[0]));
+    CHECK_FALSE(care.cares(terms[1]));
+    REQUIRE(care.cares(terms[2]));
+    EufSolver solver;
+    solver.setNativeTerms(&ir);
+    solver.setSharedTermRegistry(&registry);
+    solver.setCareGraph(&care);
+    TheoryLemmaDatabase database;
+    for (SharedTermId i = 1; i < terms.size(); ++i)
+        REQUIRE(solver.assertInterfaceEquality(terms[i - 1], terms[i], SatLit{i, true}, 0).kind ==
+                TheoryCheckResult::Kind::Consistent);
+    REQUIRE(solver.check(database, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Consistent);
+    const auto facts = solver.getDeducedSharedEqualities();
+    REQUIRE(facts.size() == 2);
+    for (const auto& fact : facts)
+        CHECK((fact.a == terms[2] || fact.b == terms[2]));
 }
 
 TEST_CASE("EUF incremental: basic equality merge consistent") {

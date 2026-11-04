@@ -22,8 +22,274 @@
 #include <fstream>
 #include <iterator>
 #include <limits>
+#include <utility>
 
 using namespace xolver;
+
+namespace {
+struct ClauseDeliveryHarness {
+    struct Lookup : TheoryAtomLookup {
+        TheoryAtomRecord premise{};
+        const TheoryAtomRecord* findBySatVar(SatVar var) const override {
+            return var == premise.satVar ? &premise : nullptr;
+        }
+    } registry;
+    struct Callbacks : TheoryPropagationCallbacks {
+        std::optional<TheoryLemma> returned;
+        std::vector<TheoryLemma> buffered;
+        int checks = 0;
+        void assertTheoryLit(const TheoryAtomRecord&, SatLit, int) override {}
+        void backtrackToLevel(int) override {}
+        void setAssignmentView(TheoryAssignmentView*) override {}
+        TheoryCheckResult check(TheoryLemmaStorage& database, TheoryEffort) override {
+            ++checks;
+            if (returned) {
+                (void)database.insertIfNew(*returned);
+                return TheoryCheckResult::mkLemma(*returned);
+            }
+            return TheoryCheckResult::consistent();
+        }
+        std::vector<TheoryLemma> takeEntailmentPropagations() override {
+            return std::exchange(buffered, {});
+        }
+    } theories;
+    CadicalBackend backend;
+    TheoryLemmaDatabase database;
+    CadicalTheoryPropagator propagator{registry, theories, database, backend};
+    SatVar premise, paddingA, paddingB, first, second;
+    ClauseDeliveryHarness() {
+        premise = backend.newVar();
+        paddingA = backend.newVar();
+        paddingB = backend.newVar();
+        first = backend.newVar();
+        second = backend.newVar();
+        registry.premise = {premise, TheoryId::LRA, true, NullExpr,
+            LinearAtomPayload{{}, Relation::Eq, RealValue::fromInt(0)}};
+        backend.connectPropagator(&propagator);
+        for (auto var : {premise, paddingA, paddingB, first, second})
+            backend.addObservedVar(var);
+    }
+    ~ClauseDeliveryHarness() { backend.disconnectPropagator(); }
+    TheoryLemma implication(SatVar consequent, LemmaKind kind = LemmaKind::Entailment) {
+        return {{{premise, false}, {consequent, true}}, kind};
+    }
+    void checkPartial() {
+        propagator.notify_assignment({static_cast<int>(premise),
+            static_cast<int>(paddingA), static_cast<int>(paddingB)});
+        CHECK(propagator.cb_propagate() == 0);
+        REQUIRE(theories.checks == 1);
+    }
+};
+
+struct SharedEqualityHarness {
+    struct Registrar : DynamicAtomRegistrar {
+        SatSolver& backend;
+        explicit Registrar(SatSolver& solver) : backend(solver) {}
+        SatLit registerDynamicAtom(ExprId, TheoryId) override {
+            return SatLit::positive(backend.newVar());
+        }
+    };
+    struct EqualityTheory : TheorySolver {
+        TheoryId theory;
+        std::vector<SharedEqualityPropagation> facts;
+        explicit EqualityTheory(TheoryId id) : theory(id) {}
+        TheoryId id() const override { return theory; }
+        void push() override {}
+        void pop(uint32_t) override {}
+        void reset() override {}
+        void backtrackToLevel(int) override {}
+        void assertLit(const TheoryAtomRecord&, bool, int, SatLit) override {}
+        bool supportsCombination() const override { return true; }
+        TheoryCheckResult check(TheoryLemmaStorage&, TheoryEffort) override {
+            return TheoryCheckResult::consistent();
+        }
+        std::vector<SharedEqualityPropagation> getDeducedSharedEqualities() override {
+            return facts;
+        }
+    };
+    CadicalBackend backend;
+    Registrar registrar{backend};
+    TheoryAtomRegistry registry;
+    TheoryManager manager;
+    TheoryLemmaDatabase database;
+    CadicalTheoryPropagator propagator{registry, manager, database, backend};
+    EqualityTheory* theory;
+
+    explicit SharedEqualityHarness(TheoryId id) {
+        registry.setContext(&backend, &registrar);
+        manager.setCombinationMode(true);
+        manager.setRegistry(&registry);
+        auto solver = std::make_unique<EqualityTheory>(id);
+        theory = solver.get();
+        manager.registerSolver(std::move(solver));
+        backend.connectPropagator(&propagator);
+    }
+    ~SharedEqualityHarness() { backend.disconnectPropagator(); }
+
+    std::vector<TheoryLemma> drain() {
+        std::vector<TheoryLemma> clauses;
+        for (size_t i = 0; i < 256; ++i) {
+            auto result = manager.check(database, TheoryEffort::Full);
+            if (result.kind == TheoryCheckResult::Kind::Consistent) return clauses;
+            REQUIRE(result.lemmaOpt);
+            clauses.push_back(*result.lemmaOpt);
+            database.markInstalled(clauses.back());
+        }
+        FAIL("Shared equality publication did not finish");
+        return clauses;
+    }
+};
+} // namespace
+
+TEST_CASE("SAT sharing: dense proved equalities publish a connected linear basis") {
+    for (const auto id : {TheoryId::LIA, TheoryId::LRA, TheoryId::EUF}) {
+        CAPTURE(static_cast<int>(id));
+        SharedEqualityHarness h(id);
+        const SatLit premise = SatLit::positive(h.backend.newVar());
+        constexpr SharedTermId count = 16;
+        for (SharedTermId a = 0; a < count; ++a)
+            for (SharedTermId b = a + 1; b < count; ++b)
+                h.theory->facts.push_back({a, b, {premise}});
+        const auto clauses = h.drain();
+        CHECK(clauses.size() == count - 1);
+        CHECK(h.registry.numAtomVars() == count - 1);
+        std::vector<std::pair<SharedTermId, SharedTermId>> edges;
+        for (const auto& clause : clauses) {
+            REQUIRE(clause.lits.size() == 2);
+            CHECK(clause.lits.front() == premise.negated());
+            const auto* record = h.registry.findBySatVar(clause.lits.back().var);
+            REQUIRE(record);
+            const auto& edge = std::get<SharedEqualityPayload>(record->payload);
+            edges.emplace_back(edge.a, edge.b);
+        }
+        std::vector<bool> reached(count, false);
+        reached.front() = true;
+        for (SharedTermId pass = 0; pass < count; ++pass) {
+            for (const auto& [a, b] : edges)
+                if (reached[a] || reached[b]) reached[a] = reached[b] = true;
+        }
+        CHECK(std::all_of(reached.begin(), reached.end(), [](bool value) { return value; }));
+    }
+}
+
+TEST_CASE("SAT sharing: basis explanations refresh after backtracking") {
+    SharedEqualityHarness h(TheoryId::LRA);
+    const SatLit first = SatLit::positive(h.backend.newVar());
+    const SatLit second = SatLit::positive(h.backend.newVar());
+    h.theory->facts = {{1, 2, {first}}, {2, 3, {first}}, {1, 3, {first}}, {7, 8, {second}}};
+    const auto initial = h.drain();
+    CHECK(initial.size() == 3);
+    CHECK(h.registry.numAtomVars() == 3);
+    h.manager.backtrackToLevel(0);
+    for (auto& fact : h.theory->facts) fact.reasons = {second};
+    const auto refreshed = h.drain();
+    REQUIRE(refreshed.size() == 2);
+    for (const auto& clause : refreshed) {
+        REQUIRE(clause.lits.size() == 2);
+        CHECK(clause.lits.front() == second.negated());
+        CHECK(std::find(clause.lits.begin(), clause.lits.end(), first.negated()) == clause.lits.end());
+    }
+    CHECK(h.registry.numAtomVars() == 3);
+}
+
+TEST_CASE("SAT delivery: partial checks install entailments but retain speculative guesses") {
+    for (const auto kind : {LemmaKind::Entailment, LemmaKind::Guess}) {
+        ClauseDeliveryHarness h;
+        const auto clause = h.implication(h.first, kind);
+        h.theories.returned = clause;
+        h.checkPartial();
+        bool forgettable = true;
+        CHECK_FALSE(h.database.isInstalled(clause));
+        if (kind == LemmaKind::Guess) {
+            CHECK_FALSE(h.propagator.cb_has_external_clause(forgettable));
+            continue;
+        }
+        REQUIRE(h.propagator.cb_has_external_clause(forgettable));
+        CHECK_FALSE(forgettable);
+        CHECK(h.propagator.cb_add_external_clause_lit() == -static_cast<int>(h.premise));
+        CHECK(h.propagator.cb_add_external_clause_lit() == static_cast<int>(h.first));
+        CHECK_FALSE(h.database.isInstalled(clause));
+        CHECK(h.propagator.cb_add_external_clause_lit() == 0);
+        CHECK(h.database.isInstalled(clause));
+        CHECK_FALSE(h.propagator.cb_has_external_clause(forgettable));
+    }
+}
+
+TEST_CASE("SAT delivery: queued clauses retain individual boundaries and acknowledgments") {
+    ClauseDeliveryHarness h;
+    const auto first = h.implication(h.first);
+    const auto second = h.implication(h.second);
+    h.theories.buffered = {first, second};
+    h.checkPartial();
+    bool forgettable = true;
+    REQUIRE(h.propagator.cb_has_external_clause(forgettable));
+    CHECK(h.propagator.cb_add_external_clause_lit() == -static_cast<int>(h.premise));
+    CHECK(h.propagator.cb_add_external_clause_lit() == static_cast<int>(h.first));
+    CHECK_FALSE(h.database.isInstalled(first));
+    CHECK(h.propagator.cb_has_external_clause(forgettable));
+    CHECK_FALSE(h.database.isInstalled(first));
+    CHECK(h.propagator.cb_add_external_clause_lit() == 0);
+    CHECK(h.database.isInstalled(first));
+    CHECK_FALSE(h.database.isInstalled(second));
+    REQUIRE(h.propagator.cb_has_external_clause(forgettable));
+    CHECK(h.propagator.cb_add_external_clause_lit() == -static_cast<int>(h.premise));
+    CHECK(h.propagator.cb_add_external_clause_lit() == static_cast<int>(h.second));
+    CHECK(h.propagator.cb_add_external_clause_lit() == 0);
+    CHECK(h.database.isInstalled(second));
+    CHECK_FALSE(h.propagator.cb_has_external_clause(forgettable));
+}
+
+TEST_CASE("SAT delivery: shared equalities remain deliverable until installation") {
+    struct Registrar : DynamicAtomRegistrar {
+        SatSolver& backend;
+        explicit Registrar(SatSolver& solver) : backend(solver) {}
+        SatLit registerDynamicAtom(ExprId, TheoryId) override {
+            return SatLit::positive(backend.newVar());
+        }
+    };
+    struct EqualityTheory : TheorySolver {
+        SatLit reason;
+        explicit EqualityTheory(SatLit premise) : reason(premise) {}
+        TheoryId id() const override { return TheoryId::LRA; }
+        void push() override {}
+        void pop(uint32_t) override {}
+        void reset() override {}
+        void backtrackToLevel(int) override {}
+        void assertLit(const TheoryAtomRecord&, bool, int, SatLit) override {}
+        bool supportsCombination() const override { return true; }
+        TheoryCheckResult check(TheoryLemmaStorage&, TheoryEffort) override {
+            return TheoryCheckResult::consistent();
+        }
+        std::vector<SharedEqualityPropagation> getDeducedSharedEqualities() override {
+            return {{1, 2, {reason}}};
+        }
+    };
+    CadicalBackend backend;
+    Registrar registrar{backend};
+    const auto premise = SatLit::positive(backend.newVar());
+    TheoryAtomRegistry registry;
+    registry.setContext(&backend, &registrar);
+    TheoryManager manager;
+    manager.setCombinationMode(true);
+    manager.setRegistry(&registry);
+    manager.registerSolver(std::make_unique<EqualityTheory>(premise));
+    TheoryLemmaDatabase database;
+    CadicalTheoryPropagator propagator{registry, manager, database, backend};
+    backend.connectPropagator(&propagator);
+    struct Disconnect {
+        CadicalBackend& backend;
+        ~Disconnect() { backend.disconnectPropagator(); }
+    } disconnect{backend};
+    const auto first = manager.check(database, TheoryEffort::Standard);
+    REQUIRE(first.lemmaOpt);
+    CHECK(first.lemmaOpt->kind == LemmaKind::Entailment);
+    CHECK_FALSE(database.isInstalled(*first.lemmaOpt));
+    const auto retry = manager.check(database, TheoryEffort::Full);
+    REQUIRE(retry.lemmaOpt);
+    CHECK(retry.lemmaOpt->lits == first.lemmaOpt->lits);
+    database.markInstalled(*retry.lemmaOpt);
+    CHECK(manager.check(database, TheoryEffort::Standard).kind == TheoryCheckResult::Kind::Consistent);
+}
 
 TEST_CASE("SAT: theory model decisions include atoms registered after the first request") {
     struct Lookup : TheoryAtomLookup {

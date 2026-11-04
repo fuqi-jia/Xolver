@@ -160,6 +160,40 @@ TEST_CASE("UnconditionalConstantPropagation: deep nesting does not overflow") {
     cprop.commit();
 }
 
+TEST_CASE("UnconditionalConstantPropagation: polarity-derived bindings remain reachable") {
+    for (bool useReal : {false, true}) {
+        for (bool disjunction : {false, true}) {
+            NativeTerms ir; SortId b, i, r; setupSorts(ir, b, i, r);
+            const auto sort = useReal ? r : i;
+            const auto x = ir.add(TermExpr{Kind::Variable, sort, {}, Payload(std::string("x"))});
+            const auto four = ir.add(TermExpr{useReal ? Kind::ConstReal : Kind::ConstInt,
+                sort, {}, useReal ? Payload(std::string("4")) : Payload(int64_t(4))});
+            const auto binding = ir.add(TermExpr{Kind::Eq, b, {x, four}, {}});
+            const auto falsity = ir.add(TermExpr{Kind::ConstBool, b, {}, Payload(false)});
+            const auto negatedBinding = ir.add(TermExpr{Kind::Not, b, {binding}, {}});
+            const auto body = disjunction
+                ? ir.add(TermExpr{Kind::Or, b, {negatedBinding, falsity}, {}})
+                : ir.add(TermExpr{Kind::Implies, b, {binding, falsity}, {}});
+            ir.addAssertion(ir.add(TermExpr{Kind::Not, b, {body}, {}}));
+            UnconditionalConstantPropagation pass(ir);
+            REQUIRE(pass.run());
+            REQUIRE(pass.fixedConstMap().at("x") == 4);
+            pass.commit();
+            // The residual must still constrain x, even when other occurrences
+            // (e.g. bare arguments of a UF) are intentionally not substituted.
+            bool retainsBinding = false;
+            std::vector<ExprId> pending = ir.assertions();
+            while (!pending.empty()) {
+                const auto id = pending.back();
+                pending.pop_back();
+                if (id == binding) retainsBinding = true;
+                for (auto child : ir.get(id).children) pending.push_back(child);
+            }
+            CHECK(retainsBinding);
+        }
+    }
+}
+
 TEST_CASE("UnconditionalConstantPropagation: wide top-level And survives ir_.add realloc") {
     // substituteAssertion() held `const auto& node = ir_.get(assertion)` and then
     // iterated `node.children` while each substituteRec(child) called ir_.add(),

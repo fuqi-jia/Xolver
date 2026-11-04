@@ -17,6 +17,7 @@ namespace {
 // backend's explicit termination API rather than reading this clock.
 thread_local long long g_startNs = 0;
 thread_local long g_budgetMs = 0; // <= 0 => no deadline
+thread_local auto g_overrideDeadline = std::chrono::steady_clock::time_point::max();
 
 long long nowNs() {
     return std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -34,10 +35,39 @@ void beginSolve(long totalBudgetMs) {
 void endSolve() {
     g_startNs = 0;
     g_budgetMs = 0;
+    g_overrideDeadline = std::chrono::steady_clock::time_point::max();
 }
 
 bool hasDeadline() {
-    return g_budgetMs > 0 && g_startNs != 0;
+    return (g_budgetMs > 0 && g_startNs != 0) ||
+        g_overrideDeadline != std::chrono::steady_clock::time_point::max();
+}
+
+std::chrono::steady_clock::time_point deadline() {
+    using Clock = std::chrono::steady_clock;
+    auto result = g_overrideDeadline;
+    if (g_budgetMs > 0 && g_startNs != 0) {
+        const auto start = Clock::time_point(std::chrono::duration_cast<Clock::duration>(
+            std::chrono::nanoseconds(g_startNs)));
+        const auto capacity = std::chrono::duration_cast<std::chrono::milliseconds>(
+            Clock::time_point::max() - start).count();
+        const auto bounded = g_budgetMs > capacity ? Clock::time_point::max() :
+            start + std::chrono::milliseconds(g_budgetMs);
+        result = std::min(result, bounded);
+    }
+    return result;
+}
+
+DeadlineScope::DeadlineScope(std::chrono::steady_clock::time_point requested)
+    : previousStartNs_(g_startNs), previousBudgetMs_(g_budgetMs),
+      previousOverride_(g_overrideDeadline) {
+    g_overrideDeadline = std::min(requested, deadline());
+}
+
+DeadlineScope::~DeadlineScope() {
+    g_startNs = previousStartNs_;
+    g_budgetMs = previousBudgetMs_;
+    g_overrideDeadline = previousOverride_;
 }
 
 long elapsedMs() {
@@ -48,8 +78,17 @@ long elapsedMs() {
 
 long remainingMs() {
     if (!hasDeadline()) return NO_DEADLINE;
-    long rem = g_budgetMs - elapsedMs();
-    return rem > 0 ? rem : 0;
+    long remaining = g_budgetMs > 0 && g_startNs != 0
+        ? std::max(0L, g_budgetMs - elapsedMs()) : NO_DEADLINE;
+    if (g_overrideDeadline != std::chrono::steady_clock::time_point::max()) {
+        const auto now = std::chrono::steady_clock::now();
+        const auto milliseconds = g_overrideDeadline <= now ? 0 :
+            std::chrono::ceil<std::chrono::milliseconds>(g_overrideDeadline - now).count();
+        const auto scoped = static_cast<long>(std::min<decltype(milliseconds)>(
+            milliseconds, std::numeric_limits<long>::max()));
+        if (remaining == NO_DEADLINE || scoped < remaining) remaining = scoped;
+    }
+    return remaining;
 }
 
 namespace {

@@ -106,6 +106,26 @@ class ArithmeticComparisonCapture(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'at most one explicit'):
             comparison.model_arguments('z3', '(check-sat)(get-model)(get-model)')
 
+    def test_command_scanner_preserves_assertions_and_quoted_boundaries(self):
+        assertion = '(assert (= |x(;)| 1 ; ignored )\n))'
+        source = '; ignored (get-model)\n(set-info :notes "a"";(get-model)")\n' \
+                 + assertion + '\n(|get-model|)\n(get-model)'
+        commands = list(comparison.source_commands(source))
+        self.assertEqual([head for head, _ in commands], ['set-info', 'assert', '', 'get-model'])
+        self.assertEqual(commands[1][1], assertion)
+        self.assertEqual(comparison.model_arguments('z3', source), [])
+
+    def test_command_scanner_rejects_incomplete_syntax(self):
+        for source in ['(assert true', '(assert |x)', '(set-info :notes "x)', ')', 'sat']:
+            with self.subTest(source=source), self.assertRaises(ValueError):
+                list(comparison.source_commands(source))
+
+    def test_model_replay_prefix_is_shared_by_all_sat_results(self):
+        with patch.object(comparison, 'source_commands', wraps=comparison.source_commands) as scanned:
+            self.run_comparison(missing_model=True)
+        # Once to detect get-model, once for all actual SAT model replays.
+        self.assertEqual(scanned.call_count, 2)
+
     def test_an_invalid_initial_model_fails_despite_agreeing_sat_verdicts(self):
         status, report, metrics, _ = self.run_comparison(invalid_model=True)
         self.assertEqual(status, 1)
