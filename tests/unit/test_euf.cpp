@@ -428,6 +428,37 @@ static TheoryAtomRecord makeEufRecord(ExprId lhs, ExprId rhs,
                             EufAtomPayload{lhs, rhs, rel, kind}};
 }
 
+TEST_CASE("EUF model: full-effort witnesses survive SAT rollback") {
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Other);
+    const auto a = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("a"))});
+    const auto b = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("b"))});
+    EufSolver solver;
+    solver.setNativeTerms(&ir);
+    TheoryLemmaDatabase lemmas;
+    solver.assertLit(makeEufRecord(a, b), true, 1, SatLit::positive(1));
+    REQUIRE(solver.check(lemmas, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Consistent);
+    const auto first = solver.getModel();
+    REQUIRE(first);
+    CHECK(first->assignments.at("a") == first->assignments.at("b"));
+
+    solver.backtrackToLevel(0);
+    const auto retained = solver.getModel();
+    REQUIRE(retained);
+    CHECK(retained->assignments.at("a") == first->assignments.at("a"));
+    CHECK(retained->assignments.at("b") == first->assignments.at("b"));
+
+    auto different = makeEufRecord(a, b, Relation::Neq, EufAtomKind::Disequality);
+    different.satVar = 2;
+    solver.assertLit(different, true, 1, SatLit::positive(2));
+    REQUIRE(solver.check(lemmas, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Consistent);
+    const auto second = solver.getModel();
+    REQUIRE(second);
+    CHECK(second->assignments.at("a") != second->assignments.at("b"));
+    solver.reset();
+    CHECK_FALSE(solver.getModel());
+}
+
 TEST_CASE("EUF sharing: equality bases preserve explanations across class splits") {
     NativeTerms ir;
     ir.registerSort(0, SortKind::Int);

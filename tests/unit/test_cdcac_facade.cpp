@@ -1,3 +1,4 @@
+#include "search/nra/core/CdcacConstraint.h"
 #include <doctest/doctest.h>
 #include "search/nra/core/CdcacSolver.h"
 #include "search/nra/core/CdcacResult.h"

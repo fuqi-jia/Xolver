@@ -1,6 +1,77 @@
 # Arithmetic validation and continuation record
 
-## Current checkpoint: affine disequality completion (2026-11-05)
+## Current checkpoint: complete equality-model export (2026-11-05)
+
+The next FULINA repair preserves live equality-class witnesses and function
+interpretations, including scalar-only UF queries, and retains the last complete
+model across SAT rollback. Exported interpretations use registered source sorts.
+Generated model declarations use fresh ordinary symbols, avoid the semantic
+source namespace, and share SOMTParser's symbol printer through its documented
+`somtparser/parser.h` umbrella header. Original arithmetic rollback is unchanged.
+
+Offline model replay now represents supplied opaque domains as exact finite
+enumerations, respects binders and aliases, and checks printed interpretations
+of source-defined functions. All original assertions remain present; unsupported
+models remain unconfirmed. The same encoding applies to every comparison arm.
+
+Panda9 / ExperimentOS qualification passes **2,133 cases / 1,325,112 assertions**,
+including 43 targeted cases / 4,845 assertions. Both frozen predecessor controls
+fail their corresponding new regressions. Replay qualification passes 46 Python
+tests and 44 independent checks over 11 public positive and negative fixtures.
+
+A fresh focused round verifies **all five previously unconfirmed SAT models**,
+versus zero for the published predecessor; both Z3 and CVC5 accept each actual
+timed Xolver model. These are five newly verified witnesses, not five new SAT
+verdicts. All six retained model controls remain verified. Four supported public
+export cases pass; an older public reserved-identifier extension stays unconfirmed.
+The complete fixed160 and development587 comparisons are running. No full-stage
+acceptance or overall performance superiority is claimed yet.
+
+Frozen CLI SHA-256:
+`55fb6d45d87f7bc92ef489e19feba434c41355c0c0ac44959c9ee6127843384a`.
+Per-input budgets remain 60 seconds, one physical CPU and 16 GiB. Protected sets
+remain unused; private inputs, models, identifiers and evidence stay off GitHub.
+Original-C QCP verification for the final version remains open. Main promotion
+requires complete server acceptance and PR CI; the cancelled extra archive is
+not a delivery requirement.
+
+
+## Previous checkpoint: installed-lemma progress (2026-11-05)
+
+[PR #96](https://github.com/fuqi-jia/Xolver/pull/96) is merged as
+`1e29a1b8085c7cbc8c5c5f4b11837a0aec6dab6f`; its
+[main CI](https://github.com/fuqi-jia/Xolver/actions/runs/41945460658) passes both
+jobs. That delivered binary completes fixed160 at 111 verified results, or 112
+with the symmetric independently checked residue-certificate supplement, versus
+116 for same-round Z3. Development587 verifies 582 versus 580 for Z3. The full
+14408 comparison of that version remains in progress; these results do not
+establish overall superiority.
+
+The next FULINA repair lets arithmetic stages and integer rules advance past
+already installed lemmas. Emitted but undelivered clauses retain retry priority.
+Skipping a refinement alone never certifies consistency. The change preserves
+full original-assertion validation and the established LRA/LIA rollback policies.
+The CDCAC constraint header also compiles independently of incidental includes.
+
+Panda9 / ExperimentOS qualification passes **2,129 cases / 1,325,055 assertions**,
+including 56 targeted cases / 5,953 assertions. The new pipeline regression fails
+with the frozen predecessor implementation and passes with identical candidate
+tests and compatible headers. A private diagnostic records repeated installed
+refinements being skipped and fresh refinements reached; it earns no solve credit.
+
+The fresh five-query focused round remains **0 to 0 verified**, versus 5 for Z3.
+All 36 retained model controls remain verified, with both independent checkers
+accepting the actual timed models. There is no claimed solved-query gain or
+performance win for this repair. Full-stage acceptance remains pending before
+main promotion. Per-input budgets remain 60 seconds, one physical CPU and 16 GiB.
+
+Frozen development CLI SHA-256:
+`592459e248e5ba574d9c192a2e330acb07b7d57f269b643f0714d6047de57296`.
+Protected sets remain unused. Private queries, models and individual evidence
+stay off GitHub. Original-C QCP verification for the final version remains open;
+the cancelled extra server archive is not a delivery requirement.
+
+## Previous checkpoint: affine disequality completion (2026-11-05)
 
 [PR #95](https://github.com/fuqi-jia/Xolver/pull/95) is merged as
 `7a9e9812931cdd443df02bec7d4e7076707a4469`; its

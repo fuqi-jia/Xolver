@@ -32,6 +32,8 @@ public:
      * Run cheap integer reasoning rules on active atoms. Standard effort
      * checks conflicts without synthesizing atoms for uninstalled lemmas.
      * The default Full effort retains the complete refinement behavior.
+     * Installed refinements are skipped so later rules and atoms can run;
+     * emitted but undelivered lemmas retain priority for delivery.
      *
      * Returns:
      *   - Conflict if GCD equality conflict detected
@@ -40,6 +42,7 @@ public:
      */
     std::optional<TheoryCheckResult> run(
         const std::vector<ActiveLinearAtom>& activeAtoms,
+        TheoryLemmaStorage& lemmaDb,
         TheoryEffort effort = TheoryEffort::Full);
 
     // Full-effort interval combinations. The conflict cites the active bounds

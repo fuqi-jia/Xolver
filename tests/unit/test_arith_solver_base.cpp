@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 #include "search/arith/ArithSolverBase.h"
+#include "search/arith/Reasoner.h"
 #include "search/coordination/TheoryLemmaDatabase.h"
 
 using namespace xolver;
@@ -50,6 +51,20 @@ protected:
     void onPop(uint32_t) override { ++popCount; }
 };
 
+class PipelineArithSolver : public MockArithSolver {
+public:
+    TheoryCheckResult check(TheoryLemmaStorage& db,
+                            TheoryEffort effort = TheoryEffort::Standard) override {
+        return ArithSolverBase::check(db, effort);
+    }
+    void addStage(CallbackReasoner::Fn fn) {
+        reasoners_.push_back(std::make_unique<CallbackReasoner>("test", std::move(fn)));
+    }
+    void recordLemma(const TheoryLemma& lemma) {
+        recordPending(0, TheoryCheckResult::mkLemma(lemma));
+    }
+};
+
 TheoryAtomRecord mkAtom(SatVar v) {
     TheoryAtomRecord r;
     r.satVar = v;
@@ -61,6 +76,87 @@ TheoryAtomRecord mkAtom(SatVar v) {
 }
 
 } // namespace
+
+TEST_CASE("ArithSolverBase: installed lemmas do not starve later stages") {
+    PipelineArithSolver solver;
+    TheoryLemmaDatabase db;
+    const TheoryLemma lemma{{SatLit::negative(1), SatLit::positive(2)}};
+    db.insertIfNew(lemma);
+    db.markInstalled(lemma);
+    int laterCalls = 0;
+    solver.addStage([&](TheoryLemmaStorage&, TheoryEffort) {
+        return TheoryCheckResult::mkLemma(lemma);
+    });
+    solver.addStage([&](TheoryLemmaStorage&, TheoryEffort) {
+        ++laterCalls;
+        return TheoryCheckResult::mkConflict(TheoryConflict{{SatLit::positive(3)}});
+    });
+    const auto result = solver.check(db, TheoryEffort::Full);
+    CHECK(result.kind == TheoryCheckResult::Kind::Conflict);
+    CHECK(laterCalls == 1);
+}
+
+TEST_CASE("ArithSolverBase: emitted lemmas remain retryable until installed") {
+    PipelineArithSolver solver;
+    TheoryLemmaDatabase db;
+    const TheoryLemma lemma{{SatLit::negative(1), SatLit::positive(2)}};
+    REQUIRE(db.insertIfNew(lemma));
+    REQUIRE_FALSE(db.isInstalled(lemma));
+    int laterCalls = 0;
+    solver.addStage([&](TheoryLemmaStorage&, TheoryEffort) {
+        return TheoryCheckResult::mkLemma(lemma);
+    });
+    solver.addStage([&](TheoryLemmaStorage&, TheoryEffort) {
+        ++laterCalls;
+        return TheoryCheckResult::unknown("later stage reached");
+    });
+    for (int retry = 0; retry < 2; ++retry) {
+        const auto result = solver.check(db, TheoryEffort::Full);
+        REQUIRE(result.lemmaOpt);
+        CHECK(result.lemmaOpt->lits == lemma.lits);
+        CHECK(laterCalls == 0);
+    }
+    db.markInstalled(lemma);
+    CHECK(solver.check(db, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Unknown);
+    CHECK(laterCalls == 1);
+}
+
+TEST_CASE("ArithSolverBase: skipped lemmas never certify consistency") {
+    PipelineArithSolver solver;
+    TheoryLemmaDatabase db;
+    const TheoryLemma lemma{{SatLit::negative(1), SatLit::positive(2)}};
+    db.markInstalled(lemma);
+    solver.addStage([&](TheoryLemmaStorage&, TheoryEffort) {
+        return TheoryCheckResult::mkLemma(lemma);
+    });
+    solver.addStage([](TheoryLemmaStorage&, TheoryEffort)
+                    -> std::optional<TheoryCheckResult> { return std::nullopt; });
+    const auto result = solver.check(db, TheoryEffort::Full);
+    REQUIRE(result.lemmaOpt);
+    CHECK(result.kind == TheoryCheckResult::Kind::Lemma);
+    CHECK(result.lemmaOpt->lits == lemma.lits);
+}
+
+TEST_CASE("ArithSolverBase: pending lemma delivery precedes subsequent stages") {
+    for (const bool installed : {false, true}) {
+        PipelineArithSolver solver;
+        TheoryLemmaDatabase db;
+        const TheoryLemma lemma{{SatLit::negative(1), SatLit::positive(2)}};
+        db.insertIfNew(lemma);
+        if (installed) db.markInstalled(lemma);
+        solver.recordLemma(lemma);
+        int laterCalls = 0;
+        solver.addStage([&](TheoryLemmaStorage&, TheoryEffort) {
+            ++laterCalls;
+            return TheoryCheckResult::unknown("pending delivery complete");
+        });
+        const auto result = solver.check(db, TheoryEffort::Full);
+        CHECK(result.kind == (installed ? TheoryCheckResult::Kind::Unknown
+                                        : TheoryCheckResult::Kind::Lemma));
+        CHECK(laterCalls == (installed ? 1 : 0));
+        CHECK_FALSE(solver.pending());
+    }
+}
 
 TEST_CASE("ArithSolverBase: assertLit appends and dedups by satVar") {
     MockArithSolver s;

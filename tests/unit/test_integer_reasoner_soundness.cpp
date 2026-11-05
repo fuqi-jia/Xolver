@@ -46,6 +46,7 @@ struct Fixture {
     Allocator allocator;
     TheoryAtomRegistry registry;
     IntegerReasoner reasoner;
+    TheoryLemmaDatabase lemmas;
     Fixture() {
         registry.setContext(&allocator, &allocator);
         reasoner.setRegistry(&registry);
@@ -424,17 +425,83 @@ TEST_CASE("IntegerReasoner: partial checks do not synthesize vocabulary") {
     const auto tighten = f.atom({{{"x", 2}}}, Relation::Leq, 3);
     const auto impossible = f.atom({{{"y", 2}}}, Relation::Eq, 1);
     const auto atoms = f.registry.numAtomVars();
-    const auto conflict = f.reasoner.run({tighten, impossible}, TheoryEffort::Standard);
+    const auto conflict = f.reasoner.run({tighten, impossible}, f.lemmas, TheoryEffort::Standard);
     REQUIRE(conflict);
     CHECK(conflict->kind == TheoryCheckResult::Kind::Conflict);
     REQUIRE(conflict->conflictOpt);
     CHECK(conflict->conflictOpt->clause == std::vector<SatLit>{impossible.lit});
     CHECK(f.registry.numAtomVars() == atoms);
     // The default call retains its complete refinement behavior.
-    const auto lemma = f.reasoner.run({tighten});
+    const auto lemma = f.reasoner.run({tighten}, f.lemmas);
     REQUIRE(lemma);
     REQUIRE(lemma->lemmaOpt);
     for (int x = -4; x <= 4; ++x) CHECK(f.holds(*lemma->lemmaOpt, {{"x", x}}));
+}
+
+TEST_CASE("IntegerReasoner: installed refinements do not starve later atoms") {
+    Fixture f;
+    const auto first = f.atom({{{"x", 2}}}, Relation::Leq, 1);
+    bool drained = false;
+    size_t firstRefinements = 0;
+    for (int attempt = 0; attempt < 4; ++attempt) {
+        const auto result = f.reasoner.run({first}, f.lemmas);
+        if (!result) { drained = true; break; }
+        REQUIRE(result->lemmaOpt);
+        CHECK_FALSE(f.lemmas.isInstalled(*result->lemmaOpt));
+        f.lemmas.insertIfNew(*result->lemmaOpt);
+        f.lemmas.markInstalled(*result->lemmaOpt);
+        ++firstRefinements;
+    }
+    REQUIRE(drained);
+    CHECK(firstRefinements > 0);
+    const auto second = f.atom({{{"y", 3}}}, Relation::Leq, 2);
+    const auto result = f.reasoner.run({first, second}, f.lemmas);
+    REQUIRE(result);
+    REQUIRE(result->lemmaOpt);
+    CHECK_FALSE(f.lemmas.isInstalled(*result->lemmaOpt));
+    CHECK(std::find(result->lemmaOpt->lits.begin(), result->lemmaOpt->lits.end(),
+        second.lit.negated()) != result->lemmaOpt->lits.end());
+    for (int x = -4; x <= 4; ++x) for (int y = -4; y <= 4; ++y)
+        CHECK(f.holds(*result->lemmaOpt, {{"x", x}, {"y", y}}));
+}
+
+TEST_CASE("IntegerReasoner: emitted refinements retry without new vocabulary") {
+    Fixture f;
+    const auto first = f.atom({{{"x", 2}}}, Relation::Leq, 1);
+    const auto second = f.atom({{{"y", 3}}}, Relation::Leq, 2);
+    const auto initial = f.reasoner.run({first, second}, f.lemmas);
+    REQUIRE(initial);
+    REQUIRE(initial->lemmaOpt);
+    REQUIRE(f.lemmas.insertIfNew(*initial->lemmaOpt));
+    const auto vocabulary = f.registry.numAtomVars();
+    for (int retry = 0; retry < 2; ++retry) {
+        const auto result = f.reasoner.run({first, second}, f.lemmas);
+        REQUIRE(result);
+        REQUIRE(result->lemmaOpt);
+        CHECK(result->lemmaOpt->lits == initial->lemmaOpt->lits);
+        CHECK(f.registry.numAtomVars() == vocabulary);
+        CHECK_FALSE(f.lemmas.isInstalled(*result->lemmaOpt));
+    }
+}
+
+TEST_CASE("IntegerReasoner: installed refinements do not hide a later gcd conflict") {
+    Fixture f;
+    const auto first = f.atom({{{"x", 2}}}, Relation::Leq, 1);
+    bool drained = false;
+    for (int attempt = 0; attempt < 4; ++attempt) {
+        const auto result = f.reasoner.run({first}, f.lemmas);
+        if (!result) { drained = true; break; }
+        REQUIRE(result->lemmaOpt);
+        REQUIRE_FALSE(f.lemmas.isInstalled(*result->lemmaOpt));
+        f.lemmas.markInstalled(*result->lemmaOpt);
+    }
+    REQUIRE(drained);
+    const auto impossible = f.atom({{{"y", 2}}}, Relation::Eq, 1);
+    const auto result = f.reasoner.run({first, impossible}, f.lemmas);
+    REQUIRE(result);
+    REQUIRE(result->conflictOpt);
+    CHECK(result->kind == TheoryCheckResult::Kind::Conflict);
+    CHECK(result->conflictOpt->clause == std::vector<SatLit>{impossible.lit});
 }
 
 TEST_CASE("LiaSolver: primitive coupled rows reach a validated integer repair") {
@@ -810,7 +877,7 @@ TEST_CASE("IntegerReasoner soundness: rational strict bound lemmas preserve witn
         // True x/2 < 1 admits x=1; false x/2 <= 0 admits x=1.
         auto atom = f.atom(LinearFormKey{{{"x",mpq_class(1,2)}}},
             value ? Relation::Lt : Relation::Leq, value ? 1 : 0, value);
-        auto result = f.reasoner.run({atom});
+        auto result = f.reasoner.run({atom}, f.lemmas);
         REQUIRE(result.has_value());
         REQUIRE(result->kind == TheoryCheckResult::Kind::Lemma);
         REQUIRE(result->lemmaOpt.has_value());
@@ -826,7 +893,7 @@ TEST_CASE("IntegerReasoner soundness: disequalities do not imply one-sided bound
         auto atom = f.atom(LinearFormKey{{{"x",2}}}, value ? Relation::Neq : Relation::Eq, 4, value);
         const Values witness{{"x",3}};
         REQUIRE(f.holds(atom.lit, witness));
-        if (auto result = f.reasoner.run({atom})) {
+        if (auto result = f.reasoner.run({atom}, f.lemmas)) {
             REQUIRE(result->kind == TheoryCheckResult::Kind::Lemma);
             REQUIRE(result->lemmaOpt.has_value());
             CHECK(f.holds(*result->lemmaOpt, witness));

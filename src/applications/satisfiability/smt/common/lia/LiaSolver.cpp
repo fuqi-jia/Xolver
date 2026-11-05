@@ -548,10 +548,10 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
             return TheoryCheckResult::mkConflict(std::move(*conflict));
 
     if (!activeAtoms_.empty()) {
-        auto cr = integerReasoner_.run(activeAtoms_, effort);
+        auto cr = integerReasoner_.run(activeAtoms_, lemmaDb, effort);
         if (cr) {
             if (cr->kind == TheoryCheckResult::Kind::Lemma && cr->lemmaOpt) {
-                if (!lemmaDb.contains(*cr->lemmaOpt)) return *cr;
+                if (!lemmaDb.isInstalled(*cr->lemmaOpt)) return *cr;
             } else {
                 return *cr;
             }
