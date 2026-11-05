@@ -15,8 +15,14 @@ void PolynomialConverter::prepare(const NativeTerms& ir) {
     const auto identity = ir.expressionIndexIdentity();
     if (expressionIdentity_ != identity) {
         memo_.clear();
+        variableSorts_.clear();
         expressionIdentity_ = identity;
     }
+}
+
+std::optional<SortKind> PolynomialConverter::variableSort(VarId variable) const {
+    const auto found = variableSorts_.find(variable);
+    return found == variableSorts_.end() ? std::nullopt : found->second;
 }
 
 void PolynomialConverter::charge(size_t amount) {
@@ -166,6 +172,9 @@ std::optional<RationalPolynomial> PolynomialConverter::collectRec(
         case Kind::Variable: {
             if (auto* s = std::get_if<std::string>(&e.payload.value)) {
                 VarId v = kernel_.getOrCreateVar(*s);
+                const auto sort = ir.sortKind(e.sort);
+                const auto [position, inserted] = variableSorts_.emplace(v, sort);
+                if (!inserted && position->second != sort) position->second = std::nullopt;
                 result = RationalPolynomial::fromVar(v, 1, mpq_class(1));
             }
             break;

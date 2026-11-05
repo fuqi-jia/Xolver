@@ -283,6 +283,35 @@ TEST_CASE("PolynomialConverter: expression index replacement invalidates cached 
     CHECK(restored.scale * kernel->toConstant(restored.poly) == 7);
 }
 
+TEST_CASE("PolynomialConverter: observed declaration sorts follow index lifetime and remain conservative") {
+    auto kernel = createPolynomialKernel();
+    PolynomialConverter converter(*kernel);
+    NativeTerms terms;
+    terms.registerSort(0, SortKind::Int);
+    terms.registerSort(1, SortKind::Real);
+    const auto x = terms.add({Kind::Variable, 0, {}, Payload(std::string("x"))});
+    const auto y = terms.add({Kind::Variable, 1, {}, Payload(std::string("y"))});
+    REQUIRE(converter.convert(x, terms).ok());
+    REQUIRE(converter.convert(y, terms).ok());
+    const auto xv = kernel->getOrCreateVar("x"), yv = kernel->getOrCreateVar("y");
+    CHECK(converter.variableSort(xv) == SortKind::Int);
+    CHECK(converter.variableSort(yv) == SortKind::Real);
+    CHECK_FALSE(converter.variableSort(kernel->getOrCreateVar("unobserved")));
+    const auto alias = terms.add({Kind::Variable, 1, {}, Payload(std::string("x"))});
+    REQUIRE(converter.convert(alias, terms).ok());
+    CHECK_FALSE(converter.variableSort(xv));
+    REQUIRE(converter.convert(x, terms).ok());
+    CHECK_FALSE(converter.variableSort(xv));
+
+    NativeTerms replacement;
+    replacement.registerSort(0, SortKind::Real);
+    const auto realX = replacement.add({Kind::Variable, 0, {}, Payload(std::string("x"))});
+    terms = std::move(replacement);
+    REQUIRE(converter.convert(realX, terms).ok());
+    CHECK(converter.variableSort(xv) == SortKind::Real);
+    CHECK_FALSE(converter.variableSort(yv));
+}
+
 TEST_CASE("PolynomialConverter: linear expression") {
     NativeTerms ir;
     ir.registerSort(0, SortKind::Real);

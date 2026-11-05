@@ -84,8 +84,41 @@ Panda qualification passes **2,161 cases / 1,327,351 assertions**, including
 predecessors and retain exact arithmetic, deadline and scope behavior. Constructed
 integer and real feasible variants have independently accepted actual timed
 models. One constructed integer refutation improves from 0.366 to 0.034 seconds;
-the selected original hard queries remain unresolved. No fixed-suite gain is
-claimed. Complete comparisons of this following implementation remain pending.
+that change alone does not close the selected original hard queries. Complete
+comparisons retain all 587 development and 14,408 private results. Raw fixed160
+coverage is **113 to 114 verified**, versus 115 for same-round Z3; one Xolver
+UNSAT remains unconfirmed and excluded. The additional solved input is linear
+real arithmetic, so it is not attributed to these nonlinear changes. There are
+no losses or errors. This is a completed prefix comparison, not qualification
+of the following implementation.
+
+The subsequent candidate retains fully constructed polynomial facts when a
+later conversion reaches its existing construction limit. Unconverted atoms
+remain uninterpreted in a refutation-only overapproximation; its models never
+establish SAT. The converter also carries observed declaration sorts, avoiding
+a second traversal of source expressions after exact cancellation. Unknown or
+conflicting sorts never justify integer reasoning.
+
+NIA now reuses the same exact polynomial linear relaxation as NRA. It retains
+unconditional monomial definitions, replaces explained bounds for each active
+context, and checks the complete normalized integer and interface constraints
+before accepting a projected model. Fractional values or independent monomial
+points cannot establish integer SAT. Pure linear integer decision and existing
+LRA/LIA rollback policies remain unchanged; no resource parameter is increased.
+
+Proof-enabled Panda9 / ExperimentOS qualification passes **2,166 cases /
+1,327,414 assertions**, including **153 focused cases / 6,697 assertions**.
+The frozen CLI is
+e3ed5f8c29e108d061ca11aedd778c035b37730b1d7d45e0d863fe5bccfbcb36.
+New regressions check coupled nonlinear conflict explanations, withdrawal and
+opposite-polarity branches, solver reset, and rejection of invalid candidate
+points. The qualified predecessor fails the new conflict regression. A fresh
+seven-input comparison improves **3 to 4 independently verified results**,
+with no losses or errors: one original integer UNSAT changes from a 60-second
+timeout to **2.522 seconds**, versus **0.065 seconds** for same-round Z3. Three
+inputs still time out, including two original gaps. Complete fresh fixed160,
+development587 and private14408 comparisons of this candidate are running.
+Main promotion, PR CI and subsequent main CI remain pending.
 
 Private inputs, models and individual evidence remain off GitHub. Protected sets
 remain unused. The cancelled extra server archive is not a delivery requirement.

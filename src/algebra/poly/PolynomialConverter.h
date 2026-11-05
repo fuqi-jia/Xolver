@@ -67,6 +67,10 @@ public:
     ConvertedConstraint convertConstraint(ExprId lhs, ExprId rhs,
                                           Relation rel, const NativeTerms& ir);
 
+    // Declaration sorts observed while converting variables in the current
+    // expression index. Conflicting or unavailable sorts remain unknown.
+    std::optional<SortKind> variableSort(VarId) const;
+
 private:
     PolynomialKernel& kernel_;
     WorkBudget* budget_;
@@ -76,6 +80,7 @@ private:
     // every cached arithmetic result, even when its IDs or address repeat.
     std::shared_ptr<const void> expressionIdentity_;
     std::unordered_map<ExprId, std::optional<RationalPolynomial>> memo_;
+    std::unordered_map<VarId, std::optional<SortKind>> variableSorts_;
 
     void prepare(const NativeTerms&);
     void charge(size_t amount = 1);
