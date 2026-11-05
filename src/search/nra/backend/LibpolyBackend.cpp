@@ -993,36 +993,12 @@ bool LibpolyBackend::validateRootIsolation(UniPolyId p, const RootSet& roots) {
         if (r.isAlgebraic() && r.root.lower > r.root.upper) return false;
     }
 
-    // Check that adjacent roots are strictly ordered. libpoly's root isolation
-    // can return abutting intervals (e.g. [3/4, 1] and [1, 5/4] for the roots
-    // 99/100 and 101/100 of 10000x²−20000x+9999): both intervals are correct
-    // but their endpoints touch. Treating that as "invalid" loses precision
-    // tests. We instead try to refine each algebraic root's bracketing
-    // interval until the pair is strictly disjoint, and only fail when
-    // refinement bottoms out without separating them.
-    auto pointOf = [](const RealAlg& r, bool lower) -> mpq_class {
-        if (r.isRational()) return r.rational;
-        return lower ? r.root.lower : r.root.upper;
-    };
-    constexpr int kMaxRefineSteps = 40;
-    auto& mutRoots = const_cast<std::vector<RealAlg>&>(roots.roots);
-    for (size_t i = 1; i < mutRoots.size(); ++i) {
-        auto& prev = mutRoots[i - 1];
-        auto& curr = mutRoots[i];
-        mpq_class prevHi = pointOf(prev, /*lower=*/false);
-        mpq_class currLo = pointOf(curr, /*lower=*/true);
-        int steps = 0;
-        while (!(prevHi < currLo) && steps < kMaxRefineSteps) {
-            bool advanced = false;
-            if (prev.isAlgebraic() && refineRootInterval(prev.root)) advanced = true;
-            if (curr.isAlgebraic() && refineRootInterval(curr.root)) advanced = true;
-            if (!advanced) break;
-            prevHi = pointOf(prev, false);
-            currLo = pointOf(curr, true);
-            ++steps;
-        }
-        if (!(prevHi < currLo)) return false;
-    }
+    // Isolation intervals may overlap even for distinct, correctly ordered
+    // roots. Validate their exact order; a read-only check must neither impose
+    // a precision cutoff nor rewrite its const input's certified intervals.
+    for (size_t i = 1; i < roots.roots.size(); ++i)
+        if (compareRealAlg(roots.roots[i - 1], roots.roots[i]) != CompareResult::Less)
+            return false;
 
     return true;
 }

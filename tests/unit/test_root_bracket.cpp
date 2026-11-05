@@ -4,6 +4,87 @@
 using namespace xolver;
 using nra_backend::compactRootBracket;
 
+TEST_CASE("root bracket: certified separation has no fixed precision cutoff") {
+    using nra_backend::RootBracket;
+    using nra_backend::separateRootBrackets;
+    mpz_class scale(1); scale <<= 256;
+    for (const int sign : {-1, 1}) {
+        const mpq_class left = mpq_class(sign) + mpq_class(1, scale);
+        const mpq_class right = mpq_class(sign) + mpq_class(3, scale);
+        size_t comparisons = 0;
+        auto compare = [&](const mpq_class& point, const mpq_class& root) -> std::optional<int> {
+            ++comparisons;
+            return cmp(point, root);
+        };
+        WorkBudget work;
+        const RootBracket initial{sign - 1, sign + 1};
+        const auto result = separateRootBrackets(initial, initial,
+            [&](const mpq_class& point) { return compare(point, left); },
+            [&](const mpq_class& point) { return compare(point, right); }, work);
+        REQUIRE(result);
+        CHECK(comparisons > 40);
+        CHECK(result->first.upper < result->second.lower);
+        CHECK(initial.lower <= result->first.lower);
+        CHECK(result->second.upper <= initial.upper);
+        CHECK(result->first.lower <= left);
+        CHECK(left <= result->first.upper);
+        CHECK(result->second.lower <= right);
+        CHECK(right <= result->second.upper);
+    }
+}
+
+TEST_CASE("root bracket: rational boundaries retain the root on either side") {
+    using nra_backend::RootBracket;
+    using nra_backend::separateRootBrackets;
+    // The comparison is exact for sqrt(2), including negative test points.
+    auto compareRoot = [](const mpq_class& point) -> std::optional<int> {
+        if (point < 0) return -1;
+        const mpq_class square = point * point;
+        return cmp(square, mpq_class(2));
+    };
+    for (const bool rootFirst : {false, true}) {
+        const mpq_class rational = rootFirst ? mpq_class(3, 2) : mpq_class(1);
+        auto compareRational = [&](const mpq_class& point) -> std::optional<int> {
+            return cmp(point, rational);
+        };
+        WorkBudget work;
+        const RootBracket root{1, 2}, point{rational, rational};
+        const auto result = rootFirst
+            ? separateRootBrackets(root, point, compareRoot, compareRational, work)
+            : separateRootBrackets(point, root, compareRational, compareRoot, work);
+        REQUIRE(result);
+        CHECK(result->first.upper < result->second.lower);
+        const auto& refined = rootFirst ? result->first : result->second;
+        CHECK(refined.lower >= 1);
+        CHECK(refined.upper <= 2);
+        CHECK(refined.lower * refined.lower <= 2);
+        CHECK(refined.upper * refined.upper >= 2);
+        const auto& exact = rootFirst ? result->second : result->first;
+        CHECK(exact.lower == rational);
+        CHECK(exact.upper == rational);
+    }
+}
+
+TEST_CASE("root bracket: inconclusive comparisons and caller exhaustion cannot certify separation") {
+    using nra_backend::RootBracket;
+    using nra_backend::separateRootBrackets;
+    const RootBracket initial{0, 2};
+    auto unknown = [](const mpq_class&) -> std::optional<int> { return std::nullopt; };
+    WorkBudget work;
+    CHECK_FALSE(separateRootBrackets(initial, initial, unknown, unknown, work));
+    CHECK(initial.lower == 0);
+    CHECK(initial.upper == 2);
+    auto left = [](const mpq_class& point) -> std::optional<int> { return cmp(point, mpq_class(1, 3)); };
+    auto right = [](const mpq_class& point) -> std::optional<int> { return cmp(point, mpq_class(2, 3)); };
+    WorkBudget exhausted(1);
+    CHECK_THROWS_AS(separateRootBrackets(initial, initial, left, right, exhausted), ResourceExhausted);
+    WorkBudget disjoint;
+    const auto result = separateRootBrackets({0, 0}, {1, 1}, unknown, unknown, disjoint);
+    REQUIRE(result);
+    CHECK(result->first.upper == 0);
+    CHECK(result->second.lower == 1);
+}
+
 TEST_CASE("root bracket: redundant dyadic precision preserves the isolated root") {
     mpz_class denominator(1); denominator <<= 16384;
     mpq_class epsilon(1, denominator);

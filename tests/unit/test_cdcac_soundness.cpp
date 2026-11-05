@@ -5,6 +5,32 @@
 
 using namespace xolver;
 
+TEST_CASE("Root isolation validation: close exact roots remain ordered without mutating input") {
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend algebra(kernel.get());
+    mpz_class scale(1); scale <<= 192;
+    const auto first = algebra.allocUni({scale, 0, -2});
+    const auto second = algebra.allocUni({scale, 0, -3});
+    AlgebraicRoot a;
+    a.definingPoly = first;
+    a.rootIndex = 1;
+    a.lower = 0;
+    a.upper = 1;
+    AlgebraicRoot b = a;
+    b.definingPoly = second;
+    const RootSet roots{{RealAlg::fromAlgebraic(a), RealAlg::fromAlgebraic(b)}};
+    REQUIRE(algebra.compareRealAlg(roots.roots[0], roots.roots[1]) == CompareResult::Less);
+    CHECK(algebra.validateRootIsolation(first, roots));
+    for (const auto& root : roots.roots) {
+        CHECK(root.root.lower == 0);
+        CHECK(root.root.upper == 1);
+    }
+    CHECK_FALSE(algebra.validateRootIsolation(first,
+        RootSet{{roots.roots[1], roots.roots[0]}}));
+    CHECK_FALSE(algebra.validateRootIsolation(first,
+        RootSet{{roots.roots[0], roots.roots[0]}}));
+}
+
 // ------------------------------------------------------------------
 // Test A: Endpoint same-sign shortcut is unsound (reviewer counterexample)
 //

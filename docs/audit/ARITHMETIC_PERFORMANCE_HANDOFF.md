@@ -1,6 +1,60 @@
 # Arithmetic validation and continuation record
 
-## Current checkpoint: timed QCP evidence and canonical parser interfaces (2026-11-05)
+## Current checkpoint: complete cut explanations and exact NIA refinements (2026-11-05)
+
+[PR #99](https://github.com/fuqi-jia/Xolver/pull/99) merged as
+412887c6b6372b7721a723c99283f6361fc7a3db after complete server acceptance and
+both PR CI jobs passed. Both jobs in its
+[main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42043177564) also pass.
+
+The shared nonlinear cut runner retains complete interval premises and stable
+polynomial identities while rebuilding explanations after context changes.
+NIA publishes multi-premise cuts as guarded clauses; NRA expands covering cores
+to original premises. The shared relaxation derives monomial signs and checks
+excluded values through both strict alternatives, restoring temporary bounds
+on exceptions. Cheap exact NIA refinements precede incomplete integer boxes.
+Existing solver controls and LRA/LIA rollback policies are preserved.
+
+Panda9 / ExperimentOS qualification passes **2,149 C++ cases / 1,327,198
+assertions**, with proofs enabled. The final frozen CLI is
+cad075a12582bc47da34521131caa11911f2b9b40e8546f74fbd2bed3dd20d32.
+Its qualified source matches the delivered Git tree. Fresh complete comparisons
+use 60 seconds, one physical CPU and 16 GiB per input:
+
+- Fixed160 improves **113 to 114 verified**, with one NIA UNSAT gain and no
+  losses. Symmetric independent certificate rechecking gives **114 to 115**,
+  versus **116 for same-round Z3**. Raw timing reports are retained; no timeout
+  or unknown is upgraded. Supplemented mean verified PAR-2 is
+  **37.982 to 37.223 seconds**, versus **34.205** for Z3.
+- Selected development587 retains **587 to 587 verified**, versus 584 for Z3.
+  Total solver time is **47.959 to 48.295 seconds**; three Z3 model replays
+  remain unconfirmed and excluded.
+- All **14,408 authorized private queries** are independently verified in both
+  versions and Z3: **8,940 SAT / 5,468 UNSAT**. There are no losses, timeouts,
+  unknowns, unconfirmed results or errors. Total solver time is
+  **1,275.330 to 1,282.082 seconds**, versus **377.151** for Z3.
+
+Each actual timed SAT model requires its own independent replay. UNSAT requires
+an independent decision or an input-bound checked certificate. All cohorts have
+zero wrong verdicts, invalid models, protocol errors or runtime errors. These
+separate cohorts establish retained coverage and one NIA gain; they do not
+establish overall superiority over Z3. Fresh final-version original-C QCP timing
+and the final protected-set comparison remain open.
+
+Following FULINA work introduces shared exact separation of certified ordered
+root brackets under the caller's deadline, removing fixed precision cutoffs.
+Root-isolation validation checks exact order without mutating const inputs.
+A constructed backend regression fails three assertions with its qualified
+predecessor. The candidate passes **2,153 C++ cases / 1,327,247 assertions**,
+including 11 focused cases / 82 assertions. Seven fresh controls retain six
+verified results in both versions; the unresolved result stays unresolved.
+Full fixed160, development587 and private14408 comparisons are in progress.
+No new solved-query or performance gain is claimed for this follow-up.
+
+Private inputs, models and individual evidence remain off GitHub. Protected sets
+remain unused. The cancelled extra server archive is not a delivery requirement.
+
+## Previous checkpoint: timed QCP evidence and canonical parser interfaces (2026-11-05)
 
 [PR #98](https://github.com/fuqi-jia/Xolver/pull/98) merged as
 `5a715942f2762860c92ee17d990a3c313420b761` after server acceptance and both
@@ -27,29 +81,6 @@ queries. All 792 SAT callbacks have independently replayed timed models; all
 the accepted frozen SMT backend with the qualified model-capture source. The
 new native build has separate source and binary qualification. Fresh final-version
 whole-workflow Xolver/Z3 timing comparisons remain open.
-
-Following FULINA work preserves complete interval-bound premises and shares
-polynomial identities while rebuilding explanations after context changes. The
-shared relaxation now derives monomial signs and checks excluded values through
-both strict alternatives. NIA runs cheap exact refinements before incomplete
-integer box encodings. The final exception-hardened build passes **2,149 C++
-cases / 1,327,198 assertions**, with proofs enabled.
-
-An initial frozen comparison of these improvements verifies **112 to 113**
-results on fixed160, versus 115 for same-round Z3, with one newly solved NIA
-UNSAT and no losses. Development587 remains **587 to 587**, versus 584 for Z3;
-its total solver time changes from 48.05 to 48.27 seconds. One Xolver and eight
-Z3 unconfirmed fixed160 results, and three Z3 development587 model replays,
-remain excluded. These results belong to CLI SHA-256
-`9079597ae466f8c8a90871a807e20f0ac5c66baec272f6bd7b7b486941c354d6`.
-The exception-hardening successor has separate native qualification; its fresh
-fixed160, development587 and full 14,408-query private-corpus comparisons are
-running. Neither snapshot establishes overall superiority over Z3 or replaces
-the earlier original-program evidence.
-
-Private inputs, models and individual evidence remain off GitHub. Per-query
-budgets remain 60 seconds, one physical CPU and 16 GiB; protected sets remain
-unused. The cancelled extra server archive is not a delivery requirement.
 
 ## Previous checkpoint: equality-model acceptance and public parser includes (2026-11-05)
 
