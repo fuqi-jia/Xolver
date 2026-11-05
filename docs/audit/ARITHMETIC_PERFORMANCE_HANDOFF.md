@@ -65,8 +65,27 @@ improves **9 to 12 independently verified results**, with no losses or errors;
 the remaining result is unknown in both Xolver versions and times out in Z3.
 Both Z3 and CVC5 accept all three newly valid actual timed SAT exports. This
 improves model validation coverage; SAT decision counts are unchanged. Complete
-fresh fixed160, development587 and private14408 comparisons against accepted
-main are in progress. Main promotion and follow-up CI remain pending.
+fresh comparisons against accepted main retain **114 to 114 raw verified** on
+fixed160, or **115 to 115** with a symmetrically rechecked input-bound certificate.
+Same-round Z3 verifies 115; supplemented mean verified PAR-2 is **37.202 to
+37.106 seconds**, versus **34.768** for Z3. Development587 retains all 587 verified
+results, versus 584 for Z3, whose three model replays remain excluded. All
+**14,408 private queries** are verified in both versions and Z3, with no losses,
+unknowns, timeouts, unconfirmed results or errors. Total private-query solver
+time is **1,333.139 to 1,329.422 seconds**, versus **399.612** for Z3. These results
+do not establish overall superiority. Main promotion and follow-up CI remain pending.
+
+The next implementation reuses polynomial conversions within an immutable native
+expression-index lifetime, invalidating cached IDs on index replacement. Boolean
+polynomial refutation also retains supported exact linear reasoning in large
+contexts; specialized modules keep their existing construction limits. Proof-enabled
+Panda qualification passes **2,161 cases / 1,327,351 assertions**, including
+36 focused cases / 829 assertions. New regressions fail with their qualified
+predecessors and retain exact arithmetic, deadline and scope behavior. Constructed
+integer and real feasible variants have independently accepted actual timed
+models. One constructed integer refutation improves from 0.366 to 0.034 seconds;
+the selected original hard queries remain unresolved. No fixed-suite gain is
+claimed. Complete comparisons of this following implementation remain pending.
 
 Private inputs, models and individual evidence remain off GitHub. Protected sets
 remain unused. The cancelled extra server archive is not a delivery requirement.

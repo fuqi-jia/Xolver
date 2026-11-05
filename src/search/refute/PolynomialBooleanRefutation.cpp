@@ -140,7 +140,10 @@ bool refutePolynomialBoolean(const NativeTerms& terms, const std::vector<ExprId>
         auto oracle = [&](std::span<const SatLit> selected) -> std::optional<std::vector<SatLit>> {
             tick();
             stats.largestContext = std::max(stats.largestContext, selected.size());
-            if (selected.empty() || selected.size() > 128) return std::nullopt;
+            if (selected.empty()) return std::nullopt;
+            // The exact linear relaxation accepts larger contexts. Each
+            // specialized refuter owns its construction limits; a nonlinear
+            // closure limit must not suppress the other supported reasoning.
             std::vector<SignRefuteConstraint> constraints;
             std::vector<SignRefuteConstraint> integers;
             for (auto literal : selected) {

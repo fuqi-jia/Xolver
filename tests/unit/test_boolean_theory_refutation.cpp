@@ -157,6 +157,45 @@ TEST_CASE("Polynomial refutation: unsupported products remain open and Boolean e
     CHECK(refutePolynomialBoolean(terms, {negative, equivalence}, limits));
 }
 
+TEST_CASE("Polynomial refutation: large contexts retain exact linear reasoning over monomials") {
+    for (const auto sort : {SortKind::Int, SortKind::Real}) {
+        for (const bool feasible : {false, true}) {
+            CAPTURE(sort);
+            CAPTURE(feasible);
+            NativeTerms terms;
+            terms.registerSort(0, sort);
+            terms.registerSort(1, SortKind::Bool);
+            terms.setBoolSortId(1);
+            const auto zero = terms.add({Kind::ConstInt, 0, {}, Payload(int64_t(0))});
+            const auto one = terms.add({Kind::ConstInt, 0, {}, Payload(int64_t(1))});
+            const auto three = terms.add({Kind::ConstInt, 0, {}, Payload(int64_t(3))});
+            const auto x = terms.add({Kind::Variable, 0, {}, Payload(std::string("x"))});
+            const auto y = terms.add({Kind::Variable, 0, {}, Payload(std::string("y"))});
+            const auto product = terms.add({Kind::Mul, 0, {x, y}, {}});
+            const auto difference = terms.add({Kind::Sub, 0, {x, y}, {}});
+            const auto sum = terms.add({Kind::Add, 0, {product, difference}, {}});
+            std::vector<ExprId> roots;
+            for (int i = 0; i < 160; ++i) {
+                const auto variable = terms.add({Kind::Variable, 0, {},
+                    Payload("padding_" + std::to_string(i))});
+                roots.push_back(terms.add({Kind::Geq, 1, {variable, zero}, {}}));
+            }
+            roots.push_back(terms.add({Kind::Geq, 1, {product, one}, {}}));
+            roots.push_back(terms.add({Kind::Geq, 1, {difference, zero}, {}}));
+            roots.push_back(terms.add({Kind::Leq, 1, {sum, feasible ? three : zero}, {}}));
+            BooleanRefutationLimits limits;
+            limits.deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+            PolynomialBooleanStatistics stats;
+            CHECK(refutePolynomialBoolean(terms, roots, limits, &stats) == !feasible);
+            CHECK(stats.largestContext == roots.size());
+            CHECK(stats.theoryCalls > 0);
+            CHECK(stats.linearCalls > 0);
+            // For the open variant, x=y=1 and every padding variable=0 is
+            // a real and integer witness. An open relaxation cannot refute it.
+        }
+    }
+}
+
 TEST_CASE("Polynomial refutation: inferred integer endpoints respect native variable sorts") {
     for (unsigned integerMask : {0u, 1u, 4u, 7u}) {
         CAPTURE(integerMask);

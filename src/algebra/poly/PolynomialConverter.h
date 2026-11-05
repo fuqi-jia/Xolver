@@ -7,6 +7,7 @@
 #include <gmpxx.h>
 #include <optional>
 #include <chrono>
+#include <memory>
 #include <unordered_map>
 
 namespace xolver {
@@ -70,8 +71,13 @@ private:
     PolynomialKernel& kernel_;
     WorkBudget* budget_;
     std::chrono::steady_clock::time_point deadline_;
+    // Native expression IDs are stable within an index space, including
+    // appended terms and assertion rollback. A different space invalidates
+    // every cached arithmetic result, even when its IDs or address repeat.
+    std::shared_ptr<const void> expressionIdentity_;
     std::unordered_map<ExprId, std::optional<RationalPolynomial>> memo_;
 
+    void prepare(const NativeTerms&);
     void charge(size_t amount = 1);
     void chargeProduct(const RationalPolynomial&, const RationalPolynomial&);
     RationalPolynomial power(RationalPolynomial, uint32_t);

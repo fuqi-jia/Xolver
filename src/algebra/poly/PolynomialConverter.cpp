@@ -11,6 +11,14 @@
 
 namespace xolver {
 
+void PolynomialConverter::prepare(const NativeTerms& ir) {
+    const auto identity = ir.expressionIndexIdentity();
+    if (expressionIdentity_ != identity) {
+        memo_.clear();
+        expressionIdentity_ = identity;
+    }
+}
+
 void PolynomialConverter::charge(size_t amount) {
     if (!budget_) return;
     budget_->tick(amount);
@@ -68,7 +76,7 @@ RationalPolynomial PolynomialConverter::power(RationalPolynomial base, uint32_t 
 
 PolynomialConverter::ConvertedExpr PolynomialConverter::convert(
     ExprId eid, const NativeTerms& ir) {
-    memo_.clear();
+    prepare(ir);
     preCollectIterative(eid, ir);
     auto rpOpt = collectRec(eid, ir);
     if (!rpOpt) return {};
@@ -82,7 +90,7 @@ PolynomialConverter::ConvertedExpr PolynomialConverter::convert(
 
 PolynomialConverter::ConvertedConstraint PolynomialConverter::convertConstraint(
     ExprId lhs, ExprId rhs, Relation rel, const NativeTerms& ir) {
-    memo_.clear();
+    prepare(ir);
     preCollectIterative(lhs, ir);
     preCollectIterative(rhs, ir);
     auto rpLOpt = collectRec(lhs, ir);
