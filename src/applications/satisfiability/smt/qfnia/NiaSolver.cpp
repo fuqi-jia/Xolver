@@ -133,8 +133,9 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nia.partial-linear-model",
         [this](TheoryLemmaStorage&, TheoryEffort) -> std::optional<TheoryCheckResult> {
-            if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty())
-                return std::nullopt;
+            // Normalization includes the live shared equalities and
+            // disequalities. Construct and validate a point for that complete
+            // context instead of disabling completion in theory combinations.
             std::vector<PartialLinearModelSearch::Constraint> constraints;
             constraints.reserve(normalized_.size());
             for (const auto& constraint : normalized_)
@@ -167,6 +168,8 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
                     << " integer_completions=" << statistics.integerCompletions
                     << " integer_nodes=" << statistics.integerCompletionNodes
                     << " integer_models=" << statistics.integerCompletionModels
+                    << " disequality_splits=" << statistics.disequalitySplits
+                    << " disequality_rejected=" << statistics.disequalityRejectedPoints
                     << " exhausted=" << statistics.exhausted
                     << " accepted=" << accepted << " us="
                     << std::chrono::duration_cast<std::chrono::microseconds>(
@@ -175,6 +178,17 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
             if (!accepted) return std::nullopt;
             currentModel_ = std::move(point);
             return TheoryCheckResult::consistent();
+        }, ReasonerSchedule::CandidateModel));
+    reasoners_.push_back(std::make_unique<CallbackReasoner>(
+        "nia.request-model-completion",
+        [this](TheoryLemmaStorage&, TheoryEffort) -> std::optional<TheoryCheckResult> {
+            // Consume before calling: failed completion continues the pipeline,
+            // and later Boolean candidates must not repeat a global search.
+            auto request = std::move(modelCompletionRequest_);
+            modelCompletionRequest_ = {};
+            if (request && request())
+                return TheoryCheckResult::unknown("validated global model available");
+            return std::nullopt;
         }, ReasonerSchedule::CandidateModel));
     // Apply exact linear, presolve and sign reasoning before constructing a
     // bounded candidate encoding. Infeasible integer boxes alone need not
@@ -258,6 +272,7 @@ void NiaSolver::onReset() {
     pendingConflict_.reset();
     pendingUnknown_.reset();
     currentModel_.reset();
+    modelCompletionRequest_ = {};
     emittedSplits_.clear();
     branchCountPerVar_.clear();
     pendingLinLemmas_.clear();

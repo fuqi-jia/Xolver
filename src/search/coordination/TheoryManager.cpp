@@ -21,6 +21,10 @@ namespace xolver {
 
 static int noDebugModelCheckId = 0;
 
+void TheoryManager::setModelCompletionRequest(const TheorySolver::ModelCompletionRequest& request) {
+    for (auto& solver : solvers_) solver->setModelCompletionRequest(request);
+}
+
 // --- XOLVER_COMB_DIAG: per-channel combination-loop emission counters --------
 // File-based (worker-thread stderr is suppressed). Confirms which channel
 // (arrangement split vs deduced-eq lemma) drives the cs_* matching loop.

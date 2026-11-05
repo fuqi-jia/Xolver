@@ -1,5 +1,42 @@
 # Arithmetic validation and continuation record
 
+## Current checkpoint: affine disequality completion (2026-11-05)
+
+[PR #95](https://github.com/fuqi-jia/Xolver/pull/95) is merged as
+`7a9e9812931cdd443df02bec7d4e7076707a4469`; its
+[main CI](https://github.com/fuqi-jia/Xolver/actions/runs/41935543549) passes both
+jobs. The cancelled extra server archive is not a delivery requirement.
+
+The next FULINA change repairs a shared candidate-construction gap: an affine
+disequality was omitted from the relaxation, so a zero-valued model was rejected
+without searching another feasible point. The real/integer helper now explores
+both strict halfspaces in local scopes, retains integer completion and validates
+every original polynomial. Failed or interrupted choices cannot become root
+refutations. Normalized shared equalities and disequalities remain active.
+A query-scoped theory interface requests a validated whole-formula witness only
+after cheap local reasoning; the existing early fallback is preserved.
+
+Panda9 / ExperimentOS qualification passes **2,122 unit cases / 1,324,921
+assertions**, including 42 targeted cases / 1,597 assertions. The same public
+zero-point regression fails with the frozen old implementation and passes with
+the candidate, using identical test objects and compatible headers.
+
+In a fresh focused development comparison, both versions retain **30 verified
+SAT results**, with no losses. Total solver time falls from **459.594 to 2.892
+seconds**; same-round Z3 takes **1.079 seconds**. Both independent checkers accept
+every actual timed Xolver model. A separate six-query model cohort retains all
+six verified results. Diagnostic evidence shows nine accepted local completions
+and no global candidate-enumeration invocation on the representative path.
+
+Frozen candidate SHA-256:
+`05e32e66e524a954e3b6c860394fa018163a017ab6cdec7e38cc20ec08c212d7`.
+Fixed160, development587 and a **new full14408 comparison of this candidate**
+are running with 60 seconds, one physical core and 16 GiB per input and solver.
+Earlier full-corpus results use an older candidate. These focused gains establish
+neither overall superiority nor completed original-C QCP verification. Protected
+sets remain unused; private inputs and individual evidence stay off GitHub.
+
+
 ## Development checkpoint: numeric UF model completion (2026-11-05)
 
 The unmerged `FULINA` branch follows

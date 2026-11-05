@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 #include "xolver/Solver.h"
+#include "ir/NativeTerms.h"
 #include <filesystem>
 #include <fstream>
 
@@ -20,6 +21,30 @@ static std::string writeSmt2(const std::string& name, const std::string& body) {
     auto p = std::filesystem::temp_directory_path() / ("xolver_mv_" + name + ".smt2");
     std::ofstream(p) << body;
     return p.string();
+}
+
+TEST_CASE("Model completion request: repeated UF integer queries preserve assumptions") {
+    const auto path = writeSmt2("requested_uf_integer",
+        "(set-logic QF_UFNIA)\n"
+        "(set-option :produce-models true)\n"
+        "(declare-fun f (Int) Int)\n"
+        "(declare-const x Int)(declare-const y Int)\n"
+        "(assert (= (f 2) 9))\n"
+        "(assert (= (* x y) 6))\n"
+        "(assert (distinct (f x) 0))\n");
+    Solver solver;
+    REQUIRE(solver.parseFile(path));
+    const auto choice = solver.mkConst(solver.boolSort(), "choice");
+    const auto notChoice = solver.mkOp(static_cast<uint32_t>(Kind::Not), {choice});
+    for (const auto assumption : {choice, notChoice}) {
+        REQUIRE_RESULT(solver.checkSatAssuming({assumption}), Result::Sat);
+        CHECK(solver.validateModel() == Solver::ModelValidation::Satisfied);
+        CHECK(solver.lastUnknownReason().empty());
+        CHECK_RESULT(solver.checkSatAssuming({choice, notChoice}), Result::Unsat);
+    }
+    REQUIRE_RESULT(solver.checkSat(), Result::Sat);
+    CHECK(solver.validateModel() == Solver::ModelValidation::Satisfied);
+    std::filesystem::remove(path);
 }
 
 TEST_CASE("MV: SAT for LRA returns non-empty model") {

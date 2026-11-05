@@ -23,6 +23,8 @@ public:
     void registerSolver(std::unique_ptr<TheorySolver> solver);
     void clearSolvers();
 
+    void setModelCompletionRequest(const TheorySolver::ModelCompletionRequest& request);
+
     void setCombinationMode(bool enabled) { combinationMode_ = enabled; }
     bool isCombinationMode() const override { return combinationMode_; }
 
