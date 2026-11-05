@@ -54,7 +54,8 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
 #ifdef XOLVER_HAS_LIBPOLY
     // Build the constraint set + active reasons + variable order.
     std::vector<CacConstraint> cacCons;
-    std::vector<SatLit> activeReasons;
+    std::vector<std::vector<SatLit>> activeReasons;
+    std::vector<SignRefuteConstraint> boundSources;
     std::set<VarId> varSet;
     cacCons.reserve(presolveConstraints_.size());
     for (const auto& c : presolveConstraints_) {
@@ -62,119 +63,21 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
         auto rp = RationalPolynomial::fromPolyId(c.poly, *kernel_);
         if (!rp) return std::nullopt;
         for (VarId v : rp->variables()) varSet.insert(v);
+        boundSources.push_back({*rp, c.rel, c.reason});
         cacCons.push_back({std::move(*rp), c.rel});
-        activeReasons.push_back(c.reason);
+        activeReasons.push_back({c.reason});
     }
-    // ====================================================================
-    // Shape cuts derived from explained interval bounds.
-    //
-    // Append redundant tightening cuts (monotonicity-square + monotonicity-
-    // product + McCormick bilinear envelope) derived from single-variable
-    // bound constraints currently in presolveConstraints_. Each cut is a
-    // logical implication of its source bounds, so adding it to cacCons is
-    // sat/unsat preserving — it can only speed CAC projection, never change
-    // the answer.
-    //
-    // SOUNDNESS GATE this commit pins:
-    //   Only single-reason cuts are injected. The cacCons / activeReasons
-    //   parallel-index contract assumes one SatLit per constraint; a cut
-    //   with two reasons would need a synthetic conjunction lit or
-    //   multi-reason aggregation in conflict generation (deferred to a
-    //   later Phase C-3 commit). Until that lands, multi-reason cuts are
-    //   silently dropped here.
-    //
-    // The bound-extraction scans presolveConstraints_ for single-variable
-    // linear atoms `c1*v + c0 rel 0` (constant + linear-in-one-var), maps
-    // each to a (var → lo/hi) update on the constructed interval, then
-    // feeds the result into NlaCutsRunner.
-    // ====================================================================
-    // Single-pass single-var bound extraction. For each constraint
-    // poly = c0 (constant) + c1*v (single var, degree 1, no other
-    // terms), derive lo/hi on v from the relation.
-    std::map<VarId, nla::VarInterval> intervalMap;
-    for (const auto& c : presolveConstraints_) {
-        if (c.poly == NullPoly) continue;
-        auto rp = RationalPolynomial::fromPolyId(c.poly, *kernel_);
-        if (!rp) continue;
-        // Must be: at most one variable, and that variable degree 1.
-        auto vars = rp->variables();
-        if (vars.size() != 1) continue;
-        VarId v = *vars.begin();
-        if (rp->degree(v) != 1) continue;
-        // Extract c0 (constant) + c1 (coefficient of v^1).
-        auto coeffs = rp->coefficients(v);  // [const, linear-coeff, ...]
-        if (coeffs.size() != 2) continue;
-        if (!coeffs[0].isConstant() || !coeffs[1].isConstant()) continue;
-        mpq_class c0 = coeffs[0].constantValue();
-        mpq_class c1 = coeffs[1].constantValue();
-        if (c1 == 0) continue;
-        // Solve `c0 + c1*v rel 0` for v: bound = -c0/c1, direction
-        // flips when c1 < 0.
-        mpq_class bound = -c0 / c1;
-        Relation effRel = c.rel;
-        if (c1 < 0) {
-            // Multiplying inequality by negative flips direction.
-            switch (effRel) {
-                case Relation::Leq: effRel = Relation::Geq; break;
-                case Relation::Geq: effRel = Relation::Leq; break;
-                case Relation::Lt:  effRel = Relation::Gt;  break;
-                case Relation::Gt:  effRel = Relation::Lt;  break;
-                case Relation::Eq:  case Relation::Neq: break;  // unchanged
-            }
-        }
-        // Map to lo / hi update on intervalMap[v]. We accept Leq/Geq/Eq;
-        // Lt/Gt would need strict-vs-non-strict handling which the NLA
-        // monotonicity rules don't require (the cut math is sound for
-        // non-strict bounds anyway).
-        auto& vi = intervalMap[v];
-        if (vi.varPoly == NullPoly) vi.varPoly = kernel_->mkVar(v);
-        auto tighter = [](std::optional<mpq_class>& lo,
-                          std::optional<mpq_class>& hi,
-                          const mpq_class& val, Relation r) {
-            switch (r) {
-                case Relation::Leq: case Relation::Lt:
-                    if (!hi || val < *hi) hi = val;
-                    break;
-                case Relation::Geq: case Relation::Gt:
-                    if (!lo || val > *lo) lo = val;
-                    break;
-                case Relation::Eq:
-                    if (!lo || val > *lo) lo = val;
-                    if (!hi || val < *hi) hi = val;
-                    break;
-                case Relation::Neq: break;
-            }
-        };
-        // Track reason: only single-reason cuts will be injected, so
-        // attach c.reason to the interval whose bound this constraint
-        // tightens. The runner unions reasons; when a generator method
-        // produces a cut from this interval alone (monotonicitySquare),
-        // it inherits this one reason — sound and single-reason.
-        // For pair cuts (monotonicityProduct, mccormickBilinear) we'll
-        // see N reasons in the cut and drop it below.
-        tighter(vi.lo, vi.hi, bound, effRel);
-        // Reason aggregation: keep the LAST single-bound reason. For
-        // monotonicitySquare on this var, the cut will list just this
-        // one reason — the precondition we need for the single-reason
-        // injection guard below.
-        vi.reasons = {c.reason};
-    }
-    std::vector<nla::VarInterval> intervals;
-    intervals.reserve(intervalMap.size());
-    for (auto& [v, vi] : intervalMap) intervals.push_back(std::move(vi));
-
-    nla::NlaCutsRunner runner(*kernel_);
-    // maxPairs = 0: skip product / McCormick (multi-reason); for Phase
-    // C-2 we only inject square cuts which are single-reason.
-    auto cuts = runner.runShapeCuts(intervals, /*maxPairs=*/0);
+    // The covering core indexes constraints; each entry can depend on
+    // several original bounds. Expand those explanations on conflict.
+    const auto intervals = nlaCuts_->collectIntervals(boundSources);
+    const auto cuts = nlaCuts_->runShapeCuts(intervals, /*maxPairs=*/0);
     for (const auto& cut : cuts) {
         if (cut.poly == NullPoly) continue;
-        if (cut.reasons.size() != 1) continue;  // see soundness gate above
         auto rp = RationalPolynomial::fromPolyId(cut.poly, *kernel_);
         if (!rp) continue;
         for (VarId v : rp->variables()) varSet.insert(v);
         cacCons.push_back({std::move(*rp), cut.rel});
-        activeReasons.push_back(cut.reasons[0]);
+        activeReasons.push_back(cut.reasons);
     }
     if (cacCons.empty() || varSet.empty()) return std::nullopt;
     std::vector<VarId> varOrder(varSet.begin(), varSet.end());  // sorted (std::set)
@@ -212,17 +115,17 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
         // conflict is returned as the theory conflict below; its validated-SAT
         // path remains sound and is returned as before.
         TheoryConflict conflict;
-        // Use attributed covering reasons, with all active reasons as fallback.
-        if (!res.unsatCore.empty()) {
-            std::vector<SatLit> minimized;
-            minimized.reserve(res.unsatCore.size());
-            for (size_t idx : res.unsatCore)
-                if (idx < activeReasons.size()) minimized.push_back(activeReasons[idx]);
-            if (!minimized.empty()) conflict.clause = std::move(minimized);
-            else conflict.clause = std::move(activeReasons);   // defensive fallback
-        } else {
-            conflict.clause = std::move(activeReasons);
-        }
+        auto include = [&](const std::vector<SatLit>& reasons) {
+            for (const auto reason : reasons)
+                if (std::find(conflict.clause.begin(), conflict.clause.end(), reason) == conflict.clause.end())
+                    conflict.clause.push_back(reason);
+        };
+        const bool validCore = !res.unsatCore.empty() &&
+            std::all_of(res.unsatCore.begin(), res.unsatCore.end(),
+                [&](size_t index) { return index < activeReasons.size(); });
+        if (validCore) for (const auto index : res.unsatCore) include(activeReasons[index]);
+        if (!validCore || conflict.clause.empty())
+            for (const auto& reasons : activeReasons) include(reasons);
         return TheoryCheckResult::mkConflict(std::move(conflict));
     }
     if (res.status == CacStatus::Sat) {

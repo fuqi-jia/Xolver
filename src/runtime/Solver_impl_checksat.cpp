@@ -872,6 +872,8 @@ Result Solver::Impl::checkSatGround() {
                     << " residue_assignments=" << stats.residueAssignments
                     << " residue_exhaustions=" << stats.residueExhaustions
                     << " linear_calls=" << stats.linearCalls << " linear_rows=" << stats.linearConstraints
+                    << " linear_sign_facts=" << stats.linearSignFacts
+                    << " linear_disequality_checks=" << stats.linearDisequalityChecks
                     << " linear_exhaustions=" << stats.linearExhaustions << " linear_us=" << stats.linearMicroseconds
                     << " exhausted=" << stats.exhausted << " refuted=" << refuted << " us="
                     << std::chrono::duration_cast<std::chrono::microseconds>(

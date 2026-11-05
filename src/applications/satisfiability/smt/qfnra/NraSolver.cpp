@@ -1,4 +1,5 @@
 #include "base/RuntimeConfig.h"
+#include "search/nra/reasoners/NlaCutsRunner.h"
 #include "applications/satisfiability/smt/qfnra/NraSolver.h"
 #include "base/EnvParam.h"
 #include "base/SolveClock.h"
@@ -24,7 +25,6 @@
 #include "search/nra/engine/ReasonManager.h"
 #ifdef XOLVER_HAS_LIBPOLY
 #include "search/nra/backend/LibpolyBackend.h"
-#include "search/nra/reasoners/NlaCutsRunner.h"
 #endif
 #include <cstdlib>
 #include <set>
@@ -38,6 +38,7 @@ namespace xolver {
 
 NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     : kernel_(std::move(kernel)),
+      nlaCuts_(std::make_unique<nla::NlaCutsRunner>(*kernel_)),
       converter_(std::make_unique<PolynomialConverter>(*kernel_)),
       engine_(kernel_.get()),
       linearRefuter_(std::make_unique<PolynomialLinearRefuter>(0)) {

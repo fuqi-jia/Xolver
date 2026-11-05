@@ -15,6 +15,7 @@
 #include <gmpxx.h>
 
 namespace xolver {
+namespace nla { class NlaCutsRunner; }
 
 class TheoryAtomRegistry;
 class LibpolyBackend;  // Algebra backend for cylindrical coverings.
@@ -113,6 +114,7 @@ private:
     };
 
     std::unique_ptr<PolynomialKernel> kernel_;
+    std::unique_ptr<nla::NlaCutsRunner> nlaCuts_;
     std::unique_ptr<PolynomialConverter> converter_;
     CdcacSolver engine_;
     std::unique_ptr<PolynomialLinearRefuter> linearRefuter_;

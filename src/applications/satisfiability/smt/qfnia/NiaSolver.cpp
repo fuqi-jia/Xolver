@@ -1,4 +1,5 @@
 #include "base/RuntimeConfig.h"
+#include "search/nra/reasoners/NlaCutsRunner.h"
 #include "applications/satisfiability/smt/qfnia/NiaSolver.h"
 #include <algorithm>
 #include "search/dl/DifferenceGraph.h"
@@ -14,7 +15,6 @@
 #ifdef XOLVER_HAS_LIBPOLY
 #include "search/nra/backend/LibpolyBackend.h"
 #include "search/nia/farkas/LeafFarkasLia.h"
-#include "search/nra/reasoners/NlaCutsRunner.h"           // Stage 3 Phase C-3
 #include "algebra/poly/RationalPolynomial.h"          // Stage 3 Phase C-3
 #endif
 #include "algebra/linear/LinearExpr.h"
@@ -88,6 +88,7 @@ void NiaSolver::setRegistry(TheoryAtomRegistry* reg) {
 
 NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     : kernel_(std::move(kernel)),
+      nlaCuts_(std::make_unique<nla::NlaCutsRunner>(*kernel_)),
       converter_(std::make_unique<PolynomialConverter>(*kernel_)),
       normalizer_(*kernel_),
       validator_(*kernel_),
@@ -190,16 +191,16 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
                 return TheoryCheckResult::unknown("validated global model available");
             return std::nullopt;
         }, ReasonerSchedule::CandidateModel));
-    // Apply exact linear, presolve and sign reasoning before constructing a
-    // bounded candidate encoding. Infeasible integer boxes alone need not
-    // refute an unbounded problem, and must not starve these exact stages.
-    addFull("nia.bit-blast-early", &NiaSolver::stageBitBlastEarly);
     // Full-effort shape cuts derived from explained single-variable bounds.
     addFull("nia.nla-cuts",   &NiaSolver::stageNlaCuts);
     add("nia.poly-conflict",  &NiaSolver::stagePolyConflict);
     add("nia.diff-conflict",  &NiaSolver::stageDifferenceConflict);
     add("nia.square-bound",   &NiaSolver::stageSquareBound);
     add("nia.sos-bound",      &NiaSolver::stageSumOfSquares);
+    // Run explained cuts and cheap exact conflicts before incomplete integer
+    // box search. A failed artificial box cannot refute an unbounded context;
+    // its search must not prevent these refinements from reaching SAT.
+    addFull("nia.bit-blast-early", &NiaSolver::stageBitBlastEarly);
     // L2 (default-ON). The univariate rational-root search (findIntegerRoots ->
     // divisors, O(sqrt|a0|) bignum modulos) re-runs on EVERY Standard-effort
     // cb_propagate. On EVM mod-2^256 inputs |a0| ~ 2^256 => an effective

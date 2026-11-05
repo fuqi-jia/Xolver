@@ -1,6 +1,57 @@
 # Arithmetic validation and continuation record
 
-## Current checkpoint: equality-model acceptance and public parser includes (2026-11-05)
+## Current checkpoint: timed QCP evidence and canonical parser interfaces (2026-11-05)
+
+[PR #98](https://github.com/fuqi-jia/Xolver/pull/98) merged as
+`5a715942f2762860c92ee17d990a3c313420b761` after server acceptance and both
+PR CI jobs passed. Both jobs in its
+[main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42022989302) also pass.
+
+Native QCP callbacks now retain and hash the actual timed SAT models for both
+Xolver and Z3 within the original query deadline. Missing, malformed, oversized
+or stale model responses fail closed. All Xolver parser consumers use
+SOMTParser's public `<somtparser/parser.h>` umbrella header, enforced by the
+architecture checker. Shared exact Bellman–Ford supports initial potentials and
+caller deadlines. The unsuccessful simplex routing experiment was removed.
+
+Panda9 / ExperimentOS qualification passes **2,139 C++ cases / 1,326,709
+assertions**, with proofs enabled, and all 21 QCP Python tests. Targeted arithmetic
+controls retain independently verified results after restoring the established
+simplex path; no arithmetic performance gain is claimed for this phase.
+
+Three supplied original-C program runs complete canonical kernel checks for
+**23 main VCs and three auxiliary lemmas**, without `Admitted`. Across initial
+and final runs, **1,560 native SMT callback occurrences** cover 174 distinct
+queries. All 792 SAT callbacks have independently replayed timed models; all
+768 UNSAT callbacks have independent checks. These original-program runs used
+the accepted frozen SMT backend with the qualified model-capture source. The
+new native build has separate source and binary qualification. Fresh final-version
+whole-workflow Xolver/Z3 timing comparisons remain open.
+
+Following FULINA work preserves complete interval-bound premises and shares
+polynomial identities while rebuilding explanations after context changes. The
+shared relaxation now derives monomial signs and checks excluded values through
+both strict alternatives. NIA runs cheap exact refinements before incomplete
+integer box encodings. The final exception-hardened build passes **2,149 C++
+cases / 1,327,198 assertions**, with proofs enabled.
+
+An initial frozen comparison of these improvements verifies **112 to 113**
+results on fixed160, versus 115 for same-round Z3, with one newly solved NIA
+UNSAT and no losses. Development587 remains **587 to 587**, versus 584 for Z3;
+its total solver time changes from 48.05 to 48.27 seconds. One Xolver and eight
+Z3 unconfirmed fixed160 results, and three Z3 development587 model replays,
+remain excluded. These results belong to CLI SHA-256
+`9079597ae466f8c8a90871a807e20f0ac5c66baec272f6bd7b7b486941c354d6`.
+The exception-hardening successor has separate native qualification; its fresh
+fixed160, development587 and full 14,408-query private-corpus comparisons are
+running. Neither snapshot establishes overall superiority over Z3 or replaces
+the earlier original-program evidence.
+
+Private inputs, models and individual evidence remain off GitHub. Per-query
+budgets remain 60 seconds, one physical CPU and 16 GiB; protected sets remain
+unused. The cancelled extra server archive is not a delivery requirement.
+
+## Previous checkpoint: equality-model acceptance and public parser includes (2026-11-05)
 
 [PR #97](https://github.com/fuqi-jia/Xolver/pull/97) passed server acceptance and
 both PR CI jobs, and merged as `66c29341718f697f050366b5344441e0c981fc5a`.
