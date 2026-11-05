@@ -9,7 +9,8 @@ namespace xolver::bitblast {
 std::vector<size_t> encodeIntegerRadixDefinitions(
     BitBlastEncoder& encoder, const std::vector<IntegerRadixDecomposition>& definitions,
     std::unordered_map<std::string, BitVec>& values, const IntegerBoundsLookup& bounds,
-    WorkBudget& budget, std::chrono::steady_clock::time_point deadline) {
+    std::vector<SatLit>& assumptions, WorkBudget& budget,
+    std::chrono::steady_clock::time_point deadline) {
     auto tick = [&] {
         budget.tick();
         if ((budget.used() & 1023) == 0 && std::chrono::steady_clock::now() >= deadline)
@@ -17,7 +18,7 @@ std::vector<size_t> encodeIntegerRadixDefinitions(
     };
     auto require = [&](SatLit literal) {
         tick();
-        if (literal != encoder.constTrue()) encoder.assertLit(literal);
+        if (literal != encoder.constTrue()) assumptions.push_back(literal);
     };
     auto fit = [&](BitVec value, const std::pair<mpz_class, mpz_class>& range) {
         const unsigned width = SpaceEstimator::bitsToCover(range.first, range.second);

@@ -2,6 +2,7 @@
 #include "search/bitblast/BitBlastSolver.h"
 #include "base/SolveClock.h"
 #include "search/bitblast/BitBlastEncoder.h"
+#include "search/bitblast/IntegerEncodingContext.h"
 #include "search/bitblast/PolyBitBlaster.h"
 #include "contracts/SatSolver.h"
 #include <chrono>
@@ -11,29 +12,6 @@
 #include <iostream>
 
 namespace xolver::bitblast {
-
-// One query owns one SAT instance. Previous gates define total functions of
-// their input bits, while source predicates and domain restrictions are only
-// assumptions. Extending a leaf keeps its low bits and adds independent high
-// bits; previous signed interpretations remain harmless definitional circuits.
-// Recreate PolyBitBlaster at each width because its monomial cache depends on
-// the current interpretation, unlike the encoder's literal-keyed gate cache.
-struct BitBlastSolver::EncodingContext {
-    static std::unique_ptr<SatSolver> makeSat() {
-        auto solver = createSatSolver();
-        // Configure before the encoder creates its constant unit. Gate
-        // extraction's occurrence table is too large for dense NIA circuits.
-        solver->configure("congruence", 0);
-        return solver;
-    }
-    std::unique_ptr<SatSolver> sat = makeSat();
-    BitBlastEncoder encoder{*sat};
-    std::unordered_map<std::string, BitVec> variables;
-
-    explicit EncodingContext(uint64_t budget) {
-        encoder.setVarBudget(budget);
-    }
-};
 
 uint64_t BitBlastSolver::defaultGateBudget() {
     // Max fresh SAT variables the bit-blast encoder may allocate. Both the
@@ -175,7 +153,7 @@ std::optional<TheoryConflict> BitBlastSolver::buildCompleteConflict(
 // caller decides whether it is globally complete; Overflow = encoding exceeded
 // the var budget). All width plans share this encoding/validation path.
 BitBlastSolver::Attempt BitBlastSolver::attemptAtWidths(
-    EncodingContext& context, const BitWidthPlan& plan,
+    IntegerEncodingContext& context, const BitWidthPlan& plan,
     const std::vector<NormalizedNiaConstraint>& cs,
     const DomainStore& domains,
     const IntegerModelValidator& validator) {
@@ -198,15 +176,15 @@ BitBlastSolver::Attempt BitBlastSolver::attemptAtWidths(
     static BBProf prof;
 
     Attempt a;
-    auto& sat = context.sat;
+    auto& sat = context.solver();
     if (satConflictBudget_ > 0) {
         // Cap CaDiCaL's conflicts for THIS internal solve. CaDiCaL returns
         // UNKNOWN when the limit is hit, which the bit-blast treats as
         // "this width didn't decide" and falls through (sound).
-        sat->limit("conflicts", static_cast<int>(satConflictBudget_));
+        sat.limit("conflicts", static_cast<int>(satConflictBudget_));
     }
-    BitBlastEncoder& enc = context.encoder;
-    auto& varBits = context.variables;
+    BitBlastEncoder& enc = context.encoder();
+    auto& varBits = context.variables();
     const uint64_t previousVars = enc.varCount();
     size_t boundedVariables = 0;
     size_t fixedVariables = 0;
@@ -219,10 +197,7 @@ BitBlastSolver::Attempt BitBlastSolver::attemptAtWidths(
             // The original polynomial still names this variable, so scoped
             // conflicts retain its bound reasons even when its gates fold away.
             value = enc.mkConst(domain->lower.value, kv.second);
-        } else if (value.width() < kv.second) {
-            const auto extension = enc.mkVar(kv.second - value.width());
-            value.bits.insert(value.bits.end(), extension.bits.begin(), extension.bits.end());
-        }
+        } else context.widen(kv.first, kv.second);
         if (bbProf) {
             boundedVariables += domain && domain->hasLower && domain->hasUpper;
             fixedVariables += value.isConst;
@@ -271,7 +246,7 @@ BitBlastSolver::Attempt BitBlastSolver::attemptAtWidths(
     for (const auto& fact : facts) assumptions.push_back(fact.literal);
 
     auto satT0 = std::chrono::steady_clock::now();
-    auto res = sat->solve(assumptions);
+    auto res = sat.solve(assumptions);
     if (bbProf) {
         prof.satMs += std::chrono::duration<double, std::milli>(
                           std::chrono::steady_clock::now() - satT0).count();
@@ -284,7 +259,7 @@ BitBlastSolver::Attempt BitBlastSolver::attemptAtWidths(
             return a;
         }
         IntegerModel model;
-        for (const auto& kv : varBits) model[kv.first] = readBitVec(*sat, kv.second);
+        for (const auto& kv : varBits) model[kv.first] = readBitVec(sat, kv.second);
         // Accept only a model that satisfies cs (exact) AND lies in the box.
         bool valid = validator.validate(model, cs) == IntegerModelValidator::Result::Valid;
         bool inBox = modelInDomains(model, domains);
@@ -304,7 +279,7 @@ BitBlastSolver::Attempt BitBlastSolver::attemptAtWidths(
     if (res == SatSolver::SolveResult::Unsat) {
         if (bbDiag) std::cerr << "[BB-DIAG] UNSAT@vars=" << enc.varCount() << "\n";
         a.kind = Attempt::Unsat;
-        const auto failed = sat->getFailedAssumptions();
+        const auto failed = sat.getFailedAssumptions();
         const auto key = [](SatLit literal) {
             return (uint64_t(literal.var) << 1) | unsigned(literal.sign);
         };
@@ -495,7 +470,11 @@ BitBlastResult BitBlastSolver::solve(const std::vector<NormalizedNiaConstraint>&
         // budget one after another. Preserve the original simultaneous width
         // cascade so an irrelevant core cannot starve another integer variable.
         unsigned width = std::min(2u, maxBW_);
-        EncodingContext context(gateBudget_);
+        auto sat = createSatSolver();
+        // Configure before the encoder installs its constant unit. Preserve
+        // the theory backend's existing configuration for dense circuits.
+        sat->configure("congruence", 0);
+        IntegerEncodingContext context(std::move(sat), gateBudget_);
         for (unsigned iter = 0; iter < maxIters_; ++iter) {
             if (wall::hasDeadline() && wall::remainingMs() == 0) return result;
             for (const auto& v : unbounded) plan.width[v] = width;

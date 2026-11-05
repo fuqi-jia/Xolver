@@ -17,6 +17,8 @@
 
 namespace xolver::bitblast {
 
+class IntegerEncodingContext;
+
 struct BitBlastResult {
     enum class Status { Sat, UnsatComplete, Unknown };
     Status status = Status::Unknown;
@@ -76,7 +78,6 @@ public:
 
 private:
     bool applicable(const std::vector<NormalizedNiaConstraint>& cs) const;
-    struct EncodingContext;
 
     // One encode+solve+validate attempt at a fixed width plan. Sat carries a
     // validated in-box model; Unsat is box-dependent (caller decides global
@@ -87,7 +88,7 @@ private:
         bool complete = false;
         std::optional<TheoryConflict> conflict;
     };
-    Attempt attemptAtWidths(EncodingContext& context, const BitWidthPlan& plan,
+    Attempt attemptAtWidths(IntegerEncodingContext& context, const BitWidthPlan& plan,
                             const std::vector<NormalizedNiaConstraint>& cs,
                             const DomainStore& domains,
                             const IntegerModelValidator& validator);

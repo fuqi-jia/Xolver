@@ -17,16 +17,17 @@ TEST_CASE("Integer radix encoding: exhaustive signed inputs preserve exact value
             return std::nullopt;
         };
         WorkBudget budget;
+        std::vector<SatLit> domainAssumptions;
         const auto applied = encodeIntegerRadixDefinitions(encoder,
             {{"word", "q", "r", mpz_class(offset), 3, negate, 0, 7}}, values,
-            bounds, budget, std::chrono::steady_clock::time_point::max());
+            bounds, domainAssumptions, budget, std::chrono::steady_clock::time_point::max());
         REQUIRE(applied == std::vector<size_t>{0});
         REQUIRE_FALSE(encoder.overflowed());
         // Remainders wider than their proved domain must be constrained,
         // rather than silently truncated. Signed quotient overflow must also
         // be rejected instead of wrapping into a spurious target value.
         for (int high = -4; high <= 3; ++high) for (int low = -16; low <= 15; ++low) {
-            std::vector<SatLit> assumptions;
+            auto assumptions = domainAssumptions;
             auto fix = [&](const BitVec& bits, int value) {
                 const mpz_class integer(value);
                 for (unsigned bit = 0; bit < bits.width(); ++bit)
@@ -58,8 +59,9 @@ TEST_CASE("Integer radix encoding: resource exhaustion cannot expose a completed
     const IntegerBoundsLookup bounds = [](const std::string&)
         -> std::optional<std::pair<mpz_class, mpz_class>> { return std::nullopt; };
     WorkBudget budget(2);
+    std::vector<SatLit> assumptions;
     CHECK_THROWS_AS(encodeIntegerRadixDefinitions(encoder,
-        {{"word", "q", "r", 0, 3, false, 0, 7}}, values, bounds, budget,
+        {{"word", "q", "r", 0, 3, false, 0, 7}}, values, bounds, assumptions, budget,
         std::chrono::steady_clock::time_point::max()), ResourceExhausted);
     CHECK(values.at("word").bits == original);
 }

@@ -3,6 +3,7 @@
 #include "base/EnvParam.h"
 #include "base/SolveClock.h"
 #include "search/bitblast/BitBlastEncoder.h"
+#include "search/bitblast/IntegerEncodingContext.h"
 #include "search/bitblast/PolyBitBlaster.h"
 #include "search/bitblast/BitVec.h"
 #include "search/bitblast/SpaceEstimator.h"
@@ -16,6 +17,7 @@
 #include <algorithm>
 #include <functional>
 #include <iterator>
+#include <optional>
 #include <unordered_set>
 #include <cstdlib>
 #include <iostream>
@@ -597,7 +599,19 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
     const int kMaxConsecutiveUnsat = static_cast<int>(
         config::read<config::ReadKind::Long>("XOLVER_NIA_EAGER_BITBLAST_UNSAT_CAP", 4));
 
-    for (unsigned K : widths) {
+    auto makeContext = [&] {
+        auto sat = createSatSolver();
+        sat->setDeadline(deadline);
+        return std::make_unique<IntegerEncodingContext>(std::move(sat), budget);
+    };
+    std::unique_ptr<IntegerEncodingContext> context;
+    std::unordered_map<std::string, EncodedIntegerDomain> pointDomains;
+    std::unordered_map<ExprId, SatLit> boolVars;
+    auto nextWidth = std::begin(widths);
+    std::optional<unsigned> retryWidth;
+    while (nextWidth != std::end(widths) || retryWidth) {
+        const unsigned K = retryWidth ? *retryWidth : *nextWidth++;
+        retryWidth.reset();
         if (expired()) {
             if (diag) std::cerr << "[EAGER-BB] wall-clock budget hit before width=" << K << "\n";
             break;
@@ -608,10 +622,21 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
                                 << ") — bail to Unknown\n";
             break;
         }
-        auto sat = createSatSolver();
-        sat->setDeadline(deadline);
-        BitBlastEncoder enc(*sat);
-        enc.setVarBudget(budget);
+        if (!context) context = makeContext();
+        auto& sat = context->solver();
+        auto& enc = context->encoder();
+        const uint64_t previousVars = enc.varCount();
+        // Retained circuits must not tighten the previous per-width limit.
+        // Compact once on overflow and retry the SAME width with a fresh
+        // instance, within the unchanged arm deadline and allocation cap.
+        auto compact = [&] {
+            if (!enc.overflowed() || previousVars == 0 || expired()) return false;
+            context = makeContext();
+            pointDomains.clear();
+            boolVars.clear();
+            retryWidth = K;
+            return true;
+        };
         WorkBudget pbWork(0);
         PseudoBooleanEncoder pb(enc, pbWork, deadline);
 
@@ -620,23 +645,24 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
         // unbounded vars get the cascade width K. Bounds are POLARITY-AWARE (only
         // positive root facts set them — see markTop in collect), so a
         // negated atom like `(not (= rfc0 0))` never wrongly pins rfc0.
-        std::unordered_map<std::string, BitVec> varBits;
-        std::unordered_map<std::string, EncodedIntegerDomain> pointDomains;
+        auto& leaves = context->variables();
+        bool leavesComplete = true;
         for (const auto& v : intVars_) {
             unsigned w = K;
             auto il = lb_.find(v), iu = ub_.find(v);
             const bool bounded = il != lb_.end() && iu != ub_.end() && il->second <= iu->second;
             if (bounded) {
+                if (leaves.contains(v)) continue; // Query-root domains are width independent.
                 w = SpaceEstimator::bitsToCover(il->second, iu->second);
                 if (il->second == iu->second) {
-                    varBits[v] = enc.mkConst(il->second, w);
+                    leaves[v] = enc.mkConst(il->second, w);
                     continue;
                 }
                 const auto points = finiteValues.find(v);
                 if (points != finiteValues.end() && points->second.size() < w) {
                     auto encoded = encodeIntegerFiniteDomain(enc, points->second, pbWork, deadline);
-                    if (!encoded) return out;
-                    varBits[v] = encoded->value;
+                    if (!encoded) { leavesComplete = false; break; }
+                    leaves[v] = encoded->value;
                     pointDomains.emplace(v, std::move(*encoded));
                     continue;
                 }
@@ -644,10 +670,19 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
             if (bounded && (il->second >= 0 || iu->second < 0)) {
                 // A root-proven sign is a constant bit, including domains wider
                 // than 0/1. Other original bounds are still encoded below.
-                varBits[v] = enc.mkVar(w - 1);
-                varBits[v].bits.push_back(il->second >= 0 ? enc.constFalse() : enc.constTrue());
-            } else varBits[v] = enc.mkVar(w);
+                leaves[v] = enc.mkVar(w - 1);
+                leaves[v].bits.push_back(il->second >= 0 ? enc.constFalse() : enc.constTrue());
+            } else context->widen(v, w);
         }
+        if (!leavesComplete || enc.overflowed()) {
+            if (compact()) continue;
+            return out;
+        }
+        // Radix definitions replace derived values for this interpretation;
+        // they must not replace the retained independent integer leaves.
+        auto varBits = leaves;
+        std::vector<SatLit> assumptions;
+        assumptions.reserve(assertions.size());
         std::unordered_set<PolyId> radixZeroPolynomials;
         try {
             // Radix sharing replaces previously unused dividend bits. A point
@@ -660,12 +695,22 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
                     definitions.push_back(radixDefinitions[index]);
                     indices.push_back(index);
                 }
-            const auto shared = encodeIntegerRadixDefinitions(enc, definitions, varBits, integerBounds, pbWork, deadline);
+            const auto shared = encodeIntegerRadixDefinitions(enc, definitions, varBits, integerBounds,
+                                                              assumptions, pbWork, deadline);
             for (size_t index : shared) radixZeroPolynomials.insert(radixEquations[indices[index]]);
             if (diag) std::cerr << "[EAGER-RADIX] candidates=" << radixDefinitions.size()
                                 << " shared=" << shared.size() << "\n";
         } catch (const ResourceExhausted&) { return out; }
-        if (enc.overflowed()) return out;
+        if (enc.overflowed()) {
+            if (compact()) continue;
+            return out;
+        }
+        // A plan that ends after this solve has one fixed interpretation.
+        // Its query facts can participate in permanent SAT preprocessing.
+        if (exactDomains) {
+            for (const auto fact : assumptions) enc.assertLit(fact);
+            assumptions.clear();
+        }
         PolyBitBlaster blaster(enc, *kernel_, varBits);
 
         auto encodeFinitePolynomial = [&](PolyId polynomial, Relation relation) -> std::optional<SatLit> {
@@ -753,8 +798,8 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
             return std::nullopt;
         };
 
+        // Compound predicates depend on this width; Boolean leaves do not.
         std::unordered_map<ExprId, SatLit> memo;
-        std::unordered_map<ExprId, SatLit> boolVars;
         bool encodeOk = true;
         long long encodeOps = 0;
 
@@ -871,8 +916,10 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
                           << " satVars=" << enc.varCount() << "\n";
             ++aIdx;
             SatLit l = encode(a);
-            if (!encodeOk) break;
-            enc.assertLit(l);
+            if (!encodeOk || enc.overflowed()) break;
+            if (exactDomains) enc.assertLit(l);
+            else assumptions.push_back(l);
+            if (l == enc.constFalse()) break;
         }
         if (diag) {
             const auto& counts = pb.statistics();
@@ -884,19 +931,22 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
                       << " reused_sums=" << counts.reusedSums
                       << " compressors=" << counts.compressors << "\n";
         }
-        if (!encodeOk) return out;            // unsupported mid-encode -> Unknown
-        if (enc.overflowed()) {               // budget blown; wider K only worse
+        if (enc.overflowed()) {
+            if (compact()) continue;
             if (diag) std::cerr << "[EAGER-BB] overflow at width=" << K << " -> stop\n";
             break;
         }
+        if (!encodeOk) return out;            // unsupported mid-encode -> Unknown
 
-        if (confLimit > 0) sat->limit("conflicts", confLimit);
+        if (confLimit > 0) sat.limit("conflicts", confLimit);
         long long encMs = elapsedMs();
-        auto res = sat->solve();
+        auto res = sat.solve(assumptions);
         if (diag) std::cerr << "[EAGER-BB] width=" << K << " vars=" << enc.varCount()
                             << " sat=" << (res == SatSolver::SolveResult::Sat ? "Y" :
                                           res == SatSolver::SolveResult::Unsat ? "N" : "?")
-                            << " encMs=" << encMs << " solveMs=" << (elapsedMs() - encMs) << "\n";
+                            << " encMs=" << encMs << " solveMs=" << (elapsedMs() - encMs)
+                            << " retainedVars=" << previousVars
+                            << " freshVars=" << enc.varCount() - previousVars << "\n";
         if (res == SatSolver::SolveResult::Unsat) {
             if (exactDomains) break; // Exact domain: wider encodings are identical.
             ++consecutiveUnsat;
@@ -910,9 +960,9 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
 
         // Candidate model -> EXACT integer re-validation over all assertions.
         std::unordered_map<std::string, mpz_class> model;
-        for (const auto& v : intVars_) model[v] = readBitVec(*sat, varBits.at(v));
+        for (const auto& v : intVars_) model[v] = readBitVec(sat, varBits.at(v));
         std::unordered_map<ExprId, bool> boolModel;
-        for (const auto& kv : boolVars) boolModel[kv.first] = litValue(*sat, kv.second);
+        for (const auto& kv : boolVars) boolModel[kv.first] = litValue(sat, kv.second);
         const auto evaluation = makePolynomialEvaluation(*kernel_, model);
 
         std::function<bool(ExprId)> ev = [&](ExprId eid) -> bool {

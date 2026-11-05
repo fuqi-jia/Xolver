@@ -33,7 +33,7 @@ namespace xolver::bitblast {
 // whole attempt to Unknown.
 //
 // Self-contained: owns its own PolynomialKernel + PolynomialConverter + a fresh
-// SAT instance per width attempt. Does NOT touch the CDCL(T) main loop
+// SAT instance with reusable gates across widths. Does NOT touch the CDCL(T) main loop
 // (invariant 5) — it is a parallel strategy, exactly what BLAN is.
 class EagerBitBlastSolver {
 public:
