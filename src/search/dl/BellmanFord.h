@@ -3,6 +3,7 @@
 #include "search/dl/DifferenceGraph.h"
 #include <vector>
 #include <limits>
+#include <chrono>
 
 namespace xolver {
 
@@ -12,6 +13,7 @@ namespace xolver {
 template <typename Weight>
 struct BfResult {
     bool negativeCycle = false;
+    bool interrupted = false;
     std::vector<EdgeId> cycle;
     std::vector<Weight> dist;
 };
@@ -23,13 +25,20 @@ struct BfResult {
 template <typename Weight>
 class BellmanFord {
 public:
-    BfResult<Weight> runFull(const DifferenceGraph<Weight>& graph) {
+    BfResult<Weight> runFull(const DifferenceGraph<Weight>& graph,
+            std::chrono::steady_clock::time_point deadline =
+                std::chrono::steady_clock::time_point::max()) {
         int n = graph.numNodes();
         BfResult<Weight> result;
         result.dist.assign(n, Weight{});
         std::vector<EdgeId> pred(n, std::numeric_limits<EdgeId>::max());
 
         for (int i = 1; i <= n; ++i) {
+            if (deadline != std::chrono::steady_clock::time_point::max() &&
+                std::chrono::steady_clock::now() >= deadline) {
+                result.interrupted = true;
+                return result;
+            }
             bool changed = false;
             for (const auto& e : graph.edges()) {
                 // Relax: dist[to] > dist[from] + weight ?

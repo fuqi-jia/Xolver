@@ -321,6 +321,7 @@ private:
 
     std::vector<VarState> vars_;
 
+
     // ========================================================================
     // Sparse indexed tableau
     // ========================================================================
@@ -381,6 +382,9 @@ private:
         mpq_class constant;
         std::vector<std::pair<int, mpq_class>> terms;  // var, coeff
     };
+
+    std::optional<Result> checkDifferenceFragment(
+        std::chrono::steady_clock::time_point deadline);
 
     // ========================================================================
     // Invariants (debug only)

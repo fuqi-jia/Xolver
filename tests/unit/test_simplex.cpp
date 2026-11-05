@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 #include "applications/satisfiability/smt/qflra/LraSolver.h"
 #include "search/lra/GeneralSimplex.h"
+#include "search/dl/BellmanFord.h"
 #include "algebra/linear/LinearExpr.h"
 #include "search/coordination/TheoryLemmaDatabase.h"
 #include "ir/NativeTerms.h"
@@ -9,6 +10,144 @@
 #include <array>
 
 using namespace xolver;
+
+TEST_CASE("GeneralSimplex: difference cycles retain scaled strict-bound certificates") {
+    for (auto policy : {GeneralSimplex::AssignmentPolicy::Reinitialize,
+                        GeneralSimplex::AssignmentPolicy::Preserve}) {
+        GeneralSimplex simplex;
+        const int x = simplex.addVar("x"), y = simplex.addVar("y");
+        const int first = simplex.addConstraint({{x, 2}, {y, -2}}, 0);
+        const int second = simplex.addConstraint({{x, -3}, {y, 3}}, 0);
+        REQUIRE(simplex.assertUpper(first, BoundInfo(BoundValue(DeltaRational(0, -1)),
+                                                    SatLit::positive(1)), 0));
+        REQUIRE(simplex.check() == GeneralSimplex::Result::Sat);
+        CHECK(simplex.value(x) < simplex.value(y));
+        const auto revision = simplex.pointRevision();
+        REQUIRE(simplex.check() == GeneralSimplex::Result::Sat);
+        CHECK(simplex.pointRevision() == revision);
+        simplex.push();
+        REQUIRE(simplex.assertUpper(second, BoundInfo(BoundValue(DeltaRational(0)),
+                                                     SatLit::positive(2)), 1));
+        REQUIRE(simplex.check() == GeneralSimplex::Result::Unsat);
+        REQUIRE(simplex.getConflict().size() == 2);
+#ifdef XOLVER_ENABLE_PROOFS
+        REQUIRE(simplex.getConflictCoeffs().size() == 2);
+        mpq_class coefficient = 0;
+        for (size_t i = 0; i < simplex.getConflict().size(); ++i) {
+            const auto& bound = simplex.getConflict()[i];
+            CHECK_FALSE(bound.isLower);
+            const auto& multiplier = simplex.getConflictCoeffs()[i];
+            CHECK(multiplier > 0);
+            coefficient += multiplier * (bound.var == first ? 2 : -3);
+        }
+        CHECK(coefficient == 0);
+#endif
+        simplex.pop(policy);
+        REQUIRE(simplex.check() == GeneralSimplex::Result::Sat);
+        CHECK(simplex.value(x) < simplex.value(y));
+        CHECK(simplex.debugCheckInvariants());
+    }
+}
+
+TEST_CASE("GeneralSimplex: constant difference rows and reset retain original reasons") {
+    GeneralSimplex simplex;
+    int x = simplex.addVar("x");
+    const int constant = simplex.addConstraint({{x, 2}, {x, -2}}, -4);
+    REQUIRE(simplex.assertUpper(constant, BoundInfo(BoundValue(DeltaRational(3)),
+                                                  SatLit::positive(1))));
+    REQUIRE(simplex.check() == GeneralSimplex::Result::Unsat);
+    REQUIRE(simplex.getConflict().size() == 1);
+    CHECK(simplex.getConflict()[0].reason == SatLit::positive(1));
+    simplex.resetActiveBounds();
+    REQUIRE(simplex.check() == GeneralSimplex::Result::Sat);
+    CHECK(simplex.value(constant) == DeltaRational(4));
+    simplex.reset();
+    x = simplex.addVar("new-x");
+    const int y = simplex.addVar("new-y");
+    const int row = simplex.addConstraint({{x, -5}, {y, 5}}, -10);
+    REQUIRE(simplex.assertLower(row, BoundInfo(BoundValue(DeltaRational(1, 1)),
+                                             SatLit::positive(2))));
+    REQUIRE(simplex.check() == GeneralSimplex::Result::Sat);
+    CHECK(simplex.value(row) >= DeltaRational(1, 1));
+    CHECK(simplex.debugCheckInvariants());
+}
+
+TEST_CASE("GeneralSimplex: nested auxiliary definitions use the general linear solver") {
+    GeneralSimplex simplex;
+    const int x = simplex.addVar("x"), y = simplex.addVar("y");
+    const int difference = simplex.addConstraint({{x, 1}, {y, -1}}, 2);
+    const int nested = simplex.addConstraint({{difference, 1}, {x, 1}}, 1);
+    for (int var : {x, nested}) {
+        REQUIRE(simplex.assertLower(var, BoundInfo(BoundValue(DeltaRational(0)),
+                                                  SatLit::positive(1))));
+        REQUIRE(simplex.assertUpper(var, BoundInfo(BoundValue(DeltaRational(0)),
+                                                  SatLit::positive(2))));
+    }
+    REQUIRE(simplex.check() == GeneralSimplex::Result::Sat);
+    CHECK(simplex.value(y) == DeltaRational(-3));
+    CHECK(simplex.value(difference) == DeltaRational(1));
+    CHECK(simplex.debugCheckInvariants());
+}
+
+TEST_CASE("GeneralSimplex: rational difference networks agree with independent closure") {
+    constexpr int count = 7;
+    std::mt19937 random(87541);
+    for (int trial = 0; trial < 40; ++trial) {
+        GeneralSimplex simplex;
+        std::array<int, count> variables;
+        for (int i = 0; i < count; ++i) variables[i] = simplex.addVar(std::to_string(i));
+        std::array<std::array<std::optional<mpq_class>, count>, count> closure;
+        for (int i = 0; i < count; ++i) closure[i][i] = 0;
+        struct Edge { int from, to; mpq_class weight; };
+        std::vector<Edge> edges;
+        for (int i = 0; i < 24; ++i) {
+            const int from = random() % count, to = random() % count;
+            const mpq_class weight = trial % 2 == 0
+                ? mpq_class(to - from) + mpq_class(random() % 4, 3)
+                : mpq_class(static_cast<int>(random() % 9) - 4, 3);
+            edges.push_back({from, to, weight});
+            if (!closure[from][to] || weight < *closure[from][to]) closure[from][to] = weight;
+            const mpq_class scale(1 + random() % 5, 2);
+            const bool lower = i % 2;
+            const mpq_class coefficient = lower ? -scale : scale;
+            const int row = simplex.addConstraint({{variables[to], coefficient},
+                {variables[from], -coefficient}}, mpq_class(coefficient * weight));
+            const BoundInfo bound(BoundValue(DeltaRational(0)), SatLit::positive(i + 1));
+            REQUIRE((lower ? simplex.assertLower(row, bound) : simplex.assertUpper(row, bound)));
+        }
+        for (int k = 0; k < count; ++k)
+            for (int i = 0; i < count; ++i)
+                for (int j = 0; j < count; ++j)
+                    if (closure[i][k] && closure[k][j]) {
+                        const mpq_class path = *closure[i][k] + *closure[k][j];
+                        if (!closure[i][j] || path < *closure[i][j]) closure[i][j] = path;
+                    }
+        bool inconsistent = false;
+        for (int i = 0; i < count; ++i) inconsistent |= *closure[i][i] < 0;
+        const auto result = simplex.check();
+        REQUIRE(result == (inconsistent ? GeneralSimplex::Result::Unsat : GeneralSimplex::Result::Sat));
+        if (!inconsistent)
+            for (const auto& edge : edges)
+                CHECK(simplex.value(variables[edge.to]) - simplex.value(variables[edge.from]) <=
+                      DeltaRational(edge.weight));
+        CHECK(simplex.debugCheckInvariants());
+    }
+}
+
+TEST_CASE("GeneralSimplex: shared difference graph honors an external deadline") {
+    DifferenceGraph<DeltaRational> graph;
+    const int x = graph.getOrCreateNode("x");
+    graph.addEdge(graph.zeroNode(), x, DeltaRational(-1), SatLit::positive(1));
+    const auto interrupted = BellmanFord<DeltaRational>().runFull(
+        graph, std::chrono::steady_clock::now());
+    CHECK(interrupted.interrupted);
+    CHECK_FALSE(interrupted.negativeCycle);
+    const auto complete = BellmanFord<DeltaRational>().runFull(graph);
+    CHECK_FALSE(complete.interrupted);
+    CHECK_FALSE(complete.negativeCycle);
+    REQUIRE(complete.dist.size() == 2);
+    CHECK(complete.dist[x] == DeltaRational(-1));
+}
 
 TEST_CASE("GeneralSimplex: point revisions include reconstruction without new bound assertions") {
     GeneralSimplex simplex;
