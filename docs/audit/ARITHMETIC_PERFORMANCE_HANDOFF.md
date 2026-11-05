@@ -116,9 +116,29 @@ points. The qualified predecessor fails the new conflict regression. A fresh
 seven-input comparison improves **3 to 4 independently verified results**,
 with no losses or errors: one original integer UNSAT changes from a 60-second
 timeout to **2.522 seconds**, versus **0.065 seconds** for same-round Z3. Three
-inputs still time out, including two original gaps. Complete fresh fixed160,
-development587 and private14408 comparisons of this candidate are running.
-Main promotion, PR CI and subsequent main CI remain pending.
+inputs still time out, including two original gaps.
+
+Complete fresh comparisons against accepted main now pass server acceptance:
+
+- Fixed160 improves **114 to 115 raw verified**, with one original NIA UNSAT
+  gain and no losses. A freshly rechecked input-bound certificate gives
+  **115 to 116 verified**, versus **116 for same-round Z3**. No timeout or
+  unknown is upgraded. Mean verified PAR-2 improves **37.122 to 36.361 seconds**,
+  versus **34.119** for Z3. The full-round gain changes from a 60-second timeout
+  to **3.274 seconds**; the earlier 2.522-second observation belongs to the
+  separate seven-input control comparison. There remain 43 timeouts and one
+  unknown; these results do not establish superiority over Z3.
+- Development587 retains **587 to 587 verified**, versus 584 for Z3; its three
+  unconfirmed model replays remain excluded. Total solver time is
+  **47.555 to 47.297 seconds**, versus **17.383** for Z3.
+- All **14,408 private queries** remain independently verified in both versions
+  and Z3: **8,940 SAT / 5,468 UNSAT**, with no losses, errors, timeouts, unknowns
+  or unconfirmed results. Total solver time is **1,311.848 to 1,307.496 seconds**,
+  versus **397.501** for Z3.
+
+Each suite uses its own actual timed model exports and complete per-input
+integrity and budget checks. The cohorts are reported separately. Main promotion,
+PR CI and subsequent main CI remain pending.
 
 Private inputs, models and individual evidence remain off GitHub. Protected sets
 remain unused. The cancelled extra server archive is not a delivery requirement.
