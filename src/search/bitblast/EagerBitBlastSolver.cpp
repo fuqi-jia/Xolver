@@ -705,6 +705,12 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
             if (compact()) continue;
             return out;
         }
+        // A plan that ends after this solve has one fixed interpretation.
+        // Its query facts can participate in permanent SAT preprocessing.
+        if (exactDomains) {
+            for (const auto fact : assumptions) enc.assertLit(fact);
+            assumptions.clear();
+        }
         PolyBitBlaster blaster(enc, *kernel_, varBits);
 
         auto encodeFinitePolynomial = [&](PolyId polynomial, Relation relation) -> std::optional<SatLit> {
@@ -911,7 +917,8 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
             ++aIdx;
             SatLit l = encode(a);
             if (!encodeOk || enc.overflowed()) break;
-            assumptions.push_back(l);
+            if (exactDomains) enc.assertLit(l);
+            else assumptions.push_back(l);
             if (l == enc.constFalse()) break;
         }
         if (diag) {

@@ -78,8 +78,25 @@ results**, with two original integer SAT gains and no losses or errors. Both
 change from 60-second timeouts to **12.748 and 10.791 seconds**. Z3 and CVC5 accept
 each actual timed candidate model; same-round Z3 verifies 16. The frozen CLI is
 `c8a8fd4e46b85bf415329f1033cf37c7ccd1f5ede9e745058418bebaac41a6c4`.
-Complete fixed160 comparison is running. This development has not completed
-whole-stage acceptance and does not establish overall superiority over Z3.
+Complete fixed160 comparison at that freeze gives **114 to 115 raw verified**,
+versus **115 for same-round Z3**, with two SAT gains and one LIA SAT loss
+(**22.769 seconds to a 60-second timeout**). No certificate supplement is applied
+to these counts. That candidate was not promoted.
+
+The refinement keeps source roots and radix-fitting facts permanent when the
+existing exact-domain plan ends after this solve. SAT preprocessing can then
+use those fixed query facts. Plans that refine integer widths retain their
+assumption boundary and shared search state. The affine regression uses the same
+fixed bounds and encoding size in both versions; permanent roots find SAT while
+assumption roots exhaust the original allocation.
+No budget, configuration, API or rollback policy is changed.
+
+Proof-enabled qualification again passes **2,183 cases / 1,331,524 assertions**,
+including **242 focused cases / 181,920 assertions**. The refined frozen CLI is
+`a68e85c39f20ae237c6dc7d8377f8171f9a63562badea00f24db0db7fd707afb`.
+A fresh 18-input control includes the affine regression and the earlier gains.
+Whole-stage acceptance remains pending; these results do not establish overall
+superiority over Z3.
 
 ## Previous checkpoint: exact models and shared NIA relaxation (2026-11-06)
 
