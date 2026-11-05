@@ -69,6 +69,9 @@ public:
                    int level, SatLit assertedLit) override;
 
     void setRegistry(TheoryAtomRegistry* reg);
+    void setModelCompletionRequest(ModelCompletionRequest request) override {
+        modelCompletionRequest_ = std::move(request);
+    }
     // setNativeTerms override: stores via base + does NIA-specific Farkas-dump side
     // effect. setSharedTermRegistry uses the base implementation.
     void setNativeTerms(const NativeTerms* ir) override;
@@ -174,6 +177,7 @@ private:
     int farkasOrSatStreak_ = 0;
 
     std::optional<IntegerModel> currentModel_;
+    ModelCompletionRequest modelCompletionRequest_;
     // Survives reset()/backtrack — the last Farkas-Or candidate that the
     // validator confirmed against the ORIGINAL formula. Used by the
     // top-level Unknown fallback in Solver.cpp when the SAT engine times

@@ -311,6 +311,7 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
             using Row = std::vector<std::pair<int, mpq_class>>;
             std::map<std::pair<Row, mpq_class>, int> definitions;
             std::vector<bool> active(atoms.size(), false);
+            std::vector<int> disequalityColumns(atoms.size(), -1);
             size_t activeCount = 0;
             std::vector<std::vector<size_t>> atomDependencies(atoms.size());
             std::vector<std::vector<size_t>> atomRootPremises(atoms.size());
@@ -473,7 +474,6 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
                         }
                         continue;
                     }
-                    if (relation == Relation::Neq) continue; // final original-model check
                     const auto key = std::make_pair(row, constant);
                     auto it = definitions.find(key);
                     if (it == definitions.end()) {
@@ -484,6 +484,10 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
                         ++stats.definitions;
                     }
                     const int auxiliary = it->second;
+                    if (relation == Relation::Neq) {
+                        disequalityColumns[index] = auxiliary;
+                        continue;
+                    }
                     if ((relation == Relation::Eq || relation == Relation::Gt || relation == Relation::Geq) &&
                         !simplex.assertLower(auxiliary, BoundInfo(BoundValue(
                             DeltaRational(0, relation == Relation::Gt ? 1 : 0)), reason), level)) return false;
@@ -505,7 +509,7 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
             };
             if (!activate(all, 0) || check() != GeneralSimplex::Result::Sat) return refuteRoot();
 
-            auto complete = [&]() -> std::optional<Model> {
+            auto completePoint = [&](auto&& self) -> std::optional<Model> {
                 tick();
                 ++stats.modelChecks;
                 Model point;
@@ -540,13 +544,48 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
                         ++stats.integerCompletionModels;
                     }
                 }
-                for (const auto& constraint : constraints) {
+                int zeroColumn = -1;
+                for (size_t index = 0; index < constraints.size(); ++index) {
                     tick();
+                    const auto& constraint = constraints[index];
                     const int sign = kernel.sgnVarId(constraint.poly, point);
-                    if (!holds(mpq_class(sign), constraint.rel)) return std::nullopt;
+                    if (holds(mpq_class(sign), constraint.rel)) continue;
+                    // All atoms must be affine under this prefix before local
+                    // disequality repair. Other rejected polynomial points still
+                    // belong to the enclosing nonlinear candidate search.
+                    if (constraint.rel != Relation::Neq || activeCount != atoms.size() ||
+                        disequalityColumns[index] < 0) return std::nullopt;
+                    if (zeroColumn < 0) zeroColumn = disequalityColumns[index];
                 }
-                return point;
+                if (zeroColumn < 0) return point;
+                ++stats.disequalityRejectedPoints;
+                // An affine disequality is the union of two strict halfspaces
+                // over either domain. Keep its choices local: neither failed
+                // orientation nor exhausted completion is a root refutation.
+                for (const bool positive : {true, false}) {
+                    tick();
+                    ++stats.disequalitySplits;
+                    simplex.push();
+                    std::optional<Model> result;
+                    try {
+                        const BoundInfo bound(BoundValue(DeltaRational(0, positive ? 1 : -1)),
+                                              SatLit::positive(0));
+                        const bool asserted = positive ? simplex.assertLower(zeroColumn, bound) :
+                                                         simplex.assertUpper(zeroColumn, bound);
+                        if (asserted && check() == GeneralSimplex::Result::Sat) result = self(self);
+                    } catch (...) {
+                        simplex.pop(GeneralSimplex::AssignmentPolicy::Preserve);
+                        throw;
+                    }
+                    simplex.pop(GeneralSimplex::AssignmentPolicy::Preserve);
+                    if (result) return result;
+                }
+                // Failed children can retain an infeasible assignment. Restore
+                // parent feasibility before singleton propagation or another pin.
+                (void)check();
+                return std::nullopt;
             };
+            auto complete = [&]() { return completePoint(completePoint); };
             auto propagateFixed = [&](int level) {
                 for (;;) {
                     tick();
@@ -687,6 +726,7 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
                 simplex.backtrackToLevel(static_cast<int>(depth), GeneralSimplex::AssignmentPolicy::Preserve);
                 for (auto index : introduced[depth + 1]) {
                     active[index] = false;
+                    disequalityColumns[index] = -1;
                     --activeCount;
                     atomDependencies[index].clear();
                 }

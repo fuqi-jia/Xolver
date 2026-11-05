@@ -56,6 +56,15 @@ public:
     // A phase hint is neither an entailment nor a satisfiability verdict.
     virtual std::optional<bool> evalAtomAtModel(SatVar v) { (void)v; return std::nullopt; }
 
+    // Query-scoped request for a complete original-formula witness. A theory
+    // may ask before expensive model search, after its exact cheap stages.
+    // True means the owner has validated a global model and will stop search;
+    // the requesting theory must yield Unknown, never an entailment or a local
+    // consistency certificate. False leaves ordinary theory search unchanged.
+    // Consumers clear the callback on reset and must not reenter the owner.
+    using ModelCompletionRequest = std::function<bool()>;
+    virtual void setModelCompletionRequest(ModelCompletionRequest) {}
+
     // -----------------------------------------------------------------------
     // Active linear context for nonlinear solvers (optional; default = no-op)
     // -----------------------------------------------------------------------

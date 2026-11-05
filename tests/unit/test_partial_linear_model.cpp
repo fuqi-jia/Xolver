@@ -2,11 +2,123 @@
 #include "search/candidate/BoundaryCandidates.h"
 #include "search/candidate/PartialLinearModelSearch.h"
 #include "search/lra/GeneralSimplex.h"
+#include <algorithm>
 #include <chrono>
 #include <stdexcept>
 #include <random>
 
 using namespace xolver;
+
+TEST_CASE("partial linear model: affine disequalities repair zero points in both domains") {
+    auto kernel = createPolynomialKernel();
+    const auto p = kernel->getOrCreateVar("p"), y = kernel->getOrCreateVar("y");
+    const auto pv = kernel->mkVar(p), yv = kernel->mkVar(y);
+    for (const bool integerDomain : {false, true}) {
+        for (const auto side : {Relation::Leq, Relation::Geq}) {
+            std::vector<PartialLinearModelSearch::Constraint> constraints{
+                {pv, Relation::Eq}, {kernel->mul(pv, yv), Relation::Eq},
+                {yv, side}, {yv, Relation::Neq}
+            };
+            PartialLinearModelSearch::Statistics stats;
+            std::optional<PartialLinearModelSearch::RootRefutation> refutation;
+            const auto model = PartialLinearModelSearch::trySolve(constraints, *kernel,
+                integerDomain, &stats, PartialLinearModelSearch::Allocation(), &refutation);
+            REQUIRE(model.has_value());
+            CHECK(model->at(p) == 0);
+            CHECK((side == Relation::Leq ? model->at(y) < 0 : model->at(y) > 0));
+            if (integerDomain) CHECK(model->at(y).get_den() == 1);
+            CHECK(stats.disequalitySplits > 0);
+            CHECK_FALSE(refutation.has_value());
+
+            // Adding an exact zero makes this conjunction inconsistent.
+            constraints.push_back({yv, Relation::Eq});
+            CHECK_FALSE(PartialLinearModelSearch::trySolve(constraints, *kernel,
+                integerDomain, &stats, PartialLinearModelSearch::Allocation(), &refutation));
+            // Exact root singleton substitution may independently prove this
+            // contradiction; any such proof must retain the disequality.
+            if (refutation) CHECK(std::find(refutation->premises.begin(), refutation->premises.end(), 3) !=
+                                  refutation->premises.end());
+        }
+    }
+}
+
+TEST_CASE("partial linear model: integer repair backtracks an infeasible disequality orientation") {
+    auto kernel = createPolynomialKernel();
+    const auto p = kernel->getOrCreateVar("p"), x = kernel->getOrCreateVar("x");
+    const auto pv = kernel->mkVar(p), xv = kernel->mkVar(x);
+    const std::vector<PartialLinearModelSearch::Constraint> constraints{
+        {pv, Relation::Eq}, {kernel->pow(pv, 2), Relation::Eq},
+        {kernel->add(xv, kernel->mkOne()), Relation::Geq},
+        {kernel->sub(kernel->mul(kernel->mkConst(2), xv), kernel->mkOne()), Relation::Leq},
+        {xv, Relation::Neq}
+    };
+    PartialLinearModelSearch::Statistics stats;
+    const auto real = PartialLinearModelSearch::trySolve(constraints, *kernel, false, &stats);
+    REQUIRE(real.has_value());
+    CHECK(real->at(x) > 0);
+    CHECK(real->at(x) <= mpq_class(1, 2));
+    const auto integral = PartialLinearModelSearch::trySolve(constraints, *kernel, true, &stats);
+    REQUIRE(integral.has_value());
+    CHECK(integral->at(x) == -1);
+    CHECK(stats.disequalitySplits >= 2);
+    CHECK(stats.integerCompletions > 0);
+    // Cancellation and failed local orientations do not leak across calls.
+    CHECK_FALSE(PartialLinearModelSearch::trySolve(constraints, *kernel, true, &stats,
+        PartialLinearModelSearch::Allocation(std::chrono::milliseconds(1000), 1)));
+    CHECK(stats.exhausted);
+    REQUIRE(PartialLinearModelSearch::trySolve(constraints, *kernel, true).has_value());
+}
+
+TEST_CASE("partial linear model: coupled disequalities retain every nonzero obligation") {
+    auto kernel = createPolynomialKernel();
+    const auto p = kernel->getOrCreateVar("p"), x = kernel->getOrCreateVar("x"),
+               y = kernel->getOrCreateVar("y");
+    const auto pv = kernel->mkVar(p), xv = kernel->mkVar(x), yv = kernel->mkVar(y);
+    std::vector<PartialLinearModelSearch::Constraint> constraints{
+        {pv, Relation::Eq}, {kernel->pow(pv, 2), Relation::Eq},
+        {xv, Relation::Geq}, {yv, Relation::Geq},
+        {xv, Relation::Neq}, {yv, Relation::Neq}, {kernel->sub(xv, yv), Relation::Neq}
+    };
+    for (const bool integerDomain : {false, true}) {
+        const auto model = PartialLinearModelSearch::trySolve(constraints, *kernel, integerDomain);
+        REQUIRE(model.has_value());
+        CHECK(model->at(x) > 0);
+        CHECK(model->at(y) > 0);
+        CHECK(model->at(x) != model->at(y));
+        if (integerDomain) {
+            CHECK(model->at(x).get_den() == 1);
+            CHECK(model->at(y).get_den() == 1);
+        }
+    }
+    constraints.push_back({kernel->sub(xv, yv), Relation::Eq});
+    CHECK_FALSE(PartialLinearModelSearch::trySolve(constraints, *kernel));
+    CHECK_FALSE(PartialLinearModelSearch::trySolve(constraints, *kernel, true));
+}
+
+TEST_CASE("partial linear model: nonlinear disequality orientations withdraw with parameter choices") {
+    auto kernel = createPolynomialKernel();
+    const auto p = kernel->getOrCreateVar("p"), y = kernel->getOrCreateVar("y");
+    const auto pv = kernel->mkVar(p), yv = kernel->mkVar(y);
+    std::vector<PartialLinearModelSearch::Constraint> constraints{
+        {pv, Relation::Geq}, {kernel->sub(pv, kernel->mkOne()), Relation::Leq},
+        {kernel->sub(kernel->pow(pv, 2), pv), Relation::Eq},
+        {yv, Relation::Leq}, {kernel->mul(pv, yv), Relation::Neq}
+    };
+    for (const bool integerDomain : {false, true}) {
+        const auto model = PartialLinearModelSearch::trySolve(constraints, *kernel, integerDomain);
+        REQUIRE(model.has_value());
+        CHECK(model->at(p) == 1);
+        CHECK(model->at(y) < 0);
+        constraints.push_back({yv, Relation::Eq});
+        std::optional<PartialLinearModelSearch::RootRefutation> refutation;
+        CHECK_FALSE(PartialLinearModelSearch::trySolve(constraints, *kernel, integerDomain,
+            nullptr, PartialLinearModelSearch::Allocation(), &refutation));
+        if (refutation) CHECK(std::find(refutation->premises.begin(), refutation->premises.end(), 4) !=
+                              refutation->premises.end());
+        constraints.pop_back();
+        REQUIRE(PartialLinearModelSearch::trySolve(constraints, *kernel, integerDomain).has_value());
+    }
+}
 
 TEST_CASE("partial linear model: root singleton propagation exposes an unconditional refutation") {
     auto kernel = createPolynomialKernel();

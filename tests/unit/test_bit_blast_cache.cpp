@@ -60,6 +60,135 @@ public:
 };
 }
 
+TEST_CASE("Model completion request: cheap exact models avoid global search") {
+    auto kernel = createPolynomialKernel();
+    const auto x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    BitBlastStageProbe solver(std::move(kernel));
+    TheoryAtomRecord atom{1, TheoryId::NIA, false, NullExpr,
+        PolynomialAtomPayload{x, Relation::Eq, RealValue::fromInt(7)}};
+    solver.assertLit(atom, true, 0, SatLit::positive(1));
+    int requests = 0;
+    solver.setModelCompletionRequest([&] { ++requests; return true; });
+    TheoryLemmaDatabase db;
+    CHECK(solver.check(db, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Consistent);
+    CHECK(requests == 0);
+    REQUIRE(solver.getModel());
+    CHECK(solver.getModel()->assignments.at("x") == "7");
+}
+
+TEST_CASE("Model completion request: a global witness yields without certifying the theory") {
+    for (const bool available : {false, true}) {
+        BitBlastStageProbe solver(createPolynomialKernel());
+        TheoryLemmaDatabase db;
+        int requests = 0;
+        TheorySolver& contract = solver;
+        contract.setModelCompletionRequest([&] { ++requests; return available; });
+        CHECK_FALSE(solver.runStageAt("nia.request-model-completion", db, TheoryEffort::Standard));
+        CHECK(requests == 0);
+        const auto result = solver.runStage("nia.request-model-completion", db);
+        CHECK(requests == 1);
+        if (available) {
+            REQUIRE(result);
+            CHECK(result->kind == TheoryCheckResult::Kind::Unknown);
+            CHECK_FALSE(result->conflictOpt);
+            CHECK_FALSE(result->lemmaOpt);
+        } else {
+            CHECK_FALSE(result);
+        }
+        CHECK_FALSE(solver.getModel());
+        CHECK_FALSE(solver.runStage("nia.request-model-completion", db));
+        CHECK(requests == 1);
+    }
+}
+
+TEST_CASE("Model completion request: reset releases query captures") {
+    BitBlastStageProbe solver(createPolynomialKernel());
+    auto lifetime = std::make_shared<int>(0);
+    std::weak_ptr<int> weak = lifetime;
+    solver.setModelCompletionRequest([lifetime] { ++*lifetime; return true; });
+    lifetime.reset();
+    CHECK_FALSE(weak.expired());
+    solver.reset();
+    CHECK(weak.expired());
+    TheoryLemmaDatabase db;
+    CHECK_FALSE(solver.runStage("nia.request-model-completion", db));
+}
+
+TEST_CASE("Model completion request: direct nonlinear model precedes global enumeration") {
+    NativeTerms terms;
+    terms.registerSort(0, SortKind::Int);
+    const auto nx = terms.add({Kind::Variable, 0, {}, Payload(std::string("x"))});
+    const auto ny = terms.add({Kind::Variable, 0, {}, Payload(std::string("y"))});
+    SharedTermRegistry shared;
+    shared.setNativeTerms(&terms);
+    const auto sx = shared.getOrCreate(nx, 0, "x", false);
+    const auto sy = shared.getOrCreate(ny, 0, "y", false);
+    auto kernel = createPolynomialKernel();
+    const auto product = kernel->mul(kernel->mkVar(kernel->getOrCreateVar("x")),
+                                     kernel->mkVar(kernel->getOrCreateVar("y")));
+    auto theory = std::make_unique<NiaSolver>(std::move(kernel));
+    auto* solver = theory.get();
+    solver->setNativeTerms(&terms);
+    solver->setSharedTermRegistry(&shared);
+    solver->assertLit(TheoryAtomRecord{1, TheoryId::NIA, false, NullExpr,
+        PolynomialAtomPayload{product, Relation::Eq, RealValue::fromInt(1002)}},
+        true, 0, SatLit::positive(1));
+    REQUIRE(solver->assertInterfaceDisequality(sx, sy, SatLit::positive(2), 0).kind ==
+            TheoryCheckResult::Kind::Consistent);
+    TheoryManager manager;
+    manager.registerSolver(std::move(theory));
+    int requests = 0;
+    manager.setModelCompletionRequest([&] { ++requests; return true; });
+    TheoryLemmaDatabase db;
+    CHECK(solver->check(db, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Consistent);
+    CHECK(requests == 0);
+    const auto model = solver->getModel();
+    REQUIRE(model);
+    const mpz_class x(model->assignments.at("x")), y(model->assignments.at("y"));
+    CHECK(x * y == 1002);
+    CHECK(x != y);
+}
+
+TEST_CASE("Model completion request: shared arrangements are checked and withdrawn") {
+    NativeTerms terms;
+    terms.registerSort(0, SortKind::Int);
+    const auto nx = terms.add({Kind::Variable, 0, {}, Payload(std::string("x"))});
+    const auto ny = terms.add({Kind::Variable, 0, {}, Payload(std::string("y"))});
+    SharedTermRegistry shared;
+    shared.setNativeTerms(&terms);
+    const auto sx = shared.getOrCreate(nx, 0, "x", false);
+    const auto sy = shared.getOrCreate(ny, 0, "y", false);
+    auto kernel = createPolynomialKernel();
+    const auto product = kernel->mul(kernel->mkVar(kernel->getOrCreateVar("x")),
+                                     kernel->mkVar(kernel->getOrCreateVar("y")));
+    NiaSolver solver(std::move(kernel));
+    solver.setNativeTerms(&terms);
+    solver.setSharedTermRegistry(&shared);
+    solver.assertLit(TheoryAtomRecord{1, TheoryId::NIA, false, NullExpr,
+        PolynomialAtomPayload{product, Relation::Eq, RealValue::fromInt(4)}},
+        true, 0, SatLit::positive(1));
+    int requests = 0;
+    solver.setModelCompletionRequest([&] { ++requests; return true; });
+    TheoryLemmaDatabase db;
+    for (const bool equal : {true, false}) {
+        if (equal)
+            solver.assertInterfaceEquality(sx, sy, SatLit::positive(2), 1);
+        else
+            solver.assertInterfaceDisequality(sx, sy, SatLit::positive(3), 1);
+        REQUIRE(solver.check(db, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Consistent);
+        const auto model = solver.getModel();
+        REQUIRE(model);
+        const mpz_class x(model->assignments.at("x")), y(model->assignments.at("y"));
+        CHECK(x * y == 4);
+        CHECK((x == y) == equal);
+        CHECK(requests == 0);
+        solver.backtrackToLevel(0);
+    }
+    solver.assertInterfaceEquality(sx, sy, SatLit::positive(4), 1);
+    solver.assertInterfaceDisequality(sx, sy, SatLit::positive(5), 1);
+    CHECK(solver.check(db, TheoryEffort::Full).kind != TheoryCheckResult::Kind::Consistent);
+}
+
 TEST_CASE("NiaSolver: new constraints invalidate a cached integer point across withdrawal") {
     env::Scope scope(env::Snapshot::capture({{"XOLVER_NIA_BB_EARLY_MIN_ACTIVE", "0"}}));
     auto kernel = createPolynomialKernel();
