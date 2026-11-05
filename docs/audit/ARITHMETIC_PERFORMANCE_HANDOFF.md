@@ -1,6 +1,21 @@
 # Arithmetic validation and continuation record
 
-## Current checkpoint: complete cut explanations and exact NIA refinements (2026-11-05)
+## Current checkpoint: exact models and shared NIA relaxation (2026-11-06)
+
+[PR #100](https://github.com/fuqi-jia/Xolver/pull/100) merged as
+af50e5c1d3c241b5705f75ad673bf76a84bf043b after complete server acceptance.
+Both jobs in its [PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/42086626787)
+and [main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42091610718) pass.
+The qualified implementation passes **2,166 C++ cases / 1,327,414 assertions**.
+Complete same-round comparisons improve fixed160 from **115 to 116 verified**
+with the independently rechecked certificate, retain all **587 development**
+and **14,408 private** results, and introduce no losses or errors. There remain
+**43 timeouts and one unknown** on fixed160. Same-round Z3 verifies 116 and has
+better mean verified PAR-2 (**34.119 versus 36.361 seconds**). This stage does
+not establish overall superiority. Final-version original-C QCP timing and
+the final protected-set comparison remain open. Detailed evidence follows.
+
+## Previous checkpoint: complete cut explanations and exact NIA refinements (2026-11-05)
 
 [PR #99](https://github.com/fuqi-jia/Xolver/pull/99) merged as
 412887c6b6372b7721a723c99283f6361fc7a3db after complete server acceptance and
@@ -73,7 +88,7 @@ results, versus 584 for Z3, whose three model replays remain excluded. All
 **14,408 private queries** are verified in both versions and Z3, with no losses,
 unknowns, timeouts, unconfirmed results or errors. Total private-query solver
 time is **1,333.139 to 1,329.422 seconds**, versus **399.612** for Z3. These results
-do not establish overall superiority. Main promotion and follow-up CI remain pending.
+do not establish overall superiority. The correction is included in PR #100.
 
 The next implementation reuses polynomial conversions within an immutable native
 expression-index lifetime, invalidating cached IDs on index replacement. Boolean
@@ -137,8 +152,8 @@ Complete fresh comparisons against accepted main now pass server acceptance:
   versus **397.501** for Z3.
 
 Each suite uses its own actual timed model exports and complete per-input
-integrity and budget checks. The cohorts are reported separately. Main promotion,
-PR CI and subsequent main CI remain pending.
+integrity and budget checks. The cohorts are reported separately. PR #100 and
+its merged-main CI pass as recorded in the current checkpoint above.
 
 Private inputs, models and individual evidence remain off GitHub. Protected sets
 remain unused. The cancelled extra server archive is not a delivery requirement.
