@@ -149,6 +149,47 @@ TEST_CASE("GeneralSimplex: shared difference graph honors an external deadline")
     CHECK(complete.dist[x] == DeltaRational(-1));
 }
 
+TEST_CASE("GeneralSimplex: seeded difference search preserves exact potentials and strict cycles") {
+    DifferenceGraph<DeltaRational> graph;
+    const int x = graph.getOrCreateNode("seed-x");
+    const int y = graph.getOrCreateNode("seed-y");
+    const int z = graph.getOrCreateNode("seed-z");
+    graph.addEdge(graph.zeroNode(), x, DeltaRational(5), SatLit::positive(1));
+    graph.addEdge(x, y, DeltaRational(0, -1), SatLit::positive(2));
+    graph.addEdge(y, z, DeltaRational(mpq_class(2, 3)), SatLit::positive(3));
+    graph.addEdge(z, graph.zeroNode(), DeltaRational(-2), SatLit::positive(4));
+    const auto unlimited = std::chrono::steady_clock::time_point::max();
+    const std::vector<DeltaRational> seed{
+        DeltaRational(10), DeltaRational(13), DeltaRational(12), DeltaRational(14)};
+    BellmanFord<DeltaRational> search;
+    const auto result = search.runFull(graph, unlimited, seed);
+    REQUIRE_FALSE(result.interrupted);
+    REQUIRE_FALSE(result.negativeCycle);
+    REQUIRE(result.dist.size() == seed.size());
+    for (const auto& edge : graph.edges())
+        CHECK(result.dist[edge.to] <= result.dist[edge.from] + edge.weight);
+    // A feasible prefix stays unchanged. Potentials have no absolute origin.
+    CHECK(search.runFull(graph, unlimited, result.dist).dist == result.dist);
+    auto shifted = seed;
+    for (auto& value : shifted) value += DeltaRational(mpq_class(7, 11));
+    const auto translated = search.runFull(graph, unlimited, shifted);
+    REQUIRE_FALSE(translated.negativeCycle);
+    for (size_t i = 0; i < seed.size(); ++i)
+        CHECK(translated.dist[i] - translated.dist[0] == result.dist[i] - result.dist[0]);
+    const auto expired = search.runFull(graph, std::chrono::steady_clock::now(), seed);
+    CHECK(expired.interrupted);
+    CHECK(expired.dist == seed);
+    const std::array<DeltaRational, 2> incomplete{};
+    CHECK_THROWS_AS(search.runFull(graph, unlimited, incomplete), std::invalid_argument);
+    graph.addEdge(z, x, DeltaRational(-3), SatLit::positive(5));
+    const auto conflict = search.runFull(graph, unlimited, seed);
+    REQUIRE(conflict.negativeCycle);
+    REQUIRE_FALSE(conflict.cycle.empty());
+    DeltaRational total;
+    for (const auto edge : conflict.cycle) total += graph.edge(edge).weight;
+    CHECK(total < DeltaRational());
+}
+
 TEST_CASE("GeneralSimplex: point revisions include reconstruction without new bound assertions") {
     GeneralSimplex simplex;
     const int x = simplex.addVar("point-revision-x");

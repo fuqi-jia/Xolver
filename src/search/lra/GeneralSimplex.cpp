@@ -239,10 +239,7 @@ std::optional<GeneralSimplex::Result> GeneralSimplex::checkDifferenceFragment(
     auto add = [&](int from, int to, const DeltaRational& weight,
                    int var, bool lower, const mpq_class& factor) {
         const auto& bound = lower ? vars_[var].lower : vars_[var].upper;
-        // Reweight by the current point. Cycle sums are unchanged, while a
-        // preserved feasible prefix does not have to be rediscovered from zero.
-        graph.addEdge(from, to, weight + initial[from] - initial[to],
-                      bound.reason.value_or(SatLit{}));
+        graph.addEdge(from, to, weight, bound.reason.value_or(SatLit{}));
         origins.push_back({var, lower, mpq_class(1) / factor});
     };
     for (size_t var = 0; var < vars_.size(); ++var) {
@@ -274,7 +271,9 @@ std::optional<GeneralSimplex::Result> GeneralSimplex::checkDifferenceFragment(
             add(negative, positive, (vars_[var].upper.bound.value - offset) / factor,
                 var, false, factor);
     }
-    const auto result = BellmanFord<DeltaRational>().runFull(graph, deadline);
+    // Reuse the current point as potentials without transforming every edge
+    // into correction coordinates and then transforming the result back.
+    const auto result = BellmanFord<DeltaRational>().runFull(graph, deadline, initial);
     conflict_.clear();
 #ifdef XOLVER_ENABLE_PROOFS
     conflictCoeffs_.clear();
@@ -299,7 +298,7 @@ std::optional<GeneralSimplex::Result> GeneralSimplex::checkDifferenceFragment(
     std::vector<DeltaRational> point(vars_.size());
     for (size_t var = 0; var < vars_.size(); ++var) {
         if (vars_[var].basicRow == -1)
-            point[var] = initial[nodes[var]] + result.dist[nodes[var]] - result.dist[graph.zeroNode()];
+            point[var] = result.dist[nodes[var]] - result.dist[graph.zeroNode()];
     }
     for (int row = 0; row < tab_.numRows(); ++row) {
         const auto& r = tab_.row(row);
