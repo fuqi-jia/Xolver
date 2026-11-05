@@ -45,11 +45,28 @@ Following FULINA work introduces shared exact separation of certified ordered
 root brackets under the caller's deadline, removing fixed precision cutoffs.
 Root-isolation validation checks exact order without mutating const inputs.
 A constructed backend regression fails three assertions with its qualified
-predecessor. The candidate passes **2,153 C++ cases / 1,327,247 assertions**,
-including 11 focused cases / 82 assertions. Seven fresh controls retain six
-verified results in both versions; the unresolved result stays unresolved.
-Full fixed160, development587 and private14408 comparisons are in progress.
-No new solved-query or performance gain is claimed for this follow-up.
+predecessor. Its complete comparison retained all development587 and private14408
+results but lost one fixed160 SAT result: **114 to 113 verified**, before the
+certificate supplement, versus 116 for Z3. That prefix was not promoted.
+
+Further constructed checks exposed a selected-root identity bug: an interval
+endpoint can be a different root of the same polynomial. Exact comparisons and
+native value reconstruction now preserve the selected root. Model serialization
+also refines endpoint-root intervals without changing stored values or openness
+flags; selected rational endpoints print as scalars. Caller deadlines and
+existing resource controls remain unchanged. No offline oracle is used in solving.
+
+The corrected frozen CLI is
+d35972e9a922b87b8a4bb3089087a77c3240d760b2e224e30017842203b0f680.
+Panda9 / ExperimentOS qualification passes **2,158 C++ cases / 1,327,313
+assertions**, including 30 focused cases / 196 assertions. The new regression
+groups fail against their qualified predecessors. A fresh 13-query comparison
+improves **9 to 12 independently verified results**, with no losses or errors;
+the remaining result is unknown in both Xolver versions and times out in Z3.
+Both Z3 and CVC5 accept all three newly valid actual timed SAT exports. This
+improves model validation coverage; SAT decision counts are unchanged. Complete
+fresh fixed160, development587 and private14408 comparisons against accepted
+main are in progress. Main promotion and follow-up CI remain pending.
 
 Private inputs, models and individual evidence remain off GitHub. Protected sets
 remain unused. The cancelled extra server archive is not a delivery requirement.

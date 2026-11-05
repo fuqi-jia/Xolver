@@ -5,6 +5,52 @@
 
 using namespace xolver;
 
+TEST_CASE("Algebraic root endpoint comparison: a rational root cannot replace a selected interior root") {
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend algebra(kernel.get());
+    const auto zero = RealAlg::fromRational(0);
+    for (const int power : {4, 48, 96}) {
+        mpz_class scale(1); scale <<= 2 * power;
+        // The three distinct roots are negative, zero and positive. A
+        // nonzero root's bracket may touch the other root at zero.
+        const auto polynomial = algebra.allocUni({scale, 0, -2, 0});
+        const auto roots = algebra.isolateRealRoots(polynomial);
+        REQUIRE(roots.complete);
+        REQUIRE(roots.roots.size() == 3);
+        for (int i = 0; i < 3; ++i) {
+            const auto expected = i == 0 ? CompareResult::Less :
+                i == 1 ? CompareResult::Equal : CompareResult::Greater;
+            const auto reversed = i == 0 ? CompareResult::Greater :
+                i == 1 ? CompareResult::Equal : CompareResult::Less;
+            CHECK(algebra.compareRealAlg(roots.roots[i], zero) == expected);
+            CHECK(algebra.compareRealAlg(zero, roots.roots[i]) == reversed);
+        }
+        CHECK(algebra.validateRootIsolation(polynomial, roots));
+    }
+}
+
+TEST_CASE("Algebraic root endpoint conversion: signs preserve the selected root and invalid identities stay unknown") {
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend algebra(kernel.get());
+    const auto polynomial = algebra.allocUni({256, 0, -2, 0});
+    const auto linear = algebra.allocUni({1, 0});
+    const auto roots = algebra.isolateRealRoots(polynomial);
+    REQUIRE(roots.complete);
+    REQUIRE(roots.roots.size() == 3);
+    REQUIRE(roots.roots[0].isAlgebraic());
+    REQUIRE(roots.roots[2].isAlgebraic());
+    CHECK(algebra.signUnivariateAtAlgebraic(linear, roots.roots[0].root) == Sign::Neg);
+    CHECK(algebra.signUnivariateAtAlgebraic(linear, roots.roots[2].root) == Sign::Pos);
+    const auto variable = kernel->getOrCreateVar("root_value");
+    const auto x = kernel->mkVar(variable);
+    CHECK(algebra.signAt(x, SamplePoint{{variable}, {roots.roots[0]}}) == Sign::Neg);
+    CHECK(algebra.signAt(x, SamplePoint{{variable}, {roots.roots[2]}}) == Sign::Pos);
+
+    auto invalid = roots.roots[2];
+    invalid.root.rootIndex = static_cast<int>(roots.roots.size());
+    CHECK(algebra.compareRealAlg(invalid, RealAlg::fromRational(0)) == CompareResult::Unknown);
+}
+
 TEST_CASE("Root isolation validation: close exact roots remain ordered without mutating input") {
     auto kernel = createPolynomialKernel();
     LibpolyBackend algebra(kernel.get());
