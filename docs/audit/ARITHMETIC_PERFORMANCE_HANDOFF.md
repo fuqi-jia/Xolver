@@ -1,21 +1,40 @@
 # Arithmetic validation and continuation record
 
-## Current checkpoint: exact models and shared NIA relaxation (2026-11-06)
+## Current checkpoint: sparse integer equality components (2026-11-06)
 
-[PR #100](https://github.com/fuqi-jia/Xolver/pull/100) merged as
-af50e5c1d3c241b5705f75ad673bf76a84bf043b after complete server acceptance.
-Both jobs in its [PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/42086626787)
-and [main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42091610718) pass.
-The qualified implementation passes **2,166 C++ cases / 1,327,414 assertions**.
-Complete same-round comparisons improve fixed160 from **115 to 116 verified**
-with the independently rechecked certificate, retain all **587 development**
-and **14,408 private** results, and introduce no losses or errors. There remain
-**43 timeouts and one unknown** on fixed160. Same-round Z3 verifies 116 and has
-better mean verified PAR-2 (**34.119 versus 36.361 seconds**). This stage does
-not establish overall superiority. Final-version original-C QCP timing and
-the final protected-set comparison remain open. Detailed evidence follows.
+[PR #101](https://github.com/fuqi-jia/Xolver/pull/101) merged as
+9b2d283d1e6d79577517739e9d0f4ae6882c9fda after complete server acceptance and
+both [PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42103295609)
+passed. Both jobs in its
+[main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42107457107) also pass.
+Proof-enabled Panda9 / ExperimentOS qualification passes **2,177 cases /
+1,331,463 assertions**. Complete frozen comparisons use 60 seconds, one physical
+CPU and 16 GiB per input:
 
-### FULINA development: component integer equality analysis
+- Fixed160 retains **114 to 114 raw verified**. Fresh symmetric checking of an
+  original-input-bound certificate gives **115 to 115 verified**, versus
+  **116 for same-round Z3**. Mean verified PAR-2 is **37.016 to 36.869 seconds**,
+  versus **34.522** for Z3. Both Xolver versions have 44 timeouts and one unknown;
+  no timeout or unknown is upgraded. One previously solved SAT also times out
+  in the unchanged frozen baseline this round. Historical favorable results
+  are not substituted for the fresh comparison.
+- Development587 retains **587 to 587 verified**, versus 584 for Z3. Three Z3
+  model replays remain unconfirmed and excluded. Total solver time is
+  **46.500 to 46.644 seconds**, versus **17.119** for Z3.
+- All **14,408 private queries** are independently verified in both versions and
+  Z3: **8,940 SAT / 5,468 UNSAT**. Total solver time is **1,271.184 to 1,273.148
+  seconds**, versus **377.408** for Z3. No private input, model or individual
+  identifier is included in this record.
+
+All three suites have no candidate-relative gains or losses, wrong verdicts,
+invalid models, protocol errors or runtime errors. Every actual timed SAT model
+requires independent replay; UNSAT requires an independent verdict or checked
+certificate. The frozen CLI is
+`d31263c354ccec15abbacc60bf67e0e119a9d9c37a63df2a21c0fa2334c1f3fd`.
+These results do not establish overall superiority over Z3. Final-version
+original-C QCP timing and the once-only protected-set comparison remain open.
+
+### Component integer equality analysis
 
 The shared integer equality analyzer now builds variable-connected components
 directly from sparse equations. Each component uses exact Smith transforms to
@@ -32,9 +51,50 @@ Panda9 / ExperimentOS qualification passes **2,177 cases / 1,331,463 assertions*
 including **169 focused cases / 27,077 assertions**. Mathematical regressions
 check exact witnesses, projected lattices, contradiction support, component
 reconnection, large coefficients, cancellation and retained transform lifetimes.
-Resource controls and LRA/LIA rollback policies are unchanged. Frozen complete
-suite comparisons are running; this development is not yet qualified for main
-promotion and has no established additional solved-count benefit.
+Resource controls and LRA/LIA rollback policies are unchanged. This stage has
+no established additional solved-count benefit.
+
+### FULINA development: shared integer encoding contexts
+
+Theory bit-blasting and whole-formula integer candidate search now share the
+same encoding-context implementation. Width refinements retain independent low
+bits, Boolean leaves and literal-keyed gates. Polynomial interpretations and
+source predicates are rebuilt for the current signed width; source roots and
+radix-fitting conditions are activated through assumptions. Finite point
+selectors remain query-local. Retained circuits that exhaust the allocation cap
+are compacted before retrying the same width, preserving the previous per-width
+capacity within the unchanged deadline. Backend configurations, conflict limits,
+solver APIs and LRA/LIA rollback policies are preserved.
+
+Proof-enabled Panda9 / ExperimentOS qualification passes **2,183 cases /
+1,331,524 assertions**, including **174 focused cases / 8,950 assertions**.
+Regressions cover signed widening, large constants, current radix assumptions,
+Boolean models, retained point selectors, query reset and allocation exhaustion.
+A native factory probe reduces two SAT constructions to one; its allocation
+boundary control still finds the exact witness after compaction.
+
+A fresh 17-input control comparison improves **6 to 8 independently verified
+results**, with two original integer SAT gains and no losses or errors. Both
+change from 60-second timeouts to **12.748 and 10.791 seconds**. Z3 and CVC5 accept
+each actual timed candidate model; same-round Z3 verifies 16. The frozen CLI is
+`c8a8fd4e46b85bf415329f1033cf37c7ccd1f5ede9e745058418bebaac41a6c4`.
+Complete fixed160 comparison is running. This development has not completed
+whole-stage acceptance and does not establish overall superiority over Z3.
+
+## Previous checkpoint: exact models and shared NIA relaxation (2026-11-06)
+
+[PR #100](https://github.com/fuqi-jia/Xolver/pull/100) merged as
+af50e5c1d3c241b5705f75ad673bf76a84bf043b after complete server acceptance.
+Both jobs in its [PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/42086626787)
+and [main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42091610718) pass.
+The qualified implementation passes **2,166 C++ cases / 1,327,414 assertions**.
+Complete same-round comparisons improve fixed160 from **115 to 116 verified**
+with the independently rechecked certificate, retain all **587 development**
+and **14,408 private** results, and introduce no losses or errors. There remain
+**43 timeouts and one unknown** on fixed160. Same-round Z3 verifies 116 and has
+better mean verified PAR-2 (**34.119 versus 36.361 seconds**). This stage does
+not establish overall superiority. Final-version original-C QCP timing and
+the final protected-set comparison remain open. Detailed evidence follows.
 
 ## Previous checkpoint: complete cut explanations and exact NIA refinements (2026-11-05)
 

@@ -10,12 +10,13 @@ namespace xolver::bitblast {
 
 // Share exact bit representations for unconditional integer radix equations.
 // Returned indices identify equations made redundant by the emitted definitions
-// and domain-fitting clauses. All supplied equations/bounds must be facts of
+// and domain-fitting assumptions. All supplied equations/bounds must be facts of
 // this query. This model-construction utility provides no assumption-core
 // explanations; an UNSAT-proof caller must separately retain those premises.
 std::vector<size_t> encodeIntegerRadixDefinitions(
     BitBlastEncoder& encoder, const std::vector<IntegerRadixDecomposition>& definitions,
     std::unordered_map<std::string, BitVec>& values, const IntegerBoundsLookup& bounds,
-    WorkBudget& budget, std::chrono::steady_clock::time_point deadline);
+    std::vector<SatLit>& assumptions, WorkBudget& budget,
+    std::chrono::steady_clock::time_point deadline);
 
 } // namespace xolver::bitblast
