@@ -4,7 +4,7 @@
 
 [PR #97](https://github.com/fuqi-jia/Xolver/pull/97) passed server acceptance and
 both PR CI jobs, and merged as `66c29341718f697f050366b5344441e0c981fc5a`.
-Its [main CI](https://github.com/fuqi-jia/Xolver/actions/runs/41970587059) is running.
+Its [main CI](https://github.com/fuqi-jia/Xolver/actions/runs/41970587059) passes both jobs.
 
 The repair preserves live equality-class witnesses and function interpretations,
 including scalar-only UF queries, and retains complete models across SAT rollback.
