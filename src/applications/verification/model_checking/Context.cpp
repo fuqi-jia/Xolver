@@ -1,5 +1,5 @@
 #include "applications/verification/model_checking/Solver.h"
-#include <somtparser/ir/node.h>
+#include <somtparser/parser.h>
 
 namespace xolver::applications::verification::model_checking {
 ContextAnswer ContextSolver::solve(const Obligation &task) {

@@ -5,7 +5,7 @@
 #include "frontend/parser/NativeTheoryPolicy.h"
 #include "ir/NativeBuilder.h"
 #include <doctest/doctest.h>
-#include <somtparser/frontend/parser.h>
+#include <somtparser/parser.h>
 
 using namespace xolver;
 namespace v = applications::verification::model_checking;

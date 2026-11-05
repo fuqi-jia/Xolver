@@ -3,7 +3,7 @@
 #include "ir/NativeFeatures.h"
 #include "quantifiers/FiniteFormula.h"
 #include <set>
-#include <somtparser/ir/node.h>
+#include <somtparser/parser.h>
 namespace xolver::applications::counting {
 Answer Solver::solve(const Problem &problem) {
     Answer answer;

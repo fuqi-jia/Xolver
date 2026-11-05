@@ -3,6 +3,9 @@
 #include "search/dl/DifferenceGraph.h"
 #include <vector>
 #include <limits>
+#include <chrono>
+#include <span>
+#include <stdexcept>
 
 namespace xolver {
 
@@ -12,24 +15,42 @@ namespace xolver {
 template <typename Weight>
 struct BfResult {
     bool negativeCycle = false;
+    bool interrupted = false;
     std::vector<EdgeId> cycle;
     std::vector<Weight> dist;
 };
 
 // ============================================================================
 // Bellman-Ford shortest paths for difference constraint feasibility.
-// All potentials initialized to 0 (standard for detecting negative cycles).
+// Potentials default to zero; callers may supply a current exact assignment.
 // ============================================================================
 template <typename Weight>
 class BellmanFord {
 public:
-    BfResult<Weight> runFull(const DifferenceGraph<Weight>& graph) {
+    BfResult<Weight> runFull(const DifferenceGraph<Weight>& graph,
+            std::chrono::steady_clock::time_point deadline =
+                std::chrono::steady_clock::time_point::max(),
+            std::span<const Weight> initial = {}) {
         int n = graph.numNodes();
         BfResult<Weight> result;
-        result.dist.assign(n, Weight{});
+        // Arbitrary finite potentials are equivalent to reweighting every edge
+        // and solving for corrections from zero. Keep the original weights so
+        // a caller with a current model need not perform that transformation.
+        if (initial.empty()) {
+            result.dist.assign(n, Weight{});
+        } else {
+            if (initial.size() != static_cast<size_t>(n))
+                throw std::invalid_argument("difference potential count does not match graph");
+            result.dist.assign(initial.begin(), initial.end());
+        }
         std::vector<EdgeId> pred(n, std::numeric_limits<EdgeId>::max());
 
         for (int i = 1; i <= n; ++i) {
+            if (deadline != std::chrono::steady_clock::time_point::max() &&
+                std::chrono::steady_clock::now() >= deadline) {
+                result.interrupted = true;
+                return result;
+            }
             bool changed = false;
             for (const auto& e : graph.edges()) {
                 // Relax: dist[to] > dist[from] + weight ?

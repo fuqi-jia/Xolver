@@ -4,7 +4,7 @@
 #include "applications/verification/sl/NativeArithmetic.h"
 #include "applications/verification/sl/HeapSearch.h"
 #include "base/MpqUtils.h"
-#include <somtparser/ir/node.h>
+#include <somtparser/parser.h>
 #include <limits>
 #include <unordered_map>
 

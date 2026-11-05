@@ -1,6 +1,6 @@
 #include "applications/optimization/cp/Solver.h"
 #include "ir/NativeBuilder.h"
-#include <somtparser/ir/node.h>
+#include <somtparser/parser.h>
 namespace xolver::applications::optimization::cp {
 SolverAnswer Solver::solve(const Problem &problem) {
     SolverAnswer answer;

@@ -1,6 +1,6 @@
 #include "applications/verification/sl/NativeSpatialSearch.h"
 #include "contracts/SeparationFormula.h"
-#include <somtparser/ir/node.h>
+#include <somtparser/parser.h>
 #include <algorithm>
 #include <functional>
 #include <limits>

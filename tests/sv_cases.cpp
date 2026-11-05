@@ -5,7 +5,7 @@
 #include <filesystem>
 #include <fstream>
 #include <nlohmann/json.hpp>
-#include <somtparser/frontend/parser.h>
+#include <somtparser/parser.h>
 
 using namespace xolver;
 namespace v = applications::verification::model_checking;

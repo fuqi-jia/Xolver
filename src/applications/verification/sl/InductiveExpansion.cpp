@@ -1,7 +1,7 @@
 #include "applications/verification/sl/InductiveExpansion.h"
 #include "base/MpqUtils.h"
 #include <algorithm>
-#include <somtparser/ir/node.h>
+#include <somtparser/parser.h>
 
 namespace xolver::sl::detail::inductive {
 Node truth(bool value) {

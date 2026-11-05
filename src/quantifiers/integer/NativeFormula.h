@@ -1,7 +1,7 @@
 #pragma once
 #include "quantifiers/integer/Elimination.h"
 #include "base/MpqUtils.h"
-#include <somtparser/ir/node.h>
+#include <somtparser/parser.h>
 #include <unordered_map>
 #include <unordered_set>
 

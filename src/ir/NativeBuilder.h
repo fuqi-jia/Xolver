@@ -2,7 +2,7 @@
 #include "base/WorkBudget.h"
 #include <gmpxx.h>
 #include <set>
-#include <somtparser/ir/node.h>
+#include <somtparser/parser.h>
 
 namespace xolver::native {
 using Node = SOMTParser::Node;

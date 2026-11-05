@@ -2,7 +2,7 @@
 #include "applications/optimization/omt/Linear.h"
 #include "ir/NativeFeatures.h"
 #include "quantifiers/FiniteFormula.h"
-#include <somtparser/ir/node.h>
+#include <somtparser/parser.h>
 namespace xolver::applications::optimization::omt {
 Answer Solver::solve(const Problem &problem) {
     Answer answer;

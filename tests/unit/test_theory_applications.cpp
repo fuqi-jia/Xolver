@@ -1,7 +1,7 @@
 #include "applications/satisfiability/smt/Solver.h"
 #include "frontend/parser/NativeTheoryPolicy.h"
 #include <doctest/doctest.h>
-#include <somtparser/frontend/parser.h>
+#include <somtparser/parser.h>
 
 using namespace xolver;
 namespace {

@@ -15,6 +15,29 @@ from tools.integration.qcp_native import formula_query
 
 
 class NativeBackendTests(unittest.TestCase):
+    def channel(self, session, result='sat', model='()', validation='satisfied'):
+        channel = MagicMock(max_bytes=64 * 1024**2)
+        channel.process.pid = 123
+        channel.remaining.return_value = 1
+        channel.diagnostics.return_value = (b'', 0)
+        channel.argv = session.channel.argv
+        if session.backend == 'xolver':
+            value = dict(result=result)
+            if result == 'sat':
+                value.update(model=model, model_validation=validation)
+            payload = json.dumps(value).encode()
+            response = json.dumps(dict(version=1, results=[dict(
+                id='0', ok=True, payload=list(payload), error='')])).encode()
+            channel.read_exact.side_effect = [bridge.HEADER.pack(len(response)), response]
+        else:
+            lines = [(result + '\n').encode(), b'qcp-query-0-done\n']
+            if result == 'sat':
+                lines.extend((model.rstrip('\n') + '\n').encode().splitlines(keepends=True))
+                lines.append(b'qcp-query-0-model-done\n')
+            channel.read_line.side_effect = lines
+        session.channel = channel
+        return channel
+
     def test_single_formula_is_not_negated_or_weakened(self):
         script, signature = formula_query('x_7*x_7 < 0 /\\ f(x_7) = 2')
         self.assertIn('(assert (and (< (* |x_7| |x_7|) 0) (= (|f| |x_7|) 2)))', script)
@@ -29,19 +52,7 @@ class NativeBackendTests(unittest.TestCase):
             for label in ('sat', 'unsat', 'unknown', 'sat extra'):
                 with self.subTest(backend=backend, label=label), tempfile.TemporaryDirectory() as name:
                     session = bridge.BackendSession(backend, Path('/solver'), Path('/guard'))
-                    channel = MagicMock(max_bytes=64 * 1024**2)
-                    channel.process.pid = 123
-                    channel.remaining.return_value = 1
-                    channel.diagnostics.return_value = (b'', 0)
-                    channel.argv = session.channel.argv
-                    session.channel = channel
-                    if backend == 'xolver':
-                        value = json.dumps(dict(result=label)).encode()
-                        response = json.dumps(dict(version=1, results=[dict(
-                            id='0', ok=True, payload=list(value), error='')])).encode()
-                        channel.read_exact.side_effect = [bridge.HEADER.pack(len(response)), response]
-                    else:
-                        channel.read_line.side_effect = [(label + '\n').encode(), b'qcp-query-0-done\n']
+                    channel = self.channel(session, result=label)
                     output = Path(name) / 'query'
                     row = bridge.decide('TT', session, output, time.monotonic_ns())
                     self.assertEqual(row['result'], label if label != 'sat extra' else 'error')
@@ -52,6 +63,75 @@ class NativeBackendTests(unittest.TestCase):
                     else:
                         self.assertEqual(row['process_pid'], 123)
                         self.assertEqual(session.ordinal, 1)
+
+    def test_model_is_exported_in_the_same_timed_session(self):
+        model = '(\n (define-fun |x_0| () Int 2)\n)\n'
+        for backend in ('xolver', 'z3'):
+            with self.subTest(backend=backend), tempfile.TemporaryDirectory() as name:
+                session = bridge.BackendSession(backend, Path('/solver'), Path('/guard'))
+                channel = self.channel(session, model=model)
+                output = Path(name) / 'query'
+                row = bridge.decide('x_0 = 2', session, output, time.monotonic_ns())
+                self.assertEqual(row['result'], 'sat')
+                self.assertTrue((output / 'model.smt2').is_file())
+                self.assertEqual((output / 'model.smt2').read_text(), model)
+                self.assertEqual(row['model_capture'], 'timed-query-response')
+                self.assertEqual(row['model_sha256'], bridge.sha256(output / 'model.smt2'))
+                self.assertEqual(row['model_bytes'], len(model.encode()))
+                self.assertEqual(row['process_pid'], 123)
+                self.assertEqual(session.ordinal, 1)
+                channel.close.assert_not_called()
+                requests = (output / 'request.bin').read_bytes()
+                if backend == 'xolver':
+                    channel.write.assert_called_once()
+                    tasks = json.loads(requests[bridge.HEADER.size:])['tasks']
+                    request = json.loads(bytes(tasks[0]['payload']))
+                    self.assertTrue(request['model'])
+                    self.assertEqual(request['smt2'], formula_query('x_0 = 2')[0])
+                    self.assertEqual(row['model_validation'], 'satisfied')
+                else:
+                    self.assertEqual(channel.write.call_count, 2)
+                    self.assertEqual(requests.count(b'(check-sat)'), 1)
+                    self.assertEqual(requests.count(b'(get-model)'), 1)
+                    self.assertIn(b'(set-option :produce-models true)', requests)
+
+    def test_missing_or_malformed_models_fail_closed(self):
+        for backend in ('xolver', 'z3'):
+            for model in ['', '(error "model unavailable")', '() ()', '((define-fun x () Int 0)']:
+                with self.subTest(backend=backend, model=model), tempfile.TemporaryDirectory() as name:
+                    session = bridge.BackendSession(backend, Path('/solver'), Path('/guard'))
+                    channel = self.channel(session, model=model)
+                    row = bridge.decide('TT', session, Path(name) / 'query', time.monotonic_ns())
+                    self.assertEqual(row['result'], 'error')
+                    self.assertNotIn('model_capture', row)
+                    channel.close.assert_called_once()
+        for model, validation in [(None, 'satisfied'), ('()', None), ('()', 'violated')]:
+            with self.subTest(model=model, validation=validation), tempfile.TemporaryDirectory() as name:
+                session = bridge.BackendSession('xolver', Path('/solver'), Path('/guard'))
+                channel = self.channel(session, model=model, validation=validation)
+                row = bridge.decide('TT', session, Path(name) / 'query', time.monotonic_ns())
+                self.assertEqual(row['result'], 'error')
+                channel.close.assert_called_once()
+
+    def test_model_export_keeps_the_original_deadline_and_boundary(self):
+        for failure in ('timeout', 'boundary', 'oversize'):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as name:
+                session = bridge.BackendSession('z3', Path('/solver'), Path('/guard'))
+                channel = self.channel(session)
+                if failure == 'timeout':
+                    channel.read_line.side_effect = [b'sat\n', b'qcp-query-0-done\n', TimeoutError('deadline')]
+                elif failure == 'boundary':
+                    channel.read_line.side_effect = [b'sat\n', b'qcp-query-0-done\n', b'()\n', b'stale\n', EOFError('closed')]
+                else:
+                    channel.max_bytes = 8
+                    channel.read_line.side_effect = [b'sat\n', b'qcp-query-0-done\n', b'123456789\n']
+                started = time.monotonic_ns()
+                row = bridge.decide('TT', session, Path(name) / 'query', started)
+                self.assertEqual(row['result'], 'timeout' if failure == 'timeout' else 'error')
+                deadlines = [call.args[1] for call in channel.write.call_args_list]
+                self.assertEqual(deadlines, [(started + bridge.WALL_NS) / 1e9] * 2)
+                self.assertNotIn('model_capture', row)
+                channel.close.assert_called_once()
 
     def test_unsupported_and_expired_queries_never_invoke_a_solver(self):
         session = bridge.BackendSession('xolver', Path('/solver'), Path('/guard'))

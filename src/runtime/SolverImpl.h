@@ -55,7 +55,7 @@
 #include "search/sat/CadicalBackend.h"
 #include "search/sat/CadicalTheoryPropagator.h"
 
-#include <somtparser/frontend/parser.h>
+#include <somtparser/parser.h>
 
 #include <iostream>
 #include <sstream>

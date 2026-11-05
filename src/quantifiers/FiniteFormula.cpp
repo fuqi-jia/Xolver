@@ -1,6 +1,6 @@
 #include "quantifiers/FiniteFormula.h"
 #include "quantifiers/bitvector/Circuit.h"
-#include <somtparser/ir/node.h>
+#include <somtparser/parser.h>
 #include <algorithm>
 #include <map>
 #include <set>

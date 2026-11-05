@@ -1,6 +1,6 @@
 #include "applications/verification/model_checking/Solver.h"
 #include "applications/verification/model_checking/Transition.h"
-#include <somtparser/ir/node.h>
+#include <somtparser/parser.h>
 namespace xolver::applications::verification::model_checking {
 Answer Solver::solve(const Problem &problem) {
     Answer answer;

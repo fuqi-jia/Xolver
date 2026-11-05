@@ -2,7 +2,7 @@
 #include "algebra/linear/Formula.h"
 #include "search/optimization/LinearProgram.h"
 #include <algorithm>
-#include <somtparser/ir/node.h>
+#include <somtparser/parser.h>
 
 namespace xolver::applications::optimization::omt {
 namespace {

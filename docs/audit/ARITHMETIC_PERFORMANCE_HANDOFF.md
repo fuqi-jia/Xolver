@@ -1,39 +1,57 @@
 # Arithmetic validation and continuation record
 
-## Current checkpoint: complete equality-model export (2026-11-05)
+## Current checkpoint: equality-model acceptance and public parser includes (2026-11-05)
 
-The next FULINA repair preserves live equality-class witnesses and function
-interpretations, including scalar-only UF queries, and retains the last complete
-model across SAT rollback. Exported interpretations use registered source sorts.
-Generated model declarations use fresh ordinary symbols, avoid the semantic
-source namespace, and share SOMTParser's symbol printer through its documented
-`somtparser/parser.h` umbrella header. Original arithmetic rollback is unchanged.
+[PR #97](https://github.com/fuqi-jia/Xolver/pull/97) passed server acceptance and
+both PR CI jobs, and merged as `66c29341718f697f050366b5344441e0c981fc5a`.
+Its [main CI](https://github.com/fuqi-jia/Xolver/actions/runs/41970587059) passes both jobs.
 
-Offline model replay now represents supplied opaque domains as exact finite
-enumerations, respects binders and aliases, and checks printed interpretations
-of source-defined functions. All original assertions remain present; unsupported
-models remain unconfirmed. The same encoding applies to every comparison arm.
+The repair preserves live equality-class witnesses and function interpretations,
+including scalar-only UF queries, and retains complete models across SAT rollback.
+Exports preserve source sorts; generated declarations use fresh ordinary symbols
+and SOMTParser's symbol printer. Offline replay uses exact finite enumerations
+for supplied opaque domains, respects binders and aliases, and checks printed
+source-defined interpretations. Original assertions and arithmetic rollback remain
+unchanged. Unsupported models remain unconfirmed in every comparison arm.
 
 Panda9 / ExperimentOS qualification passes **2,133 cases / 1,325,112 assertions**,
-including 43 targeted cases / 4,845 assertions. Both frozen predecessor controls
-fail their corresponding new regressions. Replay qualification passes 46 Python
-tests and 44 independent checks over 11 public positive and negative fixtures.
+including 43 targeted cases / 4,845 assertions. Frozen predecessor controls fail
+the new regressions. Replay qualification passes 46 Python tests and 44 independent
+checks over 11 public positive and negative fixtures.
 
-A fresh focused round verifies **all five previously unconfirmed SAT models**,
-versus zero for the published predecessor; both Z3 and CVC5 accept each actual
-timed Xolver model. These are five newly verified witnesses, not five new SAT
-verdicts. All six retained model controls remain verified. Four supported public
-export cases pass; an older public reserved-identifier extension stays unconfirmed.
-The complete fixed160 and development587 comparisons are running. No full-stage
-acceptance or overall performance superiority is claimed yet.
+Fresh complete comparisons of the qualified model-export binary establish:
 
-Frozen CLI SHA-256:
+- Fixed160 retains **112 verified results**, versus 116 for Z3, with no gains or
+  losses. Attaching the existing independently checked residue certificate
+  symmetrically gives **113 versus 116**; raw reports remain unchanged.
+- Selected development587 improves **582 to 587 verified**, versus 584 for Z3,
+  with five newly verified SAT witnesses and no losses. Both Z3 and CVC5 accept
+  the actual timed Xolver models. SAT decision coverage is unchanged. Three Z3
+  model replay portability failures remain excluded from its verified count.
+- All **14,408 authorized private development queries** are verified by both
+  Xolver and Z3: **8,940 SAT / 5,468 UNSAT**, with zero unknown, timeout,
+  unconfirmed or incorrect results. Each timed SAT export is independently
+  replayed; reconstructing replay files from the captured models also passes.
+  The predecessor retains all 14,408 results. Xolver takes **1,284.024 seconds**
+  versus **376.202 seconds** for Z3; mean PAR-2 is **0.089119 versus 0.026111**.
+
+Those comparison results belong to frozen CLI SHA-256
 `55fb6d45d87f7bc92ef489e19feba434c41355c0c0ac44959c9ee6127843384a`.
+The selected587 cohort is reported separately from the full private corpus;
+their relationship has not been established. These results do not establish
+overall superiority over Z3: fixed160 and original-C QCP verification remain open.
+
+The following FULINA include cleanup consistently uses SOMTParser's documented
+`<somtparser/parser.h>` umbrella header in all Xolver consumers, removes duplicate
+component includes, and preserves adapter ownership checks. It passes the same
+2,133 unit cases / 1,325,112 assertions and all 19 architecture tests on Panda9.
+Its separately frozen CLI is
+`8f46c415d1135b92424065fd5d80d1ed877c2e97e2e6c7583ec7c7d327b31c1a`;
+no new performance claim is made for this include-only change.
+
 Per-input budgets remain 60 seconds, one physical CPU and 16 GiB. Protected sets
-remain unused; private inputs, models, identifiers and evidence stay off GitHub.
-Original-C QCP verification for the final version remains open. Main promotion
-requires complete server acceptance and PR CI; the cancelled extra archive is
-not a delivery requirement.
+remain unused; private inputs, models, identifiers and individual evidence stay
+off GitHub. The cancelled extra server archive is not a delivery requirement.
 
 
 ## Previous checkpoint: installed-lemma progress (2026-11-05)

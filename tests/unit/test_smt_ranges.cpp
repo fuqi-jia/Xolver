@@ -4,7 +4,7 @@
 #include "search/arith/IntegerBounds.h"
 #include <doctest/doctest.h>
 #include <functional>
-#include <somtparser/frontend/parser.h>
+#include <somtparser/parser.h>
 
 using namespace xolver;
 TEST_CASE("SMT ranges: standard dispatch proves variable-divisor bounds") {

@@ -3,7 +3,7 @@
 #include "frontend/parser/NativeTheoryPolicy.h"
 #include "ir/NativeBuilder.h"
 #include <doctest/doctest.h>
-#include <somtparser/frontend/parser.h>
+#include <somtparser/parser.h>
 #include <sstream>
 
 using namespace xolver;

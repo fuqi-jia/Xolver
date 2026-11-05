@@ -1,6 +1,6 @@
 #include "ir/NativeTerms.h"
 #include "ir/NativeKind.h"
-#include <somtparser/ir/node.h>
+#include <somtparser/parser.h>
 #include <charconv>
 #include <stdexcept>
 
