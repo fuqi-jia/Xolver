@@ -1,5 +1,5 @@
 #include "search/linear/IntegerAffineModel.h"
-#include "search/presolve/IntegerLinearAlgebra.h"
+#include "search/linear/IntegerLinearSystem.h"
 
 #include <algorithm>
 #include <map>
@@ -70,33 +70,29 @@ std::optional<IntegerPoint> findIntegerAffineModel(
     std::vector<std::string> variables(names.begin(), names.end());
     std::map<std::string, size_t> columns;
     for (size_t i = 0; i < variables.size(); ++i) columns[variables[i]] = i;
-    IntMatrix matrix;
-    std::vector<mpz_class> rhs;
+    std::vector<IntegerLinearEquation> equalities;
     for (const auto& constraint : constraints) {
         if (constraint.rel != Relation::Eq) continue;
-        std::vector<mpz_class> row(variables.size());
+        IntegerLinearEquation row;
         for (const auto& [name, coefficient] : constraint.lhs.terms)
-            if (coefficient != 0) row[columns.at(name)] += coefficient.get_num();
-        matrix.push_back(std::move(row));
-        rhs.push_back(constraint.rhs.get_num());
+            if (coefficient != 0)
+                row.coefficients.emplace_back(columns.at(name), coefficient.get_num());
+        row.rhs = constraint.rhs.get_num();
+        equalities.push_back(std::move(row));
     }
-    const auto snf = smithNormalForm(matrix);
-    if (variables.size() - snf.rank > 1) return std::nullopt;
-    const auto transformed = matVec(snf.U, rhs);
-    std::vector<mpz_class> coordinates(variables.size());
-    for (int i = 0; i < snf.m; ++i) {
-        if (i < snf.rank) {
-            if (transformed[i] % snf.D[i][i] != 0) return std::nullopt;
-            coordinates[i] = transformed[i] / snf.D[i][i];
-        } else if (transformed[i] != 0) return std::nullopt;
+    const auto lattice = solveIntegerLinearSystem(variables.size(), equalities);
+    if (!lattice.consistent || variables.size() - lattice.rank > 1) return std::nullopt;
+    const auto& origin = lattice.particular;
+    const auto direction = lattice.lineDirection.value_or(
+        std::vector<mpz_class>(variables.size()));
+    for (const auto& equality : equalities) {
+        mpz_class value = 0, slope = 0;
+        for (const auto& [column, coefficient] : equality.coefficients) {
+            value += coefficient * origin[column];
+            slope += coefficient * direction[column];
+        }
+        if (value != equality.rhs || slope != 0) return std::nullopt;
     }
-    const auto origin = matVec(snf.V, coordinates);
-    std::vector<mpz_class> direction(variables.size());
-    if (snf.rank < snf.n)
-        for (int i = 0; i < snf.n; ++i) direction[i] = snf.V[i][snf.rank];
-    if (matVec(matrix, origin) != rhs) return std::nullopt;
-    for (const auto& value : matVec(matrix, direction))
-        if (value != 0) return std::nullopt;
 
     IntegerPoint point = seed;
     for (size_t i = 0; i < variables.size(); ++i) point[variables[i]] = mpq_class(origin[i]);

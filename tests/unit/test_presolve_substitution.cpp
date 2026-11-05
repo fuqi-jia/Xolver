@@ -3,10 +3,14 @@
 #include "search/presolve/AffineSubstitution.h"
 #include "search/presolve/PolynomialDefSubstitution.h"
 #include "search/presolve/PolynomialEqualityCombination.h"
+#include "search/presolve/IntegerLinearAlgebra.h"
+#include "search/presolve/IntLinearEqualityCoreHNF.h"
 #include "algebra/linear/RationalSystem.h"
 #include "search/presolve/UnivariatePolySignAnalyzer.h"
+#include <algorithm>
 #include <limits>
 #include <set>
+#include <random>
 
 using namespace xolver;
 
@@ -24,6 +28,124 @@ std::set<SatVar> support(const std::vector<SatLit>& literals) {
     }
     return result;
 }
+
+IntMatrix multiplyMatrices(const IntMatrix& left, const IntMatrix& right, size_t columns) {
+    IntMatrix product(left.size(), std::vector<mpz_class>(columns));
+    for (size_t i = 0; i < left.size(); ++i)
+        for (size_t k = 0; k < left[i].size(); ++k)
+            for (size_t j = 0; j < columns; ++j)
+                product[i][j] += left[i][k] * right[k][j];
+    return product;
+}
+
+mpq_class determinant(const IntMatrix& matrix) {
+    RatMatrix work(matrix.size(), std::vector<mpq_class>(matrix.size()));
+    for (size_t i = 0; i < matrix.size(); ++i)
+        for (size_t j = 0; j < matrix.size(); ++j) work[i][j] = matrix[i][j];
+    mpq_class result = 1;
+    for (size_t column = 0; column < work.size(); ++column) {
+        size_t pivot = column;
+        while (pivot < work.size() && work[pivot][column] == 0) ++pivot;
+        if (pivot == work.size()) return 0;
+        if (pivot != column) { std::swap(work[pivot], work[column]); result = -result; }
+        const mpq_class value = work[column][column];
+        result *= value;
+        for (size_t row = column + 1; row < work.size(); ++row) {
+            const mpq_class factor = work[row][column] / value;
+            for (size_t j = column; j < work.size(); ++j)
+                work[row][j] -= factor * work[column][j];
+        }
+    }
+    return result;
+}
+
+void checkNormalForm(const IntMatrix& matrix, const SmithNormalForm& form) {
+    const auto columns = matrix.empty() ? 0 : matrix.front().size();
+    REQUIRE(form.m == static_cast<int>(matrix.size()));
+    REQUIRE(form.n == static_cast<int>(columns));
+    REQUIRE(multiplyMatrices(multiplyMatrices(form.U, matrix, columns), form.V, columns) == form.D);
+    CHECK(abs(determinant(form.U)) == 1);
+    CHECK(abs(determinant(form.V)) == 1);
+    int rank = 0;
+    mpz_class previous = 0;
+    for (size_t i = 0; i < matrix.size(); ++i)
+        for (size_t j = 0; j < columns; ++j) {
+            if (i != j) CHECK(form.D[i][j] == 0);
+            else {
+                const auto& value = form.D[i][j];
+                CHECK(value >= 0);
+                if (value != 0) {
+                    CHECK(static_cast<int>(i) == rank);
+                    if (previous != 0) CHECK(value % previous == 0);
+                    previous = value;
+                    ++rank;
+                }
+            }
+        }
+    CHECK(form.rank == rank);
+}
+}
+
+TEST_CASE("integer normal forms: unit pivots avoid repeated full submatrix scans") {
+    constexpr size_t dimension = 40;
+    IntMatrix matrix(dimension, std::vector<mpz_class>(dimension));
+    for (size_t i = 0; i < dimension; ++i) {
+        matrix[i][i] = i % 2 ? -1 : 1;
+        for (size_t j = i + 1; j < dimension; ++j)
+            matrix[i][j] = static_cast<int>((i + 3 * j) % 5) - 2;
+    }
+    const auto form = smithNormalForm(matrix);
+    checkNormalForm(matrix, *form);
+    CHECK(form->rank == static_cast<int>(dimension));
+    CHECK(form->pivotEntriesExamined <= 4 * dimension);
+    const auto cached = smithNormalForm(matrix);
+    CHECK(cached == form);
+}
+
+TEST_CASE("integer normal forms: signed rectangular and singular systems retain exact invariants") {
+    const std::vector<IntMatrix> examples{
+        {}, {{}}, {{}, {}}, {{0, 0, 0}, {0, -6, 0}},
+        {{6, 4, 0}, {0, 10, 15}}, {{0, -3}, {2, 5}},
+        {{2, 4}, {4, 8}}, {{-2, 0, 0}, {0, 3, 0}, {0, 0, 5}},
+        {{0, 1, 0}, {1, 0, 0}}, {{9, 0}, {0, 0}, {0, 7}}};
+    for (const auto& matrix : examples) checkNormalForm(matrix, *smithNormalForm(matrix));
+    std::minstd_rand random(593271);
+    for (int sample = 0; sample < 24; ++sample) {
+        const size_t rows = 1 + random() % 5, columns = 1 + random() % 5;
+        IntMatrix matrix(rows, std::vector<mpz_class>(columns));
+        for (auto& row : matrix)
+            for (auto& value : row) value = static_cast<int>(random() % 11) - 5;
+        checkNormalForm(matrix, *smithNormalForm(matrix));
+    }
+}
+
+TEST_CASE("integer normal forms: retained transforms survive memo eviction and caller mutation") {
+    IntMatrix matrix{{2, 4}, {3, 9}};
+    const auto original = matrix;
+    const auto retained = smithNormalForm(matrix);
+    matrix[0][0] = 17;
+    for (int i = 0; i < 90; ++i)
+        (void)smithNormalForm(IntMatrix{{100 + i, 0}, {0, 101 + i}});
+    checkNormalForm(original, *retained);
+    const auto changed = smithNormalForm(matrix);
+    checkNormalForm(matrix, *changed);
+    CHECK(retained->D != changed->D);
+}
+
+TEST_CASE("native integer presolve reports unchanged congruences as a fixed point") {
+    PresolveState state;
+    state.integerDomain = true;
+    state.atoms = {{RationalPolynomial::fromVar(0, 1, 2) +
+                    RationalPolynomial::fromVar(1, 1, 4) -
+                    RationalPolynomial::fromConstant(6), Relation::Eq, reason(1)}};
+    IntLinearEqualityCoreHNF core;
+    CHECK(core.run(state));
+    REQUIRE(state.congruences.count(0) == 1);
+    CHECK(state.congruences.at(0).modulus == 2);
+    CHECK(state.congruences.at(0).residue == 1);
+    CHECK_FALSE(core.run(state));
+    CHECK_FALSE(state.hasConflict);
+    CHECK(state.ledger.size() == 0);
 }
 
 TEST_CASE("native presolve declines expansion before consuming a defining equality") {

@@ -98,11 +98,16 @@ static SmithNormalForm smithNormalFormImpl(const IntMatrix& A) {
         mpz_class best;
         for (int i = t; i < m; ++i) {
             for (int j = t; j < n; ++j) {
+                ++r.pivotEntriesExamined;
                 if (D[i][j] != 0) {
                     mpz_class a = abs(D[i][j]);
                     if (pi < 0 || a < best) { best = a; pi = i; pj = j; }
+                    // One is the global minimum nonzero integer magnitude.
+                    // Later entries cannot replace this first unit pivot.
+                    if (best == 1) break;
                 }
             }
+            if (pi >= 0 && best == 1) break;
         }
         if (pi < 0) break;  // submatrix all zero — done
         rowSwap(D, U, t, pi);
@@ -175,26 +180,26 @@ static SmithNormalForm smithNormalFormImpl(const IntMatrix& A) {
     return r;
 }
 
-SmithNormalForm smithNormalForm(const IntMatrix& A) {
+std::shared_ptr<const SmithNormalForm> smithNormalForm(const IntMatrix& A) {
     // Memo: SNF is a pure function of A, and on QF_ANIA/EVM-style inputs the same
     // (deduped) integer-equality coefficient matrix is presented to the presolve
     // fixpoint over and over (it is rebuilt from scratch every theory check). SNF
     // is super-linear with bignum growth, so recomputing it dominates. The memo
-    // stores A alongside the result and verifies A == cached-A on a hash hit, so a
+    // stores A alongside an immutable result and verifies A == cached-A on a hash hit, so a
     // collision can never return a wrong SNF (it just recomputes). thread_local:
     // the cache is private to the solve worker; bounded by clear-on-overflow.
     static thread_local std::unordered_map<size_t,
-        std::pair<IntMatrix, SmithNormalForm>> cache;
+        std::pair<IntMatrix, std::shared_ptr<const SmithNormalForm>>> cache;
     if (!A.empty()) {
         size_t key = hashMatrix(A);
         auto it = cache.find(key);
         if (it != cache.end() && it->second.first == A) return it->second.second;
-        SmithNormalForm snf = smithNormalFormImpl(A);
+        auto snf = std::make_shared<const SmithNormalForm>(smithNormalFormImpl(A));
         if (cache.size() > 64) cache.clear();   // bound memory (U/V can be large)
         cache.emplace(key, std::make_pair(A, snf));
         return snf;
     }
-    return smithNormalFormImpl(A);
+    return std::make_shared<const SmithNormalForm>(smithNormalFormImpl(A));
 }
 
 std::vector<mpz_class> matVec(const IntMatrix& M, const std::vector<mpz_class>& v) {
