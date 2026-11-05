@@ -11,6 +11,7 @@
 #include "search/coordination/TheoryAtomRegistry.h"
 #include "search/datatype/DtModelValidator.h"
 #include "ir/NativeTerms.h"
+#include "somtparser/parser.h"
 #include <cassert>
 #include <algorithm>
 #include <functional>
@@ -70,6 +71,7 @@ std::string EufSolver::classToken(EufTermId t) const {
 }
 
 std::string EufSolver::sortName(SortId s) const {
+    if (const auto sort = nativeTerms_->nativeSort(s)) return sort->toString();
     auto sk = nativeTerms_->sortKind(s);
     if (sk == SortKind::Int) return "Int";
     if (sk == SortKind::Real) return "Real";
@@ -83,9 +85,9 @@ std::optional<TheorySolver::TheoryModel> EufSolver::buildModel() const {
     if (!nativeTerms_) return std::nullopt;
     TheoryModel model;
     if (arrayMode_) buildArrayModel(model);
-    // Track 3: token-keyed UF interps for combination model validation. Scoped
-    // to combination (sharedTermRegistry_); pure QF_UF gets them from CMS.
-    if (sharedTermRegistry_) collectFunctionInterps(model);
+    // Scalar identities and UF tables belong to the live congruence model,
+    // including queries with no arithmetic combination or array interpretation.
+    collectFunctionInterps(model);
     if (model.arrayInterps.empty() && model.arrayValues.empty() && model.functionInterps.empty() &&
         model.assignments.empty() && model.numericAssignments.empty())
         return std::nullopt;

@@ -1,6 +1,42 @@
 # Arithmetic validation and continuation record
 
-## Current checkpoint: installed-lemma progress (2026-11-05)
+## Current checkpoint: complete equality-model export (2026-11-05)
+
+The next FULINA repair preserves live equality-class witnesses and function
+interpretations, including scalar-only UF queries, and retains the last complete
+model across SAT rollback. Exported interpretations use registered source sorts.
+Generated model declarations use fresh ordinary symbols, avoid the semantic
+source namespace, and share SOMTParser's symbol printer through its documented
+`somtparser/parser.h` umbrella header. Original arithmetic rollback is unchanged.
+
+Offline model replay now represents supplied opaque domains as exact finite
+enumerations, respects binders and aliases, and checks printed interpretations
+of source-defined functions. All original assertions remain present; unsupported
+models remain unconfirmed. The same encoding applies to every comparison arm.
+
+Panda9 / ExperimentOS qualification passes **2,133 cases / 1,325,112 assertions**,
+including 43 targeted cases / 4,845 assertions. Both frozen predecessor controls
+fail their corresponding new regressions. Replay qualification passes 46 Python
+tests and 44 independent checks over 11 public positive and negative fixtures.
+
+A fresh focused round verifies **all five previously unconfirmed SAT models**,
+versus zero for the published predecessor; both Z3 and CVC5 accept each actual
+timed Xolver model. These are five newly verified witnesses, not five new SAT
+verdicts. All six retained model controls remain verified. Four supported public
+export cases pass; an older public reserved-identifier extension stays unconfirmed.
+The complete fixed160 and development587 comparisons are running. No full-stage
+acceptance or overall performance superiority is claimed yet.
+
+Frozen CLI SHA-256:
+`55fb6d45d87f7bc92ef489e19feba434c41355c0c0ac44959c9ee6127843384a`.
+Per-input budgets remain 60 seconds, one physical CPU and 16 GiB. Protected sets
+remain unused; private inputs, models, identifiers and evidence stay off GitHub.
+Original-C QCP verification for the final version remains open. Main promotion
+requires complete server acceptance and PR CI; the cancelled extra archive is
+not a delivery requirement.
+
+
+## Previous checkpoint: installed-lemma progress (2026-11-05)
 
 [PR #96](https://github.com/fuqi-jia/Xolver/pull/96) is merged as
 `1e29a1b8085c7cbc8c5c5f4b11837a0aec6dab6f`; its

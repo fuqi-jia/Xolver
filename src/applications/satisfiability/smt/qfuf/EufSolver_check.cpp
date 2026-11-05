@@ -603,8 +603,7 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
     // satisfying assignment. After solve() returns, the egraph is rolled back
     // and select/bridge merges are lost, so getModel() reads this snapshot.
     // Only at Full effort (a complete model check) is the state authoritative.
-    if ((arrayMode_ || sharedTermRegistry_) &&
-        effort == TheoryEffort::Full) {
+    if (effort == TheoryEffort::Full) {
         modelSnapshot_ = buildModel();
     }
 

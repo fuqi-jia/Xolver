@@ -151,8 +151,8 @@ private:
     // Build the array/scalar model from the LIVE egraph state. Must be called
     // when the egraph reflects the satisfying assignment (i.e. at a consistent
     // Full-effort check), since merges are rolled back after solve() returns.
-    // Dispatches to buildArrayModel (QF_AX) and/or collectFunctionInterps
-    // (Track 3 UF model) and returns nullopt only if both produced nothing.
+    // Collects scalar identities and UF tables as well as array interpretations;
+    // returns nullopt only if none supplied a witness.
     std::optional<TheoryModel> buildModel() const;
     // Array/scalar interpretation builder (QF_AX). Fills model.arrayInterps and
     // scalar token assignments; no-op when there are no array variables.
@@ -160,13 +160,14 @@ private:
     // One FuncInterp per uninterpreted function symbol, keyed on argument
     // class-tokens; TheoryManager::getModel remaps the tokens to the bare-rational
     // keys the ArithModelValidator expects. Also emits scalar var -> class-token
-    // assignments so that remap can resolve each token to its arith value.
+    // assignments even when no function occurs, so pure equality queries retain
+    // their model and arithmetic combinations can resolve numeric class values.
     void collectFunctionInterps(TheoryModel& model) const;
     // Canonical class token for the ArithModelValidator namespace: numeric
     // literal -> "#n:<rational>", bool literal -> "#b:1"/"#b:0", else opaque
     // per-class marker "@e<rep>". Shared by buildArrayModel + collectFunctionInterps.
     std::string classToken(EufTermId t) const;
-    // Sort name as the validator expects ("Int"/"Real"/"Bool"/"U<id>").
+    // Preserve the registered native sort name in exported interpretations.
     std::string sortName(SortId s) const;
     // Snapshot captured at the last consistent Full-effort check, when the
     // egraph still reflects the satisfying assignment. getModel() returns this.

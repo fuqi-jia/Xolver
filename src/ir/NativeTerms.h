@@ -93,6 +93,7 @@ public:
     }
     SortId indexSort(std::shared_ptr<SOMTParser::Sort>);
     void registerNativeSort(SortId, std::shared_ptr<SOMTParser::Sort>);
+    std::shared_ptr<SOMTParser::Sort> nativeSort(SortId) const;
 
     // Scope-aware assertions
     void pushScope() { ++currentScope_; }

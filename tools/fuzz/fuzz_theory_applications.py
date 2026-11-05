@@ -5,6 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 import random
+import re
 import shutil
 import subprocess
 import sys
@@ -38,6 +39,146 @@ def emit(node):
         else:
             raise ValueError('invalid model syntax')
     return ''.join(pieces)
+
+
+def model_symbols(node, bound=()):
+    """Collect free term symbols without confusing binders or numeral literals."""
+    names, pending = set(), [(node, frozenset(bound))]
+    simple = re.compile(r'[a-zA-Z~!@$%^&*_\-+=<>.?/][a-zA-Z0-9~!@$%^&*_\-+=<>.?/]*\Z')
+    while pending:
+        item, scope = pending.pop()
+        if isinstance(item, Atom):
+            if (item.kind == 'quoted' or (item.kind == 'symbol' and
+                    simple.fullmatch(item.text) and item.text not in ('true', 'false'))):
+                if item.text not in scope:
+                    names.add(item.text)
+            continue
+        if not isinstance(item, list) or not item:
+            continue
+        op = item[0].text if isinstance(item[0], Atom) and item[0].kind == 'symbol' else None
+        if op in ('forall', 'exists', 'lambda', 'let'):
+            if len(item) != 3 or not isinstance(item[1], list):
+                raise ValueError('malformed model binder')
+            local = set()
+            for binding in item[1]:
+                if (not isinstance(binding, list) or len(binding) != 2 or
+                        not isinstance(binding[0], Atom) or binding[0].kind == 'string'):
+                    raise ValueError('malformed model binder')
+                local.add(binding[0].text)
+                if op == 'let':
+                    pending.append((binding[1], scope))  # SMT-LIB lets are parallel.
+            pending.append((item[2], scope | local))
+        elif op in ('!', 'as') and len(item) >= 2:
+            pending.append((item[1], scope))
+        elif op != '_':
+            pending.extend((child, scope) for child in item)
+    return names
+
+
+def model_universes(original_commands, definitions, auxiliary, constraints):
+    """Encode each supplied opaque domain as an exact finite enumeration."""
+    sorts, aliases, terms = {}, {}, set()
+    for command in original_commands:
+        op = emit(command[0])
+        if op == 'declare-sort' and len(command) == 3 and emit(command[2]) == '0':
+            sorts[command[1].text] = command[1]
+        elif op == 'define-sort' and len(command) == 4 and command[2] == []:
+            aliases[command[1].text] = command[3]
+        elif op in ('declare-const', 'declare-fun', 'define-fun'):
+            terms.add(command[1].text)
+
+    def root_sort(sort):
+        seen = set()
+        while isinstance(sort, Atom) and sort.kind != 'string':
+            if sort.text in sorts:
+                return sort.text
+            if sort.text in seen:
+                raise ValueError('cyclic model sort alias')
+            seen.add(sort.text)
+            if sort.text not in aliases:
+                break
+            sort = aliases[sort.text]
+        return None
+
+    def sort_key(sort):
+        root = root_sort(sort)
+        return ('declared', root) if root else ('other',
+            sort.text if isinstance(sort, Atom) else emit(sort))
+
+    uses, active = {}, set()
+    for name in terms & definitions.keys():
+        definition = definitions[name]
+        if not isinstance(definition[2], list):
+            raise ValueError('malformed model function parameters')
+        parameters = []
+        for parameter in definition[2]:
+            if (not isinstance(parameter, list) or len(parameter) != 2 or
+                    not isinstance(parameter[0], Atom)):
+                raise ValueError('malformed model function parameters')
+            parameters.append(parameter[0].text)
+        used = model_symbols(definition[4], parameters) & auxiliary.keys()
+        roots = set()
+        for value in used:
+            declaration = auxiliary[value]
+            root = root_sort(declaration[3])
+            if declaration[2] or root is None:
+                raise ValueError('unsupported auxiliary model domain')
+            roots.add(root)
+        uses[name] = roots
+        active.update(roots)
+
+    members, by_sort = {}, {}
+    for name, declaration in auxiliary.items():
+        by_sort.setdefault(sort_key(declaration[3]), set()).add(name)
+        root = root_sort(declaration[3])
+        if root in active:
+            if declaration[2]:
+                raise ValueError('unsupported auxiliary model domain')
+            members.setdefault(root, []).append(declaration[1])
+
+    provided = {}
+    for constraint in constraints:
+        binders = constraint[1]
+        if (len(binders) != 1 or not isinstance(binders[0], list) or
+                len(binders[0]) != 2 or not isinstance(binders[0][0], Atom)):
+            raise ValueError('unsupported model universe constraint')
+        variable, sort = binders[0]
+        body = constraint[2]
+        if model_symbols(body, {variable.text}) & terms:
+            raise ValueError('model universe constraint references original symbol')
+        choices = body[1:] if isinstance(body, list) and body and emit(body[0]) == 'or' else [body]
+        values = set()
+        for choice in choices:
+            if not isinstance(choice, list) or len(choice) != 3 or emit(choice[0]) != '=':
+                raise ValueError('unsupported model universe constraint')
+            left, right = choice[1:]
+            if not isinstance(left, Atom) or not isinstance(right, Atom):
+                raise ValueError('unsupported model universe constraint')
+            if left.text == variable.text and model_symbols(left) == {variable.text}:
+                value = right
+            elif right.text == variable.text and model_symbols(right) == {variable.text}:
+                value = left
+            else:
+                raise ValueError('unsupported model universe constraint')
+            if value.text == variable.text or model_symbols(value) != {value.text}:
+                raise ValueError('unsupported model universe constraint')
+            values.add(value.text)
+        if not values or values != by_sort.get(sort_key(sort)):
+            raise ValueError('incomplete model universe enumeration')
+        root = root_sort(sort)
+        if root in active:
+            # Expand a sort alias without changing its carrier or membership.
+            normalized = [constraint[0], [[variable, sorts[root]]], constraint[2]]
+            provided.setdefault(root, []).append('(assert ' + emit(normalized) + ')')
+
+    preludes, domains = {}, {}
+    for root, values in members.items():
+        # Nullary constructors enforce both distinctness and exhaustiveness.
+        # This is the same finite carrier as domain-closure axioms, without
+        # asking a checker to discover a model for a new universal formula.
+        domains[root] = emit([Atom('declare-datatype'), sorts[root], [[value] for value in values]])
+        preludes[root] = provided.get(root, [])
+    return preludes, uses, domains
 
 
 def replay(prefix, output):
@@ -76,33 +217,21 @@ def replay(prefix, output):
         if name in definitions or name in auxiliary_declarations:
             raise ValueError('duplicate model definition')
         if op == 'define-fun':
+            if (not isinstance(binding[2], list) or any(
+                    not isinstance(parameter, list) or len(parameter) != 2 or
+                    not isinstance(parameter[0], Atom) or parameter[0].kind == 'string'
+                    for parameter in binding[2])):
+                raise ValueError('malformed model function parameters')
+            if len({parameter[0].text for parameter in binding[2]}) != len(binding[2]):
+                raise ValueError('duplicate model function parameter')
             definitions[name] = binding
         else:
             if name in original_symbols:
                 raise ValueError('model declaration shadows original symbol ' + name)
             auxiliary_declarations[name] = binding
 
-    def atom_names(node):
-        names, pending = set(), [node]
-        while pending:
-            item = pending.pop()
-            if isinstance(item, list):
-                pending.extend(item)
-            elif isinstance(item, Atom) and item.kind != 'string':
-                names.add(item.text)
-        return names
-
-    # Z3 may print model-only universe elements and a finite-universe axiom.
-    # Project these out only when original interpretations do not use them and
-    # the axiom does not constrain an original symbol. The replay still pins
-    # every original declaration and checks every original assertion.
-    auxiliary_names = auxiliary_declarations.keys()
-    for name in original_symbols & definitions.keys():
-        if atom_names(definitions[name]) & auxiliary_names:
-            raise ValueError('model interpretation uses auxiliary universe element: ' + name)
-    for constraint in universe_constraints:
-        if atom_names(constraint) & original_symbols:
-            raise ValueError('model universe constraint references original symbol')
+    universes, universe_uses, domains = model_universes(
+        original_commands, definitions, auxiliary_declarations, universe_constraints)
     algebraic_prelude = []
     if 'root-of-with-interval' in output or 'root-obj' in output:
         names = [symbol_name(command[1]) for command in original_commands
@@ -112,8 +241,44 @@ def replay(prefix, output):
             [definitions[name] for name in names if name in definitions], original_commands)
         definitions.update({symbol_name(binding[1]): binding for binding in selected})
     commands, inserted_roots = [], False
+    inserted_universes, declared_sorts = set(), set()
+    extended_models = bool(universes) or any(
+        emit(command[0]) == 'define-fun' and symbol_name(command[1]) in definitions
+        and definitions[symbol_name(command[1])][2] for command in original_commands)
+    reserved = original_symbols | definitions.keys() | auxiliary_declarations.keys()
+    for binding in definitions.values():
+        reserved.update(model_symbols(binding[4]))
+        reserved.update(symbol_name(parameter[0]) for parameter in binding[2])
+
+    def fresh(base):
+        while base in reserved:
+            base += '_'
+        reserved.add(base)
+        return Atom(base)
+
+    def insert_universes(name):
+        for root in sorted(universe_uses.get(name, set()) - inserted_universes):
+            if root not in declared_sorts:
+                raise ValueError('model domain used before its sort declaration')
+            commands.extend(universes[root])
+            inserted_universes.add(root)
+
+    def check_signature(command, binding):
+        op = emit(command[0])
+        args, result = ([], command[2]) if op == 'declare-const' else (
+            [parameter[1] for parameter in command[2]] if op == 'define-fun'
+            else command[2], command[3])
+        if (emit(result) != emit(binding[3]) or len(args) != len(binding[2])
+                or any(emit(a) != emit(b[1]) for a, b in zip(args, binding[2]))):
+            raise ValueError('model signature mismatch for ' + symbol_name(command[1]))
+
+    if extended_models and not any(emit(command[0]) == 'set-logic' for command in original_commands):
+        commands.append('(set-logic ALL)')
     for command in original_commands:
         op = emit(command[0])
+        if extended_models and op == 'set-logic':
+            commands.append('(set-logic ALL)')  # Finite carrier types and function checks extend the replay language.
+            continue
         if algebraic_prelude and op == 'set-logic':
             # Keep an existing real polynomial logic: widening QF_NRA to ALL
             # can disable the independent checker's specialized arithmetic
@@ -130,14 +295,36 @@ def replay(prefix, output):
             name = symbol_name(command[1])
             if name not in definitions:
                 raise ValueError('missing interpretation for ' + name)
+            insert_universes(name)
             binding = definitions[name]
-            args, result = ([], command[2]) if op == 'declare-const' else (command[2], command[3])
-            if (emit(result) != emit(binding[3]) or len(args) != len(binding[2])
-                    or any(emit(a) != emit(b[1]) for a, b in zip(args, binding[2]))):
-                raise ValueError('model signature mismatch for ' + name)
+            check_signature(command, binding)
             commands.append(emit(binding))
+        elif op == 'define-fun' and symbol_name(command[1]) in definitions:
+            # A source-defined function is already fixed by the query. Check
+            # any printed interpretation against it rather than silently
+            # ignoring that interpretation or replacing the original definition.
+            name = symbol_name(command[1])
+            binding = definitions[name]
+            check_signature(command, binding)
+            commands.append(emit(command))
+            insert_universes(name)
+            alias = fresh('__xolver_model_function')
+            params = [[fresh('__xolver_model_argument'), p[1]] for p in binding[2]]
+            body = [command[1], *[p[0] for p in params]] if params else command[1]
+            commands.append(emit([Atom('define-fun'), alias, params, binding[3], body]))
+            call = [alias, *[p[0] for p in binding[2]]] if binding[2] else alias
+            equality = [Atom('='), call, binding[4]]
+            if binding[2]:
+                equality = [Atom('forall'), binding[2], equality]
+            commands.append(emit([Atom('assert'), equality]))
+        elif op == 'declare-sort' and symbol_name(command[1]) in domains:
+            name = symbol_name(command[1])
+            commands.append(domains[name])
+            declared_sorts.add(name)
         else:
             commands.append(emit(command))
+            if op == 'declare-sort':
+                declared_sorts.add(symbol_name(command[1]))
     return '\n'.join(commands) + '\n(check-sat)\n'
 
 

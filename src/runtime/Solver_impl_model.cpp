@@ -572,25 +572,17 @@ bool Solver::Impl::modelPositivelyValidates() {
         // #41 promoted default-ON: validator eval memoization is verdict-identical
         // (memoizes a PURE eval over ExprId) — a speedup on validator-heavy sat
         if (!ArithModelValidator::integerAssignmentsValid(*ir, filteredReal, numAsg)) return false;
-        ArithModelValidator::Verdict v;
-        if (!lastModel_->arrayInterps.empty() || !selBridge.empty()) {
-            ArithModelValidator validator(*ir, numAsg, boolAsg,
-                                          lastModel_->arrayInterps, tokAsg);
-            validator.setFunctionInterps(&lastModel_->functionInterps, &lastModel_->arrayValues);
-            validator.setRealAssignments(&filteredReal);
-            validator.setIntegerZeroExtensions(&partialFuncModel_.divZero, &partialFuncModel_.modZero);
-            if (!selBridge.empty()) validator.setSelectOverride(&selBridge);
-            if (!selectorBridge.empty()) validator.setSelectorOverride(&selectorBridge);
-            v = validator.validate(originalAssertions_);
-        } else {
-            ArithModelValidator validator(*ir, numAsg, boolAsg);
-            validator.setFunctionInterps(&lastModel_->functionInterps, &lastModel_->arrayValues);
-            validator.setRealAssignments(&filteredReal);
-            validator.setIntegerZeroExtensions(&partialFuncModel_.divZero, &partialFuncModel_.modZero);
-            if (!selectorBridge.empty()) validator.setSelectorOverride(&selectorBridge);
-            v = validator.validate(originalAssertions_);
-        }
-        return v == ArithModelValidator::Verdict::Satisfied;
+        // Equality-class identities also interpret scalar UF arguments and
+        // results when no arrays occur. Preserve every model channel on the
+        // same validation path; an empty array table needs no special case.
+        ArithModelValidator validator(*ir, numAsg, boolAsg,
+                                      lastModel_->arrayInterps, tokAsg);
+        validator.setFunctionInterps(&lastModel_->functionInterps, &lastModel_->arrayValues);
+        validator.setRealAssignments(&filteredReal);
+        validator.setIntegerZeroExtensions(&partialFuncModel_.divZero, &partialFuncModel_.modZero);
+        if (!selBridge.empty()) validator.setSelectOverride(&selBridge);
+        if (!selectorBridge.empty()) validator.setSelectorOverride(&selectorBridge);
+        return validator.validate(originalAssertions_) == ArithModelValidator::Verdict::Satisfied;
 }
     // Build the partial-function (div/mod-by-zero) model from the final model.
     // For each lowered div/mod whose divisor is 0 under the model, record the

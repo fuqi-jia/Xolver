@@ -126,6 +126,10 @@ NativeTerms& NativeTerms::operator=(const NativeTerms& other) {
 
 size_t NativeTerms::size() const { return storage_->nodes.size(); }
 Node NativeTerms::native(ExprId id) const { return storage_->nodes.at(id); }
+SortPtr NativeTerms::nativeSort(SortId id) const {
+    const auto found = storage_->sorts.find(id);
+    return found == storage_->sorts.end() ? nullptr : found->second;
+}
 std::shared_ptr<const void> NativeTerms::expressionIndexIdentity() const {
     return storage_->identity;
 }

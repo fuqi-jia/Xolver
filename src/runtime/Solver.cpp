@@ -4,9 +4,11 @@
 #include "applications/verification/sl/NativeSeparation.h"
 #include "base/MpqUtils.h"
 #include "quantifiers/FiniteFormula.h"
+#include "somtparser/parser.h"
 #include <cctype>
 #include <type_traits>
 #include <functional>
+#include <unordered_set>
 #ifdef XOLVER_ENABLE_PROOFS
 #include "evidence/AletheProof.h"
 #include "evidence/BoolClausalProof.h"
@@ -15,7 +17,6 @@
 #include "ir/Smt2Dumper.h"
 #include <gmpxx.h>
 #include <fstream>
-#include <unordered_set>
 #include <unordered_map>
 #include <map>
 #include <set>
@@ -1880,8 +1881,8 @@ void Solver::dumpModel(std::ostream& os) const {
     //   - opaque tokens in an Int/Real sort get a fresh integer (chosen to
     //     avoid colliding with any explicit numeric token in that array);
     //   - opaque tokens in an uninterpreted sort get an abstract constant
-    //     "@<sort>!<n>" declared as a 0-arity symbol of that sort (z3-style,
-    //     replayable). One namespace per uninterpreted sort.
+    //     declared as a fresh 0-arity symbol of that sort. Value identity stays
+    //     per sort, while generated names avoid the complete source namespace.
     // This block computes tokenSmt(token, smtSort) -> printable SMT term and
     // collects the abstract-constant declarations to emit first.
     // -----------------------------------------------------------------------
@@ -1890,13 +1891,19 @@ void Solver::dumpModel(std::ostream& os) const {
         enum class SK { Int, Real, Bool, Uninterp };
         // Per-uninterpreted-sort: token -> abstract constant name.
         std::map<std::string, std::map<std::string, std::string>> uninterpConsts;
-        // Per-uninterpreted-sort emission counter.
-        std::map<std::string, int> uninterpCounter;
+        std::unordered_set<std::string> occupiedNames;
+        size_t nextUninterp = 0;
         // Int/Real opaque token -> chosen integer (global; Int values are
         // globally distinct so one namespace is fine), avoiding used numbers.
         std::map<std::string, std::string> numericOpaque;
         std::set<long long> usedNums;        // explicit numbers seen anywhere
         long long nextFreeNum = 0;
+
+        void reserveName(const std::string& name) {
+            // Optional quoting does not create a different SMT-LIB symbol.
+            occupiedNames.insert(name.size() >= 2 && name.front() == '|' && name.back() == '|'
+                ? name.substr(1, name.size() - 2) : name);
+        }
 
         static SK classify(const std::string& smtSort) {
             if (smtSort == "Int")  return SK::Int;
@@ -1958,12 +1965,25 @@ void Solver::dumpModel(std::ostream& os) const {
             auto& byTok = uninterpConsts[smtSort];
             auto it = byTok.find(tok);
             if (it != byTok.end()) return it->second;
-            int idx = uninterpCounter[smtSort]++;
-            std::string cname = "@" + smtSort + "!" + std::to_string(idx);
+            std::string cname;
+            // These are declarations, so avoid the reserved abstract-value prefix '@'.
+            do {
+                cname = "__xolver_model!" + std::to_string(nextUninterp++);
+            } while (!occupiedNames.insert(cname).second);
             byTok[tok] = cname;
             return cname;
         }
     } emit;
+
+    for (const auto& variable : variables)
+        if (variable) emit.reserveName(variable->getName());
+    if (pImpl->parser)
+        for (const auto& function : pImpl->parser->getFunctions())
+            if (function) emit.reserveName(function->getName());
+    for (const auto& [name, function] : tm->functionInterps) {
+        (void)function;
+        emit.reserveName(name);
+    }
 
     // Build name -> declared array Sort (index/element SMT sort strings) for
     // every declared array variable, and pre-scan tokens for numeric collisions.
@@ -2098,7 +2118,7 @@ void Solver::dumpModel(std::ostream& os) const {
             } else {
                 body = unconstrainedValue(var->getSort());
             }
-            arrayBuf << "  (define-fun " << name << " () " << arrSmt << " "
+            arrayBuf << "  (define-fun " << SOMTParser::smtSymbol(name) << " () " << arrSmt << " "
                      << body << ")\n";
         }
     }
@@ -2119,7 +2139,7 @@ void Solver::dumpModel(std::ostream& os) const {
             if (tm && kind == ArrayModelEmitter::SK::Real) {
                 auto rvIt = tm->numericAssignments.find(name);
                 if (rvIt != tm->numericAssignments.end() && rvIt->second.isAlgebraic()) {
-                    scalarBuf << "  (define-fun " << name << " () Real "
+                    scalarBuf << "  (define-fun " << SOMTParser::smtSymbol(name) << " () Real "
                               << rvIt->second.toSmtLib2() << ")\n";
                     continue;
                 }
@@ -2132,14 +2152,14 @@ void Solver::dumpModel(std::ostream& os) const {
             }
             if (var->getSort() && var->getSort()->isBv()) {
                 const auto width = var->getSort()->getBitWidth();
-                scalarBuf << "  (define-fun " << name << " () " << smtSort << " "
+                scalarBuf << "  (define-fun " << SOMTParser::smtSymbol(name) << " () " << smtSort << " "
                           << (raw.empty() ? "(_ bv0 " + std::to_string(width) + ")" : raw)
                           << ")\n";
                 continue;
             }
             if (var->getSort() && (var->getSort()->isFp() || var->getSort()->isStr() || var->getSort()->isRoundingMode())) {
                 if (!raw.empty() && !raw.starts_with("#smt:")) { os << "(error \"invalid native model literal\")\n"; return; }
-                scalarBuf << "  (define-fun " << name << " () " << smtSort << " "
+                scalarBuf << "  (define-fun " << SOMTParser::smtSymbol(name) << " () " << smtSort << " "
                           << (raw.empty() ? unconstrainedValue(var->getSort()) : raw.substr(5)) << ")\n";
                 continue;
             }
@@ -2167,7 +2187,7 @@ void Solver::dumpModel(std::ostream& os) const {
                         SortKind::Bool, raw);
                 }
             }
-            scalarBuf << "  (define-fun " << name << " () " << smtSort << " "
+            scalarBuf << "  (define-fun " << SOMTParser::smtSymbol(name) << " () " << smtSort << " "
                       << valTerm << ")\n";
         }
     }
@@ -2178,7 +2198,7 @@ void Solver::dumpModel(std::ostream& os) const {
         const std::string fallback = !fi.entries.empty() ? fi.entries.front().value : "0";
         auto body = functionValue(fi.deflt.empty() ? fallback : fi.deflt, fi.retSort);
         if (!body) { os << "(error \"incomplete array function model\")\n"; return; }
-        functionBuf << "  (define-fun " << fname << " (";
+        functionBuf << "  (define-fun " << SOMTParser::smtSymbol(fname) << " (";
         for (std::size_t i = 0; i < fi.argSorts.size(); ++i) {
             if (i) functionBuf << ' ';
             functionBuf << "(x!" << i << " " << fi.argSorts[i] << ")";

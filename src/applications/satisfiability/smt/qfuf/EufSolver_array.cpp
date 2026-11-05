@@ -435,8 +435,6 @@ void EufSolver::collectFunctionInterps(TheoryModel& model) const {
         if (!dup) fi.entries.push_back(std::move(entry));
     }
 
-    if (model.functionInterps.empty()) return;
-
     // Emit scalar var -> class-token assignments for every interned, non-array,
     // non-bool variable the egraph knows (incl. purification vars that appear as
     // UF arguments). TheoryManager::getModel pairs these tokens with the arith
@@ -445,7 +443,8 @@ void EufSolver::collectFunctionInterps(TheoryModel& model) const {
     for (ExprId id = 0; id < static_cast<ExprId>(nativeTerms_->size()); ++id) {
         const auto& e = nativeTerms_->get(id);
         if (e.kind != Kind::Variable) continue;
-        if (nativeTerms_->arraySortParams(e.sort)) continue;
+        if (nativeTerms_->arraySortParams(e.sort) ||
+            nativeTerms_->datatypes().isDatatypeSort(e.sort)) continue;
         if (!std::holds_alternative<std::string>(e.payload.value)) continue;
         const std::string& name = std::get<std::string>(e.payload.value);
         if (model.assignments.count(name)) continue;

@@ -3,6 +3,8 @@
 #include "ir/NativeTerms.h"
 #include <filesystem>
 #include <fstream>
+#include <sstream>
+#include <vector>
 
 using namespace xolver;
 
@@ -87,6 +89,100 @@ TEST_CASE("MV: SAT for EUF returns model with all decls") {
     auto m = s.getModel();
     // EUF model may be empty if there's nothing to enumerate, but should not crash.
     CHECK_NOTHROW(m.values());
+}
+
+TEST_CASE("MV: uninterpreted scalar witnesses retain class tokens without arrays") {
+    const auto path = writeSmt2("uf_scalar_tokens",
+        "(set-logic QF_UF)\n"
+        "(set-option :produce-models true)\n"
+        "(declare-sort U 0)\n"
+        "(declare-const x U)(declare-const y U)\n"
+        "(assert (distinct x y))\n");
+    Solver solver;
+    REQUIRE(solver.parseFile(path));
+    const auto choice = solver.mkConst(solver.boolSort(), "choice");
+    const auto notChoice = solver.mkOp(static_cast<uint32_t>(Kind::Not), {choice});
+    for (const auto assumption : {choice, notChoice}) {
+        REQUIRE_RESULT(solver.checkSatAssuming({assumption}), Result::Sat);
+        CHECK(solver.validateModel() == Solver::ModelValidation::Satisfied);
+        CHECK(solver.getModel().values().size() >= 2);
+        std::ostringstream output;
+        solver.dumpModel(output);
+        CHECK(output.str().find("(error") == std::string::npos);
+        CHECK(output.str().find("(define-fun x () U ") != std::string::npos);
+        CHECK(output.str().find("(define-fun y () U ") != std::string::npos);
+        CHECK_RESULT(solver.checkSatAssuming({choice, notChoice}), Result::Unsat);
+    }
+    REQUIRE_RESULT(solver.checkSat(), Result::Sat);
+    CHECK(solver.validateModel() == Solver::ModelValidation::Satisfied);
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("MV: uninterpreted function witnesses validate without arrays") {
+    const auto path = writeSmt2("uf_function_tokens",
+        "(set-logic QF_UF)\n"
+        "(set-option :produce-models true)\n"
+        "(declare-sort U 0)\n"
+        "(declare-const x U)(declare-const y U)\n"
+        "(declare-fun f (U) U)\n"
+        "(assert (distinct x y))\n"
+        "(assert (= (f x) y))(assert (= (f y) x))\n");
+    Solver solver;
+    REQUIRE(solver.parseFile(path));
+    for (int round = 0; round < 2; ++round) {
+        REQUIRE_RESULT(solver.checkSat(), Result::Sat);
+        CHECK(solver.validateModel() == Solver::ModelValidation::Satisfied);
+        CHECK(solver.getModel().values().size() >= 2);
+        std::ostringstream output;
+        solver.dumpModel(output);
+        CHECK(output.str().find("(error") == std::string::npos);
+        CHECK(output.str().find("(define-fun f (") != std::string::npos);
+        solver.push();
+        solver.assertFormula(solver.mkBool(false));
+        CHECK_RESULT(solver.checkSat(), Result::Unsat);
+        CHECK(solver.getModel().isEmpty());
+        solver.pop();
+    }
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("MV: exported model names preserve symbol identities") {
+    const std::vector<std::string> queries{
+        "(set-logic QF_UF)(declare-sort U 0)"
+        "(declare-const x U)(declare-const |__xolver_model!0| U)(declare-const y U)"
+        "(assert (distinct x |__xolver_model!0| y))",
+        "(set-logic QF_UF)(declare-sort |two words| 0)"
+        "(declare-const |value one| |two words|)(declare-const z |two words|)"
+        "(assert (distinct |value one| z))"
+    };
+    for (size_t index = 0; index < queries.size(); ++index) {
+        const auto path = writeSmt2("model_namespace_" + std::to_string(index),
+            "(set-option :produce-models true)" + queries[index]);
+        Solver solver;
+        REQUIRE(solver.parseFile(path));
+        REQUIRE_RESULT(solver.checkSat(), Result::Sat);
+        CHECK(solver.validateModel() == Solver::ModelValidation::Satisfied);
+        std::ostringstream stream;
+        solver.dumpModel(stream);
+        const auto text = stream.str();
+        CHECK(text.find("(error") == std::string::npos);
+        CHECK(text.find("(declare-fun @") == std::string::npos);
+        if (index == 0) {
+            CHECK(text.find("(declare-fun __xolver_model!0 () U)") == std::string::npos);
+        } else {
+            CHECK(text.find("@|two words|") == std::string::npos);
+            CHECK(text.find("(define-fun |value one| () |two words| ") != std::string::npos);
+        }
+        std::filesystem::remove(path);
+    }
+
+    Solver api;
+    const auto condition = api.mkConst(api.boolSort(), "condition name");
+    api.assertFormula(condition);
+    REQUIRE_RESULT(api.checkSat(), Result::Sat);
+    std::ostringstream stream;
+    api.dumpModel(stream);
+    CHECK(stream.str().find("(define-fun |condition name| () Bool true)") != std::string::npos);
 }
 
 TEST_CASE("MV: SAT for Bool — model access does not crash") {
