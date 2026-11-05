@@ -146,6 +146,7 @@ set(XOLVER_SEARCH_SOURCES
     "search/linear/BoundAxiomGenerator.cpp"
     "search/linear/IntegerAffineModel.cpp"
     "search/linear/IntegerAffineProjection.cpp"
+    "search/linear/IntegerLinearSystem.cpp"
     "search/linear/IntegerModelCompletion.cpp"
     "search/linear/IntegerReasoner.cpp"
     "search/linear/LinearAtomManager.cpp"

@@ -15,6 +15,27 @@ better mean verified PAR-2 (**34.119 versus 36.361 seconds**). This stage does
 not establish overall superiority. Final-version original-C QCP timing and
 the final protected-set comparison remain open. Detailed evidence follows.
 
+### FULINA development: component integer equality analysis
+
+The shared integer equality analyzer now builds variable-connected components
+directly from sparse equations. Each component uses exact Smith transforms to
+derive a particular integer point, coordinate congruences, a one-dimensional
+lattice direction when applicable, and supporting original conflict rows.
+Both arithmetic presolve and integer affine model construction use this service.
+Coordinate projections never alone establish a joint model; original constraints
+are still checked before accepting a candidate. The canonical sparse interface
+accepts unsorted and repeated coefficients without a dense compatibility entry.
+
+Presolve also stops reporting progress for an unchanged congruence. Its new
+fixed-point regression fails with the qualified predecessor. Proof-enabled
+Panda9 / ExperimentOS qualification passes **2,177 cases / 1,331,463 assertions**,
+including **169 focused cases / 27,077 assertions**. Mathematical regressions
+check exact witnesses, projected lattices, contradiction support, component
+reconnection, large coefficients, cancellation and retained transform lifetimes.
+Resource controls and LRA/LIA rollback policies are unchanged. Frozen complete
+suite comparisons are running; this development is not yet qualified for main
+promotion and has no established additional solved-count benefit.
+
 ## Previous checkpoint: complete cut explanations and exact NIA refinements (2026-11-05)
 
 [PR #99](https://github.com/fuqi-jia/Xolver/pull/99) merged as

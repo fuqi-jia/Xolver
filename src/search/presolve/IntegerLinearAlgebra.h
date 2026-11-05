@@ -4,6 +4,8 @@
 // for Capability 5's two cores.
 
 #include <gmpxx.h>
+#include <cstddef>
+#include <memory>
 #include <vector>
 
 namespace xolver {
@@ -20,10 +22,14 @@ struct SmithNormalForm {
     IntMatrix D;   // m×n, diagonal
     int rank = 0;  // number of non-zero diagonal entries
     int m = 0, n = 0;
+    // Construction work, retained with the result on exact matrix memo hits.
+    std::size_t pivotEntriesExamined = 0;
 };
 
-// Compute the Smith Normal Form of A (A is copied).  A may be empty (m or n 0).
-SmithNormalForm smithNormalForm(const IntMatrix& A);
+// Compute an immutable Smith Normal Form. Exact matrix memo hits share the
+// transforms without copying them; retained results survive memo eviction.
+// A may be empty (m or n 0).
+std::shared_ptr<const SmithNormalForm> smithNormalForm(const IntMatrix& A);
 
 // Matrix · vector over Z.
 std::vector<mpz_class> matVec(const IntMatrix& M, const std::vector<mpz_class>& v);
