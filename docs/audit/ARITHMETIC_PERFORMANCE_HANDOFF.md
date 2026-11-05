@@ -88,14 +88,44 @@ existing exact-domain plan ends after this solve. SAT preprocessing can then
 use those fixed query facts. Plans that refine integer widths retain their
 assumption boundary and shared search state. The affine regression uses the same
 fixed bounds and encoding size in both versions; permanent roots find SAT while
-assumption roots exhaust the original allocation.
+the assumption variant leaves the query unresolved within the same budget.
 No budget, configuration, API or rollback policy is changed.
 
 Proof-enabled qualification again passes **2,183 cases / 1,331,524 assertions**,
 including **242 focused cases / 181,920 assertions**. The refined frozen CLI is
 `a68e85c39f20ae237c6dc7d8377f8171f9a63562badea00f24db0db7fd707afb`.
 A fresh 18-input control includes the affine regression and the earlier gains.
-Whole-stage acceptance remains pending; these results do not establish overall
+It gives **7 to 8 independently verified results**, with one retained integer
+SAT gain (**60-second timeout to 10.340 seconds**), no losses or errors, and
+16 verified for same-round Z3. The affine SAT regression is restored; the other
+intermediate gain is not retained. The assumption-only fixed-plan experiment
+is ended.
+
+Complete refined-candidate server acceptance passes at that freeze:
+
+- Fixed160 improves **113 to 115 raw verified**. Fresh symmetric checking of
+  the original-input-bound certificate gives **114 to 116 verified**, versus
+  **116 for same-round Z3**. Mean verified PAR-2 is **37.578 to 36.334 seconds**,
+  versus **34.390** for Z3. The candidate has **64 SAT / 52 UNSAT / 43 timeouts /
+  one unknown**. There are two relative SAT gains and no losses or errors;
+  one gain is in an unchanged LRA path and cannot be causally attributed to
+  integer encoding reuse. Eight unconfirmed Z3 results remain excluded.
+- Development587 retains **587 to 587 verified**, versus 584 for Z3. Total
+  solver time is **47.436 to 47.695 seconds**, versus **17.683** for Z3; three
+  unconfirmed Z3 model replays remain excluded.
+- All **14,408 private queries** retain independently verified results in both
+  Xolver versions and Z3: **8,940 SAT / 5,468 UNSAT**. Total solver time is
+  **1,330.602 to 1,339.656 seconds**, versus **401.250** for Z3. There are no
+  losses, timeouts, unknowns, unconfirmed results or errors in this cohort.
+
+Every timed solver receives 60 seconds, one physical CPU and 16 GiB. Actual
+timed SAT models require independent replay; UNSAT requires an independent
+verdict or checked certificate. No timeout or unknown is upgraded. These
+separate cohorts are not summed into an overall score.
+[PR #102](https://github.com/fuqi-jia/Xolver/pull/102) awaits final CI and main
+promotion. Original-C QCP workflows are being rerun with frozen Xolver and Z3
+backends; they are not yet accepted as complete program verification. The
+protected set remains unused. These results do not establish overall
 superiority over Z3.
 
 ## Previous checkpoint: exact models and shared NIA relaxation (2026-11-06)
