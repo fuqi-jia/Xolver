@@ -82,8 +82,8 @@ public:
 
     // Default check(): drain any pending result, then walk the reasoner
     // pipeline (Phase 2). A solver that has populated `reasoners_` in its
-    // constructor gets a uniform check() for free — the first stage
-    // returning a non-Consistent verdict wins. Solvers not yet decomposed
+    // constructor gets a uniform check() for free. The first verdict wins,
+    // except that installed lemmas permit later reasoning. Solvers not yet decomposed
     // into reasoners override check() as before. A solver with an empty
     // `reasoners_` and no override would always report Consistent, so the
     // pipeline is only the verdict when reasoners_ is non-empty.
@@ -112,9 +112,11 @@ protected:
     std::vector<std::unique_ptr<Reasoner>> reasoners_;
 
     // Walk reasoners_ in order: drain pending first, then run each stage
-    // whose runsAt(effort) holds; return its first result (including Consistent),
-    // advancing only on nullopt. Exposed so a solver that needs custom pre/post
-    // logic can call it from its own check() override.
+    // whose runsAt(effort) holds. Installed lemmas permit later stages to run;
+    // otherwise return the first result, including Consistent. If no later
+    // decision exists, return the deferred lemma rather than certify SAT.
+    // Emitted but uninstalled lemmas retain delivery priority. Exposed so custom
+    // pre/post logic can call it from its own check() override.
     TheoryCheckResult runReasonerPipeline(TheoryLemmaStorage& lemmaDb,
                                           TheoryEffort effort);
 

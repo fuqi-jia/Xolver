@@ -2,6 +2,7 @@
 
 #include "ir/types.h"
 #include "contracts/SatSolver.h"
+#include "search/nra/core/CdcacCommon.h"
 #include <vector>
 #include <optional>
 

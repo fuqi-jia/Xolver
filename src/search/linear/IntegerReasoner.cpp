@@ -2,7 +2,11 @@
 #include "algebra/linear/LinearConstraintNormalizer.h"
 #include "algebra/linear/IntegerIntervalCombination.h"
 #include "search/linear/LinearBoundPropagation.h"
+#include "contracts/TheoryPropagatorCallbacks.h"
+#include "base/RuntimeConfig.h"
 #include <algorithm>
+#include <chrono>
+#include <fstream>
 #include <unordered_map>
 
 namespace xolver {
@@ -65,27 +69,48 @@ std::optional<NormalizedConstraint> IntegerReasoner::normalize(
 // ============================================================================
 
 std::optional<TheoryCheckResult> IntegerReasoner::run(
-    const std::vector<ActiveLinearAtom>& activeAtoms, TheoryEffort effort) {
+    const std::vector<ActiveLinearAtom>& activeAtoms, TheoryLemmaStorage& lemmaDb,
+    TheoryEffort effort) {
+
+    struct Profile {
+        size_t atoms = 0, installedSkips = 0, refinements = 0, conflicts = 0;
+        std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
+        ~Profile() {
+            const auto path = config::read<config::ReadKind::ProfilePath>(
+                "ARITH_STAGE_PROF", "/tmp/xolver_stageprof.txt");
+            if (path.empty()) return;
+            std::ofstream out(path.string() + ".integer-reasoner.log", std::ios::app);
+            out << "atoms=" << atoms << " installed_skips=" << installedSkips
+                << " refinements=" << refinements << " conflicts=" << conflicts
+                << " us=" << std::chrono::duration_cast<std::chrono::microseconds>(
+                       std::chrono::steady_clock::now() - start).count() << '\n';
+        }
+    } profile;
+    auto emit = [&](std::optional<TheoryLemma> lemma) -> std::optional<TheoryCheckResult> {
+        if (!lemma) return std::nullopt;
+        if (lemmaDb.isInstalled(*lemma)) {
+            ++profile.installedSkips;
+            return std::nullopt;
+        }
+        ++profile.refinements;
+        return TheoryCheckResult::mkLemma(std::move(*lemma));
+    };
 
     for (const auto& atom : activeAtoms) {
+        ++profile.atoms;
         auto nc = normalize(atom.lhs, atom.rhs, atom.rel, atom.value);
         if (!nc) continue;
 
         // 1. GCD equality conflict
         if (auto conflict = checkGcdEqualityConflict(*nc, atom.lit)) {
+            ++profile.conflicts;
             return TheoryCheckResult::mkConflict(*conflict);
         }
 
         if (effort != TheoryEffort::Full) continue;
-        if (auto lemma = checkGcdInequalityTightening(*nc, atom.lit)) {
-            return TheoryCheckResult::mkLemma(*lemma);
-        }
-        if (auto lemma = singleVarBoundTighten(*nc, atom.lit)) {
-            return TheoryCheckResult::mkLemma(*lemma);
-        }
-        if (auto lemma = normalizeEquality(*nc, atom.lit)) {
-            return TheoryCheckResult::mkLemma(*lemma);
-        }
+        if (auto result = emit(checkGcdInequalityTightening(*nc, atom.lit))) return result;
+        if (auto result = emit(singleVarBoundTighten(*nc, atom.lit))) return result;
+        if (auto result = emit(normalizeEquality(*nc, atom.lit))) return result;
     }
 
     return std::nullopt;

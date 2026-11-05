@@ -30,10 +30,14 @@ enum class ReasonerSchedule { EveryCheck, CandidateModel };
  *                                 pipeline ADVANCES to the next stage.
  *   - `TheoryCheckResult{...}`  → this stage produced a verdict; the
  *                                 pipeline STOPS and returns it. This is
- *                                 true for Conflict / Lemma / Unknown AND
+ *                                 true for Conflict / fresh Lemma / Unknown AND
  *                                 for Consistent (a stage returning
  *                                 Consistent means "the whole theory state
  *                                 is consistent / SAT, stop here").
+ *                                 An already installed lemma permits later
+ *                                 stages to run. If none produces a verdict,
+ *                                 the pipeline returns that lemma instead of
+ *                                 treating the skipped refinement as SAT.
  *
  * This distinction matters: in the old linear check() bodies, every
  * `return consistent()` meant "stop, I'm done" — there was no implicit
@@ -60,7 +64,7 @@ public:
         return true;
     }
 
-    // The single check entry point. nullopt = continue; value = stop.
+    // nullopt = continue; a value stops unless its lemma is already installed.
     virtual std::optional<TheoryCheckResult> run(TheoryLemmaStorage& lemmaDb,
                                                  TheoryEffort effort) = 0;
 };

@@ -3,6 +3,7 @@
 #include "base/EnvParam.h"
 #include <cstdio>
 #include "search/arith/Reasoner.h"
+#include "contracts/TheoryPropagatorCallbacks.h"
 #include "ir/NativeTerms.h"
 #include "search/combination/SharedTermRegistry.h"
 #include <cassert>
@@ -62,7 +63,16 @@ std::vector<std::string> ArithSolverBase::reasonerNames() const {
 
 TheoryCheckResult ArithSolverBase::runReasonerPipeline(TheoryLemmaStorage& lemmaDb,
                                                        TheoryEffort effort) {
-    if (hasPending()) return drainPending();
+    std::optional<TheoryCheckResult> deferredInstalled;
+    auto installed = [&](const TheoryCheckResult& result) {
+        return result.kind == TheoryCheckResult::Kind::Lemma && result.lemmaOpt &&
+               lemmaDb.isInstalled(*result.lemmaOpt);
+    };
+    if (hasPending()) {
+        auto pending = drainPending();
+        if (!installed(pending)) return pending;
+        deferredInstalled = std::move(pending);
+    }
     // Per-stage cumulative profiler (ARITH_STAGE_PROF). Dumps periodically to
     // stderr so a timeout-killed run still reveals the per-propagation hot
     // stage (no clean exit / atexit). Zero cost when the env var is unset.
@@ -70,6 +80,7 @@ TheoryCheckResult ArithSolverBase::runReasonerPipeline(TheoryLemmaStorage& lemma
     struct ProfState {
         std::map<std::string, std::pair<double, long>> acc;  // name -> (ms, calls)
         long pipelineCalls = 0;
+        long installedSkips = 0;
         std::chrono::steady_clock::time_point lastDump = std::chrono::steady_clock::now();
         void dump() {
             // Worker-thread stderr is suppressed in the solve worker; write the
@@ -79,7 +90,8 @@ TheoryCheckResult ArithSolverBase::runReasonerPipeline(TheoryLemmaStorage& lemma
             if (path.empty()) return;
             FILE* f = std::fopen(path.c_str(), "w");
             if (!f) return;
-            std::fprintf(f, "[STAGE-PROF] pipeline-calls=%ld\n", pipelineCalls);
+            std::fprintf(f, "[STAGE-PROF] pipeline-calls=%ld installed-skips=%ld\n",
+                         pipelineCalls, installedSkips);
             for (const auto& [nm, mc] : acc)
                 std::fprintf(f, "  %s  ms=%ld calls=%ld\n", nm.c_str(),
                              (long)mc.first, mc.second);
@@ -89,6 +101,7 @@ TheoryCheckResult ArithSolverBase::runReasonerPipeline(TheoryLemmaStorage& lemma
     static thread_local ProfState prof;
     if (stageProf) {
         ++prof.pipelineCalls;
+        prof.installedSkips += deferredInstalled.has_value();
         auto now = std::chrono::steady_clock::now();
         if (std::chrono::duration_cast<std::chrono::milliseconds>(now - prof.lastDump).count() >= 2000) {
             prof.dump();
@@ -131,6 +144,14 @@ TheoryCheckResult ArithSolverBase::runReasonerPipeline(TheoryLemmaStorage& lemma
         // (Consistent here means "theory state is consistent, stop", NOT
         // "continue").
         if (res.has_value()) {
+            // An installed refinement already belongs to SAT. Let later
+            // stages inspect the same context instead of starving them on a
+            // repeated clause. Emitted but undelivered clauses remain retryable.
+            if (installed(*res)) {
+                if (stageProf) ++prof.installedSkips;
+                if (!deferredInstalled) deferredInstalled = std::move(*res);
+                continue;
+            }
             const bool stageDiag = xolver::config::read<xolver::config::ReadKind::Presence>("ARITH_STAGE_DIAG");
             if (stageDiag && res->kind == TheoryCheckResult::Kind::Conflict) {
                 std::cerr << "[STAGE-CONFLICT] stage=" << r->name()
@@ -145,6 +166,9 @@ TheoryCheckResult ArithSolverBase::runReasonerPipeline(TheoryLemmaStorage& lemma
             return std::move(*res);
         }
     }
+    // Skipping a refinement is not a consistency certificate. If no later
+    // stage decides the context, preserve the original pending obligation.
+    if (deferredInstalled) return std::move(*deferredInstalled);
     return TheoryCheckResult::consistent();
 }
 
