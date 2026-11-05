@@ -23,7 +23,8 @@ struct PolynomialLinearStatistics {
 // Each canonical monomial starts as an independent shared column. Exact fixed
 // factors justify explained product identities; no candidate point or integer
 // rounding is used to derive them. This is sound for real and integer clients.
-// Disequalities are omitted. Feasibility establishes no SAT result.
+// A disequality conflicts only when the relaxation proves its excluded value
+// is forced. An unfixed relaxation point establishes no SAT result.
 // Returned literals are the original premises of an exact Simplex conflict.
 // Definitions are unconditional s = polynomial equations and survive between
 // checks. Every check replaces the complete explained bound base. Call reset

@@ -88,12 +88,89 @@ TEST_CASE("Polynomial linear refutation: strict rational bounds remain exact and
     constraints[1].poly -= constant(tiny);
     CHECK_FALSE(PolynomialLinearRefuter{}.check(constraints, deadline()).has_value());
     CHECK_FALSE(PolynomialLinearRefuter{}.check({{x * x + constant(1), Relation::Eq, SatLit::positive(1)}}, deadline()));
-    CHECK_FALSE(PolynomialLinearRefuter{}.check({
+    CHECK(PolynomialLinearRefuter{}.check({
         {x, Relation::Eq, SatLit::positive(1)},
         {x, Relation::Neq, SatLit::positive(2)}}, deadline()));
     PolynomialLinearStatistics stats;
     CHECK_FALSE(PolynomialLinearRefuter{}.check(constraints, std::chrono::steady_clock::now(), &stats));
     CHECK(stats.exhausted);
+}
+
+TEST_CASE("Polynomial linear disequalities use explained fixed values rather than candidate points") {
+    const auto x = variable(0), y = variable(1);
+    const std::vector<SignRefuteConstraint> constraints{
+        {x + y - constant(3), Relation::Eq, SatLit::negative(1)},
+        {x - y - constant(1), Relation::Eq, SatLit::positive(2)},
+        {x * constant(5) - y * constant(2) - constant(8), Relation::Neq, SatLit::negative(3)},
+        {variable(2), Relation::Geq, SatLit::positive(4)}};
+    auto conflict = PolynomialLinearRefuter{}.check(constraints, deadline());
+    REQUIRE(conflict);
+    CHECK(conflict->size() == 3);
+    for (size_t i = 0; i < 3; ++i)
+        CHECK(std::find(conflict->begin(), conflict->end(), constraints[i].reason) != conflict->end());
+
+    const mpq_class tiny(1, mpz_class(1) << 180);
+    PolynomialLinearRefuter refuter;
+    CHECK_FALSE(refuter.check({
+        {x, Relation::Geq, SatLit::positive(1)},
+        {x, Relation::Neq, SatLit::negative(2)}}, deadline()));
+    CHECK_FALSE(refuter.check({
+        {x, Relation::Gt, SatLit::positive(1)},
+        {x - constant(tiny), Relation::Lt, SatLit::positive(3)},
+        {x, Relation::Neq, SatLit::negative(2)}}, deadline()));
+    CHECK_FALSE(refuter.check({
+        {x - constant(tiny), Relation::Eq, SatLit::positive(1)},
+        {x, Relation::Neq, SatLit::negative(2)}}, deadline()));
+    conflict = refuter.check({
+        {x - constant(mpq_class(2, 3)), Relation::Eq, SatLit::positive(1)},
+        {x * constant(mpq_class(-3, 7)) + constant(mpq_class(2, 7)),
+            Relation::Neq, SatLit::negative(2)}}, deadline());
+    REQUIRE(conflict);
+    CHECK(conflict->size() == 2);
+}
+
+TEST_CASE("Polynomial linear disequalities follow exact product closure and premise withdrawal") {
+    const auto x = variable(0), y = variable(1), z = variable(2);
+    const SignRefuteConstraint excluded{x * y + x * z, Relation::Neq, SatLit::negative(2)};
+    PolynomialLinearRefuter refuter;
+    const auto conflict = refuter.check({
+        {x, Relation::Eq, SatLit::positive(1)}, excluded}, deadline());
+    REQUIRE(conflict);
+    CHECK(conflict->size() == 2);
+    CHECK(std::find(conflict->begin(), conflict->end(), excluded.reason) != conflict->end());
+    CHECK_FALSE(refuter.check({excluded}, deadline()));
+    CHECK_FALSE(refuter.check({
+        {x - constant(1), Relation::Eq, SatLit::positive(1)},
+        {y - constant(1), Relation::Eq, SatLit::positive(3)},
+        {z, Relation::Eq, SatLit::positive(4)}, excluded}, deadline()));
+    CHECK(refuter.check({
+        {x * y + x * z, Relation::Eq, SatLit::positive(2)}, excluded}, deadline()));
+    CHECK_FALSE(refuter.check({excluded}, deadline()));
+    refuter.reset();
+    CHECK_FALSE(refuter.check({excluded}, deadline()));
+    PolynomialLinearStatistics stats;
+    CHECK_FALSE(refuter.check({excluded}, std::chrono::steady_clock::now(), &stats));
+    CHECK(stats.exhausted);
+}
+
+TEST_CASE("Polynomial linear disequality endpoints preserve exact rational coefficients") {
+    const auto x = variable(0);
+    PolynomialLinearRefuter refuter;
+    for (int numerator = -4; numerator <= 4; ++numerator) {
+        mpq_class value(numerator, 3);
+        value.canonicalize();
+        for (int sign : {-1, 1}) for (int offset = -1; offset <= 1; ++offset) {
+            CAPTURE(numerator);
+            CAPTURE(sign);
+            CAPTURE(offset);
+            const mpq_class scale(sign * 5, 7);
+            const auto excluded = x * constant(scale) - constant(scale * value) + constant(offset);
+            const auto conflict = refuter.check({
+                {x - constant(value), Relation::Eq, SatLit::positive(1)},
+                {excluded, Relation::Neq, SatLit::negative(2)}}, deadline());
+            CHECK(conflict.has_value() == (offset == 0));
+        }
+    }
 }
 
 TEST_CASE("Polynomial linear refutation: Boolean arithmetic closes linear and nonlinear cores") {

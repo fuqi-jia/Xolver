@@ -93,6 +93,8 @@ std::optional<std::vector<SatLit>> PolynomialLinearRefuter::check(
         };
         std::vector<GeneralSimplex::ActiveBound> bounds;
         bounds.reserve(2 * constraints.size());
+        struct Disequality { int variable; mpq_class excluded; SatLit reason; };
+        std::vector<Disequality> disequalities;
         std::unordered_set<uint64_t> activeReasons;
         auto reasonKey = [](SatLit literal) {
             return (static_cast<uint64_t>(literal.var) << 1) | literal.sign;
@@ -106,7 +108,7 @@ std::optional<std::vector<SatLit>> PolynomialLinearRefuter::check(
         bool nonlinear = false;
         for (const auto& constraint : constraints) {
             tick();
-            if (constraint.rel == Relation::Neq) {
+            if (constraint.rel == Relation::Neq && constraint.poly.isConstant()) {
                 if (constraint.poly.isZero()) {
                     ++stats.constraints;
                     return std::vector<SatLit>{constraint.reason};
@@ -179,6 +181,13 @@ std::optional<std::vector<SatLit>> PolynomialLinearRefuter::check(
             }
             ++stats.constraints;
             activeReasons.insert(reasonKey(constraint.reason));
+            if (rel == Relation::Neq) {
+                // Keep the exact definition without imposing either strict
+                // polarity. A candidate value of zero is not a contradiction;
+                // only an explained fixed value can exclude every model.
+                disequalities.push_back({row, endpoint, constraint.reason});
+                continue;
+            }
             const auto internal = label(row, {constraint.reason});
             if (rel == Relation::Eq || rel == Relation::Geq || rel == Relation::Gt)
                 bounds.push_back({row, true, BoundInfo(
@@ -210,8 +219,23 @@ std::optional<std::vector<SatLit>> PolynomialLinearRefuter::check(
             const auto result = simplex_.checkUntil(deadline);
             if (result == GeneralSimplex::Result::Unknown) stats.exhausted = true;
             if (result == GeneralSimplex::Result::Unsat) return liftConflict();
-            if (result != GeneralSimplex::Result::Sat || !nonlinear) return std::nullopt;
+            if (result != GeneralSimplex::Result::Sat || (!nonlinear && disequalities.empty()))
+                return std::nullopt;
             const auto facts = simplex_.sharedFixedValueAnalysis();
+            for (const auto& disequality : disequalities) {
+                tick();
+                const auto value = facts->fixedValue(disequality.variable);
+                if (!value || value->b != 0 || value->a != disequality.excluded) continue;
+                const auto proof = facts->prove(disequality.variable);
+                if (!proof) continue;
+                auto sources = expand(proof->second);
+                if (!sources || std::any_of(sources->begin(), sources->end(), [&](SatLit source) {
+                        return !activeReasons.contains(reasonKey(source));
+                    })) continue;
+                include(*sources, {disequality.reason});
+                return sources;
+            }
+            if (!nonlinear) return std::nullopt;
             bool progress = false;
             for (size_t index = 0; index < active.size(); ++index) {
                 build();
