@@ -12,6 +12,62 @@ bool dyadic(const mpq_class& value) {
 }
 }
 
+std::optional<std::pair<RootBracket, RootBracket>> separateRootBrackets(
+    RootBracket left, RootBracket right,
+    const RationalRootComparison& compareLeft,
+    const RationalRootComparison& compareRight, WorkBudget& work) {
+    work.tick();
+    if (left.lower > left.upper || right.lower > right.upper) return std::nullopt;
+    if (left.upper < right.lower) return std::pair{std::move(left), std::move(right)};
+
+    mpq_class lower = std::min(left.lower, right.lower);
+    mpq_class upper = std::max(left.upper, right.upper);
+    while (lower < upper) {
+        work.tick();
+        const mpq_class middle = (lower + upper) / 2;
+        const auto leftOrder = compareLeft(middle);
+        if (!leftOrder) return std::nullopt;
+        if (*leftOrder <= 0) {
+            // middle <= left root < right root.
+            if (*leftOrder == 0) left = {middle, middle};
+            lower = middle;
+            continue;
+        }
+        const auto rightOrder = compareRight(middle);
+        if (!rightOrder) return std::nullopt;
+        if (*rightOrder >= 0) {
+            // left root < right root <= middle.
+            if (*rightOrder == 0) right = {middle, middle};
+            upper = middle;
+            continue;
+        }
+
+        // left root < middle < right root. The common endpoint is certified;
+        // refine inward until it leaves a nonempty rational sector.
+        left.upper = std::min(left.upper, middle);
+        right.lower = std::max(right.lower, middle);
+        auto refine = [&](RootBracket& bracket, const RationalRootComparison& compare) {
+            work.tick();
+            if (bracket.lower == bracket.upper) return false;
+            const mpq_class point = (bracket.lower + bracket.upper) / 2;
+            const auto order = compare(point);
+            if (!order) return false;
+            if (*order < 0) bracket.lower = point;
+            else if (*order > 0) bracket.upper = point;
+            else bracket = {point, point};
+            return true;
+        };
+        while (left.upper >= right.lower) {
+            const bool refinedLeft = refine(left, compareLeft);
+            if (left.upper < right.lower) break;
+            const bool refinedRight = refine(right, compareRight);
+            if (!refinedLeft && !refinedRight) return std::nullopt;
+        }
+        return std::pair{std::move(left), std::move(right)};
+    }
+    return std::nullopt;
+}
+
 std::optional<RootBracket> compactRootBracket(
     const std::vector<mpz_class>& coefficients, const mpq_class& lower,
     const mpq_class& upper, std::size_t bitBudget, WorkBudget& work) {

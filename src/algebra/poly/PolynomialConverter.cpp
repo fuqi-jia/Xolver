@@ -11,6 +11,20 @@
 
 namespace xolver {
 
+void PolynomialConverter::prepare(const NativeTerms& ir) {
+    const auto identity = ir.expressionIndexIdentity();
+    if (expressionIdentity_ != identity) {
+        memo_.clear();
+        variableSorts_.clear();
+        expressionIdentity_ = identity;
+    }
+}
+
+std::optional<SortKind> PolynomialConverter::variableSort(VarId variable) const {
+    const auto found = variableSorts_.find(variable);
+    return found == variableSorts_.end() ? std::nullopt : found->second;
+}
+
 void PolynomialConverter::charge(size_t amount) {
     if (!budget_) return;
     budget_->tick(amount);
@@ -68,7 +82,7 @@ RationalPolynomial PolynomialConverter::power(RationalPolynomial base, uint32_t 
 
 PolynomialConverter::ConvertedExpr PolynomialConverter::convert(
     ExprId eid, const NativeTerms& ir) {
-    memo_.clear();
+    prepare(ir);
     preCollectIterative(eid, ir);
     auto rpOpt = collectRec(eid, ir);
     if (!rpOpt) return {};
@@ -82,7 +96,7 @@ PolynomialConverter::ConvertedExpr PolynomialConverter::convert(
 
 PolynomialConverter::ConvertedConstraint PolynomialConverter::convertConstraint(
     ExprId lhs, ExprId rhs, Relation rel, const NativeTerms& ir) {
-    memo_.clear();
+    prepare(ir);
     preCollectIterative(lhs, ir);
     preCollectIterative(rhs, ir);
     auto rpLOpt = collectRec(lhs, ir);
@@ -158,6 +172,9 @@ std::optional<RationalPolynomial> PolynomialConverter::collectRec(
         case Kind::Variable: {
             if (auto* s = std::get_if<std::string>(&e.payload.value)) {
                 VarId v = kernel_.getOrCreateVar(*s);
+                const auto sort = ir.sortKind(e.sort);
+                const auto [position, inserted] = variableSorts_.emplace(v, sort);
+                if (!inserted && position->second != sort) position->second = std::nullopt;
                 result = RationalPolynomial::fromVar(v, 1, mpq_class(1));
             }
             break;

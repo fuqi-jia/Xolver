@@ -1,5 +1,6 @@
 #include "base/RuntimeConfig.h"
 #include "search/nra/core/CdcacCore.h"
+#include "search/nra/backend/RootBracket.h"
 #include "search/nra/lazard/LocalProjection.h"
 #include "search/nra/preprocess/NullificationAnalyzer.h"
 #include "search/nra/proof/CellCertificateValidator.h"
@@ -304,120 +305,44 @@ std::optional<RootSet> CdcacCore::mergeRoots(const std::vector<RootSet>& rootSet
         }
     }
 
-    // Refine algebraic intervals so adjacent roots have disjoint isolating intervals.
-    // This ensures sector loops can always construct non-empty rational sectors.
-    for (size_t i = 1; i < merged.size(); ++i) {
-        bool prevAlg = merged[i - 1].isAlgebraic();
-        bool currAlg = merged[i].isAlgebraic();
-        if (!prevAlg && !currAlg) continue; // both rational, already sorted
-
-        if (prevAlg && currAlg) {
-            auto& prev = merged[i - 1].root;
-            auto& curr = merged[i].root;
-            for (int iter = 0; iter < 40; ++iter) {
-                if (prev.upper < curr.lower) break;
-                bool okPrev = algebra_->refineRootInterval(prev);
-                bool okCurr = algebra_->refineRootInterval(curr);
-                if (!okPrev && !okCurr) {
-                    return std::nullopt;
+    // Sorted roots are certified distinct. Separate their brackets with exact
+    // comparisons rather than rejecting a gap after a fixed number of bits.
+    // This also gives rational and algebraic endpoints the same orientation.
+    try {
+        WorkBudget work(0); // Share the caller's solve deadline.
+        auto bracket = [](const RealAlg& root) {
+            return root.isRational()
+                ? nra_backend::RootBracket{root.rational, root.rational}
+                : nra_backend::RootBracket{root.root.lower, root.root.upper};
+        };
+        for (size_t i = 1; i < merged.size(); ++i) {
+            auto& left = merged[i - 1];
+            auto& right = merged[i];
+            if (bracket(left).upper < bracket(right).lower) continue;
+            auto compare = [&](const mpq_class& point, const RealAlg& root) -> std::optional<int> {
+                switch (algebra_->compareRealAlg(RealAlg::fromRational(point), root)) {
+                    case CompareResult::Less: return -1;
+                    case CompareResult::Equal: return 0;
+                    case CompareResult::Greater: return 1;
+                    default: return std::nullopt;
                 }
+            };
+            const auto separated = nra_backend::separateRootBrackets(
+                bracket(left), bracket(right),
+                [&](const mpq_class& point) { return compare(point, left); },
+                [&](const mpq_class& point) { return compare(point, right); }, work);
+            if (!separated) return std::nullopt;
+            if (left.isAlgebraic()) {
+                left.root.lower = separated->first.lower;
+                left.root.upper = separated->first.upper;
             }
-            if (prev.upper >= curr.lower) {
-                return std::nullopt;
-            }
-        } else if (!prevAlg && currAlg) {
-            // prev is rational, curr is algebraic
-            mpq_class q = merged[i - 1].rational;
-            auto& curr = merged[i].root;
-            for (int iter = 0; iter < 40; ++iter) {
-                if (q < curr.lower) break;
-                bool okCurr = algebra_->refineRootInterval(curr);
-                if (!okCurr) break;
-            }
-            if (q >= curr.lower) {
-                // Cannot separate by refinement alone.  Use compareRealAlg
-                // sign-fallback to determine order.
-                RealAlg qAlg = RealAlg::fromRational(q);
-                RealAlg rootAlg = RealAlg::fromAlgebraic(curr);
-                CompareResult c = algebra_->compareRealAlg(qAlg, rootAlg);
-                if (c == CompareResult::Less) {
-                    // q < root, but curr.lower may still equal q.
-                    // Bisect to push curr.lower strictly above q so the sector
-                    // loop can construct a non-empty rational sector.
-                    mpq_class lo = q;
-                    mpq_class hi = curr.upper;
-                    for (int bisect = 0; bisect < 40; ++bisect) {
-                        if (lo >= hi) break;
-                        mpq_class mid = (lo + hi) / 2;
-                        RealAlg midAlg = RealAlg::fromRational(mid);
-                        CompareResult mc = algebra_->compareRealAlg(midAlg, rootAlg);
-                        if (mc == CompareResult::Equal) {
-                            lo = mid;
-                            break;
-                        }
-                        if (mc == CompareResult::Less) {
-                            lo = mid;
-                        } else if (mc == CompareResult::Greater) {
-                            hi = mid;
-                        } else {
-                            break;
-                        }
-                    }
-                    curr.lower = lo;
-                    continue;
-                }
-                if (c == CompareResult::Greater) {
-                    // q > root: inconsistent with insertion sort ordering
-                    return std::nullopt;
-                }
-                // Still Unknown: fail conservatively
-                return std::nullopt;
-            }
-        } else {
-            // prev is algebraic, curr is rational
-            auto& prev = merged[i - 1].root;
-            mpq_class q = merged[i].rational;
-            for (int iter = 0; iter < 40; ++iter) {
-                if (prev.upper < q) break;
-                bool okPrev = algebra_->refineRootInterval(prev);
-                if (!okPrev) break;
-            }
-            if (prev.upper >= q) {
-                // Same fallback as above
-                RealAlg rootAlg = RealAlg::fromAlgebraic(prev);
-                RealAlg qAlg = RealAlg::fromRational(q);
-                CompareResult c = algebra_->compareRealAlg(rootAlg, qAlg);
-                if (c == CompareResult::Less) {
-                    // root < q, but prev.upper may still equal q.
-                    // Bisect to push prev.upper strictly below q.
-                    mpq_class lo = prev.lower;
-                    mpq_class hi = q;
-                    for (int bisect = 0; bisect < 40; ++bisect) {
-                        if (lo >= hi) break;
-                        mpq_class mid = (lo + hi) / 2;
-                        RealAlg midAlg = RealAlg::fromRational(mid);
-                        CompareResult mc = algebra_->compareRealAlg(rootAlg, midAlg);
-                        if (mc == CompareResult::Equal) {
-                            hi = mid;
-                            break;
-                        }
-                        if (mc == CompareResult::Less) {
-                            lo = mid;
-                        } else if (mc == CompareResult::Greater) {
-                            hi = mid;
-                        } else {
-                            break;
-                        }
-                    }
-                    prev.upper = hi;
-                    continue;
-                }
-                if (c == CompareResult::Greater) {
-                    return std::nullopt;
-                }
-                return std::nullopt;
+            if (right.isAlgebraic()) {
+                right.root.lower = separated->second.lower;
+                right.root.upper = separated->second.upper;
             }
         }
+    } catch (const ResourceExhausted&) {
+        return std::nullopt;
     }
 
     return RootSet{std::move(merged)};

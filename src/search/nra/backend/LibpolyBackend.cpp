@@ -296,6 +296,34 @@ static std::optional<poly::AlgebraicNumber> algebraicRootToPolyAlg(
         return std::nullopt;
     }
     if (!bracket) return std::nullopt;
+
+    // A nonpoint bracket can touch a different rational root of the same
+    // defining polynomial. Reconstruct the selected root by its index in
+    // that case; an endpoint root must not replace the interior root.
+    auto endpointIsRoot = [&](const mpq_class& point) {
+        mpq_class value = 0;
+        for (const auto& coefficient : coeffs) value = value * point + coefficient;
+        return value == 0;
+    };
+    if (bracket->lower != bracket->upper &&
+        (endpointIsRoot(bracket->lower) || endpointIsRoot(bracket->upper))) {
+        if (ar.rootIndex < 0 || fwTrips(fwMaxCoeffBits(coeffs), "selected-root-reconstruction"))
+            return std::nullopt;
+        std::vector<poly::Integer> coefficients;
+        coefficients.reserve(coeffs.size());
+        for (auto it = coeffs.rbegin(); it != coeffs.rend(); ++it)
+            coefficients.emplace_back(*it);
+        const poly::UPolynomial polynomial(coefficients);
+        const auto roots = poly::isolate_real_roots(polynomial);
+        if (static_cast<size_t>(ar.rootIndex) >= roots.size()) return std::nullopt;
+        const auto& selected = roots[ar.rootIndex];
+        const poly::Value value(selected);
+        const poly::Value lower(poly::Rational(bracket->lower));
+        const poly::Value upper(poly::Rational(bracket->upper));
+        if (value < lower || upper < value) return std::nullopt;
+        return selected;
+    }
+
     auto loOpt = mpqToDyadicRational(bracket->lower);
     auto hiOpt = mpqToDyadicRational(bracket->upper);
     if (!loOpt || !hiOpt) return std::nullopt;
@@ -993,36 +1021,12 @@ bool LibpolyBackend::validateRootIsolation(UniPolyId p, const RootSet& roots) {
         if (r.isAlgebraic() && r.root.lower > r.root.upper) return false;
     }
 
-    // Check that adjacent roots are strictly ordered. libpoly's root isolation
-    // can return abutting intervals (e.g. [3/4, 1] and [1, 5/4] for the roots
-    // 99/100 and 101/100 of 10000x²−20000x+9999): both intervals are correct
-    // but their endpoints touch. Treating that as "invalid" loses precision
-    // tests. We instead try to refine each algebraic root's bracketing
-    // interval until the pair is strictly disjoint, and only fail when
-    // refinement bottoms out without separating them.
-    auto pointOf = [](const RealAlg& r, bool lower) -> mpq_class {
-        if (r.isRational()) return r.rational;
-        return lower ? r.root.lower : r.root.upper;
-    };
-    constexpr int kMaxRefineSteps = 40;
-    auto& mutRoots = const_cast<std::vector<RealAlg>&>(roots.roots);
-    for (size_t i = 1; i < mutRoots.size(); ++i) {
-        auto& prev = mutRoots[i - 1];
-        auto& curr = mutRoots[i];
-        mpq_class prevHi = pointOf(prev, /*lower=*/false);
-        mpq_class currLo = pointOf(curr, /*lower=*/true);
-        int steps = 0;
-        while (!(prevHi < currLo) && steps < kMaxRefineSteps) {
-            bool advanced = false;
-            if (prev.isAlgebraic() && refineRootInterval(prev.root)) advanced = true;
-            if (curr.isAlgebraic() && refineRootInterval(curr.root)) advanced = true;
-            if (!advanced) break;
-            prevHi = pointOf(prev, false);
-            currLo = pointOf(curr, true);
-            ++steps;
-        }
-        if (!(prevHi < currLo)) return false;
-    }
+    // Isolation intervals may overlap even for distinct, correctly ordered
+    // roots. Validate their exact order; a read-only check must neither impose
+    // a precision cutoff nor rewrite its const input's certified intervals.
+    for (size_t i = 1; i < roots.roots.size(); ++i)
+        if (compareRealAlg(roots.roots[i - 1], roots.roots[i]) != CompareResult::Less)
+            return false;
 
     return true;
 }
@@ -1464,7 +1468,12 @@ CompareResult LibpolyBackend::compareRealAlg(const RealAlg& a, const RealAlg& b)
         if (b.root.definingPoly != NullUniPolyId) {
             const auto& fCoeffs = getUni(b.root.definingPoly);
             mpq_class val = evalUniAtRational(fCoeffs, a.rational);
-            if (val == 0) return CompareResult::Equal;
+            if (val == 0) {
+                if (b.root.lower == b.root.upper ||
+                    (b.root.lower < a.rational && a.rational < b.root.upper))
+                    return CompareResult::Equal;
+                return compareRealAlgViaLibpolyGuarded(a, b);
+            }
 
             // P2a-sign-fallback: when bisection refinement cannot move the bound
             // (e.g. lower bound is exactly a rational that is not the root),
@@ -1496,7 +1505,12 @@ CompareResult LibpolyBackend::compareRealAlg(const RealAlg& a, const RealAlg& b)
         if (a.root.definingPoly != NullUniPolyId) {
             const auto& fCoeffs = getUni(a.root.definingPoly);
             mpq_class val = evalUniAtRational(fCoeffs, b.rational);
-            if (val == 0) return CompareResult::Equal;
+            if (val == 0) {
+                if (a.root.lower == a.root.upper ||
+                    (a.root.lower < b.rational && b.rational < a.root.upper))
+                    return CompareResult::Equal;
+                return compareRealAlgViaLibpolyGuarded(a, b);
+            }
 
             // P2a-sign-fallback: same reasoning as above.
             mpq_class valLo = evalUniAtRational(fCoeffs, a.root.lower);

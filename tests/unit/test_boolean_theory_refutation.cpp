@@ -157,6 +157,45 @@ TEST_CASE("Polynomial refutation: unsupported products remain open and Boolean e
     CHECK(refutePolynomialBoolean(terms, {negative, equivalence}, limits));
 }
 
+TEST_CASE("Polynomial refutation: large contexts retain exact linear reasoning over monomials") {
+    for (const auto sort : {SortKind::Int, SortKind::Real}) {
+        for (const bool feasible : {false, true}) {
+            CAPTURE(sort);
+            CAPTURE(feasible);
+            NativeTerms terms;
+            terms.registerSort(0, sort);
+            terms.registerSort(1, SortKind::Bool);
+            terms.setBoolSortId(1);
+            const auto zero = terms.add({Kind::ConstInt, 0, {}, Payload(int64_t(0))});
+            const auto one = terms.add({Kind::ConstInt, 0, {}, Payload(int64_t(1))});
+            const auto three = terms.add({Kind::ConstInt, 0, {}, Payload(int64_t(3))});
+            const auto x = terms.add({Kind::Variable, 0, {}, Payload(std::string("x"))});
+            const auto y = terms.add({Kind::Variable, 0, {}, Payload(std::string("y"))});
+            const auto product = terms.add({Kind::Mul, 0, {x, y}, {}});
+            const auto difference = terms.add({Kind::Sub, 0, {x, y}, {}});
+            const auto sum = terms.add({Kind::Add, 0, {product, difference}, {}});
+            std::vector<ExprId> roots;
+            for (int i = 0; i < 160; ++i) {
+                const auto variable = terms.add({Kind::Variable, 0, {},
+                    Payload("padding_" + std::to_string(i))});
+                roots.push_back(terms.add({Kind::Geq, 1, {variable, zero}, {}}));
+            }
+            roots.push_back(terms.add({Kind::Geq, 1, {product, one}, {}}));
+            roots.push_back(terms.add({Kind::Geq, 1, {difference, zero}, {}}));
+            roots.push_back(terms.add({Kind::Leq, 1, {sum, feasible ? three : zero}, {}}));
+            BooleanRefutationLimits limits;
+            limits.deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+            PolynomialBooleanStatistics stats;
+            CHECK(refutePolynomialBoolean(terms, roots, limits, &stats) == !feasible);
+            CHECK(stats.largestContext == roots.size());
+            CHECK(stats.theoryCalls > 0);
+            CHECK(stats.linearCalls > 0);
+            // For the open variant, x=y=1 and every padding variable=0 is
+            // a real and integer witness. An open relaxation cannot refute it.
+        }
+    }
+}
+
 TEST_CASE("Polynomial refutation: inferred integer endpoints respect native variable sorts") {
     for (unsigned integerMask : {0u, 1u, 4u, 7u}) {
         CAPTURE(integerMask);
@@ -243,6 +282,72 @@ TEST_CASE("Polynomial conversion: bounded expansion and unrepresentable powers s
         auto count = terms.add(TermExpr{Kind::ConstInt, 0, {}, Payload(exponent)});
         auto huge = terms.add(TermExpr{Kind::Pow, 0, {x, count}, {}});
         CHECK_FALSE(ordinary.convert(huge, terms).ok());
+    }
+}
+
+TEST_CASE("Polynomial refutation: exhausted conversion retains completed conflicts without accepting feasibility") {
+    for (const auto sort : {SortKind::Int, SortKind::Real}) {
+        for (const bool feasible : {false, true}) {
+            CAPTURE(sort);
+            CAPTURE(feasible);
+            NativeTerms terms;
+            terms.registerSort(0, sort);
+            terms.registerSort(1, SortKind::Bool);
+            terms.setBoolSortId(1);
+            const auto x = terms.add({Kind::Variable, 0, {}, Payload(std::string("x"))});
+            const auto z = terms.add({Kind::Variable, 0, {}, Payload(std::string("z"))});
+            const auto zero = terms.add({Kind::ConstInt, 0, {}, Payload(int64_t(0))});
+            const auto one = terms.add({Kind::ConstInt, 0, {}, Payload(int64_t(1))});
+            const auto two = terms.add({Kind::ConstInt, 0, {}, Payload(int64_t(2))});
+            const auto exponent = terms.add({Kind::ConstInt, 0, {}, Payload(int64_t(1024))});
+            const auto base = terms.add({Kind::Add, 0, {z, one}, {}});
+            const auto expansion = terms.add({Kind::Pow, 0, {base, exponent}, {}});
+            const auto lower = terms.add({Kind::Gt, 1, {x, zero}, {}});
+            const auto upper = terms.add({Kind::Lt, 1, {x, feasible ? two : zero}, {}});
+            const auto expensive = terms.add({Kind::Geq, 1, {expansion, zero}, {}});
+            BooleanRefutationLimits limits;
+            limits.deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+            PolynomialBooleanStatistics stats;
+            std::vector<PolynomialTheoryClause> learned;
+            CHECK(refutePolynomialBoolean(terms, {lower, upper, expensive}, limits, &stats,
+                [&](const PolynomialTheoryClause& clause) { learned.push_back(clause); }) == !feasible);
+            CHECK(stats.exhausted);
+            CHECK(stats.convertedAtoms == 2);
+            CHECK(stats.theoryCalls > 0);
+            if (!feasible) CHECK_FALSE(learned.empty());
+            for (const auto& clause : learned)
+                for (const auto& [expression, positive] : clause) {
+                    (void)positive;
+                    CHECK((expression == lower || expression == upper));
+                }
+            // The open variant has the exact witness x=1,z=0 in both sorts.
+            // No completed constraint may invent a value for the omitted atom.
+        }
+    }
+}
+
+TEST_CASE("Polynomial refutation: declaration metadata avoids rescanning canceled expression DAGs") {
+    for (const auto sort : {SortKind::Int, SortKind::Real}) {
+        NativeTerms terms;
+        terms.registerSort(0, sort);
+        terms.registerSort(1, SortKind::Bool);
+        terms.setBoolSortId(1);
+        const auto x = terms.add({Kind::Variable, 0, {}, Payload(std::string("x"))});
+        const auto z = terms.add({Kind::Variable, 0, {}, Payload(std::string("z"))});
+        auto canceled = terms.add({Kind::Sub, 0, {z, z}, {}});
+        const auto zero = terms.add({Kind::ConstInt, 0, {}, Payload(int64_t(0))});
+        for (int i = 0; i < 24000; ++i)
+            canceled = terms.add({Kind::Add, 0, {canceled, zero}, {}});
+        const auto value = terms.add({Kind::Add, 0, {canceled, x}, {}});
+        const auto positive = terms.add({Kind::Gt, 1, {value, zero}, {}});
+        const auto negative = terms.add({Kind::Lt, 1, {x, zero}, {}});
+        BooleanRefutationLimits limits;
+        limits.deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        PolynomialBooleanStatistics stats;
+        CHECK(refutePolynomialBoolean(terms, {positive, negative}, limits, &stats));
+        CHECK(stats.convertedAtoms == 2);
+        CHECK(stats.theoryCalls > 0);
+        CHECK_FALSE(stats.exhausted);
     }
 }
 

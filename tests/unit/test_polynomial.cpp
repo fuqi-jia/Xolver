@@ -3,6 +3,7 @@
 #include "algebra/poly/PolynomialKernel.h"
 #include "algebra/poly/PolynomialConverter.h"
 #include "algebra/poly/RationalPolynomial.h"
+#include "base/WorkBudget.h"
 #include "ir/NativeTerms.h"
 
 using namespace xolver;
@@ -205,6 +206,111 @@ TEST_CASE("RationalPolynomial: toPrimitiveInteger negative coefficients") {
 // ============================================================================
 // PolynomialConverter
 // ============================================================================
+
+TEST_CASE("PolynomialConverter: shared expression DAGs reuse exact conversion across atoms") {
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Real);
+    ir.registerSort(1, SortKind::Int);
+    ir.registerSort(2, SortKind::Bool);
+    ir.setBoolSortId(2);
+    const auto x = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("shared_x"))});
+    const auto one = ir.add(TermExpr{Kind::ConstInt, 1, {}, Payload(int64_t(1))});
+    const auto half = ir.add(TermExpr{Kind::ConstReal, 0, {}, Payload(std::string("1/2"))});
+    auto shared = x;
+    for (int i = 0; i < 256; ++i)
+        shared = ir.add(TermExpr{Kind::Add, 0, {shared, half}, {}});
+
+    auto kernel = createPolynomialKernel();
+    WorkBudget work(0);
+    PolynomialConverter converter(*kernel, &work);
+    const auto first = converter.convertConstraint(shared, one, Relation::Geq, ir);
+    REQUIRE(first.isConstraint());
+    const auto firstWork = work.used();
+    const auto second = converter.convertConstraint(shared, one, Relation::Lt, ir);
+    REQUIRE(second.isConstraint());
+    CHECK(kernel->eq(first.diff, second.diff));
+    CHECK(work.used() - firstWork < firstWork / 8);
+    const auto value = kernel->evalIntegerVarId(second.diff,
+        {{kernel->getOrCreateVar("shared_x"), -127}});
+    REQUIRE(value.has_value());
+    CHECK(*value == 0);
+
+    // New roots reuse the unchanged shared children; popping assertions does
+    // not change the meaning of an allocated arithmetic term.
+    ir.pushScope();
+    ir.addAssertion(ir.add(TermExpr{Kind::Eq, ir.boolSortId(), {x, one}, {}}));
+    ir.popScope();
+    const auto appended = ir.add(TermExpr{Kind::Mul, 0, {half, shared}, {}});
+    const auto converted = converter.convert(appended, ir);
+    REQUIRE(converted.ok());
+    CHECK(converted.scale == mpq_class(1, 2));
+    const auto appendedValue = kernel->evalIntegerVarId(converted.poly,
+        {{kernel->getOrCreateVar("shared_x"), 2}});
+    REQUIRE(appendedValue.has_value());
+    CHECK(*appendedValue == 130);
+    wall::DeadlineScope expired(std::chrono::steady_clock::now() - std::chrono::milliseconds(1));
+    CHECK_THROWS_AS(converter.convert(shared, ir), ResourceExhausted);
+}
+
+TEST_CASE("PolynomialConverter: expression index replacement invalidates cached numeric IDs") {
+    auto kernel = createPolynomialKernel();
+    PolynomialConverter converter(*kernel);
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Int);
+    const auto variable = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("old_x"))});
+    REQUIRE(converter.convert(variable, ir).ok());
+
+    NativeTerms replacement;
+    replacement.registerSort(0, SortKind::Int);
+    const auto constant = replacement.add(TermExpr{Kind::ConstInt, 0, {}, Payload(int64_t(7))});
+    REQUIRE(variable == constant);
+    ir = std::move(replacement);
+    const auto result = converter.convert(constant, ir);
+    REQUIRE(result.ok());
+    REQUIRE(kernel->isConstant(result.poly));
+    CHECK(result.scale * kernel->toConstant(result.poly) == 7);
+
+    NativeTerms other;
+    other.registerSort(0, SortKind::Int);
+    const auto otherConstant = other.add(TermExpr{Kind::ConstInt, 0, {}, Payload(int64_t(-11))});
+    REQUIRE(otherConstant == constant);
+    const auto otherResult = converter.convert(otherConstant, other);
+    REQUIRE(otherResult.ok());
+    REQUIRE(kernel->isConstant(otherResult.poly));
+    CHECK(otherResult.scale * kernel->toConstant(otherResult.poly) == -11);
+    const auto restored = converter.convert(constant, ir);
+    REQUIRE(restored.ok());
+    CHECK(restored.scale * kernel->toConstant(restored.poly) == 7);
+}
+
+TEST_CASE("PolynomialConverter: observed declaration sorts follow index lifetime and remain conservative") {
+    auto kernel = createPolynomialKernel();
+    PolynomialConverter converter(*kernel);
+    NativeTerms terms;
+    terms.registerSort(0, SortKind::Int);
+    terms.registerSort(1, SortKind::Real);
+    const auto x = terms.add({Kind::Variable, 0, {}, Payload(std::string("x"))});
+    const auto y = terms.add({Kind::Variable, 1, {}, Payload(std::string("y"))});
+    REQUIRE(converter.convert(x, terms).ok());
+    REQUIRE(converter.convert(y, terms).ok());
+    const auto xv = kernel->getOrCreateVar("x"), yv = kernel->getOrCreateVar("y");
+    CHECK(converter.variableSort(xv) == SortKind::Int);
+    CHECK(converter.variableSort(yv) == SortKind::Real);
+    CHECK_FALSE(converter.variableSort(kernel->getOrCreateVar("unobserved")));
+    const auto alias = terms.add({Kind::Variable, 1, {}, Payload(std::string("x"))});
+    REQUIRE(converter.convert(alias, terms).ok());
+    CHECK_FALSE(converter.variableSort(xv));
+    REQUIRE(converter.convert(x, terms).ok());
+    CHECK_FALSE(converter.variableSort(xv));
+
+    NativeTerms replacement;
+    replacement.registerSort(0, SortKind::Real);
+    const auto realX = replacement.add({Kind::Variable, 0, {}, Payload(std::string("x"))});
+    terms = std::move(replacement);
+    REQUIRE(converter.convert(realX, terms).ok());
+    CHECK(converter.variableSort(xv) == SortKind::Real);
+    CHECK_FALSE(converter.variableSort(yv));
+}
 
 TEST_CASE("PolynomialConverter: linear expression") {
     NativeTerms ir;

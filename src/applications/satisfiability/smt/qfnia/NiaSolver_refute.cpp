@@ -3,6 +3,7 @@
 #include "search/refute/SignDefinitenessRefuter.h"
 #include "search/refute/PolynomialSignClosure.h"
 #include "search/refute/PolynomialConeRefutation.h"
+#include "search/refute/PolynomialLinearRefutation.h"
 #include "applications/satisfiability/smt/qfnia/NiaSolver.h"
 #include <algorithm>
 #include "search/dl/DifferenceGraph.h"
@@ -45,6 +46,63 @@
 #include <unordered_set>
 #include <cstdlib>
 namespace xolver {
+
+std::optional<TheoryCheckResult> NiaSolver::stageLinearRelaxation(
+    TheoryLemmaStorage&, TheoryEffort) {
+    std::vector<SignRefuteConstraint> constraints;
+    constraints.reserve(normalized_.size());
+    for (const auto& source : normalized_) {
+        if (source.poly == NullPoly) continue;
+        auto polynomial = RationalPolynomial::fromPolyId(source.poly, *kernel_);
+        if (polynomial)
+            constraints.push_back({std::move(*polynomial), source.rel, source.reason});
+    }
+    if (constraints.empty()) return std::nullopt;
+    if (!linearRefuter_) linearRefuter_ = std::make_unique<PolynomialLinearRefuter>(0);
+
+    // Independent monomial values weaken both integer and real constraints.
+    // The shared refuter replaces explained bounds on every check, retaining
+    // only unconditional definitions across branches.
+    PolynomialLinearStatistics statistics;
+    const auto started = std::chrono::steady_clock::now();
+    auto conflict = linearRefuter_->check(constraints, wall::deadline(), &statistics);
+    bool accepted = false;
+    if (!conflict && !statistics.exhausted) {
+        WorkBudget work;
+        if (auto candidate = linearRefuter_->projectCandidate(constraints, work)) {
+            IntegerModel point;
+            bool integral = true;
+            for (const auto& [variable, value] : *candidate) {
+                if (value.get_den() != 1) { integral = false; break; }
+                point.emplace(std::string(kernel_->varName(variable)), value.get_num());
+            }
+            // A feasible relaxation can violate products or integrality.
+            // Check the complete normalized context, including interfaces and
+            // any source omitted from the refutation-only overapproximation.
+            accepted = integral && validator_.validate(point, normalized_) ==
+                IntegerModelValidator::Result::Valid;
+            if (accepted) currentModel_ = std::move(point);
+        }
+    }
+    const auto profile = config::read<config::ReadKind::ProfilePath>(
+        "ARITH_STAGE_PROF", "/tmp/xolver_stageprof.txt");
+    if (!profile.empty()) {
+        std::ofstream out(profile.string() + ".integer-linear-relaxation.log", std::ios::app);
+        out << "constraints=" << statistics.constraints << " variables=" << statistics.variables
+            << " new_rows=" << statistics.newRows << " reused_rows=" << statistics.reusedRows
+            << " retained_rows=" << statistics.retainedRows << " exhausted=" << statistics.exhausted
+            << " product_facts=" << statistics.productFacts
+            << " reused_products=" << statistics.reusedProductRows
+            << " closure_checks=" << statistics.closureChecks
+            << " conflict=" << bool(conflict) << " accepted=" << accepted << " us="
+            << std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - started).count() << '\n';
+    }
+    if (conflict)
+        return TheoryCheckResult::mkConflict(TheoryConflict{std::move(*conflict)});
+    if (accepted) return TheoryCheckResult::consistent();
+    return std::nullopt;
+}
 
 // NOTE: This translation unit was split out of NiaSolver.cpp for readability.
 // It compiles into the same xolver_core target and shares the class's

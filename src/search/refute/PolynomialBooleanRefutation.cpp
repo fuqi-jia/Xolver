@@ -50,10 +50,16 @@ bool refutePolynomialBoolean(const NativeTerms& terms, const std::vector<ExprId>
 #else
     try {
         WorkBudget work(100000);
+        WorkBudget control(0);
         auto tick = [&] {
             work.tick();
             if (std::chrono::steady_clock::now() >= limits.deadline)
                 throw ResourceExhausted("Boolean polynomial refutation allocation exhausted");
+        };
+        auto tickControl = [&] {
+            control.tick();
+            if (std::chrono::steady_clock::now() >= limits.deadline)
+                throw ResourceExhausted("Boolean polynomial refutation deadline exhausted");
         };
         auto sat = createSatSolver();
         Atomizer atomizer(*sat);
@@ -66,61 +72,53 @@ bool refutePolynomialBoolean(const NativeTerms& terms, const std::vector<ExprId>
         std::unordered_map<SatVar, SignRefuteConstraint> polynomials;
         std::unordered_map<SatVar, ExprId> atomExpressions;
         std::unordered_set<SatVar> integerAtoms;
-        std::unordered_map<ExprId, bool> integerTerms;
-        std::unordered_set<VarId> integerVariables, realVariables;
-        auto integerTerm = [&](ExprId root) {
-            std::vector<std::pair<ExprId, bool>> pending{{root, false}};
-            while (!pending.empty()) {
+        std::vector<SatVar> atomOrder;
+        try {
+            for (const auto& atom : atomizer.atoms()) {
                 tick();
-                const auto [id, ready] = pending.back();
-                pending.pop_back();
-                if (integerTerms.contains(id)) continue;
-                const auto node = terms.get(id);
-                if (!ready) {
-                    pending.emplace_back(id, true);
-                    for (auto child : node.children)
-                        if (!integerTerms.contains(child)) pending.emplace_back(child, false);
-                } else {
-                    bool integral = node.kind != Kind::UFApply && node.kind != Kind::BoundVariable;
-                    if (node.kind == Kind::Variable) {
-                        integral = terms.sortKind(node.sort) == SortKind::Int;
-                        const auto sort = terms.sortKind(node.sort);
-                        if (sort == SortKind::Int || sort == SortKind::Real)
-                            if (const auto* name = std::get_if<std::string>(&node.payload.value)) {
-                                const auto variable = kernel->getOrCreateVar(*name);
-                                (integral ? integerVariables : realVariables).insert(variable);
-                            }
-                    }
-                    for (auto child : node.children) integral &= integerTerms.at(child);
-                    integerTerms.emplace(id, integral);
+                const auto node = terms.get(atom.expr);
+                if (!node.isAtom() || node.children.size() != 2) continue;
+                const auto rel = relation(node.kind);
+                const auto converted = converter.convertConstraint(node.children[0], node.children[1], rel, terms);
+                if (converted.status == PolyConstraintStatus::Tautology)
+                    sat->addTheoryClause({SatLit::positive(atom.var)});
+                else if (converted.status == PolyConstraintStatus::Conflict)
+                    sat->addTheoryClause({SatLit::negative(atom.var)});
+                else if (converted.isConstraint()) {
+                    auto polynomial = RationalPolynomial::fromPolyId(converted.diff, *kernel);
+                    if (!polynomial) continue;
+                    polynomials.emplace(atom.var, SignRefuteConstraint{std::move(*polynomial), rel, {}});
+                    atomExpressions.emplace(atom.var, atom.expr);
+                    atomOrder.push_back(atom.var);
                 }
             }
-            return integerTerms.at(root);
-        };
-        std::vector<SatVar> atomOrder;
-        for (const auto& atom : atomizer.atoms()) {
-            tick();
-            const auto node = terms.get(atom.expr);
-            if (!node.isAtom() || node.children.size() != 2) continue;
-            const auto rel = relation(node.kind);
-            const auto converted = converter.convertConstraint(node.children[0], node.children[1], rel, terms);
-            if (converted.status == PolyConstraintStatus::Tautology)
-                sat->addTheoryClause({SatLit::positive(atom.var)});
-            else if (converted.status == PolyConstraintStatus::Conflict)
-                sat->addTheoryClause({SatLit::negative(atom.var)});
-            else if (converted.isConstraint()) {
-                auto polynomial = RationalPolynomial::fromPolyId(converted.diff, *kernel);
-                if (!polynomial) continue;
-                polynomials.emplace(atom.var, SignRefuteConstraint{std::move(*polynomial), rel, {}});
-                atomExpressions.emplace(atom.var, atom.expr);
-                if (integerTerm(atom.expr)) integerAtoms.insert(atom.var);
-                atomOrder.push_back(atom.var);
-            }
+        } catch (const ResourceExhausted&) {
+            // The complete Boolean skeleton remains an overapproximation when
+            // the unfinished arithmetic atoms are left uninterpreted. Retain
+            // completed exact facts, without retrying the exhausted expansion
+            // or accepting any model from this weaker obligation.
+            stats.exhausted = true;
+            tickControl();
         }
         stats.convertedAtoms = polynomials.size();
+        // Conversion already visits declaration leaves. Classify the variables
+        // that survive exact cancellation, without walking the source DAG a
+        // second time. Delay classification until all observed sort conflicts
+        // are known; uncertain declarations never justify integer reasoning.
+        std::unordered_set<VarId> integerVariables;
+        for (const auto atom : atomOrder) {
+            bool integral = true;
+            for (const auto variable : polynomials.at(atom).poly.variables()) {
+                tickControl();
+                const bool integer = converter.variableSort(variable) == SortKind::Int;
+                integral &= integer;
+                if (integer) integerVariables.insert(variable);
+            }
+            if (integral) integerAtoms.insert(atom);
+        }
         std::vector<VarId> integerDomain;
         for (const auto variable : integerVariables)
-            if (!realVariables.contains(variable)) integerDomain.push_back(variable);
+            integerDomain.push_back(variable);
         auto select = [&](const SatSolver& model) {
             std::vector<SatLit> selected;
             selected.reserve(atomOrder.size());
@@ -128,7 +126,7 @@ bool refutePolynomialBoolean(const NativeTerms& terms, const std::vector<ExprId>
             // may omit useful disequalities on alternative branches; their
             // actual model values are valid premises for explained learning.
             for (auto variable : atomOrder) {
-                tick();
+                tickControl();
                 selected.emplace_back(variable, model.value(variable));
             }
             return selected;
@@ -138,9 +136,12 @@ bool refutePolynomialBoolean(const NativeTerms& terms, const std::vector<ExprId>
         // the refuter retains its independent construction safety bound.
         PolynomialLinearRefuter linearRefuter(0);
         auto oracle = [&](std::span<const SatLit> selected) -> std::optional<std::vector<SatLit>> {
-            tick();
+            tickControl();
             stats.largestContext = std::max(stats.largestContext, selected.size());
-            if (selected.empty() || selected.size() > 128) return std::nullopt;
+            if (selected.empty()) return std::nullopt;
+            // The exact linear relaxation accepts larger contexts. Each
+            // specialized refuter owns its construction limits; a nonlinear
+            // closure limit must not suppress the other supported reasoning.
             std::vector<SignRefuteConstraint> constraints;
             std::vector<SignRefuteConstraint> integers;
             for (auto literal : selected) {
@@ -208,7 +209,7 @@ bool refutePolynomialBoolean(const NativeTerms& terms, const std::vector<ExprId>
             consume(translated);
         };
         stats.boolean = refuteBooleanTheory(*sat, select, oracle, limits, publish);
-        stats.exhausted = stats.boolean.exhausted;
+        stats.exhausted |= stats.boolean.exhausted;
         return stats.boolean.refuted;
     } catch (const ResourceExhausted&) {
         stats.exhausted = true;

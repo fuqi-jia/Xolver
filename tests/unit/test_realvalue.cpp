@@ -199,6 +199,52 @@ TEST_CASE("RealValue: toSmtLib2 algebraic rational-singleton falls back to Real 
     CHECK(v.toSmtLib2() == "5.0");
 }
 
+TEST_CASE("RealValue: model endpoint refinement excludes distinct roots and keeps stored intervals") {
+    for (const bool negative : {false, true}) {
+        const mpq_class originalLower = negative ? mpq_class(-1, 4) : mpq_class(0);
+        const mpq_class originalUpper = negative ? mpq_class(0) : mpq_class(1, 4);
+        const auto value = RealValue::fromAlgebraic(
+            AlgebraicNumber{{0, 1, 0, -128}, originalLower, originalUpper, true, true});
+        const mpq_class lower = negative ? mpq_class(-1, 8) : mpq_class(1, 16);
+        const mpq_class upper = negative ? mpq_class(-1, 16) : mpq_class(1, 8);
+        CHECK(RealValue::fromMpq(lower) < value);
+        CHECK(value < RealValue::fromMpq(upper));
+        CHECK(lower - 128 * lower * lower * lower != 0);
+        CHECK(upper - 128 * upper * upper * upper != 0);
+        const std::string expected = negative
+            ? "(root-of-with-interval (coeffs 0 1 0 (- 128)) (/ (- 1.0) 8.0) (/ (- 1.0) 16.0))"
+            : "(root-of-with-interval (coeffs 0 1 0 (- 128)) (/ 1.0 16.0) (/ 1.0 8.0))";
+        CHECK(value.toSmtLib2() == expected);
+        CHECK(value.asAlgebraic().lower == originalLower);
+        CHECK(value.asAlgebraic().upper == originalUpper);
+        CHECK(value.asAlgebraic().lowerOpen);
+        CHECK(value.asAlgebraic().upperOpen);
+    }
+}
+
+TEST_CASE("RealValue: model endpoints that are selected rational roots emit scalars") {
+    for (const int root : {0, 1}) {
+        const mpq_class lower = root == 0 ? mpq_class(0) : mpq_class(1, 2);
+        const mpq_class upper = root == 0 ? mpq_class(1, 2) : mpq_class(1);
+        const auto value = RealValue::fromAlgebraic(
+            AlgebraicNumber{{0, -1, 1}, lower, upper, root != 0, root == 0});
+        CHECK(value == RealValue::fromInt(root));
+        CHECK(value.toSmtLib2() == (root == 0 ? "0.0" : "1.0"));
+        CHECK(value.isAlgebraic());
+        CHECK(value.asAlgebraic().lower == lower);
+        CHECK(value.asAlgebraic().upper == upper);
+    }
+}
+
+TEST_CASE("RealValue: model endpoint serialization rejects ambiguous closed intervals") {
+    const auto ambiguous = RealValue::fromAlgebraic(
+        AlgebraicNumber{{0, 1, 0, -128}, 0, mpq_class(1, 4), false, false});
+    CHECK_THROWS_AS(ambiguous.toSmtLib2(), std::domain_error);
+    const auto zeroPolynomial = RealValue::fromAlgebraic(
+        AlgebraicNumber{{0, 0, 0}, 0, 1, true, true});
+    CHECK_THROWS_AS(zeroPolynomial.toSmtLib2(), std::domain_error);
+}
+
 TEST_CASE("ExtendedRealValue: infinities order correctly") {
     ExtendedRealValue ninf = ExtendedRealValue::negInf();
     ExtendedRealValue pinf = ExtendedRealValue::posInf();

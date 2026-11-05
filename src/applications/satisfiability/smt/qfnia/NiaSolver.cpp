@@ -5,6 +5,7 @@
 #include "search/dl/DifferenceGraph.h"
 #include "search/dl/BellmanFord.h"
 #include "search/arith/Reasoner.h"
+#include "search/refute/PolynomialLinearRefutation.h"
 #include <random>
 #include "search/nia/search/NiaLinearizationAdapter.h"
 #include "search/nia/search/NiaIcpAdapter.h"
@@ -129,6 +130,7 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // normalized constraint is linear, validates any integer witness exactly,
     // and otherwise leaves the obligation to the remaining NIA stages.
     addFull("nia.linear-decide", &NiaSolver::stageLinearDecide);
+    addFull("nia.linear-relaxation", &NiaSolver::stageLinearRelaxation);
     add("nia.presolve", &NiaSolver::stagePresolveFixpoint);
     addFull("nia.sign-refute", &NiaSolver::stageSignRefute);
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
@@ -268,6 +270,7 @@ void NiaSolver::onReset() {
     active_.clear();
     trail_.clear();
     normalized_.clear();
+    if (linearRefuter_) linearRefuter_->reset();
     domains_.reset();
     activeSet_.reset();
     pendingConflict_.reset();

@@ -1,6 +1,8 @@
 #include "base/RealValue.h"
 #include "base/RealAlgebraicOps.h"
+#include "base/WorkBudget.h"
 
+#include <algorithm>
 #include <cassert>
 #include <cctype>
 #include <sstream>
@@ -230,13 +232,6 @@ std::string rationalToRealModelValue(const mpq_class& in) {
            q.get_den().get_str() + ".0)";
 }
 
-// Content (GCD of |coefficients|) — used only by the debug validity check
-// below, so it has no caller under NDEBUG (Release): mark maybe_unused.
-[[maybe_unused]] mpz_class coeffContent(const std::vector<mpz_class>& coeffs) {
-    mpz_class g = 0;
-    for (const auto& c : coeffs) mpz_gcd(g.get_mpz_t(), g.get_mpz_t(), c.get_mpz_t());
-    return g;
-}
 }  // namespace
 
 std::string RealValue::toSmtLib2() const {
@@ -257,24 +252,52 @@ std::string RealValue::toSmtLib2() const {
         return rationalToRealModelValue(a.lower);
     }
 
+    // The model syntax has no endpoint-openness flags. Preserve the selected
+    // value while removing other polynomial roots from its interval boundary.
+    if (a.lower >= a.upper || std::all_of(a.coefficients.begin(), a.coefficients.end(),
+            [](const mpz_class& coefficient) { return coefficient == 0; }))
+        throw std::domain_error("RealValue: model requires a nonzero polynomial and a nonempty isolating interval");
+    mpq_class lower = a.lower, upper = a.upper;
+    auto endpointIsRoot = [&](const mpq_class& point) {
+        mpq_class value = 0;
+        for (auto it = a.coefficients.rbegin(); it != a.coefficients.rend(); ++it)
+            value = value * point + *it;
+        return value == 0;
+    };
+    bool lowerRoot = endpointIsRoot(lower), upperRoot = endpointIsRoot(upper);
+    if (lowerRoot && compare(RealValue::fromMpq(lower)) == 0)
+        return rationalToRealModelValue(lower);
+    if (upperRoot && compare(RealValue::fromMpq(upper)) == 0)
+        return rationalToRealModelValue(upper);
+    WorkBudget work(0);
+    while (lowerRoot || upperRoot) {
+        work.tick();
+        const mpq_class middle = (lower + upper) / 2;
+        const int order = compare(RealValue::fromMpq(middle));
+        if (order == 0) return rationalToRealModelValue(middle);
+        if (order < 0) {
+            upper = middle;
+            upperRoot = endpointIsRoot(upper);
+        } else {
+            lower = middle;
+            lowerRoot = endpointIsRoot(lower);
+        }
+    }
+
     // SMT-COMP 2026 Model-Validation form:
     //   (root-of-with-interval (coeffs c0 c1 ... cn) min max)
     // integer coefficients ascending (constant first); the isolating interval
-    // endpoints are bare Real-sort model values.  Canonical-form invariants are
-    // asserted in debug builds (compiled out under NDEBUG).
+    // endpoints are bare Real-sort model values. Coefficients retain the
+    // supplied polynomial; scalar content and leading sign do not change roots.
     assert(!a.coefficients.empty() && a.coefficients.back() != 0 &&
            "algebraic: leading coefficient must be nonzero");
-    assert(a.coefficients.back() > 0 &&
-           "algebraic: leading coefficient must be positive (canonical form)");
-    assert(coeffContent(a.coefficients) == 1 &&
-           "algebraic: coefficients must be coprime (canonical form)");
-    assert(a.lower < a.upper && "algebraic: isolation interval must be non-empty");
+    assert(lower < upper && "algebraic: isolation interval must be non-empty");
 
     std::ostringstream os;
     os << "(root-of-with-interval (coeffs";
     for (const auto& c : a.coefficients) os << " " << intCoeff(c);
-    os << ") " << rationalToRealModelValue(a.lower) << " "
-       << rationalToRealModelValue(a.upper) << ")";
+    os << ") " << rationalToRealModelValue(lower) << " "
+       << rationalToRealModelValue(upper) << ")";
     return os.str();
 }
 

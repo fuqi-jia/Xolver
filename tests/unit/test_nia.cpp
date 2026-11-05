@@ -61,6 +61,91 @@ public:
         });
     }
 };
+
+class LinearRelaxationOnlySolver : public NiaSolver {
+public:
+    explicit LinearRelaxationOnlySolver(std::unique_ptr<PolynomialKernel> kernel)
+        : NiaSolver(std::move(kernel)) {
+        std::erase_if(reasoners_, [](const auto& stage) {
+            return stage->name() != "nia.normalize" && stage->name() != "nia.linear-relaxation";
+        });
+        reasoners_.push_back(std::make_unique<CallbackReasoner>(
+            "unresolved-relaxation", [](TheoryLemmaStorage&, TheoryEffort)
+                -> std::optional<TheoryCheckResult> {
+                return TheoryCheckResult::unknown("relaxation did not establish a model");
+            }, ReasonerSchedule::CandidateModel));
+    }
+};
+}
+
+TEST_CASE("NIA shared relaxation: coupled monomials retain branch explanations and withdraw bounds") {
+    auto kernel = createPolynomialKernel();
+    auto* polynomial = kernel.get();
+    const auto x = polynomial->mkVar(polynomial->getOrCreateVar("x"));
+    const auto y = polynomial->mkVar(polynomial->getOrCreateVar("y"));
+    const auto product = polynomial->mul(x, y);
+    const auto difference = polynomial->sub(x, y);
+    const auto sum = polynomial->add(product, difference);
+    LinearDeciderContext context;
+    LinearRelaxationOnlySolver solver(std::move(kernel));
+    solver.setRegistry(&context.registry);
+    auto assertConstraint = [&](PolyId poly, Relation relation, int rhs,
+                                SatLit reason, int level, bool value = true) {
+        solver.assertLit({reason.var, TheoryId::NIA, false, NullExpr,
+            PolynomialAtomPayload{poly, relation, RealValue::fromInt(rhs)}}, value, level, reason);
+    };
+    const auto lower = context.reason(), ordered = context.reason(), upper = context.reason();
+    assertConstraint(product, Relation::Geq, 1, lower, 0);
+    assertConstraint(difference, Relation::Geq, 0, ordered, 0);
+    assertConstraint(sum, Relation::Leq, 0, upper, 1);
+    TheoryLemmaDatabase database;
+    auto checkConflict = [&](SatLit closing) {
+        const auto result = solver.check(database, TheoryEffort::Full);
+        REQUIRE(result.kind == TheoryCheckResult::Kind::Conflict);
+        REQUIRE(result.conflictOpt);
+        CHECK(result.conflictOpt->clause.size() == 3);
+        for (const auto reason : {lower, ordered, closing})
+            CHECK(std::find(result.conflictOpt->clause.begin(), result.conflictOpt->clause.end(),
+                            reason) != result.conflictOpt->clause.end());
+    };
+    checkConflict(upper);
+    solver.backtrackToLevel(0);
+    assertConstraint(x, Relation::Eq, 1, context.reason(), 1);
+    assertConstraint(y, Relation::Eq, 1, context.reason(), 1);
+    assertConstraint(sum, Relation::Leq, 3, context.reason(), 1);
+    REQUIRE(solver.check(database, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Consistent);
+    const auto model = solver.getModel();
+    REQUIRE(model);
+    CHECK(model->assignments.at("x") == "1");
+    CHECK(model->assignments.at("y") == "1");
+    solver.backtrackToLevel(0);
+    const auto negative = context.reason().negated();
+    assertConstraint(sum, Relation::Geq, 1, negative, 1, false);
+    checkConflict(negative);
+    solver.reset();
+    assertConstraint(product, Relation::Eq, 0, context.reason(), 0);
+    REQUIRE(solver.check(database, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Consistent);
+}
+
+TEST_CASE("NIA shared relaxation: rational and independent monomial points do not establish integer SAT") {
+    for (const bool fractional : {false, true}) {
+        CAPTURE(fractional);
+        auto kernel = createPolynomialKernel();
+        auto* polynomial = kernel.get();
+        const auto x = polynomial->mkVar(polynomial->getOrCreateVar("x"));
+        const auto y = polynomial->mkVar(polynomial->getOrCreateVar("y"));
+        const auto expression = fractional ? polynomial->mul(polynomial->mkConst(2), x)
+                                          : polynomial->mul(x, y);
+        LinearDeciderContext context;
+        LinearRelaxationOnlySolver solver(std::move(kernel));
+        solver.setRegistry(&context.registry);
+        const auto reason = context.reason();
+        solver.assertLit({reason.var, TheoryId::NIA, false, NullExpr,
+            PolynomialAtomPayload{expression, Relation::Eq, RealValue::fromInt(1)}}, true, 0, reason);
+        TheoryLemmaDatabase database;
+        CHECK(solver.check(database, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Unknown);
+        CHECK_FALSE(solver.getModel());
+    }
 }
 
 TEST_CASE("NIA cut explanations: guarded consequences retain both endpoints and survive backtracking") {

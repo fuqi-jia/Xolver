@@ -36,6 +36,7 @@ class NiaLinearizationAdapter;
 class CdcacCore;        // integer-aware CDCAC (libpoly-gated; constructed in .cpp)
 class AlgebraBackend;
 class NiaLinearDecider; // embedded bounded LIA model search (nia.linear-decide; own TU)
+class PolynomialLinearRefuter;
 namespace farkas { struct FarkasProfile; struct FarkasOrContext; }
 
 /**
@@ -166,6 +167,7 @@ private:
     // NIA's TheoryAtomRegistry.
     // Destroyed by the out-of-line ~NiaSolver().
     std::unique_ptr<NiaLinearDecider> linDecider_;
+    std::unique_ptr<PolynomialLinearRefuter> linearRefuter_;
     // Set of "proxy_name:truth" tokens we've already pinned via
     // registry->pinLiteral. Prevents the Farkas-Or stage's repeated
     // verdict-SAT path from re-issuing the same unit clauses on each
@@ -200,6 +202,7 @@ private:
     // Replay an all-linear active set into bounded integer search. Publish a
     // validated model or a root LP conflict; inconclusive search falls through.
     std::optional<TheoryCheckResult> stageLinearDecide(TheoryLemmaStorage&, TheoryEffort);
+    std::optional<TheoryCheckResult> stageLinearRelaxation(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageNormalize(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stagePresolveFixpoint(TheoryLemmaStorage&, TheoryEffort);
     // Append redundant
