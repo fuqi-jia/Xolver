@@ -2,10 +2,48 @@
 #include "xolver/Solver.h"
 #include "applications/satisfiability/smt/qfnra/NraSolver.h"
 #include "search/coordination/TheoryLemmaDatabase.h"
+#include "search/arith/Reasoner.h"
+#include <algorithm>
 #include <fstream>
 #include <filesystem>
 
 using namespace xolver;
+
+namespace {
+class CoveringOnlySolver : public NraSolver {
+public:
+    CoveringOnlySolver() : NraSolver(createPolynomialKernel()) {
+        std::erase_if(reasoners_, [](const auto& stage) { return stage->name() != "nra.cac"; });
+    }
+};
+}
+
+TEST_CASE("NRA cut explanations: covering conflicts keep the lower endpoint after a later upper bound") {
+    CoveringOnlySolver solver;
+    auto* kernel = solver.kernel();
+    const auto x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    const auto square = kernel->pow(x, 2);
+    auto atom = [&](PolyId polynomial, Relation relation, int rhs, SatVar reason, int level) {
+        solver.assertLit({reason, TheoryId::NRA, false, NullExpr,
+            PolynomialAtomPayload{polynomial, relation, RealValue::fromInt(rhs)}},
+            true, level, SatLit::positive(reason));
+    };
+    atom(x, Relation::Geq, 2, 1, 0);
+    atom(x, Relation::Leq, 3, 2, 0);
+    atom(square, Relation::Leq, 1, 3, 0);
+    TheoryLemmaDatabase database;
+    const auto result = solver.check(database, TheoryEffort::Full);
+    REQUIRE(result.kind == TheoryCheckResult::Kind::Conflict);
+    REQUIRE(result.conflictOpt);
+    CHECK(std::find(result.conflictOpt->clause.begin(), result.conflictOpt->clause.end(),
+                    SatLit::positive(1)) != result.conflictOpt->clause.end());
+    CHECK(std::find(result.conflictOpt->clause.begin(), result.conflictOpt->clause.end(),
+                    SatLit::positive(3)) != result.conflictOpt->clause.end());
+    solver.reset();
+    atom(x, Relation::Leq, 3, 2, 0);
+    atom(square, Relation::Leq, 1, 3, 0);
+    CHECK(solver.check(database, TheoryEffort::Full).kind != TheoryCheckResult::Kind::Conflict);
+}
 
 TEST_CASE("NRA: box-sector explanations preserve a known rational witness") {
     const auto path = std::filesystem::path(__FILE__).parent_path().parent_path() /

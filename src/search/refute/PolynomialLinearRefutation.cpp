@@ -210,10 +210,67 @@ std::optional<std::vector<SatLit>> PolynomialLinearRefuter::check(
         };
         // Conditional product bounds are rebuilt from current explanations.
         // Only unconditional auxiliary definitions survive premise withdrawal.
-        simplex_.replaceActiveBounds(bounds, GeneralSimplex::AssignmentPolicy::Preserve);
+        if (!simplex_.replaceActiveBounds(bounds, GeneralSimplex::AssignmentPolicy::Preserve))
+            return liftConflict();
         std::set<std::pair<int, mpq_class>> applied;
         for (;;) {
             tick();
+            // Keep the lifted monomials consistent with the exact signs of
+            // their factors. These are implications of active bounds, never
+            // guesses from the current relaxation point. Even powers need no
+            // sign premise; strict factor bounds retain their infinitesimals.
+            constexpr unsigned negative = 1, zero = 2, positive = 4, any = 7;
+            auto productSigns = [](unsigned left, unsigned right) {
+                unsigned result = 0;
+                for (const unsigned a : {negative, zero, positive})
+                    for (const unsigned b : {negative, zero, positive})
+                        if ((left & a) && (right & b))
+                            result |= a == zero || b == zero ? zero : a == b ? positive : negative;
+                return result;
+            };
+            for (const auto current : active) {
+                const auto& monomial = current->first;
+                if (monomial.size() == 1 && monomial.front().second == 1) continue;
+                unsigned signs = positive;
+                std::vector<SatLit> sources;
+                for (const auto& [variable, exponent] : monomial) {
+                    build();
+                    if (exponent <= 0) throw ResourceExhausted("invalid monomial exponent");
+                    unsigned factor = any;
+                    const auto base = variables_.find(MonomialKey{{variable, 1}});
+                    if (base != variables_.end()) {
+                        const auto state = simplex_.varState(base->second);
+                        auto restrict = [&](const BoundInfo& bound, bool lower) {
+                            if (!bound.bound.isFinite() || !bound.reason) return;
+                            const auto value = bound.bound.value;
+                            if (lower ? value < DeltaRational(0) : value > DeltaRational(0)) return;
+                            const auto premises = expand({{base->second, lower, *bound.reason}});
+                            if (!premises) return;
+                            include(sources, *premises);
+                            factor &= lower ? (value > DeltaRational(0) ? positive : zero | positive)
+                                            : (value < DeltaRational(0) ? negative : negative | zero);
+                        };
+                        restrict(state.lower, true);
+                        restrict(state.upper, false);
+                    }
+                    if (exponent % 2 == 0)
+                        factor = (factor & zero) | ((factor & (negative | positive)) ? positive : 0);
+                    signs = productSigns(signs, factor);
+                }
+                for (const bool lower : {true, false}) {
+                    if (signs & (lower ? negative : positive)) continue;
+                    const DeltaRational endpoint(0, (signs & zero) ? 0 : lower ? 1 : -1);
+                    const auto state = simplex_.varState(current->second);
+                    const auto& previous = lower ? state.lower : state.upper;
+                    if (previous.bound.isFinite() &&
+                        (lower ? previous.bound.value >= endpoint : previous.bound.value <= endpoint)) continue;
+                    const BoundInfo bound(BoundValue(endpoint), label(current->second, sources));
+                    ++stats.signFacts;
+                    const bool consistent = lower ? simplex_.assertLower(current->second, bound)
+                                                  : simplex_.assertUpper(current->second, bound);
+                    if (!consistent) return liftConflict();
+                }
+            }
             updateStats();
             ++stats.closureChecks;
             const auto result = simplex_.checkUntil(deadline);
@@ -234,6 +291,54 @@ std::optional<std::vector<SatLit>> PolynomialLinearRefuter::check(
                     })) continue;
                 include(*sources, {disequality.reason});
                 return sources;
+            }
+            // A coupled polyhedron can force a value without fixing both
+            // explicit endpoints of its tableau column. Discharge both strict
+            // alternatives exactly instead of treating a zero-valued point as
+            // proof. The temporary bound is local to each feasibility query.
+            for (const auto& disequality : disequalities) {
+                tick();
+                const auto point = simplex_.value(disequality.variable);
+                if (point.a != disequality.excluded || point.b != 0) continue;
+                std::vector<GeneralSimplex::ActiveBound> saved;
+                for (int variable = 0; variable < simplex_.numVars(); ++variable) {
+                    const auto state = simplex_.varState(variable);
+                    if (state.lower.bound.isFinite()) saved.push_back({variable, true, state.lower});
+                    if (state.upper.bound.isFinite()) saved.push_back({variable, false, state.upper});
+                }
+                auto refuteSide = [&](bool lower) -> std::optional<std::vector<SatLit>> {
+                    ++stats.disequalityChecks;
+                    auto answer = GeneralSimplex::Result::Unknown;
+                    std::optional<std::vector<SatLit>> proof;
+                    try {
+                        const BoundInfo hypothesis(BoundValue(DeltaRational(
+                            disequality.excluded, lower ? 1 : -1)),
+                            label(disequality.variable, {disequality.reason}));
+                        const bool consistent = lower ? simplex_.assertLower(disequality.variable, hypothesis)
+                                                      : simplex_.assertUpper(disequality.variable, hypothesis);
+                        answer = consistent ? simplex_.checkUntil(deadline) : GeneralSimplex::Result::Unsat;
+                        if (answer == GeneralSimplex::Result::Unsat) proof = liftConflict();
+                    } catch (...) {
+                        simplex_.replaceActiveBounds(saved, GeneralSimplex::AssignmentPolicy::Preserve);
+                        throw;
+                    }
+                    simplex_.replaceActiveBounds(saved, GeneralSimplex::AssignmentPolicy::Preserve);
+                    const auto restored = simplex_.checkUntil(deadline);
+                    if (answer == GeneralSimplex::Result::Unknown || restored != GeneralSimplex::Result::Sat) {
+                        stats.exhausted = true;
+                        throw ResourceExhausted("polynomial disequality case allocation exhausted");
+                    }
+                    return proof;
+                };
+                const auto upperSide = refuteSide(true);
+                if (!upperSide) continue;
+                const auto lowerSide = refuteSide(false);
+                if (lowerSide) {
+                    auto sources = *upperSide;
+                    include(sources, *lowerSide);
+                    include(sources, {disequality.reason});
+                    return sources;
+                }
             }
             if (!nonlinear) return std::nullopt;
             bool progress = false;

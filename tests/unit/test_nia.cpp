@@ -51,6 +51,59 @@ public:
     }
     unsigned encodingCalls = 0;
 };
+
+class IntervalCutsOnlySolver : public NiaSolver {
+public:
+    explicit IntervalCutsOnlySolver(std::unique_ptr<PolynomialKernel> kernel)
+        : NiaSolver(std::move(kernel)) {
+        std::erase_if(reasoners_, [](const auto& stage) {
+            return stage->name() != "nia.normalize" && stage->name() != "nia.nla-cuts";
+        });
+    }
+};
+}
+
+TEST_CASE("NIA cut explanations: guarded consequences retain both endpoints and survive backtracking") {
+    auto kernel = createPolynomialKernel();
+    auto* polynomial = kernel.get();
+    const auto x = polynomial->mkVar(polynomial->getOrCreateVar("x"));
+    LinearDeciderContext context;
+    IntervalCutsOnlySolver solver(std::move(kernel));
+    solver.setRegistry(&context.registry);
+    const auto upper = context.reason(), lower = context.reason();
+    auto atom = [&](Relation relation, int rhs, SatLit reason, int level) {
+        solver.assertLit({reason.var, TheoryId::NIA, false, NullExpr,
+            PolynomialAtomPayload{x, relation, RealValue::fromInt(rhs)}}, true, level, reason);
+    };
+    atom(Relation::Leq, 3, upper, 0);
+    atom(Relation::Geq, 2, lower, 1);
+    TheoryLemmaDatabase database;
+    for (int cut = 0; cut < 2; ++cut) {
+        const auto result = solver.check(database, TheoryEffort::Full);
+        REQUIRE(result.kind == TheoryCheckResult::Kind::Lemma);
+        REQUIRE(result.lemmaOpt);
+        const auto& lemma = *result.lemmaOpt;
+        CHECK(lemma.kind == LemmaKind::Entailment);
+        REQUIRE(lemma.lits.size() == 3);
+        CHECK(std::find(lemma.lits.begin(), lemma.lits.end(), lower.negated()) != lemma.lits.end());
+        CHECK(std::find(lemma.lits.begin(), lemma.lits.end(), upper.negated()) != lemma.lits.end());
+        const auto conclusion = lemma.lits.back();
+        const auto* record = context.registry.findBySatVar(conclusion.var);
+        REQUIRE(record);
+        const auto* payload = std::get_if<PolynomialAtomPayload>(&record->payload);
+        REQUIRE(payload);
+        for (int value = 2; value <= 3; ++value)
+            CHECK(polynomial->sgn(payload->poly, {{"x", mpq_class(value)}}) >= 0);
+        // An emitted clause is not yet installed: delivery must remain
+        // possible until the SAT adapter acknowledges the same lemma.
+        const auto repeated = solver.check(database, TheoryEffort::Full);
+        REQUIRE(repeated.kind == TheoryCheckResult::Kind::Lemma);
+        REQUIRE(repeated.lemmaOpt);
+        CHECK(repeated.lemmaOpt->lits == lemma.lits);
+        database.markInstalled(lemma);
+    }
+    solver.backtrackToLevel(0);
+    CHECK(solver.check(database, TheoryEffort::Full).kind != TheoryCheckResult::Kind::Lemma);
 }
 
 TEST_CASE("NIA: exact polynomial refutation precedes bounded model encoding") {

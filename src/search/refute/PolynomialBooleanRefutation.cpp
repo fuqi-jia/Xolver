@@ -174,6 +174,8 @@ bool refutePolynomialBoolean(const NativeTerms& terms, const std::vector<ExprId>
                     : refuteByPolynomialConsequences(linearRefuter, constraints, consequences, until, &linear);
                 ++stats.linearCalls;
                 stats.linearConstraints += linear.constraints;
+                stats.linearSignFacts += linear.signFacts;
+                stats.linearDisequalityChecks += linear.disequalityChecks;
                 stats.linearExhaustions += linear.exhausted;
                 stats.linearMicroseconds += std::chrono::duration_cast<std::chrono::microseconds>(
                     std::chrono::steady_clock::now() - linearStarted).count();

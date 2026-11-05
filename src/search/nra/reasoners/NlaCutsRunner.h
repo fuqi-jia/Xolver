@@ -1,9 +1,11 @@
 #pragma once
 
 #include "search/nra/reasoners/NlaCutGenerator.h"
+#include "search/refute/SignDefinitenessRefuter.h"
 #include "algebra/poly/PolynomialKernel.h"
 
 #include <vector>
+#include <map>
 
 namespace xolver {
 namespace nla {
@@ -18,6 +20,12 @@ namespace nla {
 class NlaCutsRunner {
 public:
     explicit NlaCutsRunner(PolynomialKernel& kernel);
+
+    // Extract rational bounds from the current signed polynomial context.
+    // Each endpoint retains its strongest source; the interval explanation
+    // includes both endpoints. Weaken strict endpoints without rounding.
+    std::vector<VarInterval> collectIntervals(
+        const std::vector<SignRefuteConstraint>& constraints);
 
     // Generate the union of cuts available from the listed intervals.
     // For each interval: monotonicitySquare(x). For each pair: both
@@ -42,6 +50,11 @@ public:
 private:
     PolynomialKernel& kernel_;
     NlaCutGenerator gen_;
+    using PolynomialShape = std::vector<std::pair<MonomialKey, mpq_class>>;
+    // Only mathematical identities persist. Bound explanations are recomputed
+    // for every call, including after a source changes or is withdrawn.
+    std::map<PolynomialShape, PolyId> polynomials_;
+    void sharePolynomials(std::vector<NlaCut>& cuts);
 };
 
 } // namespace nla

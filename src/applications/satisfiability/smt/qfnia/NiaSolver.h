@@ -30,6 +30,7 @@
 #include <deque>
 
 namespace xolver {
+namespace nla { class NlaCutsRunner; }
 
 class NiaLinearizationAdapter;
 class CdcacCore;        // integer-aware CDCAC (libpoly-gated; constructed in .cpp)
@@ -119,6 +120,7 @@ private:
     };
 
     std::unique_ptr<PolynomialKernel> kernel_;
+    std::unique_ptr<nla::NlaCutsRunner> nlaCuts_;
     std::unique_ptr<PolynomialConverter> converter_;
 
     std::vector<ActiveNiaConstraint> active_;

@@ -1,10 +1,12 @@
 #include <doctest/doctest.h>
 
 #include "search/nra/reasoners/NlaCutGenerator.h"
+#include "search/nra/reasoners/NlaCutsRunner.h"
 #include "algebra/poly/PolynomialKernel.h"
 
 #include <gmpxx.h>
 #include <unordered_map>
+#include <algorithm>
 
 // Phase A unit tests for NlaCutGenerator (monotonicity-product +
 // monotonicity-square prototypes).
@@ -49,6 +51,109 @@ bool cutHoldsAt(PolynomialKernel& k, const NlaCut& c,
 }
 
 } // namespace
+
+TEST_CASE("NLA interval explanations retain both strong endpoints in every source order") {
+    auto kernel = createPolynomialKernel();
+    const auto id = kernel->getOrCreateVar("x");
+    const auto x = RationalPolynomial::fromVar(id, 1, 1);
+    const auto c = [](int value) { return RationalPolynomial::fromConstant(value); };
+    const std::vector<SignRefuteConstraint> sources{
+        {x - c(2), Relation::Geq, lit(1)},
+        {x - c(3), Relation::Leq, lit(2, false)},
+        {x + c(5), Relation::Geq, lit(3)},
+        {x - c(9), Relation::Neq, lit(4)}};
+    std::vector<size_t> order{0, 1, 2, 3};
+    do {
+        std::vector<SignRefuteConstraint> permuted;
+        for (const auto index : order) permuted.push_back(sources[index]);
+        NlaCutsRunner runner(*kernel);
+        const auto intervals = runner.collectIntervals(permuted);
+        REQUIRE(intervals.size() == 1);
+        CHECK(intervals[0].lo == mpq_class(2));
+        CHECK(intervals[0].hi == mpq_class(3));
+        const auto cuts = runner.runShapeCuts(intervals, 0);
+        REQUIRE(cuts.size() == 2);
+        for (const auto& cut : cuts) {
+            REQUIRE(cut.reasons.size() == 2);
+            CHECK(hasReason(cut, sources[0].reason));
+            CHECK(hasReason(cut, sources[1].reason));
+            // Check the explanation itself: only its selected premises may
+            // restrict a point when replaying the generated consequence.
+            for (int value = -6; value <= 7; ++value) {
+                bool premise = true;
+                for (const auto reason : cut.reasons) {
+                    if (reason == sources[0].reason) premise &= value >= 2;
+                    else if (reason == sources[1].reason) premise &= value <= 3;
+                    else FAIL("unexpected cut premise");
+                }
+                if (premise) CHECK(cutHoldsAt(*kernel, cut, {{"x", mpz_class(value)}}));
+            }
+        }
+    } while (std::next_permutation(order.begin(), order.end()));
+}
+
+TEST_CASE("NLA interval explanations preserve scaled strict rational bounds and withdrawn endpoints") {
+    auto kernel = createPolynomialKernel();
+    const auto id = kernel->getOrCreateVar("x");
+    const auto x = RationalPolynomial::fromVar(id, 1, 1);
+    const auto c = [](int value) { return RationalPolynomial::fromConstant(value); };
+    std::vector<SignRefuteConstraint> sources{
+        {x * c(2) - c(1), Relation::Gt, lit(1)},
+        {x * c(-3) + c(2), Relation::Gt, lit(2)}};
+    NlaCutsRunner runner(*kernel);
+    auto intervals = runner.collectIntervals(sources);
+    REQUIRE(intervals.size() == 1);
+    CHECK(intervals[0].lo == mpq_class(1, 2));
+    CHECK(intervals[0].hi == mpq_class(2, 3));
+    const auto cuts = runner.runShapeCuts(intervals, 0);
+    REQUIRE(cuts.size() == 2);
+    for (const auto& cut : cuts) {
+        CHECK(hasReason(cut, sources[0].reason));
+        CHECK(hasReason(cut, sources[1].reason));
+        for (int numerator = 1; numerator <= 12; ++numerator) {
+            mpq_class point(numerator, 12);
+            point.canonicalize();
+            if (point > mpq_class(1, 2) && point < mpq_class(2, 3))
+                CHECK(kernel->sgn(cut.poly, {{"x", point}}) >= 0);
+        }
+    }
+    sources.erase(sources.begin());
+    intervals = runner.collectIntervals(sources);
+    REQUIRE(intervals.size() == 1);
+    CHECK_FALSE(intervals[0].lo);
+    REQUIRE(intervals[0].reasons.size() == 1);
+    CHECK(intervals[0].reasons[0] == lit(2));
+    sources = {{x - c(2), Relation::Eq, lit(3)}};
+    intervals = runner.collectIntervals(sources);
+    REQUIRE(intervals.size() == 1);
+    CHECK(intervals[0].lo == mpq_class(2));
+    CHECK(intervals[0].hi == mpq_class(2));
+    CHECK(intervals[0].reasons.size() == 1);
+}
+
+TEST_CASE("NLA interval cuts share polynomial identities without retaining old premises") {
+    auto kernel = createPolynomialKernel();
+    const auto x = RationalPolynomial::fromVar(kernel->getOrCreateVar("x"), 1, 1);
+    const auto c = [](int value) { return RationalPolynomial::fromConstant(value); };
+    std::vector<SignRefuteConstraint> sources{
+        {x - c(2), Relation::Geq, lit(1)}, {x - c(3), Relation::Leq, lit(2)}};
+    NlaCutsRunner runner(*kernel);
+    const auto first = runner.runShapeCuts(runner.collectIntervals(sources), 0);
+    REQUIRE(first.size() == 2);
+    sources[1].reason = lit(7, false);
+    const auto second = runner.runShapeCuts(runner.collectIntervals(sources), 0);
+    REQUIRE(second.size() == first.size());
+    for (size_t i = 0; i < first.size(); ++i) {
+        CHECK(second[i].poly == first[i].poly);
+        CHECK(hasReason(second[i], lit(7, false)));
+        CHECK_FALSE(hasReason(second[i], lit(2)));
+    }
+    sources.pop_back();
+    const auto third = runner.runShapeCuts(runner.collectIntervals(sources), 0);
+    REQUIRE(third.size() == 1);
+    CHECK(third[0].poly == first[0].poly);
+    CHECK(third[0].reasons == std::vector<SatLit>{lit(1)});
+}
 
 TEST_CASE("NlaCut monotonicity-product: both intervals non-negative") {
     auto k = createPolynomialKernel();

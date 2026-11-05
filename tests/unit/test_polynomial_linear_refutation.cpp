@@ -87,7 +87,7 @@ TEST_CASE("Polynomial linear refutation: strict rational bounds remain exact and
     const mpq_class tiny(mpz_class(1), denominator);
     constraints[1].poly -= constant(tiny);
     CHECK_FALSE(PolynomialLinearRefuter{}.check(constraints, deadline()).has_value());
-    CHECK_FALSE(PolynomialLinearRefuter{}.check({{x * x + constant(1), Relation::Eq, SatLit::positive(1)}}, deadline()));
+    CHECK(PolynomialLinearRefuter{}.check({{x * x + constant(1), Relation::Eq, SatLit::positive(1)}}, deadline()));
     CHECK(PolynomialLinearRefuter{}.check({
         {x, Relation::Eq, SatLit::positive(1)},
         {x, Relation::Neq, SatLit::positive(2)}}, deadline()));
@@ -171,6 +171,53 @@ TEST_CASE("Polynomial linear disequality endpoints preserve exact rational coeff
             CHECK(conflict.has_value() == (offset == 0));
         }
     }
+}
+
+TEST_CASE("Polynomial monomial signs refute a coupled zero sum and retain every active premise") {
+    const auto x = variable(0), y = variable(1), z = variable(2);
+    std::vector<SignRefuteConstraint> sources{
+        {x, Relation::Geq, SatLit::positive(1)},
+        {y, Relation::Geq, SatLit::negative(2)},
+        {z, Relation::Geq, SatLit::positive(3)},
+        {x * y + y * z, Relation::Leq, SatLit::positive(4)},
+        {x * y, Relation::Neq, SatLit::negative(5)}};
+    PolynomialLinearRefuter refuter;
+    PolynomialLinearStatistics statistics;
+    auto conflict = refuter.check(sources, deadline(), &statistics);
+    REQUIRE(conflict);
+    CHECK(statistics.signFacts >= 2);
+    CHECK(statistics.disequalityChecks >= 2);
+    for (const auto& source : sources)
+        CHECK(std::find(conflict->begin(), conflict->end(), source.reason) != conflict->end());
+    const auto removed = sources[2];
+    sources.erase(sources.begin() + 2);
+    CHECK_FALSE(refuter.check(sources, deadline()));
+    sources.push_back(removed);
+    CHECK(refuter.check(sources, deadline()));
+}
+
+TEST_CASE("Polynomial monomial signs preserve even powers and strict signed factors") {
+    const auto x = variable(0), y = variable(1);
+    PolynomialLinearRefuter refuter;
+    const auto product = x * x * y;
+    auto conflict = refuter.check({
+        {y, Relation::Geq, SatLit::positive(1)},
+        {product, Relation::Lt, SatLit::negative(2)}}, deadline());
+    REQUIRE(conflict);
+    CHECK(conflict->size() == 2);
+    CHECK_FALSE(refuter.check({{product, Relation::Lt, SatLit::negative(2)}}, deadline()));
+    conflict = refuter.check({
+        {x, Relation::Lt, SatLit::positive(1)},
+        {y, Relation::Gt, SatLit::positive(2)},
+        {x * y, Relation::Geq, SatLit::negative(3)}}, deadline());
+    REQUIRE(conflict);
+    CHECK(conflict->size() == 3);
+    CHECK_FALSE(refuter.check({
+        {x, Relation::Leq, SatLit::positive(1)},
+        {y, Relation::Gt, SatLit::positive(2)},
+        {x * y, Relation::Eq, SatLit::negative(3)}}, deadline()));
+    CHECK(refuter.check({{x * x + constant(1), Relation::Eq, SatLit::positive(4)}}, deadline()));
+    CHECK_FALSE(refuter.check({}, deadline()));
 }
 
 TEST_CASE("Polynomial linear refutation: Boolean arithmetic closes linear and nonlinear cores") {
@@ -363,7 +410,7 @@ TEST_CASE("Polynomial consequences: unconditional facts and exhausted checks pre
         {x * x, Relation::Lt, SatLit::negative(5)}};
     const std::vector<PolynomialConsequence> consequences{{x * x, Relation::Geq, {}}};
     PolynomialLinearRefuter refuter;
-    REQUIRE_FALSE(refuter.check(constraints, deadline()));
+    REQUIRE(refuter.check(constraints, deadline()));
     const auto conflict = refuteByPolynomialConsequences(refuter, constraints, consequences, deadline());
     REQUIRE(conflict);
     CHECK(*conflict == std::vector<SatLit>{SatLit::negative(5)});
@@ -477,7 +524,7 @@ TEST_CASE("Polynomial linear refutation: zero products avoid huge powers and opt
     const auto conflict = refuter.check(constraints, deadline(), &stats);
     REQUIRE(conflict);
     CHECK(conflict->size() == 2);
-    CHECK(stats.productFacts == 1);
+    CHECK(stats.productFacts + stats.signFacts == 1);
     CHECK_FALSE(stats.exhausted);
     constraints.erase(constraints.begin());
     CHECK_FALSE(refuter.check(constraints, deadline()));
