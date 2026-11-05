@@ -1,7 +1,6 @@
 #include "base/RuntimeConfig.h"
 #include "search/lra/GeneralSimplex.h"
 #include "base/EnvParam.h"
-#include "search/dl/BellmanFord.h"
 #include <cassert>
 #include <chrono>
 #include <algorithm>
@@ -200,126 +199,6 @@ int GeneralSimplex::addConstraint(const std::vector<std::pair<int, mpq_class>>& 
         vars_[aux].beta = std::move(value);
     }
     return aux;
-}
-
-std::optional<GeneralSimplex::Result> GeneralSimplex::checkDifferenceFragment(
-        std::chrono::steady_clock::time_point deadline) {
-    // Recognize the existing normalized basis before allocating graph state.
-    // This also covers definitions reduced to differences by earlier pivots.
-    for (int row = 0; row < tab_.numRows(); ++row) {
-        const auto& entries = tab_.row(row).entries;
-        if (entries.size() > 2) return std::nullopt;
-        if (entries.size() == 2) {
-            const auto& a = entries[0].coeff;
-            const auto& b = entries[1].coeff;
-            if (mpq_sgn(a.get_mpq_t()) == mpq_sgn(b.get_mpq_t()) ||
-                mpz_cmpabs(a.get_num_mpz_t(), b.get_num_mpz_t()) != 0 ||
-                mpz_cmp(a.get_den_mpz_t(), b.get_den_mpz_t()) != 0)
-                return std::nullopt;
-        }
-    }
-    if (pickViolatedBasic() == -1) {
-        conflict_.clear();
-        return Result::Sat;
-    }
-    DifferenceGraph<DeltaRational> graph;
-    std::vector<int> nodes(vars_.size(), graph.zeroNode());
-    std::vector<DeltaRational> initial(1);
-    for (size_t var = 0; var < vars_.size(); ++var) {
-        if (vars_[var].basicRow != -1) continue;
-        nodes[var] = graph.getOrCreateNode(std::to_string(var));
-        initial.push_back(vars_[var].beta);
-    }
-    struct Origin {
-        int var;
-        bool lower;
-        mpq_class multiplier;
-    };
-    std::vector<Origin> origins;
-    auto add = [&](int from, int to, const DeltaRational& weight,
-                   int var, bool lower, const mpq_class& factor) {
-        const auto& bound = lower ? vars_[var].lower : vars_[var].upper;
-        graph.addEdge(from, to, weight, bound.reason.value_or(SatLit{}));
-        origins.push_back({var, lower, mpq_class(1) / factor});
-    };
-    for (size_t var = 0; var < vars_.size(); ++var) {
-        if (vars_[var].basicRow != -1) continue;
-        if (vars_[var].lower.bound.isFinite())
-            add(nodes[var], graph.zeroNode(), -vars_[var].lower.bound.value, var, true, 1);
-        if (vars_[var].upper.bound.isFinite())
-            add(graph.zeroNode(), nodes[var], vars_[var].upper.bound.value, var, false, 1);
-    }
-    for (int row = 0; row < tab_.numRows(); ++row) {
-        const auto& r = tab_.row(row);
-        const int var = basicVars_[row];
-        int positive = graph.zeroNode(), negative = graph.zeroNode();
-        mpq_class factor = 1;
-        if (!r.entries.empty()) {
-            positive = nodes[r.entries[0].col];
-            factor = r.entries[0].coeff;
-            if (r.entries.size() == 2) negative = nodes[r.entries[1].col];
-            if (factor < 0) {
-                factor = -factor;
-                std::swap(positive, negative);
-            }
-        }
-        const DeltaRational offset(r.rhs);
-        if (vars_[var].lower.bound.isFinite())
-            add(positive, negative, (offset - vars_[var].lower.bound.value) / factor,
-                var, true, factor);
-        if (vars_[var].upper.bound.isFinite())
-            add(negative, positive, (vars_[var].upper.bound.value - offset) / factor,
-                var, false, factor);
-    }
-    // Reuse the current point as potentials without transforming every edge
-    // into correction coordinates and then transforming the result back.
-    const auto result = BellmanFord<DeltaRational>().runFull(graph, deadline, initial);
-    conflict_.clear();
-#ifdef XOLVER_ENABLE_PROOFS
-    conflictCoeffs_.clear();
-#endif
-    if (result.interrupted) return Result::Unknown;
-    if (result.negativeCycle) {
-        DeltaRational sum;
-        for (const auto edge : result.cycle) sum += graph.edge(edge).weight;
-        if (!(sum < DeltaRational())) return std::nullopt;
-        for (const auto edge : result.cycle) {
-            const auto& origin = origins[edge];
-            const auto& bound = origin.lower ? vars_[origin.var].lower : vars_[origin.var].upper;
-            if (!bound.reason) continue;
-            conflict_.push_back({origin.var, origin.lower, *bound.reason});
-#ifdef XOLVER_ENABLE_PROOFS
-            conflictCoeffs_.push_back(origin.multiplier);
-#endif
-        }
-        return Result::Unsat;
-    }
-
-    std::vector<DeltaRational> point(vars_.size());
-    for (size_t var = 0; var < vars_.size(); ++var) {
-        if (vars_[var].basicRow == -1)
-            point[var] = result.dist[nodes[var]] - result.dist[graph.zeroNode()];
-    }
-    for (int row = 0; row < tab_.numRows(); ++row) {
-        const auto& r = tab_.row(row);
-        DeltaRational value(r.rhs);
-        for (const auto& entry : r.entries) value += entry.coeff * point[entry.col];
-        point[basicVars_[row]] = std::move(value);
-    }
-    for (size_t var = 0; var < vars_.size(); ++var) {
-        if ((vars_[var].lower.bound.isFinite() && point[var] < vars_[var].lower.bound.value) ||
-            (vars_[var].upper.bound.isFinite() && point[var] > vars_[var].upper.bound.value))
-            return std::nullopt;
-    }
-    bool changed = false;
-    for (size_t var = 0; var < vars_.size(); ++var) {
-        changed |= vars_[var].beta != point[var];
-        vars_[var].beta = std::move(point[var]);
-    }
-    if (changed) notePointChange();
-    violatedQueue_.clear();
-    std::fill(inViolationQueue_.begin(), inViolationQueue_.end(), false);
-    return Result::Sat;
 }
 
 // ============================================================================
@@ -676,12 +555,6 @@ GeneralSimplex::Result GeneralSimplex::checkUntil(std::chrono::steady_clock::tim
 }
 
 GeneralSimplex::Result GeneralSimplex::checkInternal(std::chrono::steady_clock::time_point deadline) {
-    if (deadline != std::chrono::steady_clock::time_point::max() &&
-        std::chrono::steady_clock::now() >= deadline) {
-        conflict_.clear();
-        return Result::Unknown;
-    }
-    if (auto result = checkDifferenceFragment(deadline)) return *result;
     // LRA is decidable: check() must never self-return Unknown from an internal
     // iteration cap (that would be giving up on a solvable, decidable instance —
     // only the external wall-clock may stop a solve). Termination is guaranteed

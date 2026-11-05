@@ -16,6 +16,8 @@ import time
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / 'python'))
+sys.path.insert(0, str(ROOT / 'tools/proof'))
+from isabelle_pa import Atom, parse
 from tools.integration.qcp import Unsupported
 from tools.integration.qcp_backend import leased_cpu
 from tools.integration.qcp_native import formula_query
@@ -50,6 +52,23 @@ def solver_environment() -> dict:
             if key not in excluded and not key.startswith('XOLVER_QCP_')}
 
 
+def model_response(text: str) -> str:
+    """Require one complete exported model; semantic replay remains offline."""
+    if not isinstance(text, str):
+        raise ValueError('missing timed SAT model')
+    forms = parse(text)
+    if len(forms) != 1 or not isinstance(forms[0], list):
+        raise ValueError('invalid timed SAT model')
+    bindings = forms[0]
+    if bindings and bindings[0] == Atom('model'):
+        bindings = bindings[1:]
+    if any(not isinstance(binding, list) or not binding or
+           binding[0] not in (Atom('define-fun'), Atom('declare-fun'), Atom('forall'))
+           for binding in bindings):
+        raise ValueError('invalid timed SAT model')
+    return text
+
+
 class BackendSession:
     """One selected backend process, with a fresh context for each occurrence."""
     def __init__(self, backend: str, solver: Path, guard: Path):
@@ -70,8 +89,10 @@ class BackendSession:
         began = time.monotonic()
         self.channel.remaining(deadline)
         first = self.channel.process is None
+        model = None
+        model_validation = None
         if self.backend == 'xolver':
-            payload = json.dumps(dict(smt2=script, model=False,
+            payload = json.dumps(dict(smt2=script, model=True,
                 timeout_ms=max(1, int(self.channel.remaining(deadline) * 1000)))).encode()
             tasks = [Task(str(self.ordinal), 'smt.solve', payload)]
             request = frame(encode_tasks(tasks), self.channel.max_bytes)
@@ -84,6 +105,7 @@ class BackendSession:
                 raise ValueError('expected the generated terminal exit command')
             marker = 'qcp-query-{}-done'.format(self.ordinal)
             request = ('(reset)\n(set-option :print-success false)\n'
+                '(set-option :produce-models true)\n'
                 '(set-option :timeout {})\n'.format(max(1, int(self.channel.remaining(deadline) * 1000)))
                 + script[:-len('(exit)\n')] + '(echo "' + marker + '")\n').encode()
         (output / 'request.bin').write_bytes(request)
@@ -97,6 +119,11 @@ class BackendSession:
             result = value.get('result')
             if result not in ('sat', 'unsat', 'unknown'):
                 raise ValueError('invalid typed solver result')
+            if result == 'sat':
+                model = model_response(value.get('model'))
+                model_validation = value.get('model_validation')
+                if model_validation not in ('satisfied', 'indeterminate'):
+                    raise ValueError('invalid typed model validation status')
         else:
             answer = self.channel.read_line(deadline)
             terminator = self.channel.read_line(deadline)
@@ -106,6 +133,26 @@ class BackendSession:
             result = answer.strip().decode()
             if result not in ('sat', 'unsat', 'unknown'):
                 raise ValueError('invalid SMT-LIB solver result')
+            if result == 'sat':
+                model_marker = 'qcp-query-{}-model-done'.format(self.ordinal)
+                model_request = ('(get-model)\n(echo "' + model_marker + '")\n').encode()
+                with (output / 'request.bin').open('ab') as stream:
+                    stream.write(model_request)
+                self.channel.write(model_request, deadline)
+                chunks, size = [], 0
+                with (output / 'response.bin').open('ab') as stream:
+                    while True:
+                        line = self.channel.read_line(deadline)
+                        stream.write(line)
+                        if line.strip() == model_marker.encode():
+                            break
+                        size += len(line)
+                        if size > self.channel.max_bytes:
+                            raise ValueError('timed SAT model exceeds transport limit')
+                        chunks.append(line)
+                model = model_response(b''.join(chunks).decode())
+        if model is not None:
+            (output / 'model.smt2').write_text(model)
         self.channel.remaining(deadline)
         stderr, self.stderr_offset = self.channel.diagnostics(self.stderr_offset)
         (output / 'stdout').write_text(result + '\n')
@@ -119,6 +166,12 @@ class BackendSession:
             request_sha256=sha256(output / 'request.bin'),
             response_sha256=sha256(output / 'response.bin'),
             stdout_sha256=sha256(output / 'stdout'), stderr_sha256=sha256(output / 'stderr'))
+        if model is not None:
+            record.update(model_capture='timed-query-response',
+                          model_sha256=sha256(output / 'model.smt2'),
+                          model_bytes=(output / 'model.smt2').stat().st_size)
+            if model_validation is not None:
+                record['model_validation'] = model_validation
         self.ordinal += 1
         return record
 
