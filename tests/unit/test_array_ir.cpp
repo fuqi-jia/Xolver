@@ -4,7 +4,7 @@
 // does not carry.
 
 #include <doctest/doctest.h>
-#include <somtparser/frontend/parser.h>
+#include <somtparser/parser.h>
 
 #include "frontend/parser/adapter.h"
 #include "ir/NativeTerms.h"

@@ -8,7 +8,7 @@
 #include "applications/verification/sl/Solver.h"
 #include "applications/optimization/omt/Optimize.h"
 #include "quantifiers/FiniteFormula.h"
-#include <somtparser/frontend/parser.h>
+#include <somtparser/parser.h>
 #include <type_traits>
 
 using namespace xolver;

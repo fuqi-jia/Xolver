@@ -1,6 +1,6 @@
 #pragma once
 
-#include <somtparser/passes/rewriter.h>
+#include <somtparser/parser.h>
 
 namespace xolver {
 

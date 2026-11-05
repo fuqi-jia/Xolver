@@ -1,6 +1,6 @@
 #pragma once
 #include "ir/NativeTerms.h"
-#include <somtparser/frontend/parser.h>
+#include <somtparser/parser.h>
 
 namespace xolver {
 // Parser entry point: retain native node handles and attach query assertions.

@@ -89,7 +89,7 @@ def inspect(root: Path = ROOT) -> tuple[dict, list[str]]:
             elif ("cadical" in include and layer != "search"
                   or include.startswith("somtparser/frontend/") and layer not in ("frontend", "runtime")
                   or include.startswith("somtparser/passes/") and layer not in ("frontend", "runtime")
-                  or include.startswith(("somtparser/ir/", "somtparser/core/")) and layer not in ("ir", "quantifiers", "applications", "frontend", "runtime")
+                  or (include == "somtparser/parser.h" or include.startswith(("somtparser/ir/", "somtparser/core/"))) and layer not in ("ir", "quantifiers", "applications", "frontend", "runtime")
                   or include.startswith(("poly/", "polyxx/")) and layer not in ("algebra", "search", "applications")):
                 errors.append(f"external backend leaks into {layer}: {name} -> {include}")
         if layer not in ("base",) and re.search(r"\b(?:getenv|setenv|unsetenv)\s*\(", text):

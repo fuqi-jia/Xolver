@@ -4,7 +4,7 @@
 #include <fstream>
 #include <iostream>
 #include <nlohmann/json.hpp>
-#include <somtparser/frontend/parser.h>
+#include <somtparser/parser.h>
 
 // A native client of the SV APIs. Input is an SMT-LIB obligation: preceding
 // assertions are assumptions; the final assertion is the refutation condition.

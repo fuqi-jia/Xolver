@@ -1,7 +1,7 @@
 #include <doctest/doctest.h>
 #include "applications/verification/sl/NativeSeparation.h"
 #include "xolver/Solver.h"
-#include <somtparser/frontend/parser.h>
+#include <somtparser/parser.h>
 #include <filesystem>
 #include <fstream>
 #include <unistd.h>

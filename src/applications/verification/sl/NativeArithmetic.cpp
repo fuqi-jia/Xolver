@@ -1,7 +1,7 @@
 #include "applications/verification/sl/NativeArithmetic.h"
 #include "applications/verification/sl/HeapSearch.h"
 #include "evidence/PresburgerModel.h"
-#include <somtparser/ir/node.h>
+#include <somtparser/parser.h>
 #include <unordered_set>
 
 namespace xolver::sl::detail {

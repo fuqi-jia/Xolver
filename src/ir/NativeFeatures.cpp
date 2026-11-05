@@ -1,5 +1,5 @@
 #include "ir/NativeFeatures.h"
-#include <somtparser/ir/node.h>
+#include <somtparser/parser.h>
 #include <unordered_set>
 
 namespace xolver {

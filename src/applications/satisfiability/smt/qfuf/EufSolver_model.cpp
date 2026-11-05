@@ -11,7 +11,7 @@
 #include "search/coordination/TheoryAtomRegistry.h"
 #include "search/datatype/DtModelValidator.h"
 #include "ir/NativeTerms.h"
-#include "somtparser/parser.h"
+#include <somtparser/parser.h>
 #include <cassert>
 #include <algorithm>
 #include <functional>

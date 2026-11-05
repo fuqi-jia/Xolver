@@ -3,7 +3,7 @@
 #include "quantifiers/boolean/Diagram.h"
 #include "quantifiers/FiniteFormula.h"
 #include "quantifiers/bitvector/Circuit.h"
-#include <somtparser/frontend/parser.h>
+#include <somtparser/parser.h>
 
 using namespace xolver;
 namespace {

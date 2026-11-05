@@ -1,5 +1,5 @@
 #pragma once
-#include <somtparser/core/options.h>
+#include <somtparser/parser.h>
 namespace xolver {
 // Preserve theory semantics for exact native backends. Parsing must not decide
 // FP equality or evaluate Unicode operations using host floating-point/bytes.

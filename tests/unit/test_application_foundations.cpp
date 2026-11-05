@@ -9,7 +9,7 @@
 #include "ir/NativeBuilder.h"
 #include "search/optimization/LinearProgram.h"
 #include <doctest/doctest.h>
-#include <somtparser/frontend/parser.h>
+#include <somtparser/parser.h>
 
 using namespace xolver;
 namespace {

@@ -1,7 +1,6 @@
 #include <doctest/doctest.h>
 #include "ir/NativeTerms.h"
-#include <somtparser/frontend/parser.h>
-#include <somtparser/ir/node.h>
+#include <somtparser/parser.h>
 
 using namespace xolver;
 

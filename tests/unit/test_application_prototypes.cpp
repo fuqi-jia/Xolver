@@ -10,7 +10,7 @@
 #include "ir/NativeBuilder.h"
 #include "quantifiers/FiniteFormula.h"
 #include <doctest/doctest.h>
-#include <somtparser/frontend/parser.h>
+#include <somtparser/parser.h>
 
 using namespace xolver;
 namespace {

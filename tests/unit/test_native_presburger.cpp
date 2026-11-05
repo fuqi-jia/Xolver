@@ -5,7 +5,7 @@
 #include "frontend/parser/adapter.h"
 #include "xolver/Solver.h"
 #include "xolver/Proof.h"
-#include <somtparser/frontend/parser.h>
+#include <somtparser/parser.h>
 #include <sstream>
 #include <set>
 #include <filesystem>

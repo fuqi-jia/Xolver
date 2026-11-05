@@ -4,7 +4,7 @@
 #include "applications/verification/sl/NativeSeparation.h"
 #include "base/MpqUtils.h"
 #include "quantifiers/FiniteFormula.h"
-#include "somtparser/parser.h"
+#include <somtparser/parser.h>
 #include <cctype>
 #include <type_traits>
 #include <functional>

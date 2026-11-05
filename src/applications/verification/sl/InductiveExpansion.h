@@ -3,7 +3,7 @@
 #include "contracts/SeparationFormula.h"
 #include <gmpxx.h>
 #include <set>
-#include <somtparser/ir/node.h>
+#include <somtparser/parser.h>
 #include <unordered_map>
 #include <unordered_set>
 

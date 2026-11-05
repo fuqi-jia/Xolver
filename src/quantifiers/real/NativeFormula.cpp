@@ -1,6 +1,6 @@
 #include "quantifiers/real/Problem.h"
 #include "base/MpqUtils.h"
-#include <somtparser/ir/node.h>
+#include <somtparser/parser.h>
 #include <map>
 #include <unordered_map>
 
