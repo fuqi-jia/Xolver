@@ -193,6 +193,57 @@ tests, four skipped**. Compiled inputs and binaries remain unchanged, so the
 proof-enabled 2,255-case native qualification and full benchmark freeze above
 remain applicable. This framework repair changes no formal benchmark score.
 
+Both jobs in [PR CI42283787516](https://github.com/fuqi-jia/Xolver/actions/runs/42283787516)
+pass for predecessor `8d9bae3a`. The earlier LRA panel observation remains
+unresolved, and main promotion remains pending.
+
+### In development: shared nonlinear factor sign partitions
+
+Incomplete integer-box search could consume the remaining deadline while
+nonlinear factors still had unresolved signs. The shared partitioner now
+selects odd-power factors using exact affine sign bounds and publishes the
+unconditional clause **x < 0 or x = 0 or x > 0**. Integer and real pipelines
+use separate Full-effort stages after existing candidate construction and
+before integer-box or covering search. Installed partitions are reused across
+checks; selection reads the current active prefix and stores no bound facts.
+Existing zero-product refutation stages, APIs, resource controls and rollback
+policies retain their contracts.
+
+Proof-enabled Panda9 / ExperimentOS qualification passes **2,258 cases /
+1,373,099 assertions**. Three new groups check integer and rational coverage,
+negative coefficients, exact endpoint signs, installation/retry, cancellation,
+Full-effort scheduling and backtracking. The frozen CLI SHA-256 is
+`a9c78b212859672030ef09cdc16d3b5e167c14e8910ec80fbec78979c19911e3`.
+
+A complete fresh 144-input comparison covers all 80 fixed nonlinear inputs,
+32 fixed QF_LRA controls and 32 development QF_UFNIA controls. Verified results
+improve **114 to 115**, versus **112 for Z3**, with one gain, no losses and no
+errors. One public integer UNSAT changes from a 60-second timeout to **32.002
+seconds**, independently confirmed by same-round Z3. Verified PAR-2 totals
+change **3,937.310 to 3,830.035 seconds**, versus **3,988.083 for Z3**. One
+UNSAT in each Xolver version and six Z3 decisions remain unconfirmed and
+excluded. A real input changes from unknown to timeout and remains unsolved.
+
+Diagnostics on the gained input show one new sign partition, followed by 235
+projected checks with 230 explained conflicts and no integer-box entry. The
+predecessor performs 82 projected checks with 78 conflicts before entering the
+box search and timing out. These diagnostic timings do not replace formal
+rows. Full fixed160, development587 and private14408 comparisons of this new
+freeze remain pending, as do exact-head CI, final-version original-C QCP and
+protected-set validation. No overall superiority is established.
+
+### Closed experiment: presolve inside Boolean polynomial refutation
+
+Moving exact presolve/projection into the whole-formula Boolean refuter passes
+2,256 proof-enabled unit cases, including learned-clause checks, but the
+complete 112-input nonlinear/LRA comparison retains **82 to 82 verified
+results**, with no gains, losses or errors. Verified PAR-2 totals change
+**3,935.419 to 3,938.525 seconds**. Eliminating 12 variables in a remaining
+integer gap still leaves it timed out. The optional four-file integration and
+its new test are removed; existing correctness fixes remain. Its source,
+qualification, failed development attempts and complete comparison are retained
+as a closed experiment. No full private-suite repetition was performed.
+
 The affine-product strengthening experiment is closed without promotion:
 both variants retain 62 of 69 controls, add no verified solves and increase
 total time. Its optional implementation was removed; accepted correctness
