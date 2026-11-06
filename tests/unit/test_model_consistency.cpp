@@ -94,27 +94,6 @@ TEST_CASE("MC: integral real candidates reconstruct fractional values and Boolea
     CHECK(solver.validateModel() == Solver::ModelValidation::Satisfied);
 }
 
-TEST_CASE("MC: linear real candidates reconstruct fractional values and Boolean choices") {
-    const auto path = writeSmt2("linear_real_candidate_reconstruction",
-        "(set-logic QF_LRA)\n"
-        "(declare-const x Real)\n"
-        "(declare-const y Real)\n"
-        "(declare-const c Bool)\n"
-        "(assert (= x (/ y 2)))\n"
-        "(assert (ite c (= y 3) (= y 5)))\n"
-        "(assert (> y 0))\n"
-        "(assert (< y 4))\n"
-        "(check-sat)\n");
-    Solver solver;
-    REQUIRE(solver.parseFile(path));
-    for (int repeat = 0; repeat < 2; ++repeat) {
-        REQUIRE_RESULT(solver.checkSat(), Result::Sat);
-        CHECK(solver.validateModel() == Solver::ModelValidation::Satisfied);
-        const auto values = modelValueSet(solver.getModel());
-        CHECK(values.count("3/2") + values.count("(/ 3 2)") + values.count("1.5") > 0);
-    }
-}
-
 TEST_CASE("MC: distinct pair has at least two values in model") {
     auto path = writeSmt2("distinct_pair",
         "(set-logic QF_LIA)\n"

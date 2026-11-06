@@ -1,5 +1,4 @@
 #include "search/bitblast/EagerBitBlastSolver.h"
-#include "xolver/Solver.h"
 #include <doctest/doctest.h>
 
 using namespace xolver;
@@ -64,75 +63,6 @@ TEST_CASE("Eager numeric candidates: fractional and irrational real points remai
         fixture.binary(Kind::Geq, x, fixture.integer(0))});
     REQUIRE(result.status == bitblast::EagerBitBlastSolver::Status::Sat);
     CHECK(result.model.at("x") == 2);
-}
-
-TEST_CASE("Eager linear real candidates: joint Boolean choices match integral witnesses") {
-    EagerFixture f(true);
-    const auto x = f.variable("x"), y = f.variable("y");
-    const auto choice = f.terms.add({Kind::Variable, 0, {}, Payload(std::string("choice"))});
-    const auto branch = f.terms.add({Kind::Ite, 0,
-        {choice, f.binary(Kind::Leq, x, y), f.binary(Kind::Geq, x, y)}, {}});
-    const std::vector<ExprId> bounds{
-        f.binary(Kind::Geq, x, f.integer(-1)), f.binary(Kind::Leq, x, f.integer(1)),
-        f.binary(Kind::Geq, y, f.integer(-1)), f.binary(Kind::Leq, y, f.integer(1)), branch};
-    bitblast::EagerBitBlastSolver solver;
-    for (int target = -3; target <= 3; ++target) {
-        for (bool takeBranch : {false, true}) {
-            CAPTURE(target);
-            CAPTURE(takeBranch);
-            bool feasible = false;
-            for (int xv = -1; xv <= 1; ++xv) for (int yv = -1; yv <= 1; ++yv)
-                feasible |= xv + yv == target && (takeBranch ? xv <= yv : xv >= yv);
-            auto roots = bounds;
-            roots.push_back(f.binary(Kind::Eq, f.binary(Kind::Add, x, y), f.integer(target)));
-            roots.push_back(takeBranch ? choice : f.terms.add({Kind::Not, 0, {choice}, {}}));
-            const auto result = solver.solve(f.terms, roots);
-            if (!feasible) {
-                CHECK(result.status == bitblast::EagerBitBlastSolver::Status::Unknown);
-                continue;
-            }
-            REQUIRE(result.status == bitblast::EagerBitBlastSolver::Status::Sat);
-            const auto& xv = result.model.at("x");
-            const auto& yv = result.model.at("y");
-            CHECK(xv + yv == target);
-            CHECK((xv >= -1 && xv <= 1 && yv >= -1 && yv <= 1));
-            CHECK((takeBranch ? xv <= yv : xv >= yv));
-            CHECK(result.boolModel.at("choice") == takeBranch);
-        }
-    }
-}
-
-TEST_CASE("Eager linear real candidates: fractional fallback preserves assumptions and scopes") {
-    Solver solver;
-    solver.setLogic("QF_LRA");
-    const auto x = solver.mkConst(solver.realSort(), "x");
-    const auto y = solver.mkConst(solver.realSort(), "y");
-    const auto choice = solver.mkConst(solver.boolSort(), "choice");
-    auto node = [&](Kind kind, std::initializer_list<Term> children) {
-        return solver.mkOp(static_cast<uint32_t>(kind), std::vector<Term>(children));
-    };
-    const auto zero = solver.mkReal("0"), one = solver.mkReal("1");
-    const auto two = solver.mkReal("2"), three = solver.mkReal("3");
-    const auto other = node(Kind::Not, {choice});
-    solver.assertFormula(node(Kind::Eq, {node(Kind::Add, {x, y}), three}));
-    solver.assertFormula(node(Kind::Geq, {x, zero}));
-    solver.assertFormula(node(Kind::Leq, {x, three}));
-    solver.assertFormula(node(Kind::Ite, {choice,
-        node(Kind::Geq, {x, two}), node(Kind::Leq, {x, one})}));
-    auto satisfied = [&](Result result) {
-        REQUIRE(static_cast<int>(result) == static_cast<int>(Result::Sat));
-        CHECK(solver.validateModel() == Solver::ModelValidation::Satisfied);
-    };
-    satisfied(solver.checkSat());
-    satisfied(solver.checkSatAssuming({choice}));
-    solver.push();
-    solver.assertFormula(node(Kind::Gt, {x, zero}));
-    solver.assertFormula(node(Kind::Lt, {x, one}));
-    CHECK(static_cast<int>(solver.checkSatAssuming({choice})) == static_cast<int>(Result::Unsat));
-    satisfied(solver.checkSatAssuming({other}));
-    solver.pop();
-    satisfied(solver.checkSatAssuming({choice}));
-    satisfied(solver.checkSatAssuming({other}));
 }
 
 TEST_CASE("Eager affine bounds: derived wide integer models survive the cascade") {

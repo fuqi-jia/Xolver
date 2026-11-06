@@ -1,23 +1,23 @@
 # Arithmetic validation and continuation record
 
-## Current checkpoint: explained arithmetic projections and polynomial reasoning (2026-11-07)
+## Current checkpoint: finite integer decisions and nonlinear sign partitions (2026-11-07)
 
-[PR #106](https://github.com/fuqi-jia/Xolver/pull/106) merged as
-3210f9aa1f969d770136922ba7ae105983db3b72 after complete server acceptance and
-both final-head [PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42245857681)
-passed. Both jobs in its
-[merged-main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42248876468) pass.
-The qualified source matches the merged tree. Its fresh fixed160 comparison
-improves **118 to 121 independently verified results**, with three gains, no
-losses and no errors. There remain **38 timeouts and one unknown**. Same-round
-Z3 has 125 raw decisions, of which **117 are independently verified**; eight
-unconfirmed decisions remain excluded. Mean verified PAR-2 is **34.031 seconds**
-for Xolver and **33.959** for Z3. Protected inputs remain unused, and overall
+[PR #107](https://github.com/fuqi-jia/Xolver/pull/107) merged as
+4be69a7fb59663e6ada00ac234d9c85fb5325fbd after complete server acceptance and
+both final-head [PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42295424156)
+passed. Its [merged-main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42298823094)
+is running. All 2,179 qualified source contents match its reviewed head and
+parser gitlink. Fresh fixed160 acceptance improves **119 to 122 independently
+verified results**, with three gains, no losses and no errors. There remain
+**38 timeouts**, with no unknown or unconfirmed decisions. Same-round Z3 has
+124 raw decisions, of which **117 are independently verified**; seven
+unconfirmed decisions remain excluded. Mean verified PAR-2 is **33.168 seconds**
+for Xolver and **33.648** for Z3. Protected inputs remain unused, and overall
 superiority is not established.
 
 All **14,408 private queries** remain independently verified: **8,940 SAT and
 5,468 UNSAT**, with no timeouts, unknowns, unconfirmed decisions or errors.
-Total solver time is **1,461.871 seconds versus 467.262 for Z3**. Development587
+Total solver time is **1,403.877 seconds versus 443.938 for Z3**. Development587
 also retains all 587 verified results, versus 584 for Z3. Private inputs, models
 and individual identifiers remain server-only.
 
@@ -250,37 +250,39 @@ decisions. Total solver time changes **1,405.258 to 1,403.877 seconds**, versus
 development results remain verified, with totals **49.928 to 50.099 seconds**,
 versus **18.833 for Z3**; three Z3 decisions remain unconfirmed and excluded.
 Both jobs in [code-head CI42292270895](https://github.com/fuqi-jia/Xolver/actions/runs/42292270895)
-pass for `f139452e`. Stage review and main promotion remain open. Final-version
+pass for `f139452e`. The final documentation head `3e217dc0` also passes both
+jobs in CI42295424156 and is merged through PR #107 above. Final-version
 original-C QCP and protected-set validation remain outstanding; no overall
 superiority is established. Private inputs, models and individual identifiers
 remain server-only.
 
-### In development: share Boolean numeric candidates with linear reals
+### Closed experiment: joint Boolean candidates for linear reals
 
-The runtime admitted Boolean nonlinear real formulas to the shared whole-formula
-candidate engine but excluded linear real formulas. The engine already supports
-exact reified linear constraints and integral coordinates of real variables.
-Linear real formulas with Boolean alternatives now reach the same candidate-only
-entry. Every accepted point receives exact source evaluation and typed model
-reconstruction. Failed integer-subset searches continue to the real solver;
-literal conjunction routing, refutation semantics, budgets and rollback remain
-unchanged.
+The candidate exposed the existing exactly validated Boolean/integral-coordinate
+search to linear real formulas with Boolean alternatives. Proof-enabled native
+qualification passed **2,261 cases / 1,373,171 assertions**. Three new groups
+checked linear/Boolean witnesses, fractional model reconstruction, assumptions,
+push/pop and fractional fallback. The complete 32-input QF_LRA pilot improved
+**19 to 20 verified results**, with one gain and no losses or errors; a public
+SAT changed from timeout to **15.199 seconds**, with its actual timed model
+independently replayed by both references.
 
-Proof-enabled Panda9 / ExperimentOS qualification passes **2,261 cases /
-1,373,171 assertions**. Three new groups check exact linear/Boolean witnesses,
-fractional reconstructed values, assumptions, push/pop and fractional fallback.
-CLI SHA-256 is
-`b5ccfadaa016e01bfa07f65086e73ca9ab04482fbf0a02cd6a0003ecd587aad4`.
-The complete 32-input fixed QF_LRA comparison improves **19 to 20 independently
-verified results**, versus **22 for Z3**, with one gain, no losses and no errors.
-One public SAT changes from timeout to **15.199 seconds**; its actual timed
-model passes independent replay by both reference solvers. Same-round Z3 times
-out on that input. Verified PAR-2 totals change **1,656.625 to 1,580.848 seconds**,
-versus **1,210.163 for Z3**. Four Z3 decisions remain unconfirmed and excluded.
-Complete fixed160, development587 and private14408 comparisons of this new
-freeze remain pending. The qualified predecessor's complete results above do
-not substitute for the new comparisons; no whole-suite improvement or overall
-superiority is yet established.
+The subsequent complete fixed160 comparison rejects the variant: verified
+counts fall **123 to 121** after symmetric independent residue-certificate
+checking, with no gains, two lost SAT results and no errors. Mean verified
+PAR-2 changes **32.748 to 33.957 seconds**, versus **33.688 for Z3**.
+The pilot's gained input times out in both arms this round. The command, input,
+binary, runtime-control manifest and process-budget helper match the pilot;
+the differing physical CPUs do not establish the cause of the different
+search outcome. One loss is in unchanged nonlinear-real routing. Raw results
+remain intact, without retakes or score substitution. The private14408 audit is
+pending; all 587 development results are retained. Four additional independent
+process diagnostics find SAT in **17.156 to 17.460 seconds** with identical
+encoding counters; these diagnostics do not explain or replace the full-run
+timeout. The optional source and new tests are restored to qualified main
+contents through ExperimentOS: **2,258 cases / 1,373,099 assertions** pass, and
+the CLI and worker hashes exactly match the preceding qualified executables.
+No main promotion or whole-suite benefit is attributed to this experiment.
 
 ### Closed experiment: presolve inside Boolean polynomial refutation
 
