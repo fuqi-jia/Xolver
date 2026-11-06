@@ -229,8 +229,31 @@ projected checks with 230 explained conflicts and no integer-box entry. The
 predecessor performs 82 projected checks with 78 conflicts before entering the
 box search and timing out. These diagnostic timings do not replace formal
 rows. Full fixed160, development587 and private14408 comparisons of this new
-freeze remain pending, as do exact-head CI, final-version original-C QCP and
-protected-set validation. No overall superiority is established.
+freeze have now completed. After symmetric independent residue-certificate
+checking, fixed160 improves **119 to 122 verified results**, versus **117 for
+Z3**, with three gains, no losses and no errors. The candidate has **68 SAT,
+54 UNSAT and 38 timeouts**, with no unknown or unconfirmed decisions. Z3 has
+124 raw decisions; seven remain unconfirmed and excluded. Mean verified PAR-2
+changes **35.282 to 33.168 seconds**, versus **33.648 for Z3**.
+
+The preceding candidate's historical full comparison also verified 122
+results. The new nonlinear solve is offset by a different input that previously
+completed in 59.822 seconds and now times out in both main and candidate.
+These are separate rounds, not a causal old/candidate comparison; the raw
+timeout is retained without a retake or score substitution. The earlier
+112-input panel's separate LRA loss also remains unresolved.
+
+All **14,408 private queries** are independently verified in every arm:
+**8,940 SAT and 5,468 UNSAT**, with no losses, errors, unknowns or unconfirmed
+decisions. Total solver time changes **1,405.258 to 1,403.877 seconds**, versus
+**443.938 for Z3**; the candidate remains about 3.16 times slower. All 587
+development results remain verified, with totals **49.928 to 50.099 seconds**,
+versus **18.833 for Z3**; three Z3 decisions remain unconfirmed and excluded.
+Both jobs in [code-head CI42292270895](https://github.com/fuqi-jia/Xolver/actions/runs/42292270895)
+pass for `f139452e`. Stage review and main promotion remain open. Final-version
+original-C QCP and protected-set validation remain outstanding; no overall
+superiority is established. Private inputs, models and individual identifiers
+remain server-only.
 
 ### Closed experiment: presolve inside Boolean polynomial refutation
 
