@@ -287,29 +287,35 @@ contents through ExperimentOS: **2,258 cases / 1,373,099 assertions** pass, and
 the CLI and worker hashes exactly match the preceding qualified executables.
 No main promotion or whole-suite benefit is attributed to this experiment.
 
-### In development: retain Boolean directions in weighted threshold diagrams
+### Closed experiment: Boolean directions in weighted threshold diagrams
 
-Whole-formula arithmetic encoding computed Boolean occurrence directions but
-discarded them at weighted thresholds. Shared threshold diagrams now retain
-the required implications through ITE gates. Complementing a normalized sum
-or an equality under disequality reverses the required directions exactly.
-An existing gate can gain its missing definition without allocating another
-variable. Default calls retain full equivalences; complete arithmetic sums
-and exact model validation retain their contracts. Integer and real callers
-share this implementation, with no resource, seed or rollback changes.
-The rejected linear-real admission route remains removed.
+The prototype forwarded established Boolean occurrence directions through
+weighted threshold diagrams and shared ITE gates. Default calls retained full
+equivalences; opposite occurrences completed earlier definitions. Native
+qualification passed **2,263 cases / 1,397,778 assertions**, including five new
+groups, and actual CNF passed **10,052 independent Z3/cvc5 decisions** across
+63 synthetic scenarios. Signed thresholds, complements, high variable IDs,
+incremental upgrades and exhausted-diagram retries were checked.
 
-Proof-enabled Panda9 / ExperimentOS qualification passes **2,263 cases /
-1,397,778 assertions**. Five new groups check signed and constant ITE inputs,
-high variable IDs, definition upgrades, arbitrary-size signed thresholds and
-safe retries after exhausted partial diagrams. The encoder's actual CNF also
-passes **10,052 independent Z3/cvc5 decisions** across 63 synthetic scenarios,
-including single-direction and completed definitions. Expected answers come
-from separate Python integer/Boolean evaluation. No subject SAT backend is
-called by the CNF exporter. Frozen CLI SHA-256 is
-`18f247f28d824e0791aaca99171fd25dbd568f0734cac40ee92431ef679f5dbb`.
-The complete fixed160 comparison remains pending. Clause reduction alone is
-not a whole-suite performance result or evidence of overall superiority.
+Complete fixed160 retains **123 to 123 verified results**, versus **117 for
+Z3**, after symmetric independent residue-certificate checking. There is one
+gain, one loss and no errors. A LIA SAT changes from **15.005 seconds to
+timeout**; the gained pure-LRA result does not enter the changed threshold
+route and does not establish a causal benefit. Mean verified PAR-2 changes
+**32.626 to 32.391 seconds**, versus **33.876 for Z3**. A diagnostic lowers
+three-input gate definition clauses, but this is not a net capability gain.
+Raw formal rows remain unchanged. No further development587 or private14408
+comparison is launched for this rejected variant. Its optional code and five
+new tests are restored to the qualified main contents through ExperimentOS:
+**2,258 cases / 1,373,099 assertions** pass, and the CLI and worker hashes
+exactly match the qualified main executables. No main promotion is attributed
+to it.
+
+A separate propagation preflight retains full definitions. For five pairs of
+thresholds over the same weighted sum, both independent backends confirm the
+incompatible bounds UNSAT. Four pairs fail to conflict under unit propagation
+alone. This motivates checking explicit cross-threshold entailments next;
+it is not a solver performance result or an implemented capability.
 
 ### Closed experiment: presolve inside Boolean polynomial refutation
 

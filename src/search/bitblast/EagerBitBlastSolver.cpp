@@ -8,7 +8,6 @@
 #include "search/bitblast/BitVec.h"
 #include "search/bitblast/SpaceEstimator.h"
 #include "search/bitblast/PseudoBooleanEncoder.h"
-#include <array>
 #include "search/bitblast/IntegerRadixEncoder.h"
 #include "search/bitblast/IntegerFiniteDomainEncoder.h"
 #include "search/linear/LinearBoundPropagation.h"
@@ -842,8 +841,7 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
         PolyBitBlaster blaster(enc, *kernel_, varBits);
 
         size_t directDifferences = 0;
-        auto encodeWeightedPolynomial = [&](PolyId polynomial, Relation relation,
-                BooleanDefinitionDirections directions) -> std::optional<SatLit> {
+        auto encodeWeightedPolynomial = [&](PolyId polynomial, Relation relation) -> std::optional<SatLit> {
             if (const auto direct = blaster.encodeDifferenceConstraint(polynomial, relation)) {
                 ++directDifferences;
                 return direct;
@@ -909,19 +907,13 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
                 }
                 weighted.push_back({literal, term.coefficient});
             }
-            // Disequality negates the conjunction of the two equality bounds.
-            // Its required definition directions therefore swap before either
-            // threshold is encoded. The later normalized-sum complement may
-            // independently swap them again inside PseudoBooleanEncoder.
-            if (relation == Relation::Neq)
-                std::swap(directions.positive, directions.negative);
             auto lessEqual = [&](bool negate, int adjustment) {
                 auto weights = weighted;
                 if (negate) for (auto& term : weights) term.weight = -term.weight;
                 mpz_class bound = constant;
                 if (!negate) bound = -bound;
                 bound += adjustment;
-                return pb.lessEqual(std::move(weights), bound, directions);
+                return pb.lessEqual(std::move(weights), bound);
             };
             switch (relation) {
                 case Relation::Leq: return lessEqual(false, 0);
@@ -931,7 +923,7 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
                 case Relation::Eq: case Relation::Neq: {
                     const auto upper = lessEqual(false, 0), lower = lessEqual(true, 0);
                     if (!upper || !lower) return std::nullopt;
-                    const auto equal = enc.andGate(std::array{*upper, *lower}, directions);
+                    const auto equal = enc.andGate(*upper, *lower);
                     return relation == Relation::Eq ? equal : equal.negated();
                 }
             }
@@ -1035,8 +1027,7 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
                                 // at every width, including heuristic domains.
                                 // Domain completeness controls permanent facts,
                                 // independently of the arithmetic representation.
-                                const auto encoded = encodeWeightedPolynomial(part.first, part.second,
-                                    booleanDefinitionDirections(polarities, eid));
+                                const auto encoded = encodeWeightedPolynomial(part.first, part.second);
                                 if (encoded) pl = *encoded;
                                 else if (exactDomains) { encodeOk = false; break; }
                                 else pl = blaster.encodeConstraint({part.first, part.second, {}});
@@ -1082,12 +1073,9 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
         if (diag) {
             const auto& counts = pb.statistics();
             std::cerr << "[EAGER-PB] thresholds=" << counts.thresholds
-                      << " directional_thresholds=" << counts.directionalThresholds
                       << " direct_differences=" << directDifferences
                       << " ternary_gates=" << enc.ternaryGateCount()
                       << " ternary_reuses=" << enc.ternaryCacheHits()
-                      << " ternary_clauses=" << enc.ternaryClauseCount()
-                      << " ternary_direction_upgrades=" << enc.ternaryDirectionUpgrades()
                       << " nary_gates=" << enc.naryGateCount()
                       << " nary_inputs=" << enc.naryInputCount()
                       << " nary_reuses=" << enc.naryCacheHits()
