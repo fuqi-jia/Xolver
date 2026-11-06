@@ -276,9 +276,10 @@ bool GeneralSimplex::assertLower(int var, const BoundInfo& info, int level) {
     } else {
         refreshViolationStatus(var);
     }
-    // An accepted tightening cannot remove an existing pin. If it creates no
-    // pin either, all sources of the fixed-value closure remain unchanged.
-    if (retainedAnalysis && !fixedValue(var) && boundAnalysisRevision &&
+    // A connected one-sided bound can create a tight face even without an
+    // explicit equality pin. Only isolated, unpinned columns are irrelevant.
+    if (retainedAnalysis && !isBasic(var) && tab_.col(var).entries.empty() &&
+        !fixedValue(var) && boundAnalysisRevision &&
         analysisRevision() == boundAnalysisRevision)
         fixedValueAnalysis_ = retainedAnalysis;
     return true;
@@ -308,7 +309,8 @@ bool GeneralSimplex::assertUpper(int var, const BoundInfo& info, int level) {
     } else {
         refreshViolationStatus(var);
     }
-    if (retainedAnalysis && !fixedValue(var) && boundAnalysisRevision &&
+    if (retainedAnalysis && !isBasic(var) && tab_.col(var).entries.empty() &&
+        !fixedValue(var) && boundAnalysisRevision &&
         analysisRevision() == boundAnalysisRevision)
         fixedValueAnalysis_ = retainedAnalysis;
     return true;
@@ -1139,7 +1141,7 @@ bool GeneralSimplex::replaceActiveBoundViews(std::span<const ActiveBoundView> bo
     boundMergeChanged_.reserve(boundedVars_.size() + sourceOrder.size());
     std::vector<std::unordered_set<int>::node_type> membership(sourceOrder.size());
     const auto retainedAnalysis = fixedValueAnalysis_;
-    bool fixedSourcesChanged = false;
+    bool proofSourcesChanged = false;
     noteBoundChange();
     const auto replacementRevision = analysisRevision();
     trail_.clear();
@@ -1152,12 +1154,13 @@ bool GeneralSimplex::replaceActiveBoundViews(std::span<const ActiveBoundView> bo
         if (state.lower.bound.kind != lower.bound.kind || state.upper.bound.kind != upper.bound.kind ||
             (lower.bound.isFinite() && (state.lower.bound.value != lower.bound.value || state.lower.reason != lower.reason)) ||
             (upper.bound.isFinite() && (state.upper.bound.value != upper.bound.value || state.upper.reason != upper.reason))) {
-            if (retainedAnalysis && !fixedSourcesChanged) {
+            if (retainedAnalysis && !proofSourcesChanged) {
                 const bool wasFixed = state.lower.bound.isFinite() && state.upper.bound.isFinite() &&
                     state.lower.bound.value == state.upper.bound.value;
                 const bool nowFixed = lower.bound.isFinite() && upper.bound.isFinite() &&
                     lower.bound.value == upper.bound.value;
-                fixedSourcesChanged = wasFixed != nowFixed || (wasFixed &&
+                proofSourcesChanged = isBasic(var) || !tab_.col(var).entries.empty() ||
+                    wasFixed != nowFixed || (wasFixed &&
                     (state.lower.bound.value != lower.bound.value || state.lower.reason != lower.reason ||
                      state.upper.reason != upper.reason));
             }
@@ -1208,10 +1211,10 @@ bool GeneralSimplex::replaceActiveBoundViews(std::span<const ActiveBoundView> bo
         // A new non-basic point can expose additional violations.
         if (pointMoved) for (int var : sourceOrder) refreshViolationStatus(var);
     }
-    // Fixed-value closure uses only equality pins, their explanations and the
-    // tableau equations. Other interval changes do not change those proofs.
-    // The bound/scan revision still changes; outstanding snapshots stay immutable.
-    if (retainedAnalysis && !fixedSourcesChanged && replacementRevision &&
+    // Tight-face proofs depend on connected one-sided bounds as well as pins.
+    // Identical bases and isolated unpinned changes can reuse the snapshot;
+    // outstanding handles remain immutable when a fresh analysis is needed.
+    if (retainedAnalysis && !proofSourcesChanged && replacementRevision &&
         analysisRevision() == replacementRevision)
         fixedValueAnalysis_ = retainedAnalysis;
     return !hasImmediateConflict_;
@@ -1249,6 +1252,7 @@ GeneralSimplex::FixedValueAnalysis GeneralSimplex::analyzeFixedValues() const {
     result.values_.resize(vars_.size());
     result.dependencies_.resize(vars_.size());
     result.premises_.resize(vars_.size());
+    result.proofGroup_.assign(vars_.size(), -1);
     for (int var : boundedVars_) {
         if (auto value = fixedValue(var)) {
             result.values_[var] = *value;
@@ -1260,19 +1264,82 @@ GeneralSimplex::FixedValueAnalysis GeneralSimplex::analyzeFixedValues() const {
     // without rational arithmetic; evaluate only rows that can determine a
     // value. Most partially known rows never fire during a closure pass.
     std::vector<size_t> unknown(tab_.numRows());
-    std::vector<int> pending;
+    std::vector<int> pending, faces;
+    std::vector<unsigned char> queued(tab_.numRows(), 0);
+    const auto schedule = [&](int row) {
+        if (unknown[row] == 0) return;
+        const unsigned char priority = unknown[row] == 1 ? 2 : 1;
+        if (queued[row] >= priority) return;
+        queued[row] = priority;
+        (priority == 2 ? pending : faces).push_back(row);
+    };
     for (int r = 0; r < tab_.numRows(); ++r) {
         const auto& row = tab_.row(r);
         if (!result.values_[row.basicVar]) ++unknown[r];
         for (const auto& entry : row.entries) {
             if (!result.values_[entry.col]) ++unknown[r];
         }
-        if (unknown[r] == 1) pending.push_back(r);
+        schedule(r);
     }
-    while (!pending.empty()) {
-        const int r = pending.back(); pending.pop_back();
-        if (unknown[r] != 1) continue;
+    const auto notify = [&](int var) {
+        const auto updateRow = [&](int affected) {
+            assert(unknown[affected] > 0);
+            --unknown[affected];
+            schedule(affected);
+        };
+        if (isBasic(var)) updateRow(basicRowOfVar(var));
+        for (const auto& entry : tab_.col(var).entries) updateRow(entry.row);
+    };
+    while (!pending.empty() || !faces.empty()) {
+        const unsigned char priority = pending.empty() ? 1 : 2;
+        auto& queue = priority == 2 ? pending : faces;
+        const int r = queue.back(); queue.pop_back();
+        if (queued[r] != priority) continue;
+        queued[r] = 0;
+        if (unknown[r] == 0) continue;
         const auto& row = tab_.row(r);
+        if (unknown[r] > 1) {
+            // If a row's exact minimum/maximum equals its required value,
+            // every remaining coordinate must attain the corresponding
+            // endpoint. The proof uses all selected bounds and already-fixed
+            // dependencies, not the current feasible point.
+            const auto pinFace = [&](bool minimum) {
+                DeltaRational endpoint(0);
+                std::vector<std::pair<int, DeltaRational>> fixed;
+                FixedValueAnalysis::ProofGroup group;
+                const auto term = [&](int var, const mpq_class& coefficient) {
+                    if (coefficient == 0) return true;
+                    if (result.values_[var]) {
+                        endpoint += coefficient * *result.values_[var];
+                        group.dependencies.push_back(var);
+                        return true;
+                    }
+                    const bool lower = (coefficient > 0) == minimum;
+                    const auto& bound = lower ? vars_[var].lower : vars_[var].upper;
+                    if (!bound.bound.isFinite()) return false;
+                    endpoint += coefficient * bound.bound.value;
+                    fixed.emplace_back(var, bound.bound.value);
+                    if (bound.reason) group.premises.push_back({var, lower, *bound.reason});
+                    return true;
+                };
+                if (!term(row.basicVar, mpq_class(1))) return false;
+                for (const auto& entry : row.entries)
+                    if (!term(entry.col, -entry.coeff)) return false;
+                if (endpoint != DeltaRational(row.rhs)) return false;
+                const auto groupId = static_cast<int>(result.groups_.size());
+                result.groups_.push_back(std::move(group));
+                // Store the common face proof once, including for wide rows.
+                // Its dependencies were fixed before any member of this face.
+                for (const auto& [var, value] : fixed) {
+                    result.values_[var] = value;
+                    result.proofGroup_[var] = groupId;
+                    notify(var);
+                }
+                return true;
+            };
+            if (!pinFace(true)) pinFace(false);
+            continue;
+        }
         int var = -1;
         mpq_class coefficient = 1;
         DeltaRational residual(row.rhs);
@@ -1293,14 +1360,7 @@ GeneralSimplex::FixedValueAnalysis GeneralSimplex::analyzeFixedValues() const {
         for (const auto& entry : row.entries)
             if (entry.col != var) dependencies.push_back(entry.col);
 
-        auto updateRow = [&](int affected) {
-            assert(unknown[affected] > 0);
-            --unknown[affected];
-            if (unknown[affected] == 1) pending.push_back(affected);
-        };
-        if (isBasic(var)) updateRow(basicRowOfVar(var));
-        for (const auto& entry : tab_.col(var).entries)
-            updateRow(entry.row);
+        notify(var);
     }
     return result;
 }
@@ -1325,11 +1385,18 @@ GeneralSimplex::FixedValueAnalysis::prove(int var) const {
     std::vector<BoundReason> reasons;
     std::vector<int> pending{var};
     std::unordered_set<int> visited;
+    std::unordered_set<int> visitedGroups;
     while (!pending.empty()) {
         const int current = pending.back(); pending.pop_back();
         if (!visited.insert(current).second) continue;
         reasons.insert(reasons.end(), premises_[current].begin(), premises_[current].end());
         pending.insert(pending.end(), dependencies_[current].begin(), dependencies_[current].end());
+        const auto group = proofGroup_[current];
+        if (group >= 0 && visitedGroups.insert(group).second) {
+            const auto& proof = groups_[group];
+            reasons.insert(reasons.end(), proof.premises.begin(), proof.premises.end());
+            pending.insert(pending.end(), proof.dependencies.begin(), proof.dependencies.end());
+        }
     }
     auto less = [](const BoundReason& a, const BoundReason& b) {
         if (a.var != b.var) return a.var < b.var;

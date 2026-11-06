@@ -142,7 +142,7 @@ std::optional<TheoryCheckResult> NraSolver::stagePresolve(TheoryLemmaStorage& /*
 // original-variable point and check every original constraint before accepting
 // it. A feasible relaxation alone never establishes nonlinear SAT.
 std::optional<TheoryCheckResult> NraSolver::stageLinearRelaxation(
-    TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort effort) {
+    TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
     if (presolveConstraints_.empty()) return std::nullopt;
 
     // Skip unsupported placeholders; omitting a premise weakens the relaxation.
@@ -157,8 +157,10 @@ std::optional<TheoryCheckResult> NraSolver::stageLinearRelaxation(
     if (cs.empty()) return std::nullopt;
 
     PolynomialLinearStatistics statistics;
+    std::vector<PolynomialConsequence> consequences;
     auto reasons = linearRefuter_->check(cs,
-        std::chrono::steady_clock::time_point::max(), &statistics);
+        std::chrono::steady_clock::time_point::max(), &statistics,
+        effort == TheoryEffort::Full && registry_ ? &consequences : nullptr);
     const auto profile = config::read<config::ReadKind::ProfilePath>("ARITH_STAGE_PROF", "/tmp/xolver_stageprof.txt");
     if (!profile.empty()) {
         std::ofstream out(profile.string() + ".linear-relaxation.log", std::ios::app);
@@ -166,7 +168,9 @@ std::optional<TheoryCheckResult> NraSolver::stageLinearRelaxation(
             << " new_rows=" << statistics.newRows << " reused_rows=" << statistics.reusedRows
             << " retained_rows=" << statistics.retainedRows << " exhausted=" << statistics.exhausted
             << " product_facts=" << statistics.productFacts << " reused_products=" << statistics.reusedProductRows
-            << " closure_checks=" << statistics.closureChecks << '\n';
+            << " closure_checks=" << statistics.closureChecks
+            << " fixed_monomials=" << statistics.fixedMonomials
+            << " zero_monomials=" << statistics.zeroMonomials << '\n';
     }
     if (!reasons) {
         if (effort == TheoryEffort::Full && interfaceEqualities_.empty() &&
@@ -186,6 +190,14 @@ std::optional<TheoryCheckResult> NraSolver::stageLinearRelaxation(
                 satFastModel_ = std::move(*candidate);
                 return TheoryCheckResult::consistent();
             }
+        }
+        for (const auto& fact : consequences) {
+            if (fact.poly.isConstant() || fact.poly.terms().front().first.empty()) continue;
+            const auto polynomial = fact.poly.toPrimitiveInteger(*kernel_);
+            if (polynomial.ok())
+                if (auto lemma = splitZeroPolynomialProduct(polynomial.poly, fact.premises,
+                        *kernel_, TheoryId::NRA, *registry_, lemmaDb))
+                    return TheoryCheckResult::mkLemma(std::move(*lemma));
         }
         return std::nullopt;
     }
@@ -223,7 +235,7 @@ std::optional<TheoryCheckResult> NraSolver::stageSignRefute(TheoryLemmaStorage& 
         if (effort != TheoryEffort::Full || !registry_) return std::nullopt;
         for (const auto& source : presolveConstraints_)
             if (source.rel == Relation::Eq && source.poly != NullPoly)
-                if (auto lemma = splitZeroPolynomialProduct(source.poly, source.reason,
+                if (auto lemma = splitZeroPolynomialProduct(source.poly, {source.reason},
                         *kernel_, TheoryId::NRA, *registry_, lemmaDb))
                     return TheoryCheckResult::mkLemma(std::move(*lemma));
         return std::nullopt;

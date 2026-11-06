@@ -49,7 +49,7 @@
 namespace xolver {
 
 std::optional<TheoryCheckResult> NiaSolver::stageLinearRelaxation(
-    TheoryLemmaStorage&, TheoryEffort) {
+    TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
     std::vector<SignRefuteConstraint> constraints;
     constraints.reserve(normalized_.size());
     for (const auto& source : normalized_) {
@@ -66,7 +66,9 @@ std::optional<TheoryCheckResult> NiaSolver::stageLinearRelaxation(
     // only unconditional definitions across branches.
     PolynomialLinearStatistics statistics;
     const auto started = std::chrono::steady_clock::now();
-    auto conflict = linearRefuter_->check(constraints, wall::deadline(), &statistics);
+    std::vector<PolynomialConsequence> consequences;
+    auto conflict = linearRefuter_->check(constraints, wall::deadline(), &statistics,
+        effort == TheoryEffort::Full && registry_ ? &consequences : nullptr);
     bool accepted = false;
     if (!conflict && !statistics.exhausted) {
         WorkBudget work;
@@ -97,6 +99,8 @@ std::optional<TheoryCheckResult> NiaSolver::stageLinearRelaxation(
             << " monomial_checks=" << statistics.monomialDivisibilityChecks
             << " reused_products=" << statistics.reusedProductRows
             << " closure_checks=" << statistics.closureChecks
+            << " fixed_monomials=" << statistics.fixedMonomials
+            << " zero_monomials=" << statistics.zeroMonomials
             << " conflict=" << bool(conflict) << " accepted=" << accepted << " us="
             << std::chrono::duration_cast<std::chrono::microseconds>(
                 std::chrono::steady_clock::now() - started).count() << '\n';
@@ -104,6 +108,15 @@ std::optional<TheoryCheckResult> NiaSolver::stageLinearRelaxation(
     if (conflict)
         return TheoryCheckResult::mkConflict(TheoryConflict{std::move(*conflict)});
     if (accepted) return TheoryCheckResult::consistent();
+    for (const auto& fact : consequences) {
+        // A nonzero constant term excludes a common monomial factor.
+        if (fact.poly.isConstant() || fact.poly.terms().front().first.empty()) continue;
+        const auto polynomial = fact.poly.toPrimitiveInteger(*kernel_);
+        if (polynomial.ok())
+            if (auto lemma = splitZeroPolynomialProduct(polynomial.poly, fact.premises,
+                    *kernel_, TheoryId::NIA, *registry_, lemmaDb))
+                return TheoryCheckResult::mkLemma(std::move(*lemma));
+    }
     return std::nullopt;
 }
 
@@ -117,7 +130,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageSignRefute(TheoryLemmaStorage& 
         if (effort != TheoryEffort::Full || !registry_) return std::nullopt;
         for (const auto& source : active_)
             if (source.rel == Relation::Eq && source.poly != NullPoly)
-                if (auto lemma = splitZeroPolynomialProduct(source.poly, source.reason,
+                if (auto lemma = splitZeroPolynomialProduct(source.poly, {source.reason},
                         *kernel_, TheoryId::NIA, *registry_, lemmaDb))
                     return TheoryCheckResult::mkLemma(std::move(*lemma));
         return std::nullopt;

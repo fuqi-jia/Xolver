@@ -20,6 +20,7 @@ struct PolynomialLinearStatistics {
     size_t monomialProducts = 0, monomialDivisibilityChecks = 0;
     size_t signFacts = 0;
     size_t disequalityChecks = 0;
+    size_t fixedMonomials = 0, zeroMonomials = 0;
 };
 
 // Refute a polynomial assignment by an exact linear relaxation over the reals.
@@ -41,7 +42,12 @@ public:
     std::optional<std::vector<SatLit>> check(
         const std::vector<SignRefuteConstraint>&,
         std::chrono::steady_clock::time_point deadline,
-        PolynomialLinearStatistics* = nullptr);
+        PolynomialLinearStatistics* = nullptr,
+        std::vector<PolynomialConsequence>* consequences = nullptr);
+    // Consequences are fresh explained equations for active composite monomials.
+    // They are exported only from fixed-value proofs, never a relaxation point.
+    // The optional output is cleared on entry, conflict and resource exhaustion;
+    // each premise is an original signed literal from this check's bound base.
     void reset();
     // Project the current relaxation point onto original variables, completing
     // variables without degree-one columns with zero. This is an UNTRUSTED

@@ -269,6 +269,36 @@ TEST_CASE("Polynomial product covers: weak inequalities do not imply zero factor
     }
 }
 
+TEST_CASE("Proved product feedback: integer relaxation publishes a coupled zero proof") {
+    FinitePartitionFixture f;
+    const auto z = f.kernel->mkVar(f.kernel->getOrCreateVar("z"));
+    const auto w = f.kernel->mkVar(f.kernel->getOrCreateVar("w"));
+    const auto t = f.kernel->mkVar(f.kernel->getOrCreateVar("t"));
+    for (const auto variable : {f.parameter, f.other, z, w, t})
+        f.add(variable, Relation::Geq, 0);
+    f.add(f.kernel->add(f.kernel->mul(f.parameter, f.other), z), Relation::Leq, 0);
+    f.add(f.kernel->mul(w, t), Relation::Eq, 1);
+    f.prepare();
+    const auto result = f.solver->runStage("nia.linear-relaxation", f.db);
+    REQUIRE(result);
+    REQUIRE(result->kind == TheoryCheckResult::Kind::Lemma);
+    REQUIRE(result->lemmaOpt);
+    CHECK(result->lemmaOpt->lits.size() > 3);
+    size_t factors = 0;
+    for (const auto literal : result->lemmaOpt->lits) {
+        if (!literal.sign) { CHECK(literal.var <= 7); continue; }
+        const auto* atom = f.registry.findBySatVar(literal.var);
+        REQUIRE(atom);
+        const auto& payload = std::get<PolynomialAtomPayload>(atom->payload);
+        CHECK(payload.rel == Relation::Eq);
+        CHECK((payload.poly == f.parameter || payload.poly == f.other));
+        ++factors;
+    }
+    CHECK(factors == 2);
+    f.db.markInstalled(*result->lemmaOpt);
+    CHECK_FALSE(f.solver->runStage("nia.linear-relaxation", f.db));
+}
+
 TEST_CASE("Model completion request: cheap exact models avoid global search") {
     auto kernel = createPolynomialKernel();
     const auto x = kernel->mkVar(kernel->getOrCreateVar("x"));

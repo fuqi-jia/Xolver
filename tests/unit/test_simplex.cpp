@@ -515,6 +515,75 @@ TEST_CASE("GeneralSimplex: randomized sparse LRA stress") {
     }
 }
 
+TEST_CASE("Closed linear faces: signed rational endpoints have complete shared proofs") {
+    for (const bool minimum : {false, true}) {
+        GeneralSimplex gs;
+        const auto x = gs.addVar("x"), y = gs.addVar("y");
+        const auto row = gs.addConstraint({{x, 2}, {y, -3}}, 0);
+        const mpq_class a = minimum ? mpq_class(1, 3) : mpq_class(7, 6);
+        const mpq_class b = minimum ? mpq_class(2, 5) : mpq_class(-5, 7);
+        const mpq_class endpoint = 2 * a - 3 * b;
+        const BoundInfo first(BoundValue(DeltaRational(a)), SatLit::positive(101));
+        const BoundInfo second(BoundValue(DeltaRational(b)), SatLit::negative(503));
+        const BoundInfo total(BoundValue(DeltaRational(endpoint)), SatLit::positive(9001));
+        REQUIRE((minimum ? gs.assertLower(x, first) : gs.assertUpper(x, first)));
+        REQUIRE((minimum ? gs.assertUpper(y, second) : gs.assertLower(y, second)));
+        REQUIRE((minimum ? gs.assertUpper(row, total) : gs.assertLower(row, total)));
+        REQUIRE(gs.check() == GeneralSimplex::Result::Sat);
+        const auto analysis = gs.sharedFixedValueAnalysis();
+        for (const auto& [var, value] : std::vector<std::pair<int, mpq_class>>{{x, a}, {y, b}, {row, endpoint}}) {
+            const auto proof = analysis->prove(var);
+            REQUIRE(proof);
+            CHECK(proof->first == DeltaRational(value));
+            REQUIRE(proof->second.size() == 3);
+            for (const auto reason : {SatLit::positive(101), SatLit::negative(503), SatLit::positive(9001)})
+                CHECK(std::any_of(proof->second.begin(), proof->second.end(), [&](const auto& source) {
+                    return source.reason == reason;
+                }));
+        }
+    }
+}
+
+TEST_CASE("Closed linear faces: wide endpoint proofs survive snapshots but not withdrawn bounds") {
+    for (const auto policy : {GeneralSimplex::AssignmentPolicy::Preserve,
+                              GeneralSimplex::AssignmentPolicy::Reinitialize}) {
+        GeneralSimplex gs;
+        std::vector<std::pair<int, mpq_class>> terms;
+        std::vector<GeneralSimplex::ActiveBound> bounds;
+        for (int i = 0; i < 256; ++i) {
+            const auto variable = gs.addVar("v" + std::to_string(i));
+            terms.emplace_back(variable, 1);
+            bounds.push_back({variable, true, BoundInfo(BoundValue(DeltaRational(0)),
+                SatLit::positive(static_cast<SatVar>(1000 + i)))});
+        }
+        const auto sum = gs.addConstraint(terms, 0);
+        bounds.push_back({sum, false, BoundInfo(BoundValue(DeltaRational(0)), SatLit::negative(9001))});
+        REQUIRE(gs.replaceActiveBounds(bounds, policy));
+        REQUIRE(gs.check() == GeneralSimplex::Result::Sat);
+        const auto pinned = gs.sharedFixedValueAnalysis();
+        for (const auto& [variable, coefficient] : terms) {
+            (void)coefficient;
+            REQUIRE(pinned->fixedValue(variable));
+            CHECK(*pinned->fixedValue(variable) == DeltaRational(0));
+        }
+        const auto proof = pinned->prove(terms.front().first);
+        REQUIRE(proof);
+        CHECK(proof->second.size() == bounds.size());
+        bounds.erase(bounds.begin());
+        REQUIRE(gs.replaceActiveBounds(bounds, policy));
+        REQUIRE(gs.check() == GeneralSimplex::Result::Sat);
+        CHECK_FALSE(gs.sharedFixedValueAnalysis()->fixedValue(terms.front().first));
+        CHECK_FALSE(gs.sharedFixedValueAnalysis()->fixedValue(terms.back().first));
+        CHECK(pinned->fixedValue(terms.front().first) == DeltaRational(0));
+        bounds.insert(bounds.begin(), {terms.front().first, true,
+            BoundInfo(BoundValue(DeltaRational(0, 1)), SatLit::positive(20000))});
+        bounds.back().info.bound = BoundValue(DeltaRational(1));
+        REQUIRE(gs.replaceActiveBounds(bounds, policy));
+        REQUIRE(gs.check() == GeneralSimplex::Result::Sat);
+        CHECK_FALSE(gs.sharedFixedValueAnalysis()->fixedValue(terms.back().first));
+    }
+}
+
 TEST_CASE("GeneralSimplex: fixed-value closure shares diamond dependencies and retains premises") {
     GeneralSimplex gs;
     const int x = gs.addVar("x"), y = gs.addVar("y"), z = gs.addVar("z"), w = gs.addVar("w");
@@ -750,7 +819,7 @@ TEST_CASE("GeneralSimplex: cached fixed values cannot leak through scope removal
     CHECK_FALSE(gs.sharedFixedValueAnalysis()->fixedValue(100));
 }
 
-TEST_CASE("GeneralSimplex: non-pinning tightenings retain valid fixed-value proofs") {
+TEST_CASE("GeneralSimplex: isolated bounds reuse snapshots while connected bounds refresh proofs") {
     GeneralSimplex gs;
     const int x = gs.addVar("tightening-x"), y = gs.addVar("tightening-y");
     const int z = gs.addVar("tightening-z");
@@ -772,9 +841,13 @@ TEST_CASE("GeneralSimplex: non-pinning tightenings retain valid fixed-value proo
     REQUIRE(gs.assertUpper(z, endpoint(10, 6)));
     REQUIRE(gs.assertLower(z, endpoint(4, 7)));
     REQUIRE(gs.assertUpper(z, endpoint(6, 8)));
-    // This upper bound also leaves a derived pin's original proof valid.
-    REQUIRE(gs.assertUpper(y, endpoint(4, 9)));
     CHECK(gs.sharedFixedValueAnalysis() == pinned);
+    // The old proof remains valid, but a connected bound can create other faces.
+    REQUIRE(gs.assertUpper(y, endpoint(4, 9)));
+    const auto current = gs.sharedFixedValueAnalysis();
+    CHECK(current != pinned);
+    REQUIRE(current->prove(y));
+    CHECK(current->prove(y)->first == pinned->prove(y)->first);
     const auto fresh = gs.analyzeFixedValues();
     REQUIRE(fresh.prove(y));
     CHECK(fresh.prove(y)->first == pinned->prove(y)->first);

@@ -458,6 +458,41 @@ new full-suite claim. The generic capability remains in development; the next
 investigation concerns exporting proved fixed-monomial facts from the shared
 linear relaxation. A zero-valued candidate alone is not such a proof.
 
+### FULINA development: proved linear faces and product feedback
+
+The shared simplex now proves fixed values on exact tight linear faces. For
+example, `a>=0`, `b>=0` and `a+b<=0` force both coordinates to zero. Shared
+proof groups retain every selected bound and prior dependency without copying
+a wide face's explanation for each coordinate. Changing or withdrawing a
+connected bound invalidates the cached proof; existing snapshots stay immutable.
+
+The polynomial relaxation exports exact fixed composite monomial equations
+with their current original signed premises. Integer and real clients publish
+guarded product covers through one shared interface. Candidate point values
+are never proofs. Resource settings, model checks, API contracts and the
+separate arithmetic rollback policies retain their semantics.
+
+Predecessor regressions reproduce the missing inference and publication.
+Withdrawal tests also caught and repaired stale proof reuse in the prototype.
+Proof-enabled Panda9 / ExperimentOS qualification passes **2,233 cases /
+1,371,158 assertions**, including eight new cases with 1,165 assertions. The
+frozen CLI is
+`517e00bd0ec9c9be41c67ec179d6b1a58adaeec647bdfbb6c8f1b9c54757b172`.
+
+The fresh unchanged 36-input comparison regresses **28 to 27 independently
+verified results**, versus 25 for same-round Z3: no gains, one SAT loss and no
+incorrect results or protocol errors. Verified PAR-2 totals are **1,104.232 to
+1,232.397 seconds**, versus **1,448.326** for Z3. Actual timed SAT models are
+independently replayed; UNSAT requires an independent decision. The eight
+original gaps remain unsolved. Diagnostics confirm proved zero facts and
+multi-premise covers in both representative nonlinear gaps, but each still
+stops in its first early bit-blast call.
+
+This isolated performance experiment is closed without main promotion. The
+new exact capability is qualified development work, not a performance gain.
+The linear SAT loss and the remaining bit-blast work require investigation;
+there is no fresh full-suite, final-version QCP or protected-set claim.
+
 ## Previous checkpoint: sparse integer equality components (2026-11-06)
 
 [PR #101](https://github.com/fuqi-jia/Xolver/pull/101) merged as

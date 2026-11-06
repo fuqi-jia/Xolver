@@ -46,10 +46,12 @@ std::optional<std::unordered_map<VarId, mpq_class>> PolynomialLinearRefuter::pro
 std::optional<std::vector<SatLit>> PolynomialLinearRefuter::check(
     const std::vector<SignRefuteConstraint>& constraints,
     std::chrono::steady_clock::time_point deadline,
-    PolynomialLinearStatistics* statistics) {
+    PolynomialLinearStatistics* statistics,
+    std::vector<PolynomialConsequence>* consequences) {
     PolynomialLinearStatistics local;
     auto& stats = statistics ? *statistics : local;
     stats = {};
+    if (consequences) consequences->clear();
     try {
         WorkBudget work(workLimit_);
         WorkBudget construction;
@@ -484,10 +486,41 @@ std::optional<std::vector<SatLit>> PolynomialLinearRefuter::check(
                     }
                 }
             }
-            if (!progress) { updateStats(); return std::nullopt; }
+            if (!progress) {
+                updateStats();
+                if (consequences) {
+                    // Expand while this check's internal explanation labels
+                    // still denote its current original premises. A zero-valued
+                    // LP point cannot supply any of these equations.
+                    for (const auto current : active) {
+                        build();
+                        const auto& monomial = current->first;
+                        if (monomial.size() == 1 && monomial.front().second == 1) continue;
+                        const auto value = facts->fixedValue(current->second);
+                        if (!value || value->b != 0) continue;
+                        const auto proof = facts->prove(current->second);
+                        if (!proof || proof->first != *value) continue;
+                        auto sources = expand(proof->second);
+                        if (!sources || sources->empty() ||
+                            std::any_of(sources->begin(), sources->end(), [&](SatLit source) {
+                                return !activeReasons.contains(reasonKey(source));
+                            })) continue;
+                        RationalPolynomial equation;
+                        equation.addTerm(monomial, 1);
+                        equation.addConstant(-value->a);
+                        equation.normalize();
+                        consequences->push_back({std::move(equation), Relation::Eq, std::move(*sources)});
+                        ++stats.fixedMonomials;
+                        stats.zeroMonomials += value->a == 0;
+                    }
+                }
+                return std::nullopt;
+            }
         }
     } catch (const ResourceExhausted&) {
         stats.exhausted = true;
+        if (consequences) consequences->clear();
+        stats.fixedMonomials = stats.zeroMonomials = 0;
     }
     return std::nullopt;
 }
