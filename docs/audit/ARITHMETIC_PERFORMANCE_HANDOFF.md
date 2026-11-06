@@ -571,6 +571,38 @@ capability remains development work. Diagnostics confirm reduced refuter entry
 in both representative nonlinear gaps, but neither completes within 60 seconds.
 No final-version QCP, protected-set or overall superiority claim is made.
 
+### FULINA development: explained monomial order transport
+
+The shared polynomial relaxation now transports source inequalities through
+proved nonnegative monomial factors, using only products expressible in the
+current input's monomial vocabulary. Source equalities allow arbitrary factor
+signs. Strict products retain strictness only when the factor is proved positive.
+Every conditional bound retains its original signed premises and is replaced
+with the next active context; unconditional definitions remain reusable. Integer,
+real and Boolean polynomial clients share the implementation. Resource settings,
+solver APIs, model checks and arithmetic rollback policies are unchanged.
+
+All four independently constructed predecessor regressions fail. The new
+implementation passes those tests for high-degree even factors, equality
+transport, unknown signs, zero factors, exact rational coefficients, strictness,
+premise withdrawal and cancellation. Proof-enabled Panda9 / ExperimentOS
+qualification passes **2,243 cases / 1,371,769 assertions**. The frozen CLI is
+`60c3a75678e5c2ea5ebf39e7029228a09a3c099b55846f6e2780db2750ce5138`.
+
+The fresh unchanged 36-input comparison improves **28 to 29 independently
+verified results**, versus 25 for same-round Z3, with one gain, no losses and
+no errors. An original nonlinear integer gap changes from a 60-second timeout
+to **30.342 seconds UNSAT**, independently confirmed. Verified PAR-2 totals
+improve from **1,103.729 to 1,016.114 seconds**, versus **1,445.238** for Z3.
+Eight separate generic integer/real checks retain all results in both versions
+and Z3; actual timed Xolver SAT models require both Z3 and cvc5 replay.
+
+A diagnostic run also refutes the gained input in **30.293 seconds** and records
+7,124 transported bounds in the integer relaxation. The other representative
+nonlinear gap remains a timeout. This is a verified development-panel gain;
+complete new-version suite acceptance, current-version original-C QCP and final
+protected-set comparison remain open. No overall superiority is claimed.
+
 ## Previous checkpoint: sparse integer equality components (2026-11-06)
 
 [PR #101](https://github.com/fuqi-jia/Xolver/pull/101) merged as

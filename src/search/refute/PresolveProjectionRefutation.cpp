@@ -58,6 +58,8 @@ std::optional<std::vector<SatLit>> refutePresolveProjection(
             << " variables=" << projection.variables().size()
             << " definitions=" << projection.definitionCount()
             << " linear_exhausted=" << linearStats.exhausted
+            << " multiplied_candidates=" << linearStats.multipliedCandidates
+            << " multiplied_facts=" << linearStats.multipliedFacts
             << " sign_exhausted=" << signStats.exhausted
             << " quadratic_certified=" << quadraticStats.certified
             << " conflict=" << bool(conflict) << " premises=" << lifted.size()

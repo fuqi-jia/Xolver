@@ -214,6 +214,83 @@ std::optional<std::vector<SatLit>> PolynomialLinearRefuter::check(
         // Only unconditional auxiliary definitions survive premise withdrawal.
         if (!simplex_.replaceActiveBounds(bounds, GeneralSimplex::AssignmentPolicy::Preserve))
             return liftConflict();
+        // Use only words from this input, not columns retained from an older
+        // query or manufactured by fixed-factor reconstruction below.
+        std::map<MonomialKey, int> vocabulary;
+        for (const auto variable : active) vocabulary.emplace(variable->first, variable->second);
+        struct MultipliedRow { size_t source; MonomialKey factor; LinearRow terms; };
+        std::optional<std::vector<MultipliedRow>> multiplied;
+        auto prepareMultiples = [&] {
+            multiplied.emplace();
+            auto quotient = [&](const MonomialKey& word, const MonomialKey& divisor)
+                -> std::optional<MonomialKey> {
+                MonomialKey result;
+                size_t position = 0;
+                for (const auto& [variable, exponent] : word) {
+                    build();
+                    if (position < divisor.size() && divisor[position].first < variable) return std::nullopt;
+                    int remaining = exponent;
+                    if (position < divisor.size() && divisor[position].first == variable)
+                        remaining -= divisor[position++].second;
+                    if (remaining < 0) return std::nullopt;
+                    if (remaining) result.emplace_back(variable, remaining);
+                }
+                if (position != divisor.size()) return std::nullopt;
+                return result;
+            };
+            for (size_t source = 0; source < constraints.size(); ++source) {
+                const auto& constraint = constraints[source];
+                if (constraint.rel == Relation::Neq || constraint.poly.isConstant()) continue;
+                MonomialKey anchor;
+                size_t degree = 0;
+                for (const auto& [word, coefficient] : constraint.poly.terms()) {
+                    (void)coefficient;
+                    size_t current = 0;
+                    for (const auto& [variable, exponent] : word) {
+                        (void)variable; build(); current += exponent;
+                    }
+                    if (current > degree) { anchor = word; degree = current; }
+                }
+                for (const auto& [target, column] : vocabulary) {
+                    (void)column;
+                    build();
+                    auto factor = quotient(target, anchor);
+                    if (!factor || factor->empty()) continue;
+                    LinearRow terms;
+                    bool supported = true;
+                    for (const auto& [word, coefficient] : constraint.poly.terms()) {
+                        MonomialKey product;
+                        size_t left = 0, right = 0;
+                        while (left < word.size() || right < factor->size()) {
+                            build();
+                            if (right == factor->size() ||
+                                (left < word.size() && word[left].first < (*factor)[right].first))
+                                product.push_back(word[left++]);
+                            else if (left == word.size() || (*factor)[right].first < word[left].first)
+                                product.push_back((*factor)[right++]);
+                            else {
+                                if ((*factor)[right].second > std::numeric_limits<int>::max() - word[left].second) {
+                                    supported = false; break;
+                                }
+                                product.emplace_back(word[left].first, word[left].second + (*factor)[right].second);
+                                ++left;
+                                ++right;
+                            }
+                        }
+                        if (!supported) break;
+                        const auto found = vocabulary.find(product);
+                        if (found == vocabulary.end()) { supported = false; break; }
+                        terms.emplace_back(found->second, coefficient);
+                    }
+                    if (!supported) continue;
+                    std::sort(terms.begin(), terms.end(), [](const auto& a, const auto& b) {
+                        return a.first < b.first;
+                    });
+                    multiplied->push_back({source, std::move(*factor), std::move(terms)});
+                    ++stats.multipliedCandidates;
+                }
+            }
+        };
         std::set<std::pair<int, mpq_class>> applied;
         for (;;) {
             tick();
@@ -487,6 +564,92 @@ std::optional<std::vector<SatLit>> PolynomialLinearRefuter::check(
                 }
             }
             if (!progress) {
+                if (!multiplied) prepareMultiples();
+                for (const auto& product : *multiplied) {
+                    build();
+                    const auto& source = constraints[product.source];
+                    std::vector<SatLit> support{source.reason};
+                    bool strictFactor = false;
+                    if (source.rel != Relation::Eq) {
+                        bool proved = false;
+                        // A bound on a composite word can prove its sign even
+                        // when its individual factors have unknown signs.
+                        const auto current = vocabulary.find(product.factor);
+                        if (current != vocabulary.end()) {
+                            const auto bound = simplex_.varState(current->second).lower;
+                            if (bound.bound.isFinite() && bound.bound.value >= DeltaRational(0) && bound.reason) {
+                                auto proof = expand({{current->second, true, *bound.reason}});
+                                if (proof) {
+                                    include(support, *proof);
+                                    proved = true;
+                                    strictFactor = bound.bound.value > DeltaRational(0);
+                                }
+                            }
+                        }
+                        if (!proved) {
+                            unsigned signs = positive;
+                            std::vector<SatLit> reasons;
+                            for (const auto& [variable, exponent] : product.factor) {
+                                build();
+                                unsigned factor = any;
+                                const auto base = vocabulary.find(MonomialKey{{variable, 1}});
+                                if (base != vocabulary.end()) {
+                                    const auto state = simplex_.varState(base->second);
+                                    auto restrict = [&](const BoundInfo& bound, bool lower) {
+                                        if (!bound.bound.isFinite() || !bound.reason) return;
+                                        const auto value = bound.bound.value;
+                                        if (lower ? value < DeltaRational(0) : value > DeltaRational(0)) return;
+                                        const auto proof = expand({{base->second, lower, *bound.reason}});
+                                        if (!proof) return;
+                                        include(reasons, *proof);
+                                        factor &= lower ? (value > DeltaRational(0) ? positive : zero | positive)
+                                                        : (value < DeltaRational(0) ? negative : negative | zero);
+                                    };
+                                    restrict(state.lower, true);
+                                    restrict(state.upper, false);
+                                }
+                                if (exponent % 2 == 0)
+                                    factor = (factor & zero) | ((factor & (negative | positive)) ? positive : 0);
+                                signs = productSigns(signs, factor);
+                            }
+                            if (signs & negative) continue;
+                            include(support, reasons);
+                            strictFactor = !(signs & zero);
+                        }
+                    }
+                    int row;
+                    bool reversed = false;
+                    if (product.terms.size() == 1) {
+                        row = product.terms.front().first;
+                        reversed = product.terms.front().second < 0;
+                    } else {
+                        auto found = productRows_.find(product.terms);
+                        if (found == productRows_.end()) {
+                            const int auxiliary = simplex_.addConstraint(product.terms, 0);
+                            if (auxiliary < 0) throw ResourceExhausted("multiplied polynomial row allocation failed");
+                            found = productRows_.emplace(product.terms, auxiliary).first;
+                            ++stats.multipliedRows;
+                        }
+                        row = found->second;
+                    }
+                    for (const bool lower : {true, false}) {
+                        if (source.rel != Relation::Eq &&
+                            lower != (source.rel == Relation::Geq || source.rel == Relation::Gt)) continue;
+                        const bool direction = lower != reversed;
+                        const bool strict = strictFactor && (source.rel == Relation::Lt || source.rel == Relation::Gt);
+                        const DeltaRational endpoint(0, strict ? direction ? 1 : -1 : 0);
+                        const auto state = simplex_.varState(row);
+                        const auto& previous = direction ? state.lower : state.upper;
+                        if (previous.bound.isFinite() &&
+                            (direction ? previous.bound.value >= endpoint : previous.bound.value <= endpoint)) continue;
+                        const BoundInfo bound(BoundValue(endpoint), label(row, support));
+                        ++stats.multipliedFacts;
+                        progress = true;
+                        if (!(direction ? simplex_.assertLower(row, bound) : simplex_.assertUpper(row, bound)))
+                            return liftConflict();
+                    }
+                }
+                if (progress) continue;
                 updateStats();
                 if (consequences) {
                     // Expand while this check's internal explanation labels

@@ -14,6 +14,87 @@ auto variable(VarId id) { return RationalPolynomial::fromVar(id, 1, 1); }
 auto constant(const mpq_class& value) { return RationalPolynomial::fromConstant(value); }
 }
 
+TEST_CASE("Multiplied relaxation: even monomial factors transport exact polynomial order") {
+    const auto x = variable(0), y = variable(1), s = variable(2), t = variable(3);
+    const auto factor = s * s * t * t;
+    std::vector<SignRefuteConstraint> constraints{
+        {(x - y) * constant(mpq_class(2, 3)), Relation::Geq, SatLit::negative(101)},
+        {factor * y - constant(1), Relation::Geq, SatLit::positive(503)},
+        {factor * x, Relation::Leq, SatLit::negative(9001)}};
+    PolynomialLinearRefuter refuter;
+    PolynomialLinearStatistics stats;
+    const auto conflict = refuter.check(constraints, deadline(), &stats);
+    REQUIRE(conflict);
+    for (const auto& source : constraints)
+        CHECK(std::find(conflict->begin(), conflict->end(), source.reason) != conflict->end());
+    // Removing the transported order leaves x=0, y=s=t=1 as a witness.
+    constraints.erase(constraints.begin());
+    CHECK_FALSE(refuter.check(constraints, deadline()));
+}
+
+TEST_CASE("Multiplied relaxation: equality transport needs no multiplier sign assumption") {
+    const auto x = variable(0), y = variable(1), s = variable(2), t = variable(3);
+    const auto factor = s * t;
+    std::vector<SignRefuteConstraint> constraints{
+        {x - y, Relation::Eq, SatLit::negative(11)},
+        {factor * y - constant(1), Relation::Geq, SatLit::positive(31)},
+        {factor * x, Relation::Leq, SatLit::negative(71)}};
+    PolynomialLinearRefuter refuter;
+    const auto conflict = refuter.check(constraints, deadline());
+    REQUIRE(conflict);
+    for (const auto& source : constraints)
+        CHECK(std::find(conflict->begin(), conflict->end(), source.reason) != conflict->end());
+    // The order alone permits a negative multiplier and reverses the products.
+    constraints[0].rel = Relation::Geq;
+    CHECK_FALSE(refuter.check(constraints, deadline()));
+    const std::unordered_map<VarId, mpq_class> point{{0, 0}, {1, -1}, {2, -1}, {3, 1}};
+    CHECK(constraints[0].poly.evaluateRational(point) >= 0);
+    CHECK(constraints[1].poly.evaluateRational(point) >= 0);
+    CHECK(constraints[2].poly.evaluateRational(point) <= 0);
+}
+
+TEST_CASE("Multiplied relaxation: strictness retains nonzero factor premises after withdrawal") {
+    const auto x = variable(0), y = variable(1), z = variable(2);
+    std::vector<SignRefuteConstraint> constraints{
+        {x - y, Relation::Gt, SatLit::negative(17)},
+        {z, Relation::Geq, SatLit::positive(37)},
+        {z * x - z * y, Relation::Leq, SatLit::negative(97)}};
+    PolynomialLinearRefuter refuter;
+    CHECK_FALSE(refuter.check(constraints, deadline())); // z=0 remains admissible.
+    constraints[1].rel = Relation::Gt;
+    const auto conflict = refuter.check(constraints, deadline());
+    REQUIRE(conflict);
+    for (const auto& source : constraints)
+        CHECK(std::find(conflict->begin(), conflict->end(), source.reason) != conflict->end());
+    constraints[1].rel = Relation::Leq;
+    constraints[1].reason = SatLit::negative(37);
+    CHECK_FALSE(refuter.check(constraints, deadline()));
+    refuter.reset();
+    CHECK_FALSE(refuter.check(constraints, deadline()));
+}
+
+TEST_CASE("Multiplied relaxation: signed upper orders and cancellation preserve caller context") {
+    const auto x = variable(0), y = variable(1), z = variable(2);
+    std::vector<SignRefuteConstraint> constraints{
+        {(x - y) * constant(mpq_class(7, 5)), Relation::Leq, SatLit::negative(41)},
+        {z, Relation::Geq, SatLit::positive(43)},
+        {z * x - z * y, Relation::Gt, SatLit::negative(47)}};
+    PolynomialLinearRefuter refuter;
+    PolynomialLinearStatistics stats;
+    CHECK_FALSE(refuter.check(constraints, std::chrono::steady_clock::now(), &stats));
+    CHECK(stats.exhausted);
+    const auto conflict = refuter.check(constraints, deadline(), &stats);
+    REQUIRE(conflict);
+    CHECK_FALSE(stats.exhausted);
+    for (const auto& source : constraints)
+        CHECK(std::find(conflict->begin(), conflict->end(), source.reason) != conflict->end());
+    constraints[0].rel = Relation::Geq;
+    CHECK_FALSE(refuter.check(constraints, deadline()));
+    PolynomialLinearRefuter limited(1);
+    CHECK_FALSE(limited.check(constraints, deadline(), &stats));
+    CHECK(stats.exhausted);
+}
+
 TEST_CASE("Polynomial linear refutation: coupled inequalities explain a nonlinear context conflict") {
     const auto x = variable(0), y = variable(1), z = variable(2);
     const std::vector<SignRefuteConstraint> constraints{

@@ -19,6 +19,7 @@ struct PolynomialLinearStatistics {
     size_t productFacts = 0, reusedProductRows = 0, closureChecks = 0;
     size_t monomialProducts = 0, monomialDivisibilityChecks = 0;
     size_t signFacts = 0;
+    size_t multipliedCandidates = 0, multipliedFacts = 0, multipliedRows = 0;
     size_t disequalityChecks = 0;
     size_t fixedMonomials = 0, zeroMonomials = 0;
 };
@@ -30,6 +31,8 @@ struct PolynomialLinearStatistics {
 // fixes its multiples without selecting which factor vanishes. These rules hold
 // for real and integer clients.
 // Explained factor bounds and even powers also constrain monomial signs.
+// Multiplying a source by a proved nonnegative monomial transports its order
+// through the current monomial vocabulary. Equalities need no sign premise.
 // A disequality conflicts only when the relaxation proves its excluded value
 // is forced. An unfixed relaxation point establishes no SAT result.
 // Returned literals are the original premises of an exact Simplex conflict.
