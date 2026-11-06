@@ -43,22 +43,38 @@ IntervalZ IntervalEvaluator::evaluatePolynomial(
 }
 
 bool IntervalEvaluator::isDefinitelyViolated(const IntervalZ& polyInterval, Relation rel) {
+    return relationValue(polyInterval, rel) == std::optional<bool>(false);
+}
+
+std::optional<bool> IntervalEvaluator::relationValue(const IntervalZ& range, Relation rel) {
+    if (range.isEmpty()) return std::nullopt;
     switch (rel) {
         case Relation::Leq:
-            return polyInterval.lo > 0;
+            if (range.hi <= 0) return true;
+            if (range.lo > 0) return false;
+            break;
         case Relation::Geq:
-            return polyInterval.hi < 0;
+            if (range.lo >= 0) return true;
+            if (range.hi < 0) return false;
+            break;
         case Relation::Lt:
-            return polyInterval.lo >= 0;
+            if (range.hi < 0) return true;
+            if (range.lo >= 0) return false;
+            break;
         case Relation::Gt:
-            return polyInterval.hi <= 0;
+            if (range.lo > 0) return true;
+            if (range.hi <= 0) return false;
+            break;
         case Relation::Eq:
-            return !polyInterval.containsZero();
+            if (range.lo == 0 && range.hi == 0) return true;
+            if (!range.containsZero()) return false;
+            break;
         case Relation::Neq:
-            return polyInterval.lo == 0 && polyInterval.hi == 0;
-        default:
-            return false;
+            if (!range.containsZero()) return true;
+            if (range.lo == 0 && range.hi == 0) return false;
+            break;
     }
+    return std::nullopt;
 }
 
 std::optional<ReasonedInterval> IntervalEvaluator::evaluateTerms(

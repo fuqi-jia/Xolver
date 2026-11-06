@@ -23,6 +23,7 @@ set(XOLVER_IR_SOURCES
     "ir/NativeKind.cpp"
     "ir/NativeTerms.cpp"
     "ir/NumericLiteral.cpp"
+    "ir/PartialBooleanEvaluation.cpp"
     "ir/Smt2Dumper.cpp"
     "ir/TermFeatureIndex.cpp"
 )

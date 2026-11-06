@@ -63,6 +63,10 @@ public:
         const std::vector<PolynomialKernel::MonomialTerm>& terms,
         const ReasonedBox& box, std::optional<VarId> omitted = std::nullopt) const;
 
+    // A value is returned only when every point of the nonempty enclosure
+    // agrees. An empty enclosure or a relation crossing its boundary is open.
+    static std::optional<bool> relationValue(const IntervalZ& range, Relation relation);
+
 private:
     PolynomialKernel& kernel_;
 

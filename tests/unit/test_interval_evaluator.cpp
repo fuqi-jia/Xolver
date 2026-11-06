@@ -37,6 +37,35 @@ static ReasonedBox makeBox(const std::string& var, mpz_class lo, mpz_class hi,
     return box;
 }
 
+TEST_CASE("IntervalEvaluator: relation truth agrees with every enclosed integer") {
+    for (const auto relation : {Relation::Eq, Relation::Neq, Relation::Lt,
+                                Relation::Leq, Relation::Gt, Relation::Geq}) {
+        auto holds = [&](long value) {
+            switch (relation) {
+                case Relation::Eq: return value == 0;
+                case Relation::Neq: return value != 0;
+                case Relation::Lt: return value < 0;
+                case Relation::Leq: return value <= 0;
+                case Relation::Gt: return value > 0;
+                case Relation::Geq: return value >= 0;
+            }
+            return false;
+        };
+        for (long lower = -3; lower <= 3; ++lower) {
+            for (long upper = lower; upper <= 3; ++upper) {
+                std::optional<bool> expected = holds(lower);
+                for (long point = lower; point <= upper; ++point)
+                    if (holds(point) != holds(lower)) expected.reset();
+                CHECK(IntervalEvaluator::relationValue({lower, upper}, relation) == expected);
+            }
+        }
+        CHECK_FALSE(IntervalEvaluator::relationValue({1, 0}, relation).has_value());
+    }
+    const mpz_class large = mpz_class(1) << 130;
+    CHECK(IntervalEvaluator::relationValue({large, large + 1}, Relation::Gt) == true);
+    CHECK(IntervalEvaluator::relationValue({-large, -large + 1}, Relation::Geq) == false);
+}
+
 TEST_CASE("IntervalEvaluator: x^2 - 1 <= 0 on [-2,2] -> not violated") {
     auto kernel = createPolynomialKernel();
     IntervalEvaluator eval(*kernel);

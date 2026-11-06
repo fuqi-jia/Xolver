@@ -2,7 +2,6 @@
 
 #include "ir/NativeTerms.h"
 #include <unordered_map>
-#include <optional>
 
 namespace xolver {
 
@@ -22,10 +21,6 @@ public:
 
     // Check a single expression.
     bool eval(ExprId eid, const NativeTerms& ir, const BoolAssignment& assignment);
-
-private:
-    std::optional<bool> evalKnown(ExprId eid, const NativeTerms& ir,
-                                 const BoolAssignment& assignment);
 };
 
 } // namespace xolver

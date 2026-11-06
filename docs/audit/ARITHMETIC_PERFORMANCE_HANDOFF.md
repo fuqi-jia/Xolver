@@ -91,6 +91,38 @@ recorded above. Original-C QCP evidence at the newer worker freeze remains open.
 The protected set is unused, and overall superiority over Z3 is not established.
 Private inputs, models and individual identifiers remain off GitHub.
 
+### FULINA development: partial Boolean evaluation over candidate intervals
+
+Candidate search now composes exact polynomial interval enclosures through a
+shared three-valued Boolean DAG interpreter before constructing integer
+circuits. Proven predicates and conditional subexpressions fold at the current
+width. Excluded domains request widening without spending a SAT search attempt;
+they never establish source UNSAT. Interval and Boolean caches belong to one
+candidate interpretation. Exact original-formula validation, finite-only APIs,
+resource settings and arithmetic rollback policies are retained.
+
+The same interpreter replaces the duplicated Boolean model-validation walk.
+Unknown atoms remain unknown under negation; valid nary implication and XOR
+use their full Boolean semantics. Regressions cover truth tables, unsupported
+arities and sorts, deep shared DAGs, query replacement, nonlinear powers and
+integer values requiring more than four narrow width attempts.
+
+The first required-facts-only variant passed 2,190 unit cases but retained
+9 of 18 independently verified controls with worse PAR-2; it is closed as a
+standalone experiment. The whole-formula implementation passes **2,193 cases /
+1,331,859 assertions**, with proofs enabled. Its frozen CLI is
+`9ce136ede0377885366840e104e5c0cb64c8378d364ad4e968bed4ff83ff0b08`.
+The unchanged fresh 18-input comparison retains **9 to 9 verified**, versus
+16 for Z3, with no losses or errors. Verified PAR-2 totals improve from
+**1,171.418 to 1,159.593 seconds**, versus **271.947** for Z3. This is a limited
+timing observation, not an additional solved input or an overall win.
+
+Fresh complete fixed160, development587 and private14408 comparisons against
+accepted weighted main are in progress at this freeze. Each solver receives
+60 seconds, one leased physical CPU and 16 GiB. Actual timed models require
+the same independent replay policy as above. Server acceptance and PR/main CI
+remain pending for this development change; neither protected set is used.
+
 ## Previous checkpoint: sparse integer equality components (2026-11-06)
 
 [PR #101](https://github.com/fuqi-jia/Xolver/pull/101) merged as

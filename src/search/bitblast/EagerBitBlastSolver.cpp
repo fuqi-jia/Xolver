@@ -13,7 +13,9 @@
 #include "search/linear/LinearBoundPropagation.h"
 #include "algebra/linear/LinearExpr.h"
 #include "algebra/poly/PolynomialEvaluation.h"
+#include "algebra/interval/IntervalEvaluator.h"
 #include "contracts/SatSolver.h"
+#include "ir/PartialBooleanEvaluation.h"
 #include <algorithm>
 #include <functional>
 #include <iterator>
@@ -705,6 +707,69 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
             if (compact()) continue;
             return out;
         }
+        // Exclude an impossible interpretation before constructing its arithmetic
+        // circuits. Bounds enclose the actual signed leaves, including constant
+        // sign bits and derived radix values; they are local to this width.
+        ReasonedBox box;
+        for (const auto& [variable, bits] : varBits) {
+            IntervalZ range{0, 0};
+            if (bits.isConst) range = {bits.constValue, bits.constValue};
+            else for (unsigned bit = 0; bit < bits.width(); ++bit) {
+                mpz_class weight = mpz_class(1) << bit;
+                if (bit + 1 == bits.width()) weight = -weight;
+                if (bits.bits[bit] == enc.constFalse()) continue;
+                if (bits.bits[bit] == enc.constTrue()) {
+                    range.lo += weight;
+                    range.hi += weight;
+                } else if (weight < 0) range.lo += weight;
+                else range.hi += weight;
+            }
+            box.set(variable, {std::move(range), {}});
+        }
+        IntervalEvaluator intervals(*kernel_);
+        std::unordered_map<PolyId, std::optional<IntervalZ>> ranges;
+        auto intervalTruth = [&](ExprId id) -> std::optional<bool> {
+            if (expired()) return std::nullopt;
+            const auto atom = atomCs_.find(id);
+            if (atom == atomCs_.end()) return std::nullopt;
+            bool allTrue = true;
+            for (const auto& [polynomial, relation] : atom->second.parts) {
+                std::optional<bool> value;
+                if (polynomial == NullPoly) value = relation == Relation::Eq;
+                else if (radixZeroPolynomials.contains(polynomial))
+                    value = relationHolds(mpz_class(0), relation);
+                else {
+                    auto [entry, inserted] = ranges.try_emplace(polynomial);
+                    if (inserted) if (const auto terms = kernel_->terms(polynomial))
+                        if (auto range = intervals.evaluateTerms(*terms, box))
+                            entry->second = std::move(range->interval);
+                    if (entry->second)
+                        value = IntervalEvaluator::relationValue(*entry->second, relation);
+                }
+                if (value == std::optional<bool>(false)) return false;
+                allTrue = allTrue && value == std::optional<bool>(true);
+            }
+            return allTrue ? std::optional<bool>(true) : std::nullopt;
+        };
+        PartialBooleanEvaluation interpretation(ir, intervalTruth);
+        bool excluded = false;
+        for (auto assertion : assertions) {
+            if (expired()) return out;
+            if (interpretation.evaluate(assertion) == std::optional<bool>(false)) {
+                excluded = true;
+                break;
+            }
+        }
+        if (diag) std::cerr << "[EAGER-INTERVAL] width=" << K
+                            << " ranges=" << ranges.size() << " excluded=" << excluded
+                            << " booleanNodes=" << interpretation.evaluatedNodes()
+                            << " satVars=" << enc.varCount() << "\n";
+        if (excluded) {
+            if (exactDomains) break;
+            // An interval exclusion only requests a wider interpretation; it
+            // is not a SAT search result about the source's integer feasibility.
+            continue;
+        }
         // A plan that ends after this solve has one fixed interpretation.
         // Its query facts can participate in permanent SAT preprocessing.
         if (exactDomains) {
@@ -813,6 +878,11 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
             }
             auto m = memo.find(eid);
             if (m != memo.end()) return m->second;
+            if (auto known = interpretation.evaluate(eid)) {
+                const auto literal = *known ? enc.constTrue() : enc.constFalse();
+                memo.emplace(eid, literal);
+                return literal;
+            }
             const TermExpr& e = ir.get(eid);
             SatLit r = enc.constFalse();
             switch (e.kind) {

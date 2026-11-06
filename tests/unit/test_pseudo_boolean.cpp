@@ -584,3 +584,43 @@ TEST_CASE("General integer portfolio: linear predicates compose with nonlinear i
     const mpz_class value = weight * result.model.at("x") - (weight - 3) * result.model.at("y");
     CHECK(value >= 0);
 }
+
+TEST_CASE("Integer interval preflight: rejected signed widths do not constrain later queries") {
+    BinaryFixture f;
+    const auto x = f.variable("x"), y = f.variable("y");
+    const auto sum = f.term(Kind::Add, {x, y});
+    const auto difference = f.term(Kind::Eq, {f.term(Kind::Sub, {x, y}), f.integer(2)});
+    EagerBitBlastSolver solver;
+    for (const auto& target : std::vector<mpz_class>{1024, -1024, 0, (mpz_class(1) << 40) + 2}) {
+        const auto equality = f.term(Kind::Eq, {sum, f.integer(target)});
+        CHECK(solver.solveLinear(f.ir, {difference, equality}).status == EagerBitBlastSolver::Status::Unknown);
+        const auto result = solver.solve(f.ir, {difference, equality});
+        REQUIRE(result.status == EagerBitBlastSolver::Status::Sat);
+        CHECK(result.model.at("x") + result.model.at("y") == target);
+        CHECK(result.model.at("x") - result.model.at("y") == 2);
+    }
+    const auto negative = f.term(Kind::Not, {f.term(Kind::Leq, {sum, f.integer(1024)})});
+    const auto result = solver.solve(f.ir, {negative});
+    REQUIRE(result.status == EagerBitBlastSolver::Status::Sat);
+    CHECK(result.model.at("x") + result.model.at("y") > 1024);
+}
+
+TEST_CASE("Integer interval preflight: conditional alternatives and nonlinear powers stay sound") {
+    BinaryFixture f;
+    const auto x = f.variable("x"), y = f.variable("y");
+    const auto sum = f.term(Kind::Add, {x, y});
+    EagerBitBlastSolver solver;
+    const auto either = f.term(Kind::Or, {
+        f.term(Kind::Geq, {sum, f.integer(1024)}),
+        f.term(Kind::Eq, {sum, f.integer(0)})});
+    const auto branch = solver.solve(f.ir, {either});
+    REQUIRE(branch.status == EagerBitBlastSolver::Status::Sat);
+    CHECK(branch.model.at("x") + branch.model.at("y") == 0);
+    const auto square = f.term(Kind::Mul, {x, x});
+    const auto nonlinear = solver.solve(f.ir, {
+        f.term(Kind::Geq, {square, f.integer(1024)}),
+        f.term(Kind::Lt, {x, f.integer(0)})});
+    REQUIRE(nonlinear.status == EagerBitBlastSolver::Status::Sat);
+    CHECK(nonlinear.model.at("x") * nonlinear.model.at("x") >= 1024);
+    CHECK(nonlinear.model.at("x") < 0);
+}
