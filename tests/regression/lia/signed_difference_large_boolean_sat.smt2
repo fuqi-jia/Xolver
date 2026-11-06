@@ -1,0 +1,8 @@
+(set-logic QF_LIA)
+(set-info :status sat)
+(declare-const x Int)
+(declare-const y Int)
+(assert (or (= (+ x y) 1208925819614629174706185)
+            (= (+ x y) 1208925819614629174706187)))
+(assert (distinct (+ x y) 1208925819614629174706185))
+(check-sat)

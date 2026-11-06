@@ -5,6 +5,7 @@
 #include "search/nia/preprocess/NiaNormalizer.h"   // NormalizedNiaConstraint
 #include "ir/types.h"                                  // VarId
 #include <map>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -23,6 +24,10 @@ public:
 
     void assertConstraint(const NormalizedNiaConstraint& c);
     SatLit encodeConstraint(const NormalizedNiaConstraint& c);
+
+    // Reify scaled integer differences with zero/adjacent rounded thresholds.
+    // Unsupported forms leave the caller's general encoding path available.
+    std::optional<SatLit> encodeDifferenceConstraint(PolyId p, Relation rel);
 
     // Encode a polynomial to its value bit-vector (used by assertConstraint).
     BitVec encodePoly(PolyId p);

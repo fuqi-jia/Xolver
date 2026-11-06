@@ -5,7 +5,10 @@
 #include "contracts/LinearFormKey.h"
 #include "base/WorkBudget.h"
 #include <gmpxx.h>
+#include <optional>
+#include <span>
 #include <string>
+#include <utility>
 #include <vector>
 #include <unordered_map>
 
@@ -34,5 +37,13 @@ bool extractLinearConstraint(ExprId eid, const NativeTerms& ir,
 // Negate a relation.
 // ============================================================================
 Relation negateRelation(Relation r);
+
+// A representative-model radius for integer difference predicates, allowing a
+// consistent sign change of each variable and arbitrary nonzero rational scales.
+// Supply EVERY affine atom as (lhs, rhs); any comparison and Boolean combination
+// is allowed. Unsupported forms return nullopt. This is a satisfiability cover,
+// NOT an entailed bound on every model; do not export it as a theory lemma.
+std::optional<mpz_class> integerDifferenceCoverRadius(
+    std::span<const std::pair<LinearFormKey, mpq_class>> forms);
 
 } // namespace xolver

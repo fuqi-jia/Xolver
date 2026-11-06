@@ -132,13 +132,59 @@ SatLit BitBlastEncoder::iteGate(SatLit s, SatLit t, SatLit e) {
     if (e == false_) return andGate(s, t);         // s ? t : 0
     if (t == false_) return andGate(s.negated(), e);
     if (e == true_)  return orGate(s.negated(), t);
-    SatLit c = freshVar();
-    if (over_) return c; // Preserve the already encoded prefix on exhaustion.
-    sat_.addClause({s.negated(), t.negated(), c});
-    sat_.addClause({s.negated(), t, c.negated()});
-    sat_.addClause({s, e.negated(), c});
-    sat_.addClause({s, e, c.negated()});
-    return c;
+    return internTernaryGate(TernaryGateKind::Ite, s, t, e);
+}
+
+SatLit BitBlastEncoder::majorityGate(SatLit a, SatLit b, SatLit c) {
+    if (over_) return false_;
+    if (a == b || a == c) return a;
+    if (b == c) return b;
+    if (a == b.negated()) return c;
+    if (a == c.negated()) return b;
+    if (b == c.negated()) return a;
+    if (a == true_) return orGate(b, c);
+    if (b == true_) return orGate(a, c);
+    if (c == true_) return orGate(a, b);
+    if (a == false_) return andGate(b, c);
+    if (b == false_) return andGate(a, c);
+    if (c == false_) return andGate(a, b);
+    return internTernaryGate(TernaryGateKind::Majority, a, b, c);
+}
+
+SatLit BitBlastEncoder::internTernaryGate(TernaryGateKind kind, SatLit a, SatLit b, SatLit c) {
+    TernaryGateKey key{kind, {a, b, c}};
+    if (kind == TernaryGateKind::Majority) {
+        std::sort(key.inputs.begin(), key.inputs.end(), [](SatLit left, SatLit right) {
+            return left.var < right.var || (left.var == right.var && left.sign < right.sign);
+        });
+    } else if (!a.sign) {
+        key.inputs[0] = a.negated();
+        std::swap(key.inputs[1], key.inputs[2]);
+    }
+    if (const auto found = ternaryGateCache_.find(key); found != ternaryGateCache_.end()) {
+        ++ternaryCacheHits_;
+        return found->second;
+    }
+    const auto output = freshVar();
+    if (over_) return output;
+    const auto x = key.inputs[0], y = key.inputs[1], z = key.inputs[2];
+    if (kind == TernaryGateKind::Ite) {
+        sat_.addClause({x.negated(), y.negated(), output});
+        sat_.addClause({x.negated(), y, output.negated()});
+        sat_.addClause({x, z.negated(), output});
+        sat_.addClause({x, z, output.negated()});
+    } else {
+        // Every pair of true inputs forces output; every pair of false inputs
+        // forces its negation. No intermediate sum or selector is needed.
+        sat_.addClause({x.negated(), y.negated(), output});
+        sat_.addClause({x.negated(), z.negated(), output});
+        sat_.addClause({y.negated(), z.negated(), output});
+        sat_.addClause({x, y, output.negated()});
+        sat_.addClause({x, z, output.negated()});
+        sat_.addClause({y, z, output.negated()});
+    }
+    ternaryGateCache_.emplace(std::move(key), output);
+    return output;
 }
 
 void BitBlastEncoder::assertLit(SatLit l) {
@@ -155,9 +201,7 @@ BitVec BitBlastEncoder::signExtend(const BitVec& a, unsigned width) {
 std::pair<SatLit, SatLit> BitBlastEncoder::fullAdder(SatLit a, SatLit b, SatLit cin) {
     SatLit axb  = xorGate(a, b);
     SatLit sum  = xorGate(axb, cin);
-    SatLit ab   = andGate(a, b);
-    SatLit acin = andGate(axb, cin);
-    SatLit cout = orGate(ab, acin);
+    SatLit cout = majorityGate(a, b, cin);
     return {sum, cout};
 }
 
@@ -289,7 +333,30 @@ BitVec BitBlastEncoder::powConst(const BitVec& a, unsigned e) {
 }
 
 SatLit BitBlastEncoder::eq(const BitVec& a, const BitVec& b) {
-    return isZero(sub(a, b));
+    const auto width = std::max(a.width(), b.width());
+    const auto left = signExtend(a, width), right = signExtend(b, width);
+    auto equal = constTrue();
+    for (unsigned bit = 0; bit < width; ++bit)
+        equal = andGate(equal, xorGate(left.bits[bit], right.bits[bit]).negated());
+    return equal;
+}
+
+SatLit BitBlastEncoder::compare(const BitVec& a, const BitVec& b, Relation rel) {
+    if (rel == Relation::Eq) return eq(a, b);
+    if (rel == Relation::Neq) return eq(a, b).negated();
+    const bool reverse = rel == Relation::Gt || rel == Relation::Leq;
+    const auto width = std::max(a.width(), b.width());
+    const auto left = signExtend(reverse ? b : a, width);
+    const auto right = signExtend(reverse ? a : b, width);
+    auto less = constFalse();
+    for (unsigned bit = 0; bit < width; ++bit) {
+        // A higher differing bit overrides lower bits. At the sign position,
+        // a negative left operand is smaller; elsewhere a zero left bit wins.
+        less = bit + 1 == width
+            ? majorityGate(left.bits[bit], right.bits[bit].negated(), less)
+            : majorityGate(left.bits[bit].negated(), right.bits[bit], less);
+    }
+    return rel == Relation::Leq || rel == Relation::Geq ? less.negated() : less;
 }
 
 SatLit BitBlastEncoder::relZero(const BitVec& a, Relation rel) {

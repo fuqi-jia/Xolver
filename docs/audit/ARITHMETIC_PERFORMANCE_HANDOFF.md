@@ -1,25 +1,41 @@
 # Arithmetic validation and continuation record
 
-## Current checkpoint: shared integer encoding contexts (2026-11-06)
+## Current checkpoint: signed weighted integer encoding (2026-11-06)
 
-[PR #102](https://github.com/fuqi-jia/Xolver/pull/102) merged as
-21e9601604b161e1ecd25e9e48ec2f43322fcf21 after complete server acceptance.
-Both jobs in its [PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/42129679565)
-and [main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42133242643) pass.
-The accepted frozen CLI is
-`a68e85c39f20ae237c6dc7d8377f8171f9a63562badea00f24db0db7fd707afb`.
-Fixed160 verifies **116 results**, including the independently rechecked
-input-bound certificate. Same-round Z3 also verifies 116, with better mean
-verified PAR-2 (**34.390 versus 36.334 seconds**). All **14,408 private queries**
-are independently verified. Detailed complete-suite results follow below.
-There remain **43 timeouts and one unknown** on fixed160.
+[PR #103](https://github.com/fuqi-jia/Xolver/pull/103) merged as
+937ebf03d5ce43ab19e4bf606fdbf269b9bdb6fb after complete server acceptance and
+both final-head [PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42144673710)
+passed. Both jobs in its
+[main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42148651505) also pass.
+Fixed160 improves **116 to 117 independently verified results**, versus 115 for
+same-round Z3, with no losses or errors. Mean verified PAR-2 worsens from
+**36.313 to 36.841 seconds**, versus **35.024** for Z3. There remain **42 timeouts
+and one unknown**. All **14,408 private queries** remain independently verified,
+but their total solver time remains substantially slower than Z3. Complete
+frozen-suite results and the new binary identity follow below.
 
-Fresh original-C QCP/max3 workflows pass final-check with both frozen backends.
-Their actual-query evidence audit and complete workflow timing comparison remain
-pending; branch and GCD proof workflows are still in progress. No protected set
-has been used, and overall superiority over Z3 is not established.
+Fresh original-C QCP workflows for branch, max3 and GCD now pass canonical
+final-check with both backends: **three unique programs and 23 top-level VCs per
+backend**, without `Admitted`. All **4,680 actual SMT occurrences** across the
+workflows are independently verified: **2,340 per backend**, each with 1,188 SAT
+and 1,152 UNSAT results. Actual timed Xolver models are replayed by Z3 and cvc5;
+Z3 results require cvc5. Neither self-verdicts nor freshly regenerated models
+replace actual timed evidence. There are no incorrect results, unconfirmed
+decisions or protocol errors in this round.
 
-### FULINA development: signed weighted linear atoms across integer widths
+These QCP workflows use the previous accepted
+[PR #102](https://github.com/fuqi-jia/Xolver/pull/102) freeze, not the new weighted
+binary. Final-check phases include original-C symexec, selected SMT and Rocq:
+**54.351 seconds total for Xolver versus 56.192 for Z3**, with 780 calls per
+backend in those phases. These single samples and potentially different checked
+proof scripts do not establish backend superiority; inclusive workflow wall
+times separately include proof development and scheduling. GCD retains its
+supplied partial-correctness contract and external abs specification; max3
+retains its supplied upper-bound specification. Final-version QCP timing and
+the final protected-set comparison remain open. No protected set has been used,
+and overall superiority over Z3 is not established.
+
+### Accepted implementation: signed weighted linear atoms across integer widths
 
 Runtime LIA now admits the existing general integer candidate search, while
 the separate finite-only `solveLinear` API retains its contract. The first
@@ -69,11 +85,157 @@ physical CPU and 16 GiB per solver:
 Every actual timed Xolver SAT model is independently replayed by both Z3 and
 cvc5; actual timed Z3 models require cvc5 replay. UNSAT requires an independent
 verdict or checked certificate. These separate cohorts are not summed into an
-overall score. [PR #103](https://github.com/fuqi-jia/Xolver/pull/103) tracks this
-change; promotion requires the final PR head and main CI to pass. Original-C
-QCP evidence at the newer worker freeze remains open. The protected set is
-unused, and overall superiority over Z3 is not established. Private inputs,
-models and individual identifiers remain off GitHub.
+overall score. This implementation is merged through
+[PR #103](https://github.com/fuqi-jia/Xolver/pull/103); its merged-main CI is
+recorded above. Original-C QCP evidence at the newer worker freeze remains open.
+The protected set is unused, and overall superiority over Z3 is not established.
+Private inputs, models and individual identifiers remain off GitHub.
+
+### FULINA development: partial Boolean evaluation over candidate intervals
+
+Candidate search now composes exact polynomial interval enclosures through a
+shared three-valued Boolean DAG interpreter before constructing integer
+circuits. Proven predicates and conditional subexpressions fold at the current
+width. Excluded domains request widening without spending a SAT search attempt;
+they never establish source UNSAT. Interval and Boolean caches belong to one
+candidate interpretation. Exact original-formula validation, finite-only APIs,
+resource settings and arithmetic rollback policies are retained.
+
+The same interpreter replaces the duplicated Boolean model-validation walk.
+Unknown atoms remain unknown under negation; valid nary implication and XOR
+use their full Boolean semantics. Regressions cover truth tables, unsupported
+arities and sorts, deep shared DAGs, query replacement, nonlinear powers and
+integer values requiring more than four narrow width attempts.
+
+The first required-facts-only variant passed 2,190 unit cases but retained
+9 of 18 independently verified controls with worse PAR-2; it is closed as a
+standalone experiment. The whole-formula implementation passes **2,193 cases /
+1,331,859 assertions**, with proofs enabled. Its frozen CLI is
+`9ce136ede0377885366840e104e5c0cb64c8378d364ad4e968bed4ff83ff0b08`.
+The unchanged fresh 18-input comparison retains **9 to 9 verified**, versus
+16 for Z3, with no losses or errors. Verified PAR-2 totals improve from
+**1,171.418 to 1,159.593 seconds**, versus **271.947** for Z3. This is a limited
+timing observation, not an additional solved input or an overall win.
+
+Complete comparisons at that freeze retained all 587 development and 14,408
+private results, but fixed160 raw verified counts fell **115 to 114**, versus
+114 for Z3, with no gains and one loss. Unconfirmed decisions remain excluded.
+Private-query solver totals were **1,291.285 to 1,298.924 seconds**, versus
+**389.697** for Z3. This standalone optimization is not accepted for main.
+
+### FULINA development: complete integer difference candidate domains
+
+A shared algebra helper now certifies representative-model covers for affine
+integer atoms that become scaled differences after consistent variable sign
+changes. It merges repeated coefficients, rejects unsupported forms and
+inconsistent orientations, and computes the radius using exact rational
+arithmetic. Candidate search selects one complete width for this fragment,
+including widths beyond 64 bits. A cover is not an entailed bound on every
+source model. SAT-only results, exact model validation, finite-only APIs and
+arithmetic rollback policies retain their contracts.
+
+Proof-enabled Panda9 / ExperimentOS qualification passes **2,197 cases /
+1,333,562 assertions**. The frozen CLI is
+`ca8c020c797eb529628dd3fa4cf808b2190148bc3e2a3c2f1ffe5654a6779368`.
+Tests cover exact scales, coefficient cancellation, orientation consistency,
+all feasible atom sign patterns in an exhaustive small construction, large
+integers and query replacement.
+
+A fresh 65-input focused comparison combines the existing controls, all fixed
+LIA inputs and two independent generic regressions, deduplicating input hashes.
+Verified counts improve **46 to 47**, versus **53** for Z3, with one gain, no
+losses and no errors. Verified PAR-2 totals are **2,776.266 to 2,667.764 seconds**,
+versus **1,553.807** for Z3. The newly solved SAT input takes **22.513 seconds**;
+both other timed programs reach 60 seconds. Z3 and CVC5 independently accept
+the actual timed model. Its diagnostic trace does not qualify for the new
+difference cover, so attribution of this gain to that helper is unproven.
+The earlier near-budget regression also does not qualify; its extra width
+search remains unresolved.
+
+The complete comparison did not reproduce the gain: fixed160 raw verified
+counts fell **116 to 115**, versus 114 for Z3, with no gains, one loss and no
+errors. The fresh run retains all 587 development and 14,408 private results.
+Private-query solver totals are **1,333.389 to 1,340.699 seconds**, versus
+**406.476** for Z3. This standalone performance experiment is closed without
+acceptance; the exact large-integer candidate capability remains on FULINA.
+
+### FULINA development: direct signed difference comparison encoding
+
+Signed word equality now compares sign-extended bits directly. A shared signed
+comparison primitive avoids subtraction circuits; whole-formula candidate
+search and polynomial constraint encoding both use it for scaled integer
+differences. Exact floor and ceiling convert zero or adjacent integer edges
+to direct comparisons, including both predicate polarities. Other forms retain
+their existing exact encoding. Resource settings, API contracts and arithmetic
+rollback policies are unchanged.
+
+Proof-enabled Panda9 / ExperimentOS qualification passes **2,200 cases /
+1,353,122 assertions**. The frozen CLI is
+`b40a0e1b372e6d75ab7410e51d28bcb00260640ecf61a66baafccf7caeb50a4b`.
+New exhaustive checks cover unequal signed widths, extremal values, rational
+threshold rounding, large coefficients, general fallback, both polarities and
+nonlinear candidate queries. Diagnostic traces demonstrate fewer arithmetic
+threshold states and SAT variables; this is not itself a solved-input claim.
+
+The unchanged 65-input comparison gives **46 to 47 verified**, versus **52**
+for Z3: two gains, one loss and no errors. Actual timed SAT models require both
+Z3 and CVC5 acceptance. Verified PAR-2 totals are **2,776.738 to 2,683.785 seconds**,
+versus **1,659.824** for Z3. This standalone candidate is not accepted for main,
+and its complete suites have not been rerun. The following implementation
+addresses its carry and comparison representation; no protected set is used,
+and overall superiority over Z3 is unproven.
+
+### FULINA development: shared ternary definitions and majority carries
+
+Boolean ITE definitions now share exact literal-keyed gates, with canonical
+selector polarity. A shared majority primitive uses one output and six clauses
+for a carry, replacing intermediate AND/OR gates in ordinary addition and
+pseudo-Boolean compression. Signed comparisons use the same primitive.
+Cache keys preserve every variable-ID bit, input polarity and gate kind;
+allocation failure never caches an incomplete definition. Exact arithmetic,
+model checks, resource settings, API contracts and rollback policies are unchanged.
+
+Proof-enabled Panda9 / ExperimentOS qualification passes **2,202 cases /
+1,363,554 assertions**. Exhaustive checks cover input polarities, constants,
+duplicates, complementary inputs, high variable IDs, canonical sharing and
+allocation exhaustion. The frozen CLI is
+`06dd48f4b695b4f00ded14e811ac71e44e8c8bcd3d4b2dc4ff3b7d49c7e09860`.
+
+The unchanged 65-input comparison gives **46 to 47 independently verified**,
+versus **52** for Z3: one gain, no losses and no errors. The preceding lost SAT
+input remains verified in this round. Verified PAR-2 totals improve from
+**2,776.199 to 2,628.914 seconds**, versus **1,663.965** for Z3. Both independent
+checkers accept the actual timed model of the new SAT result. Diagnostic traces
+confirm smaller encodings and reused ternary definitions on some inputs, but
+do not establish the cause of every timing change.
+
+Complete fresh comparisons use the accepted weighted-main freeze and unchanged
+reference programs. ExperimentOS assigns available physical cores, excluding
+other leases and external busy cores; every solver/input retains 60 seconds,
+one physical CPU and 16 GiB:
+
+- Fixed160 improves **114 to 117 raw verified**. Fresh symmetric checking of an
+  original-input-bound residue certificate gives **115 to 118 verified**, versus
+  **116 for same-round Z3**, with three gains, no losses and no errors. The
+  candidate has **66 SAT / 52 UNSAT / 41 timeouts / one unknown**. One gain is on
+  an unchanged real-arithmetic path and is not attributed to this implementation.
+  Mean verified PAR-2 improves from **38.319 to 36.305 seconds**, versus **34.352**
+  for Z3. Eight unconfirmed Z3 results remain excluded. No timeout or unknown is
+  upgraded, and favorable historical results do not replace the fresh baseline.
+- Development587 retains **587 to 587 verified**, versus 584 for Z3. Total
+  solver time is **50.183 to 50.226 seconds**, versus **19.337** for Z3. Three
+  unconfirmed Z3 model replays remain excluded.
+- Private14408 retains every independently verified result in both versions and
+  Z3: **8,940 SAT / 5,468 UNSAT**, with no losses, timeouts, unknowns, unconfirmed
+  results or errors. Total solver time is **1,547.980 to 1,550.934 seconds**,
+  versus **467.153** for Z3; no private-query speedup is established.
+
+All timed Xolver SAT models require both independent checkers; UNSAT requires
+an independent verdict or checked certificate. These results support a fixed-set
+correct-count gain, not an overall win or final-version QCP coverage. Complete
+server evidence passes; PR CI and main acceptance remain pending. No protected
+set has been used. Private inputs, models and individual identifiers remain off
+GitHub.
 
 ## Previous checkpoint: sparse integer equality components (2026-11-06)
 

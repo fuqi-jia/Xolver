@@ -13,7 +13,9 @@
 #include "search/linear/LinearBoundPropagation.h"
 #include "algebra/linear/LinearExpr.h"
 #include "algebra/poly/PolynomialEvaluation.h"
+#include "algebra/interval/IntervalEvaluator.h"
 #include "contracts/SatSolver.h"
+#include "ir/PartialBooleanEvaluation.h"
 #include <algorithm>
 #include <functional>
 #include <iterator>
@@ -465,6 +467,36 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
     }
     if (finiteLinearOnly && !boundedLinear) return out;
     const bool exactDomains = binaryDomains || boundedLinear;
+    std::optional<mpz_class> differenceCover;
+    if (!exactDomains) {
+        std::vector<std::pair<LinearFormKey, mpq_class>> forms;
+        bool linear = true;
+        for (const auto& [atom, constraints] : atomCs_) {
+            (void)atom;
+            for (const auto& [polynomial, relation] : constraints.parts) {
+                (void)relation;
+                if (polynomial == NullPoly) continue;
+                const auto terms = kernel_->terms(polynomial);
+                if (!terms) { linear = false; break; }
+                std::pair<LinearFormKey, mpq_class> form;
+                for (const auto& term : *terms) {
+                    if (term.powers.empty()) form.second -= term.coefficient;
+                    else if (term.powers.size() == 1 && term.powers[0].second == 1)
+                        form.first.terms.emplace_back(
+                            std::string(kernel_->varName(term.powers[0].first)),
+                            mpq_class(term.coefficient));
+                    else { linear = false; break; }
+                }
+                if (!linear) break;
+                forms.push_back(std::move(form));
+            }
+            if (!linear) break;
+        }
+        if (linear) differenceCover = integerDifferenceCoverRadius(forms);
+    }
+    const bool fixedInterpretation = exactDomains || differenceCover.has_value();
+    if (diag) std::cerr << "[EAGER-DOMAIN] signed_difference=" << differenceCover.has_value()
+                        << (differenceCover ? " radius=" + differenceCover->get_str() : "") << "\n";
     const IntegerBoundsLookup integerBounds = [&](const std::string& variable)
         -> std::optional<std::pair<mpz_class, mpz_class>> {
         const auto lower = lb_.find(variable), upper = ub_.find(variable);
@@ -586,7 +618,12 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
         return std::chrono::duration_cast<std::chrono::milliseconds>(
                    std::chrono::steady_clock::now() - t0).count();
     };
-    const unsigned widths[] = {4, 8, 16, 24, 32, 48, 64};
+    // A certified difference fragment has a complete finite interpretation;
+    // its radius selects one width directly, even beyond the fallback cascade.
+    // Keep representative-model covers separate from entailed source bounds.
+    const std::vector<unsigned> widths = differenceCover
+        ? std::vector<unsigned>{SpaceEstimator::bitsToCover(-*differenceCover, *differenceCover)}
+        : std::vector<unsigned>{4, 8, 16, 24, 32, 48, 64};
     // Consecutive-UNSAT cap: when the inner SAT solver returns UNSAT at
     // several widths in a row WITHOUT ever finding a SAT candidate, the
     // formula is highly likely integer-genuinely-UNSAT (e.g. VeryMax
@@ -705,15 +742,83 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
             if (compact()) continue;
             return out;
         }
+        // Exclude an impossible interpretation before constructing its arithmetic
+        // circuits. Bounds enclose the actual signed leaves, including constant
+        // sign bits and derived radix values; they are local to this width.
+        ReasonedBox box;
+        for (const auto& [variable, bits] : varBits) {
+            IntervalZ range{0, 0};
+            if (bits.isConst) range = {bits.constValue, bits.constValue};
+            else for (unsigned bit = 0; bit < bits.width(); ++bit) {
+                mpz_class weight = mpz_class(1) << bit;
+                if (bit + 1 == bits.width()) weight = -weight;
+                if (bits.bits[bit] == enc.constFalse()) continue;
+                if (bits.bits[bit] == enc.constTrue()) {
+                    range.lo += weight;
+                    range.hi += weight;
+                } else if (weight < 0) range.lo += weight;
+                else range.hi += weight;
+            }
+            box.set(variable, {std::move(range), {}});
+        }
+        IntervalEvaluator intervals(*kernel_);
+        std::unordered_map<PolyId, std::optional<IntervalZ>> ranges;
+        auto intervalTruth = [&](ExprId id) -> std::optional<bool> {
+            if (expired()) return std::nullopt;
+            const auto atom = atomCs_.find(id);
+            if (atom == atomCs_.end()) return std::nullopt;
+            bool allTrue = true;
+            for (const auto& [polynomial, relation] : atom->second.parts) {
+                std::optional<bool> value;
+                if (polynomial == NullPoly) value = relation == Relation::Eq;
+                else if (radixZeroPolynomials.contains(polynomial))
+                    value = relationHolds(mpz_class(0), relation);
+                else {
+                    auto [entry, inserted] = ranges.try_emplace(polynomial);
+                    if (inserted) if (const auto terms = kernel_->terms(polynomial))
+                        if (auto range = intervals.evaluateTerms(*terms, box))
+                            entry->second = std::move(range->interval);
+                    if (entry->second)
+                        value = IntervalEvaluator::relationValue(*entry->second, relation);
+                }
+                if (value == std::optional<bool>(false)) return false;
+                allTrue = allTrue && value == std::optional<bool>(true);
+            }
+            return allTrue ? std::optional<bool>(true) : std::nullopt;
+        };
+        PartialBooleanEvaluation interpretation(ir, intervalTruth);
+        bool excluded = false;
+        for (auto assertion : assertions) {
+            if (expired()) return out;
+            if (interpretation.evaluate(assertion) == std::optional<bool>(false)) {
+                excluded = true;
+                break;
+            }
+        }
+        if (diag) std::cerr << "[EAGER-INTERVAL] width=" << K
+                            << " ranges=" << ranges.size() << " excluded=" << excluded
+                            << " booleanNodes=" << interpretation.evaluatedNodes()
+                            << " satVars=" << enc.varCount() << "\n";
+        if (excluded) {
+            if (fixedInterpretation) break;
+            // An interval exclusion only requests a wider interpretation; it
+            // is not a SAT search result about the source's integer feasibility.
+            continue;
+        }
         // A plan that ends after this solve has one fixed interpretation.
         // Its query facts can participate in permanent SAT preprocessing.
-        if (exactDomains) {
+        if (fixedInterpretation) {
             for (const auto fact : assumptions) enc.assertLit(fact);
             assumptions.clear();
         }
         PolyBitBlaster blaster(enc, *kernel_, varBits);
 
+        size_t directDifferences = 0;
         auto encodeWeightedPolynomial = [&](PolyId polynomial, Relation relation) -> std::optional<SatLit> {
+            if (const auto direct = blaster.encodeDifferenceConstraint(polynomial, relation)) {
+                ++directDifferences;
+                return direct;
+            }
             const auto terms = kernel_->terms(polynomial);
             if (!terms) return std::nullopt;
             // Reify a univariate predicate directly over shared point choices,
@@ -813,6 +918,11 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
             }
             auto m = memo.find(eid);
             if (m != memo.end()) return m->second;
+            if (auto known = interpretation.evaluate(eid)) {
+                const auto literal = *known ? enc.constTrue() : enc.constFalse();
+                memo.emplace(eid, literal);
+                return literal;
+            }
             const TermExpr& e = ir.get(eid);
             SatLit r = enc.constFalse();
             switch (e.kind) {
@@ -921,13 +1031,16 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
             ++aIdx;
             SatLit l = encode(a);
             if (!encodeOk || enc.overflowed()) break;
-            if (exactDomains) enc.assertLit(l);
+            if (fixedInterpretation) enc.assertLit(l);
             else assumptions.push_back(l);
             if (l == enc.constFalse()) break;
         }
         if (diag) {
             const auto& counts = pb.statistics();
             std::cerr << "[EAGER-PB] thresholds=" << counts.thresholds
+                      << " direct_differences=" << directDifferences
+                      << " ternary_gates=" << enc.ternaryGateCount()
+                      << " ternary_reuses=" << enc.ternaryCacheHits()
                       << " diagram_states=" << counts.diagramStates
                       << " diagram_budget_proofs=" << counts.diagramBudgetProofs
                       << " carry_save=" << counts.carrySaveThresholds
@@ -952,13 +1065,13 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
                             << " retainedVars=" << previousVars
                             << " freshVars=" << enc.varCount() - previousVars << "\n";
         if (res == SatSolver::SolveResult::Unsat) {
-            if (exactDomains) break; // Exact domain: wider encodings are identical.
+            if (fixedInterpretation) break; // The selected plan has no wider interpretation.
             ++consecutiveUnsat;
             continue;   // wider K (never claim UNSAT)
         }
         consecutiveUnsat = 0;  // reset on any non-Unsat (Unknown counts as continue too)
         if (res != SatSolver::SolveResult::Sat) {
-            if (exactDomains) break;
+            if (fixedInterpretation) break;
             continue;
         }
 
@@ -1032,7 +1145,7 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
             }
             return out;
         }
-        if (exactDomains) break;
+        if (fixedInterpretation) break;
         // SAT but candidate failed exact validation (narrow-width artifact) -> wider K.
     }
     return out;   // Unknown

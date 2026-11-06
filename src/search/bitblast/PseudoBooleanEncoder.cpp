@@ -246,9 +246,7 @@ std::optional<SatLit> PseudoBooleanEncoder::carrySaveThreshold(
             const auto c = columns[bit].back(); columns[bit].pop_back();
             const auto axb = encoder_.xorGate(a, b);
             const auto sum = encoder_.xorGate(axb, c);
-            const auto ab = encoder_.andGate(a, b);
-            const auto ac = encoder_.andGate(axb, c);
-            const auto carry = encoder_.orGate(ab, ac);
+            const auto carry = encoder_.majorityGate(a, b, c);
             if (encoder_.overflowed()) return std::nullopt;
             ++statistics_.compressors;
             if (sum != encoder_.constFalse()) columns[bit].push_back(sum);
