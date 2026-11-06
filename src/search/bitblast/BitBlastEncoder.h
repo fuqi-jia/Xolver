@@ -4,6 +4,7 @@
 #include "search/bitblast/BitVec.h"
 #include "ir/types.h"          // Relation
 #include <gmpxx.h>
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <optional>
@@ -30,6 +31,9 @@ public:
     SatLit orGate(SatLit a, SatLit b);
     SatLit xorGate(SatLit a, SatLit b);
     SatLit iteGate(SatLit s, SatLit t, SatLit e);
+    SatLit majorityGate(SatLit a, SatLit b, SatLit c);
+    uint64_t ternaryGateCount() const { return ternaryGateCache_.size(); }
+    uint64_t ternaryCacheHits() const { return ternaryCacheHits_; }
 
     // Arithmetic.
     BitVec add(const BitVec& a, const BitVec& b);    // width max+1
@@ -98,6 +102,29 @@ private:
     static GateKey gateKey(GateKind kind, SatLit a, SatLit b);
     SatLit internGate(GateKind kind, SatLit a, SatLit b);
     std::unordered_map<GateKey, SatLit, GateKeyHash> gateCache_;
+
+    enum class TernaryGateKind : uint8_t { Ite, Majority };
+    struct TernaryGateKey {
+        TernaryGateKind kind;
+        std::array<SatLit, 3> inputs;
+        bool operator==(const TernaryGateKey& other) const {
+            return kind == other.kind && inputs == other.inputs;
+        }
+    };
+    struct TernaryGateKeyHash {
+        size_t operator()(const TernaryGateKey& key) const {
+            size_t hash = static_cast<size_t>(key.kind);
+            for (const auto literal : key.inputs) {
+                const uint64_t encoded = (uint64_t(literal.var) << 1) | uint64_t(literal.sign);
+                const auto part = std::hash<uint64_t>{}(encoded);
+                hash ^= part + size_t(0x9e3779b9) + (hash << 6) + (hash >> 2);
+            }
+            return hash;
+        }
+    };
+    SatLit internTernaryGate(TernaryGateKind kind, SatLit a, SatLit b, SatLit c);
+    std::unordered_map<TernaryGateKey, SatLit, TernaryGateKeyHash> ternaryGateCache_;
+    uint64_t ternaryCacheHits_ = 0;
 
     static unsigned bitsForValue(const mpz_class& v);
     BitVec signExtend(const BitVec& a, unsigned width);

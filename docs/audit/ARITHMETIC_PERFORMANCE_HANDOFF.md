@@ -180,9 +180,42 @@ threshold states and SAT variables; this is not itself a solved-input claim.
 The unchanged 65-input comparison gives **46 to 47 verified**, versus **52**
 for Z3: two gains, one loss and no errors. Actual timed SAT models require both
 Z3 and CVC5 acceptance. Verified PAR-2 totals are **2,776.738 to 2,683.785 seconds**,
-versus **1,659.824** for Z3. The lost SAT input remains under investigation;
-this candidate is not accepted for main, and its complete suites have not been
-rerun. No protected set is used, and overall superiority over Z3 is unproven.
+versus **1,659.824** for Z3. This standalone candidate is not accepted for main,
+and its complete suites have not been rerun. The following implementation
+addresses its carry and comparison representation; no protected set is used,
+and overall superiority over Z3 is unproven.
+
+### FULINA development: shared ternary definitions and majority carries
+
+Boolean ITE definitions now share exact literal-keyed gates, with canonical
+selector polarity. A shared majority primitive uses one output and six clauses
+for a carry, replacing intermediate AND/OR gates in ordinary addition and
+pseudo-Boolean compression. Signed comparisons use the same primitive.
+Cache keys preserve every variable-ID bit, input polarity and gate kind;
+allocation failure never caches an incomplete definition. Exact arithmetic,
+model checks, resource settings, API contracts and rollback policies are unchanged.
+
+Proof-enabled Panda9 / ExperimentOS qualification passes **2,202 cases /
+1,363,554 assertions**. Exhaustive checks cover input polarities, constants,
+duplicates, complementary inputs, high variable IDs, canonical sharing and
+allocation exhaustion. The frozen CLI is
+`06dd48f4b695b4f00ded14e811ac71e44e8c8bcd3d4b2dc4ff3b7d49c7e09860`.
+
+The unchanged 65-input comparison gives **46 to 47 independently verified**,
+versus **52** for Z3: one gain, no losses and no errors. The preceding lost SAT
+input remains verified in this round. Verified PAR-2 totals improve from
+**2,776.199 to 2,628.914 seconds**, versus **1,663.965** for Z3. Both independent
+checkers accept the actual timed model of the new SAT result. Diagnostic traces
+confirm smaller encodings and reused ternary definitions on some inputs, but
+do not establish the cause of every timing change.
+
+One fresh complete comparison is registered for fixed160, development587 and
+private14408 against the accepted weighted-main freeze and unchanged reference
+programs. ExperimentOS assigns available physical cores, excluding other leases
+and external busy cores; every solver/input retains 60 seconds, one physical CPU
+and 16 GiB. Complete results, server acceptance and PR CI remain pending.
+This focused gain does not establish an overall win or final-version QCP
+coverage. Private inputs, models and individual identifiers remain off GitHub.
 
 ## Previous checkpoint: sparse integer equality components (2026-11-06)
 
