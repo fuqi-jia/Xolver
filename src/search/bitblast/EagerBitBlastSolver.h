@@ -24,9 +24,9 @@ namespace xolver::bitblast {
 // integer problem) and NEVER returns an unvalidated Sat. Real polynomial
 // inputs use the same integer-valued candidate points and exact validation;
 // failure of that subset search leaves the original real problem open.
-// Finite-domain LIA
-// enters through solveLinear and uses fully reified pseudo-Boolean constraints
-// for arbitrary finite signed integer domains.
+// Linear and nonlinear integer formulas share solve(). Linear atoms use fully
+// reified signed pseudo-Boolean constraints at every width. The separate
+// solveLinear() entry requires finite domains before allocating a SAT solver.
 // Any encoding mistake
 // can therefore only downgrade a candidate to Unknown, never produce a wrong
 // answer. Widths are escalated (cascade); overflow of the var budget bails the

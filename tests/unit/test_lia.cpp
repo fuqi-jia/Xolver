@@ -22,6 +22,70 @@ static std::string writeTempSmt2(const std::string& content) {
     return path;
 }
 
+TEST_CASE("LIA: unbounded Boolean integer models survive widening and query scopes") {
+    Solver solver;
+    solver.setLogic("QF_LIA");
+    auto op = [&](Kind kind, std::vector<Term> terms) {
+        return solver.mkOp(static_cast<uint32_t>(kind), std::move(terms));
+    };
+    const auto x = solver.mkConst(solver.intSort(), "unbounded-x");
+    const auto y = solver.mkConst(solver.intSort(), "unbounded-y");
+    const auto choice = solver.mkConst(solver.boolSort(), "unbounded-choice");
+    const auto negativeChoice = op(Kind::Not, {choice});
+    auto checkChoice = [&](bool expected) {
+        const auto model = solver.getModel();
+        const auto* value = model.getValue(choice.id());
+        REQUIRE(value != nullptr);
+        CHECK(*value == (expected ? "true" : "false"));
+    };
+    solver.assertFormula(op(Kind::Or, {
+        op(Kind::And, {choice, op(Kind::Gt, {x, solver.mkInt(2)}),
+            op(Kind::Eq, {y, op(Kind::Add, {op(Kind::Mul, {solver.mkInt(2), x}), solver.mkInt(1)})})}),
+        op(Kind::And, {negativeChoice, op(Kind::Lt, {x, solver.mkInt(-2)}),
+            op(Kind::Eq, {y, op(Kind::Sub, {op(Kind::Mul, {solver.mkInt(3), x}), solver.mkInt(1)})})})}));
+    REQUIRE(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Sat));
+    CHECK(solver.validateModel() == Solver::ModelValidation::Satisfied);
+    solver.push();
+    solver.assertFormula(op(Kind::Geq, {x, solver.mkInt(17)}));
+    REQUIRE(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Sat));
+    CHECK(solver.validateModel() == Solver::ModelValidation::Satisfied);
+    checkChoice(true);
+    solver.pop();
+    REQUIRE(static_cast<int>(solver.checkSatAssuming({negativeChoice})) == static_cast<int>(Result::Sat));
+    CHECK(solver.validateModel() == Solver::ModelValidation::Satisfied);
+    checkChoice(false);
+    solver.push();
+    solver.assertFormula(op(Kind::Lt, {x, solver.mkInt(-17)}));
+    REQUIRE(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Sat));
+    CHECK(solver.validateModel() == Solver::ModelValidation::Satisfied);
+    checkChoice(false);
+    solver.pop();
+    REQUIRE(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Sat));
+    CHECK(solver.validateModel() == Solver::ModelValidation::Satisfied);
+}
+
+TEST_CASE("LIA: unbounded Boolean integer contradictions retain the explained fallback") {
+    Solver solver;
+    solver.setLogic("QF_LIA");
+    auto op = [&](Kind kind, std::vector<Term> terms) {
+        return solver.mkOp(static_cast<uint32_t>(kind), std::move(terms));
+    };
+    const auto x = solver.mkConst(solver.intSort(), "parity-x");
+    const auto y = solver.mkConst(solver.intSort(), "parity-y");
+    const auto impossible = op(Kind::Or, {
+        op(Kind::Eq, {op(Kind::Mul, {solver.mkInt(2), x}),
+            op(Kind::Add, {op(Kind::Mul, {solver.mkInt(2), y}), solver.mkInt(1)})}),
+        op(Kind::Eq, {op(Kind::Mul, {solver.mkInt(4), x}),
+            op(Kind::Add, {op(Kind::Mul, {solver.mkInt(4), y}), solver.mkInt(3)})})});
+    REQUIRE(static_cast<int>(solver.checkSatAssuming({impossible})) == static_cast<int>(Result::Unsat));
+    solver.push();
+    solver.assertFormula(impossible);
+    REQUIRE(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Unsat));
+    solver.pop();
+    REQUIRE(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Sat));
+    CHECK(solver.validateModel() == Solver::ModelValidation::Satisfied);
+}
+
 TEST_CASE("LIA: strict sort - 2x = 1 is unsat") {
     std::string path = writeTempSmt2(
         "(set-logic QF_LIA)\n"

@@ -902,25 +902,21 @@ Result Solver::Impl::checkSatGround() {
 
         // -------------------------------------------------------------------
         // Whole-formula EAGER BIT-BLAST portfolio arm (BLAN-style): translate
-        // the ENTIRE QF_NIA formula (boolean skeleton + arith atoms,
+        // the ENTIRE integer formula (boolean skeleton + arith atoms,
         // Int -> bit-vectors) into ONE SAT solve. SOUND SAT-FINDER ONLY -- the
         // model is exact-validated inside EagerBitBlastSolver (invariant 1)
         // and it NEVER returns Unsat (invariant 7). On Unknown it falls
         // through to the CDCL(T) main loop -- a parallel strategy, not
         // main-loop surgery (invariant 5 intact).
         //
-        // Applies to pure nonlinear integer arithmetic, Boolean combinations
-        // of nonlinear real atoms, and LIA whose
-        // integer domains are proved finite by positive root facts. Real
+        // Applies to integer arithmetic and Boolean combinations of nonlinear
+        // real atoms. Linear and nonlinear integer formulas share the same
+        // candidate search; global finite bounds narrow an encoding but are
+        // not required to search for an exactly validated integer point. Real
         // variables receive integer-valued candidates; exhausted integer boxes
-        // leave the real obligation open. Iter-3/4/5
-        // confirmed the CDCL(T)-per-atom-assignment bit-blast cannot close
-        // the leipzig / VeryMax cluster because each per-call constraint
-        // subset enumerates Boolean disjunct choices serially. The eager
-        // path encodes the OR atoms directly into the bit-blast CNF so
-        // CaDiCaL searches disjuncts + integer bits concurrently: leipzig
-        // term-0Hb4yp.smt2 falls from 5 s TO to 152 ms (~33x). Held-out
-        // 16-case set (oracle=SAT ∧ BLAN=SAT<10s ∧ xolver=TO) gains 4+/16.
+        // leave the real obligation open. Reified Boolean alternatives and
+        // integer bits are searched jointly, rather than requiring a separate
+        // arithmetic search for each Boolean assignment.
         //
         // -------------------------------------------------------------------
         {
@@ -934,9 +930,9 @@ Result Solver::Impl::checkSatGround() {
                           << " hasNonlinear=" << features.hasNonlinear
                           << "\n";
             }
-            const bool finiteLinear = (logic == "QF_LIA" || logic == "LIA");
+            const bool integerLinear = (logic == "QF_LIA" || logic == "LIA");
             const bool realCandidates = (logic == "QF_NRA" || logic == "NRA");
-            const bool logicOk = (logic == "QF_NIA" || logic == "NIA" || finiteLinear || realCandidates);
+            const bool logicOk = (logic == "QF_NIA" || logic == "NIA" || integerLinear || realCandidates);
             auto eagerRoots = ir->assertions();
             eagerRoots.insert(eagerRoots.end(), assumptionIndicators.begin(), assumptionIndicators.end());
             eagerRoots.insert(eagerRoots.end(), indicatorRoots_.begin(), indicatorRoots_.end());
@@ -964,7 +960,7 @@ Result Solver::Impl::checkSatGround() {
                 // otherwise eager-bb hogs the wall-clock and the refutation never
                 // runs. The detector bails on non-Farkas inputs (good()==false),
                 // so the cost there is one O(tree) scan.
-                if (!finiteLinear && !realCandidates) {
+                if (!integerLinear && !realCandidates) {
                     farkas::FarkasOrDetector fdet(*ir);
                     auto fprof = fdet.detect();
                     if (fprof.good() && !fprof.boundedGlobals.empty()) {
@@ -981,8 +977,7 @@ Result Solver::Impl::checkSatGround() {
                             config::read<config::ReadKind::Long>("XOLVER_NIA_FARKAS_EAGER_BUDGET_MS", 2000));
                     }
                 }
-                auto ibr = finiteLinear ? eagerbb.solveLinear(*ir, eagerRoots)
-                                        : eagerbb.solve(*ir, eagerRoots);
+                auto ibr = eagerbb.solve(*ir, eagerRoots);
                 phase("eager-bb-done");
                 if (ibr.status == bitblast::EagerBitBlastSolver::Status::Sat) {
                     // Transfer the validated integer model from EagerBitBlast
