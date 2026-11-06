@@ -78,7 +78,64 @@ BitVec PolyBitBlaster::encodeSum(const std::vector<PolynomialKernel::MonomialTer
     return monos.front();
 }
 
+std::optional<SatLit> PolyBitBlaster::encodeDifferenceConstraint(PolyId p, Relation rel) {
+    const auto terms = kernel_.terms(p);
+    if (!terms) return std::nullopt;
+    const PolynomialKernel::MonomialTerm* positive = nullptr;
+    const PolynomialKernel::MonomialTerm* negative = nullptr;
+    mpz_class constant = 0;
+    for (const auto& term : *terms) {
+        if (term.coefficient == 0) continue;
+        if (term.powers.empty()) { constant += term.coefficient; continue; }
+        if (term.powers.size() != 1 || term.powers[0].second != 1) return std::nullopt;
+        if (term.coefficient > 0) {
+            if (positive) return std::nullopt;
+            positive = &term;
+        } else {
+            if (negative) return std::nullopt;
+            negative = &term;
+        }
+    }
+    if (!positive && !negative) return std::nullopt;
+    if (positive && negative && positive->coefficient != -negative->coefficient)
+        return std::nullopt;
+    const BitVec* left = nullptr;
+    const BitVec* right = nullptr;
+    for (auto [term, bits] : {std::pair{positive, &left}, std::pair{negative, &right}}) {
+        if (!term) continue;
+        const auto found = varBits_.find(std::string(kernel_.varName(term->powers[0].first)));
+        if (found == varBits_.end()) return std::nullopt;
+        *bits = &found->second;
+    }
+    const mpz_class magnitude = positive ? positive->coefficient : mpz_class(-negative->coefficient);
+    const mpq_class bound = mpq_class(-constant) / magnitude;
+    Relation direct;
+    if (rel == Relation::Eq || rel == Relation::Neq) {
+        if (bound.get_den() != 1) return rel == Relation::Eq ? enc_.constFalse() : enc_.constTrue();
+        if (bound != 0) return std::nullopt;
+        direct = rel;
+    } else {
+        mpz_class floor, ceiling;
+        mpz_fdiv_q(floor.get_mpz_t(), bound.get_num().get_mpz_t(), bound.get_den().get_mpz_t());
+        mpz_cdiv_q(ceiling.get_mpz_t(), bound.get_num().get_mpz_t(), bound.get_den().get_mpz_t());
+        if (rel == Relation::Leq || rel == Relation::Lt) {
+            const mpz_class edge = rel == Relation::Leq ? floor : mpz_class(ceiling - 1);
+            if (edge == 0) direct = Relation::Leq;
+            else if (edge == -1) direct = Relation::Lt;
+            else return std::nullopt;
+        } else {
+            const mpz_class edge = rel == Relation::Geq ? ceiling : mpz_class(floor + 1);
+            if (edge == 0) direct = Relation::Geq;
+            else if (edge == 1) direct = Relation::Gt;
+            else return std::nullopt;
+        }
+    }
+    const auto zero = enc_.mkConst(mpz_class(0));
+    return enc_.compare(left ? *left : zero, right ? *right : zero, direct);
+}
+
 SatLit PolyBitBlaster::encodeConstraint(const NormalizedNiaConstraint& c) {
+    if (const auto direct = encodeDifferenceConstraint(c.poly, c.rel)) return *direct;
     auto terms = kernel_.terms(c.poly);
     if (terms && !terms->empty()) {
         // p = m*q: comparing p with zero needs the factors' zero/sign bits,

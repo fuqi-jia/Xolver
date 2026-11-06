@@ -26,6 +26,97 @@ void pin(std::vector<SatLit>& assumptions, const BitVec& bits, int value) {
 }
 }
 
+TEST_CASE("Signed comparison encoding: unequal widths and both predicate polarities") {
+    const std::array relations{Relation::Eq, Relation::Neq, Relation::Lt,
+                               Relation::Leq, Relation::Gt, Relation::Geq};
+    auto sat = createSatSolver();
+    BitBlastEncoder encoder(*sat);
+    const auto left = encoder.mkVar(2), right = encoder.mkVar(3);
+    std::vector<SatLit> predicates;
+    for (auto relation : relations) predicates.push_back(encoder.compare(left, right, relation));
+    for (int a = -2; a <= 1; ++a) for (int b = -4; b <= 3; ++b) {
+        std::vector<SatLit> assumptions;
+        pin(assumptions, left, a);
+        pin(assumptions, right, b);
+        REQUIRE(sat->solve(assumptions) == SatSolver::SolveResult::Sat);
+        std::vector<bool> observed;
+        for (auto predicate : predicates) observed.push_back(litValue(*sat, predicate));
+        for (size_t i = 0; i < relations.size(); ++i) {
+            const bool expected = comparison(mpz_class(a-b), relations[i]);
+            CHECK(observed[i] == expected);
+            assumptions.push_back(expected ? predicates[i].negated() : predicates[i]);
+            CHECK(sat->solve(assumptions) == SatSolver::SolveResult::Unsat);
+            assumptions.pop_back();
+        }
+    }
+    const mpz_class large = mpz_class(1) << 120;
+    const std::vector<mpz_class> values{-large, -large + 1, -1, 0, 1, large - 1, large};
+    for (const auto& a : values) for (const auto& b : values)
+        for (auto relation : relations) {
+            const auto predicate = encoder.compare(encoder.mkConst(a), encoder.mkConst(b), relation);
+            CHECK(predicate == (comparison(mpz_class(a-b), relation) ? encoder.constTrue() : encoder.constFalse()));
+        }
+}
+
+TEST_CASE("Integer difference encoding: exact scales rounding and general fallback") {
+    auto kernel = createPolynomialKernel();
+    const auto x = kernel->getOrCreateVar("x"), y = kernel->getOrCreateVar("y");
+    const auto z = kernel->getOrCreateVar("z");
+    const std::array relations{Relation::Eq, Relation::Neq, Relation::Lt,
+                               Relation::Leq, Relation::Gt, Relation::Geq};
+    size_t directCount = 0, fallbackCount = 0;
+    for (const mpz_class& scale : std::vector<mpz_class>{2, 2*((mpz_class(1) << 100) + 3)})
+        for (int shape = 0; shape < 3; ++shape) for (int offset = -3; offset <= 3; ++offset) {
+            const bool useX = shape != 2, useY = shape != 1;
+            const mpz_class constant = (scale / 2) * offset;
+            std::vector<PolynomialKernel::MonomialTerm> terms{{constant, {}}};
+            if (useX) terms.push_back({scale, {{x, 1}}});
+            if (useY) terms.push_back({-scale, {{y, 1}}});
+            const auto polynomial = kernel->mkFromMonomials(terms);
+            auto sat = createSatSolver();
+            BitBlastEncoder encoder(*sat);
+            std::unordered_map<std::string, BitVec> variables{
+                {"x", encoder.mkVar(3)}, {"y", encoder.mkVar(3)}};
+            PolyBitBlaster blaster(encoder, *kernel, variables);
+            std::vector<SatLit> predicates;
+            for (auto relation : relations) {
+                const auto direct = blaster.encodeDifferenceConstraint(polynomial, relation);
+                if (direct) { ++directCount; predicates.push_back(*direct); }
+                else {
+                    ++fallbackCount;
+                    predicates.push_back(blaster.encodeConstraint({polynomial, relation, {}}));
+                }
+            }
+            for (int a = -4; a <= 3; ++a) for (int b = -4; b <= 3; ++b) {
+                std::vector<SatLit> assumptions;
+                pin(assumptions, variables.at("x"), a);
+                pin(assumptions, variables.at("y"), b);
+                REQUIRE(sat->solve(assumptions) == SatSolver::SolveResult::Sat);
+                const mpz_class exact = scale * ((useX ? a : 0) - (useY ? b : 0)) + constant;
+                for (size_t i = 0; i < relations.size(); ++i) {
+                    const bool expected = comparison(exact, relations[i]);
+                    assumptions.push_back(expected ? predicates[i].negated() : predicates[i]);
+                    CHECK(sat->solve(assumptions) == SatSolver::SolveResult::Unsat);
+                    assumptions.pop_back();
+                }
+            }
+        }
+    CHECK(directCount > 0);
+    CHECK(fallbackCount > 0);
+    auto sat = createSatSolver();
+    BitBlastEncoder encoder(*sat);
+    const std::unordered_map<std::string, BitVec> variables{
+        {"x", encoder.mkVar(3)}, {"y", encoder.mkVar(3)}, {"z", encoder.mkVar(3)}};
+    PolyBitBlaster blaster(encoder, *kernel, variables);
+    for (const auto& terms : std::vector<std::vector<PolynomialKernel::MonomialTerm>>{
+        {{1, {{x, 1}}}, {-1, {{y, 1}}}, {1, {{z, 1}}}},
+        {{1, {{x, 1}}}, {-2, {{y, 1}}}},
+        {{1, {{x, 1}, {y, 1}}}},
+        {{1, {{z, 2}}}}})
+        for (auto relation : relations)
+            CHECK_FALSE(blaster.encodeDifferenceConstraint(kernel->mkFromMonomials(terms), relation));
+}
+
 TEST_CASE("polynomial product comparisons preserve zero factors and signed odd/even powers") {
     auto kernel = createPolynomialKernel();
     const auto x = kernel->mkVar(kernel->getOrCreateVar("x"));

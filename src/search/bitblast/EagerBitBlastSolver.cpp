@@ -813,7 +813,12 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
         }
         PolyBitBlaster blaster(enc, *kernel_, varBits);
 
+        size_t directDifferences = 0;
         auto encodeWeightedPolynomial = [&](PolyId polynomial, Relation relation) -> std::optional<SatLit> {
+            if (const auto direct = blaster.encodeDifferenceConstraint(polynomial, relation)) {
+                ++directDifferences;
+                return direct;
+            }
             const auto terms = kernel_->terms(polynomial);
             if (!terms) return std::nullopt;
             // Reify a univariate predicate directly over shared point choices,
@@ -1033,6 +1038,7 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
         if (diag) {
             const auto& counts = pb.statistics();
             std::cerr << "[EAGER-PB] thresholds=" << counts.thresholds
+                      << " direct_differences=" << directDifferences
                       << " diagram_states=" << counts.diagramStates
                       << " diagram_budget_proofs=" << counts.diagramBudgetProofs
                       << " carry_save=" << counts.carrySaveThresholds

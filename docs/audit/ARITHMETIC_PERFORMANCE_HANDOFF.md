@@ -152,11 +152,37 @@ difference cover, so attribution of this gain to that helper is unproven.
 The earlier near-budget regression also does not qualify; its extra width
 search remains unresolved.
 
-Fresh complete fixed160, development587 and private14408 comparisons are in
-progress at the new freeze, with 60 seconds, one leased physical CPU and 16 GiB
-per solver/input and the unchanged independent replay policy. Full server
-acceptance and PR/main CI remain pending. No protected set is used, and no
-overall improvement over Z3 is established.
+The complete comparison did not reproduce the gain: fixed160 raw verified
+counts fell **116 to 115**, versus 114 for Z3, with no gains, one loss and no
+errors. The fresh run retains all 587 development and 14,408 private results.
+Private-query solver totals are **1,333.389 to 1,340.699 seconds**, versus
+**406.476** for Z3. This standalone performance experiment is closed without
+acceptance; the exact large-integer candidate capability remains on FULINA.
+
+### FULINA development: direct signed difference comparison encoding
+
+Signed word equality now compares sign-extended bits directly. A shared signed
+comparison primitive avoids subtraction circuits; whole-formula candidate
+search and polynomial constraint encoding both use it for scaled integer
+differences. Exact floor and ceiling convert zero or adjacent integer edges
+to direct comparisons, including both predicate polarities. Other forms retain
+their existing exact encoding. Resource settings, API contracts and arithmetic
+rollback policies are unchanged.
+
+Proof-enabled Panda9 / ExperimentOS qualification passes **2,200 cases /
+1,353,122 assertions**. The frozen CLI is
+`b40a0e1b372e6d75ab7410e51d28bcb00260640ecf61a66baafccf7caeb50a4b`.
+New exhaustive checks cover unequal signed widths, extremal values, rational
+threshold rounding, large coefficients, general fallback, both polarities and
+nonlinear candidate queries. Diagnostic traces demonstrate fewer arithmetic
+threshold states and SAT variables; this is not itself a solved-input claim.
+
+The unchanged 65-input comparison gives **46 to 47 verified**, versus **52**
+for Z3: two gains, one loss and no errors. Actual timed SAT models require both
+Z3 and CVC5 acceptance. Verified PAR-2 totals are **2,776.738 to 2,683.785 seconds**,
+versus **1,659.824** for Z3. The lost SAT input remains under investigation;
+this candidate is not accepted for main, and its complete suites have not been
+rerun. No protected set is used, and overall superiority over Z3 is unproven.
 
 ## Previous checkpoint: sparse integer equality components (2026-11-06)
 

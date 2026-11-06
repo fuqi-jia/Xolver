@@ -42,6 +42,8 @@ public:
     // Relations: every NIA constraint is `value rel 0`.
     SatLit isZero(const BitVec& a);
     SatLit eq(const BitVec& a, const BitVec& b);
+    // Exact signed comparison after sign extension, without constructing a-b.
+    SatLit compare(const BitVec& a, const BitVec& b, Relation rel);
     SatLit relZero(const BitVec& a, Relation rel);
 
     void assertLit(SatLit l);

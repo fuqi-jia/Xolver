@@ -648,3 +648,27 @@ TEST_CASE("Integer difference cover: complete interpretations exceed the fallbac
     REQUIRE(result.status == EagerBitBlastSolver::Status::Sat);
     CHECK(result.model.at("x") + result.model.at("y") == target + 2);
 }
+
+TEST_CASE("Integer difference encoding: nonlinear candidate search retains exact query state") {
+    BinaryFixture f;
+    const auto x = f.variable("x"), y = f.variable("y");
+    const mpz_class scale = 2*((mpz_class(1) << 100) + 3);
+    const auto difference = f.term(Kind::Sub, {
+        f.term(Kind::Mul, {f.integer(scale), x}),
+        f.term(Kind::Mul, {f.integer(scale), y})});
+    const std::vector<ExprId> roots{
+        f.term(Kind::Geq, {x, f.integer(-4)}), f.term(Kind::Leq, {x, f.integer(3)}),
+        f.term(Kind::Geq, {y, f.integer(-4)}), f.term(Kind::Leq, {y, f.integer(3)}),
+        f.term(Kind::Eq, {f.term(Kind::Mul, {x, y}), f.integer(-3)})};
+    EagerBitBlastSolver solver;
+    for (auto relation : {Kind::Lt, Kind::Gt}) {
+        auto query = roots;
+        query.push_back(f.term(relation, {difference, f.integer(relation == Kind::Lt ? 1 : -1)}));
+        CHECK(solver.solveLinear(f.ir, query).status == EagerBitBlastSolver::Status::Unknown);
+        const auto result = solver.solve(f.ir, query);
+        REQUIRE(result.status == EagerBitBlastSolver::Status::Sat);
+        CHECK(result.model.at("x") * result.model.at("y") == -3);
+        const mpz_class exact = scale*(result.model.at("x") - result.model.at("y"));
+        CHECK((relation == Kind::Lt ? exact < 1 : exact > -1));
+    }
+}

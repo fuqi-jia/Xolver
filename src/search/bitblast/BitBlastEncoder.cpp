@@ -289,7 +289,29 @@ BitVec BitBlastEncoder::powConst(const BitVec& a, unsigned e) {
 }
 
 SatLit BitBlastEncoder::eq(const BitVec& a, const BitVec& b) {
-    return isZero(sub(a, b));
+    const auto width = std::max(a.width(), b.width());
+    const auto left = signExtend(a, width), right = signExtend(b, width);
+    auto equal = constTrue();
+    for (unsigned bit = 0; bit < width; ++bit)
+        equal = andGate(equal, xorGate(left.bits[bit], right.bits[bit]).negated());
+    return equal;
+}
+
+SatLit BitBlastEncoder::compare(const BitVec& a, const BitVec& b, Relation rel) {
+    if (rel == Relation::Eq) return eq(a, b);
+    if (rel == Relation::Neq) return eq(a, b).negated();
+    const bool reverse = rel == Relation::Gt || rel == Relation::Leq;
+    const auto width = std::max(a.width(), b.width());
+    const auto left = signExtend(reverse ? b : a, width);
+    const auto right = signExtend(reverse ? a : b, width);
+    auto less = constFalse();
+    for (unsigned bit = 0; bit < width; ++bit) {
+        const auto different = xorGate(left.bits[bit], right.bits[bit]);
+        // A higher differing bit overrides lower bits. At the sign position,
+        // a negative left operand is smaller; elsewhere a zero left bit wins.
+        less = iteGate(different, bit + 1 == width ? left.bits[bit] : right.bits[bit], less);
+    }
+    return rel == Relation::Leq || rel == Relation::Geq ? less.negated() : less;
 }
 
 SatLit BitBlastEncoder::relZero(const BitVec& a, Relation rel) {
