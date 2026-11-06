@@ -1,7 +1,9 @@
 #include "search/lra/LraPropagationEngine.h"
+#include "base/RuntimeConfig.h"
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cstdio>
 #include <deque>
 #include <map>
 #include <optional>
@@ -67,6 +69,40 @@ struct RowAggregate {
     }
 };
 
+struct PropagationProfile {
+    LraPropagationEngine::Statistics* statistics;
+    std::filesystem::path path;
+
+    ~PropagationProfile() {
+        if (path.empty() || !statistics) return;
+        struct Totals {
+            std::size_t calls = 0;
+            LraPropagationEngine::Statistics work;
+            std::chrono::steady_clock::time_point lastDump{};
+        };
+        static thread_local Totals totals;
+        ++totals.calls;
+        totals.work.rowVisits += statistics->rowVisits;
+        totals.work.backwardTargets += statistics->backwardTargets;
+        totals.work.nonImprovingTargets += statistics->nonImprovingTargets;
+        totals.work.backwardDivisions += statistics->backwardDivisions;
+        totals.work.publishedBounds += statistics->publishedBounds;
+        const auto now = std::chrono::steady_clock::now();
+        if (now - totals.lastDump < std::chrono::seconds(2)) return;
+        totals.lastDump = now;
+        path += ".propagation.json";
+        if (FILE* output = std::fopen(path.c_str(), "w")) {
+            std::fprintf(output,
+                "{\"calls\":%zu,\"row_visits\":%zu,\"backward_targets\":%zu,"
+                "\"non_improving_targets\":%zu,\"backward_divisions\":%zu,"
+                "\"published_bounds\":%zu}\n", totals.calls, totals.work.rowVisits,
+                totals.work.backwardTargets, totals.work.nonImprovingTargets,
+                totals.work.backwardDivisions, totals.work.publishedBounds);
+            std::fclose(output);
+        }
+    }
+};
+
 } // namespace
 
 std::vector<LraPropagationEngine::ExplainedBound>
@@ -74,7 +110,12 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
                                   const PropagationBudget& budget,
                                   Statistics* statistics,
                                   const BoundConsumer& consume) {
+    Statistics localStatistics;
+    auto profilePath = config::read<config::ReadKind::ProfilePath>(
+        "ARITH_STAGE_PROF", "/tmp/xolver_stageprof.txt");
+    if (!statistics && !profilePath.empty()) statistics = &localStatistics;
     if (statistics) *statistics = {};
+    PropagationProfile profile{statistics, std::move(profilePath)};
     std::vector<ExplainedBound> accepted;
     if (budget.maxDerivedBounds <= 0 || budget.maxIterations <= 0 ||
         budget.maxReasonSize < 0 || budget.maxTimeMs <= 0) return accepted;
@@ -153,6 +194,7 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
         target.reasons = *reasons;
         target.explained = true;
         accepted.push_back({var, lower, value, std::move(*reasons)});
+        if (statistics) ++statistics->publishedBounds;
         if (consume) {
             const auto beforeConsumer = std::chrono::steady_clock::now();
             consumerStopped = !consume(accepted.back());
@@ -227,21 +269,38 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
             publish(item.basic, item.lower, DeltaRational(row.rhs) + forward.sum,
                     forward, nullptr, {});
 
-        const auto basic = bounds[item.basic][item.lower ? 0 : 1];
+        const auto& basic = bounds[item.basic][item.lower ? 0 : 1];
         if (!basic.usable()) continue;
         // s >= L always subtracts the MAXIMUM of the other terms;
         // s <= U always subtracts their MINIMUM. The target coefficient
         // controls the final inequality direction only, after division.
         const auto& backward = item.lower ? maximum : minimum;
         const size_t contributionSide = item.lower ? 1 : 0;
+        // Every target in this direction uses the same residual. Snapshot
+        // contributions remain immutable until the next queued row visit.
+        const auto residual = *basic.value - DeltaRational(row.rhs) - backward.sum;
         for (size_t index = 0; index < row.entries.size() && !exhausted(); ++index) {
             const auto& entry = row.entries[index];
             if (entry.coeff == 0) continue;
             const auto& excluded = contributions[index][contributionSide];
             if (backward.missing != (excluded.available ? 0u : 1u)) continue;
-            DeltaRational others = backward.sum;
-            if (excluded.available) others -= excluded.value;
-            const auto value = (*basic.value - DeltaRational(row.rhs) - others) / entry.coeff;
+            if (statistics) ++statistics->backwardTargets;
+            const auto& opposite = contributions[index][1 - contributionSide];
+            if (excluded.available && opposite.available) {
+                // Multiplying the improvement test by the target coefficient
+                // gives the same interval-width test for either sign. Compare
+                // delta-rationals exactly before dividing. Local bounds only
+                // tighten, so a candidate dominated by its snapshot endpoint
+                // cannot improve a newer endpoint either.
+                const auto threshold = opposite.value - excluded.value;
+                if (item.lower ? residual <= threshold : residual >= threshold) {
+                    if (statistics) ++statistics->nonImprovingTargets;
+                    continue;
+                }
+            }
+            if (statistics) ++statistics->backwardDivisions;
+            const auto numerator = excluded.available ? residual + excluded.value : residual;
+            const auto value = numerator / entry.coeff;
             const bool lower = item.lower ? entry.coeff > 0 : entry.coeff < 0;
             if (!publish(entry.col, lower, value, backward, &excluded, basic.reasons)) continue;
             // Only rows incident to the changed non-basic variable can learn

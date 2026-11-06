@@ -1,6 +1,57 @@
 # Arithmetic validation and continuation record
 
-## Current checkpoint: shared polarity-aware Boolean definitions (2026-11-06)
+## Current checkpoint: explained arithmetic projections and polynomial reasoning (2026-11-07)
+
+[PR #106](https://github.com/fuqi-jia/Xolver/pull/106) merged as
+3210f9aa1f969d770136922ba7ae105983db3b72 after complete server acceptance and
+both final-head [PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42245857681)
+passed. Both jobs in its
+[merged-main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42248876468) pass.
+The qualified source matches the merged tree. Its fresh fixed160 comparison
+improves **118 to 121 independently verified results**, with three gains, no
+losses and no errors. There remain **38 timeouts and one unknown**. Same-round
+Z3 has 125 raw decisions, of which **117 are independently verified**; eight
+unconfirmed decisions remain excluded. Mean verified PAR-2 is **34.031 seconds**
+for Xolver and **33.959** for Z3. Protected inputs remain unused, and overall
+superiority is not established.
+
+All **14,408 private queries** remain independently verified: **8,940 SAT and
+5,468 UNSAT**, with no timeouts, unknowns, unconfirmed decisions or errors.
+Total solver time is **1,461.871 seconds versus 467.262 for Z3**. Development587
+also retains all 587 verified results, versus 584 for Z3. Private inputs, models
+and individual identifiers remain server-only.
+
+### In development: exact interval slack before backward division
+
+The shared row propagator now hoists its direction's invariant residual and
+tests exact interval slack before dividing a candidate endpoint. A candidate
+dominated by a snapshot endpoint cannot improve its monotonically tightened
+local successor. Both coefficient signs and infinitesimals retain exact
+arithmetic; missing endpoints use the general derivation. No facts or reasons
+survive a call, and rollback policies, APIs and resource controls are unchanged.
+
+Proof-enabled native qualification passes **2,247 cases / 1,371,961 assertions**.
+The old arithmetic performs 16 unnecessary divisions in the new interval
+regression; the candidate performs none. Strict signed large-coefficient
+regressions pass. A fresh complete 32-input fixed QF_LRA panel retains **19 to
+19 verified results**, versus 22 for Z3, with no gains, losses or errors. Total
+solver time changes **880.067 to 859.367 seconds**; verified PAR-2 totals change
+**1,659.982 to 1,639.284 seconds**. This is a panel timing improvement, not a new
+solve or whole-suite result.
+
+An instrumented subprocess exited without a verdict. Its original exit code
+was not retained; the failure is preserved and remains unexplained. Four fresh
+old/candidate sampler-on/off diagnostic runs all reach the external timeout
+without a crash, and the independent formal panel has no runtime errors.
+These diagnostics do not replace the original observation or establish that a
+bug was fixed. Full-stage acceptance and promotion remain open.
+
+The affine-product strengthening experiment is closed without promotion:
+both variants retain 62 of 69 controls, add no verified solves and increase
+total time. Its optional implementation was removed; accepted correctness
+fixes remain. The propagation memory-pool experiment remains closed.
+
+### Previous checkpoint: shared polarity-aware Boolean definitions
 
 [PR #105](https://github.com/fuqi-jia/Xolver/pull/105) merged as
 e9b30722375435d2cc18d52655dd6f5f2a4f368f after complete server acceptance and
