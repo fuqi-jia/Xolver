@@ -17,19 +17,19 @@ namespace xolver::bitblast {
 // gates + each arithmetic atom reified via the ported bit-blaster (Int vars ->
 // two's-complement bit-vectors) — into ONE SAT instance and solves it once.
 //
-// SOUNDNESS (invariants 1 + 7): this is a SAT-FINDER ONLY. A SAT model is a
+// SOUNDNESS: solve() and solveLinear() are SAT finders. A SAT model is a
 // CANDIDATE; it is accepted only after EXACT integer re-evaluation of every
-// assertion (kernel arithmetic + the boolean structure). It NEVER returns Unsat
-// (a bit-blast UNSAT at a heuristic width proves nothing about the unbounded
-// integer problem) and NEVER returns an unvalidated Sat. Real polynomial
+// assertion (kernel arithmetic + the boolean structure). These entries never
+// return Unsat: UNSAT at a heuristic width proves nothing about an unbounded
+// integer problem. decide() additionally accepts a refutation when all numeric
+// variables are Int and unconditional bounds cover the entire linear formula.
+// No entry returns an unvalidated Sat. Real polynomial
 // inputs use the same integer-valued candidate points and exact validation;
 // failure of that subset search leaves the original real problem open.
 // Linear and nonlinear integer formulas share solve(). Linear atoms use fully
 // reified signed pseudo-Boolean constraints at every width. The separate
 // solveLinear() entry requires finite domains before allocating a SAT solver.
-// Any encoding mistake
-// can therefore only downgrade a candidate to Unknown, never produce a wrong
-// answer. Widths are escalated (cascade); overflow of the var budget bails the
+// Widths are escalated (cascade); overflow of the var budget bails the
 // whole attempt to Unknown.
 //
 // Self-contained: owns its own PolynomialKernel + PolynomialConverter + a fresh
@@ -37,7 +37,7 @@ namespace xolver::bitblast {
 // (invariant 5) — it is a parallel strategy, exactly what BLAN is.
 class EagerBitBlastSolver {
 public:
-    enum class Status { Sat, Unknown };
+    enum class Status { Sat, Unknown, Unsat };
     struct Result {
         // (boolModel) populated alongside model on Sat so callers (Solver::Impl)
         // can hand a complete typed channel to ModelConverter::reconstruct.
@@ -52,6 +52,10 @@ public:
 
     // Attempt to find (and exactly validate) a model for `assertions` in `ir`.
     Result solve(const NativeTerms& ir, const std::vector<ExprId>& assertions);
+
+    // Accept UNSAT only for a complete, finite linear integer interpretation.
+    // Incomplete domains, real points and unsupported arithmetic remain open.
+    Result decide(const NativeTerms& ir, const std::vector<ExprId>& assertions);
 
     // Linear integer portfolio entry. Positive root facts and their exact
     // linear consequences must bound every used integer variable. Conditional
@@ -74,7 +78,7 @@ public:
 
 private:
     Result solveImpl(const NativeTerms& ir, const std::vector<ExprId>& assertions,
-                     bool finiteLinearOnly);
+                     bool finiteLinearOnly, bool allowFiniteRefutation = false);
     long budgetPctOverride_ = -1;
     long budgetMsOverride_ = -1;
     std::unique_ptr<PolynomialKernel> kernel_;

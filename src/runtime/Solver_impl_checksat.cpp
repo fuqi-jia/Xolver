@@ -906,12 +906,10 @@ Result Solver::Impl::checkSatGround() {
 
         // -------------------------------------------------------------------
         // Whole-formula EAGER BIT-BLAST portfolio arm (BLAN-style): translate
-        // the ENTIRE integer formula (boolean skeleton + arith atoms,
-        // Int -> bit-vectors) into ONE SAT solve. SOUND SAT-FINDER ONLY -- the
-        // model is exact-validated inside EagerBitBlastSolver (invariant 1)
-        // and it NEVER returns Unsat (invariant 7). On Unknown it falls
-        // through to the CDCL(T) main loop -- a parallel strategy, not
-        // main-loop surgery (invariant 5 intact).
+        // the entire numeric formula into one SAT encoding. SAT models receive
+        // exact source validation. An UNSAT result is accepted only for a
+        // complete finite linear integer domain; other candidate encodings
+        // leave refutation open. Unknown continues into the CDCL(T) main loop.
         //
         // Applies to integer arithmetic and Boolean combinations of nonlinear
         // real atoms. Linear and nonlinear integer formulas share the same
@@ -981,8 +979,15 @@ Result Solver::Impl::checkSatGround() {
                             config::read<config::ReadKind::Long>("XOLVER_NIA_FARKAS_EAGER_BUDGET_MS", 2000));
                     }
                 }
-                auto ibr = eagerbb.solve(*ir, eagerRoots);
+                auto ibr = realCandidates ? eagerbb.solve(*ir, eagerRoots) :
+                                           eagerbb.decide(*ir, eagerRoots);
                 phase("eager-bb-done");
+                if (ibr.status == bitblast::EagerBitBlastSolver::Status::Unsat) {
+#ifdef XOLVER_ENABLE_CASESTATS
+                    finalizeCaseStats(Result::Unsat, 0.0, nullptr, nullptr, cadicalBackend);
+#endif
+                    return Result::Unsat;
+                }
                 if (ibr.status == bitblast::EagerBitBlastSolver::Status::Sat) {
                     // Transfer the validated integer model from EagerBitBlast
                     // to lastModel_, then run the ModelConverter to restore

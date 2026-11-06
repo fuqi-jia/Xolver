@@ -122,9 +122,39 @@ ExperimentOS qualification passes **2,250 cases / 1,372,201 assertions**.
 Two mechanism tests fail with the old implementation; all four new groups
 pass with the candidate. CLI SHA-256 is
 `7772792c5d9ae8d3eb92b9dbd9164af240e46ae6fe1150dde06d9aecafb12a94`.
-Fresh diagnostics and a complete 112-input linear/mixed-theory comparison
-are running. Main promotion and full-stage acceptance remain pending;
-no new solve or timing benefit is claimed.
+The complete 112-input linear/mixed-theory comparison retains **90 to 90
+verified results**, versus **90 for Z3**, without gains, losses or errors.
+Verified PAR-2 totals change **3,180.632 to 3,172.223 seconds**. Diagnostics
+confirm all 120 coordinates are bounded and reduce one SAT encoding from
+8,394 to 2,956 variables; its kernel refutation takes about 0.727 seconds.
+The SAT-only entry still discards that refutation. This intermediate range
+capability is pushed as `d34a01fd`; no source solve is gained in this variant.
+
+### In development: complete finite linear integer refutations
+
+The new `EagerBitBlastSolver::decide` entry accepts UNSAT only after proving
+that unconditional finite bounds cover every numeric variable, every variable
+is integer-valued, and every polynomial atom is linear. An excluded complete
+interpretation or a refuted exact SAT encoding then refutes the source.
+Heuristic widths, nonlinear formulas and integer samples of real domains
+retain their candidate-only behavior. Existing `solve` and `solveLinear` API
+contracts, resource settings and rollback policies are retained.
+
+Proof-enabled Panda9 / ExperimentOS qualification passes **2,255 cases /
+1,372,703 assertions**. Five new groups check signed arithmetic and Boolean
+structure against exhaustive finite domains, 130-bit sparse integer choices,
+real/nonlinear/unbounded exclusions, repeated calls and assumption scopes.
+Frozen CLI SHA-256 is
+`adaa1760f58f952c779019feefd8f2e40b0b702ec2cac026b54bb859adf81675`.
+
+A fresh complete 112-input comparison gives **90 to 90 verified results**,
+versus **91 for Z3**, with one gain, one loss and no errors. One public integer
+UNSAT changes from a 60-second timeout to **0.920 seconds**, independently
+confirmed by same-round Z3. A separate QF_LRA SAT changes from **17.958 seconds
+to timeout**. Verified PAR-2 totals change **3,157.904 to 3,150.994 seconds**,
+versus **2,647.839 for Z3**. The raw loss is retained; pure LRA does not schedule
+the new integer decision entry, and phase/theory diagnostics are investigating
+the regression. Whole-suite acceptance and main promotion remain pending.
 
 The affine-product strengthening experiment is closed without promotion:
 both variants retain 62 of 69 controls, add no verified solves and increase

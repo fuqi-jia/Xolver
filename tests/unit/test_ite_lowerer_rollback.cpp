@@ -111,3 +111,28 @@ TEST_CASE("IteLowerer: numeric choice bounds withdraw with their assertion scope
         CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Sat));
     }
 }
+
+TEST_CASE("Finite linear decisions: assumptions and scope changes retain their API meaning") {
+    Solver solver;
+    solver.setLogic("QF_LIA");
+    const auto x = solver.mkVar(solver.intSort(), "x"), y = solver.mkVar(solver.intSort(), "y");
+    const auto p = solver.mkVar(solver.boolSort(), "p");
+    auto op = [&](Kind kind, std::initializer_list<Term> children) {
+        return solver.mkOp(static_cast<uint32_t>(kind), std::vector<Term>(children));
+    };
+    for (const auto variable : {x, y}) {
+        solver.assertFormula(op(Kind::Geq, {variable, solver.mkInt(0)}));
+        solver.assertFormula(op(Kind::Leq, {variable, solver.mkInt(1)}));
+    }
+    const auto equivalent = op(Kind::Eq,
+        {op(Kind::Eq, {x, solver.mkInt(0)}), op(Kind::Eq, {y, solver.mkInt(0)})});
+    solver.assertFormula(op(Kind::Implies, {p, equivalent}));
+    solver.assertFormula(op(Kind::Distinct, {x, y}));
+    CHECK(static_cast<int>(solver.checkSatAssuming({p})) == static_cast<int>(Result::Unsat));
+    CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Sat));
+    solver.push();
+    solver.assertFormula(p);
+    CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Unsat));
+    solver.pop();
+    CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Sat));
+}

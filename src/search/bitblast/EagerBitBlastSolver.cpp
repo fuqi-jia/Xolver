@@ -406,8 +406,14 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const NativeTerms& ir,
     return solveImpl(ir, assertions, false);
 }
 
+EagerBitBlastSolver::Result EagerBitBlastSolver::decide(
+    const NativeTerms& ir, const std::vector<ExprId>& assertions) {
+    return solveImpl(ir, assertions, false, true);
+}
+
 EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
-    const NativeTerms& ir, const std::vector<ExprId>& assertions, bool finiteLinearOnly) {
+    const NativeTerms& ir, const std::vector<ExprId>& assertions,
+    bool finiteLinearOnly, bool allowFiniteRefutation) {
     Result out;
     if (assertions.empty()) return out;
     atomCs_.clear();
@@ -467,6 +473,22 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
                   << " fixed_variables=" << fixed << " finite_linear=" << boundedLinear << "\n";
     }
     if (finiteLinearOnly && !boundedLinear) return out;
+    bool completeIntegerLinear = allowFiniteRefutation && boundedLinear;
+    if (completeIntegerLinear) {
+        std::vector<ExprId> pending(assertions.begin(), assertions.end());
+        std::unordered_set<ExprId> seen;
+        while (!pending.empty()) {
+            const auto id = pending.back(); pending.pop_back();
+            if (!seen.insert(id).second) continue;
+            const auto& node = ir.get(id);
+            if (node.kind == Kind::Variable && ir.sortKind(node.sort) != SortKind::Int &&
+                ir.sortKind(node.sort) != SortKind::Bool) {
+                completeIntegerLinear = false;
+                break;
+            }
+            pending.insert(pending.end(), node.children.begin(), node.children.end());
+        }
+    }
     const bool exactDomains = binaryDomains || boundedLinear;
     std::optional<mpz_class> differenceCover;
     if (!exactDomains) {
@@ -801,6 +823,10 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
                             << " booleanNodes=" << interpretation.evaluatedNodes()
                             << " satVars=" << enc.varCount() << "\n";
         if (excluded) {
+            // The enclosure covers every source integer value only when the
+            // unconditional linear domains are complete. Narrow candidate
+            // boxes and integer-valued samples of real formulas cannot refute.
+            if (completeIntegerLinear) { out.status = Status::Unsat; return out; }
             if (fixedInterpretation) break;
             // An interval exclusion only requests a wider interpretation; it
             // is not a SAT search result about the source's integer feasibility.
@@ -1078,6 +1104,7 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
                             << " retainedVars=" << previousVars
                             << " freshVars=" << enc.varCount() - previousVars << "\n";
         if (res == SatSolver::SolveResult::Unsat) {
+            if (completeIntegerLinear) { out.status = Status::Unsat; return out; }
             if (fixedInterpretation) break; // The selected plan has no wider interpretation.
             ++consecutiveUnsat;
             continue;   // wider K (never claim UNSAT)
