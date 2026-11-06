@@ -37,7 +37,6 @@ public:
         size_t reusedSums = 0;
         size_t compressors = 0;
         size_t reusedThresholds = 0;
-        size_t thresholdImplications = 0;
     };
     PseudoBooleanEncoder(BitBlastEncoder& encoder, WorkBudget& work,
         std::chrono::steady_clock::time_point deadline =
@@ -60,8 +59,8 @@ private:
     // threshold polarities are deliberately absent from the expression key.
     std::map<std::vector<WeightedLiteral>, BitVec, SumLess> sums_;
     // Each predicate is fully defined over these exact signed SAT literals.
-    // Adjacent bounds suffice to represent their total order; no current
-    // assignment, source bound or query-scope fact enters this index.
+    // Reuse changes no predicate definition. No current assignment, source
+    // bound or query-scope fact enters this index.
     std::map<std::vector<WeightedLiteral>, std::map<mpz_class, SatLit>, SumLess> thresholds_;
     // Only completed diagrams that exceeded the arithmetic cost are recorded.
     // A later threshold over the same sum can amortize an arithmetic encoding;

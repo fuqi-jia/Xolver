@@ -7,52 +7,6 @@ using namespace xolver;
 using namespace xolver::bitblast;
 
 namespace {
-struct ThresholdClauses final : SatSolver {
-    SatVar next = 1;
-    std::vector<std::vector<SatLit>> clauses;
-    SatVar newVar() override { return next++; }
-    void addClause(const std::vector<SatLit>& clause) override { clauses.push_back(clause); }
-    SolveResult solve() override { return SolveResult::Unknown; }
-    SolveResult solve(const std::vector<SatLit>&) override { return SolveResult::Unknown; }
-    bool value(SatVar) const override { return false; }
-    void setDeadline(std::chrono::steady_clock::time_point) override {}
-
-    bool unitConflict(const std::vector<SatLit>& assumptions) const {
-        std::vector<int> values(next, 0);
-        auto assign = [&](SatLit literal) {
-            const int value = literal.sign ? 1 : -1;
-            if (values[literal.var] == -value) return false;
-            values[literal.var] = value;
-            return true;
-        };
-        for (const auto literal : assumptions)
-            if (!assign(literal)) return true;
-        bool changed;
-        do {
-            changed = false;
-            for (const auto& clause : clauses) {
-                bool satisfied = false;
-                size_t unset = 0;
-                SatLit unit;
-                for (const auto literal : clause) {
-                    if (values[literal.var] == (literal.sign ? 1 : -1)) {
-                        satisfied = true;
-                        break;
-                    }
-                    if (!values[literal.var]) { ++unset; unit = literal; }
-                }
-                if (satisfied) continue;
-                if (!unset) return true;
-                if (unset == 1) {
-                    if (!assign(unit)) return true;
-                    changed = true;
-                }
-            }
-        } while (changed);
-        return false;
-    }
-};
-
 void checkThreshold(const std::vector<long>& weights, const mpz_class& scale = 1) {
     for (long threshold = -6; threshold <= 12; ++threshold) {
         auto sat = createSatSolver();
@@ -391,44 +345,7 @@ TEST_CASE("PseudoBooleanEncoder: an exhausted attempt cannot corrupt a later sha
     CHECK(sat->solve(assumptions) == SatSolver::SolveResult::Unsat);
 }
 
-TEST_CASE("Ordered PB: incompatible thresholds conflict without input decisions") {
-    const std::array<std::array<size_t, 3>, 3> orders{{{0, 1, 2}, {2, 1, 0}, {0, 2, 1}}};
-    for (unsigned family = 0; family < 5; ++family) {
-        for (const auto& order : orders) {
-            ThresholdClauses sat;
-            BitBlastEncoder enc(sat);
-            const unsigned count = family == 1 ? 8 : family == 2 ? 6 : 10;
-            std::vector<WeightedLiteral> terms;
-            for (unsigned i = 0; i < count; ++i) {
-                mpz_class weight = family == 0 ? 1 : i + 1;
-                if (family == 1) weight = std::array<long, 8>{17, 29, 31, 43, 57, 91, 127, 211}[i];
-                if (family == 2) weight = std::array<long, 6>{-3, 5, -7, 11, -13, 17}[i];
-                if (family == 3) weight <<= 83;
-                if (family == 4) weight = mpz_class(1) << i;
-                terms.push_back({enc.mkVar(1).bits[0], weight});
-            }
-            const long start = family == 0 ? 4 : family == 1 ? 150 : family == 2 ? 2
-                               : family == 3 ? 10 : 210;
-            std::array<mpz_class, 3> bounds{start, start + 1, start + 2};
-            if (family == 3)
-                for (auto& bound : bounds) { bound <<= 83; bound += 3; }
-            WorkBudget work;
-            PseudoBooleanEncoder pb(enc, work);
-            std::array<SatLit, 3> roots;
-            for (const auto index : order) {
-                const auto root = pb.lessEqual(terms, bounds[index]);
-                REQUIRE(root);
-                roots[index] = *root;
-            }
-            for (size_t low = 0; low < roots.size(); ++low)
-                for (size_t high = low + 1; high < roots.size(); ++high)
-                    CHECK(sat.unitConflict({roots[low], roots[high].negated()}));
-            CHECK_FALSE(sat.unitConflict({roots.front().negated(), roots.back()}));
-        }
-    }
-}
-
-TEST_CASE("Ordered PB: shared signed bounds preserve every Boolean truth assignment") {
+TEST_CASE("Shared PB: cached signed bounds preserve every Boolean truth assignment") {
     for (const auto& scale : std::array<mpz_class, 2>{mpz_class(1), mpz_class(1) << 100}) {
         auto sat = createSatSolver();
         BitBlastEncoder enc(*sat);
@@ -477,7 +394,7 @@ TEST_CASE("Ordered PB: shared signed bounds preserve every Boolean truth assignm
     }
 }
 
-TEST_CASE("Ordered PB: incomplete thresholds stay private and complete predicates reuse no variables") {
+TEST_CASE("Shared PB: incomplete thresholds stay private and complete predicates reuse no variables") {
     auto sat = createSatSolver();
     BitBlastEncoder enc(*sat);
     WorkBudget work;

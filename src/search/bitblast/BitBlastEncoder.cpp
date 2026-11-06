@@ -263,11 +263,6 @@ void BitBlastEncoder::assertLit(SatLit l) {
     if (!over_) sat_.addClause({l});
 }
 
-void BitBlastEncoder::assertImplication(SatLit premise, SatLit conclusion) {
-    if (!over_ && premise != false_ && conclusion != true_ && premise != conclusion)
-        sat_.addClause({premise.negated(), conclusion});
-}
-
 BitVec BitBlastEncoder::signExtend(const BitVec& a, unsigned width) {
     BitVec r = a;
     SatLit s = a.sign();

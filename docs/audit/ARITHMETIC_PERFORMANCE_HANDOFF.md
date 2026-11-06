@@ -287,7 +287,7 @@ contents through ExperimentOS: **2,258 cases / 1,373,099 assertions** pass, and
 the CLI and worker hashes exactly match the preceding qualified executables.
 No main promotion or whole-suite benefit is attributed to this experiment.
 
-### In development: ordered fully reified weighted thresholds
+### Closed experiment: ordered fully reified weighted thresholds
 
 An encoding probe linked against qualified main finds that four of five
 incompatible threshold pairs do not conflict under unit propagation. Frozen
@@ -311,8 +311,42 @@ Frozen CLI SHA-256 is
 `35a67b88cbeea17527225f0b5773d271b8642813c4f1c6a25701c78e2a5511f1`.
 The initial native attempt had a type error in a new test; its failure is
 retained, and only the test operand type was corrected before qualification.
-Complete fixed160 comparison remains pending; no performance benefit or
-additional main capability is claimed yet.
+Complete fixed160 falls **124 to 121 independently verified results**, versus
+**116 for Z3**, after symmetric original-input-bound certificate checking.
+There are no gains, three lost SAT results and no errors. Mean verified PAR-2
+worsens **32.145 to 33.756 seconds**, versus **34.255 for Z3**. Raw rows remain
+unchanged, and no private/development expansion or main promotion is performed.
+
+A mechanism diagnostic retains 369 completed predicates and reduces repeated
+diagram states from **26,345 to 14,006**. However, another diagnostic adds
+1,584 threshold implications and changes a roughly 12-second SAT search into
+an exhausted search followed by integer fallback and timeout. A separate
+pure-LRA diagnostic reverses the formal timing order; its cause remains
+unresolved. Sampled live solver processes consume about one full CPU, which
+does not establish an infrastructure explanation. Diagnostic replays replace
+none of the original formal observations.
+
+The blanket threshold implications, their unused encoder operation and the
+edge-only tests are removed in the successor prototype. That prototype retains
+only fully defined predicate reuse, whose saved diagram traversal is directly
+measured. The successor's separate qualification is recorded below; no
+whole-suite benefit is inferred from the rejected combined prototype.
+
+### In development: reuse completed weighted threshold predicates
+
+The successor retains only exact predicate reuse. It emits the existing full
+definitions and caches only completed thresholds, including normalized signed,
+GCD-reduced and complemented requests. It removes the extra implication
+clauses and their unused API rather than retaining an alternate implementation
+or configuration gate. Partial resource-limited attempts expose no predicate.
+
+Proof-enabled Panda9 / ExperimentOS qualification passes **2,260 cases /
+1,374,319 assertions**, including two new groups and 1,220 targeted assertions.
+The actual successor CNF independently passes **13,896 Z3/cvc5 decisions**
+across 48 synthetic scenarios. Frozen CLI SHA-256 is
+`7ea65d8276b1394f8c63ce5ce8ef51752b7edbc5a3df02807e53cbae040e5381`.
+Its fresh complete fixed160 comparison against qualified main remains pending;
+the earlier regressions are not replaced by this new experiment.
 
 ### Closed experiment: Boolean directions in weighted threshold diagrams
 

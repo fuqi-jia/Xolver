@@ -1,6 +1,5 @@
 #include "search/bitblast/PseudoBooleanEncoder.h"
 #include <algorithm>
-#include <iterator>
 #include <limits>
 #include <map>
 
@@ -136,20 +135,7 @@ std::optional<SatLit> PseudoBooleanEncoder::lessEqual(
         auto publish = [&](std::optional<SatLit> literal) -> std::optional<SatLit> {
             if (!literal || encoder_.overflowed()) return std::nullopt;
             tick();
-            auto& predicates = thresholds_[terms];
-            const auto next = predicates.lower_bound(target);
-            // A smaller threshold entails a larger one. These are relations
-            // between total Boolean functions, so they remain valid under
-            // assumptions and when a finite candidate box is withdrawn.
-            auto imply = [&](SatLit smaller, SatLit larger) {
-                if (smaller != larger) {
-                    encoder_.assertImplication(smaller, larger);
-                    ++statistics_.thresholdImplications;
-                }
-            };
-            if (next != predicates.end()) imply(*literal, next->second);
-            if (next != predicates.begin()) imply(std::prev(next)->second, *literal);
-            predicates.emplace_hint(next, target, *literal);
+            thresholds_[terms].emplace(target, *literal);
             return oriented(literal);
         };
         // Once a sum needed an arithmetic encoding, subsequent thresholds
