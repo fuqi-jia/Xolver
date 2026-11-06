@@ -44,10 +44,36 @@ A fresh unchanged 18-input control comparison improves **8 to 9 independently
 verified results**, versus 16 for same-round Z3. One SAT changes from a
 60-second timeout to **5.031 seconds**; both Z3 and cvc5 accept the actual timed
 model. There are no losses, wrong results or runtime/protocol errors.
-Complete fresh fixed160, development587 and private14408 comparisons are now
-running with 60 seconds, one physical CPU and 16 GiB per solver. This selected
-control result is not complete stage acceptance or evidence of overall Z3
-superiority. Private inputs, models and individual identifiers remain off GitHub.
+
+Complete fresh server comparisons pass at that freeze, with 60 seconds, one
+physical CPU and 16 GiB per solver:
+
+- Fixed160 improves **115 to 116 verified before the certificate supplement**.
+  Fresh independent checking of the original-input-bound residue certificate
+  applies symmetrically to the two actual UNSAT results, giving **116 to 117
+  verified**, versus **115 for same-round Z3**. No timeout or unknown is
+  upgraded. The candidate has **65 SAT / 52 UNSAT / 42 timeouts / one unknown**.
+  One SAT improves from a 60-second timeout to **5.632 seconds**; both independent
+  solvers accept its actual timed model. There are no losses or errors. Mean
+  verified PAR-2 increases from **36.313 to 36.841 seconds**, versus **35.024**
+  for Z3. This is a correct-count gain with a timing cost. Eight unconfirmed Z3
+  results remain excluded; favorable results from older rounds are not substituted.
+- Development587 retains **587 to 587 verified**, versus 584 for Z3. Total
+  solver time is **48.173 to 48.311 seconds**, versus **18.015** for Z3. Three
+  unconfirmed Z3 model replays remain excluded.
+- All **14,408 private queries** retain verified results in both versions and
+  Z3: **8,940 SAT / 5,468 UNSAT**. Total solver time is **1,280.396 to 1,278.062
+  seconds**, versus **379.889** for Z3. There are no losses, timeouts, unknowns,
+  unconfirmed results or errors in this cohort.
+
+Every actual timed Xolver SAT model is independently replayed by both Z3 and
+cvc5; actual timed Z3 models require cvc5 replay. UNSAT requires an independent
+verdict or checked certificate. These separate cohorts are not summed into an
+overall score. [PR #103](https://github.com/fuqi-jia/Xolver/pull/103) tracks this
+change; promotion requires the final PR head and main CI to pass. Original-C
+QCP evidence at the newer worker freeze remains open. The protected set is
+unused, and overall superiority over Z3 is not established. Private inputs,
+models and individual identifiers remain off GitHub.
 
 ## Previous checkpoint: sparse integer equality components (2026-11-06)
 
