@@ -2,6 +2,7 @@
 
 #include "contracts/SatSolver.h"
 #include "search/bitblast/BitVec.h"
+#include "search/boolean/BooleanDefinitions.h"
 #include "ir/types.h"          // Relation
 #include <gmpxx.h>
 #include <array>
@@ -32,6 +33,14 @@ public:
     SatLit xorGate(SatLit a, SatLit b);
     SatLit iteGate(SatLit s, SatLit t, SatLit e);
     SatLit majorityGate(SatLit a, SatLit b, SatLit c);
+    // Full equivalences by default. With one direction requested, the caller
+    // must have established the connective's occurrence polarity first.
+    SatLit andGate(std::span<const SatLit> inputs, BooleanDefinitionDirections directions = {});
+    SatLit orGate(std::span<const SatLit> inputs, BooleanDefinitionDirections directions = {});
+    uint64_t naryGateCount() const { return naryGateCount_; }
+    uint64_t naryInputCount() const { return naryInputCount_; }
+    uint64_t naryCacheHits() const { return naryCacheHits_; }
+    uint64_t naryDirectionUpgrades() const { return naryDirectionUpgrades_; }
     uint64_t ternaryGateCount() const { return ternaryGateCache_.size(); }
     uint64_t ternaryCacheHits() const { return ternaryCacheHits_; }
 
@@ -81,6 +90,36 @@ private:
     uint64_t maxVars_ = 0;     // 0 = unlimited
     uint64_t varCount_ = 0;
     bool over_ = false;
+    SatLit naryGate(std::span<const SatLit> inputs, bool conjunction,
+                    BooleanDefinitionDirections directions);
+    uint64_t naryGateCount_ = 0;
+    uint64_t naryInputCount_ = 0;
+    uint64_t naryCacheHits_ = 0;
+    uint64_t naryDirectionUpgrades_ = 0;
+
+    struct NaryGateKey {
+        bool conjunction;
+        std::vector<SatLit> inputs;
+        bool operator==(const NaryGateKey& other) const {
+            return conjunction == other.conjunction && inputs == other.inputs;
+        }
+    };
+    struct NaryGateKeyHash {
+        size_t operator()(const NaryGateKey& key) const {
+            size_t hash = key.conjunction;
+            for (const auto input : key.inputs) {
+                const uint64_t encoded = (uint64_t(input.var) << 1) | uint64_t(input.sign);
+                const auto part = std::hash<uint64_t>{}(encoded);
+                hash ^= part + size_t(0x9e3779b9) + (hash << 6) + (hash >> 2);
+            }
+            return hash;
+        }
+    };
+    struct NaryGateDefinition {
+        SatLit output;
+        BooleanDefinitionDirections directions;
+    };
+    std::unordered_map<NaryGateKey, NaryGateDefinition, NaryGateKeyHash> naryGateCache_;
 
     // Share by exact gate identity within this encoder's SAT instance. Each
     // operand retains all 32 variable bits; signs and kind live separately.

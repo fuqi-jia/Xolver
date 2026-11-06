@@ -36,6 +36,127 @@ SatLit gate(bitblast::BitBlastEncoder& enc,unsigned type,SatLit a,SatLit b) {
 }
 }
 
+TEST_CASE("Encoder: nary definitions preserve the requested implication directions") {
+    for (const bool conjunction : {false, true}) {
+        for (unsigned arity = 0; arity <= 5; ++arity) {
+            for (unsigned mode = 1; mode <= 3; ++mode) {
+                auto sat = createSatSolver();
+                bitblast::BitBlastEncoder enc(*sat);
+                std::vector<SatLit> inputs;
+                for (unsigned i = 0; i < arity; ++i)
+                    inputs.push_back(enc.mkVar(1).bits[0]);
+                const auto before = enc.varCount();
+                const BooleanDefinitionDirections directions{bool(mode & 1), bool(mode & 2)};
+                const auto root = conjunction ? enc.andGate(inputs, directions) : enc.orGate(inputs, directions);
+                CHECK(enc.varCount() - before <= 1);
+                for (unsigned mask = 0; mask < (1u << arity); ++mask) {
+                    const bool expected = conjunction ? mask == (1u << arity) - 1 : mask != 0;
+                    std::vector<SatLit> assignments;
+                    for (unsigned i = 0; i < arity; ++i)
+                        assignments.push_back(mask & (1u << i) ? inputs[i] : inputs[i].negated());
+                    assignments.push_back(expected ? root : root.negated());
+                    CHECK(sat->solve(assignments) == SatSolver::SolveResult::Sat);
+                    if ((expected && directions.negative) || (!expected && directions.positive)) {
+                        assignments.back() = assignments.back().negated();
+                        CHECK(sat->solve(assignments) == SatSolver::SolveResult::Unsat);
+                    }
+                }
+            }
+        }
+    }
+}
+
+TEST_CASE("Encoder: nary sharing accumulates polarity definitions within the allocation budget") {
+    for (const bool conjunction : {false, true}) {
+        SparseSat sat;
+        bitblast::BitBlastEncoder enc(sat);
+        const auto a = SatLit::positive(sat.newVar());
+        const auto b = SatLit::negative(sat.newVar());
+        const auto c = SatLit::positive(sat.bind(std::numeric_limits<SatVar>::max()));
+        const auto define = [&](std::span<const SatLit> inputs, BooleanDefinitionDirections directions) {
+            return conjunction ? enc.andGate(inputs, directions) : enc.orGate(inputs, directions);
+        };
+        const auto root = define(std::array{a, b, c}, {true, false});
+        const auto allocated = enc.varCount();
+        const auto clauses = sat.clauses;
+        enc.setVarBudget(allocated);
+        for (unsigned repeat = 0; repeat < 64; ++repeat)
+            CHECK(define(std::array{c, a, b, a}, {true, false}) == root);
+        CHECK(enc.varCount() == allocated);
+        CHECK(sat.clauses == clauses);
+        CHECK_FALSE(enc.overflowed());
+        // The previously omitted reverse direction is still free before the
+        // upgrade; after it, the same output denotes the full equivalence.
+        const auto all = std::vector<SatLit>{a, b, c, root.negated()};
+        CHECK(sat.solve(all) == SatSolver::SolveResult::Sat);
+        CHECK(define(std::array{b, c, a}, {false, true}) == root);
+        CHECK(sat.clauses == clauses + (conjunction ? 1u : 3u));
+        CHECK(sat.solve(all) == SatSolver::SolveResult::Unsat);
+        const auto completeClauses = sat.clauses;
+        CHECK(define(std::array{a, c, b}, {}) == root);
+        CHECK(sat.clauses == completeClauses);
+        CHECK(enc.varCount() == allocated);
+        CHECK_FALSE(enc.overflowed());
+    }
+}
+
+TEST_CASE("Encoder: nary sharing keeps gate kind polarity and high variable IDs distinct") {
+    SparseSat sat;
+    bitblast::BitBlastEncoder enc(sat);
+    const auto a = SatLit::positive(sat.newVar()), b = SatLit::negative(sat.newVar());
+    const auto c = SatLit::positive(sat.newVar());
+    const auto high = SatLit::positive(sat.bind((SatVar(1) << 31) + c.var));
+    const std::array outputs{enc.andGate(std::array{a, b, c}), enc.orGate(std::array{a, b, c}),
+                              enc.andGate(std::array{a, b, high}), enc.andGate(std::array{a, b.negated(), c})};
+    for (size_t i = 0; i < outputs.size(); ++i)
+        for (size_t j = 0; j < i; ++j) CHECK(outputs[i] != outputs[j]);
+    const auto allocated = enc.varCount();
+    CHECK(enc.andGate(std::array{c, b, a}) == outputs[0]);
+    CHECK(enc.orGate(std::array{b, c, a}) == outputs[1]);
+    CHECK(enc.andGate(std::array{high, a, b}) == outputs[2]);
+    CHECK(enc.andGate(std::array{b.negated(), c, a}) == outputs[3]);
+    CHECK(enc.varCount() == allocated);
+    const auto pair = enc.andGate(std::array{a, b}, {true, false});
+    CHECK(enc.andGate(std::array{b, a}, {false, true}) == pair);
+    CHECK(enc.andGate(a, b) == pair);
+    CHECK(sat.solve({a, b, pair.negated()}) == SatSolver::SolveResult::Unsat);
+    for (unsigned mask = 0; mask < 16; ++mask) {
+        const bool av = mask & 1, bv = mask & 2, cv = mask & 4, hv = mask & 8;
+        const std::array expected{av && bv && cv, av || bv || cv, av && bv && hv, av && !bv && cv};
+        std::vector<SatLit> assignments{av ? a : a.negated(), bv ? b : b.negated(),
+                                        cv ? c : c.negated(), hv ? high : high.negated()};
+        for (size_t i = 0; i < outputs.size(); ++i)
+            assignments.push_back(expected[i] ? outputs[i] : outputs[i].negated());
+        CHECK(sat.solve(assignments) == SatSolver::SolveResult::Sat);
+        for (size_t i = 0; i < outputs.size(); ++i) {
+            assignments[4 + i] = assignments[4 + i].negated();
+            CHECK(sat.solve(assignments) == SatSolver::SolveResult::Unsat);
+            assignments[4 + i] = assignments[4 + i].negated();
+        }
+    }
+}
+
+TEST_CASE("Encoder: nary simplification keeps high variable bits and completed budget prefixes") {
+    SparseSat sat;
+    bitblast::BitBlastEncoder enc(sat);
+    const auto low = SatLit::positive(sat.newVar());
+    const auto high = SatLit::negative(sat.bind(std::numeric_limits<SatVar>::max()));
+    const auto other = SatLit::positive(sat.newVar());
+    CHECK(enc.andGate(std::array{low, enc.constTrue(), low}) == low);
+    CHECK(enc.orGate(std::array{high, enc.constFalse(), high}) == high);
+    CHECK(enc.andGate(std::array{low, high, low.negated()}) == enc.constFalse());
+    CHECK(enc.orGate(std::array{low, high, high.negated()}) == enc.constTrue());
+    enc.setVarBudget(1);
+    const auto root = enc.andGate(std::array{low, high, other});
+    CHECK(enc.varCount() == 1);
+    const auto clauses = sat.clauses;
+    enc.orGate(std::array{low, high, other});
+    CHECK(enc.overflowed());
+    CHECK(sat.clauses == clauses);
+    CHECK(sat.solve({low, high, other, root}) == SatSolver::SolveResult::Sat);
+    CHECK(sat.solve({low, high, other, root.negated()}) == SatSolver::SolveResult::Unsat);
+}
+
 TEST_CASE("Encoder: majority gates preserve every input polarity and constant") {
     auto sat = createSatSolver();
     bitblast::BitBlastEncoder enc(*sat);

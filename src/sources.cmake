@@ -108,6 +108,7 @@ set(XOLVER_SEARCH_SOURCES
     "search/bitblast/SpaceEstimator.cpp"
     "search/boolean/ArithAtomExtractor.cpp"
     "search/boolean/Atomizer.cpp"
+    "search/boolean/BooleanDefinitions.cpp"
     "search/boolean/EufAtomExtractor.cpp"
     "search/boolean/TheoryRefutation.cpp"
     "search/candidate/CandidateModelSearch.cpp"

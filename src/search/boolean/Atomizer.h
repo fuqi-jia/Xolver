@@ -2,6 +2,7 @@
 
 #include "ir/NativeTerms.h"
 #include "contracts/SatSolver.h"
+#include "search/boolean/BooleanDefinitions.h"
 #include "search/boolean/ArithAtomExtractor.h"
 #include "search/boolean/EufAtomExtractor.h"
 #include "contracts/DynamicAtomRegistrar.h"
@@ -125,7 +126,7 @@ private:
     SyntheticExprIdAllocator synthExprAlloc_;
 
     // polarity bitset: bit0 = occurs positively, bit1 = occurs negatively.
-    std::unordered_map<ExprId, uint8_t> pol_;
+    BooleanPolarities pol_;
 
     ArithAtomExtractor arithExtractor_;
     EufAtomExtractor eufExtractor_;

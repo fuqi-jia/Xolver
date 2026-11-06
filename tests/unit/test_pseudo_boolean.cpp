@@ -1,5 +1,6 @@
 #include "search/bitblast/PseudoBooleanEncoder.h"
 #include "search/bitblast/EagerBitBlastSolver.h"
+#include <array>
 #include <doctest/doctest.h>
 
 using namespace xolver;
@@ -65,6 +66,48 @@ struct BinaryFixture {
         roots.push_back(term(Kind::Leq, {variable, integer(1)}));
     }
 };
+}
+
+TEST_CASE("Eager bitblast: polarity definitions preserve guarded integer truth tables across queries") {
+    BinaryFixture f;
+    const auto x = f.variable("x"), y = f.variable("y"), z = f.variable("z");
+    const auto guard = f.ir.add({Kind::Variable, 0, {}, Payload(std::string("guard"))});
+    const auto a = f.term(Kind::Eq, {x, f.integer(1)});
+    const auto b = f.term(Kind::Eq, {y, f.integer(1)});
+    const auto c = f.term(Kind::Eq, {z, f.integer(1)});
+    const auto some = f.term(Kind::Or, {a, b, c});
+    const auto all = f.term(Kind::And, {a, b, c});
+    const std::vector formulas{
+        some, f.term(Kind::Not, {some}), f.term(Kind::Implies, {a, b, c}),
+        f.term(Kind::And, {some, f.term(Kind::Not, {all})}),
+        f.term(Kind::Eq, {some, all}), f.term(Kind::Xor, {some, all})};
+    EagerBitBlastSolver solver;
+    for (unsigned mask = 0; mask < 8; ++mask) {
+        std::vector<ExprId> base{guard};
+        unsigned index = 0;
+        for (const auto variable : {x, y, z}) {
+            f.bounds(variable, base);
+            const auto pin = f.term(Kind::Eq, {variable, f.integer(mask & (1u << index++) ? 1 : 0)});
+            base.push_back(f.term(Kind::Or, {f.term(Kind::Not, {guard}), pin}));
+        }
+        const bool someValue = mask != 0, allValue = mask == 7;
+        const std::array expected{someValue, !someValue,
+            !(mask & 1) || !(mask & 2) || bool(mask & 4), someValue && !allValue,
+            someValue == allValue, someValue != allValue};
+        for (size_t shape = 0; shape < formulas.size(); ++shape) {
+            auto roots = base;
+            roots.push_back(formulas[shape]);
+            const auto result = solver.solveLinear(f.ir, roots);
+            CHECK(result.status == (expected[shape] ? EagerBitBlastSolver::Status::Sat
+                                                   : EagerBitBlastSolver::Status::Unknown));
+            if (result.status == EagerBitBlastSolver::Status::Sat) {
+                CHECK(result.model.at("x") == bool(mask & 1));
+                CHECK(result.model.at("y") == bool(mask & 2));
+                CHECK(result.model.at("z") == bool(mask & 4));
+                CHECK(result.boolModel.at("guard"));
+            }
+        }
+    }
 }
 
 TEST_CASE("PseudoBooleanEncoder: reified signed thresholds match exhaustive assignments") {
