@@ -80,6 +80,9 @@ void TheorySearchStats::print(std::ostream& out) const {
         << " conflict=" << modelCheckConflict
         << " lemma=" << modelCheckLemma
         << " unknowns=" << modelCheckUnknown << "\n";
+    out << "  source_reuses=" << modelSourceReuses
+        << " source_rebuilds=" << modelSourceRebuilds
+        << " replayed_atoms=" << modelSourceAssertions << "\n";
     if (modelCheckConflict > 0) {
         out << "  conflict_size min=" << conflictMinSize
             << " max=" << conflictMaxSize
@@ -164,6 +167,13 @@ void CadicalTheoryPropagator::maybeUserSetup() {
     user_->onSetup(obs);
 }
 
+void CadicalTheoryPropagator::recordTheorySource(SatVar var) {
+    const auto count = registry_.numAtomVars();
+    if (!sourceRegistrySize_) sourceRegistrySize_ = count;
+    else if (*sourceRegistrySize_ != count) modelSourcesFollowTrail_ = false;
+    notifiedTheoryVars_.insert(var);
+}
+
 void CadicalTheoryPropagator::notify_assignment(const std::vector<int>& lits) {
     const bool satProf = xolver::config::read<xolver::config::ReadKind::Presence>("XOLVER_SAT_PROF");
     auto _na0 = satProf ? std::chrono::steady_clock::now()
@@ -208,6 +218,7 @@ void CadicalTheoryPropagator::notify_assignment(const std::vector<int>& lits) {
         const auto* atom = registry_.findBySatVar(var);
         if (!atom) continue;
         tm_.assertTheoryLit(*atom, SatLit{var, sign}, currentLevel_);
+        recordTheorySource(var);
         if (user_) {
             user_->onFixed(static_cast<uint32_t>(var), sign,
                            Term{static_cast<uint32_t>(atom->exprId), userContext_});
@@ -355,6 +366,7 @@ void CadicalTheoryPropagator::notify_backtrack(size_t new_level) {
         const SatVar v = assignTrail_.back().first;
         currentAssignment_.erase(v);
         varToLevel_.erase(v);
+        notifiedTheoryVars_.erase(v);
         assignTrail_.pop_back();
     }
     if (currentLevel_ == 0) {
@@ -367,6 +379,7 @@ void CadicalTheoryPropagator::notify_backtrack(size_t new_level) {
             if (!atom) continue;
             assert(level == 0);
             tm_.restoreRootLiteral(*atom, SatLit{var, currentAssignment_.at(var)});
+            recordTheorySource(var);
             theoryDirtySinceCheck_ = true;
         }
     }
@@ -408,63 +421,92 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
     }
 
     assignmentView_.clear();
+    bool sourcesMatch = modelSourcesFollowTrail_ &&
+        (!sourceRegistrySize_ || *sourceRegistrySize_ == registry_.numAtomVars());
     for (int lit : model) {
         SatVar var = static_cast<SatVar>(std::abs(lit));
         assignmentView_.setVarValue(var, lit > 0);
+        if (registry_.findBySatVar(var)) {
+            const auto assigned = currentAssignment_.find(var);
+            if (!notifiedTheoryVars_.contains(var) || assigned == currentAssignment_.end() ||
+                assigned->second != (lit > 0) ||
+                !varToLevel_.contains(var)) sourcesMatch = false;
+        }
+    }
+    if (sourcesMatch) {
+        // Check coverage in the other direction too: a truncated model must
+        // not retain an observed source that is absent from that model.
+        for (const auto var : notifiedTheoryVars_)
+            if (assignmentView_.value(SatLit{var, currentAssignment_.at(var)}) != LitValue::True) {
+                sourcesMatch = false;
+                break;
+            }
     }
     tm_.setAssignmentView(&assignmentView_);
 
     NO_DBG << "[CaDiCaL] cb_check_found_model modelSize=" << model.size() << "\n";
 
-    // Reset theory state to level 0 before rebuilding from current model.
-    // Without this, stale assignments from previous model checks accumulate
-    // in solver trails and cause malformed conflict clauses (explain returns
-    // reason lits that are false in the current model).
-    tm_.backtrackToLevel(0);
+    if (sourcesMatch) {
+        // Theories already received this exact source assignment and its SAT
+        // levels through notifications. Keep their incremental contexts; Full
+        // checking below still validates every complete candidate.
+        ++stats_.modelSourceReuses;
+    } else {
+        ++stats_.modelSourceRebuilds;
+        modelSourcesFollowTrail_ = false;
+        // Reset theory state to level 0 before rebuilding from current model.
+        // Without this, stale assignments from previous model checks accumulate
+        // in solver trails and cause malformed conflict clauses (explain returns
+        // reason lits that are false in the current model).
+        tm_.backtrackToLevel(0);
 
-    // Re-assert all theory atoms from the current model so that
-    // TheoryManager rebuilds solver state after backtrack clears it.
-    // This must include *all* theory atoms (LRA, LIA, EUF, Combination),
-    // not just Combination atoms, otherwise legacy single-theory paths
-    // see an empty active state after backtrack.
-    //
-    // Re-assert each atom at its REAL SAT decision level (varToLevel_), but in
-    // ASCENDING-LEVEL ORDER. The model vector is in trail/model order, whose
-    // levels are non-monotonic; feeding that directly violates the theory
-    // solvers' snapshot invariant (ensureSnapshotForLevel assumes non-decreasing
-    // levels) and corrupts e-graph rollback. Sorting by level restores
-    // monotonicity WHILE preserving the level<->trail correspondence, so the
-    // rebuilt state matches the actual trail: a subsequent notify_backtrack(N)
-    // rolls the theory back to exactly the level-N search state. Using a single
-    // fixed level instead (an earlier workaround) broke that correspondence,
-    // leaving model-check merges stale in continued search -> spurious
-    // interface-disequality conflicts -> false UNSAT.
-    auto levelOf = [this](SatVar v) -> int {
-        auto it = varToLevel_.find(v);
-        return it != varToLevel_.end() ? it->second : 0;
-    };
-    // Decorate-sort-undecorate (perf): the comparator's levelOf() is a hash
-    // lookup; doing it inside stable_sort costs O(n log n) lookups and dominated
-    // cb_check_found_model on large QF_RDL/IDL models (profiled). Precompute each
-    // lit's level ONCE (O(n) lookups), sort by the integer key, and REUSE the key
-    // in the re-assertion below (which also called levelOf per lit). Verdict-
-    // identical: stable sort by .first preserves trail order within a level, the
-    // same order the by-levelOf stable_sort produced.
-    std::vector<std::pair<int, int>>& ordered = modelSortScratch_;  // (level, lit)
-    ordered.clear();
-    ordered.reserve(model.size());
-    for (int lit : model)
-        ordered.emplace_back(levelOf(static_cast<SatVar>(std::abs(lit))), lit);
-    std::stable_sort(ordered.begin(), ordered.end(),
-                     [](const std::pair<int, int>& a, const std::pair<int, int>& b) {
-                         return a.first < b.first;
-                     });
-    for (const auto& [lvl, lit] : ordered) {
-        SatVar var = static_cast<SatVar>(std::abs(lit));
-        bool sign = lit > 0;
-        const auto* atom = registry_.findBySatVar(var);
-        if (!atom) continue;
-        tm_.assertTheoryLit(*atom, SatLit{var, sign}, lvl);
+        // Re-assert all theory atoms from the current model so that
+        // TheoryManager rebuilds solver state after backtrack clears it.
+        // This must include *all* theory atoms (LRA, LIA, EUF, Combination),
+        // not just Combination atoms, otherwise legacy single-theory paths
+        // see an empty active state after backtrack.
+        //
+        // Re-assert each atom at its REAL SAT decision level (varToLevel_), but in
+        // ASCENDING-LEVEL ORDER. The model vector is in trail/model order, whose
+        // levels are non-monotonic; feeding that directly violates the theory
+        // solvers' snapshot invariant (ensureSnapshotForLevel assumes non-decreasing
+        // levels) and corrupts e-graph rollback. Sorting by level restores
+        // monotonicity WHILE preserving the level<->trail correspondence, so the
+        // rebuilt state matches the actual trail: a subsequent notify_backtrack(N)
+        // rolls the theory back to exactly the level-N search state. Using a single
+        // fixed level instead (an earlier workaround) broke that correspondence,
+        // leaving model-check merges stale in continued search -> spurious
+        // interface-disequality conflicts -> false UNSAT.
+        auto levelOf = [this](SatVar v) -> int {
+            auto it = varToLevel_.find(v);
+            return it != varToLevel_.end() ? it->second : 0;
+        };
+        // Decorate-sort-undecorate (perf): the comparator's levelOf() is a hash
+        // lookup; doing it inside stable_sort costs O(n log n) lookups and dominated
+        // cb_check_found_model on large QF_RDL/IDL models (profiled). Precompute each
+        // lit's level ONCE (O(n) lookups), sort by the integer key, and REUSE the key
+        // in the re-assertion below (which also called levelOf per lit). Verdict-
+        // identical: stable sort by .first preserves trail order within a level, the
+        // same order the by-levelOf stable_sort produced.
+        std::vector<std::pair<int, int>>& ordered = modelSortScratch_;  // (level, lit)
+        ordered.clear();
+        ordered.reserve(model.size());
+        for (int lit : model) {
+            const auto var = static_cast<SatVar>(std::abs(lit));
+            if (registry_.findBySatVar(var)) ordered.emplace_back(levelOf(var), lit);
+        }
+        std::stable_sort(ordered.begin(), ordered.end(),
+                         [](const std::pair<int, int>& a, const std::pair<int, int>& b) {
+                             return a.first < b.first;
+                         });
+        for (const auto& [lvl, lit] : ordered) {
+            SatVar var = static_cast<SatVar>(std::abs(lit));
+            bool sign = lit > 0;
+            const auto* atom = registry_.findBySatVar(var);
+            if (!atom) continue;
+            tm_.assertTheoryLit(*atom, SatLit{var, sign}, lvl);
+            ++stats_.modelSourceAssertions;
+        }
     }
     for (int lit : model) {
         SatVar var = static_cast<SatVar>(std::abs(lit));
@@ -642,6 +684,9 @@ int CadicalTheoryPropagator::cb_propagate() {
                              g_notifyCalls, g_notifyUs / 1000);
                 std::fprintf(f, "cb_check_found_model(Full): calls=%lld total_ms=%lld\n",
                              g_checkCalls, g_checkUs / 1000);
+                std::fprintf(f, "Full_model_sources: reused=%lld rebuilt=%lld assertions=%lld\n",
+                             stats_.modelSourceReuses, stats_.modelSourceRebuilds,
+                             stats_.modelSourceAssertions);
                 std::fprintf(f, "cb_propagate body: total_ms=%lld\n", g_propUs / 1000);
                 std::fprintf(f, "notify_backtrack: calls=%lld total_ms=%lld\n",
                              g_btCalls, g_btUs / 1000);

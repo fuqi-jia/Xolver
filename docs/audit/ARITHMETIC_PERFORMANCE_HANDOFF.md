@@ -287,6 +287,36 @@ contents through ExperimentOS: **2,258 cases / 1,373,099 assertions** pass, and
 the CLI and worker hashes exactly match the preceding qualified executables.
 No main promotion or whole-suite benefit is attributed to this experiment.
 
+### In development: retain fully observed theory sources at model checks
+
+An accepted-main LRA diagnostic records **2,124 complete model callbacks /
+34.433 seconds**. Each callback unconditionally withdraws and readmits its
+theory sources. This includes repeated work when notifications already supply
+the complete candidate's exact source assignment and SAT decision levels; the
+timing alone does not attribute all callback cost to replay.
+
+The shared SAT/theory bridge now records actually notified theory sources.
+Before Full checking, it checks both model/trail coverage directions, values,
+levels and registry stability. A matching prefix keeps each theory's existing
+incremental context. A model completion or later registration growth retains
+complete admission in stable decision-level order. Pure Boolean literals do
+not participate in that source sort. Every candidate still receives a Full
+theory check; per-theory rollback, APIs, allocations and seeds are unchanged.
+
+Proof-enabled Panda9 / ExperimentOS qualification passes **2,261 cases /
+1,373,168 assertions**, including three new callback regression groups and
+342 targeted cases. All **32 independent synthetic inputs** across eight logics
+match expected SAT/UNSAT results in baseline, candidate and Z3. The **80 actual
+exported-model replays** pass; there are no opposite verdicts, unknowns,
+unconfirmed results or errors. This covers linear/nonlinear integer and real
+arithmetic, UF, UF with reals, arrays with integers, and mixed integer/real
+arithmetic. It does not establish performance or private-suite acceptance.
+
+Frozen CLI SHA-256 is
+`ac48a93976861b9cbc2a8d0514f3c6b87f79571bb14091ec695aeb25131bff9f`.
+The next comparison uses the complete original fixed160 suite and qualified
+main, retaining the original logics and identical per-input resources.
+
 ### Closed experiment: ordered fully reified weighted thresholds
 
 An encoding probe linked against qualified main finds that four of five
