@@ -1085,7 +1085,6 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
                       << " carry_save=" << counts.carrySaveThresholds
                       << " arithmetic_sums=" << counts.carrySaveSums
                       << " reused_sums=" << counts.reusedSums
-                      << " reused_thresholds=" << counts.reusedThresholds
                       << " compressors=" << counts.compressors << "\n";
         }
         if (enc.overflowed()) {

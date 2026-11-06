@@ -332,7 +332,7 @@ only fully defined predicate reuse, whose saved diagram traversal is directly
 measured. The successor's separate qualification is recorded below; no
 whole-suite benefit is inferred from the rejected combined prototype.
 
-### In development: reuse completed weighted threshold predicates
+### Closed experiment: reuse completed weighted threshold predicates
 
 The successor retains only exact predicate reuse. It emits the existing full
 definitions and caches only completed thresholds, including normalized signed,
@@ -345,8 +345,34 @@ Proof-enabled Panda9 / ExperimentOS qualification passes **2,260 cases /
 The actual successor CNF independently passes **13,896 Z3/cvc5 decisions**
 across 48 synthetic scenarios. Frozen CLI SHA-256 is
 `7ea65d8276b1394f8c63ce5ce8ef51752b7edbc5a3df02807e53cbae040e5381`.
-Its fresh complete fixed160 comparison against qualified main remains pending;
-the earlier regressions are not replaced by this new experiment.
+Its fresh complete fixed160 comparison falls **123 to 122 independently
+verified results**, versus **118 for Z3**, after symmetric certificate checking.
+There are no gains, one lost SAT and no errors. Mean verified PAR-2 worsens
+**32.555 to 33.151 seconds**, versus **33.136 for Z3**. The lost SAT changes
+from **24.328 seconds to timeout**. Its diagnostic SAT in 24.021 seconds does
+not replace that formal loss. Another diagnostic retains the saved diagram
+states but takes 58.090 seconds; reduced encoding work has not established a
+solver-time benefit. The earlier regressions are retained separately.
+
+No private/development expansion or main promotion is performed. The optional
+predicate-cache implementation and its two new tests are restored to qualified
+main contents through ExperimentOS: **2,258 cases / 1,373,099 assertions** pass.
+All 2,179 source contents and the CLI/worker hashes exactly match qualified
+main. All accepted correctness and reasoning changes are retained; no solver
+allocation or seed is changed.
+
+Three accepted-main parse-only diagnostics take **0.416, 5.782 and 4.177
+seconds** on public inputs from verified Z3/Xolver gaps. They do not explain
+the 60-second failures or establish a parser defect. The next attribution
+examines LRA propagation and search, rather than repeating either rejected
+threshold variant or the previously closed lazy-initialization experiment.
+
+Two subsequent accepted-main diagnostics reach **5,934 and 4,464 LRA core
+checks**, accounting for **30.542 and 27.971 seconds** in their last snapshots.
+Both reach the external timeout. These establish repeated theory work but do
+not identify which producer or callback causes the remaining cost. A separate
+callback profile is running with unchanged solver settings; it is diagnostic
+evidence only and cannot replace formal scores.
 
 ### Closed experiment: Boolean directions in weighted threshold diagrams
 
