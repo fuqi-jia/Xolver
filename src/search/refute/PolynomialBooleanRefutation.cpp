@@ -176,6 +176,8 @@ bool refutePolynomialBoolean(const NativeTerms& terms, const std::vector<ExprId>
                 ++stats.linearCalls;
                 stats.linearConstraints += linear.constraints;
                 stats.linearSignFacts += linear.signFacts;
+                stats.linearMonomialProducts += linear.monomialProducts;
+                stats.linearMonomialChecks += linear.monomialDivisibilityChecks;
                 stats.linearDisequalityChecks += linear.disequalityChecks;
                 stats.linearExhaustions += linear.exhausted;
                 stats.linearMicroseconds += std::chrono::duration_cast<std::chrono::microseconds>(

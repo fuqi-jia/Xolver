@@ -2,14 +2,17 @@
 
 ## Current checkpoint: shared polarity-aware Boolean definitions (2026-11-06)
 
-FULINA implementation e46f2bdac485c737093d628f5f895d2cba01225f passes complete
-server acceptance. Its fresh fixed160 comparison improves **117 to 119
+[PR #105](https://github.com/fuqi-jia/Xolver/pull/105) merged as
+e9b30722375435d2cc18d52655dd6f5f2a4f368f after complete server acceptance and
+both final-head [PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42190015816)
+passed. Its [merged-main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42192328446)
+is running. Its fresh fixed160 comparison improves **117 to 119
 independently verified results**, versus **117 for same-round Z3**, with two
 gains, no losses and no errors. Mean verified PAR-2 improves from **36.444 to
 35.262 seconds**, versus **33.829** for Z3. There remain **40 timeouts and one
 unknown**. All **14,408 private queries** remain independently verified, with
-total solver time **1,409.618 seconds versus 466.676 for Z3**. PR CI and merged-main
-CI are pending for this implementation; no overall superiority is established.
+total solver time **1,409.618 seconds versus 466.676 for Z3**. No overall
+superiority is established.
 
 [PR #104](https://github.com/fuqi-jia/Xolver/pull/104) merged as
 0c0b2d2355f06236891e7c859bf72888225e1769 after complete server acceptance and
@@ -248,7 +251,7 @@ server acceptance and both PR CI jobs pass; this stage is merged through
 passing as recorded above. No protected set has been used. Private inputs,
 models and individual identifiers remain off GitHub.
 
-### FULINA development: shared polarity-aware nary Boolean definitions
+### Accepted implementation: shared polarity-aware nary Boolean definitions
 
 The atomizer and whole-formula integer candidate search now use the same
 occurrence-polarity analysis and nary defining clauses. This removes binary
@@ -310,9 +313,44 @@ certificate. Paired diagnostics on the preceding variant and this variant
 observe no new nary cache hits or direction upgrades on their two representative
 inputs. The cache resource property is tested, but the measured search-time
 changes do not establish that cache reuse caused them. Complete server
-acceptance passes; PR CI and merged-main CI remain pending. Final-version
+acceptance and both PR CI jobs pass; this stage is merged through
+[PR #105](https://github.com/fuqi-jia/Xolver/pull/105). Its merged-main CI is
+running as recorded above. Final-version
 original-C QCP and protected-set comparisons remain open. No protected set has
 been used; private inputs, models and individual identifiers remain off GitHub.
+
+### FULINA development: explained fixed monomial products
+
+The shared polynomial linear relaxation now propagates an exactly fixed
+monomial into its divisible products. For example, `x*y=0` entails `x*y*z=0`
+without selecting which factor vanishes. Nonzero signed rational values and
+repeated powers use the same explained identity. A variable index avoids
+comparing every pair of monomials. Conditional bounds are replaced on each
+check; only unconditional slack definitions persist. Integer and real clients
+share this rule, retaining existing resource controls, API contracts, exact
+model checks and arithmetic rollback policies.
+
+Four new mathematical regressions fail on the qualified predecessor. All five
+new cases pass after implementation, including feasible rational points,
+overlapping factors, premise withdrawal, changed source polarity and large
+exponents. Proof-enabled Panda9 / ExperimentOS qualification passes **2,213
+cases / 1,365,164 assertions**. The frozen CLI is
+`1bfd69e32e5cc5c63db53eb7ce4479fc2464ea28a12c684394bfd116e8650d62`.
+
+A frozen 32-input comparison includes all eight verified-Z3/open-predecessor
+development gaps, retained results and six independently constructed generic
+queries. Verified counts improve **22 to 23**, versus 21 for Z3, with one gain,
+no losses and no errors. The gain is a generic integer query with many bounds:
+**60-second timeout to 0.017 seconds UNSAT**. Its real counterpart improves
+**1.120 to 0.018 seconds**. Independent decisions confirm both results. Separate
+diagnostics show one new monomial identity and one exact relaxation conflict
+closing each formula. No filename or answer-specific rule is used.
+
+The eight original development gaps have no new solves in this comparison.
+These selected controls do not establish a fixed160 count gain or an overall
+win. Complete fixed160, development587 and private14408 comparisons at this
+freeze remain pending. The code is in development; no additional main merge or
+protected-set result is claimed.
 
 ## Previous checkpoint: sparse integer equality components (2026-11-06)
 

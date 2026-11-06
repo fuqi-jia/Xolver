@@ -17,14 +17,17 @@ struct PolynomialLinearStatistics {
     size_t retainedRows = 0;
     bool exhausted = false;
     size_t productFacts = 0, reusedProductRows = 0, closureChecks = 0;
+    size_t monomialProducts = 0, monomialDivisibilityChecks = 0;
     size_t signFacts = 0;
     size_t disequalityChecks = 0;
 };
 
 // Refute a polynomial assignment by an exact linear relaxation over the reals.
 // Each canonical monomial starts as an independent shared column. Exact fixed
-// factors justify explained product identities; no candidate point or integer
-// rounding is used to derive them. This is sound for real and integer clients.
+// factors, including composite monomials, justify explained product identities;
+// no candidate point or integer rounding is used to derive them. A zero product
+// fixes its multiples without selecting which factor vanishes. These rules hold
+// for real and integer clients.
 // Explained factor bounds and even powers also constrain monomial signs.
 // A disequality conflicts only when the relaxation proves its excluded value
 // is forced. An unfixed relaxation point establishes no SAT result.

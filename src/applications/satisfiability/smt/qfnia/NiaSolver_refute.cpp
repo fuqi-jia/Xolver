@@ -92,6 +92,8 @@ std::optional<TheoryCheckResult> NiaSolver::stageLinearRelaxation(
             << " new_rows=" << statistics.newRows << " reused_rows=" << statistics.reusedRows
             << " retained_rows=" << statistics.retainedRows << " exhausted=" << statistics.exhausted
             << " product_facts=" << statistics.productFacts
+            << " monomial_products=" << statistics.monomialProducts
+            << " monomial_checks=" << statistics.monomialDivisibilityChecks
             << " reused_products=" << statistics.reusedProductRows
             << " closure_checks=" << statistics.closureChecks
             << " conflict=" << bool(conflict) << " accepted=" << accepted << " us="

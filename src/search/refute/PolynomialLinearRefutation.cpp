@@ -342,6 +342,63 @@ std::optional<std::vector<SatLit>> PolynomialLinearRefuter::check(
             }
             if (!nonlinear) return std::nullopt;
             bool progress = false;
+            auto power = [&](const mpq_class& value, int exponent) -> mpq_class {
+                if (value == 0 || value == 1) return value;
+                if (value == -1) return exponent % 2 ? -1 : 1;
+                const size_t bits = mpz_sizeinbase(value.get_num_mpz_t(), 2) +
+                                    mpz_sizeinbase(value.get_den_mpz_t(), 2);
+                if (static_cast<size_t>(exponent) > std::numeric_limits<size_t>::max() / bits)
+                    throw ResourceExhausted("polynomial product coefficient allocation overflow");
+                build(bits * static_cast<size_t>(exponent));
+                mpz_class numerator, denominator;
+                mpz_pow_ui(numerator.get_mpz_t(), value.get_num_mpz_t(), exponent);
+                mpz_pow_ui(denominator.get_mpz_t(), value.get_den_mpz_t(), exponent);
+                return mpq_class(numerator, denominator);
+            };
+            auto installProduct = [&](VariableIterator current, const MonomialKey& remaining,
+                                      const mpq_class& multiplier, std::vector<SatLit> sources,
+                                      bool composite) {
+                if (sources.empty()) return true;
+                int variable = current->second;
+                mpq_class value = multiplier;
+                if (multiplier != 0 && !remaining.empty()) {
+                    auto residual = variables_.find(remaining);
+                    if (residual == variables_.end())
+                        residual = variables_.emplace(remaining,
+                            simplex_.addVar("m" + std::to_string(variables_.size()))).first;
+                    activate(residual);
+                    LinearRow terms{{current->second, mpq_class(1)}, {residual->second, -multiplier}};
+                    std::sort(terms.begin(), terms.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+                    auto definition = productRows_.find(terms);
+                    if (definition == productRows_.end()) {
+                        const int auxiliary = simplex_.addConstraint(terms, 0);
+                        if (auxiliary < 0) throw ResourceExhausted("polynomial product definition allocation failed");
+                        definition = productRows_.emplace(std::move(terms), auxiliary).first;
+                    } else if (!applied.contains({definition->second, mpq_class(0)})) ++stats.reusedProductRows;
+                    variable = definition->second;
+                    value = 0;
+                } else {
+                    const auto existing = facts->fixedValue(variable);
+                    if (existing && existing->b == 0 && existing->a == value) return true;
+                }
+                if (!applied.emplace(variable, value).second) return true;
+                const auto reason = label(variable, std::move(sources));
+                const BoundInfo exact(BoundValue(DeltaRational(value)), reason);
+                ++stats.productFacts;
+                stats.monomialProducts += composite;
+                progress = true;
+                return simplex_.assertLower(variable, exact) && simplex_.assertUpper(variable, exact);
+            };
+            struct FixedMonomial { VariableIterator variable; mpq_class value; };
+            std::unordered_map<VarId, std::vector<FixedMonomial>> fixedMonomials;
+            for (const auto current : active) {
+                build();
+                const auto& monomial = current->first;
+                if (monomial.size() == 1 && monomial.front().second == 1) continue;
+                const auto value = facts->fixedValue(current->second);
+                if (value && value->b == 0)
+                    fixedMonomials[monomial.front().first].push_back({current, value->a});
+            }
             for (size_t index = 0; index < active.size(); ++index) {
                 build();
                 const auto current = active[index];
@@ -364,7 +421,6 @@ std::optional<std::vector<SatLit>> PolynomialLinearRefuter::check(
                     }
                     fixed.push_back({base->second, exponent, value->a});
                 }
-                if (fixed.empty()) continue;
                 mpq_class multiplier = zero ? 0 : 1;
                 std::vector<SatLit> sources;
                 bool explained = true;
@@ -375,55 +431,58 @@ std::optional<std::vector<SatLit>> PolynomialLinearRefuter::check(
                     if (!parents) { explained = false; break; }
                     include(sources, *parents);
                     if (zero) break;
-                    mpq_class value;
-                    if (factor.value == 1) value = 1;
-                    else if (factor.value == -1) value = factor.exponent % 2 ? -1 : 1;
-                    else {
-                        const size_t bits = mpz_sizeinbase(factor.value.get_num_mpz_t(), 2) +
-                                            mpz_sizeinbase(factor.value.get_den_mpz_t(), 2);
-                        if (static_cast<size_t>(factor.exponent) > std::numeric_limits<size_t>::max() / bits)
-                            throw ResourceExhausted("polynomial product coefficient allocation overflow");
-                        build(bits * static_cast<size_t>(factor.exponent));
-                        mpz_class numerator, denominator;
-                        mpz_pow_ui(numerator.get_mpz_t(), factor.value.get_num_mpz_t(), factor.exponent);
-                        mpz_pow_ui(denominator.get_mpz_t(), factor.value.get_den_mpz_t(), factor.exponent);
-                        value = mpq_class(numerator, denominator);
-                    }
+                    const mpq_class value = power(factor.value, factor.exponent);
                     build(mpz_sizeinbase(multiplier.get_num_mpz_t(), 2) +
                           mpz_sizeinbase(multiplier.get_den_mpz_t(), 2) +
                           mpz_sizeinbase(value.get_num_mpz_t(), 2) +
                           mpz_sizeinbase(value.get_den_mpz_t(), 2));
                     multiplier *= value;
                 }
-                if (!explained || sources.empty()) continue;
-                int variable = current->second;
-                mpq_class value = multiplier;
-                if (!zero && !remaining.empty()) {
-                    auto residual = variables_.find(remaining);
-                    if (residual == variables_.end())
-                        residual = variables_.emplace(remaining,
-                            simplex_.addVar("m" + std::to_string(variables_.size()))).first;
-                    activate(residual);
-                    LinearRow terms{{current->second, mpq_class(1)}, {residual->second, -multiplier}};
-                    std::sort(terms.begin(), terms.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
-                    auto definition = productRows_.find(terms);
-                    if (definition == productRows_.end()) {
-                        const int auxiliary = simplex_.addConstraint(terms, 0);
-                        if (auxiliary < 0) return std::nullopt;
-                        definition = productRows_.emplace(std::move(terms), auxiliary).first;
-                    } else if (!applied.contains({definition->second, mpq_class(0)})) ++stats.reusedProductRows;
-                    variable = definition->second;
-                    value = 0;
-                } else {
-                    const auto existing = facts->fixedValue(variable);
-                    if (existing && existing->b == 0 && existing->a == value) continue;
+                if (explained && !sources.empty() &&
+                    !installProduct(current, remaining, multiplier, std::move(sources), false)) return liftConflict();
+
+                // A fixed product constrains every divisible monomial even
+                // when none of its individual factors is fixed. Index by one
+                // required variable instead of comparing every pair of words.
+                // The identity m = c^k * (m/d^k) needs no nonzero premise.
+                for (const auto& [variable, exponent] : monomial) {
+                    (void)exponent;
+                    const auto found = fixedMonomials.find(variable);
+                    if (found == fixedMonomials.end()) continue;
+                    for (const auto& factor : found->second) {
+                        build();
+                        if (factor.variable == current) continue;
+                        ++stats.monomialDivisibilityChecks;
+                        const auto& divisor = factor.variable->first;
+                        int copies = std::numeric_limits<int>::max();
+                        size_t position = 0;
+                        for (const auto& [base, degree] : divisor) {
+                            build();
+                            while (position < monomial.size() && monomial[position].first < base) ++position;
+                            if (degree <= 0 || position == monomial.size() || monomial[position].first != base) {
+                                copies = 0;
+                                break;
+                            }
+                            copies = std::min(copies, monomial[position].second / degree);
+                        }
+                        if (!copies) continue;
+                        const auto proof = facts->prove(factor.variable->second);
+                        if (!proof || proof->second.empty()) continue;
+                        auto support = expand(proof->second);
+                        if (!support || support->empty()) continue;
+                        MonomialKey quotient;
+                        position = 0;
+                        for (const auto& [base, degree] : monomial) {
+                            build();
+                            int rest = degree;
+                            if (position < divisor.size() && divisor[position].first == base)
+                                rest -= copies * divisor[position++].second;
+                            if (rest) quotient.emplace_back(base, rest);
+                        }
+                        if (!installProduct(current, quotient, power(factor.value, copies),
+                                            std::move(*support), true)) return liftConflict();
+                    }
                 }
-                if (!applied.emplace(variable, value).second) continue;
-                const auto reason = label(variable, std::move(sources));
-                const BoundInfo exact(BoundValue(DeltaRational(value)), reason);
-                ++stats.productFacts;
-                progress = true;
-                if (!simplex_.assertLower(variable, exact) || !simplex_.assertUpper(variable, exact)) return liftConflict();
             }
             if (!progress) { updateStats(); return std::nullopt; }
         }
