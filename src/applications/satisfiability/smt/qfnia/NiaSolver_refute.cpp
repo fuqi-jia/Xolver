@@ -6,6 +6,8 @@
 #include "search/refute/PolynomialLinearRefutation.h"
 #include "search/refute/PolynomialProductSplit.h"
 #include "applications/satisfiability/smt/qfnia/NiaSolver.h"
+#include "search/presolve/PresolveProjection.h"
+#include "search/refute/PresolveProjectionRefutation.h"
 #include <algorithm>
 #include "search/dl/DifferenceGraph.h"
 #include "search/dl/BellmanFord.h"
@@ -126,8 +128,20 @@ std::optional<TheoryCheckResult> NiaSolver::stageLinearRelaxation(
 // Behavior is byte-identical to the pre-split definitions.
 
 std::optional<TheoryCheckResult> NiaSolver::stageSignRefute(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
+    if (presolveProjection_ && effort == TheoryEffort::Full) {
+        if (!linearRefuter_) linearRefuter_ = std::make_unique<PolynomialLinearRefuter>(0);
+        if (auto conflict = refutePresolveProjection(*presolveProjection_, *kernel_,
+                *linearRefuter_, {.allInteger = true}))
+            return TheoryCheckResult::mkConflict(TheoryConflict{std::move(*conflict)});
+    }
     const auto splitProducts = [&]() -> std::optional<TheoryCheckResult> {
         if (effort != TheoryEffort::Full || !registry_) return std::nullopt;
+        if (presolveProjection_)
+            for (const auto& source : presolveProjection_->constraints())
+                if (source.rel == Relation::Eq)
+                    if (auto lemma = splitZeroPolynomialProduct(source.poly, source.premises,
+                            *kernel_, TheoryId::NIA, *registry_, lemmaDb))
+                        return TheoryCheckResult::mkLemma(std::move(*lemma));
         for (const auto& source : active_)
             if (source.rel == Relation::Eq && source.poly != NullPoly)
                 if (auto lemma = splitZeroPolynomialProduct(source.poly, {source.reason},

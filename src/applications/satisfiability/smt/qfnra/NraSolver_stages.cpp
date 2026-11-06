@@ -7,6 +7,7 @@
 #include "algebra/linear/LinearExpr.h"
 #include "search/presolve/Presolve.h"
 #include "search/presolve/PresolveProjection.h"
+#include "search/refute/PresolveProjectionRefutation.h"
 #include "algebra/poly/RationalPolynomial.h"
 #include "base/RealValue.h"                                // validated rational witness model
 #include "search/nra/reasoners/SubtropicalSatFinder.h"  // subtropical candidate search
@@ -262,8 +263,18 @@ std::optional<TheoryCheckResult> NraSolver::stageBoxRefute(TheoryLemmaStorage& /
 // family that CAD/CAC time out on).
 std::optional<TheoryCheckResult> NraSolver::stageSignRefute(TheoryLemmaStorage& lemmaDb,
                                                             TheoryEffort effort) {
+    if (presolveProjection_ && effort == TheoryEffort::Full)
+        if (auto conflict = refutePresolveProjection(*presolveProjection_, *kernel_,
+                *linearRefuter_, {}))
+            return TheoryCheckResult::mkConflict(TheoryConflict{std::move(*conflict)});
     const auto splitProducts = [&]() -> std::optional<TheoryCheckResult> {
         if (effort != TheoryEffort::Full || !registry_) return std::nullopt;
+        if (presolveProjection_)
+            for (const auto& source : presolveProjection_->constraints())
+                if (source.rel == Relation::Eq)
+                    if (auto lemma = splitZeroPolynomialProduct(source.poly, source.premises,
+                            *kernel_, TheoryId::NRA, *registry_, lemmaDb))
+                        return TheoryCheckResult::mkLemma(std::move(*lemma));
         for (const auto& source : presolveConstraints_)
             if (source.rel == Relation::Eq && source.poly != NullPoly)
                 if (auto lemma = splitZeroPolynomialProduct(source.poly, {source.reason},

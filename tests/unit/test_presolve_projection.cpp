@@ -2,8 +2,10 @@
 #include "search/presolve/PresolveProjection.h"
 #include "search/presolve/AffineSubstitution.h"
 #include "applications/satisfiability/smt/qfnra/NraSolver.h"
+#include "applications/satisfiability/smt/qfnia/NiaSolver.h"
 #include "search/coordination/TheoryLemmaDatabase.h"
 #include "search/arith/Reasoner.h"
+#include "algebra/linear/LinearExpr.h"
 #include <stdexcept>
 
 using namespace xolver;
@@ -20,6 +22,66 @@ public:
         throw std::logic_error("missing real projection stage");
     }
 };
+class IntegerProjectionProbe : public NiaSolver {
+public:
+    using NiaSolver::NiaSolver;
+    std::optional<TheoryCheckResult> stage(const std::string& name, TheoryLemmaStorage& db) {
+        for (auto& reasoner : reasoners_)
+            if (reasoner->name() == name) return reasoner->run(db, TheoryEffort::Full);
+        throw std::logic_error("missing integer projection stage");
+    }
+};
+
+template<class Solver>
+void checkProjectedRefutation(TheoryId theory, const std::string& prefix) {
+    auto owned = createPolynomialKernel();
+    auto& kernel = *owned;
+    std::vector<PolyId> aliases;
+    for (unsigned i = 0; i < 132; ++i)
+        aliases.push_back(kernel.mkVar(kernel.getOrCreateVar("a" + std::to_string(i))));
+    const auto x = kernel.mkVar(kernel.getOrCreateVar("x"));
+    const auto y = kernel.mkVar(kernel.getOrCreateVar("y"));
+    Solver solver(std::move(owned));
+    std::vector<SatLit> sources;
+    const auto add = [&](PolyId poly, Relation relation) {
+        const auto id = static_cast<SatVar>(sources.size() + 1);
+        const bool value = id % 2 == 0;
+        const auto literal = SatLit{id, value};
+        const auto atomRelation = value ? relation : negateRelation(relation);
+        TheoryAtomRecord atom{id, theory, false, NullExpr,
+            PolynomialAtomPayload{poly, atomRelation, RealValue::fromInt(0)}};
+        solver.assertLit(atom, value, 1, literal);
+        sources.push_back(literal);
+    };
+    for (unsigned i = 0; i < aliases.size(); ++i)
+        add(kernel.sub(aliases[i], kernel.add(kernel.add(x,y), kernel.mkConst(i))), Relation::Eq);
+    const auto quadratic = kernel.sub(
+        kernel.add(kernel.pow(aliases[0],2), kernel.add(kernel.pow(x,2),kernel.pow(y,2))),
+        kernel.mul(kernel.mkConst(3),kernel.mul(x,y)));
+    add(quadratic, Relation::Lt);
+    TheoryLemmaDatabase db;
+    if (theory == TheoryId::NIA) REQUIRE_FALSE(solver.stage("nia.normalize", db));
+    REQUIRE_FALSE(solver.stage(prefix + ".presolve", db));
+    const auto result = solver.stage(prefix + ".sign-refute", db);
+    CHECK(result.has_value());
+    if (!result) return;
+    REQUIRE(result->kind == TheoryCheckResult::Kind::Conflict);
+    REQUIRE(result->conflictOpt);
+    const auto& clause = result->conflictOpt->clause;
+    CHECK(clause.size() == 2);
+    for (const auto required : {sources.front(), sources.back()})
+        CHECK(std::find(clause.begin(), clause.end(), required) != clause.end());
+    for (const auto source : clause)
+        CHECK(std::find(sources.begin(), sources.end(), source) != sources.end());
+    solver.backtrackToLevel(0);
+    if (theory == TheoryId::NIA) REQUIRE_FALSE(solver.stage("nia.normalize", db));
+    CHECK_FALSE(solver.stage(prefix + ".sign-refute", db));
+}
+}
+
+TEST_CASE("Projected refutation: eliminated equations remain guards of exact integer and real conflicts") {
+    checkProjectedRefutation<IntegerProjectionProbe>(TheoryId::NIA, "nia");
+    checkProjectedRefutation<RealProjectionProbe>(TheoryId::NRA, "nra");
 }
 
 TEST_CASE("Presolve handoff: definition reconstruction is exact and transactional") {

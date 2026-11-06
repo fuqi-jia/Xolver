@@ -258,6 +258,7 @@ set(XOLVER_SEARCH_SOURCES
     "search/refute/PolynomialProductSplit.cpp"
     "search/refute/PolynomialResidueRefutation.cpp"
     "search/refute/PolynomialSignClosure.cpp"
+    "search/refute/PresolveProjectionRefutation.cpp"
     "search/refute/SignDefinitenessRefuter.cpp"
     "search/sat/CadicalBackend.cpp"
     "search/sat/CadicalTheoryPropagator.cpp"

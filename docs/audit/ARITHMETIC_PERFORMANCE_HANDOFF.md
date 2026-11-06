@@ -539,6 +539,38 @@ without main promotion, a full-suite claim or overall superiority. The exact
 reconstruction capability remains in development; the next investigation is
 whether existing exact refuters can consume the same reduced constraints.
 
+### FULINA development: exact refutation of presolve projections
+
+Integer and real sign stages now share exact linear, sign, cone and quadratic
+refutation of the retained presolve projection. Reduced zero-product equations
+also publish guarded factor covers. Each reduced constraint receives a distinct
+local proof label; conflicts map only the used labels back to their original
+signed premises, including elimination equalities. Unrelated active premises
+are excluded. Original-context refutation remains available; resource settings,
+model validation and arithmetic rollback policies retain their semantics.
+
+The predecessor misses the new direct-stage integer/real regression. An
+intermediate implementation finds the conflict but includes 133 premises; the
+final implementation retains the two required negative premises and invalidates
+them on withdrawal. Proof-enabled Panda9 / ExperimentOS qualification passes
+**2,239 cases / 1,371,739 assertions**. The frozen CLI is
+`582765ac8e8141752e8bb6d375ebb4060d70ca83b9cbebfed4514b0378fb1f5b`.
+
+The fresh unchanged 36-input comparison verifies **27 to 28 results**, versus
+25 for same-round Z3, with no losses or errors. Verified PAR-2 totals are
+**1,193.603 to 1,097.808 seconds**, versus **1,446.296** for Z3. The sole count
+difference recovers a previously solved SAT on an unchanged linear path; it is
+not attributed to projected refutation. All eight original gaps remain unsolved.
+Four separate constructed integer/real contradiction and definition-withdrawal
+queries pass independent checking in all three versions, with actual timed SAT
+models replayed by both Z3 and cvc5. They earn no original-gap solve credit.
+
+This closes the isolated performance trial without an established new original
+solve, main promotion or a fresh complete-suite claim. The generic exact
+capability remains development work. Diagnostics confirm reduced refuter entry
+in both representative nonlinear gaps, but neither completes within 60 seconds.
+No final-version QCP, protected-set or overall superiority claim is made.
+
 ## Previous checkpoint: sparse integer equality components (2026-11-06)
 
 [PR #101](https://github.com/fuqi-jia/Xolver/pull/101) merged as
