@@ -209,13 +209,33 @@ checkers accept the actual timed model of the new SAT result. Diagnostic traces
 confirm smaller encodings and reused ternary definitions on some inputs, but
 do not establish the cause of every timing change.
 
-One fresh complete comparison is registered for fixed160, development587 and
-private14408 against the accepted weighted-main freeze and unchanged reference
-programs. ExperimentOS assigns available physical cores, excluding other leases
-and external busy cores; every solver/input retains 60 seconds, one physical CPU
-and 16 GiB. Complete results, server acceptance and PR CI remain pending.
-This focused gain does not establish an overall win or final-version QCP
-coverage. Private inputs, models and individual identifiers remain off GitHub.
+Complete fresh comparisons use the accepted weighted-main freeze and unchanged
+reference programs. ExperimentOS assigns available physical cores, excluding
+other leases and external busy cores; every solver/input retains 60 seconds,
+one physical CPU and 16 GiB:
+
+- Fixed160 improves **114 to 117 raw verified**. Fresh symmetric checking of an
+  original-input-bound residue certificate gives **115 to 118 verified**, versus
+  **116 for same-round Z3**, with three gains, no losses and no errors. The
+  candidate has **66 SAT / 52 UNSAT / 41 timeouts / one unknown**. One gain is on
+  an unchanged real-arithmetic path and is not attributed to this implementation.
+  Mean verified PAR-2 improves from **38.319 to 36.305 seconds**, versus **34.352**
+  for Z3. Eight unconfirmed Z3 results remain excluded. No timeout or unknown is
+  upgraded, and favorable historical results do not replace the fresh baseline.
+- Development587 retains **587 to 587 verified**, versus 584 for Z3. Total
+  solver time is **50.183 to 50.226 seconds**, versus **19.337** for Z3. Three
+  unconfirmed Z3 model replays remain excluded.
+- Private14408 retains every independently verified result in both versions and
+  Z3: **8,940 SAT / 5,468 UNSAT**, with no losses, timeouts, unknowns, unconfirmed
+  results or errors. Total solver time is **1,547.980 to 1,550.934 seconds**,
+  versus **467.153** for Z3; no private-query speedup is established.
+
+All timed Xolver SAT models require both independent checkers; UNSAT requires
+an independent verdict or checked certificate. These results support a fixed-set
+correct-count gain, not an overall win or final-version QCP coverage. Complete
+server evidence passes; PR CI and main acceptance remain pending. No protected
+set has been used. Private inputs, models and individual identifiers remain off
+GitHub.
 
 ## Previous checkpoint: sparse integer equality components (2026-11-06)
 
