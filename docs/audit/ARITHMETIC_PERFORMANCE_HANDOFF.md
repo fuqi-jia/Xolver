@@ -5,8 +5,9 @@
 [PR #105](https://github.com/fuqi-jia/Xolver/pull/105) merged as
 e9b30722375435d2cc18d52655dd6f5f2a4f368f after complete server acceptance and
 both final-head [PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42190015816)
-passed. Its [merged-main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42192328446)
-is running. Its fresh fixed160 comparison improves **117 to 119
+passed. Both jobs in its
+[merged-main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42192328446) also
+pass. Its fresh fixed160 comparison improves **117 to 119
 independently verified results**, versus **117 for same-round Z3**, with two
 gains, no losses and no errors. Mean verified PAR-2 improves from **36.444 to
 35.262 seconds**, versus **33.829** for Z3. There remain **40 timeouts and one
@@ -314,8 +315,8 @@ observe no new nary cache hits or direction upgrades on their two representative
 inputs. The cache resource property is tested, but the measured search-time
 changes do not establish that cache reuse caused them. Complete server
 acceptance and both PR CI jobs pass; this stage is merged through
-[PR #105](https://github.com/fuqi-jia/Xolver/pull/105). Its merged-main CI is
-running as recorded above. Final-version
+[PR #105](https://github.com/fuqi-jia/Xolver/pull/105), with both merged-main CI
+jobs passing as recorded above. Final-version
 original-C QCP and protected-set comparisons remain open. No protected set has
 been used; private inputs, models and individual identifiers remain off GitHub.
 
@@ -348,9 +349,52 @@ closing each formula. No filename or answer-specific rule is used.
 
 The eight original development gaps have no new solves in this comparison.
 These selected controls do not establish a fixed160 count gain or an overall
-win. Complete fixed160, development587 and private14408 comparisons at this
-freeze remain pending. The code is in development; no additional main merge or
+win. Complete fresh comparisons against the accepted Boolean-main freeze give:
+
+- Fixed160 retains **118 to 118 raw verified**, versus 117 for Z3, with one
+  SAT gain, one SAT loss and no errors. Both changes are on unchanged linear
+  call paths and are not attributed to product inference. Verified PAR-2 totals
+  are **5,770.140 to 5,757.641 seconds**, versus **5,406.743** for Z3. One
+  unconfirmed UNSAT in each Xolver version remains excluded; no fresh
+  certificate supplement is credited to this standalone experiment.
+- Development587 retains **587 to 587 verified**, versus 584 for Z3. Solver
+  totals are **48.336 to 48.460 seconds**, versus **18.744**. Three unconfirmed
+  Z3 model replays remain excluded.
+- Private14408 retains all verified results in both versions and Z3:
+  **8,940 SAT / 5,468 UNSAT**. Solver totals are **1,386.822 to 1,385.884
+  seconds**, versus **452.316** for Z3. There are no losses or errors; this small
+  timing difference establishes no reproducible private-query speedup.
+
+This standalone performance experiment is closed without main promotion. The
+exact shared mathematical capability remains in development while the next
+change repairs finite integer partition progress. No additional main merge or
 protected-set result is claimed.
+
+### FULINA development: productive finite integer partitions
+
+Finite interval splits now use an exact floor midpoint. Previously `[-2,-1]`
+could produce `x<=-1 or x>=0`, leaving the feasible left interval unchanged.
+Every non-singleton interval now has two nonempty, disjoint children whose
+union covers the interval, including negative and large integer endpoints.
+
+Finite factors in mixed finite/unbounded monomials can also request their
+complete integer cover before incomplete candidate searches. The existing
+branch constructor handles both this request and the final general search;
+clause publication remains at Full effort. Ordinary exact model checks,
+resource settings, API contracts and arithmetic rollback policies are retained.
+
+The qualified predecessor fails three strict-progress assertions in one new
+signed-interval regression. All four new cases pass after implementation,
+covering global integer covers, full-effort publication, unrelated finite
+components, duplicate requests, backtracking and reset. Proof-enabled Panda9 /
+ExperimentOS qualification passes **2,217 cases / 1,365,731 assertions**. The
+frozen CLI is
+`a1bf8f4becf651532eabaa8a2b265260e6d460b620778d6929a2c0751bf0fd20`.
+
+A fresh 36-input comparison retains the preceding controls, all eight verified
+Z3/open-main gaps and the previous full-round loss, and adds four independent
+signed integer interval queries. Results and diagnostic profiles are pending;
+no new fixed160 solved count or main acceptance is claimed.
 
 ## Previous checkpoint: sparse integer equality components (2026-11-06)
 

@@ -1,4 +1,5 @@
 #include "base/RuntimeConfig.h"
+#include "base/SolveClock.h"
 #include "applications/satisfiability/smt/qfnia/NiaSolver.h"
 #include "applications/satisfiability/smt/qfnia/NiaSolverDetail.h"
 #include <algorithm>
@@ -46,8 +47,15 @@ namespace xolver {
 // private state via the declarations in the corresponding header.
 // Behavior is byte-identical to the pre-split definitions.
 
+std::optional<TheoryCheckResult> NiaSolver::stageFiniteDomainSplit(
+    TheoryLemmaStorage& lemmaDb, TheoryEffort) {
+    if (auto lemma = buildBranchLemma(normalized_, domains_, lemmaDb, BranchScope::MixedFinite))
+        return TheoryCheckResult::mkLemma(*lemma);
+    return std::nullopt;
+}
+
 std::optional<TheoryCheckResult> NiaSolver::stageBranch(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
-    if (auto lemma = buildBranchLemma(normalized_, domains_, lemmaDb)) {
+    if (auto lemma = buildBranchLemma(normalized_, domains_, lemmaDb, BranchScope::Any)) {
         return TheoryCheckResult::mkLemma(*lemma);
     }
     return TheoryCheckResult::unknown("NIA: no progress (finite domain not closed, branch lemma failed, local search failed)");
@@ -77,12 +85,35 @@ bool NiaSolver::relationSatisfied(const mpq_class& val, Relation rel) const {
 std::optional<TheoryLemma> NiaSolver::buildBranchLemma(
     const std::vector<NormalizedNiaConstraint>& constraints,
     const DomainStore& domains,
-    TheoryLemmaStorage& lemmaDb) {
+    TheoryLemmaStorage& lemmaDb, BranchScope scope) {
 
     if (!registry_) return std::nullopt;
 
     auto allVars = collectVars(constraints, *kernel_);
     if (allVars.empty()) return std::nullopt;
+
+    std::unordered_set<std::string> mixedFinite;
+    if (scope == BranchScope::MixedFinite) {
+        for (const auto& constraint : constraints) {
+            if (wall::hasDeadline() && wall::remainingMs() == 0) return std::nullopt;
+            if (constraint.poly == NullPoly) continue;
+            const auto terms = kernel_->terms(constraint.poly);
+            if (!terms) continue;
+            for (const auto& term : *terms) {
+                bool unbounded = false;
+                std::vector<std::string> finite;
+                for (const auto& [variable, exponent] : term.powers) {
+                    (void)exponent;
+                    const std::string name(kernel_->varName(variable));
+                    const auto* domain = domains.getDomain(name);
+                    if (!domain || !domain->hasLower || !domain->hasUpper) unbounded = true;
+                    else if (domain->lower.value < domain->upper.value) finite.push_back(name);
+                }
+                if (unbounded) mixedFinite.insert(finite.begin(), finite.end());
+            }
+        }
+        if (mixedFinite.empty()) return std::nullopt;
+    }
 
     // Collect candidate variables with their domain info
     struct Candidate {
@@ -97,6 +128,7 @@ std::optional<TheoryLemma> NiaSolver::buildBranchLemma(
     std::vector<Candidate> candidates;
 
     for (const auto& var : allVars) {
+        if (scope == BranchScope::MixedFinite && !mixedFinite.contains(var)) continue;
         const IntDomain* d = domains.getDomain(var);
         Candidate c{var, false, false, 0, 0, 0, 2};
         if (d) {
@@ -128,7 +160,10 @@ std::optional<TheoryLemma> NiaSolver::buildBranchLemma(
     for (const auto& cand : candidates) {
         mpz_class k;
         if (cand.hasLower && cand.hasUpper) {
-            k = (cand.lower + cand.upper) / 2;
+            // Floor division keeps lower <= k < upper for every non-singleton
+            // integer interval, including two adjacent negative endpoints.
+            k = cand.lower + cand.upper;
+            mpz_fdiv_q_2exp(k.get_mpz_t(), k.get_mpz_t(), 1);
         } else if (cand.hasLower) {
             k = cand.lower;
         } else if (cand.hasUpper) {

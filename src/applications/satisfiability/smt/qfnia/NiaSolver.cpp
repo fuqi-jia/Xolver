@@ -133,6 +133,10 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     addFull("nia.linear-relaxation", &NiaSolver::stageLinearRelaxation);
     add("nia.presolve", &NiaSolver::stagePresolveFixpoint);
     addFull("nia.sign-refute", &NiaSolver::stageSignRefute);
+    // Finite integer factors can partition an unbounded nonlinear context.
+    // Publish their complete covers before incomplete candidate searches;
+    // each selected branch supplies exact values/bounds to the next check.
+    addFull("nia.finite-domain-split", &NiaSolver::stageFiniteDomainSplit);
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nia.partial-linear-model",
         [this](TheoryLemmaStorage&, TheoryEffort) -> std::optional<TheoryCheckResult> {
