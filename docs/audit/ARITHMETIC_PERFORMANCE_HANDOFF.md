@@ -154,7 +154,44 @@ confirmed by same-round Z3. A separate QF_LRA SAT changes from **17.958 seconds
 to timeout**. Verified PAR-2 totals change **3,157.904 to 3,150.994 seconds**,
 versus **2,647.839 for Z3**. The raw loss is retained; pure LRA does not schedule
 the new integer decision entry, and phase/theory diagnostics are investigating
-the regression. Whole-suite acceptance and main promotion remain pending.
+the regression. That panel remains part of the evidence below.
+
+The subsequent preplanned full comparison uses frozen main and candidate
+`c2c7e57a`, with 60 seconds, one leased physical CPU and 16 GiB per solver/input
+on Panda9 through ExperimentOS. After symmetric independent residue-certificate
+checking, fixed160 improves **120 to 122 verified results**, with two gains,
+no losses and no errors. The candidate has **68 SAT, 54 UNSAT, 37 timeouts and
+one unknown**, with no unconfirmed decisions. Same-round Z3 has 124 raw
+decisions and **117 independently verified results**; seven unconfirmed
+decisions remain excluded. Mean verified PAR-2 changes **34.825 to 33.487
+seconds**, versus **33.653 for Z3**. The complete finite linear refutation
+changes a public timeout to **0.968 seconds UNSAT**, independently confirmed
+by same-round Z3. Attribution of the other gained SAT across the combined
+development changes is not established.
+
+All **14,408 private queries** remain independently verified in main, candidate
+and Z3: **8,940 SAT and 5,468 UNSAT**, with no losses or errors. Total solver
+time changes **1,408.150 to 1,406.398 seconds**, versus **447.010 for Z3**;
+the candidate remains about 3.15 times slower on this workload. All 587
+development results are also retained, versus 584 verified for Z3. Private
+inputs, models and individual identifiers remain server-only. The earlier
+112-input panel's LRA regression is retained; the favorable full comparison
+does not erase it or establish its cause. Final-version QCP validation,
+protection-set validation, PR CI and main promotion remain open. Overall
+superiority is not established.
+
+The public regression runner previously applied its declared 20-second limit
+only to the outer subprocess, leaving the solver's portfolio unaware of the
+deadline. A public nonlinear regression timed out in that configuration;
+frozen main and candidate both return UNSAT in about 6.7 seconds when explicitly
+given the same 20 seconds. The runner now forwards that budget through the
+existing child-only `XOLVER_WALLCLOCK_MS` control while retaining the outer
+deadline. Two new contract tests cover forwarding, fractional milliseconds
+and parent-environment isolation. All **32 public CTest command groups** pass
+through ExperimentOS, including all **139 NIA regressions** and **292 harness
+tests, four skipped**. Compiled inputs and binaries remain unchanged, so the
+proof-enabled 2,255-case native qualification and full benchmark freeze above
+remain applicable. This framework repair changes no formal benchmark score.
 
 The affine-product strengthening experiment is closed without promotion:
 both variants retain 62 of 69 controls, add no verified solves and increase
