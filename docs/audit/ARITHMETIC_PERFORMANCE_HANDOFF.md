@@ -21,10 +21,23 @@ Total solver time is **1,461.871 seconds versus 467.262 for Z3**. Development587
 also retains all 587 verified results, versus 584 for Z3. Private inputs, models
 and individual identifiers remain server-only.
 
-### In development: exact interval slack before backward division
+Fresh original-C branch, max3 and GCD workflows also pass canonical final-check
+with both backends at the earlier monomial-order worker freeze
+`28e7de071f3b12be5a64e02c5684eb830c61b088f22018c8621effd33cf54c5d`.
+Each backend verifies three programs and 23 top-level VCs without `Admitted`.
+All **4,680 actual timed SMT occurrences** are independently verified, including
+each captured SAT model: 2,340 per backend, each with 1,188 SAT and 1,152 UNSAT.
+Final-check totals are **57.710 seconds for Xolver and 58.237 for Z3**, with 780
+native queries per backend in those phases. Different checked proof scripts
+and a single timing sample do not establish backend superiority. The supplied
+max3 upper-bound contract and GCD partial-correctness/external-abs contract are
+retained. This is original-program evidence for that freeze; final-version QCP
+verification remains open.
 
-The shared row propagator now hoists its direction's invariant residual and
-tests exact interval slack before dividing a candidate endpoint. A candidate
+### Closed experiment: exact interval slack before backward division
+
+The experimental shared row propagator hoisted its direction's invariant
+residual and tested exact interval slack before dividing a candidate endpoint. A candidate
 dominated by a snapshot endpoint cannot improve its monotonically tightened
 local successor. Both coefficient signs and infinitesimals retain exact
 arithmetic; missing endpoints use the general derivation. No facts or reasons
@@ -44,7 +57,38 @@ was not retained; the failure is preserved and remains unexplained. Four fresh
 old/candidate sampler-on/off diagnostic runs all reach the external timeout
 without a crash, and the independent formal panel has no runtime errors.
 These diagnostics do not replace the original observation or establish that a
-bug was fixed. Full-stage acceptance and promotion remain open.
+bug was fixed.
+
+Complete fresh comparisons retained all 587 development and 14,408 private
+results, with no losses or errors. The complete affected QF_LRA panel retained
+19 verified results in each version; total time changed only **877.542 to
+876.958 seconds**. The pilot timing reduction did not reproduce. Private-query
+time increased **1,468.823 to 1,471.551 seconds**, versus **466.625 for Z3**.
+Fixed160 changed from 120 to 121 verified after symmetric independent
+certificate checking, but its single gain occurred in unchanged LIA code and
+does not establish a benefit from this propagation experiment. The optional
+source and test changes are removed; this experiment is closed without main
+promotion. Accepted correctness fixes remain.
+
+### In development: deliver explained integer cuts before other refinements
+
+`LiaSolver::checkIntegrality` registered and charged a Gomory cut before
+`stageCore` could replace its result with a different integer refinement.
+An instrumented native run generated four cuts but returned only three; one
+was shadowed by that later producer. The repair uses the existing shared
+`LemmaKind::Entailment` contract to deliver an explained cut immediately.
+Interval contradictions are checked before allocating integrality atoms,
+retaining conflict priority and avoiding unused cut charges. Speculative
+split order, partial-effort vocabulary, APIs and rollback policies are retained.
+
+Proof-enabled Panda9 / ExperimentOS qualification passes **2,246 cases /
+1,372,057 assertions**, including 101 targeted cases. The new regression fails
+with the predecessor and passes with the repair; it checks fractional-point
+exclusion, integer witnesses and conditional-cut rollback. Frozen CLI SHA-256
+is `1bd4c9d53bba240995ee0ad9a47ed3eb61f191a26dc332b3eea8d04b7a6e1cc3`.
+A fresh 80-input comparison against accepted main and Z3 is running, covering
+all fixed-suite QF_LIA inputs and all development QF_UFNIA controls. No new
+solve, timing benefit or full-stage acceptance is claimed before its audit.
 
 The affine-product strengthening experiment is closed without promotion:
 both variants retain 62 of 69 controls, add no verified solves and increase

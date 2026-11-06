@@ -43,10 +43,6 @@ public:
         std::size_t snapshotHits = 0;
         std::size_t termPairs = 0;
         std::size_t unproductiveSnapshots = 0;
-        std::size_t backwardTargets = 0;
-        std::size_t nonImprovingTargets = 0;
-        std::size_t backwardDivisions = 0;
-        std::size_t publishedBounds = 0;
     };
 
     // Return false when the consumer has enough conclusions. Consumer time is

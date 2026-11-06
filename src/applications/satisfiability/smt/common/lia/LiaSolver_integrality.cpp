@@ -239,6 +239,10 @@ TheoryCheckResult LiaSolver::checkIntegrality(TheoryLemmaStorage& lemmaDb, Theor
             tryIntegralityRepair()) {
             return TheoryCheckResult::consistent();
         }
+        // Refute the current context before registering a cut or split. A
+        // conflict needs no new predicate and must not spend an unused cut.
+        if (auto conflict = integerReasoner_.checkIntervalCombinationConflict(activeAtoms_))
+            return TheoryCheckResult::mkConflict(std::move(*conflict));
         // Try an explanation-carrying cut before splitting, within the solve budget.
         if (effort == TheoryEffort::Full &&
             cutsThisSolve_ < kMaxCutsPerSolve) {
@@ -486,7 +490,9 @@ std::optional<TheoryLemma> LiaSolver::generateGomoryCut(int xi) {
     clause.erase(std::unique(clause.begin(), clause.end(), [](SatLit a, SatLit b) {
         return a.var == b.var && a.sign == b.sign;
     }), clause.end());
-    return TheoryLemma{clause};
+    // The bound premises imply this single cut predicate. Unlike an integer
+    // split, it is an explained refinement that must reach the SAT consumer.
+    return TheoryLemma{std::move(clause), LemmaKind::Entailment};
 }
 
 TheoryLemma LiaSolver::buildBranchSplitLemma(int var, const DeltaRational& val) {
