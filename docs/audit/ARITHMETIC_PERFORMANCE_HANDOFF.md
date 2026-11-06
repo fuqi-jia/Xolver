@@ -493,6 +493,52 @@ new exact capability is qualified development work, not a performance gain.
 The linear SAT loss and the remaining bit-blast work require investigation;
 there is no fresh full-suite, final-version QCP or protected-set claim.
 
+### Closed circuit compression pilot
+
+A shared signed carry-save sum and Baugh-Wooley multiplier prototype passes
+2,239 unit cases and reduces the constructed 32-bit multiplier from 5,490 to
+3,968 gates. The unchanged 36-input comparison nevertheless regresses **28 to
+27 verified results**, with no gains, one SAT loss and no incorrect results.
+All eight original gaps still time out. The performance replacement is removed;
+the frozen implementation and evidence remain archived privately. Fewer gates
+do not establish improved solver performance. Do not repeat this experiment.
+
+### FULINA development: retained presolve projections
+
+Presolve previously discarded nonterminal elimination results before integer
+bit-blasting and real candidate search. A shared immutable projection now
+retains reduced constraints, original premises and exact definitions. Integer
+bit-blasting and integer/real candidate search consume it, reconstruct the
+original variables and validate the original constraints before accepting SAT.
+Reduced refutations are lifted through the original context. Assertion changes,
+backtracking and reset invalidate the projection; the existing weakened-context
+model API remains intact. Finite enumeration shares the reconstruction helper.
+No resource setting, feature switch or arithmetic rollback policy changes.
+
+An independently constructed predecessor regression fails when an eliminated
+integer requires more than the backend's independent leaf widths. The new
+path reconstructs its exact value beyond 128 bits without raising that width
+limit. Five new cases cover integer/real projections, rational coefficients,
+signed premises, dependency chains, incomplete assignments, cycles, resource
+exhaustion and replacement definitions after withdrawal. Proof-enabled Panda9 /
+ExperimentOS qualification passes **2,238 cases / 1,371,717 assertions**. The
+frozen CLI is
+`5e9f78ea287a559369b0f52222cf30a5dd018aa4f196b426ad8b1f97453ee3fa`.
+
+The fresh unchanged 36-input comparison retains **28 to 28 independently
+verified results**, versus 25 for same-round Z3, with no gains, losses or errors.
+Verified PAR-2 totals are **1,096.054 to 1,098.149 seconds**, versus **1,382.349**
+for Z3. Four separate constructed model/source-guard queries are independently
+verified in all three versions; they earn no original-gap solve credit. Actual
+timed Xolver SAT models require both Z3 and cvc5 replay.
+
+Diagnostics confirm that eliminated variables and constraints now stay out of
+the two representative bit-vector searches, but both still time out. All eight
+original gaps remain unresolved. This closes the isolated performance trial
+without main promotion, a full-suite claim or overall superiority. The exact
+reconstruction capability remains in development; the next investigation is
+whether existing exact refuters can consume the same reduced constraints.
+
 ## Previous checkpoint: sparse integer equality components (2026-11-06)
 
 [PR #101](https://github.com/fuqi-jia/Xolver/pull/101) merged as

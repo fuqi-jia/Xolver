@@ -132,6 +132,48 @@ struct FinitePartitionFixture {
         }
     }
 };
+
+TEST_CASE("Presolve handoff: integer search reconstructs values beyond independent leaf widths") {
+    FinitePartitionFixture f;
+    const auto z = f.kernel->mkVar(f.kernel->getOrCreateVar("z"));
+    const mpz_class scale = (mpz_class(1) << 160) + 1;
+    const auto definition = f.kernel->sub(f.parameter,
+        f.kernel->add(f.kernel->mul(f.kernel->mkConst(scale), f.other), z));
+    // Repeated source reasons must not restore redundant independent leaves.
+    for (int i = 0; i < 52; ++i) f.add(definition, Relation::Eq, 0);
+    f.add(f.kernel->mul(f.other, z), Relation::Eq, 2);
+    f.prepare();
+    REQUIRE_FALSE(f.solver->runStage("nia.presolve", f.db));
+    const auto result = f.solver->runStage("nia.bit-blast-early", f.db);
+    REQUIRE(result);
+    REQUIRE(result->kind == TheoryCheckResult::Kind::Consistent);
+    const auto model = f.solver->getModel();
+    REQUIRE(model);
+    const mpz_class p(model->assignments.at("p"));
+    const mpz_class x(model->assignments.at("x"));
+    const mpz_class valueZ(model->assignments.at("z"));
+    CHECK(x * valueZ == 2);
+    CHECK(p == scale * x + valueZ);
+    CHECK(abs(p) > (mpz_class(1) << 128));
+    f.solver->backtrackToLevel(0);
+    const auto replacement = f.kernel->sub(f.parameter,
+        f.kernel->sub(z, f.kernel->mul(f.kernel->mkConst(scale), f.other)));
+    for (int i = 0; i < 52; ++i) f.add(replacement, Relation::Eq, 0);
+    f.add(f.kernel->mul(f.other, z), Relation::Eq, 2);
+    CHECK_FALSE(f.solver->getModel());
+    f.prepare();
+    REQUIRE_FALSE(f.solver->runStage("nia.presolve", f.db));
+    const auto second = f.solver->runStage("nia.bit-blast-early", f.db);
+    REQUIRE(second);
+    REQUIRE(second->kind == TheoryCheckResult::Kind::Consistent);
+    const auto rebuilt = f.solver->getModel();
+    REQUIRE(rebuilt);
+    const mpz_class newP(rebuilt->assignments.at("p"));
+    const mpz_class newX(rebuilt->assignments.at("x"));
+    const mpz_class newZ(rebuilt->assignments.at("z"));
+    CHECK(newX * newZ == 2);
+    CHECK(newP == -scale * newX + newZ);
+}
 }
 
 TEST_CASE("NIA finite partition: signed intervals make strict progress") {

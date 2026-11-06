@@ -3,8 +3,10 @@
 #include "base/RuntimeConfig.h"
 #include "evidence/ArithModelValidator.h"
 #include "ir/NativeTerms.h"
+#include "search/presolve/PresolveProjection.h"
 #include <algorithm>
 #include <cstdio>
+#include <fstream>
 #include <memory>
 #include <optional>
 #include <set>
@@ -16,6 +18,92 @@
 #include <gmpxx.h>
 
 namespace xolver {
+
+bitblast::BitBlastResult NiaSolver::solveBitBlastContext() {
+    if (!presolveProjection_) return bitBlast_.solve(normalized_, domains_, validator_);
+    bitblast::BitBlastResult result;
+    try {
+        WorkBudget work(0);
+        std::vector<NormalizedNiaConstraint> reduced;
+        for (const auto& constraint : presolveProjection_->constraints()) {
+            work.tick();
+            const auto reason = constraint.premises.empty() ? SatLit::positive(1)
+                                                           : constraint.premises.front();
+            reduced.push_back(normalizer_.normalizeOne({constraint.poly, constraint.rel, reason}));
+        }
+        DomainStore reducedDomains;
+        const auto guard = normalized_.empty() ? SatLit::positive(1) : normalized_.front().reason;
+        for (const auto variable : presolveProjection_->variables()) {
+            const std::string name(kernel_->varName(variable));
+            if (const auto* domain = domains_.getDomain(name)) {
+                if (domain->hasLower) reducedDomains.addLowerBound(name, domain->lower.value, domain->lower.reasons);
+                if (domain->hasUpper) reducedDomains.addUpperBound(name, domain->upper.value, domain->upper.reasons);
+                if (domain->finiteValues) reducedDomains.restrictToFiniteSet(name, *domain->finiteValues, guard);
+                for (const auto& [value, reasons] : domain->excludedValues) {
+                    (void)reasons;
+                    reducedDomains.excludeValue(name, value, guard);
+                }
+            }
+        }
+        const auto profile = config::read<config::ReadKind::ProfilePath>("ARITH_STAGE_PROF", "/tmp/xolver_stageprof.txt");
+        if (!profile.empty()) {
+            std::ofstream out(profile.string() + ".presolve-consumers.log", std::ios::app);
+            out << "consumer=integer-bitblast phase=enter original=" << normalized_.size()
+                << " reduced=" << reduced.size() << " variables=" << presolveProjection_->variables().size()
+                << " definitions=" << presolveProjection_->definitionCount() << '\n';
+        }
+        // Internal labels are local to this reduced obligation. Every conflict
+        // below is lifted through the whole original context before publication.
+        const auto inferred = linearDomain_.run(reduced, reducedDomains);
+        if (inferred.kind == NiaReasoningKind::Conflict || reducedDomains.isEmpty()) {
+            result.status = bitblast::BitBlastResult::Status::UnsatComplete;
+        } else if (reduced.empty()) {
+            result.status = bitblast::BitBlastResult::Status::Sat;
+        } else {
+            result = bitBlast_.solve(reduced, reducedDomains, validator_);
+        }
+        if (result.status == bitblast::BitBlastResult::Status::UnsatComplete) {
+            TheoryConflict conflict;
+            for (const auto& original : normalized_) conflict.clause.push_back(original.reason);
+            if (conflict.clause.empty()) return {};
+            result.conflict = std::move(conflict);
+        } else if (result.status == bitblast::BitBlastResult::Status::Sat) {
+            std::unordered_map<VarId, mpq_class> point;
+            for (const auto& [name, value] : result.model) {
+                const auto variable = kernel_->findVar(name);
+                if (!variable) return {};
+                point.emplace(*variable, value);
+            }
+            if (!presolveProjection_->reconstruct(point, work)) return {};
+            result.model.clear();
+            for (const auto& [variable, value] : point) {
+                if (value.get_den() != 1) return {};
+                result.model.emplace(std::string(kernel_->varName(variable)), value.get_num());
+            }
+            if (validator_.validate(result.model, normalized_) != IntegerModelValidator::Result::Valid)
+                return {};
+            for (const auto& [name, domain] : domains_.getAllDomains()) {
+                const auto found = result.model.find(name);
+                if (found == result.model.end()) return {};
+                const auto& value = found->second;
+                if ((domain.hasLower && value < domain.lower.value) ||
+                    (domain.hasUpper && value > domain.upper.value) ||
+                    (domain.finiteValues && !domain.finiteValues->contains(value)) ||
+                    domain.excludedValues.contains(value)) return {};
+            }
+        }
+        if (!profile.empty()) {
+            std::ofstream out(profile.string() + ".presolve-consumers.log", std::ios::app);
+            out << "consumer=integer-bitblast phase=return original=" << normalized_.size()
+                << " reduced=" << reduced.size() << " variables=" << presolveProjection_->variables().size()
+                << " definitions=" << presolveProjection_->definitionCount()
+                << " result=" << static_cast<unsigned>(result.status) << '\n';
+        }
+        return result;
+    } catch (const ResourceExhausted&) {
+        return {};
+    }
+}
 
 std::optional<TheoryCheckResult> NiaSolver::stageBounded(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     auto allVars = collectVars(normalized_, *kernel_);
@@ -77,7 +165,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageBitBlastEarly(TheoryLemmaStorag
     // The backend reuses definitive answers only for an identical complete
     // query. Retrying Unknown must remain possible after backtracking or a
     // resource-budget change; equal constraint counts do not identify a query.
-    auto res = bitBlast_.solve(normalized_, domains_, validator_);
+    auto res = solveBitBlastContext();
     switch (res.status) {
         case bitblast::BitBlastResult::Status::Sat:
             currentModel_ = res.model;
@@ -107,7 +195,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageBitBlast(TheoryLemmaStorage&, T
                 bbEntryCount, active_.size(), normalized_.size());
         }
     }
-    auto res = bitBlast_.solve(normalized_, domains_, validator_);
+    auto res = solveBitBlastContext();
     switch (res.status) {
         case bitblast::BitBlastResult::Status::Sat:
             currentModel_ = res.model;

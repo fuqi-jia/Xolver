@@ -1,6 +1,7 @@
 #include "base/RuntimeConfig.h"
 #include "search/nra/reasoners/NlaCutsRunner.h"
 #include "applications/satisfiability/smt/qfnra/NraSolver.h"
+#include "search/presolve/PresolveProjection.h"
 #include "base/EnvParam.h"
 #include "base/SolveClock.h"
 #include <chrono>
@@ -211,6 +212,7 @@ void NraSolver::onReset() {
 }
 
 void NraSolver::invalidateModel() {
+    presolveProjection_.reset();
     satFastModel_.reset();
     satCacAlgModel_.reset();
 }

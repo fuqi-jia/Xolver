@@ -6,6 +6,7 @@
 #include "search/arith/Reasoner.h"
 #include "algebra/linear/LinearExpr.h"
 #include "search/presolve/Presolve.h"
+#include "search/presolve/PresolveProjection.h"
 #include "algebra/poly/RationalPolynomial.h"
 #include "base/RealValue.h"                                // validated rational witness model
 #include "search/nra/reasoners/SubtropicalSatFinder.h"  // subtropical candidate search
@@ -53,15 +54,27 @@ std::optional<TheoryCheckResult> NraSolver::stagePartialLinearModel(
     if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty()) return std::nullopt;
     std::vector<PartialLinearModelSearch::Constraint> constraints;
     constraints.reserve(presolveConstraints_.size());
-    for (const auto& c : presolveConstraints_) {
-        if (c.poly == NullPoly) return std::nullopt;
-        constraints.push_back({c.poly, c.rel});
+    if (presolveProjection_) {
+        for (const auto& c : presolveProjection_->constraints()) constraints.push_back({c.poly, c.rel});
+    } else {
+        for (const auto& c : presolveConstraints_) {
+            if (c.poly == NullPoly) return std::nullopt;
+            constraints.push_back({c.poly, c.rel});
+        }
     }
     PartialLinearModelSearch::Statistics stats;
     std::optional<PartialLinearModelSearch::RootRefutation> refutation;
     const auto started = std::chrono::steady_clock::now();
     auto model = PartialLinearModelSearch::trySolve(constraints, *kernel_, false, &stats,
         PartialLinearModelSearch::Allocation(), &refutation);
+    if (presolveProjection_ && constraints.empty())
+        model = std::unordered_map<VarId, mpq_class>{};
+    if (model && presolveProjection_) {
+        try {
+            WorkBudget work(0);
+            if (!presolveProjection_->reconstruct(*model, work)) model.reset();
+        } catch (const ResourceExhausted&) { model.reset(); }
+    }
     const auto profile = config::read<config::ReadKind::ProfilePath>("ARITH_STAGE_PROF", "/tmp/xolver_stageprof.txt");
     if (!profile.empty()) {
         std::ofstream out(profile.string() + ".boundary.log", std::ios::app);
@@ -84,8 +97,10 @@ std::optional<TheoryCheckResult> NraSolver::stagePartialLinearModel(
     }
     if (refutation) {
         TheoryConflict conflict;
-        for (const auto index : refutation->premises)
+        if (presolveProjection_) conflict.clause = presolveProjection_->premises();
+        else for (const auto index : refutation->premises)
             conflict.clause.push_back(presolveConstraints_.at(index).reason);
+        if (conflict.clause.empty()) return std::nullopt;
         std::sort(conflict.clause.begin(), conflict.clause.end(), [](SatLit a, SatLit b) {
             return a.var != b.var ? a.var < b.var : a.sign < b.sign;
         });
@@ -93,7 +108,7 @@ std::optional<TheoryCheckResult> NraSolver::stagePartialLinearModel(
                               conflict.clause.end());
         return TheoryCheckResult::mkConflict(std::move(conflict));
     }
-    if (!model) return std::nullopt;
+    if (!model || !validateRationalCandidate(*model)) return std::nullopt;
     satFastModel_ = std::move(*model);
     return TheoryCheckResult::consistent();
 }
@@ -111,6 +126,7 @@ std::optional<TheoryCheckResult> NraSolver::stagePartialLinearModel(
 // claim. Conflict / Lemma terminations always return immediately.
 std::optional<TheoryCheckResult> NraSolver::stagePresolve(TheoryLemmaStorage& /*lemmaDb*/,
                                                           TheoryEffort /*effort*/) {
+    presolveProjection_.reset();
     const long presolveBudgetMs =
         config::read<config::ReadKind::Long>("XOLVER_NRA_PRESOLVE_BUDGET_MS", 50);
     PresolveEngine presolve(kernel_.get(), /*integerDomain=*/false);
@@ -132,6 +148,21 @@ std::optional<TheoryCheckResult> NraSolver::stagePresolve(TheoryLemmaStorage& /*
             return TheoryCheckResult::mkConflict(pr.conflict);
         if (pr.kind == PresolveResult::Kind::Lemma)
             return TheoryCheckResult::mkLemma(pr.lemma);
+        try {
+            WorkBudget work(0);
+            if (auto projection = PresolveProjection::build(presolve.state(), work))
+                presolveProjection_ = std::make_unique<PresolveProjection>(std::move(*projection));
+        } catch (const ResourceExhausted&) { presolveProjection_.reset(); }
+        const auto profile = config::read<config::ReadKind::ProfilePath>("ARITH_STAGE_PROF", "/tmp/xolver_stageprof.txt");
+        if (!profile.empty()) {
+            const auto& state = presolve.state();
+            std::ofstream out(profile.string() + ".presolve-projection.log", std::ios::app);
+            out << "theory=real sources=" << presolveConstraints_.size()
+                << " live=" << std::count_if(state.atoms.begin(), state.atoms.end(),
+                       [](const auto& atom) { return atom.live; })
+                << " definitions=" << state.substMap.size() << " fixed=" << state.fixedValues.size()
+                << " bounds=" << state.bounds.size() << " retained=" << bool(presolveProjection_) << '\n';
+        }
     }
     return std::nullopt;
 }

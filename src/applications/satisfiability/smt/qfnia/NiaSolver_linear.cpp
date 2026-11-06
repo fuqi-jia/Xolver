@@ -23,6 +23,7 @@
 #include "algebra/linear/LinearConstraintNormalizer.h"
 #include "contracts/LogicFeatureDetector.h"
 #include "search/presolve/Presolve.h"
+#include "search/presolve/PresolveProjection.h"
 #include "search/candidate/CompleteFiniteDomainEnumerator.h"
 #include "search/coordination/TheoryLemmaDatabase.h"
 #include "evidence/ArithModelValidator.h"
@@ -35,6 +36,7 @@
 #include "base/MpqUtils.h"
 #include <chrono>
 #include <iostream>
+#include <fstream>
 
 #include <unordered_set>
 #include <cstdlib>
@@ -105,6 +107,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageLinearDecide(
 }
 
 std::optional<TheoryCheckResult> NiaSolver::stageNormalize(TheoryLemmaStorage&, TheoryEffort) {
+    presolveProjection_.reset();
     // Merge live interface constraints with normal atoms before normalization.
     const std::vector<ActiveNiaConstraint>* toNormalize = &active_;
     std::vector<ActiveNiaConstraint> merged;
@@ -122,7 +125,8 @@ std::optional<TheoryCheckResult> NiaSolver::stageNormalize(TheoryLemmaStorage&, 
     return std::nullopt;
 }
 
-std::optional<TheoryCheckResult> NiaSolver::stagePresolveFixpoint(TheoryLemmaStorage&, TheoryEffort) {
+std::optional<TheoryCheckResult> NiaSolver::stagePresolveFixpoint(TheoryLemmaStorage&, TheoryEffort effort) {
+    presolveProjection_.reset();
     // Theory-check presolve fixpoint (Capabilities 1–7, 11). Sound,
     // equivalence-preserving derivations over the active atoms. May return a
     // Conflict (UNSAT) or a case-split Lemma; never SAT directly. Otherwise
@@ -169,6 +173,25 @@ std::optional<TheoryCheckResult> NiaSolver::stagePresolveFixpoint(TheoryLemmaSto
         }
         if (fd.status == FiniteDomainResult::Status::UnsatComplete) {
             return TheoryCheckResult::mkConflict(fd.conflict);
+        }
+        if (effort == TheoryEffort::Full) {
+            try {
+                WorkBudget work(0);
+                if (auto projection = PresolveProjection::build(presolve.state(), work))
+                    presolveProjection_ = std::make_unique<PresolveProjection>(std::move(*projection));
+            } catch (const ResourceExhausted&) {
+                presolveProjection_.reset();
+            }
+        }
+        const auto profile = config::read<config::ReadKind::ProfilePath>("ARITH_STAGE_PROF", "/tmp/xolver_stageprof.txt");
+        if (!profile.empty()) {
+            const auto& state = presolve.state();
+            std::ofstream out(profile.string() + ".presolve-projection.log", std::ios::app);
+            out << "theory=integer sources=" << normalized_.size()
+                << " live=" << std::count_if(state.atoms.begin(), state.atoms.end(),
+                       [](const auto& atom) { return atom.live; })
+                << " definitions=" << state.substMap.size() << " fixed=" << state.fixedValues.size()
+                << " bounds=" << state.bounds.size() << " retained=" << bool(presolveProjection_) << '\n';
         }
     }
     return std::nullopt;

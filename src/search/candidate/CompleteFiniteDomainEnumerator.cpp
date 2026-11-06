@@ -1,38 +1,10 @@
 #include "search/candidate/CompleteFiniteDomainEnumerator.h"
+#include "search/presolve/PresolveProjection.h"
 
 #include <algorithm>
 #include <set>
 
 namespace xolver {
-
-namespace {
-
-// Evaluate substitution definitions at a (partial) rational assignment of the
-// free variables, resolving substituted-var dependency chains.  Returns false
-// if some substituted var cannot be reduced to a constant (gating failure).
-bool resolveAssignment(const PresolveState& st,
-                       std::map<VarId, mpq_class>& assign /* free vars in */) {
-    size_t remaining = st.substMap.size();
-    for (size_t iter = 0; iter <= st.substMap.size() + 1 && remaining > 0; ++iter) {
-        bool progress = false;
-        for (const auto& [v, entry] : st.substMap) {
-            if (assign.count(v)) continue;
-            RationalPolynomial t = entry.value;
-            for (const auto& [var, val] : assign) {
-                if (t.contains(var)) t = t.substituteRational(var, val);
-            }
-            if (t.isConstant()) {
-                assign[v] = t.constantValue();
-                --remaining;
-                progress = true;
-            }
-        }
-        if (!progress) break;
-    }
-    return remaining == 0;
-}
-
-}  // namespace
 
 FiniteDomainResult CompleteFiniteDomainEnumerator::run(
     const PresolveState& st,
@@ -90,12 +62,21 @@ FiniteDomainResult CompleteFiniteDomainEnumerator::run(
     if (!any) return res;
 
     bool anyIndeterminate = false;
+    PolynomialDefinitions definitions;
+    for (const auto& [variable, definition] : st.substMap)
+        definitions.emplace(variable, definition.value);
+    WorkBudget reconstructionWork(0);
 
     while (true) {
-        std::map<VarId, mpq_class> assign;
+        std::unordered_map<VarId, mpq_class> assign;
         for (size_t i = 0; i < freeVars.size(); ++i) assign[freeVars[i]] = mpq_class(points[i][idx[i]]);
 
-        bool resolved = resolveAssignment(st, assign);
+        bool resolved;
+        try {
+            resolved = reconstructPolynomialDefinitions(definitions, assign, reconstructionWork);
+        } catch (const ResourceExhausted&) {
+            return res;
+        }
         bool allInt = resolved;
         if (resolved) {
             for (const auto& [v, val] : assign) {

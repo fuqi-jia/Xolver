@@ -37,6 +37,7 @@ class CdcacCore;        // integer-aware CDCAC (libpoly-gated; constructed in .c
 class AlgebraBackend;
 class NiaLinearDecider; // embedded bounded LIA model search (nia.linear-decide; own TU)
 class PolynomialLinearRefuter;
+class PresolveProjection;
 namespace farkas { struct FarkasProfile; struct FarkasOrContext; }
 
 /**
@@ -147,6 +148,8 @@ private:
     BoundedNiaSolver bounded_;
     NiaLocalSearch localSearch_;
     bitblast::BitBlastSolver bitBlast_;
+    std::unique_ptr<PresolveProjection> presolveProjection_;
+    bitblast::BitBlastResult solveBitBlastContext();
     ProductPositivityReasoner productPositivity_;
     GcdDivisibilityReasoner gcdDivisibility_;
     ModularResidueReasoner modularResidue_;

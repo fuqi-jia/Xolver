@@ -248,6 +248,7 @@ set(XOLVER_SEARCH_SOURCES
     "search/presolve/PolynomialDefSubstitution.cpp"
     "search/presolve/PolynomialEqualityCombination.cpp"
     "search/presolve/PresolveEngine.cpp"
+    "search/presolve/PresolveProjection.cpp"
     "search/presolve/PresolveSupport.cpp"
     "search/presolve/UnivariatePolySignAnalyzer.cpp"
     "search/refute/MonomialSquares.cpp"
