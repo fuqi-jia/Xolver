@@ -7,6 +7,7 @@
 #include "search/dl/BellmanFord.h"
 #include "search/arith/Reasoner.h"
 #include "search/refute/PolynomialLinearRefutation.h"
+#include "search/refute/PolynomialProductSplit.h"
 #include <random>
 #include "search/nia/search/NiaLinearizationAdapter.h"
 #include "search/nia/search/NiaIcpAdapter.h"
@@ -217,6 +218,23 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     add("nia.diff-conflict",  &NiaSolver::stageDifferenceConflict);
     add("nia.square-bound",   &NiaSolver::stageSquareBound);
     add("nia.sos-bound",      &NiaSolver::stageSumOfSquares);
+    // Preserve candidate construction and exact conflicts before introducing
+    // factor sign cells. Each installed partition is a reusable tautology.
+    reasoners_.push_back(std::make_unique<CallbackReasoner>(
+        "nia.sign-partition",
+        [this](TheoryLemmaStorage& db, TheoryEffort) -> std::optional<TheoryCheckResult> {
+            if (!registry_) return std::nullopt;
+            std::vector<SignRefuteConstraint> constraints;
+            for (const auto& source : active_) {
+                if (source.poly == NullPoly) continue;
+                if (auto polynomial = RationalPolynomial::fromPolyId(source.poly, *kernel_))
+                    constraints.push_back({std::move(*polynomial), source.rel, source.reason});
+            }
+            if (auto lemma = splitNonlinearVariableSigns(constraints, *kernel_, TheoryId::NIA,
+                    *registry_, db))
+                return TheoryCheckResult::mkLemma(std::move(*lemma));
+            return std::nullopt;
+        }, ReasonerSchedule::CandidateModel));
     // Run explained cuts and cheap exact conflicts before incomplete integer
     // box search. A failed artificial box cannot refute an unbounded context;
     // its search must not prevent these refinements from reaching SAT.

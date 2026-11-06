@@ -4,6 +4,8 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location(
@@ -14,7 +16,7 @@ spec.loader.exec_module(harness)
 
 
 class RegressionContract(unittest.TestCase):
-    def run_fake(self, program, expected="pass"):
+    def run_fake(self, program, expected="pass", timeout=5):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             case = root / "input.smt2"
@@ -22,7 +24,21 @@ class RegressionContract(unittest.TestCase):
             solver = root / "fake solver"
             solver.write_text("#!/usr/bin/env python3\nimport sys\n" + program + "\n")
             solver.chmod(0o755)
-            return harness.run_case(str(case), str(solver), 5, expected)
+            return harness.run_case(str(case), str(solver), timeout, expected)
+
+    def test_case_budget_reaches_the_solver(self):
+        result = self.run_fake(
+            "import os; assert os.environ.get('XOLVER_WALLCLOCK_MS') == '5000'; print('sat')")
+        self.assertEqual(result.verdict, "PASS")
+
+    def test_fractional_budget_overrides_only_the_child_environment(self):
+        completed = SimpleNamespace(returncode=0, stdout="sat\n", stderr="")
+        with patch.dict(harness.os.environ, {"XOLVER_WALLCLOCK_MS": "999999"}), \
+                patch.object(harness.subprocess, "run", return_value=completed) as run:
+            self.assertEqual(self.run_fake("", timeout=0.1255).verdict, "PASS")
+            self.assertEqual(run.call_args.kwargs["timeout"], 0.1255)
+            self.assertEqual(run.call_args.kwargs["env"]["XOLVER_WALLCLOCK_MS"], "126")
+            self.assertEqual(harness.os.environ["XOLVER_WALLCLOCK_MS"], "999999")
 
     def test_opposite_verdict_never_exempted(self):
         for tag in ("pass", "known-fail", "known-unsound"):

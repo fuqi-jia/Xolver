@@ -84,3 +84,55 @@ TEST_CASE("IteLowerer: arithmetic affine choices preserve incremental branch sem
         }
     }
 }
+
+TEST_CASE("IteLowerer: numeric choice bounds withdraw with their assertion scope") {
+    for (bool real : {false, true}) {
+        Solver solver;
+        solver.setLogic(real ? "QF_LRA" : "QF_LIA");
+        const auto sort = real ? solver.realSort() : solver.intSort();
+        const auto c = solver.mkVar(solver.boolSort(), "choice");
+        const auto d = solver.mkVar(solver.boolSort(), "nested-choice");
+        const auto x = solver.mkVar(sort, "value");
+        auto op = [&](Kind kind, std::initializer_list<Term> terms) {
+            return solver.mkOp(static_cast<uint32_t>(kind), std::vector<Term>(terms));
+        };
+        auto number = [&](int value) { return real ? solver.mkReal(std::to_string(value)) : solver.mkInt(value); };
+        const auto inner = op(Kind::Ite, {d, number(-5), number(7)});
+        const auto choice = op(Kind::Ite, {c, number(2), inner});
+        solver.push();
+        solver.assertFormula(op(Kind::Eq, {x, choice}));
+        solver.push();
+        solver.assertFormula(op(Kind::Eq, {x, number(100)}));
+        CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Unsat));
+        solver.pop();
+        CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Sat));
+        solver.pop();
+        solver.assertFormula(op(Kind::Eq, {x, number(100)}));
+        CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Sat));
+    }
+}
+
+TEST_CASE("Finite linear decisions: assumptions and scope changes retain their API meaning") {
+    Solver solver;
+    solver.setLogic("QF_LIA");
+    const auto x = solver.mkVar(solver.intSort(), "x"), y = solver.mkVar(solver.intSort(), "y");
+    const auto p = solver.mkVar(solver.boolSort(), "p");
+    auto op = [&](Kind kind, std::initializer_list<Term> children) {
+        return solver.mkOp(static_cast<uint32_t>(kind), std::vector<Term>(children));
+    };
+    for (const auto variable : {x, y}) {
+        solver.assertFormula(op(Kind::Geq, {variable, solver.mkInt(0)}));
+        solver.assertFormula(op(Kind::Leq, {variable, solver.mkInt(1)}));
+    }
+    const auto equivalent = op(Kind::Eq,
+        {op(Kind::Eq, {x, solver.mkInt(0)}), op(Kind::Eq, {y, solver.mkInt(0)})});
+    solver.assertFormula(op(Kind::Implies, {p, equivalent}));
+    solver.assertFormula(op(Kind::Distinct, {x, y}));
+    CHECK(static_cast<int>(solver.checkSatAssuming({p})) == static_cast<int>(Result::Unsat));
+    CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Sat));
+    solver.push();
+    solver.assertFormula(p);
+    CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Unsat));
+    solver.pop();
+    CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Sat));
+}

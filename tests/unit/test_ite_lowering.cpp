@@ -2,6 +2,7 @@
 #include "frontend/preprocess/IteLowerer.h"
 #include "ir/NumericLiteral.h"
 #include "algebra/linear/LinearExpr.h"
+#include "search/bitblast/EagerBitBlastSolver.h"
 #include <doctest/doctest.h>
 
 using namespace xolver;
@@ -311,6 +312,8 @@ mpq_class evaluateChoice(const NativeTerms& ir, ExprId id, const ArithmeticValue
     if (node.kind == Kind::Not) return child(0) == 0 ? 1 : 0;
     if (node.kind == Kind::Or) return child(0) != 0 || child(1) != 0 ? 1 : 0;
     if (node.kind == Kind::Eq) return child(0) == child(1) ? 1 : 0;
+    if (node.kind == Kind::Geq) return child(0) >= child(1) ? 1 : 0;
+    if (node.kind == Kind::Leq) return child(0) <= child(1) ? 1 : 0;
     if (node.kind == Kind::Ite) return child(0) != 0 ? child(1) : child(2);
     if (node.kind == Kind::Neg) return -child(0);
     mpq_class result = node.kind == Kind::Mul ? 1 : 0;
@@ -338,6 +341,89 @@ void replayChoiceDefinitions(const NativeTerms& ir, const std::vector<ExprId>& d
     }
     for (auto definition : definitions) CHECK(evaluateChoice(ir, definition, values) == 1);
 }
+}
+
+TEST_CASE("IteLowerer: nested numeric choice ranges hold for every branch") {
+    for (bool real : {false, true}) {
+        NativeTerms ir;
+        ir.registerSort(ir.allocateSortId(), SortKind::Bool);
+        ir.registerSort(ir.allocateSortId(), SortKind::Int);
+        ir.registerSort(ir.allocateSortId(), SortKind::Real);
+        const auto sort = real ? ir.realSortId() : ir.intSortId();
+        const auto boolean = ir.boolSortId();
+        auto literal = [&](const mpq_class& value) {
+            return ir.addShared(TermExpr{real ? Kind::ConstReal : Kind::ConstInt,
+                                         sort, {}, Payload(value.get_str())});
+        };
+        const auto c = ir.add({Kind::Variable, boolean, {}, Payload(std::string("c"))});
+        const auto d = ir.add({Kind::Variable, boolean, {}, Payload(std::string("d"))});
+        const auto inner = ir.add({Kind::Ite, sort,
+            {c, literal(mpq_class(-5, real ? 2 : 1)), literal(mpq_class(7, real ? 3 : 1))}, {}});
+        const auto left = ir.add({Kind::Neg, sort, {inner}, {}});
+        const auto square = ir.add({Kind::Mul, sort, {inner, inner}, {}});
+        const auto right = ir.add({Kind::Sub, sort, {square, literal(4)}, {}});
+        const auto choice = ir.add({Kind::Ite, sort, {d, left, right}, {}});
+        const auto assertion = ir.add({Kind::Eq, boolean, {choice, literal(0)}, {}});
+        IteLowerer lowerer(ir);
+        const auto lowered = ir.get(lowerer.lowerAssertion(assertion)).children[0];
+        REQUIRE(lowerer.generatedBounds().size() == 4);
+        for (int flags = 0; flags < 4; ++flags) {
+            ArithmeticValues values{{c, flags & 1}, {d, (flags >> 1) & 1}};
+            const auto expected = evaluateChoice(ir, choice, values);
+            replayChoiceDefinitions(ir, lowerer.generatedAssertions(), values);
+            CHECK(evaluateChoice(ir, lowered, values) == expected);
+            for (const auto bound : lowerer.generatedBounds())
+                CHECK(evaluateChoice(ir, bound, values) == 1);
+        }
+        lowerer.lowerAssertion(assertion);
+        CHECK(lowerer.generatedBounds().size() == 4);
+    }
+}
+
+TEST_CASE("IteLowerer: unbounded numeric branches produce no unconditional finite range") {
+    NativeTerms ir;
+    ir.registerSort(ir.allocateSortId(), SortKind::Bool);
+    ir.registerSort(ir.allocateSortId(), SortKind::Int);
+    const auto boolean = ir.boolSortId(), integer = ir.intSortId();
+    const auto c = ir.add({Kind::Variable, boolean, {}, Payload(std::string("c"))});
+    const auto x = ir.add({Kind::Variable, integer, {}, Payload(std::string("x"))});
+    const auto zero = ir.add({Kind::ConstInt, integer, {}, Payload(int64_t(0))});
+    const auto choice = ir.add({Kind::Ite, integer, {c, x, zero}, {}});
+    const auto assertion = ir.add({Kind::Eq, boolean, {choice, zero}, {}});
+    IteLowerer lowerer(ir);
+    lowerer.lowerAssertion(assertion);
+    CHECK(lowerer.generatedBounds().empty());
+    REQUIRE(lowerer.generatedAssertions().size() == 2);
+    for (int selected = 0; selected < 2; ++selected) {
+        ArithmeticValues values{{c, selected}, {x, mpq_class(mpz_class(1) << 140)}};
+        replayChoiceDefinitions(ir, lowerer.generatedAssertions(), values);
+    }
+}
+
+TEST_CASE("IteLowerer: numeric choice bounds enable exact finite linear candidate search") {
+    NativeTerms ir;
+    ir.registerSort(ir.allocateSortId(), SortKind::Bool);
+    ir.registerSort(ir.allocateSortId(), SortKind::Int);
+    const auto boolean = ir.boolSortId(), integer = ir.intSortId();
+    auto literal = [&](int value) {
+        return ir.add({Kind::ConstInt, integer, {}, Payload(int64_t(value))});
+    };
+    const auto c = ir.add({Kind::Variable, boolean, {}, Payload(std::string("c"))});
+    const auto d = ir.add({Kind::Variable, boolean, {}, Payload(std::string("d"))});
+    const auto x = ir.add({Kind::Variable, integer, {}, Payload(std::string("x"))});
+    const auto inner = ir.add({Kind::Ite, integer, {c, literal(2), literal(5)}, {}});
+    const auto outer = ir.add({Kind::Ite, integer, {d, literal(-3), inner}, {}});
+    IteLowerer lowerer(ir);
+    std::vector<ExprId> roots{
+        lowerer.lowerAssertion(ir.add({Kind::Eq, boolean, {x, outer}, {}})),
+        ir.add({Kind::Not, boolean, {ir.add({Kind::Eq, boolean, {x, literal(-3)}, {}})}, {}}),
+        ir.add({Kind::Not, boolean, {ir.add({Kind::Eq, boolean, {x, literal(2)}, {}})}, {}})};
+    roots.insert(roots.end(), lowerer.generatedAssertions().begin(), lowerer.generatedAssertions().end());
+    roots.insert(roots.end(), lowerer.generatedBounds().begin(), lowerer.generatedBounds().end());
+    bitblast::EagerBitBlastSolver search;
+    const auto result = search.solveLinear(ir, roots);
+    REQUIRE(result.status == bitblast::EagerBitBlastSolver::Status::Sat);
+    CHECK(result.model.at("x") == 5);
 }
 
 TEST_CASE("IteLowerer: affine choices preserve signed nested branch witnesses") {

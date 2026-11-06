@@ -390,6 +390,69 @@ TEST_CASE("Linear model phase hints: large rational endpoints preserve unit diff
     }
 }
 
+TEST_CASE("LiaSolver: explained cuts are delivered before unrelated integer refinements") {
+    Fixture f;
+    LiaSolver solver;
+    solver.setRegistry(&f.registry);
+    solver.push();
+    const std::vector<ActiveLinearAtom> constraints = {
+        f.atom({{{"x", 1}}}, Relation::Geq, 1),
+        f.atom({{{"y", 1}}}, Relation::Geq, 1),
+        f.atom({{{"z", 1}}}, Relation::Geq, 1),
+        f.atom({{{"x", 3}, {"y", 5}, {"z", 7}}}, Relation::Eq, 23),
+        f.atom({{{"padding-a", 2}}}, Relation::Leq, 3),
+        f.atom({{{"padding-b", 2}}}, Relation::Leq, 3),
+        f.atom({{{"padding-c", 2}}}, Relation::Leq, 3),
+        f.atom({{{"padding-d", 2}}}, Relation::Leq, 3)
+    };
+    for (const auto& atom : constraints)
+        solver.assertLit(*f.registry.findBySatVar(atom.lit.var), true, 1, atom.lit);
+    const SatVar previousVariable = f.allocator.next;
+    const auto result = solver.check(f.lemmas, TheoryEffort::Full);
+    REQUIRE(result.kind == TheoryCheckResult::Kind::Lemma);
+    REQUIRE(result.lemmaOpt);
+    const auto& lemma = *result.lemmaOpt;
+    CHECK(lemma.kind == LemmaKind::Entailment);
+
+    Values values{{"x", 1}, {"y", 1}, {"z", 1}, {"padding-a", 0},
+                  {"padding-b", 0}, {"padding-c", 0}, {"padding-d", 0}};
+    bool excludesRelaxationVertex = false;
+    for (const auto& [name, coefficient] : constraints[3].lhs.terms) {
+        values[name] = 1 + mpq_class(8) / coefficient;
+        for (const auto& atom : constraints) REQUIRE(f.holds(atom.lit, values));
+        excludesRelaxationVertex |= !f.holds(lemma, values);
+        values[name] = 1;
+    }
+    CHECK(excludesRelaxationVertex);
+    // This premise set has the integer witness (2,2,1). Check the implication
+    // over a larger integer grid, including assignments falsifying premises.
+    for (int x = 0; x <= 4; ++x) for (int y = 0; y <= 4; ++y) for (int z = 0; z <= 4; ++z) {
+        values["x"] = x; values["y"] = y; values["z"] = z;
+        CHECK(f.holds(lemma, values));
+    }
+    values["x"] = 2; values["y"] = 2; values["z"] = 1;
+    for (const auto& atom : constraints) REQUIRE(f.holds(atom.lit, values));
+    CHECK(f.holds(lemma, values));
+
+    // Learning and then withdrawing a conditional cut must not leave its
+    // bound active in a new context where the original equation is absent.
+    const auto conclusion = std::find_if(lemma.lits.begin(), lemma.lits.end(),
+        [&](SatLit literal) { return literal.var > previousVariable; });
+    REQUIRE(conclusion != lemma.lits.end());
+    f.lemmas.markInstalled(lemma);
+    solver.assertLit(*f.registry.findBySatVar(conclusion->var), conclusion->sign, 1, *conclusion);
+    solver.pop(1);
+    for (const auto* name : {"x", "y", "z"}) {
+        const auto zero = f.atom({{{name, 1}}}, Relation::Eq, 0);
+        solver.assertLit(*f.registry.findBySatVar(zero.lit.var), true, 0, zero.lit);
+    }
+    REQUIRE(solver.check(f.lemmas, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Consistent);
+    const auto model = solver.getModel();
+    REQUIRE(model);
+    for (const auto* name : {"x", "y", "z"})
+        CHECK(mpq_class(model->assignments.at(name)) == 0);
+}
+
 TEST_CASE("LiaSolver: partial checks leave integer search to full effort") {
     for (int divisor : {2, 3}) for (int sign : {-1, 1}) {
         CAPTURE(divisor);

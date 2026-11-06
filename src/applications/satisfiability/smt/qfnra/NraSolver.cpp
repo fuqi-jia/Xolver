@@ -7,6 +7,7 @@
 #include <chrono>
 #include "search/arith/Reasoner.h"
 #include "search/refute/PolynomialLinearRefutation.h"
+#include "search/refute/PolynomialProductSplit.h"
 #include "algebra/linear/LinearExpr.h"
 #include "search/presolve/Presolve.h"
 #include "base/RealValue.h"                                // validated rational witness model
@@ -137,6 +138,22 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.subtropical",
         stageWrap("subtropical", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageSubtropical(db, e); })));
+    reasoners_.push_back(std::make_unique<CallbackReasoner>(
+        "nra.sign-partition",
+        stageWrap("sign-partition", [this](TheoryLemmaStorage& db, TheoryEffort)
+                -> std::optional<TheoryCheckResult> {
+            if (!registry_) return std::nullopt;
+            std::vector<SignRefuteConstraint> constraints;
+            for (const auto& source : presolveConstraints_) {
+                if (source.poly == NullPoly) continue;
+                if (auto polynomial = RationalPolynomial::fromPolyId(source.poly, *kernel_))
+                    constraints.push_back({std::move(*polynomial), source.rel, source.reason});
+            }
+            if (auto lemma = splitNonlinearVariableSigns(constraints, *kernel_, TheoryId::NRA,
+                    *registry_, db))
+                return TheoryCheckResult::mkLemma(std::move(*lemma));
+            return std::nullopt;
+        }), ReasonerSchedule::CandidateModel));
     // Covering/projection can perform unbounded algebraic work. Run them only
     // on a complete Boolean candidate, after propagation has had a chance to
     // reject it. The Full check still requires a verdict from these backends;

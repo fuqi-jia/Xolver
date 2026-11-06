@@ -22,6 +22,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
+import os
 import re
 import subprocess
 import sys
@@ -91,6 +93,10 @@ def run_case(path_str: str, solver: str, timeout: float, expected: str) -> CaseR
     path = Path(path_str)
     oracle = read_oracle_status(path)
     start = time.perf_counter()
+    # Give the solver the same budget as the outer watchdog. Portfolio stages
+    # otherwise use their standalone defaults without knowing this deadline.
+    environment = dict(os.environ)
+    environment["XOLVER_WALLCLOCK_MS"] = str(max(1, math.ceil(timeout * 1000)))
     try:
         proc = subprocess.run(
             [solver, "solve", str(path)],
@@ -99,6 +105,7 @@ def run_case(path_str: str, solver: str, timeout: float, expected: str) -> CaseR
             stderr=subprocess.PIPE,
             universal_newlines=True,
             timeout=timeout,
+            env=environment,
         )
     except subprocess.TimeoutExpired:
         return CaseResult(path, oracle, "timeout", expected, "TIMEOUT",

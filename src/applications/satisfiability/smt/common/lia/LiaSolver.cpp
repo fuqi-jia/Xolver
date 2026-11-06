@@ -543,9 +543,15 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
         return TheoryCheckResult::consistent();
     }
 
-    if (effort == TheoryEffort::Full && ir.kind != TheoryCheckResult::Kind::Conflict)
-        if (auto conflict = integerReasoner_.checkIntervalCombinationConflict(activeAtoms_))
-            return TheoryCheckResult::mkConflict(std::move(*conflict));
+    if (ir.kind == TheoryCheckResult::Kind::Conflict) return ir;
+
+    // Cut generation has already registered its conclusion and consumed a
+    // cut slot. Deliver that explained refinement before another producer can
+    // replace it; otherwise repeated checks can exhaust the slots without
+    // ever learning the cut. Speculative splits retain their existing order.
+    if (ir.kind == TheoryCheckResult::Kind::Lemma && ir.lemmaOpt &&
+        ir.lemmaOpt->kind == LemmaKind::Entailment)
+        return ir;
 
     if (!activeAtoms_.empty()) {
         auto cr = integerReasoner_.run(activeAtoms_, lemmaDb, effort);
