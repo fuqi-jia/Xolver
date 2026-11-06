@@ -205,6 +205,70 @@ TEST_CASE("NIA finite partition: withdrawn bounds cannot restrict a later contex
     }
 }
 
+TEST_CASE("Polynomial product covers: zero equations publish only at full effort") {
+    FinitePartitionFixture f;
+    f.add(f.kernel->mul(f.parameter, f.other), Relation::Eq, 0);
+    f.prepare();
+    CHECK_FALSE(f.solver->runStageAt("nia.sign-refute", f.db, TheoryEffort::Standard));
+    CHECK(f.registry.numAtomVars() == 0);
+    const auto result = f.solver->runStage("nia.sign-refute", f.db);
+    REQUIRE(result);
+    REQUIRE(result->kind == TheoryCheckResult::Kind::Lemma);
+    REQUIRE(result->lemmaOpt);
+    const auto& lemma = *result->lemmaOpt;
+    CHECK(lemma.kind == LemmaKind::Entailment);
+    REQUIRE(lemma.lits.size() == 3);
+    size_t guards = 0, alternatives = 0;
+    for (const auto literal : lemma.lits) {
+        const auto* atom = f.registry.findBySatVar(literal.var);
+        if (!atom) { CHECK_FALSE(literal.sign); ++guards; continue; }
+        REQUIRE(literal.sign);
+        REQUIRE(std::holds_alternative<PolynomialAtomPayload>(atom->payload));
+        const auto& payload = std::get<PolynomialAtomPayload>(atom->payload);
+        CHECK(payload.rel == Relation::Eq);
+        CHECK(payload.rhs.asRational() == 0);
+        CHECK((payload.poly == f.parameter || payload.poly == f.other));
+        ++alternatives;
+    }
+    CHECK(guards == 1);
+    CHECK(alternatives == 2);
+    const auto atoms = f.registry.numAtomVars();
+    REQUIRE(f.solver->runStage("nia.sign-refute", f.db));
+    f.db.markInstalled(lemma);
+    CHECK_FALSE(f.solver->runStage("nia.sign-refute", f.db));
+    CHECK(f.registry.numAtomVars() == atoms);
+}
+
+TEST_CASE("Polynomial product covers: withdrawn equations cannot constrain later contexts") {
+    for (const bool reset : {false, true}) {
+        FinitePartitionFixture f;
+        const auto polynomial = f.kernel->mul(f.parameter, f.kernel->sub(f.other, f.kernel->mkOne()));
+        f.add(polynomial, Relation::Eq, 0);
+        f.prepare();
+        const auto result = f.solver->runStage("nia.sign-refute", f.db);
+        REQUIRE(result);
+        REQUIRE(result->lemmaOpt);
+        f.db.markInstalled(*result->lemmaOpt);
+        if (reset) f.solver->reset();
+        else f.solver->backtrackToLevel(0);
+        f.prepare();
+        CHECK_FALSE(f.solver->runStage("nia.sign-refute", f.db));
+        f.add(polynomial, Relation::Neq, 0);
+        f.prepare();
+        CHECK_FALSE(f.solver->runStage("nia.sign-refute", f.db));
+    }
+}
+
+TEST_CASE("Polynomial product covers: weak inequalities do not imply zero factors") {
+    for (const auto relation : {Relation::Geq, Relation::Leq, Relation::Neq}) {
+        FinitePartitionFixture f;
+        f.add(f.kernel->mul(f.parameter, f.other), relation, 0);
+        f.prepare();
+        CHECK_FALSE(f.solver->runStage("nia.sign-refute", f.db));
+        CHECK(f.registry.numAtomVars() == 0);
+    }
+}
+
 TEST_CASE("Model completion request: cheap exact models avoid global search") {
     auto kernel = createPolynomialKernel();
     const auto x = kernel->mkVar(kernel->getOrCreateVar("x"));

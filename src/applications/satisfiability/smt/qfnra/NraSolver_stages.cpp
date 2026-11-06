@@ -23,6 +23,8 @@
 #include "search/refute/SignDefinitenessRefuter.h"       // sign-definiteness refutation
 #include "search/refute/PolynomialSignClosure.h"
 #include "search/refute/PolynomialLinearRefutation.h"
+#include "search/refute/PolynomialProductSplit.h"
+#include "search/coordination/TheoryAtomRegistry.h"
 #include "search/refute/PolynomialConeRefutation.h"
 #include "search/nra/core/CdcacCore.h"
 #include "search/nra/core/CdcacConstraint.h"
@@ -215,10 +217,19 @@ std::optional<TheoryCheckResult> NraSolver::stageBoxRefute(TheoryLemmaStorage& /
 // unconditionally sound UNSAT for sign-definite constraints (e.g. a sum of
 // strictly-positive monomials = 0 with all variables positive — the Sturm-MBO
 // family that CAD/CAC time out on).
-std::optional<TheoryCheckResult> NraSolver::stageSignRefute(TheoryLemmaStorage& /*lemmaDb*/,
+std::optional<TheoryCheckResult> NraSolver::stageSignRefute(TheoryLemmaStorage& lemmaDb,
                                                             TheoryEffort effort) {
+    const auto splitProducts = [&]() -> std::optional<TheoryCheckResult> {
+        if (effort != TheoryEffort::Full || !registry_) return std::nullopt;
+        for (const auto& source : presolveConstraints_)
+            if (source.rel == Relation::Eq && source.poly != NullPoly)
+                if (auto lemma = splitZeroPolynomialProduct(source.poly, source.reason,
+                        *kernel_, TheoryId::NRA, *registry_, lemmaDb))
+                    return TheoryCheckResult::mkLemma(std::move(*lemma));
+        return std::nullopt;
+    };
     if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty())
-        return std::nullopt;   // combination: interface (dis)eqs not in presolveConstraints_
+        return splitProducts();   // local product covers do not depend on interface facts
 
     std::vector<SignRefuteConstraint> cs;
     cs.reserve(presolveConstraints_.size());
@@ -262,7 +273,7 @@ std::optional<TheoryCheckResult> NraSolver::stageSignRefute(TheoryLemmaStorage& 
                     std::chrono::steady_clock::now() - started).count() << '\n';
         }
     }
-    if (!conflict) return std::nullopt;
+    if (!conflict) return splitProducts();
 
     TheoryConflict tc;
     tc.clause = std::move(*conflict);

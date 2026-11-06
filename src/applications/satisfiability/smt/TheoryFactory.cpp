@@ -40,6 +40,7 @@ void buildNRA(BuildContext& c) {
     auto lra = std::make_unique<LraSolver>();
     lra->setRegistry(&registry);
     auto nra = std::make_unique<NraSolver>(std::move(polyKernel));
+    nra->setRegistry(&registry);
     theoryManager.registerSolver(std::move(nra));
     theoryManager.registerSolver(std::move(lra));
 }
@@ -398,6 +399,7 @@ void buildUFNRA(BuildContext& c) {
     euf->setSharedTermRegistry(sharedTermRegistry.get());
     theoryManager.registerSolver(std::move(euf));
     auto nra = std::make_unique<NraSolver>(std::move(polyKernel));
+    nra->setRegistry(&registry);
     nra->setNativeTerms(ir);
     nra->setSharedTermRegistry(sharedTermRegistry.get());
     theoryManager.registerSolver(std::move(nra));

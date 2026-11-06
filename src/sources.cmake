@@ -254,6 +254,7 @@ set(XOLVER_SEARCH_SOURCES
     "search/refute/PolynomialBooleanRefutation.cpp"
     "search/refute/PolynomialConeRefutation.cpp"
     "search/refute/PolynomialLinearRefutation.cpp"
+    "search/refute/PolynomialProductSplit.cpp"
     "search/refute/PolynomialResidueRefutation.cpp"
     "search/refute/PolynomialSignClosure.cpp"
     "search/refute/SignDefinitenessRefuter.cpp"

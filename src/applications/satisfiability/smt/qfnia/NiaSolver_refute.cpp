@@ -4,6 +4,7 @@
 #include "search/refute/PolynomialSignClosure.h"
 #include "search/refute/PolynomialConeRefutation.h"
 #include "search/refute/PolynomialLinearRefutation.h"
+#include "search/refute/PolynomialProductSplit.h"
 #include "applications/satisfiability/smt/qfnia/NiaSolver.h"
 #include <algorithm>
 #include "search/dl/DifferenceGraph.h"
@@ -111,8 +112,17 @@ std::optional<TheoryCheckResult> NiaSolver::stageLinearRelaxation(
 // private state via the declarations in the corresponding header.
 // Behavior is byte-identical to the pre-split definitions.
 
-std::optional<TheoryCheckResult> NiaSolver::stageSignRefute(TheoryLemmaStorage&, TheoryEffort) {
-    if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty()) return std::nullopt;
+std::optional<TheoryCheckResult> NiaSolver::stageSignRefute(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
+    const auto splitProducts = [&]() -> std::optional<TheoryCheckResult> {
+        if (effort != TheoryEffort::Full || !registry_) return std::nullopt;
+        for (const auto& source : active_)
+            if (source.rel == Relation::Eq && source.poly != NullPoly)
+                if (auto lemma = splitZeroPolynomialProduct(source.poly, source.reason,
+                        *kernel_, TheoryId::NIA, *registry_, lemmaDb))
+                    return TheoryCheckResult::mkLemma(std::move(*lemma));
+        return std::nullopt;
+    };
+    if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty()) return splitProducts();
     std::vector<SignRefuteConstraint> constraints;
     constraints.reserve(active_.size());
     for (const auto& source : active_) {
@@ -142,7 +152,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageSignRefute(TheoryLemmaStorage&,
     if (!conflict) conflict = refuteByPolynomialCone(constraints,
         wall::deadline(), {.allInteger = true});
     if (!conflict) conflict = refuteByQuadraticSigns(constraints);
-    if (!conflict) return std::nullopt;
+    if (!conflict) return splitProducts();
     return TheoryCheckResult::mkConflict(TheoryConflict{std::move(*conflict)});
 }
 

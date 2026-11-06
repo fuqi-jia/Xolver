@@ -427,6 +427,37 @@ normalizes to 102 facts and resumes sign inference, but does not solve within
 solve claim or main promotion. Complete new-version suite acceptance remains
 open; no protected-set or final-version QCP result is claimed.
 
+### FULINA development: shared zero-product covers
+
+Integer and real sign reasoning now publish complete, guarded product covers.
+For example, `x^2*y*(y-z)=0` implies `x=0 or y=0 or y-z=0`; no factor is
+cancelled without retaining its zero alternative. The rule uses one exact
+common-monomial decomposition, also reused by the existing bit-vector sign
+encoder. Canonical quotient conversion reuses the kernel cache, so repeated
+checks retain the same dynamic atoms. Publication remains at Full effort;
+installed clauses are skipped and undelivered clauses remain retryable.
+
+Two predecessor regressions fail because no cover is published. All six new
+cases pass, including exact integer/rational point checks, powers, negative
+coefficients, source polarity, premise withdrawal, weak inequalities and both
+theory clients. Proof-enabled Panda9 / ExperimentOS qualification passes
+**2,225 cases / 1,369,990 assertions**. The frozen CLI is
+`ad70e7290a449841ad5b47716d96504545187179f19b760bc847937b9bebf20c`.
+
+A fresh unchanged 36-input comparison against the immediately qualified
+canonical-sign predecessor retains **28 to 28 independently verified results**,
+versus 25 for same-round Z3, with no gains, losses or errors. Verified PAR-2
+totals are **1,132.492 to 1,105.405 seconds**, versus **1,447.762** for Z3.
+The largest timing change is on an unchanged linear path and is not attributed
+to product covers. All eight original gaps still time out.
+
+Entry diagnostics confirm that the new covers advance theory search, but both
+representative nonlinear gaps still stop in their first early bit-blast call.
+This isolated performance experiment is closed without main promotion or a
+new full-suite claim. The generic capability remains in development; the next
+investigation concerns exporting proved fixed-monomial facts from the shared
+linear relaxation. A zero-valued candidate alone is not such a proof.
+
 ## Previous checkpoint: sparse integer equality components (2026-11-06)
 
 [PR #101](https://github.com/fuqi-jia/Xolver/pull/101) merged as
