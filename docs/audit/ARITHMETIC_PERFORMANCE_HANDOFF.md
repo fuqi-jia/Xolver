@@ -640,10 +640,39 @@ the added interior choice completes the local model, avoiding the slow fallback.
 The entire panel's verified PAR-2 total nevertheless increases from
 **1,080.233 to 1,100.294 seconds**, including substantial timing changes in
 linear controls. No overall timing benefit is claimed. Each solver/input uses
-60 seconds, one physical CPU and 16 GiB. Complete new-version suite acceptance,
-current-version original-C QCP, PR/main CI and the final protected comparison
-remain open. Private queries, models, identifiers and per-input evidence remain
-off GitHub. The cancelled server archive is not a delivery requirement.
+60 seconds, one physical CPU and 16 GiB. These panel timings are retained;
+the complete new-version comparison below supersedes its acceptance status.
+Private queries, models, identifiers and per-input evidence remain off GitHub.
+The cancelled server archive is not a delivery requirement.
+
+The complete fresh comparison at `ac4d03c1`, against accepted main, finishes
+with no losses, wrong results, model failures or protocol errors:
+
+- Fixed160 improves from **118 to 121 independently verified results**, versus
+  **117 for same-round Z3**. Raw verified counts are 117/120/117; independent
+  rechecking of an original-input-bound residue certificate adds one actual
+  UNSAT to both Xolver arms. No timeout or unknown is upgraded. The candidate
+  has **68 SAT / 53 UNSAT / 38 timeouts / one unknown**. Of three gained
+  results, one nonlinear UNSAT has direct new-reasoning evidence; two linear
+  SAT results recover existing capability and are not attributed to new
+  nonlinear algorithms. Mean verified PAR-2 improves from **35.739 to 34.031
+  seconds**, versus **33.959** for Z3. Z3 returns 125 definite verdicts, but its
+  eight unconfirmed results remain excluded from the verified score.
+- Development587 retains **587 to 587 verified**, versus 584 for Z3. Total
+  solver time is **48.787 to 50.920 seconds**, versus **19.068** for Z3.
+- All **14,408 private queries** retain independent verification in both
+  Xolver versions and Z3: **8,940 SAT / 5,468 UNSAT**, with no timeouts,
+  unknowns or unconfirmed results. Total solver time is **1,411.936 to
+  1,461.871 seconds**, versus **467.262** for Z3. This timing regression is
+  retained explicitly; the local mixed-query speedup is not extrapolated.
+
+Every actual timed Xolver SAT model passes both Z3 and cvc5 replay; actual
+timed Z3 models require cvc5. UNSAT requires an independent verdict or checked
+certificate. All 2,177 qualified source files match the committed implementation,
+including the pinned parser files. The worker is
+`b379ae8743e4ed8b4d5c628d1a98045f41b5db88541fd3611c7f7b46ef3ee894`.
+PR/main CI, final-version original-C QCP and the final protected comparison
+remain open. No protected set was used and no overall superiority is claimed.
 
 ## Previous checkpoint: sparse integer equality components (2026-11-06)
 
