@@ -603,6 +603,48 @@ nonlinear gap remains a timeout. This is a verified development-panel gain;
 complete new-version suite acceptance, current-version original-C QCP and final
 protected-set comparison remain open. No overall superiority is claimed.
 
+The completed fresh monomial-order comparison against accepted main retains
+**119 to 119 verified results on fixed160**, versus 116 for same-round Z3,
+after symmetric checking of the original-input-bound residue certificate.
+One gained UNSAT is balanced by one lost SAT. All **14,408 private queries**
+remain independently verified, but total solver time increases from
+**1,360.125 to 1,463.334 seconds**, versus **443.920** for Z3. Development587
+also retains all results with a timing regression. This version has not been
+accepted for main; its focused gain does not establish an overall improvement.
+
+### FULINA development: interior completion of one-sided arithmetic domains
+
+Partial linear model search could exhaust a half-line after trying only its
+finite endpoint: all origin-based seeds could clamp to that same value.
+For example, `x >= 1` and `x*x > 1` require an interior point. The shared integer
+and real candidate constructor now retains an interior representative of each
+one-sided interval, after existing candidates. Boundary ordering, exact complete
+model validation, root refutation semantics, API contracts, arithmetic rollback
+and resource allocations are unchanged. Diagnostic-only tracing was removed.
+
+The independently constructed predecessor regression fails. Proof-enabled
+Panda9 / ExperimentOS qualification passes **2,245 cases / 1,371,889 assertions**,
+including positive/negative endpoints, large integers, strict rational bounds
+and genuine singleton rejection. The frozen CLI is
+`fb56603bff5c8332d72127f5a9f706dc35f10778eb6dbfd1f5a6f9bf0a1a0d9d`.
+
+A fresh 69-input comparison retains **62 to 62 verified results**, versus 59
+for same-round Z3, with no losses or errors. It contains the preceding 36
+controls, the prior full-round lost SAT and all 32 mixed-UFNIA development
+queries. Those 32 queries retain all verified results while total solver time
+falls from **31.730 to 2.213 seconds**, versus **1.076** for Z3. Two actual
+SAT runs improve from approximately **14.9 to 0.12 seconds**; both independent
+checkers accept their actual timed models. Separate diagnostics confirm that
+the added interior choice completes the local model, avoiding the slow fallback.
+
+The entire panel's verified PAR-2 total nevertheless increases from
+**1,080.233 to 1,100.294 seconds**, including substantial timing changes in
+linear controls. No overall timing benefit is claimed. Each solver/input uses
+60 seconds, one physical CPU and 16 GiB. Complete new-version suite acceptance,
+current-version original-C QCP, PR/main CI and the final protected comparison
+remain open. Private queries, models, identifiers and per-input evidence remain
+off GitHub. The cancelled server archive is not a delivery requirement.
+
 ## Previous checkpoint: sparse integer equality components (2026-11-06)
 
 [PR #101](https://github.com/fuqi-jia/Xolver/pull/101) merged as

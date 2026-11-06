@@ -667,6 +667,11 @@ std::optional<PartialLinearModelSearch::Model> PartialLinearModelSearch::trySolv
                     if (b.lower && q <= b.lower->value) q = b.lower->value + (b.lower->strict ? 1 : 0);
                     add(q);
                 }
+                // A half-line needs an interior representative even when
+                // every origin-based seed clamps to its finite endpoint.
+                // Endpoint rejection must not exhaust the whole sampled ray.
+                if (b.lower && !b.upper) addRounded(mpq_class(b.lower->value + 1));
+                if (b.upper && !b.lower) addRounded(mpq_class(b.upper->value - 1));
                 // This domain is frozen before any prefix choice of this pass.
                 return CandidateChoices<mpq_class>{std::move(values), std::move(dependencies)};
             };
