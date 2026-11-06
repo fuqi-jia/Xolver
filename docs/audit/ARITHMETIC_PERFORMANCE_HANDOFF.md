@@ -2,14 +2,18 @@
 
 ## Current checkpoint: shared polarity-aware Boolean definitions (2026-11-06)
 
-FULINA implementation e46f2bdac485c737093d628f5f895d2cba01225f passes complete
-server acceptance. Its fresh fixed160 comparison improves **117 to 119
+[PR #105](https://github.com/fuqi-jia/Xolver/pull/105) merged as
+e9b30722375435d2cc18d52655dd6f5f2a4f368f after complete server acceptance and
+both final-head [PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42190015816)
+passed. Both jobs in its
+[merged-main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42192328446) also
+pass. Its fresh fixed160 comparison improves **117 to 119
 independently verified results**, versus **117 for same-round Z3**, with two
 gains, no losses and no errors. Mean verified PAR-2 improves from **36.444 to
 35.262 seconds**, versus **33.829** for Z3. There remain **40 timeouts and one
 unknown**. All **14,408 private queries** remain independently verified, with
-total solver time **1,409.618 seconds versus 466.676 for Z3**. PR CI and merged-main
-CI are pending for this implementation; no overall superiority is established.
+total solver time **1,409.618 seconds versus 466.676 for Z3**. No overall
+superiority is established.
 
 [PR #104](https://github.com/fuqi-jia/Xolver/pull/104) merged as
 0c0b2d2355f06236891e7c859bf72888225e1769 after complete server acceptance and
@@ -248,7 +252,7 @@ server acceptance and both PR CI jobs pass; this stage is merged through
 passing as recorded above. No protected set has been used. Private inputs,
 models and individual identifiers remain off GitHub.
 
-### FULINA development: shared polarity-aware nary Boolean definitions
+### Accepted implementation: shared polarity-aware nary Boolean definitions
 
 The atomizer and whole-formula integer candidate search now use the same
 occurrence-polarity analysis and nary defining clauses. This removes binary
@@ -310,9 +314,365 @@ certificate. Paired diagnostics on the preceding variant and this variant
 observe no new nary cache hits or direction upgrades on their two representative
 inputs. The cache resource property is tested, but the measured search-time
 changes do not establish that cache reuse caused them. Complete server
-acceptance passes; PR CI and merged-main CI remain pending. Final-version
+acceptance and both PR CI jobs pass; this stage is merged through
+[PR #105](https://github.com/fuqi-jia/Xolver/pull/105), with both merged-main CI
+jobs passing as recorded above. Final-version
 original-C QCP and protected-set comparisons remain open. No protected set has
 been used; private inputs, models and individual identifiers remain off GitHub.
+
+### FULINA development: explained fixed monomial products
+
+The shared polynomial linear relaxation now propagates an exactly fixed
+monomial into its divisible products. For example, `x*y=0` entails `x*y*z=0`
+without selecting which factor vanishes. Nonzero signed rational values and
+repeated powers use the same explained identity. A variable index avoids
+comparing every pair of monomials. Conditional bounds are replaced on each
+check; only unconditional slack definitions persist. Integer and real clients
+share this rule, retaining existing resource controls, API contracts, exact
+model checks and arithmetic rollback policies.
+
+Four new mathematical regressions fail on the qualified predecessor. All five
+new cases pass after implementation, including feasible rational points,
+overlapping factors, premise withdrawal, changed source polarity and large
+exponents. Proof-enabled Panda9 / ExperimentOS qualification passes **2,213
+cases / 1,365,164 assertions**. The frozen CLI is
+`1bfd69e32e5cc5c63db53eb7ce4479fc2464ea28a12c684394bfd116e8650d62`.
+
+A frozen 32-input comparison includes all eight verified-Z3/open-predecessor
+development gaps, retained results and six independently constructed generic
+queries. Verified counts improve **22 to 23**, versus 21 for Z3, with one gain,
+no losses and no errors. The gain is a generic integer query with many bounds:
+**60-second timeout to 0.017 seconds UNSAT**. Its real counterpart improves
+**1.120 to 0.018 seconds**. Independent decisions confirm both results. Separate
+diagnostics show one new monomial identity and one exact relaxation conflict
+closing each formula. No filename or answer-specific rule is used.
+
+The eight original development gaps have no new solves in this comparison.
+These selected controls do not establish a fixed160 count gain or an overall
+win. Complete fresh comparisons against the accepted Boolean-main freeze give:
+
+- Fixed160 retains **118 to 118 raw verified**, versus 117 for Z3, with one
+  SAT gain, one SAT loss and no errors. Both changes are on unchanged linear
+  call paths and are not attributed to product inference. Verified PAR-2 totals
+  are **5,770.140 to 5,757.641 seconds**, versus **5,406.743** for Z3. One
+  unconfirmed UNSAT in each Xolver version remains excluded; no fresh
+  certificate supplement is credited to this standalone experiment.
+- Development587 retains **587 to 587 verified**, versus 584 for Z3. Solver
+  totals are **48.336 to 48.460 seconds**, versus **18.744**. Three unconfirmed
+  Z3 model replays remain excluded.
+- Private14408 retains all verified results in both versions and Z3:
+  **8,940 SAT / 5,468 UNSAT**. Solver totals are **1,386.822 to 1,385.884
+  seconds**, versus **452.316** for Z3. There are no losses or errors; this small
+  timing difference establishes no reproducible private-query speedup.
+
+This standalone performance experiment is closed without main promotion. The
+exact shared mathematical capability remains in development while the next
+change repairs finite integer partition progress. No additional main merge or
+protected-set result is claimed.
+
+### FULINA development: productive finite integer partitions
+
+Finite interval splits now use an exact floor midpoint. Previously `[-2,-1]`
+could produce `x<=-1 or x>=0`, leaving the feasible left interval unchanged.
+Every non-singleton interval now has two nonempty, disjoint children whose
+union covers the interval, including negative and large integer endpoints.
+
+Finite factors in mixed finite/unbounded monomials can also request their
+complete integer cover before incomplete candidate searches. The existing
+branch constructor handles both this request and the final general search;
+clause publication remains at Full effort. Ordinary exact model checks,
+resource settings, API contracts and arithmetic rollback policies are retained.
+
+The qualified predecessor fails three strict-progress assertions in one new
+signed-interval regression. All four new cases pass after implementation,
+covering global integer covers, full-effort publication, unrelated finite
+components, duplicate requests, backtracking and reset. Proof-enabled Panda9 /
+ExperimentOS qualification passes **2,217 cases / 1,365,731 assertions**. The
+frozen CLI is
+`a1bf8f4becf651532eabaa8a2b265260e6d460b620778d6929a2c0751bf0fd20`.
+
+A fresh 36-input comparison retains the preceding controls, all eight verified
+Z3/open-main gaps and the previous full-round loss, and adds four independent
+signed integer interval queries. Verified counts improve **27 to 28**, versus
+25 for same-round Z3, with no losses or errors. The count gain is the previously
+constructed product-inference control. A separate large negative interval
+control improves **22.318 to 0.116 seconds UNSAT**, independently confirmed.
+The eight original gaps remain unsolved. Diagnostics show finite-factor
+substitutions and less candidate work, without a new fixed160 solve or main
+acceptance claim.
+
+### FULINA development: canonical polynomial sign inputs
+
+The shared integer/real sign closure now merges normalized, scaled source
+aliases before charging its existing input-fact capacity. Repeated premises
+could previously skip all sign reasoning even when their canonical context
+fit that capacity. Input, fact, work and round limits retain their values;
+there is no parameter increase. Explained strengthened facts retain their
+active premises, including after premise withdrawal or a resource exit.
+
+The qualified predecessor fails both independently constructed regressions.
+The implementation passes those tests for guarded nonlinear contradictions,
+strict product consequences, rational scaling and integer/real domains.
+Proof-enabled Panda9 / ExperimentOS qualification passes **2,219 cases /
+1,365,910 assertions**. The frozen CLI is
+`f69f95643232503c37be38c19b4ef0c5ee3d8e4eac3c57c627a82e1b2700f66f`.
+
+A fresh unchanged 36-input comparison against accepted main verifies **27 to
+28 results**, versus 27 for same-round Z3, with no losses or errors. Verified
+PAR-2 totals are **1,242.381 to 1,100.938 seconds**, versus **1,275.895** for
+Z3. Its sole gain remains the earlier generic product-inference control; the
+eight original gaps still time out. A diagnostic context with 133 sources
+normalizes to 102 facts and resumes sign inference, but does not solve within
+60 seconds. This closes the isolated performance trial without a new fixed160
+solve claim or main promotion. Complete new-version suite acceptance remains
+open; no protected-set or final-version QCP result is claimed.
+
+### FULINA development: shared zero-product covers
+
+Integer and real sign reasoning now publish complete, guarded product covers.
+For example, `x^2*y*(y-z)=0` implies `x=0 or y=0 or y-z=0`; no factor is
+cancelled without retaining its zero alternative. The rule uses one exact
+common-monomial decomposition, also reused by the existing bit-vector sign
+encoder. Canonical quotient conversion reuses the kernel cache, so repeated
+checks retain the same dynamic atoms. Publication remains at Full effort;
+installed clauses are skipped and undelivered clauses remain retryable.
+
+Two predecessor regressions fail because no cover is published. All six new
+cases pass, including exact integer/rational point checks, powers, negative
+coefficients, source polarity, premise withdrawal, weak inequalities and both
+theory clients. Proof-enabled Panda9 / ExperimentOS qualification passes
+**2,225 cases / 1,369,990 assertions**. The frozen CLI is
+`ad70e7290a449841ad5b47716d96504545187179f19b760bc847937b9bebf20c`.
+
+A fresh unchanged 36-input comparison against the immediately qualified
+canonical-sign predecessor retains **28 to 28 independently verified results**,
+versus 25 for same-round Z3, with no gains, losses or errors. Verified PAR-2
+totals are **1,132.492 to 1,105.405 seconds**, versus **1,447.762** for Z3.
+The largest timing change is on an unchanged linear path and is not attributed
+to product covers. All eight original gaps still time out.
+
+Entry diagnostics confirm that the new covers advance theory search, but both
+representative nonlinear gaps still stop in their first early bit-blast call.
+This isolated performance experiment is closed without main promotion or a
+new full-suite claim. The generic capability remains in development; the next
+investigation concerns exporting proved fixed-monomial facts from the shared
+linear relaxation. A zero-valued candidate alone is not such a proof.
+
+### FULINA development: proved linear faces and product feedback
+
+The shared simplex now proves fixed values on exact tight linear faces. For
+example, `a>=0`, `b>=0` and `a+b<=0` force both coordinates to zero. Shared
+proof groups retain every selected bound and prior dependency without copying
+a wide face's explanation for each coordinate. Changing or withdrawing a
+connected bound invalidates the cached proof; existing snapshots stay immutable.
+
+The polynomial relaxation exports exact fixed composite monomial equations
+with their current original signed premises. Integer and real clients publish
+guarded product covers through one shared interface. Candidate point values
+are never proofs. Resource settings, model checks, API contracts and the
+separate arithmetic rollback policies retain their semantics.
+
+Predecessor regressions reproduce the missing inference and publication.
+Withdrawal tests also caught and repaired stale proof reuse in the prototype.
+Proof-enabled Panda9 / ExperimentOS qualification passes **2,233 cases /
+1,371,158 assertions**, including eight new cases with 1,165 assertions. The
+frozen CLI is
+`517e00bd0ec9c9be41c67ec179d6b1a58adaeec647bdfbb6c8f1b9c54757b172`.
+
+The fresh unchanged 36-input comparison regresses **28 to 27 independently
+verified results**, versus 25 for same-round Z3: no gains, one SAT loss and no
+incorrect results or protocol errors. Verified PAR-2 totals are **1,104.232 to
+1,232.397 seconds**, versus **1,448.326** for Z3. Actual timed SAT models are
+independently replayed; UNSAT requires an independent decision. The eight
+original gaps remain unsolved. Diagnostics confirm proved zero facts and
+multi-premise covers in both representative nonlinear gaps, but each still
+stops in its first early bit-blast call.
+
+This isolated performance experiment is closed without main promotion. The
+new exact capability is qualified development work, not a performance gain.
+The linear SAT loss and the remaining bit-blast work require investigation;
+there is no fresh full-suite, final-version QCP or protected-set claim.
+
+### Closed circuit compression pilot
+
+A shared signed carry-save sum and Baugh-Wooley multiplier prototype passes
+2,239 unit cases and reduces the constructed 32-bit multiplier from 5,490 to
+3,968 gates. The unchanged 36-input comparison nevertheless regresses **28 to
+27 verified results**, with no gains, one SAT loss and no incorrect results.
+All eight original gaps still time out. The performance replacement is removed;
+the frozen implementation and evidence remain archived privately. Fewer gates
+do not establish improved solver performance. Do not repeat this experiment.
+
+### FULINA development: retained presolve projections
+
+Presolve previously discarded nonterminal elimination results before integer
+bit-blasting and real candidate search. A shared immutable projection now
+retains reduced constraints, original premises and exact definitions. Integer
+bit-blasting and integer/real candidate search consume it, reconstruct the
+original variables and validate the original constraints before accepting SAT.
+Reduced refutations are lifted through the original context. Assertion changes,
+backtracking and reset invalidate the projection; the existing weakened-context
+model API remains intact. Finite enumeration shares the reconstruction helper.
+No resource setting, feature switch or arithmetic rollback policy changes.
+
+An independently constructed predecessor regression fails when an eliminated
+integer requires more than the backend's independent leaf widths. The new
+path reconstructs its exact value beyond 128 bits without raising that width
+limit. Five new cases cover integer/real projections, rational coefficients,
+signed premises, dependency chains, incomplete assignments, cycles, resource
+exhaustion and replacement definitions after withdrawal. Proof-enabled Panda9 /
+ExperimentOS qualification passes **2,238 cases / 1,371,717 assertions**. The
+frozen CLI is
+`5e9f78ea287a559369b0f52222cf30a5dd018aa4f196b426ad8b1f97453ee3fa`.
+
+The fresh unchanged 36-input comparison retains **28 to 28 independently
+verified results**, versus 25 for same-round Z3, with no gains, losses or errors.
+Verified PAR-2 totals are **1,096.054 to 1,098.149 seconds**, versus **1,382.349**
+for Z3. Four separate constructed model/source-guard queries are independently
+verified in all three versions; they earn no original-gap solve credit. Actual
+timed Xolver SAT models require both Z3 and cvc5 replay.
+
+Diagnostics confirm that eliminated variables and constraints now stay out of
+the two representative bit-vector searches, but both still time out. All eight
+original gaps remain unresolved. This closes the isolated performance trial
+without main promotion, a full-suite claim or overall superiority. The exact
+reconstruction capability remains in development; the next investigation is
+whether existing exact refuters can consume the same reduced constraints.
+
+### FULINA development: exact refutation of presolve projections
+
+Integer and real sign stages now share exact linear, sign, cone and quadratic
+refutation of the retained presolve projection. Reduced zero-product equations
+also publish guarded factor covers. Each reduced constraint receives a distinct
+local proof label; conflicts map only the used labels back to their original
+signed premises, including elimination equalities. Unrelated active premises
+are excluded. Original-context refutation remains available; resource settings,
+model validation and arithmetic rollback policies retain their semantics.
+
+The predecessor misses the new direct-stage integer/real regression. An
+intermediate implementation finds the conflict but includes 133 premises; the
+final implementation retains the two required negative premises and invalidates
+them on withdrawal. Proof-enabled Panda9 / ExperimentOS qualification passes
+**2,239 cases / 1,371,739 assertions**. The frozen CLI is
+`582765ac8e8141752e8bb6d375ebb4060d70ca83b9cbebfed4514b0378fb1f5b`.
+
+The fresh unchanged 36-input comparison verifies **27 to 28 results**, versus
+25 for same-round Z3, with no losses or errors. Verified PAR-2 totals are
+**1,193.603 to 1,097.808 seconds**, versus **1,446.296** for Z3. The sole count
+difference recovers a previously solved SAT on an unchanged linear path; it is
+not attributed to projected refutation. All eight original gaps remain unsolved.
+Four separate constructed integer/real contradiction and definition-withdrawal
+queries pass independent checking in all three versions, with actual timed SAT
+models replayed by both Z3 and cvc5. They earn no original-gap solve credit.
+
+This closes the isolated performance trial without an established new original
+solve, main promotion or a fresh complete-suite claim. The generic exact
+capability remains development work. Diagnostics confirm reduced refuter entry
+in both representative nonlinear gaps, but neither completes within 60 seconds.
+No final-version QCP, protected-set or overall superiority claim is made.
+
+### FULINA development: explained monomial order transport
+
+The shared polynomial relaxation now transports source inequalities through
+proved nonnegative monomial factors, using only products expressible in the
+current input's monomial vocabulary. Source equalities allow arbitrary factor
+signs. Strict products retain strictness only when the factor is proved positive.
+Every conditional bound retains its original signed premises and is replaced
+with the next active context; unconditional definitions remain reusable. Integer,
+real and Boolean polynomial clients share the implementation. Resource settings,
+solver APIs, model checks and arithmetic rollback policies are unchanged.
+
+All four independently constructed predecessor regressions fail. The new
+implementation passes those tests for high-degree even factors, equality
+transport, unknown signs, zero factors, exact rational coefficients, strictness,
+premise withdrawal and cancellation. Proof-enabled Panda9 / ExperimentOS
+qualification passes **2,243 cases / 1,371,769 assertions**. The frozen CLI is
+`60c3a75678e5c2ea5ebf39e7029228a09a3c099b55846f6e2780db2750ce5138`.
+
+The fresh unchanged 36-input comparison improves **28 to 29 independently
+verified results**, versus 25 for same-round Z3, with one gain, no losses and
+no errors. An original nonlinear integer gap changes from a 60-second timeout
+to **30.342 seconds UNSAT**, independently confirmed. Verified PAR-2 totals
+improve from **1,103.729 to 1,016.114 seconds**, versus **1,445.238** for Z3.
+Eight separate generic integer/real checks retain all results in both versions
+and Z3; actual timed Xolver SAT models require both Z3 and cvc5 replay.
+
+A diagnostic run also refutes the gained input in **30.293 seconds** and records
+7,124 transported bounds in the integer relaxation. The other representative
+nonlinear gap remains a timeout. This is a verified development-panel gain;
+complete new-version suite acceptance, current-version original-C QCP and final
+protected-set comparison remain open. No overall superiority is claimed.
+
+The completed fresh monomial-order comparison against accepted main retains
+**119 to 119 verified results on fixed160**, versus 116 for same-round Z3,
+after symmetric checking of the original-input-bound residue certificate.
+One gained UNSAT is balanced by one lost SAT. All **14,408 private queries**
+remain independently verified, but total solver time increases from
+**1,360.125 to 1,463.334 seconds**, versus **443.920** for Z3. Development587
+also retains all results with a timing regression. This version has not been
+accepted for main; its focused gain does not establish an overall improvement.
+
+### FULINA development: interior completion of one-sided arithmetic domains
+
+Partial linear model search could exhaust a half-line after trying only its
+finite endpoint: all origin-based seeds could clamp to that same value.
+For example, `x >= 1` and `x*x > 1` require an interior point. The shared integer
+and real candidate constructor now retains an interior representative of each
+one-sided interval, after existing candidates. Boundary ordering, exact complete
+model validation, root refutation semantics, API contracts, arithmetic rollback
+and resource allocations are unchanged. Diagnostic-only tracing was removed.
+
+The independently constructed predecessor regression fails. Proof-enabled
+Panda9 / ExperimentOS qualification passes **2,245 cases / 1,371,889 assertions**,
+including positive/negative endpoints, large integers, strict rational bounds
+and genuine singleton rejection. The frozen CLI is
+`fb56603bff5c8332d72127f5a9f706dc35f10778eb6dbfd1f5a6f9bf0a1a0d9d`.
+
+A fresh 69-input comparison retains **62 to 62 verified results**, versus 59
+for same-round Z3, with no losses or errors. It contains the preceding 36
+controls, the prior full-round lost SAT and all 32 mixed-UFNIA development
+queries. Those 32 queries retain all verified results while total solver time
+falls from **31.730 to 2.213 seconds**, versus **1.076** for Z3. Two actual
+SAT runs improve from approximately **14.9 to 0.12 seconds**; both independent
+checkers accept their actual timed models. Separate diagnostics confirm that
+the added interior choice completes the local model, avoiding the slow fallback.
+
+The entire panel's verified PAR-2 total nevertheless increases from
+**1,080.233 to 1,100.294 seconds**, including substantial timing changes in
+linear controls. No overall timing benefit is claimed. Each solver/input uses
+60 seconds, one physical CPU and 16 GiB. These panel timings are retained;
+the complete new-version comparison below supersedes its acceptance status.
+Private queries, models, identifiers and per-input evidence remain off GitHub.
+The cancelled server archive is not a delivery requirement.
+
+The complete fresh comparison at `ac4d03c1`, against accepted main, finishes
+with no losses, wrong results, model failures or protocol errors:
+
+- Fixed160 improves from **118 to 121 independently verified results**, versus
+  **117 for same-round Z3**. Raw verified counts are 117/120/117; independent
+  rechecking of an original-input-bound residue certificate adds one actual
+  UNSAT to both Xolver arms. No timeout or unknown is upgraded. The candidate
+  has **68 SAT / 53 UNSAT / 38 timeouts / one unknown**. Of three gained
+  results, one nonlinear UNSAT has direct new-reasoning evidence; two linear
+  SAT results recover existing capability and are not attributed to new
+  nonlinear algorithms. Mean verified PAR-2 improves from **35.739 to 34.031
+  seconds**, versus **33.959** for Z3. Z3 returns 125 definite verdicts, but its
+  eight unconfirmed results remain excluded from the verified score.
+- Development587 retains **587 to 587 verified**, versus 584 for Z3. Total
+  solver time is **48.787 to 50.920 seconds**, versus **19.068** for Z3.
+- All **14,408 private queries** retain independent verification in both
+  Xolver versions and Z3: **8,940 SAT / 5,468 UNSAT**, with no timeouts,
+  unknowns or unconfirmed results. Total solver time is **1,411.936 to
+  1,461.871 seconds**, versus **467.262** for Z3. This timing regression is
+  retained explicitly; the local mixed-query speedup is not extrapolated.
+
+Every actual timed Xolver SAT model passes both Z3 and cvc5 replay; actual
+timed Z3 models require cvc5. UNSAT requires an independent verdict or checked
+certificate. All 2,177 qualified source files match the committed implementation,
+including the pinned parser files. The worker is
+`b379ae8743e4ed8b4d5c628d1a98045f41b5db88541fd3611c7f7b46ef3ee894`.
+PR/main CI, final-version original-C QCP and the final protected comparison
+remain open. No protected set was used and no overall superiority is claimed.
 
 ## Previous checkpoint: sparse integer equality components (2026-11-06)
 

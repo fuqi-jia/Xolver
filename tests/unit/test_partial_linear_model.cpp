@@ -677,3 +677,62 @@ TEST_CASE("partial linear model: explained substitution and withdrawal preserve 
         }
     }
 }
+
+TEST_CASE("partial linear model: one-sided domains retain interior witnesses") {
+    auto kernel = createPolynomialKernel();
+    const auto x = kernel->getOrCreateVar("x"), y = kernel->getOrCreateVar("y");
+    const auto xv = kernel->mkVar(x), yv = kernel->mkVar(y);
+    const auto square = kernel->pow(xv, 2);
+    for (const bool integerDomain : {false, true}) {
+        for (const int direction : {-1, 1}) {
+            for (const auto& magnitude : {mpz_class(1), mpz_class(7),
+                                          mpz_class("100000000000000000000003")}) {
+                const mpz_class endpoint = direction * magnitude;
+                const auto boundary = kernel->sub(xv, kernel->mkConst(mpq_class(endpoint)));
+                const auto outside = kernel->sub(square, kernel->mkConst(mpq_class(magnitude * magnitude)));
+                std::vector<PartialLinearModelSearch::Constraint> constraints{
+                    {boundary, direction > 0 ? Relation::Geq : Relation::Leq},
+                    {outside, Relation::Gt},
+                    {kernel->sub(yv, kernel->mul(kernel->mkConst(3), xv)), Relation::Eq}
+                };
+                PartialLinearModelSearch::Statistics stats;
+                std::optional<PartialLinearModelSearch::RootRefutation> refutation;
+                const auto model = PartialLinearModelSearch::trySolve(constraints, *kernel,
+                    integerDomain, &stats, PartialLinearModelSearch::Allocation(), &refutation);
+                REQUIRE(model.has_value());
+                CHECK(direction * model->at(x) > magnitude);
+                CHECK(model->at(y) == 3 * model->at(x));
+                CHECK_FALSE(refutation.has_value());
+                CHECK_FALSE(stats.exhausted);
+                if (integerDomain) CHECK(model->at(x).get_den() == 1);
+                for (const auto& constraint : constraints) {
+                    const auto sign = kernel->sgnVarId(constraint.poly, *model);
+                    CHECK((constraint.rel == Relation::Eq ? sign == 0 :
+                           constraint.rel == Relation::Gt ? sign > 0 :
+                           constraint.rel == Relation::Geq ? sign >= 0 : sign <= 0));
+                }
+                // A genuine singleton cannot acquire an out-of-domain witness.
+                constraints.push_back({boundary, direction > 0 ? Relation::Leq : Relation::Geq});
+                CHECK_FALSE(PartialLinearModelSearch::trySolve(constraints, *kernel, integerDomain));
+            }
+        }
+    }
+}
+
+TEST_CASE("partial linear model: unbounded real interiors preserve strict rational bounds") {
+    auto kernel = createPolynomialKernel();
+    const auto x = kernel->getOrCreateVar("x");
+    const auto xv = kernel->mkVar(x);
+    for (const int direction : {-1, 1}) {
+        const auto oriented = direction > 0 ? xv : kernel->neg(xv);
+        std::vector<PartialLinearModelSearch::Constraint> constraints{
+            {kernel->sub(kernel->mul(kernel->mkConst(3), oriented), kernel->mkConst(7)), Relation::Gt},
+            {kernel->sub(kernel->mul(kernel->mkConst(9), kernel->pow(xv, 2)),
+                         kernel->mkConst(49)), Relation::Gt}
+        };
+        const auto model = PartialLinearModelSearch::trySolve(constraints, *kernel);
+        REQUIRE(model.has_value());
+        CHECK(direction * model->at(x) > mpq_class(7, 3));
+        CHECK(kernel->sgnVarId(constraints[1].poly, *model) > 0);
+    }
+}

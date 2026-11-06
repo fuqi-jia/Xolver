@@ -469,7 +469,9 @@ TEST_CASE("Polynomial sign closure: exported facts retain current premises and c
         return fact.rel == Relation::Gt && fact.poly.terms() == (x * z).terms() && fact.premises.size() == 2;
     }));
 
-    std::vector<SignRefuteConstraint> oversized(129, {x, Relation::Geq, SatLit::positive(1)});
+    std::vector<SignRefuteConstraint> oversized;
+    for (VarId variableId = 0; variableId < 129; ++variableId)
+        constraint(oversized, variable(variableId), Relation::Geq);
     PolynomialSignStatistics statistics;
     CHECK_FALSE(refuteByPolynomialSignClosure(oversized, &statistics, {}, &consequences));
     CHECK(statistics.exhausted);
@@ -479,6 +481,63 @@ TEST_CASE("Polynomial sign closure: exported facts retain current premises and c
     constraint(constraints, x, Relation::Gt);
     REQUIRE(refuteByPolynomialSignClosure(constraints, nullptr, {}, &consequences));
     CHECK(consequences.empty());
+}
+
+TEST_CASE("Canonical sign context: repeated equations preserve explained nonlinear refutation") {
+    const auto u = variable(0), x = variable(1), y = variable(2), s = variable(3);
+    std::vector<SignRefuteConstraint> constraints;
+    for (int repeat = 0; repeat < 129; ++repeat)
+        constraint(constraints, u * (s - x) * constant(repeat % 2 ? -3 : 2), Relation::Eq);
+    const auto guard = constraints.size();
+    constraint(constraints, u, Relation::Gt);
+    constraint(constraints, x, Relation::Gt);
+    constraint(constraints, y, Relation::Gt);
+    constraint(constraints, u * (s + y), Relation::Eq);
+    PolynomialSignStatistics statistics;
+    auto conflict = refuteByPolynomialSignClosure(constraints, &statistics);
+    REQUIRE(conflict);
+    CHECK_FALSE(statistics.exhausted);
+    CHECK(statistics.rounds > 0);
+    checkReasons(constraints, *conflict);
+
+    constraints[guard].rel = Relation::Geq;
+    constraints[guard].reason = SatLit::negative(1000);
+    const std::unordered_map<VarId, mpq_class> point{{0, 0}, {1, 1}, {2, 1}, {3, 0}};
+    for (const auto& source : constraints) REQUIRE(holds(source, point));
+    CHECK_FALSE(refuteByPolynomialSignClosure(constraints));
+    constraints[guard].rel = Relation::Gt;
+    conflict = refuteByPolynomialSignClosure(constraints);
+    REQUIRE(conflict);
+    checkReasons(constraints, *conflict);
+    CHECK(std::find(conflict->begin(), conflict->end(), SatLit::negative(1000)) != conflict->end());
+    CHECK(std::find(conflict->begin(), conflict->end(), SatLit::positive(130)) == conflict->end());
+}
+
+TEST_CASE("Canonical sign context: scaled source aliases retain strict product consequences") {
+    const auto x = variable(0), y = variable(1);
+    for (const bool integer : {false, true}) {
+        std::vector<SignRefuteConstraint> constraints;
+        for (int repeat = 0; repeat < 129; ++repeat) {
+            const auto scale = Polynomial::fromConstant(mpq_class(repeat % 5 + 1, 3));
+            constraint(constraints, x * y * scale, Relation::Geq);
+        }
+        constraint(constraints, x * y, Relation::Neq);
+        PolynomialSignStatistics statistics;
+        std::vector<PolynomialConsequence> consequences;
+        CHECK_FALSE(refuteByPolynomialSignClosure(constraints, &statistics,
+            {.allInteger = integer}, &consequences));
+        CHECK_FALSE(statistics.exhausted);
+        REQUIRE(std::any_of(consequences.begin(), consequences.end(), [&](const auto& fact) {
+            return fact.rel == Relation::Gt && fact.poly.terms() == (x * y).terms();
+        }));
+        const std::unordered_map<VarId, mpq_class> point{{0, 1}, {1, 1}};
+        for (const auto& fact : consequences) {
+            CHECK(holds({fact.poly, fact.rel, {}}, point));
+            for (const auto premise : fact.premises)
+                CHECK(std::any_of(constraints.begin(), constraints.end(),
+                    [&](const auto& source) { return source.reason == premise; }));
+        }
+    }
 }
 
 TEST_CASE("Polynomial sign closure: weighted squares retain weak and strict sign premises") {

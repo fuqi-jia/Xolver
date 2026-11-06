@@ -873,6 +873,8 @@ Result Solver::Impl::checkSatGround() {
                     << " residue_exhaustions=" << stats.residueExhaustions
                     << " linear_calls=" << stats.linearCalls << " linear_rows=" << stats.linearConstraints
                     << " linear_sign_facts=" << stats.linearSignFacts
+                    << " linear_monomial_products=" << stats.linearMonomialProducts
+                    << " linear_monomial_checks=" << stats.linearMonomialChecks
                     << " linear_disequality_checks=" << stats.linearDisequalityChecks
                     << " linear_exhaustions=" << stats.linearExhaustions << " linear_us=" << stats.linearMicroseconds
                     << " exhausted=" << stats.exhausted << " refuted=" << refuted << " us="

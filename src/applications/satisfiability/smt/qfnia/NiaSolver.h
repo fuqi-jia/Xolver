@@ -37,6 +37,7 @@ class CdcacCore;        // integer-aware CDCAC (libpoly-gated; constructed in .c
 class AlgebraBackend;
 class NiaLinearDecider; // embedded bounded LIA model search (nia.linear-decide; own TU)
 class PolynomialLinearRefuter;
+class PresolveProjection;
 namespace farkas { struct FarkasProfile; struct FarkasOrContext; }
 
 /**
@@ -147,6 +148,8 @@ private:
     BoundedNiaSolver bounded_;
     NiaLocalSearch localSearch_;
     bitblast::BitBlastSolver bitBlast_;
+    std::unique_ptr<PresolveProjection> presolveProjection_;
+    bitblast::BitBlastResult solveBitBlastContext();
     ProductPositivityReasoner productPositivity_;
     GcdDivisibilityReasoner gcdDivisibility_;
     ModularResidueReasoner modularResidue_;
@@ -271,6 +274,7 @@ private:
         const farkas::FarkasProfile& profile, bool& notRefutable);
     std::optional<TheoryCheckResult> stageLocalSearch(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stagePendingLemma(TheoryLemmaStorage&, TheoryEffort);
+    std::optional<TheoryCheckResult> stageFiniteDomainSplit(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageBranch(TheoryLemmaStorage&, TheoryEffort);
 
     // nativeTerms_, sharedTermRegistry_, sharedTermToVarName_, getVarNameForSharedTerm
@@ -313,10 +317,11 @@ private:
     static constexpr int MAX_UNBOUNDED_SPLITS = 1;
 
     bool relationSatisfied(const mpq_class& val, Relation rel) const;
+    enum class BranchScope { Any, MixedFinite };
     std::optional<TheoryLemma> buildBranchLemma(
         const std::vector<NormalizedNiaConstraint>& constraints,
         const DomainStore& domains,
-        TheoryLemmaStorage& lemmaDb);
+        TheoryLemmaStorage& lemmaDb, BranchScope scope);
 };
 
 } // namespace xolver

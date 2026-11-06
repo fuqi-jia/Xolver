@@ -1,5 +1,6 @@
 #include "base/RuntimeConfig.h"
 #include "search/bitblast/PolyBitBlaster.h"
+#include "algebra/poly/CommonMonomialFactor.h"
 #include "base/EnvParam.h"
 #include <algorithm>
 #include <cstdlib>
@@ -141,33 +142,16 @@ SatLit PolyBitBlaster::encodeConstraint(const NormalizedNiaConstraint& c) {
         // p = m*q: comparing p with zero needs the factors' zero/sign bits,
         // not the magnitude of their product. Retain m=0 explicitly: cancelling
         // a possibly-zero factor would change both equalities and inequalities.
-        std::map<VarId, int> common(terms->front().powers.begin(), terms->front().powers.end());
-        for (size_t i = 1; i < terms->size() && !common.empty(); ++i) {
-            for (auto it = common.begin(); it != common.end();) {
-                const auto& powers = (*terms)[i].powers;
-                const auto power = std::find_if(powers.begin(), powers.end(),
-                    [&](const auto& entry) { return entry.first == it->first; });
-                if (power == powers.end()) it = common.erase(it);
-                else { it->second = std::min(it->second, power->second); ++it; }
-            }
-        }
-        if (!common.empty()) {
+        if (const auto factor = factorCommonMonomial(*terms)) {
             SatLit factorZero = enc_.constFalse();
             SatLit factorNegative = enc_.constFalse();
-            for (const auto& [variable, exponent] : common) {
+            for (const auto& [variable, exponent] : factor->powers) {
                 const auto& bits = varBits_.at(std::string(kernel_.varName(variable)));
                 factorZero = enc_.orGate(factorZero, enc_.isZero(bits));
                 if (exponent % 2 != 0)
                     factorNegative = enc_.xorGate(factorNegative, bits.sign());
             }
-            for (auto& term : *terms) {
-                for (auto& [variable, exponent] : term.powers) {
-                    const auto found = common.find(variable);
-                    if (found != common.end()) exponent -= found->second;
-                }
-                std::erase_if(term.powers, [](const auto& power) { return power.second == 0; });
-            }
-            const auto quotient = encodeSum(*terms);
+            const auto quotient = encodeSum(factor->quotient);
             const auto zero = enc_.orGate(factorZero, enc_.isZero(quotient));
             const auto negative = enc_.andGate(zero.negated(),
                 enc_.xorGate(factorNegative, quotient.sign()));

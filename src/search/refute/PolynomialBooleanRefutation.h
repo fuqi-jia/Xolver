@@ -16,6 +16,7 @@ struct PolynomialBooleanStatistics {
     size_t linearCalls = 0;
     size_t linearConstraints = 0;
     size_t linearSignFacts = 0;
+    size_t linearMonomialProducts = 0, linearMonomialChecks = 0;
     size_t linearDisequalityChecks = 0;
     size_t linearExhaustions = 0;
     long long linearMicroseconds = 0;

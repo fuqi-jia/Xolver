@@ -20,6 +20,7 @@ namespace nla { class NlaCutsRunner; }
 class TheoryAtomRegistry;
 class LibpolyBackend;  // Algebra backend for cylindrical coverings.
 class PolynomialLinearRefuter;
+class PresolveProjection;
 
 /**
  * NRA (Nonlinear Real Arithmetic) theory solver.
@@ -38,6 +39,7 @@ public:
 
     // Expose kernel so Atomizer can share the same instance.
     PolynomialKernel* kernel() const { return kernel_.get(); }
+    void setRegistry(TheoryAtomRegistry* registry) { registry_ = registry; }
 
     // NRA is a facade over CdcacSolver with its own active-literal
     // tracking (activeLits_/trail_/activeSet_), so it overrides
@@ -114,10 +116,12 @@ private:
     };
 
     std::unique_ptr<PolynomialKernel> kernel_;
+    TheoryAtomRegistry* registry_ = nullptr;
     std::unique_ptr<nla::NlaCutsRunner> nlaCuts_;
     std::unique_ptr<PolynomialConverter> converter_;
     CdcacSolver engine_;
     std::unique_ptr<PolynomialLinearRefuter> linearRefuter_;
+    std::unique_ptr<PresolveProjection> presolveProjection_;
     // libpoly hardening: decline the CDCAC path (→ unknown, sound) on inputs above
     // these thresholds, preventing libpoly blowup/OOM on pathological systems.
     // 0 = disabled (default ⇒ no corpus impact); tuned on the benchmark set.

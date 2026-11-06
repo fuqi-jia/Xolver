@@ -1,6 +1,7 @@
 #include "base/RuntimeConfig.h"
 #include "search/nra/reasoners/NlaCutsRunner.h"
 #include "applications/satisfiability/smt/qfnia/NiaSolver.h"
+#include "search/presolve/PresolveProjection.h"
 #include <algorithm>
 #include "search/dl/DifferenceGraph.h"
 #include "search/dl/BellmanFord.h"
@@ -133,6 +134,10 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     addFull("nia.linear-relaxation", &NiaSolver::stageLinearRelaxation);
     add("nia.presolve", &NiaSolver::stagePresolveFixpoint);
     addFull("nia.sign-refute", &NiaSolver::stageSignRefute);
+    // Finite integer factors can partition an unbounded nonlinear context.
+    // Publish their complete covers before incomplete candidate searches;
+    // each selected branch supplies exact values/bounds to the next check.
+    addFull("nia.finite-domain-split", &NiaSolver::stageFiniteDomainSplit);
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nia.partial-linear-model",
         [this](TheoryLemmaStorage&, TheoryEffort) -> std::optional<TheoryCheckResult> {
@@ -141,12 +146,25 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
             // context instead of disabling completion in theory combinations.
             std::vector<PartialLinearModelSearch::Constraint> constraints;
             constraints.reserve(normalized_.size());
-            for (const auto& constraint : normalized_)
-                constraints.push_back({constraint.poly, constraint.rel});
+            if (presolveProjection_) {
+                for (const auto& constraint : presolveProjection_->constraints())
+                    constraints.push_back({constraint.poly, constraint.rel});
+            } else {
+                for (const auto& constraint : normalized_)
+                    constraints.push_back({constraint.poly, constraint.rel});
+            }
             PartialLinearModelSearch::Statistics statistics;
             const auto started = std::chrono::steady_clock::now();
             auto model = PartialLinearModelSearch::trySolve(
                 constraints, *kernel_, true, &statistics);
+            if (presolveProjection_ && constraints.empty())
+                model = std::unordered_map<VarId, mpq_class>{};
+            if (model && presolveProjection_) {
+                try {
+                    WorkBudget work(0);
+                    if (!presolveProjection_->reconstruct(*model, work)) model.reset();
+                } catch (const ResourceExhausted&) { model.reset(); }
+            }
             bool accepted = false;
             IntegerModel point;
             if (model) {
@@ -264,6 +282,7 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
 }
 
 void NiaSolver::onReset() {
+    presolveProjection_.reset();
     // Base clears state_.trail + its pending slot; NIA clears its own
     // polynomial stack, active literal set, level-tagged pendings, and
     // combination state.
@@ -295,6 +314,7 @@ void NiaSolver::assertLit(const TheoryAtomRecord& atom, bool value,
     // Preserve the separately validated whole-formula Farkas witness, but do
     // not expose a stale local point to model-based theory combination.
     currentModel_.reset();
+    presolveProjection_.reset();
     if (r == ActiveLiteralSet::InsertResult::OppositePolarity) {
         const bool oppDiag = xolver::config::read<xolver::config::ReadKind::Presence>("NIA_OPP_DIAG");
         if (oppDiag) {
@@ -342,6 +362,7 @@ void NiaSolver::assertLit(const TheoryAtomRecord& atom, bool value,
 }
 
 void NiaSolver::onBacktrack(int level) {
+    presolveProjection_.reset();
     // Base already removed state_.trail entries with level > target.
     // Roll back normal atoms in level order. Interface constraints have their
     // own level-tagged storage and are pruned below.

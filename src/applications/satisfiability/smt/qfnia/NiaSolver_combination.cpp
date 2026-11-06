@@ -1,5 +1,6 @@
 #include "base/RuntimeConfig.h"
 #include "applications/satisfiability/smt/qfnia/NiaSolver.h"
+#include "search/presolve/PresolveProjection.h"
 #include <algorithm>
 #include "search/dl/DifferenceGraph.h"
 #include "search/dl/BellmanFord.h"
@@ -63,6 +64,7 @@ TheoryCheckResult NiaSolver::assertInterfaceEquality(
         return TheoryCheckResult::consistent();
 
     currentModel_.reset();
+    presolveProjection_.reset();
     interfaceEqualities_.push_back({a, b, reason, level, cc.diff, Relation::Eq});
     return TheoryCheckResult::consistent();
 }
@@ -85,6 +87,7 @@ TheoryCheckResult NiaSolver::assertInterfaceDisequality(
         return TheoryCheckResult::consistent();
 
     currentModel_.reset();
+    presolveProjection_.reset();
     interfaceDisequalities_.push_back({a, b, reason, level, cc.diff, Relation::Neq});
     return TheoryCheckResult::consistent();
 }

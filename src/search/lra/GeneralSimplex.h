@@ -242,6 +242,12 @@ public:
         std::vector<std::optional<DeltaRational>> values_;
         std::vector<std::vector<int>> dependencies_;
         std::vector<std::vector<BoundReason>> premises_;
+        struct ProofGroup {
+            std::vector<int> dependencies;
+            std::vector<BoundReason> premises;
+        };
+        std::vector<ProofGroup> groups_;
+        std::vector<int> proofGroup_;
     };
     FixedValueAnalysis analyzeFixedValues() const;
     // Reuse an immutable snapshot while bounds and tableau are unchanged.

@@ -17,15 +17,22 @@ struct PolynomialLinearStatistics {
     size_t retainedRows = 0;
     bool exhausted = false;
     size_t productFacts = 0, reusedProductRows = 0, closureChecks = 0;
+    size_t monomialProducts = 0, monomialDivisibilityChecks = 0;
     size_t signFacts = 0;
+    size_t multipliedCandidates = 0, multipliedFacts = 0, multipliedRows = 0;
     size_t disequalityChecks = 0;
+    size_t fixedMonomials = 0, zeroMonomials = 0;
 };
 
 // Refute a polynomial assignment by an exact linear relaxation over the reals.
 // Each canonical monomial starts as an independent shared column. Exact fixed
-// factors justify explained product identities; no candidate point or integer
-// rounding is used to derive them. This is sound for real and integer clients.
+// factors, including composite monomials, justify explained product identities;
+// no candidate point or integer rounding is used to derive them. A zero product
+// fixes its multiples without selecting which factor vanishes. These rules hold
+// for real and integer clients.
 // Explained factor bounds and even powers also constrain monomial signs.
+// Multiplying a source by a proved nonnegative monomial transports its order
+// through the current monomial vocabulary. Equalities need no sign premise.
 // A disequality conflicts only when the relaxation proves its excluded value
 // is forced. An unfixed relaxation point establishes no SAT result.
 // Returned literals are the original premises of an exact Simplex conflict.
@@ -38,7 +45,12 @@ public:
     std::optional<std::vector<SatLit>> check(
         const std::vector<SignRefuteConstraint>&,
         std::chrono::steady_clock::time_point deadline,
-        PolynomialLinearStatistics* = nullptr);
+        PolynomialLinearStatistics* = nullptr,
+        std::vector<PolynomialConsequence>* consequences = nullptr);
+    // Consequences are fresh explained equations for active composite monomials.
+    // They are exported only from fixed-value proofs, never a relaxation point.
+    // The optional output is cleared on entry, conflict and resource exhaustion;
+    // each premise is an original signed literal from this check's bound base.
     void reset();
     // Project the current relaxation point onto original variables, completing
     // variables without degree-one columns with zero. This is an UNTRUSTED

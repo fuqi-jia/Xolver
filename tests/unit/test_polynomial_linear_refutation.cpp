@@ -14,6 +14,87 @@ auto variable(VarId id) { return RationalPolynomial::fromVar(id, 1, 1); }
 auto constant(const mpq_class& value) { return RationalPolynomial::fromConstant(value); }
 }
 
+TEST_CASE("Multiplied relaxation: even monomial factors transport exact polynomial order") {
+    const auto x = variable(0), y = variable(1), s = variable(2), t = variable(3);
+    const auto factor = s * s * t * t;
+    std::vector<SignRefuteConstraint> constraints{
+        {(x - y) * constant(mpq_class(2, 3)), Relation::Geq, SatLit::negative(101)},
+        {factor * y - constant(1), Relation::Geq, SatLit::positive(503)},
+        {factor * x, Relation::Leq, SatLit::negative(9001)}};
+    PolynomialLinearRefuter refuter;
+    PolynomialLinearStatistics stats;
+    const auto conflict = refuter.check(constraints, deadline(), &stats);
+    REQUIRE(conflict);
+    for (const auto& source : constraints)
+        CHECK(std::find(conflict->begin(), conflict->end(), source.reason) != conflict->end());
+    // Removing the transported order leaves x=0, y=s=t=1 as a witness.
+    constraints.erase(constraints.begin());
+    CHECK_FALSE(refuter.check(constraints, deadline()));
+}
+
+TEST_CASE("Multiplied relaxation: equality transport needs no multiplier sign assumption") {
+    const auto x = variable(0), y = variable(1), s = variable(2), t = variable(3);
+    const auto factor = s * t;
+    std::vector<SignRefuteConstraint> constraints{
+        {x - y, Relation::Eq, SatLit::negative(11)},
+        {factor * y - constant(1), Relation::Geq, SatLit::positive(31)},
+        {factor * x, Relation::Leq, SatLit::negative(71)}};
+    PolynomialLinearRefuter refuter;
+    const auto conflict = refuter.check(constraints, deadline());
+    REQUIRE(conflict);
+    for (const auto& source : constraints)
+        CHECK(std::find(conflict->begin(), conflict->end(), source.reason) != conflict->end());
+    // The order alone permits a negative multiplier and reverses the products.
+    constraints[0].rel = Relation::Geq;
+    CHECK_FALSE(refuter.check(constraints, deadline()));
+    const std::unordered_map<VarId, mpq_class> point{{0, 0}, {1, -1}, {2, -1}, {3, 1}};
+    CHECK(constraints[0].poly.evaluateRational(point) >= 0);
+    CHECK(constraints[1].poly.evaluateRational(point) >= 0);
+    CHECK(constraints[2].poly.evaluateRational(point) <= 0);
+}
+
+TEST_CASE("Multiplied relaxation: strictness retains nonzero factor premises after withdrawal") {
+    const auto x = variable(0), y = variable(1), z = variable(2);
+    std::vector<SignRefuteConstraint> constraints{
+        {x - y, Relation::Gt, SatLit::negative(17)},
+        {z, Relation::Geq, SatLit::positive(37)},
+        {z * x - z * y, Relation::Leq, SatLit::negative(97)}};
+    PolynomialLinearRefuter refuter;
+    CHECK_FALSE(refuter.check(constraints, deadline())); // z=0 remains admissible.
+    constraints[1].rel = Relation::Gt;
+    const auto conflict = refuter.check(constraints, deadline());
+    REQUIRE(conflict);
+    for (const auto& source : constraints)
+        CHECK(std::find(conflict->begin(), conflict->end(), source.reason) != conflict->end());
+    constraints[1].rel = Relation::Leq;
+    constraints[1].reason = SatLit::negative(37);
+    CHECK_FALSE(refuter.check(constraints, deadline()));
+    refuter.reset();
+    CHECK_FALSE(refuter.check(constraints, deadline()));
+}
+
+TEST_CASE("Multiplied relaxation: signed upper orders and cancellation preserve caller context") {
+    const auto x = variable(0), y = variable(1), z = variable(2);
+    std::vector<SignRefuteConstraint> constraints{
+        {(x - y) * constant(mpq_class(7, 5)), Relation::Leq, SatLit::negative(41)},
+        {z, Relation::Geq, SatLit::positive(43)},
+        {z * x - z * y, Relation::Gt, SatLit::negative(47)}};
+    PolynomialLinearRefuter refuter;
+    PolynomialLinearStatistics stats;
+    CHECK_FALSE(refuter.check(constraints, std::chrono::steady_clock::now(), &stats));
+    CHECK(stats.exhausted);
+    const auto conflict = refuter.check(constraints, deadline(), &stats);
+    REQUIRE(conflict);
+    CHECK_FALSE(stats.exhausted);
+    for (const auto& source : constraints)
+        CHECK(std::find(conflict->begin(), conflict->end(), source.reason) != conflict->end());
+    constraints[0].rel = Relation::Geq;
+    CHECK_FALSE(refuter.check(constraints, deadline()));
+    PolynomialLinearRefuter limited(1);
+    CHECK_FALSE(limited.check(constraints, deadline(), &stats));
+    CHECK(stats.exhausted);
+}
+
 TEST_CASE("Polynomial linear refutation: coupled inequalities explain a nonlinear context conflict") {
     const auto x = variable(0), y = variable(1), z = variable(2);
     const std::vector<SignRefuteConstraint> constraints{
@@ -30,6 +111,101 @@ TEST_CASE("Polynomial linear refutation: coupled inequalities explain a nonlinea
     CHECK(stats.constraints == 4);
     CHECK(stats.variables == 4);
     CHECK_FALSE(stats.exhausted);
+}
+
+TEST_CASE("Proved polynomial facts: coupled bounds export zeros with original signed premises") {
+    const auto x = variable(0), y = variable(1), z = variable(2);
+    std::vector<SignRefuteConstraint> constraints{
+        {x, Relation::Geq, SatLit::positive(101)},
+        {y, Relation::Geq, SatLit::negative(503)},
+        {z, Relation::Geq, SatLit::positive(9001)},
+        {x * y + z, Relation::Leq, SatLit::negative(10007)}};
+    PolynomialLinearRefuter refuter;
+    PolynomialLinearStatistics stats;
+    std::vector<PolynomialConsequence> facts;
+    REQUIRE_FALSE(refuter.check(constraints, deadline(), &stats, &facts));
+    REQUIRE(facts.size() == 1);
+    CHECK(stats.fixedMonomials == 1);
+    CHECK(stats.zeroMonomials == 1);
+    const auto fact = facts.front();
+    CHECK(fact.rel == Relation::Eq);
+    CHECK(fact.poly.terms() == (x * y).terms());
+    REQUIRE(fact.premises.size() == 4);
+    for (const auto& source : constraints)
+        CHECK(std::find(fact.premises.begin(), fact.premises.end(), source.reason) != fact.premises.end());
+    const auto holds = [](const SignRefuteConstraint& source,
+                          const std::unordered_map<VarId, mpq_class>& point) {
+        const auto value = source.poly.evaluateRational(point);
+        return source.rel == Relation::Geq ? value >= 0 : value <= 0;
+    };
+    for (int a = -2; a <= 2; ++a) for (int b = -2; b <= 2; ++b) for (int c = -2; c <= 2; ++c) {
+        const std::unordered_map<VarId, mpq_class> point{{0, mpq_class(a, 3)},
+            {1, mpq_class(b, 3)}, {2, mpq_class(c, 3)}};
+        if (std::all_of(constraints.begin(), constraints.end(), [&](const auto& source) {
+                return holds(source, point);
+            })) CHECK(fact.poly.evaluateRational(point) == 0);
+    }
+    constraints[1].rel = Relation::Lt;
+    constraints[1].reason = SatLit::positive(503);
+    REQUIRE_FALSE(refuter.check(constraints, deadline(), &stats, &facts));
+    CHECK(facts.empty());
+    CHECK(stats.zeroMonomials == 0);
+    constraints[1].rel = Relation::Geq;
+    constraints[1].reason = SatLit::negative(503);
+    refuter.reset();
+    REQUIRE_FALSE(refuter.check(constraints, deadline(), &stats, &facts));
+    CHECK(facts.size() == 1);
+}
+
+TEST_CASE("Proved polynomial facts: fractional fixed values stay exact and point zeros are not proofs") {
+    const auto x = variable(0), y = variable(1);
+    std::vector<SignRefuteConstraint> constraints{
+        {x * y - constant(mpq_class(1, 3)), Relation::Eq, SatLit::negative(1001)},
+        {x, Relation::Geq, SatLit::positive(4001)},
+        {y, Relation::Geq, SatLit::positive(9001)}};
+    PolynomialLinearRefuter refuter;
+    PolynomialLinearStatistics stats;
+    std::vector<PolynomialConsequence> facts;
+    REQUIRE_FALSE(refuter.check(constraints, deadline(), &stats, &facts));
+    REQUIRE(facts.size() == 1);
+    CHECK(facts.front().poly.terms() == constraints.front().poly.terms());
+    CHECK(stats.fixedMonomials == 1);
+    CHECK(stats.zeroMonomials == 0);
+    CHECK(std::find(facts.front().premises.begin(), facts.front().premises.end(),
+                    constraints.front().reason) != facts.front().premises.end());
+    constraints.front().poly = x * y;
+    constraints.front().rel = Relation::Geq;
+    refuter.reset();
+    REQUIRE_FALSE(refuter.check(constraints, deadline(), &stats, &facts));
+    WorkBudget work;
+    const auto candidate = refuter.projectCandidate(constraints, work);
+    REQUIRE(candidate);
+    CHECK((x * y).evaluateRational(*candidate) == 0);
+    CHECK(facts.empty());
+    CHECK(stats.fixedMonomials == 0);
+    const std::unordered_map<VarId, mpq_class> other{{0, 1}, {1, 1}};
+    CHECK((x * y).evaluateRational(other) > 0);
+}
+
+TEST_CASE("Proved polynomial facts: conflict and exhausted checks discard earlier exported context") {
+    const auto x = variable(0), y = variable(1);
+    PolynomialLinearRefuter refuter;
+    PolynomialLinearStatistics stats;
+    std::vector<PolynomialConsequence> facts{{x * y, Relation::Eq, {SatLit::positive(777)}}};
+    CHECK(refuter.check({{x, Relation::Geq, SatLit::positive(101)},
+        {x, Relation::Lt, SatLit::negative(503)}}, deadline(), &stats, &facts));
+    CHECK(facts.empty());
+    facts.push_back({x * y, Relation::Eq, {SatLit::positive(777)}});
+    CHECK_FALSE(refuter.check({{x * y, Relation::Eq, SatLit::positive(101)}},
+        std::chrono::steady_clock::now() - std::chrono::milliseconds(1), &stats, &facts));
+    CHECK(stats.exhausted);
+    CHECK(facts.empty());
+    CHECK(stats.fixedMonomials == 0);
+    refuter.reset();
+    CHECK_FALSE(refuter.check({{x * y - constant(2), Relation::Eq, SatLit::positive(503)}},
+        deadline(), &stats, &facts));
+    REQUIRE(facts.size() == 1);
+    CHECK(facts.front().poly.terms() == (x * y - constant(2)).terms());
 }
 
 TEST_CASE("Polynomial relaxation projection preserves exact infinitesimals and current variables") {
@@ -186,7 +362,9 @@ TEST_CASE("Polynomial monomial signs refute a coupled zero sum and retain every 
     auto conflict = refuter.check(sources, deadline(), &statistics);
     REQUIRE(conflict);
     CHECK(statistics.signFacts >= 2);
-    CHECK(statistics.disequalityChecks >= 2);
+    // The tight face proves the excluded product value directly, so neither
+    // strict alternative needs a temporary feasibility check.
+    CHECK(statistics.disequalityChecks == 0);
     for (const auto& source : sources)
         CHECK(std::find(conflict->begin(), conflict->end(), source.reason) != conflict->end());
     const auto removed = sources[2];
@@ -536,4 +714,100 @@ TEST_CASE("Polynomial linear refutation: zero products avoid huge powers and opt
     constraints[0].poly = x - constant(1);
     CHECK_FALSE(refuter.check(constraints, deadline(), &stats));
     CHECK_FALSE(stats.exhausted);
+}
+
+TEST_CASE("Polynomial fixed monomials: exact product values constrain every divisible word") {
+    const auto x = variable(0), y = variable(1), z = variable(2);
+    for (const mpq_class value : {mpq_class(0), mpq_class(2), mpq_class(-3), mpq_class(2, 3)}) {
+        CAPTURE(value.get_str());
+        const std::vector<SignRefuteConstraint> constraints{
+            {x * y - constant(value), Relation::Eq, SatLit::negative(1)},
+            {x * y * z - constant(value) * z, Relation::Neq, SatLit::positive(2)}};
+        PolynomialLinearStatistics statistics;
+        const auto conflict = PolynomialLinearRefuter{}.check(constraints, deadline(), &statistics);
+        REQUIRE(conflict);
+        CHECK(conflict->size() == 2);
+        CHECK(statistics.productFacts > 0);
+        CHECK_FALSE(statistics.exhausted);
+        for (const auto& source : constraints)
+            CHECK(std::find(conflict->begin(), conflict->end(), source.reason) != conflict->end());
+    }
+}
+
+TEST_CASE("Polynomial fixed monomials: coupled values retain current explanations across withdrawal") {
+    const auto x = variable(0), y = variable(1), z = variable(2), w = variable(3);
+    std::vector<SignRefuteConstraint> constraints{
+        {x * y + w - constant(5), Relation::Eq, SatLit::positive(1)},
+        {w - constant(5), Relation::Eq, SatLit::negative(2)},
+        {x * y * z, Relation::Neq, SatLit::negative(3)}};
+    PolynomialLinearRefuter refuter;
+    auto conflict = refuter.check(constraints, deadline());
+    REQUIRE(conflict);
+    CHECK(conflict->size() == 3);
+    for (const auto& source : constraints)
+        CHECK(std::find(conflict->begin(), conflict->end(), source.reason) != conflict->end());
+    CHECK_FALSE(refuter.check({constraints[0], constraints[2]}, deadline()));
+    constraints[1].reason = SatLit::positive(20);
+    conflict = refuter.check(constraints, deadline());
+    REQUIRE(conflict);
+    CHECK(std::find(conflict->begin(), conflict->end(), SatLit::negative(2)) == conflict->end());
+    CHECK(std::find(conflict->begin(), conflict->end(), SatLit::positive(20)) != conflict->end());
+    constraints[1].poly = w - constant(4);
+    CHECK_FALSE(refuter.check(constraints, deadline())); // x=y=z=1,w=4
+    refuter.reset();
+    CHECK_FALSE(refuter.check({}, deadline()));
+}
+
+TEST_CASE("Polynomial fixed monomials: repeated factors preserve exact signed rational powers") {
+    const auto x = variable(0), y = variable(1), z = variable(2);
+    for (const mpq_class value : {mpq_class(0), mpq_class(-2, 3), mpq_class(1), mpq_class(2)}) {
+        mpq_class raised = value;
+        for (int exponent = 2; exponent <= 4; ++exponent) {
+            raised *= value;
+            CAPTURE(value.get_str());
+            CAPTURE(exponent);
+            const std::vector<SignRefuteConstraint> constraints{
+                {x * y - constant(value), Relation::Eq, SatLit::positive(1)},
+                {x.pow(exponent) * y.pow(exponent) * z - constant(raised) * z,
+                    Relation::Neq, SatLit::negative(2)}};
+            const auto conflict = PolynomialLinearRefuter{}.check(constraints, deadline());
+            REQUIRE(conflict);
+            CHECK(conflict->size() == 2);
+        }
+    }
+}
+
+TEST_CASE("Polynomial fixed monomials: overlapping factors and feasible points cannot create conflicts") {
+    const auto x = variable(0), y = variable(1), z = variable(2);
+    PolynomialLinearRefuter refuter;
+    for (int a = -2; a <= 2; ++a) for (int b = -2; b <= 2; ++b) for (int c = -1; c <= 1; ++c) {
+        const std::unordered_map<VarId, mpq_class> point{{0, a}, {1, b}, {2, mpq_class(c, 3)}};
+        std::vector<SignRefuteConstraint> constraints;
+        for (const auto& polynomial : {x * y, x * x * y, x * z, x * y * y * z, y * z * z})
+            constraints.push_back({polynomial - constant(polynomial.evaluateRational(point)), Relation::Eq,
+                SatLit(static_cast<SatVar>(constraints.size() + 1), constraints.size() % 2)});
+        for (const auto& source : constraints) REQUIRE(source.poly.evaluateRational(point) == 0);
+        CHECK_FALSE(refuter.check(constraints, deadline()));
+    }
+    CHECK_FALSE(refuter.check({
+        {x * y, Relation::Eq, SatLit::positive(1)},
+        {x * z - constant(1), Relation::Eq, SatLit::positive(2)}}, deadline())); // x=z=1,y=0
+}
+
+TEST_CASE("Polynomial fixed monomials: huge powers respect exact values and construction limits") {
+    const auto x = variable(0), y = variable(1), z = variable(2);
+    const auto large = x.pow(2147483647) * y.pow(2147483647) * z;
+    PolynomialLinearRefuter refuter(0);
+    PolynomialLinearStatistics statistics;
+    const auto conflict = refuter.check({
+        {x * y - constant(1), Relation::Eq, SatLit::positive(1)},
+        {large - z, Relation::Neq, SatLit::negative(2)}}, deadline(), &statistics);
+    REQUIRE(conflict);
+    CHECK_FALSE(statistics.exhausted);
+    CHECK_FALSE(refuter.check({
+        {x * y - constant(2), Relation::Eq, SatLit::positive(1)},
+        {large - z, Relation::Neq, SatLit::negative(2)}}, deadline(), &statistics));
+    CHECK(statistics.exhausted);
+    CHECK_FALSE(refuter.check({}, deadline(), &statistics));
+    CHECK_FALSE(statistics.exhausted);
 }

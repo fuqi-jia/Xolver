@@ -4,7 +4,10 @@
 #include "search/refute/PolynomialSignClosure.h"
 #include "search/refute/PolynomialConeRefutation.h"
 #include "search/refute/PolynomialLinearRefutation.h"
+#include "search/refute/PolynomialProductSplit.h"
 #include "applications/satisfiability/smt/qfnia/NiaSolver.h"
+#include "search/presolve/PresolveProjection.h"
+#include "search/refute/PresolveProjectionRefutation.h"
 #include <algorithm>
 #include "search/dl/DifferenceGraph.h"
 #include "search/dl/BellmanFord.h"
@@ -48,7 +51,7 @@
 namespace xolver {
 
 std::optional<TheoryCheckResult> NiaSolver::stageLinearRelaxation(
-    TheoryLemmaStorage&, TheoryEffort) {
+    TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
     std::vector<SignRefuteConstraint> constraints;
     constraints.reserve(normalized_.size());
     for (const auto& source : normalized_) {
@@ -65,7 +68,9 @@ std::optional<TheoryCheckResult> NiaSolver::stageLinearRelaxation(
     // only unconditional definitions across branches.
     PolynomialLinearStatistics statistics;
     const auto started = std::chrono::steady_clock::now();
-    auto conflict = linearRefuter_->check(constraints, wall::deadline(), &statistics);
+    std::vector<PolynomialConsequence> consequences;
+    auto conflict = linearRefuter_->check(constraints, wall::deadline(), &statistics,
+        effort == TheoryEffort::Full && registry_ ? &consequences : nullptr);
     bool accepted = false;
     if (!conflict && !statistics.exhausted) {
         WorkBudget work;
@@ -92,8 +97,15 @@ std::optional<TheoryCheckResult> NiaSolver::stageLinearRelaxation(
             << " new_rows=" << statistics.newRows << " reused_rows=" << statistics.reusedRows
             << " retained_rows=" << statistics.retainedRows << " exhausted=" << statistics.exhausted
             << " product_facts=" << statistics.productFacts
+            << " monomial_products=" << statistics.monomialProducts
+            << " monomial_checks=" << statistics.monomialDivisibilityChecks
             << " reused_products=" << statistics.reusedProductRows
             << " closure_checks=" << statistics.closureChecks
+            << " multiplied_candidates=" << statistics.multipliedCandidates
+            << " multiplied_facts=" << statistics.multipliedFacts
+            << " multiplied_rows=" << statistics.multipliedRows
+            << " fixed_monomials=" << statistics.fixedMonomials
+            << " zero_monomials=" << statistics.zeroMonomials
             << " conflict=" << bool(conflict) << " accepted=" << accepted << " us="
             << std::chrono::duration_cast<std::chrono::microseconds>(
                 std::chrono::steady_clock::now() - started).count() << '\n';
@@ -101,6 +113,15 @@ std::optional<TheoryCheckResult> NiaSolver::stageLinearRelaxation(
     if (conflict)
         return TheoryCheckResult::mkConflict(TheoryConflict{std::move(*conflict)});
     if (accepted) return TheoryCheckResult::consistent();
+    for (const auto& fact : consequences) {
+        // A nonzero constant term excludes a common monomial factor.
+        if (fact.poly.isConstant() || fact.poly.terms().front().first.empty()) continue;
+        const auto polynomial = fact.poly.toPrimitiveInteger(*kernel_);
+        if (polynomial.ok())
+            if (auto lemma = splitZeroPolynomialProduct(polynomial.poly, fact.premises,
+                    *kernel_, TheoryId::NIA, *registry_, lemmaDb))
+                return TheoryCheckResult::mkLemma(std::move(*lemma));
+    }
     return std::nullopt;
 }
 
@@ -109,8 +130,29 @@ std::optional<TheoryCheckResult> NiaSolver::stageLinearRelaxation(
 // private state via the declarations in the corresponding header.
 // Behavior is byte-identical to the pre-split definitions.
 
-std::optional<TheoryCheckResult> NiaSolver::stageSignRefute(TheoryLemmaStorage&, TheoryEffort) {
-    if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty()) return std::nullopt;
+std::optional<TheoryCheckResult> NiaSolver::stageSignRefute(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
+    if (presolveProjection_ && effort == TheoryEffort::Full) {
+        if (!linearRefuter_) linearRefuter_ = std::make_unique<PolynomialLinearRefuter>(0);
+        if (auto conflict = refutePresolveProjection(*presolveProjection_, *kernel_,
+                *linearRefuter_, {.allInteger = true}))
+            return TheoryCheckResult::mkConflict(TheoryConflict{std::move(*conflict)});
+    }
+    const auto splitProducts = [&]() -> std::optional<TheoryCheckResult> {
+        if (effort != TheoryEffort::Full || !registry_) return std::nullopt;
+        if (presolveProjection_)
+            for (const auto& source : presolveProjection_->constraints())
+                if (source.rel == Relation::Eq)
+                    if (auto lemma = splitZeroPolynomialProduct(source.poly, source.premises,
+                            *kernel_, TheoryId::NIA, *registry_, lemmaDb))
+                        return TheoryCheckResult::mkLemma(std::move(*lemma));
+        for (const auto& source : active_)
+            if (source.rel == Relation::Eq && source.poly != NullPoly)
+                if (auto lemma = splitZeroPolynomialProduct(source.poly, {source.reason},
+                        *kernel_, TheoryId::NIA, *registry_, lemmaDb))
+                    return TheoryCheckResult::mkLemma(std::move(*lemma));
+        return std::nullopt;
+    };
+    if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty()) return splitProducts();
     std::vector<SignRefuteConstraint> constraints;
     constraints.reserve(active_.size());
     for (const auto& source : active_) {
@@ -127,6 +169,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageSignRefute(TheoryLemmaStorage&,
         if (!profile.empty()) {
             std::ofstream out(profile.string() + ".polynomial-sign.log", std::ios::app);
             out << "rounds=" << stats.rounds << " facts=" << stats.inferredFacts
+                << " sources=" << stats.sourceConstraints << " input_facts=" << stats.inputFacts
                 << " substitutions=" << stats.substitutions << " cancellations=" << stats.cancellations
                 << " divisions=" << stats.divisions << " eliminations=" << stats.eliminations
                 << " var_queries=" << stats.variableLookups << " var_hits=" << stats.variableIndexHits
@@ -139,7 +182,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageSignRefute(TheoryLemmaStorage&,
     if (!conflict) conflict = refuteByPolynomialCone(constraints,
         wall::deadline(), {.allInteger = true});
     if (!conflict) conflict = refuteByQuadraticSigns(constraints);
-    if (!conflict) return std::nullopt;
+    if (!conflict) return splitProducts();
     return TheoryCheckResult::mkConflict(TheoryConflict{std::move(*conflict)});
 }
 

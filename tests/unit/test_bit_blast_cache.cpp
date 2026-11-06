@@ -58,6 +58,287 @@ public:
         throw std::runtime_error("missing early bit-blast stage");
     }
 };
+
+struct FinitePartitionFixture {
+    std::unique_ptr<SatSolver> sat = createSatSolver();
+    Atomizer atomizer{*sat};
+    TheoryAtomRegistry registry;
+    TheoryManager theories;
+    TheoryLemmaDatabase db;
+    CadicalBackend& backend = dynamic_cast<CadicalBackend&>(*sat);
+    CadicalTheoryPropagator propagator{registry, theories, db, backend};
+    PolynomialKernel* kernel;
+    VarId parameterId;
+    PolyId parameter, other;
+    std::unique_ptr<BitBlastStageProbe> solver;
+
+    FinitePartitionFixture() {
+        registry.setContext(sat.get(), &atomizer);
+        backend.connectPropagator(&propagator);
+        auto owned = createPolynomialKernel();
+        kernel = owned.get();
+        parameterId = kernel->getOrCreateVar("p");
+        parameter = kernel->mkVar(parameterId);
+        other = kernel->mkVar(kernel->getOrCreateVar("x"));
+        solver = std::make_unique<BitBlastStageProbe>(std::move(owned));
+        solver->setRegistry(&registry);
+    }
+    ~FinitePartitionFixture() { backend.disconnectPropagator(); }
+
+    void add(PolyId polynomial, Relation relation, const mpz_class& rhs, int level = 1) {
+        const auto reason = SatLit::positive(sat->newVar());
+        TheoryAtomRecord atom{reason.var, TheoryId::NIA, false, NullExpr,
+            PolynomialAtomPayload{polynomial, relation, RealValue::fromMpq(mpq_class(rhs))}};
+        solver->assertLit(atom, true, level, reason);
+    }
+    void bounds(const mpz_class& lower, const mpz_class& upper) {
+        add(parameter, Relation::Geq, lower);
+        add(parameter, Relation::Leq, upper);
+    }
+    void prepare() {
+        REQUIRE_FALSE(solver->runStage("nia.normalize", db));
+        REQUIRE_FALSE(solver->runStage("nia.domain", db));
+    }
+    void checkCover(const TheoryCheckResult& result, const mpz_class& lower, const mpz_class& upper) {
+        REQUIRE(result.kind == TheoryCheckResult::Kind::Lemma);
+        REQUIRE(result.lemmaOpt);
+        REQUIRE(result.lemmaOpt->lits.size() == 2);
+        std::optional<mpz_class> left, right;
+        for (const auto literal : result.lemmaOpt->lits) {
+            REQUIRE(literal.sign);
+            const auto* atom = registry.findBySatVar(literal.var);
+            REQUIRE(atom);
+            REQUIRE(std::holds_alternative<PolynomialAtomPayload>(atom->payload));
+            const auto& payload = std::get<PolynomialAtomPayload>(atom->payload);
+            const auto terms = kernel->terms(payload.poly);
+            REQUIRE(terms);
+            REQUIRE(terms->size() == 1);
+            REQUIRE(terms->front().coefficient == 1);
+            REQUIRE(terms->front().powers.size() == 1);
+            CHECK(terms->front().powers.front() == std::make_pair(parameterId, 1));
+            REQUIRE(payload.rhs.asRational().get_den() == 1);
+            if (payload.rel == Relation::Leq) left = payload.rhs.asRational().get_num();
+            else if (payload.rel == Relation::Geq) right = payload.rhs.asRational().get_num();
+            else FAIL("an integer partition must bound both sides");
+        }
+        REQUIRE(left);
+        REQUIRE(right);
+        CHECK(lower <= *left);
+        CHECK(*left < upper);
+        CHECK(*right == *left + 1);
+        for (const mpz_class& point : std::vector<mpz_class>{lower - 1, lower, *left, *right, upper, upper + 1}) {
+            CHECK((point <= *left || point >= *right));
+            CHECK_FALSE((point <= *left && point >= *right));
+        }
+    }
+};
+
+TEST_CASE("Presolve handoff: integer search reconstructs values beyond independent leaf widths") {
+    FinitePartitionFixture f;
+    const auto z = f.kernel->mkVar(f.kernel->getOrCreateVar("z"));
+    const mpz_class scale = (mpz_class(1) << 160) + 1;
+    const auto definition = f.kernel->sub(f.parameter,
+        f.kernel->add(f.kernel->mul(f.kernel->mkConst(scale), f.other), z));
+    // Repeated source reasons must not restore redundant independent leaves.
+    for (int i = 0; i < 52; ++i) f.add(definition, Relation::Eq, 0);
+    f.add(f.kernel->mul(f.other, z), Relation::Eq, 2);
+    f.prepare();
+    REQUIRE_FALSE(f.solver->runStage("nia.presolve", f.db));
+    const auto result = f.solver->runStage("nia.bit-blast-early", f.db);
+    REQUIRE(result);
+    REQUIRE(result->kind == TheoryCheckResult::Kind::Consistent);
+    const auto model = f.solver->getModel();
+    REQUIRE(model);
+    const mpz_class p(model->assignments.at("p"));
+    const mpz_class x(model->assignments.at("x"));
+    const mpz_class valueZ(model->assignments.at("z"));
+    CHECK(x * valueZ == 2);
+    CHECK(p == scale * x + valueZ);
+    CHECK(abs(p) > (mpz_class(1) << 128));
+    f.solver->backtrackToLevel(0);
+    const auto replacement = f.kernel->sub(f.parameter,
+        f.kernel->sub(z, f.kernel->mul(f.kernel->mkConst(scale), f.other)));
+    for (int i = 0; i < 52; ++i) f.add(replacement, Relation::Eq, 0);
+    f.add(f.kernel->mul(f.other, z), Relation::Eq, 2);
+    CHECK_FALSE(f.solver->getModel());
+    f.prepare();
+    REQUIRE_FALSE(f.solver->runStage("nia.presolve", f.db));
+    const auto second = f.solver->runStage("nia.bit-blast-early", f.db);
+    REQUIRE(second);
+    REQUIRE(second->kind == TheoryCheckResult::Kind::Consistent);
+    const auto rebuilt = f.solver->getModel();
+    REQUIRE(rebuilt);
+    const mpz_class newP(rebuilt->assignments.at("p"));
+    const mpz_class newX(rebuilt->assignments.at("x"));
+    const mpz_class newZ(rebuilt->assignments.at("z"));
+    CHECK(newX * newZ == 2);
+    CHECK(newP == -scale * newX + newZ);
+}
+}
+
+TEST_CASE("NIA finite partition: signed intervals make strict progress") {
+    const mpz_class large = mpz_class(1) << 180;
+    for (const auto& [lower, upper] : std::vector<std::pair<mpz_class, mpz_class>>{
+            {-2, -1}, {-7, -6}, {-10, -1}, {-2, 1}, {0, 1}, {1, 2},
+            {-large - 2, -large - 1}, {large, large + 1}}) {
+        FinitePartitionFixture f;
+        f.bounds(lower, upper);
+        f.prepare();
+        const auto partition = f.solver->runStage("nia.branch", f.db);
+        REQUIRE(partition);
+        f.checkCover(*partition, lower, upper);
+    }
+}
+
+TEST_CASE("NIA finite partition: mixed factors publish a complete cover only at full effort") {
+    FinitePartitionFixture f;
+    f.add(f.kernel->mul(f.parameter, f.other), Relation::Geq, 0, 0);
+    f.bounds(-3, -2);
+    f.prepare();
+    CHECK_FALSE(f.solver->runStageAt("nia.finite-domain-split", f.db, TheoryEffort::Standard));
+    CHECK(f.registry.numAtomVars() == 0);
+    const auto partition = f.solver->runStage("nia.finite-domain-split", f.db);
+    REQUIRE(partition);
+    f.checkCover(*partition, -3, -2);
+    const auto registered = f.registry.numAtomVars();
+    CHECK_FALSE(f.solver->runStage("nia.finite-domain-split", f.db));
+    CHECK(f.registry.numAtomVars() == registered);
+}
+
+TEST_CASE("NIA finite partition: complete components and unrelated bounds need no early cover") {
+    for (int context = 0; context < 4; ++context) {
+        FinitePartitionFixture f;
+        f.bounds(0, context == 2 ? 0 : 1);
+        if (context == 0) {
+            f.add(f.other, Relation::Geq, 0);
+            f.add(f.other, Relation::Leq, 1);
+        }
+        const auto polynomial = context == 1 ? f.kernel->pow(f.other, 2) :
+            context == 3 ? f.kernel->add(f.parameter, f.other) :
+            f.kernel->mul(f.parameter, f.other);
+        f.add(polynomial, Relation::Geq, 0);
+        f.prepare();
+        CHECK_FALSE(f.solver->runStage("nia.finite-domain-split", f.db));
+        CHECK(f.registry.numAtomVars() == 0);
+    }
+}
+
+TEST_CASE("NIA finite partition: withdrawn bounds cannot restrict a later context") {
+    for (const bool reset : {false, true}) {
+        FinitePartitionFixture f;
+        const auto product = f.kernel->mul(f.parameter, f.other);
+        f.add(product, Relation::Geq, 0, 0);
+        f.bounds(-2, -1);
+        f.prepare();
+        const auto first = f.solver->runStage("nia.finite-domain-split", f.db);
+        REQUIRE(first);
+        f.checkCover(*first, -2, -1);
+        if (reset) {
+            f.solver->reset();
+            f.add(product, Relation::Geq, 0, 0);
+        } else f.solver->backtrackToLevel(0);
+        f.prepare();
+        CHECK_FALSE(f.solver->runStage("nia.finite-domain-split", f.db));
+        f.bounds(3, 4);
+        f.prepare();
+        const auto current = f.solver->runStage("nia.finite-domain-split", f.db);
+        REQUIRE(current);
+        f.checkCover(*current, 3, 4);
+    }
+}
+
+TEST_CASE("Polynomial product covers: zero equations publish only at full effort") {
+    FinitePartitionFixture f;
+    f.add(f.kernel->mul(f.parameter, f.other), Relation::Eq, 0);
+    f.prepare();
+    CHECK_FALSE(f.solver->runStageAt("nia.sign-refute", f.db, TheoryEffort::Standard));
+    CHECK(f.registry.numAtomVars() == 0);
+    const auto result = f.solver->runStage("nia.sign-refute", f.db);
+    REQUIRE(result);
+    REQUIRE(result->kind == TheoryCheckResult::Kind::Lemma);
+    REQUIRE(result->lemmaOpt);
+    const auto& lemma = *result->lemmaOpt;
+    CHECK(lemma.kind == LemmaKind::Entailment);
+    REQUIRE(lemma.lits.size() == 3);
+    size_t guards = 0, alternatives = 0;
+    for (const auto literal : lemma.lits) {
+        const auto* atom = f.registry.findBySatVar(literal.var);
+        if (!atom) { CHECK_FALSE(literal.sign); ++guards; continue; }
+        REQUIRE(literal.sign);
+        REQUIRE(std::holds_alternative<PolynomialAtomPayload>(atom->payload));
+        const auto& payload = std::get<PolynomialAtomPayload>(atom->payload);
+        CHECK(payload.rel == Relation::Eq);
+        CHECK(payload.rhs.asRational() == 0);
+        CHECK((payload.poly == f.parameter || payload.poly == f.other));
+        ++alternatives;
+    }
+    CHECK(guards == 1);
+    CHECK(alternatives == 2);
+    const auto atoms = f.registry.numAtomVars();
+    REQUIRE(f.solver->runStage("nia.sign-refute", f.db));
+    f.db.markInstalled(lemma);
+    CHECK_FALSE(f.solver->runStage("nia.sign-refute", f.db));
+    CHECK(f.registry.numAtomVars() == atoms);
+}
+
+TEST_CASE("Polynomial product covers: withdrawn equations cannot constrain later contexts") {
+    for (const bool reset : {false, true}) {
+        FinitePartitionFixture f;
+        const auto polynomial = f.kernel->mul(f.parameter, f.kernel->sub(f.other, f.kernel->mkOne()));
+        f.add(polynomial, Relation::Eq, 0);
+        f.prepare();
+        const auto result = f.solver->runStage("nia.sign-refute", f.db);
+        REQUIRE(result);
+        REQUIRE(result->lemmaOpt);
+        f.db.markInstalled(*result->lemmaOpt);
+        if (reset) f.solver->reset();
+        else f.solver->backtrackToLevel(0);
+        f.prepare();
+        CHECK_FALSE(f.solver->runStage("nia.sign-refute", f.db));
+        f.add(polynomial, Relation::Neq, 0);
+        f.prepare();
+        CHECK_FALSE(f.solver->runStage("nia.sign-refute", f.db));
+    }
+}
+
+TEST_CASE("Polynomial product covers: weak inequalities do not imply zero factors") {
+    for (const auto relation : {Relation::Geq, Relation::Leq, Relation::Neq}) {
+        FinitePartitionFixture f;
+        f.add(f.kernel->mul(f.parameter, f.other), relation, 0);
+        f.prepare();
+        CHECK_FALSE(f.solver->runStage("nia.sign-refute", f.db));
+        CHECK(f.registry.numAtomVars() == 0);
+    }
+}
+
+TEST_CASE("Proved product feedback: integer relaxation publishes a coupled zero proof") {
+    FinitePartitionFixture f;
+    const auto z = f.kernel->mkVar(f.kernel->getOrCreateVar("z"));
+    const auto w = f.kernel->mkVar(f.kernel->getOrCreateVar("w"));
+    const auto t = f.kernel->mkVar(f.kernel->getOrCreateVar("t"));
+    for (const auto variable : {f.parameter, f.other, z, w, t})
+        f.add(variable, Relation::Geq, 0);
+    f.add(f.kernel->add(f.kernel->mul(f.parameter, f.other), z), Relation::Leq, 0);
+    f.add(f.kernel->mul(w, t), Relation::Eq, 1);
+    f.prepare();
+    const auto result = f.solver->runStage("nia.linear-relaxation", f.db);
+    REQUIRE(result);
+    REQUIRE(result->kind == TheoryCheckResult::Kind::Lemma);
+    REQUIRE(result->lemmaOpt);
+    CHECK(result->lemmaOpt->lits.size() > 3);
+    size_t factors = 0;
+    for (const auto literal : result->lemmaOpt->lits) {
+        if (!literal.sign) { CHECK(literal.var <= 7); continue; }
+        const auto* atom = f.registry.findBySatVar(literal.var);
+        REQUIRE(atom);
+        const auto& payload = std::get<PolynomialAtomPayload>(atom->payload);
+        CHECK(payload.rel == Relation::Eq);
+        CHECK((payload.poly == f.parameter || payload.poly == f.other));
+        ++factors;
+    }
+    CHECK(factors == 2);
+    f.db.markInstalled(*result->lemmaOpt);
+    CHECK_FALSE(f.solver->runStage("nia.linear-relaxation", f.db));
 }
 
 TEST_CASE("Model completion request: cheap exact models avoid global search") {
@@ -291,6 +572,7 @@ TEST_CASE("NiaSolver: partial propagation preserves unpublished refinement state
     for (int repeat = 0; repeat < 8; ++repeat) {
         CHECK_FALSE(solver.runStageAt("nia.linearize", db, TheoryEffort::Standard));
         CHECK_FALSE(solver.runStageAt("nia.pending-lemma", db, TheoryEffort::Standard));
+        CHECK_FALSE(solver.runStageAt("nia.finite-domain-split", db, TheoryEffort::Standard));
         CHECK_FALSE(solver.runStageAt("nia.branch", db, TheoryEffort::Standard));
         CHECK(registry.numAtomVars() == 0);
     }
