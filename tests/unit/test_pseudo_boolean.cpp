@@ -529,3 +529,58 @@ TEST_CASE("Binary polynomial encoding: positive powers collapse without losing e
     CHECK(result.model.at("x") == 1);
     CHECK(result.model.at("y") == 1);
 }
+
+TEST_CASE("General integer portfolio: unbounded signed predicates preserve wide coefficients and widening") {
+    for (auto relation : {Kind::Eq, Kind::Distinct, Kind::Lt, Kind::Leq, Kind::Gt, Kind::Geq}) {
+        BinaryFixture f;
+        const auto x = f.variable("x"), y = f.variable("y");
+        const mpz_class weight = (mpz_class(1) << 100) + 7;
+        const auto sum = f.term(Kind::Sub, {
+            f.term(Kind::Mul, {f.integer(weight), x}),
+            f.term(Kind::Mul, {f.integer(weight - 3), y})});
+        const auto predicate = f.term(relation, {sum, f.integer(0)});
+        const bool holds = relation == Kind::Distinct || relation == Kind::Lt || relation == Kind::Leq;
+        const std::vector<ExprId> roots{
+            f.term(Kind::Or, {
+                f.term(Kind::And, {f.term(Kind::Eq, {x, f.integer(-17)}),
+                                   f.term(Kind::Eq, {y, f.integer(19)})}),
+                f.term(Kind::And, {f.term(Kind::Eq, {x, f.integer(19)}),
+                                   f.term(Kind::Eq, {y, f.integer(-17)})})}),
+            f.term(Kind::Lt, {x, f.integer(0)}),
+            holds ? predicate : f.term(Kind::Not, {predicate})};
+        EagerBitBlastSolver solver;
+        CHECK(solver.solveLinear(f.ir, roots).status == EagerBitBlastSolver::Status::Unknown);
+        const auto result = solver.solve(f.ir, roots);
+        REQUIRE(result.status == EagerBitBlastSolver::Status::Sat);
+        CHECK(result.model.at("x") == -17);
+        CHECK(result.model.at("y") == 19);
+        const mpz_class value = weight * result.model.at("x") - (weight - 3) * result.model.at("y");
+        CHECK(value < 0);
+    }
+}
+
+TEST_CASE("General integer portfolio: linear predicates compose with nonlinear integer atoms") {
+    BinaryFixture f;
+    const auto x = f.variable("x"), y = f.variable("y");
+    const mpz_class weight = (mpz_class(1) << 100) + 7;
+    const auto sum = f.term(Kind::Sub, {
+        f.term(Kind::Mul, {f.integer(weight), x}),
+        f.term(Kind::Mul, {f.integer(weight - 3), y})});
+    const std::vector<ExprId> roots{
+        f.term(Kind::Eq, {f.term(Kind::Mul, {x, y}), f.integer(-323)}),
+        f.term(Kind::Or, {
+            f.term(Kind::And, {f.term(Kind::Eq, {x, f.integer(-17)}),
+                               f.term(Kind::Eq, {y, f.integer(19)})}),
+            f.term(Kind::And, {f.term(Kind::Eq, {x, f.integer(17)}),
+                               f.term(Kind::Eq, {y, f.integer(-19)})})}),
+        f.term(Kind::Not, {f.term(Kind::Lt, {sum, f.integer(0)})})};
+    EagerBitBlastSolver solver;
+    CHECK(solver.solveLinear(f.ir, roots).status == EagerBitBlastSolver::Status::Unknown);
+    const auto result = solver.solve(f.ir, roots);
+    REQUIRE(result.status == EagerBitBlastSolver::Status::Sat);
+    CHECK(result.model.at("x") == 17);
+    CHECK(result.model.at("y") == -19);
+    CHECK(result.model.at("x") * result.model.at("y") == -323);
+    const mpz_class value = weight * result.model.at("x") - (weight - 3) * result.model.at("y");
+    CHECK(value >= 0);
+}

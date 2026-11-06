@@ -713,7 +713,7 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
         }
         PolyBitBlaster blaster(enc, *kernel_, varBits);
 
-        auto encodeFinitePolynomial = [&](PolyId polynomial, Relation relation) -> std::optional<SatLit> {
+        auto encodeWeightedPolynomial = [&](PolyId polynomial, Relation relation) -> std::optional<SatLit> {
             const auto terms = kernel_->terms(polynomial);
             if (!terms) return std::nullopt;
             // Reify a univariate predicate directly over shared point choices,
@@ -877,12 +877,16 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
                                                                    : enc.constFalse();
                             else if (radixZeroPolynomials.contains(part.first))
                                 pl = relationHolds(mpz_class(0), part.second) ? enc.constTrue() : enc.constFalse();
-                            else if (exactDomains) {
-                                const auto encoded = encodeFinitePolynomial(part.first, part.second);
-                                if (!encoded) { encodeOk = false; break; }
-                                pl = *encoded;
-                            } else
-                                pl = blaster.encodeConstraint({part.first, part.second, {}});
+                            else {
+                                // A linear polynomial is a signed weighted sum
+                                // at every width, including heuristic domains.
+                                // Domain completeness controls permanent facts,
+                                // independently of the arithmetic representation.
+                                const auto encoded = encodeWeightedPolynomial(part.first, part.second);
+                                if (encoded) pl = *encoded;
+                                else if (exactDomains) { encodeOk = false; break; }
+                                else pl = blaster.encodeConstraint({part.first, part.second, {}});
+                            }
                             r = enc.andGate(r, pl);
                         }
                     } else if (e.kind == Kind::Eq) {  // boolean iff chain
