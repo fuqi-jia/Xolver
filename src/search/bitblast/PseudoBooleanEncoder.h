@@ -16,8 +16,10 @@ struct WeightedLiteral {
     mpz_class weight;
 };
 
-// Fully reified exact integer threshold: the returned literal is equivalent to
-// sum(weight * [literal]) <= bound, including under negation or disjunction.
+// Exact integer threshold, fully reified by default. A caller with established
+// occurrence polarity can request only the required implication directions.
+// They propagate through diagrams, including complemented thresholds; complete
+// arithmetic sums can still provide a full equivalence.
 // Signed weights, repeated/complementary literals and arbitrary-size integers
 // are normalized before building a shared decision diagram. Complete diagrams
 // are retained when their state space provably fits the declared budgets.
@@ -30,6 +32,7 @@ class PseudoBooleanEncoder {
 public:
     struct Statistics {
         size_t thresholds = 0;
+        size_t directionalThresholds = 0;
         size_t diagramStates = 0;
         size_t diagramBudgetProofs = 0;
         size_t carrySaveThresholds = 0;
@@ -42,7 +45,8 @@ public:
             std::chrono::steady_clock::time_point::max())
         : encoder_(encoder), work_(work), deadline_(deadline) {}
 
-    std::optional<SatLit> lessEqual(std::vector<WeightedLiteral> terms, mpz_class bound);
+    std::optional<SatLit> lessEqual(std::vector<WeightedLiteral> terms, mpz_class bound,
+                                   BooleanDefinitionDirections directions = {});
     const Statistics& statistics() const { return statistics_; }
 
 private:

@@ -75,4 +75,17 @@ void emitBooleanNaryDefinition(SatSolver& solver, SatLit output,
     }
 }
 
+void emitBooleanIteDefinition(SatSolver& solver, SatLit output,
+                              SatLit selector, SatLit thenValue, SatLit elseValue,
+                              BooleanDefinitionDirections directions) {
+    if (directions.negative)
+        solver.addClause({selector.negated(), thenValue.negated(), output});
+    if (directions.positive)
+        solver.addClause({selector.negated(), thenValue, output.negated()});
+    if (directions.negative)
+        solver.addClause({selector, elseValue.negated(), output});
+    if (directions.positive)
+        solver.addClause({selector, elseValue, output.negated()});
+}
+
 } // namespace xolver

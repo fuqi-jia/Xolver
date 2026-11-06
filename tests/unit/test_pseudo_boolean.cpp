@@ -7,7 +7,8 @@ using namespace xolver;
 using namespace xolver::bitblast;
 
 namespace {
-void checkThreshold(const std::vector<long>& weights, const mpz_class& scale = 1) {
+void checkThreshold(const std::vector<long>& weights, const mpz_class& scale = 1,
+                    BooleanDefinitionDirections directions = {}) {
     for (long threshold = -6; threshold <= 12; ++threshold) {
         auto sat = createSatSolver();
         BitBlastEncoder enc(*sat);
@@ -25,7 +26,7 @@ void checkThreshold(const std::vector<long>& weights, const mpz_class& scale = 1
         PseudoBooleanEncoder pb(enc, work);
         mpz_class bound = scale * threshold;
         if (scale > 1) bound += scale - 1;
-        const auto root = pb.lessEqual(terms, bound);
+        const auto root = pb.lessEqual(terms, bound, directions);
         REQUIRE(root.has_value());
         for (unsigned mask = 0; mask < (1u << weights.size()); ++mask) {
             mpz_class value = -scale;
@@ -39,8 +40,10 @@ void checkThreshold(const std::vector<long>& weights, const mpz_class& scale = 1
             const bool expected = value <= bound;
             assignments.push_back(expected ? *root : root->negated());
             CHECK(sat->solve(assignments) == SatSolver::SolveResult::Sat);
-            assignments.back() = assignments.back().negated();
-            CHECK(sat->solve(assignments) == SatSolver::SolveResult::Unsat);
+            if ((expected && directions.negative) || (!expected && directions.positive)) {
+                assignments.back() = assignments.back().negated();
+                CHECK(sat->solve(assignments) == SatSolver::SolveResult::Unsat);
+            }
         }
     }
 }
@@ -113,6 +116,91 @@ TEST_CASE("Eager bitblast: polarity definitions preserve guarded integer truth t
 TEST_CASE("PseudoBooleanEncoder: reified signed thresholds match exhaustive assignments") {
     checkThreshold({3, -2, 5, 0});
     checkThreshold({-4, 2, -1, 3}, mpz_class(1) << 100);
+}
+
+TEST_CASE("PseudoBoolean directions: signed normalized thresholds preserve required truth") {
+    for (unsigned mode = 1; mode <= 3; ++mode) {
+        const BooleanDefinitionDirections directions{bool(mode & 1), bool(mode & 2)};
+        checkThreshold({3, -2, 5, 0}, 1, directions);
+        checkThreshold({-4, 2, -1, 3}, mpz_class(1) << 100, directions);
+    }
+}
+
+TEST_CASE("PseudoBoolean directions: complemented requests complete shared threshold definitions") {
+    auto sat = createSatSolver();
+    BitBlastEncoder enc(*sat);
+    const std::array<long, 5> weights{1, 2, -3, 7, 8};
+    std::vector<WeightedLiteral> terms;
+    mpz_class total = 0;
+    for (const auto weight : weights) {
+        terms.push_back({enc.mkVar(1).bits[0], weight});
+        total += weight;
+    }
+    WorkBudget work;
+    PseudoBooleanEncoder pb(enc, work);
+    const auto root = pb.lessEqual(terms, 5, {true, false});
+    REQUIRE(root.has_value());
+    const auto allocated = enc.varCount();
+    enc.setVarBudget(allocated);
+    auto complemented = terms;
+    for (auto& term : complemented) term.literal = term.literal.negated();
+    const auto opposite = pb.lessEqual(complemented, total - 6, {true, false});
+    REQUIRE(opposite.has_value());
+    CHECK(*opposite == root->negated());
+    const auto complete = pb.lessEqual(terms, 5);
+    REQUIRE(complete.has_value());
+    CHECK(*complete == *root);
+    CHECK(enc.varCount() == allocated);
+    CHECK_FALSE(enc.overflowed());
+    for (unsigned mask = 0; mask < 32; ++mask) {
+        std::vector<SatLit> inputs;
+        long value = 0;
+        for (size_t i = 0; i < terms.size(); ++i) {
+            const bool chosen = mask & (1u << i);
+            inputs.push_back(chosen ? terms[i].literal : terms[i].literal.negated());
+            if (chosen) value += weights[i];
+        }
+        const bool expected = value <= 5;
+        const std::array outputs{*root, opposite->negated(), *complete};
+        for (const auto output : outputs) {
+            auto assumptions = inputs;
+            assumptions.push_back(expected ? output : output.negated());
+            CHECK(sat->solve(assumptions) == SatSolver::SolveResult::Sat);
+            assumptions.back() = assumptions.back().negated();
+            CHECK(sat->solve(assumptions) == SatSolver::SolveResult::Unsat);
+        }
+    }
+}
+
+TEST_CASE("PseudoBoolean directions: exhausted partial diagrams do not poison a complete retry") {
+    for (unsigned mode = 1; mode <= 3; ++mode) {
+        auto sat = createSatSolver();
+        BitBlastEncoder enc(*sat);
+        std::vector<WeightedLiteral> terms;
+        for (int i = 0; i < 20; ++i) terms.push_back({enc.mkVar(1).bits[0], i + 1});
+        WorkBudget limited(100);
+        PseudoBooleanEncoder partial(enc, limited);
+        CHECK_FALSE(partial.lessEqual(terms, 105, {bool(mode & 1), bool(mode & 2)}).has_value());
+        WorkBudget work;
+        PseudoBooleanEncoder complete(enc, work);
+        const auto root = complete.lessEqual(terms, 105);
+        REQUIRE(root.has_value());
+        std::vector<unsigned> masks{0xfffff, 0x55555, 0xaaaaa};
+        for (unsigned mask = 0; mask < 128; ++mask) masks.push_back(mask);
+        for (const auto mask : masks) {
+            std::vector<SatLit> assumptions;
+            unsigned value = 0;
+            for (unsigned i = 0; i < terms.size(); ++i) {
+                const bool chosen = mask & (1u << i);
+                assumptions.push_back(chosen ? terms[i].literal : terms[i].literal.negated());
+                if (chosen) value += i + 1;
+            }
+            assumptions.push_back(value <= 105 ? *root : root->negated());
+            CHECK(sat->solve(assumptions) == SatSolver::SolveResult::Sat);
+            assumptions.back() = assumptions.back().negated();
+            CHECK(sat->solve(assumptions) == SatSolver::SolveResult::Unsat);
+        }
+    }
 }
 
 TEST_CASE("PseudoBooleanEncoder: long thresholds use an explicit stack") {

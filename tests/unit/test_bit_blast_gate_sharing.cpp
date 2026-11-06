@@ -66,6 +66,86 @@ TEST_CASE("Encoder: nary definitions preserve the requested implication directio
     }
 }
 
+TEST_CASE("Encoder directions: ITE definitions preserve all signs constants and required halves") {
+    for (unsigned mode = 1; mode <= 3; ++mode) {
+        auto sat = createSatSolver();
+        bitblast::BitBlastEncoder enc(*sat);
+        const std::array variables{sat->newVar(), sat->newVar(), sat->newVar()};
+        const std::array choices{
+            SatLit::positive(variables[0]), SatLit::negative(variables[0]),
+            SatLit::positive(variables[1]), SatLit::negative(variables[1]),
+            SatLit::positive(variables[2]), SatLit::negative(variables[2]),
+            enc.constTrue(), enc.constFalse()};
+        const BooleanDefinitionDirections directions{bool(mode & 1), bool(mode & 2)};
+        struct Predicate { unsigned selector, thenValue, elseValue; SatLit output; };
+        std::vector<Predicate> predicates;
+        for (unsigned s = 0; s < choices.size(); ++s)
+            for (unsigned t = 0; t < choices.size(); ++t)
+                for (unsigned e = 0; e < choices.size(); ++e)
+                    predicates.push_back({s, t, e, enc.iteGate(choices[s], choices[t], choices[e], directions)});
+        auto inputValue = [](unsigned choice, unsigned mask) {
+            if (choice >= 6) return choice == 6;
+            const bool value = mask & (1u << (choice / 2));
+            return choice % 2 ? !value : value;
+        };
+        for (unsigned mask = 0; mask < 8; ++mask) {
+            std::vector<SatLit> assumptions;
+            for (unsigned i = 0; i < variables.size(); ++i)
+                assumptions.emplace_back(variables[i], bool(mask & (1u << i)));
+            for (const auto& p : predicates) {
+                const bool expected = inputValue(p.selector, mask)
+                    ? inputValue(p.thenValue, mask) : inputValue(p.elseValue, mask);
+                assumptions.push_back(expected ? p.output : p.output.negated());
+                CHECK(sat->solve(assumptions) == SatSolver::SolveResult::Sat);
+                if ((expected && directions.negative) || (!expected && directions.positive)) {
+                    assumptions.back() = assumptions.back().negated();
+                    CHECK(sat->solve(assumptions) == SatSolver::SolveResult::Unsat);
+                }
+                assumptions.pop_back();
+            }
+        }
+    }
+}
+
+TEST_CASE("Encoder directions: ITE sharing upgrades without new variables and retains full defaults") {
+    for (const bool startPositive : {false, true}) {
+        SparseSat sat;
+        bitblast::BitBlastEncoder enc(sat);
+        const auto selector = SatLit::negative(sat.newVar());
+        const auto thenValue = SatLit::positive(sat.newVar());
+        const auto elseValue = SatLit::negative(sat.bind(std::numeric_limits<SatVar>::max()));
+        const auto before = sat.clauses;
+        const auto root = enc.iteGate(selector, thenValue, elseValue, {startPositive, !startPositive});
+        CHECK(sat.clauses == before + 2);
+        const auto allocated = enc.varCount();
+        enc.setVarBudget(allocated);
+        CHECK(enc.iteGate(selector.negated(), elseValue, thenValue,
+                         {startPositive, !startPositive}) == root);
+        CHECK(sat.clauses == before + 2);
+        CHECK(sat.solve({selector, startPositive ? thenValue : thenValue.negated(),
+                         startPositive ? root.negated() : root}) == SatSolver::SolveResult::Sat);
+        CHECK(enc.iteGate(selector.negated(), elseValue, thenValue,
+                         {!startPositive, startPositive}) == root);
+        CHECK(sat.clauses == before + 4);
+        CHECK(enc.ternaryDirectionUpgrades() == 1);
+        CHECK(enc.iteGate(selector, thenValue, elseValue) == root);
+        CHECK(sat.clauses == before + 4);
+        CHECK(enc.varCount() == allocated);
+        CHECK_FALSE(enc.overflowed());
+        for (unsigned mask = 0; mask < 8; ++mask) {
+            const bool selected = mask & 1, thenBit = mask & 2, elseBit = mask & 4;
+            const bool expected = selected ? thenBit : elseBit;
+            std::vector<SatLit> assumptions{
+                selected ? selector : selector.negated(),
+                thenBit ? thenValue : thenValue.negated(),
+                elseBit ? elseValue : elseValue.negated(), expected ? root : root.negated()};
+            CHECK(sat.solve(assumptions) == SatSolver::SolveResult::Sat);
+            assumptions.back() = assumptions.back().negated();
+            CHECK(sat.solve(assumptions) == SatSolver::SolveResult::Unsat);
+        }
+    }
+}
+
 TEST_CASE("Encoder: nary sharing accumulates polarity definitions within the allocation budget") {
     for (const bool conjunction : {false, true}) {
         SparseSat sat;

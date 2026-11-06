@@ -193,18 +193,21 @@ SatLit BitBlastEncoder::naryGate(std::span<const SatLit> inputs, bool conjunctio
     return output;
 }
 
-SatLit BitBlastEncoder::iteGate(SatLit s, SatLit t, SatLit e) {
+SatLit BitBlastEncoder::iteGate(SatLit s, SatLit t, SatLit e,
+                               BooleanDefinitionDirections directions) {
     if (over_) return false_;        // budget exhausted: no more gates/clauses
     if (s == true_)  return t;
     if (s == false_) return e;
     if (t == e)      return t;
     if (t == true_  && e == false_) return s;
     if (t == false_ && e == true_)  return s.negated();
-    if (t == true_)  return orGate(s, e);          // s ? 1 : e
-    if (e == false_) return andGate(s, t);         // s ? t : 0
-    if (t == false_) return andGate(s.negated(), e);
-    if (e == true_)  return orGate(s.negated(), t);
-    return internTernaryGate(TernaryGateKind::Ite, s, t, e);
+    // The reduced gate retains the same required output direction. Its cache
+    // can complete an earlier one-way definition when another caller needs it.
+    if (t == true_)  return orGate(std::array{s, e}, directions);
+    if (e == false_) return andGate(std::array{s, t}, directions);
+    if (t == false_) return andGate(std::array{s.negated(), e}, directions);
+    if (e == true_)  return orGate(std::array{s.negated(), t}, directions);
+    return internTernaryGate(TernaryGateKind::Ite, s, t, e, directions);
 }
 
 SatLit BitBlastEncoder::majorityGate(SatLit a, SatLit b, SatLit c) {
@@ -223,7 +226,8 @@ SatLit BitBlastEncoder::majorityGate(SatLit a, SatLit b, SatLit c) {
     return internTernaryGate(TernaryGateKind::Majority, a, b, c);
 }
 
-SatLit BitBlastEncoder::internTernaryGate(TernaryGateKind kind, SatLit a, SatLit b, SatLit c) {
+SatLit BitBlastEncoder::internTernaryGate(TernaryGateKind kind, SatLit a, SatLit b, SatLit c,
+                                        BooleanDefinitionDirections directions) {
     TernaryGateKey key{kind, {a, b, c}};
     if (kind == TernaryGateKind::Majority) {
         std::sort(key.inputs.begin(), key.inputs.end(), [](SatLit left, SatLit right) {
@@ -233,18 +237,28 @@ SatLit BitBlastEncoder::internTernaryGate(TernaryGateKind kind, SatLit a, SatLit
         key.inputs[0] = a.negated();
         std::swap(key.inputs[1], key.inputs[2]);
     }
-    if (const auto found = ternaryGateCache_.find(key); found != ternaryGateCache_.end()) {
+    if (auto found = ternaryGateCache_.find(key); found != ternaryGateCache_.end()) {
         ++ternaryCacheHits_;
-        return found->second;
+        auto& definition = found->second;
+        const BooleanDefinitionDirections missing{
+            directions.positive && !definition.directions.positive,
+            directions.negative && !definition.directions.negative};
+        if (missing.positive || missing.negative) {
+            emitBooleanIteDefinition(sat_, definition.output,
+                key.inputs[0], key.inputs[1], key.inputs[2], missing);
+            definition.directions.positive |= missing.positive;
+            definition.directions.negative |= missing.negative;
+            ternaryClauses_ += 2 * (unsigned(missing.positive) + unsigned(missing.negative));
+            ++ternaryDirectionUpgrades_;
+        }
+        return definition.output;
     }
     const auto output = freshVar();
     if (over_) return output;
     const auto x = key.inputs[0], y = key.inputs[1], z = key.inputs[2];
     if (kind == TernaryGateKind::Ite) {
-        sat_.addClause({x.negated(), y.negated(), output});
-        sat_.addClause({x.negated(), y, output.negated()});
-        sat_.addClause({x, z.negated(), output});
-        sat_.addClause({x, z, output.negated()});
+        emitBooleanIteDefinition(sat_, output, x, y, z, directions);
+        ternaryClauses_ += 2 * (unsigned(directions.positive) + unsigned(directions.negative));
     } else {
         // Every pair of true inputs forces output; every pair of false inputs
         // forces its negation. No intermediate sum or selector is needed.
@@ -254,8 +268,9 @@ SatLit BitBlastEncoder::internTernaryGate(TernaryGateKind kind, SatLit a, SatLit
         sat_.addClause({x, y, output.negated()});
         sat_.addClause({x, z, output.negated()});
         sat_.addClause({y, z, output.negated()});
+        ternaryClauses_ += 6;
     }
-    ternaryGateCache_.emplace(std::move(key), output);
+    ternaryGateCache_.emplace(std::move(key), TernaryGateDefinition{output, directions});
     return output;
 }
 

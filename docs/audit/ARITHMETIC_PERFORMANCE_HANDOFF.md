@@ -5,8 +5,9 @@
 [PR #107](https://github.com/fuqi-jia/Xolver/pull/107) merged as
 4be69a7fb59663e6ada00ac234d9c85fb5325fbd after complete server acceptance and
 both final-head [PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42295424156)
-passed. Its [merged-main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42298823094)
-is running. All 2,179 qualified source contents match its reviewed head and
+passed. Both jobs in its
+[merged-main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42298823094) pass.
+All 2,179 qualified source contents match its reviewed head and
 parser gitlink. Fresh fixed160 acceptance improves **119 to 122 independently
 verified results**, with three gains, no losses and no errors. There remain
 **38 timeouts**, with no unknown or unconfirmed decisions. Same-round Z3 has
@@ -275,14 +276,40 @@ The pilot's gained input times out in both arms this round. The command, input,
 binary, runtime-control manifest and process-budget helper match the pilot;
 the differing physical CPUs do not establish the cause of the different
 search outcome. One loss is in unchanged nonlinear-real routing. Raw results
-remain intact, without retakes or score substitution. The private14408 audit is
-pending; all 587 development results are retained. Four additional independent
+remain intact, without retakes or score substitution. All 587 development and
+14,408 private results are retained. Private totals change **1,404.183 to
+1,405.099 seconds**, versus **442.649 for Z3**; no private gain or loss is
+observed. Four additional independent
 process diagnostics find SAT in **17.156 to 17.460 seconds** with identical
 encoding counters; these diagnostics do not explain or replace the full-run
 timeout. The optional source and new tests are restored to qualified main
 contents through ExperimentOS: **2,258 cases / 1,373,099 assertions** pass, and
 the CLI and worker hashes exactly match the preceding qualified executables.
 No main promotion or whole-suite benefit is attributed to this experiment.
+
+### In development: retain Boolean directions in weighted threshold diagrams
+
+Whole-formula arithmetic encoding computed Boolean occurrence directions but
+discarded them at weighted thresholds. Shared threshold diagrams now retain
+the required implications through ITE gates. Complementing a normalized sum
+or an equality under disequality reverses the required directions exactly.
+An existing gate can gain its missing definition without allocating another
+variable. Default calls retain full equivalences; complete arithmetic sums
+and exact model validation retain their contracts. Integer and real callers
+share this implementation, with no resource, seed or rollback changes.
+The rejected linear-real admission route remains removed.
+
+Proof-enabled Panda9 / ExperimentOS qualification passes **2,263 cases /
+1,397,778 assertions**. Five new groups check signed and constant ITE inputs,
+high variable IDs, definition upgrades, arbitrary-size signed thresholds and
+safe retries after exhausted partial diagrams. The encoder's actual CNF also
+passes **10,052 independent Z3/cvc5 decisions** across 63 synthetic scenarios,
+including single-direction and completed definitions. Expected answers come
+from separate Python integer/Boolean evaluation. No subject SAT backend is
+called by the CNF exporter. Frozen CLI SHA-256 is
+`18f247f28d824e0791aaca99171fd25dbd568f0734cac40ee92431ef679f5dbb`.
+The complete fixed160 comparison remains pending. Clause reduction alone is
+not a whole-suite performance result or evidence of overall superiority.
 
 ### Closed experiment: presolve inside Boolean polynomial refutation
 

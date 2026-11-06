@@ -70,8 +70,10 @@ bool PseudoBooleanEncoder::diagramFitsBudget(
 }
 
 std::optional<SatLit> PseudoBooleanEncoder::lessEqual(
-    std::vector<WeightedLiteral> terms, mpz_class bound) {
+    std::vector<WeightedLiteral> terms, mpz_class bound,
+    BooleanDefinitionDirections directions) {
     ++statistics_.thresholds;
+    if (!directions.positive || !directions.negative) ++statistics_.directionalThresholds;
     try {
         // w*[not x] + v*[x] = min(w,v) + |w-v|*[heavier polarity].
         std::map<SatVar, std::pair<mpz_class, mpz_class>> coefficients;
@@ -120,6 +122,7 @@ std::optional<SatLit> PseudoBooleanEncoder::lessEqual(
         if (complement) {
             bound = suffix[0] - bound - 1;
             for (auto& term : terms) term.literal = term.literal.negated();
+            std::swap(directions.positive, directions.negative);
         }
         auto oriented = [&](std::optional<SatLit> literal) {
             if (literal && complement) *literal = literal->negated();
@@ -197,7 +200,7 @@ std::optional<SatLit> PseudoBooleanEncoder::lessEqual(
                     if (keepDiagram) ++statistics_.diagramBudgetProofs;
                 }
                 if (expanded > circuitCost && !keepDiagram) {
-                    // Every emitted gate is only a total-function definition;
+                    // Every emitted gate admits its exact function value;
                     // no source predicate has been asserted. Discarding the
                     // partial diagram therefore cannot restrict the inputs.
                     stack.clear();
@@ -213,7 +216,7 @@ std::optional<SatLit> PseudoBooleanEncoder::lessEqual(
                 const mpz_class highBound = frame.bound - terms[index].weight;
                 stack.push_back({index + 1, highBound, 0, {}});
             } else {
-                result = encoder_.iteGate(terms[index].literal, result, frame.low);
+                result = encoder_.iteGate(terms[index].literal, result, frame.low, directions);
                 if (encoder_.overflowed()) return std::nullopt;
                 memo[index].emplace(frame.bound, result);
                 stack.pop_back();

@@ -30,4 +30,8 @@ void emitBooleanNaryDefinition(SatSolver& solver, SatLit output,
                                std::span<const SatLit> inputs, bool conjunction,
                                BooleanDefinitionDirections directions = {});
 
+void emitBooleanIteDefinition(SatSolver& solver, SatLit output,
+                              SatLit selector, SatLit thenValue, SatLit elseValue,
+                              BooleanDefinitionDirections directions = {});
+
 } // namespace xolver

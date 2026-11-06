@@ -31,7 +31,8 @@ public:
     SatLit andGate(SatLit a, SatLit b);
     SatLit orGate(SatLit a, SatLit b);
     SatLit xorGate(SatLit a, SatLit b);
-    SatLit iteGate(SatLit s, SatLit t, SatLit e);
+    SatLit iteGate(SatLit s, SatLit t, SatLit e,
+                   BooleanDefinitionDirections directions = {});
     SatLit majorityGate(SatLit a, SatLit b, SatLit c);
     // Full equivalences by default. With one direction requested, the caller
     // must have established the connective's occurrence polarity first.
@@ -43,6 +44,8 @@ public:
     uint64_t naryDirectionUpgrades() const { return naryDirectionUpgrades_; }
     uint64_t ternaryGateCount() const { return ternaryGateCache_.size(); }
     uint64_t ternaryCacheHits() const { return ternaryCacheHits_; }
+    uint64_t ternaryClauseCount() const { return ternaryClauses_; }
+    uint64_t ternaryDirectionUpgrades() const { return ternaryDirectionUpgrades_; }
 
     // Arithmetic.
     BitVec add(const BitVec& a, const BitVec& b);    // width max+1
@@ -161,9 +164,16 @@ private:
             return hash;
         }
     };
-    SatLit internTernaryGate(TernaryGateKind kind, SatLit a, SatLit b, SatLit c);
-    std::unordered_map<TernaryGateKey, SatLit, TernaryGateKeyHash> ternaryGateCache_;
+    struct TernaryGateDefinition {
+        SatLit output;
+        BooleanDefinitionDirections directions;
+    };
+    SatLit internTernaryGate(TernaryGateKind kind, SatLit a, SatLit b, SatLit c,
+                            BooleanDefinitionDirections directions = {});
+    std::unordered_map<TernaryGateKey, TernaryGateDefinition, TernaryGateKeyHash> ternaryGateCache_;
     uint64_t ternaryCacheHits_ = 0;
+    uint64_t ternaryClauses_ = 0;
+    uint64_t ternaryDirectionUpgrades_ = 0;
 
     static unsigned bitsForValue(const mpz_class& v);
     BitVec signExtend(const BitVec& a, unsigned width);
