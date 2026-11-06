@@ -1,5 +1,6 @@
 #include "search/bitblast/BitBlastEncoder.h"
 #include <algorithm>
+#include <unordered_set>
 
 namespace xolver::bitblast {
 
@@ -119,6 +120,77 @@ SatLit BitBlastEncoder::xorGate(SatLit a, SatLit b) {
     if (a == b)      return false_;
     if (a == b.negated()) return true_;
     return internGate(GateKind::Xor, a, b);
+}
+
+SatLit BitBlastEncoder::andGate(std::span<const SatLit> inputs,
+                               BooleanDefinitionDirections directions) {
+    return naryGate(inputs, true, directions);
+}
+
+SatLit BitBlastEncoder::orGate(std::span<const SatLit> inputs,
+                              BooleanDefinitionDirections directions) {
+    return naryGate(inputs, false, directions);
+}
+
+SatLit BitBlastEncoder::naryGate(std::span<const SatLit> inputs, bool conjunction,
+                                BooleanDefinitionDirections directions) {
+    if (over_) return false_;
+    const auto identity = conjunction ? true_ : false_;
+    const auto absorbing = identity.negated();
+    std::vector<SatLit> reduced;
+    reduced.reserve(inputs.size());
+    std::unordered_set<uint64_t> seen;
+    for (const auto input : inputs) {
+        if (input == absorbing) return absorbing;
+        if (input == identity) continue;
+        const uint64_t key = (uint64_t(input.var) << 1) | uint64_t(input.sign);
+        if (seen.contains(key ^ 1)) return absorbing;
+        if (seen.insert(key).second) reduced.push_back(input);
+    }
+    if (reduced.empty()) return identity;
+    if (reduced.size() == 1) return reduced[0];
+    std::sort(reduced.begin(), reduced.end(), [](SatLit a, SatLit b) {
+        return a.var < b.var || (a.var == b.var && a.sign < b.sign);
+    });
+    NaryGateKey key{conjunction, std::move(reduced)};
+    if (auto found = naryGateCache_.find(key); found != naryGateCache_.end()) {
+        auto& definition = found->second;
+        const BooleanDefinitionDirections missing{
+            directions.positive && !definition.directions.positive,
+            directions.negative && !definition.directions.negative};
+        if (missing.positive || missing.negative) {
+            emitBooleanNaryDefinition(sat_, definition.output, key.inputs, conjunction, missing);
+            definition.directions.positive |= missing.positive;
+            definition.directions.negative |= missing.negative;
+            ++naryDirectionUpgrades_;
+        }
+        if (key.inputs.size() == 2 && definition.directions.positive && definition.directions.negative)
+            gateCache_.try_emplace(gateKey(conjunction ? GateKind::And : GateKind::Or,
+                                           key.inputs[0], key.inputs[1]), definition.output);
+        ++naryCacheHits_;
+        return definition.output;
+    }
+    // Existing exact binary definitions already provide both directions.
+    // Reuse them even when this occurrence needs only one implication.
+    if (key.inputs.size() == 2) {
+        const auto binary = gateCache_.find(gateKey(conjunction ? GateKind::And : GateKind::Or,
+                                                   key.inputs[0], key.inputs[1]));
+        if (binary != gateCache_.end() || (directions.positive && directions.negative)) {
+            const auto output = binary != gateCache_.end() ? binary->second :
+                conjunction ? andGate(key.inputs[0], key.inputs[1]) : orGate(key.inputs[0], key.inputs[1]);
+            if (!over_) naryGateCache_.emplace(std::move(key), NaryGateDefinition{output, {}});
+            return output;
+        }
+    }
+    const auto output = freshVar();
+    if (over_) return output;
+    emitBooleanNaryDefinition(sat_, output, key.inputs, conjunction, directions);
+    ++naryGateCount_;
+    naryInputCount_ += key.inputs.size();
+    // Different expression IDs may denote the same literal function. Their
+    // required occurrence directions accumulate on one shared definition.
+    naryGateCache_.emplace(std::move(key), NaryGateDefinition{output, directions});
+    return output;
 }
 
 SatLit BitBlastEncoder::iteGate(SatLit s, SatLit t, SatLit e) {

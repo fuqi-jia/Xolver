@@ -1,5 +1,6 @@
 #include "ir/PartialBooleanEvaluation.h"
 #include "evidence/ModelValidator.h"
+#include "search/boolean/BooleanDefinitions.h"
 #include <doctest/doctest.h>
 #include <utility>
 #include <vector>
@@ -49,6 +50,32 @@ TEST_CASE("PartialBooleanEvaluation: nary connectives agree with exact truth tab
             CHECK(validator.eval(root, f.terms, assignment) == expected);
         }
     }
+}
+
+TEST_CASE("Boolean definitions: shared occurrences and nary implications preserve every polarity") {
+    BooleanFixture f;
+    const auto a = f.variable("a"), b = f.variable("b"), c = f.variable("c");
+    const auto left = f.node(Kind::And, {a, b});
+    const auto middle = f.node(Kind::Or, {b, c});
+    const auto right = f.node(Kind::And, {a, c});
+    const auto implication = f.node(Kind::Implies, {left, middle, right});
+    const std::vector roots{implication, f.node(Kind::Not, {right})};
+    auto polarities = computeBooleanPolarities(roots, f.terms);
+    CHECK(polarities.at(left) == 2);
+    CHECK(polarities.at(middle) == 2);
+    CHECK(polarities.at(right) == 3);
+    CHECK_FALSE(booleanDefinitionDirections(polarities, left).positive);
+    CHECK(booleanDefinitionDirections(polarities, left).negative);
+    CHECK(booleanDefinitionDirections(polarities, NullExpr).positive);
+    CHECK(booleanDefinitionDirections(polarities, NullExpr).negative);
+    const std::vector nonmonotone{f.node(Kind::Xor, {left, middle, right})};
+    polarities = computeBooleanPolarities(nonmonotone, f.terms);
+    for (const auto child : {left, middle, right}) CHECK(polarities.at(child) == 3);
+    auto deep = a;
+    for (unsigned i = 0; i < 30001; ++i) deep = f.node(Kind::Not, {deep});
+    const std::vector deepRoots{deep};
+    polarities = computeBooleanPolarities(deepRoots, f.terms);
+    CHECK(polarities.at(a) == 2);
 }
 
 TEST_CASE("PartialBooleanEvaluation: unknown atoms preserve polarity and conditional semantics") {

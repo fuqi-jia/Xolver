@@ -417,6 +417,7 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
     std::unordered_map<std::string, std::vector<mpz_class>> finiteValues;
     const bool diag = xolver::config::read<xolver::config::ReadKind::Presence>("NIA_EAGER_BB_DIAG");
     if (!collect(ir, assertions, finiteValues)) return out;   // unsupported construct -> Unknown
+    const auto polarities = computeBooleanPolarities(assertions, ir);
     for (auto& [variable, points] : finiteValues) {
         const auto lower = lb_.find(variable), upper = ub_.find(variable);
         points.erase(std::remove_if(points.begin(), points.end(), [&](const mpz_class& point) {
@@ -941,27 +942,35 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
                     r = encode(e.children[0]).negated();
                     break;
                 case Kind::And: {
-                    r = enc.constTrue();
-                    for (ExprId c : e.children) r = enc.andGate(r, encode(c));
+                    std::vector<SatLit> children;
+                    children.reserve(e.children.size());
+                    for (const auto child : e.children) children.push_back(encode(child));
+                    r = enc.andGate(children, booleanDefinitionDirections(polarities, eid));
                     break;
                 }
                 case Kind::Or: {
-                    r = enc.constFalse();
+                    std::vector<SatLit> children;
+                    children.reserve(e.children.size());
                     size_t orIdx = 0;
                     for (ExprId c : e.children) {
                         if (diag && (orIdx % 100) == 0 && e.children.size() > 50)
                             std::cerr << "[EAGER-BB-OR] alt=" << orIdx << "/" << e.children.size()
                                       << " satVars=" << enc.varCount() << "\n";
                         ++orIdx;
-                        r = enc.orGate(r, encode(c));
+                        children.push_back(encode(c));
                     }
+                    r = enc.orGate(children, booleanDefinitionDirections(polarities, eid));
                     break;
                 }
                 case Kind::Implies: {
                     // right-assoc: (=> a b c) = a -> (b -> c)
-                    r = encode(e.children.back());
-                    for (size_t i = e.children.size() - 1; i-- > 0;)
-                        r = enc.orGate(encode(e.children[i]).negated(), r);
+                    std::vector<SatLit> children;
+                    children.reserve(e.children.size());
+                    for (size_t i = 0; i < e.children.size(); ++i) {
+                        const auto child = encode(e.children[i]);
+                        children.push_back(i + 1 == e.children.size() ? child : child.negated());
+                    }
+                    r = enc.orGate(children, booleanDefinitionDirections(polarities, eid));
                     break;
                 }
                 case Kind::Xor: {
@@ -1041,6 +1050,10 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
                       << " direct_differences=" << directDifferences
                       << " ternary_gates=" << enc.ternaryGateCount()
                       << " ternary_reuses=" << enc.ternaryCacheHits()
+                      << " nary_gates=" << enc.naryGateCount()
+                      << " nary_inputs=" << enc.naryInputCount()
+                      << " nary_reuses=" << enc.naryCacheHits()
+                      << " nary_direction_upgrades=" << enc.naryDirectionUpgrades()
                       << " diagram_states=" << counts.diagramStates
                       << " diagram_budget_proofs=" << counts.diagramBudgetProofs
                       << " carry_save=" << counts.carrySaveThresholds
