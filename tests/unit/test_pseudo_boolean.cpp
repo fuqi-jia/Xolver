@@ -624,3 +624,27 @@ TEST_CASE("Integer interval preflight: conditional alternatives and nonlinear po
     CHECK(nonlinear.model.at("x") * nonlinear.model.at("x") >= 1024);
     CHECK(nonlinear.model.at("x") < 0);
 }
+
+TEST_CASE("Integer difference cover: complete interpretations exceed the fallback word cascade") {
+    BinaryFixture f;
+    const auto x = f.variable("x"), y = f.variable("y");
+    const auto difference = f.term(Kind::Sub, {x, y});
+    const auto sum = f.term(Kind::Add, {x, y});
+    EagerBitBlastSolver solver;
+    for (const mpz_class& target : std::vector<mpz_class>{31, (mpz_class(1) << 80) + 7, -31}) {
+        const std::vector<ExprId> roots{
+            f.term(Kind::Not, {f.term(Kind::Leq, {difference, f.integer(target)})}),
+            f.term(Kind::Leq, {difference, f.integer(target + 1)})};
+        CHECK(solver.solveLinear(f.ir, roots).status == EagerBitBlastSolver::Status::Unknown);
+        const auto result = solver.solve(f.ir, roots);
+        REQUIRE(result.status == EagerBitBlastSolver::Status::Sat);
+        CHECK(result.model.at("x") - result.model.at("y") == target + 1);
+    }
+    const mpz_class target = (mpz_class(1) << 80) + 9;
+    const auto result = solver.solve(f.ir, {
+        f.term(Kind::Or, {f.term(Kind::Eq, {sum, f.integer(target)}),
+                          f.term(Kind::Eq, {sum, f.integer(target + 2)})}),
+        f.term(Kind::Distinct, {sum, f.integer(target)})});
+    REQUIRE(result.status == EagerBitBlastSolver::Status::Sat);
+    CHECK(result.model.at("x") + result.model.at("y") == target + 2);
+}

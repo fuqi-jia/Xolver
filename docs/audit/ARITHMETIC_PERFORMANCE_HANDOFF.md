@@ -117,11 +117,46 @@ The unchanged fresh 18-input comparison retains **9 to 9 verified**, versus
 **1,171.418 to 1,159.593 seconds**, versus **271.947** for Z3. This is a limited
 timing observation, not an additional solved input or an overall win.
 
-Fresh complete fixed160, development587 and private14408 comparisons against
-accepted weighted main are in progress at this freeze. Each solver receives
-60 seconds, one leased physical CPU and 16 GiB. Actual timed models require
-the same independent replay policy as above. Server acceptance and PR/main CI
-remain pending for this development change; neither protected set is used.
+Complete comparisons at that freeze retained all 587 development and 14,408
+private results, but fixed160 raw verified counts fell **115 to 114**, versus
+114 for Z3, with no gains and one loss. Unconfirmed decisions remain excluded.
+Private-query solver totals were **1,291.285 to 1,298.924 seconds**, versus
+**389.697** for Z3. This standalone optimization is not accepted for main.
+
+### FULINA development: complete integer difference candidate domains
+
+A shared algebra helper now certifies representative-model covers for affine
+integer atoms that become scaled differences after consistent variable sign
+changes. It merges repeated coefficients, rejects unsupported forms and
+inconsistent orientations, and computes the radius using exact rational
+arithmetic. Candidate search selects one complete width for this fragment,
+including widths beyond 64 bits. A cover is not an entailed bound on every
+source model. SAT-only results, exact model validation, finite-only APIs and
+arithmetic rollback policies retain their contracts.
+
+Proof-enabled Panda9 / ExperimentOS qualification passes **2,197 cases /
+1,333,562 assertions**. The frozen CLI is
+`ca8c020c797eb529628dd3fa4cf808b2190148bc3e2a3c2f1ffe5654a6779368`.
+Tests cover exact scales, coefficient cancellation, orientation consistency,
+all feasible atom sign patterns in an exhaustive small construction, large
+integers and query replacement.
+
+A fresh 65-input focused comparison combines the existing controls, all fixed
+LIA inputs and two independent generic regressions, deduplicating input hashes.
+Verified counts improve **46 to 47**, versus **53** for Z3, with one gain, no
+losses and no errors. Verified PAR-2 totals are **2,776.266 to 2,667.764 seconds**,
+versus **1,553.807** for Z3. The newly solved SAT input takes **22.513 seconds**;
+both other timed programs reach 60 seconds. Z3 and CVC5 independently accept
+the actual timed model. Its diagnostic trace does not qualify for the new
+difference cover, so attribution of this gain to that helper is unproven.
+The earlier near-budget regression also does not qualify; its extra width
+search remains unresolved.
+
+Fresh complete fixed160, development587 and private14408 comparisons are in
+progress at the new freeze, with 60 seconds, one leased physical CPU and 16 GiB
+per solver/input and the unchanged independent replay policy. Full server
+acceptance and PR/main CI remain pending. No protected set is used, and no
+overall improvement over Z3 is established.
 
 ## Previous checkpoint: sparse integer equality components (2026-11-06)
 

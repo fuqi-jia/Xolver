@@ -467,6 +467,36 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
     }
     if (finiteLinearOnly && !boundedLinear) return out;
     const bool exactDomains = binaryDomains || boundedLinear;
+    std::optional<mpz_class> differenceCover;
+    if (!exactDomains) {
+        std::vector<std::pair<LinearFormKey, mpq_class>> forms;
+        bool linear = true;
+        for (const auto& [atom, constraints] : atomCs_) {
+            (void)atom;
+            for (const auto& [polynomial, relation] : constraints.parts) {
+                (void)relation;
+                if (polynomial == NullPoly) continue;
+                const auto terms = kernel_->terms(polynomial);
+                if (!terms) { linear = false; break; }
+                std::pair<LinearFormKey, mpq_class> form;
+                for (const auto& term : *terms) {
+                    if (term.powers.empty()) form.second -= term.coefficient;
+                    else if (term.powers.size() == 1 && term.powers[0].second == 1)
+                        form.first.terms.emplace_back(
+                            std::string(kernel_->varName(term.powers[0].first)),
+                            mpq_class(term.coefficient));
+                    else { linear = false; break; }
+                }
+                if (!linear) break;
+                forms.push_back(std::move(form));
+            }
+            if (!linear) break;
+        }
+        if (linear) differenceCover = integerDifferenceCoverRadius(forms);
+    }
+    const bool fixedInterpretation = exactDomains || differenceCover.has_value();
+    if (diag) std::cerr << "[EAGER-DOMAIN] signed_difference=" << differenceCover.has_value()
+                        << (differenceCover ? " radius=" + differenceCover->get_str() : "") << "\n";
     const IntegerBoundsLookup integerBounds = [&](const std::string& variable)
         -> std::optional<std::pair<mpz_class, mpz_class>> {
         const auto lower = lb_.find(variable), upper = ub_.find(variable);
@@ -588,7 +618,12 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
         return std::chrono::duration_cast<std::chrono::milliseconds>(
                    std::chrono::steady_clock::now() - t0).count();
     };
-    const unsigned widths[] = {4, 8, 16, 24, 32, 48, 64};
+    // A certified difference fragment has a complete finite interpretation;
+    // its radius selects one width directly, even beyond the fallback cascade.
+    // Keep representative-model covers separate from entailed source bounds.
+    const std::vector<unsigned> widths = differenceCover
+        ? std::vector<unsigned>{SpaceEstimator::bitsToCover(-*differenceCover, *differenceCover)}
+        : std::vector<unsigned>{4, 8, 16, 24, 32, 48, 64};
     // Consecutive-UNSAT cap: when the inner SAT solver returns UNSAT at
     // several widths in a row WITHOUT ever finding a SAT candidate, the
     // formula is highly likely integer-genuinely-UNSAT (e.g. VeryMax
@@ -765,14 +800,14 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
                             << " booleanNodes=" << interpretation.evaluatedNodes()
                             << " satVars=" << enc.varCount() << "\n";
         if (excluded) {
-            if (exactDomains) break;
+            if (fixedInterpretation) break;
             // An interval exclusion only requests a wider interpretation; it
             // is not a SAT search result about the source's integer feasibility.
             continue;
         }
         // A plan that ends after this solve has one fixed interpretation.
         // Its query facts can participate in permanent SAT preprocessing.
-        if (exactDomains) {
+        if (fixedInterpretation) {
             for (const auto fact : assumptions) enc.assertLit(fact);
             assumptions.clear();
         }
@@ -991,7 +1026,7 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
             ++aIdx;
             SatLit l = encode(a);
             if (!encodeOk || enc.overflowed()) break;
-            if (exactDomains) enc.assertLit(l);
+            if (fixedInterpretation) enc.assertLit(l);
             else assumptions.push_back(l);
             if (l == enc.constFalse()) break;
         }
@@ -1022,13 +1057,13 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
                             << " retainedVars=" << previousVars
                             << " freshVars=" << enc.varCount() - previousVars << "\n";
         if (res == SatSolver::SolveResult::Unsat) {
-            if (exactDomains) break; // Exact domain: wider encodings are identical.
+            if (fixedInterpretation) break; // The selected plan has no wider interpretation.
             ++consecutiveUnsat;
             continue;   // wider K (never claim UNSAT)
         }
         consecutiveUnsat = 0;  // reset on any non-Unsat (Unknown counts as continue too)
         if (res != SatSolver::SolveResult::Sat) {
-            if (exactDomains) break;
+            if (fixedInterpretation) break;
             continue;
         }
 
@@ -1102,7 +1137,7 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
             }
             return out;
         }
-        if (exactDomains) break;
+        if (fixedInterpretation) break;
         // SAT but candidate failed exact validation (narrow-width artifact) -> wider K.
     }
     return out;   // Unknown

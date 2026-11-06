@@ -1,0 +1,7 @@
+(set-logic QF_LIA)
+(set-info :status sat)
+(declare-const x Int)
+(declare-const y Int)
+(assert (not (<= (- x y) 1208925819614629174706183)))
+(assert (<= (- x y) 1208925819614629174706184))
+(check-sat)

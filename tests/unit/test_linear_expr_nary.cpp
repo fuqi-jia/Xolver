@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 #include "algebra/linear/LinearExpr.h"
 #include "ir/NativeTerms.h"
+#include <set>
 
 // Directly exercises extractLinearExpr's n-ary handling of Sub/Mul/Div.
 // The production frontend (SOMTParser) binarizes these, so end-to-end .smt2
@@ -110,4 +111,59 @@ TEST_CASE("extractLinearExpr: Div by a variable (/ x y) is nonlinear") {
     std::unordered_map<std::string, mpq_class> coeffs;
     mpq_class constant = 0;
     CHECK_FALSE(extractLinearExpr(div, b.ir, coeffs, constant, mpq_class(1)));
+}
+
+namespace {
+auto differenceForm(std::initializer_list<std::pair<std::string, mpq_class>> terms,
+                    mpq_class rhs) {
+    return std::pair{LinearFormKey{terms}, std::move(rhs)};
+}
+}
+
+TEST_CASE("Integer difference cover: rational scales and noncanonical forms") {
+    std::vector forms{
+        differenceForm({{"x", mpq_class(1, 2)}, {"y", mpq_class(-1, 2)}}, mpq_class(3, 4)),
+        differenceForm({{"x", -3}}, 1)};
+    CHECK(integerDifferenceCoverRadius(forms) == std::optional<mpz_class>(6));
+    forms = {differenceForm({{"x", 3}, {"y", -2}, {"x", -1}, {"unused", 0}}, 3)};
+    CHECK(integerDifferenceCoverRadius(forms) == std::optional<mpz_class>(6));
+    forms = {differenceForm({{"x", 3}, {"x", -3}}, 100)};
+    CHECK(integerDifferenceCoverRadius(forms) == std::optional<mpz_class>(0));
+    const mpz_class large = (mpz_class(1) << 200) + 1;
+    forms = {differenceForm({{"x", 1}}, mpq_class(large, 2))};
+    CHECK(integerDifferenceCoverRadius(forms) == std::optional<mpz_class>((large + 1) / 2 + 1));
+    forms = {differenceForm({{"x", 1}, {"y", -2}}, 0)};
+    CHECK_FALSE(integerDifferenceCoverRadius(forms).has_value());
+    forms = {differenceForm({{"x", 1}, {"y", 1}, {"z", 1}}, 0)};
+    CHECK_FALSE(integerDifferenceCoverRadius(forms).has_value());
+}
+
+TEST_CASE("Integer difference cover: signs must be consistent across every atom") {
+    std::vector forms{
+        differenceForm({{"x", 1}, {"y", 1}}, 0),
+        differenceForm({{"y", 1}, {"z", 1}}, 1),
+        differenceForm({{"x", 1}, {"z", -1}}, 2)};
+    CHECK(integerDifferenceCoverRadius(forms) == std::optional<mpz_class>(9));
+    forms.push_back(differenceForm({{"x", 1}, {"z", 1}}, 0));
+    CHECK_FALSE(integerDifferenceCoverRadius(forms).has_value());
+    forms = {differenceForm({{"a", -7}, {"b", -7}}, 0),
+             differenceForm({{"c", 2}, {"d", -2}}, 0),
+             differenceForm({{"a", 1}, {"c", 1}}, 0),
+             differenceForm({{"b", -3}, {"d", -3}}, 0)};
+    CHECK_FALSE(integerDifferenceCoverRadius(forms).has_value());
+}
+
+TEST_CASE("Integer difference cover: every feasible atom sign pattern has a bounded witness") {
+    const std::vector forms{differenceForm({{"x", 2}, {"y", -2}}, 4),
+                           differenceForm({{"x", -3}}, 0)};
+    const auto radius = integerDifferenceCoverRadius(forms);
+    REQUIRE(radius == std::optional<mpz_class>(6));
+    auto sign = [](int value) { return (value > 0) - (value < 0); };
+    auto pattern = [&](int x, int y) { return std::pair{sign(2*x - 2*y - 4), sign(-3*x)}; };
+    std::set<std::pair<int, int>> bounded;
+    for (int x = -6; x <= 6; ++x)
+        for (int y = -6; y <= 6; ++y) bounded.insert(pattern(x, y));
+    REQUIRE(bounded.size() == 9);
+    for (int x = -20; x <= 20; ++x)
+        for (int y = -20; y <= 20; ++y) CHECK(bounded.contains(pattern(x, y)));
 }

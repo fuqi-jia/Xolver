@@ -3,6 +3,8 @@
 #include "ir/payload.h"
 #include <cassert>
 #include <algorithm>
+#include <iterator>
+#include <map>
 
 namespace xolver {
 
@@ -229,6 +231,87 @@ Relation negateRelation(Relation r) {
         case Relation::Neq: return Relation::Eq;
     }
     return r;
+}
+
+std::optional<mpz_class> integerDifferenceCoverRadius(
+    std::span<const std::pair<LinearFormKey, mpq_class>> forms) {
+    struct Orientations {
+        std::vector<size_t> parent;
+        std::vector<unsigned> rank;
+        std::vector<bool> reversed;
+
+        size_t add() {
+            const auto id = parent.size();
+            parent.push_back(id);
+            rank.push_back(0);
+            reversed.push_back(false);
+            return id;
+        }
+        std::pair<size_t, bool> find(size_t id) {
+            auto root = id;
+            bool parity = false;
+            while (parent[root] != root) {
+                parity ^= reversed[root];
+                root = parent[root];
+            }
+            const bool result = parity;
+            while (parent[id] != id) {
+                const auto next = parent[id];
+                const bool edge = reversed[id];
+                parent[id] = root;
+                reversed[id] = parity;
+                parity ^= edge;
+                id = next;
+            }
+            return {root, result};
+        }
+        bool connect(size_t left, size_t right, bool opposite) {
+            auto [a, pa] = find(left);
+            auto [b, pb] = find(right);
+            if (a == b) return (pa != pb) == opposite;
+            if (rank[a] > rank[b]) std::swap(a, b);
+            parent[a] = b;
+            reversed[a] = pa ^ pb ^ opposite;
+            if (rank[a] == rank[b]) ++rank[b];
+            return true;
+        }
+    } orientations;
+    std::unordered_map<std::string, size_t> variables;
+    auto variableId = [&](const std::string& name) {
+        auto [entry, inserted] = variables.try_emplace(name, variables.size());
+        if (inserted) orientations.add();
+        return entry->second;
+    };
+    mpz_class maximum = 1;
+    for (const auto& [form, rhs] : forms) {
+        std::map<std::string, mpq_class> terms;
+        for (const auto& [variable, coefficient] : form.terms) terms[variable] += coefficient;
+        std::erase_if(terms, [](const auto& term) { return term.second == 0; });
+        if (terms.empty()) continue;
+        if (terms.size() > 2) return std::nullopt;
+        const auto& [first, a] = *terms.begin();
+        const auto left = variableId(first);
+        if (terms.size() == 2) {
+            const auto& [second, b] = *std::next(terms.begin());
+            if (abs(a) != abs(b) ||
+                !orientations.connect(left, variableId(second), (a > 0) == (b > 0)))
+                return std::nullopt;
+        }
+        mpq_class threshold = rhs / a;
+        if (threshold < 0) threshold = -threshold;
+        threshold.canonicalize();
+        mpz_class ceiling;
+        mpz_cdiv_q(ceiling.get_mpz_t(), threshold.get_num().get_mpz_t(),
+                   threshold.get_den().get_mpz_t());
+        ++ceiling; // Includes strict comparisons and both polarities of disequality.
+        if (ceiling > maximum) maximum = std::move(ceiling);
+    }
+    // Fix a feasible truth pattern, selecting a side of each disequality. After
+    // the consistent sign changes, it is a system of integer difference edges
+    // of magnitude at most maximum. Super-source shortest paths use at most n
+    // edges. Shifting the zero vertex to zero bounds every variable by n*C.
+    // Thus the box covers a witness for every feasible Boolean truth pattern.
+    return mpz_class(std::to_string(variables.size())) * maximum;
 }
 
 } // namespace xolver
