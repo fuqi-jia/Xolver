@@ -1,18 +1,24 @@
 # Arithmetic validation and continuation record
 
-## Current checkpoint: shared arithmetic and Boolean circuits (2026-11-06)
+## Current checkpoint: shared polarity-aware Boolean definitions (2026-11-06)
+
+FULINA implementation e46f2bdac485c737093d628f5f895d2cba01225f passes complete
+server acceptance. Its fresh fixed160 comparison improves **117 to 119
+independently verified results**, versus **117 for same-round Z3**, with two
+gains, no losses and no errors. Mean verified PAR-2 improves from **36.444 to
+35.262 seconds**, versus **33.829** for Z3. There remain **40 timeouts and one
+unknown**. All **14,408 private queries** remain independently verified, with
+total solver time **1,409.618 seconds versus 466.676 for Z3**. PR CI and merged-main
+CI are pending for this implementation; no overall superiority is established.
 
 [PR #104](https://github.com/fuqi-jia/Xolver/pull/104) merged as
 0c0b2d2355f06236891e7c859bf72888225e1769 after complete server acceptance and
 both final-head [PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42179518678)
 passed. Both jobs in its
 [main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42182629064) also pass.
-Fixed160 improves **115 to 118 independently verified results**, versus 116 for
-same-round Z3, with no losses or errors. Mean verified PAR-2 improves from
-**38.319 to 36.305 seconds**, versus **34.352** for Z3. There remain **41 timeouts
-and one unknown**. All **14,408 private queries** remain independently verified,
-but their total solver time remains substantially slower than Z3. Complete
-frozen-suite results and the new binary identity follow below.
+Its separate accepted comparison gives **118 independently verified results**;
+historical favorable timings are not substituted for the fresh baseline above.
+Complete frozen-suite results and binary identities follow below.
 
 Fresh original-C QCP workflows for branch, max3 and GCD now pass canonical
 final-check with both backends: **three unique programs and 23 top-level VCs per
@@ -86,8 +92,9 @@ Every actual timed Xolver SAT model is independently replayed by both Z3 and
 cvc5; actual timed Z3 models require cvc5 replay. UNSAT requires an independent
 verdict or checked certificate. These separate cohorts are not summed into an
 overall score. This implementation is merged through
-[PR #103](https://github.com/fuqi-jia/Xolver/pull/103); its merged-main CI is
-recorded above. Original-C QCP evidence at the newer worker freeze remains open.
+[PR #103](https://github.com/fuqi-jia/Xolver/pull/103); its
+[merged-main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42148651505) passes.
+Original-C QCP evidence at the newer worker freeze remains open.
 The protected set is unused, and overall superiority over Z3 is not established.
 Private inputs, models and individual identifiers remain off GitHub.
 
@@ -270,9 +277,42 @@ Proof-enabled Panda9 / ExperimentOS qualification passes **2,208 cases /
 `d95ad7ea95551d8e83ba5df5c74808bb605db11144eb4f8748ad5ab89ddadb6d`.
 Correctness checks cover definition-direction upgrades, high variable IDs,
 input polarity, gate kind, constant folding and retained budget prefixes.
-Fresh focused comparison is running against the accepted circuit-main freeze;
-no additional solved-count or timing benefit is claimed yet. Full acceptance
-and PR CI remain pending, and no protected set has been used.
+The fresh unchanged 65-input focused comparison improves **47 to 49 verified**,
+versus 52 for Z3, with two gains, no losses and no errors. Verified PAR-2 totals
+improve from **2,658.058 to 2,432.088 seconds**, versus **1,668.584** for Z3.
+The previously lost SAT result remains independently verified.
+
+Complete fresh comparisons against the accepted shared-ternary main use the
+same frozen references, 60 seconds, one leased physical CPU and 16 GiB:
+
+- Fixed160 improves **116 to 118 verified before the certificate supplement**.
+  Fresh independent checking of the original-input-bound residue certificate
+  applies symmetrically to the two actual UNSAT results, giving **117 to 119
+  verified**, versus **117 for Z3**. No timeout or unknown is upgraded. There
+  are two SAT gains, no losses and no errors, with **67 SAT / 52 UNSAT / 40
+  timeouts / one unknown**. One gain is on a real-arithmetic call path and is
+  not attributed to circuit sharing. Mean verified PAR-2 improves from
+  **36.444 to 35.262 seconds**, versus **33.829** for Z3. Eight Z3 UNSAT results
+  remain unconfirmed because independent checking times out; they are excluded,
+  not treated as incorrect.
+- Development587 retains **587 to 587 verified**, versus 584 for Z3. Total
+  solver time is **48.987 to 48.974 seconds**, versus **19.098** for Z3. Three
+  unconfirmed Z3 model replays remain excluded.
+- Private14408 retains all verified results in both versions and Z3:
+  **8,940 SAT / 5,468 UNSAT**, with no losses, timeouts, unknowns, unconfirmed
+  results or errors. Solver totals are **1,402.255 to 1,409.618 seconds**,
+  versus **466.676** for Z3. This implementation establishes no private-query
+  speedup.
+
+Actual timed Xolver SAT models require both Z3 and cvc5 replay; Z3 models
+require cvc5 replay. UNSAT requires an independent verdict or checked
+certificate. Paired diagnostics on the preceding variant and this variant
+observe no new nary cache hits or direction upgrades on their two representative
+inputs. The cache resource property is tested, but the measured search-time
+changes do not establish that cache reuse caused them. Complete server
+acceptance passes; PR CI and merged-main CI remain pending. Final-version
+original-C QCP and protected-set comparisons remain open. No protected set has
+been used; private inputs, models and individual identifiers remain off GitHub.
 
 ## Previous checkpoint: sparse integer equality components (2026-11-06)
 
