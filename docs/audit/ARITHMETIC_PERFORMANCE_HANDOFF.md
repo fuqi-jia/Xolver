@@ -255,6 +255,33 @@ original-C QCP and protected-set validation remain outstanding; no overall
 superiority is established. Private inputs, models and individual identifiers
 remain server-only.
 
+### In development: share Boolean numeric candidates with linear reals
+
+The runtime admitted Boolean nonlinear real formulas to the shared whole-formula
+candidate engine but excluded linear real formulas. The engine already supports
+exact reified linear constraints and integral coordinates of real variables.
+Linear real formulas with Boolean alternatives now reach the same candidate-only
+entry. Every accepted point receives exact source evaluation and typed model
+reconstruction. Failed integer-subset searches continue to the real solver;
+literal conjunction routing, refutation semantics, budgets and rollback remain
+unchanged.
+
+Proof-enabled Panda9 / ExperimentOS qualification passes **2,261 cases /
+1,373,171 assertions**. Three new groups check exact linear/Boolean witnesses,
+fractional reconstructed values, assumptions, push/pop and fractional fallback.
+CLI SHA-256 is
+`b5ccfadaa016e01bfa07f65086e73ca9ab04482fbf0a02cd6a0003ecd587aad4`.
+The complete 32-input fixed QF_LRA comparison improves **19 to 20 independently
+verified results**, versus **22 for Z3**, with one gain, no losses and no errors.
+One public SAT changes from timeout to **15.199 seconds**; its actual timed
+model passes independent replay by both reference solvers. Same-round Z3 times
+out on that input. Verified PAR-2 totals change **1,656.625 to 1,580.848 seconds**,
+versus **1,210.163 for Z3**. Four Z3 decisions remain unconfirmed and excluded.
+Complete fixed160, development587 and private14408 comparisons of this new
+freeze remain pending. The qualified predecessor's complete results above do
+not substitute for the new comparisons; no whole-suite improvement or overall
+superiority is yet established.
+
 ### Closed experiment: presolve inside Boolean polynomial refutation
 
 Moving exact presolve/projection into the whole-formula Boolean refuter passes

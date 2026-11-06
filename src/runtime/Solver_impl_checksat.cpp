@@ -911,8 +911,8 @@ Result Solver::Impl::checkSatGround() {
         // complete finite linear integer domain; other candidate encodings
         // leave refutation open. Unknown continues into the CDCL(T) main loop.
         //
-        // Applies to integer arithmetic and Boolean combinations of nonlinear
-        // real atoms. Linear and nonlinear integer formulas share the same
+        // Applies to integer arithmetic and Boolean combinations of real
+        // atoms. Linear and nonlinear integer formulas share the same
         // candidate search; global finite bounds narrow an encoding but are
         // not required to search for an exactly validated integer point. Real
         // variables receive integer-valued candidates; exhausted integer boxes
@@ -933,7 +933,8 @@ Result Solver::Impl::checkSatGround() {
                           << "\n";
             }
             const bool integerLinear = (logic == "QF_LIA" || logic == "LIA");
-            const bool realCandidates = (logic == "QF_NRA" || logic == "NRA");
+            const bool realCandidates = (logic == "QF_NRA" || logic == "NRA" ||
+                                         logic == "QF_LRA" || logic == "LRA");
             const bool logicOk = (logic == "QF_NIA" || logic == "NIA" || integerLinear || realCandidates);
             auto eagerRoots = ir->assertions();
             eagerRoots.insert(eagerRoots.end(), assumptionIndicators.begin(), assumptionIndicators.end());
