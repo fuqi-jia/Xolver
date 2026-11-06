@@ -7,6 +7,52 @@ using namespace xolver;
 using namespace xolver::bitblast;
 
 namespace {
+struct ThresholdClauses final : SatSolver {
+    SatVar next = 1;
+    std::vector<std::vector<SatLit>> clauses;
+    SatVar newVar() override { return next++; }
+    void addClause(const std::vector<SatLit>& clause) override { clauses.push_back(clause); }
+    SolveResult solve() override { return SolveResult::Unknown; }
+    SolveResult solve(const std::vector<SatLit>&) override { return SolveResult::Unknown; }
+    bool value(SatVar) const override { return false; }
+    void setDeadline(std::chrono::steady_clock::time_point) override {}
+
+    bool unitConflict(const std::vector<SatLit>& assumptions) const {
+        std::vector<int> values(next, 0);
+        auto assign = [&](SatLit literal) {
+            const int value = literal.sign ? 1 : -1;
+            if (values[literal.var] == -value) return false;
+            values[literal.var] = value;
+            return true;
+        };
+        for (const auto literal : assumptions)
+            if (!assign(literal)) return true;
+        bool changed;
+        do {
+            changed = false;
+            for (const auto& clause : clauses) {
+                bool satisfied = false;
+                size_t unset = 0;
+                SatLit unit;
+                for (const auto literal : clause) {
+                    if (values[literal.var] == (literal.sign ? 1 : -1)) {
+                        satisfied = true;
+                        break;
+                    }
+                    if (!values[literal.var]) { ++unset; unit = literal; }
+                }
+                if (satisfied) continue;
+                if (!unset) return true;
+                if (unset == 1) {
+                    if (!assign(unit)) return true;
+                    changed = true;
+                }
+            }
+        } while (changed);
+        return false;
+    }
+};
+
 void checkThreshold(const std::vector<long>& weights, const mpz_class& scale = 1) {
     for (long threshold = -6; threshold <= 12; ++threshold) {
         auto sat = createSatSolver();
@@ -216,7 +262,7 @@ TEST_CASE("PseudoBooleanEncoder: shared sums preserve distinct and complemented 
     const auto exactLower = pb.lessEqual(negative, -boundary);
     REQUIRE(exactUpper); REQUIRE(lower); REQUIRE(exactLower);
     CHECK(pb.statistics().carrySaveSums == 1);
-    CHECK(pb.statistics().reusedSums == 3);
+    CHECK(pb.statistics().reusedSums + pb.statistics().reusedThresholds == 3);
     const auto differentSum = pb.lessEqual(changed, boundary);
     REQUIRE(differentSum);
     const std::vector<SatLit> predicates{*upper, *exactUpper, *lower, *exactLower, *differentSum};
@@ -295,7 +341,7 @@ TEST_CASE("PseudoBooleanEncoder: repeated bounds amortize a completed strong dia
     for (auto& term : complemented) term.literal = term.literal.negated();
     const auto opposite = pb.lessEqual(complemented, total - boundary - 2);
     REQUIRE(opposite);
-    CHECK(pb.statistics().reusedSums == 1);
+    CHECK(pb.statistics().reusedSums + pb.statistics().reusedThresholds == 1);
     CHECK_FALSE(encoder.overflowed());
     // The old diagram and the new arithmetic representation coexist in one
     // SAT instance. Check both truth directions, including exact boundaries.
@@ -343,6 +389,134 @@ TEST_CASE("PseudoBooleanEncoder: an exhausted attempt cannot corrupt a later sha
     CHECK(sat->solve(assumptions) == SatSolver::SolveResult::Sat);
     assumptions.back() = predicate->negated();
     CHECK(sat->solve(assumptions) == SatSolver::SolveResult::Unsat);
+}
+
+TEST_CASE("Ordered PB: incompatible thresholds conflict without input decisions") {
+    const std::array<std::array<size_t, 3>, 3> orders{{{0, 1, 2}, {2, 1, 0}, {0, 2, 1}}};
+    for (unsigned family = 0; family < 5; ++family) {
+        for (const auto& order : orders) {
+            ThresholdClauses sat;
+            BitBlastEncoder enc(sat);
+            const unsigned count = family == 1 ? 8 : family == 2 ? 6 : 10;
+            std::vector<WeightedLiteral> terms;
+            for (unsigned i = 0; i < count; ++i) {
+                mpz_class weight = family == 0 ? 1 : i + 1;
+                if (family == 1) weight = std::array<long, 8>{17, 29, 31, 43, 57, 91, 127, 211}[i];
+                if (family == 2) weight = std::array<long, 6>{-3, 5, -7, 11, -13, 17}[i];
+                if (family == 3) weight <<= 83;
+                if (family == 4) weight = mpz_class(1) << i;
+                terms.push_back({enc.mkVar(1).bits[0], weight});
+            }
+            const long start = family == 0 ? 4 : family == 1 ? 150 : family == 2 ? 2
+                               : family == 3 ? 10 : 210;
+            std::array<mpz_class, 3> bounds{start, start + 1, start + 2};
+            if (family == 3)
+                for (auto& bound : bounds) { bound <<= 83; bound += 3; }
+            WorkBudget work;
+            PseudoBooleanEncoder pb(enc, work);
+            std::array<SatLit, 3> roots;
+            for (const auto index : order) {
+                const auto root = pb.lessEqual(terms, bounds[index]);
+                REQUIRE(root);
+                roots[index] = *root;
+            }
+            for (size_t low = 0; low < roots.size(); ++low)
+                for (size_t high = low + 1; high < roots.size(); ++high)
+                    CHECK(sat.unitConflict({roots[low], roots[high].negated()}));
+            CHECK_FALSE(sat.unitConflict({roots.front().negated(), roots.back()}));
+        }
+    }
+}
+
+TEST_CASE("Ordered PB: shared signed bounds preserve every Boolean truth assignment") {
+    for (const auto& scale : std::array<mpz_class, 2>{mpz_class(1), mpz_class(1) << 100}) {
+        auto sat = createSatSolver();
+        BitBlastEncoder enc(*sat);
+        std::array<SatLit, 4> variables;
+        for (auto& variable : variables) variable = enc.mkVar(1).bits[0];
+        const std::array<long, 4> weights{3, -2, 5, 0};
+        std::vector<WeightedLiteral> terms;
+        for (size_t i = 0; i < variables.size(); ++i)
+            terms.push_back({variables[i], weights[i] * scale});
+        terms.push_back({variables[0].negated(), 2 * scale});
+        terms.push_back({variables[0], 3 * scale});
+        terms.push_back({enc.constTrue(), -scale});
+        terms.push_back({enc.constFalse(), 7 * scale});
+        auto negative = terms;
+        for (auto& term : negative) term.weight = -term.weight;
+        const std::array<long, 9> bounds{-6, 12, 0, 3, 8, -2, 1, 9, 4};
+        WorkBudget work;
+        PseudoBooleanEncoder pb(enc, work);
+        std::vector<SatLit> roots;
+        for (const long bound : bounds) {
+            const auto upper = pb.lessEqual(terms, scale * bound + scale - 1);
+            const auto lower = pb.lessEqual(negative, -scale * bound);
+            REQUIRE(upper); REQUIRE(lower);
+            roots.push_back(*upper);
+            roots.push_back(*lower);
+        }
+        for (unsigned mask = 0; mask < 16; ++mask) {
+            std::vector<SatLit> assumptions;
+            mpz_class value = scale * ((mask & 1) ? 2 : 1);
+            for (size_t i = 0; i < variables.size(); ++i) {
+                const bool chosen = mask & (1u << i);
+                assumptions.push_back(chosen ? variables[i] : variables[i].negated());
+                if (chosen) value += weights[i] * scale;
+            }
+            const auto inputs = assumptions;
+            for (size_t i = 0; i < roots.size(); ++i) {
+                const bool expected = i % 2 ? value >= scale * bounds[i/2]
+                                            : value <= scale * bounds[i/2] + scale - 1;
+                assumptions = inputs;
+                assumptions.push_back(expected ? roots[i] : roots[i].negated());
+                CHECK(sat->solve(assumptions) == SatSolver::SolveResult::Sat);
+                assumptions.back() = assumptions.back().negated();
+                CHECK(sat->solve(assumptions) == SatSolver::SolveResult::Unsat);
+            }
+        }
+    }
+}
+
+TEST_CASE("Ordered PB: incomplete thresholds stay private and complete predicates reuse no variables") {
+    auto sat = createSatSolver();
+    BitBlastEncoder enc(*sat);
+    WorkBudget work;
+    PseudoBooleanEncoder pb(enc, work);
+    std::vector<WeightedLiteral> terms;
+    for (unsigned i = 0; i < 10; ++i) terms.push_back({enc.mkVar(1).bits[0], 1});
+    const auto first = pb.lessEqual(terms, 5);
+    REQUIRE(first);
+    work = WorkBudget(40);
+    CHECK_FALSE(pb.lessEqual(terms, 4));
+    CHECK_FALSE(enc.overflowed());
+    work = WorkBudget();
+    const auto next = pb.lessEqual(terms, 4);
+    REQUIRE(next);
+    const auto count = enc.varCount();
+    enc.setVarBudget(count);
+    auto equivalent = terms;
+    equivalent.push_back({enc.constTrue(), 3});
+    equivalent.push_back({terms.front().literal, 0});
+    const auto repeated = pb.lessEqual(equivalent, 8);
+    REQUIRE(repeated);
+    CHECK(*repeated == *first);
+    auto complement = terms;
+    for (auto& term : complement) term.literal = term.literal.negated();
+    const auto opposite = pb.lessEqual(complement, 4);
+    REQUIRE(opposite);
+    CHECK(*opposite == first->negated());
+    CHECK(enc.varCount() == count);
+    CHECK_FALSE(enc.overflowed());
+    for (unsigned chosen = 0; chosen <= 10; ++chosen) {
+        std::vector<SatLit> assumptions;
+        for (size_t i = 0; i < terms.size(); ++i)
+            assumptions.push_back(i < chosen ? terms[i].literal : terms[i].literal.negated());
+        assumptions.push_back(chosen <= 4 ? *next : next->negated());
+        assumptions.push_back(chosen <= 5 ? *first : first->negated());
+        CHECK(sat->solve(assumptions) == SatSolver::SolveResult::Sat);
+        assumptions.back() = assumptions.back().negated();
+        CHECK(sat->solve(assumptions) == SatSolver::SolveResult::Unsat);
+    }
 }
 
 TEST_CASE("Finite integer portfolio: signed strict bounds and Boolean contexts validate exactly") {

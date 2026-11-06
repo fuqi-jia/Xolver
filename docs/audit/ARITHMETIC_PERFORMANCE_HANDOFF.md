@@ -287,6 +287,33 @@ contents through ExperimentOS: **2,258 cases / 1,373,099 assertions** pass, and
 the CLI and worker hashes exactly match the preceding qualified executables.
 No main promotion or whole-suite benefit is attributed to this experiment.
 
+### In development: ordered fully reified weighted thresholds
+
+An encoding probe linked against qualified main finds that four of five
+incompatible threshold pairs do not conflict under unit propagation. Frozen
+Z3 and cvc5 independently refute all five actual CNF instances. This is a
+propagation gap; it does not identify the cause of every remaining timeout.
+
+The shared pseudo-Boolean encoder retains full predicate definitions and
+indexes completed thresholds by the exact normalized signed weighted sum.
+A smaller bound entails its next larger bound; adjacent implications encode
+the order without fresh variables. Equivalent and complemented requests reuse
+completed predicates. Partial encodings are never published, and current
+assignments, candidate boxes and source-scope facts never enter the index.
+APIs, theory admission, resource settings and rollback policies are unchanged.
+
+Proof-enabled Panda9 / ExperimentOS qualification passes **2,261 cases /
+1,374,424 assertions**. Three new groups check decision-free conflicts under
+different insertion orders, exhaustive signed truth tables with 100-bit
+coefficients, and exhausted attempts followed by complete reuse. Actual CNF
+passes **13,896 independent Z3/cvc5 decisions** across 48 synthetic scenarios.
+Frozen CLI SHA-256 is
+`35a67b88cbeea17527225f0b5773d271b8642813c4f1c6a25701c78e2a5511f1`.
+The initial native attempt had a type error in a new test; its failure is
+retained, and only the test operand type was corrected before qualification.
+Complete fixed160 comparison remains pending; no performance benefit or
+additional main capability is claimed yet.
+
 ### Closed experiment: Boolean directions in weighted threshold diagrams
 
 The prototype forwarded established Boolean occurrence directions through

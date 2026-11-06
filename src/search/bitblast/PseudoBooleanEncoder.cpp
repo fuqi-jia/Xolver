@@ -1,7 +1,8 @@
 #include "search/bitblast/PseudoBooleanEncoder.h"
 #include <algorithm>
-#include <map>
+#include <iterator>
 #include <limits>
+#include <map>
 
 namespace xolver::bitblast {
 
@@ -125,19 +126,45 @@ std::optional<SatLit> PseudoBooleanEncoder::lessEqual(
             if (literal && complement) *literal = literal->negated();
             return literal;
         };
+        const mpz_class target = bound;
+        if (const auto sum = thresholds_.find(terms); sum != thresholds_.end()) {
+            if (const auto predicate = sum->second.find(target); predicate != sum->second.end()) {
+                ++statistics_.reusedThresholds;
+                return oriented(predicate->second);
+            }
+        }
+        auto publish = [&](std::optional<SatLit> literal) -> std::optional<SatLit> {
+            if (!literal || encoder_.overflowed()) return std::nullopt;
+            tick();
+            auto& predicates = thresholds_[terms];
+            const auto next = predicates.lower_bound(target);
+            // A smaller threshold entails a larger one. These are relations
+            // between total Boolean functions, so they remain valid under
+            // assumptions and when a finite candidate box is withdrawn.
+            auto imply = [&](SatLit smaller, SatLit larger) {
+                if (smaller != larger) {
+                    encoder_.assertImplication(smaller, larger);
+                    ++statistics_.thresholdImplications;
+                }
+            };
+            if (next != predicates.end()) imply(*literal, next->second);
+            if (next != predicates.begin()) imply(std::prev(next)->second, *literal);
+            predicates.emplace_hint(next, target, *literal);
+            return oriented(literal);
+        };
         // Once a sum needed an arithmetic encoding, subsequent thresholds
         // reuse it before trying another potentially large decision diagram.
         if (const auto found = sums_.find(terms); found != sums_.end()) {
             ++statistics_.carrySaveThresholds;
             ++statistics_.reusedSums;
-            return oriented(compareSum(found->second, bound));
+            return publish(compareSum(found->second, bound));
         }
         // Several individually affordable diagrams can still duplicate most
         // of the encoding for a family of bounds. Once this sum needed a large
         // complete diagram, a new threshold makes the shared arithmetic
         // representation useful. Existing diagram literals remain exact.
         if (diagramSums_.contains(terms))
-            return oriented(carrySaveThreshold(terms, bound));
+            return publish(carrySaveThreshold(terms, bound));
 
         // A full adder needs at most five gates; the final addition/comparison
         // is linear in the coefficient width. If a diagram exceeds that
@@ -155,7 +182,6 @@ std::optional<SatLit> PseudoBooleanEncoder::lessEqual(
             maximumWidth = std::max(maximumWidth, mpz_sizeinbase(term.weight.get_mpz_t(), 2));
         }
         charge(maximumWidth, 16);
-        const mpz_class target = bound;
 
         // F(i,b) = ite(literal_i, F(i+1,b-weight_i), F(i+1,b)).
         // Memoization is local to this normalized threshold. Gate sharing in
@@ -202,7 +228,7 @@ std::optional<SatLit> PseudoBooleanEncoder::lessEqual(
                     // partial diagram therefore cannot restrict the inputs.
                     stack.clear();
                     memo.clear();
-                    return oriented(carrySaveThreshold(terms, target));
+                    return publish(carrySaveThreshold(terms, target));
                 }
                 frame.phase = 1;
                 const mpz_class lowBound = frame.bound;
@@ -219,8 +245,9 @@ std::optional<SatLit> PseudoBooleanEncoder::lessEqual(
                 stack.pop_back();
             }
         }
-        if (keepDiagram) diagramSums_.insert(std::move(terms));
-        return oriented(result);
+        const auto complete = publish(result);
+        if (complete && keepDiagram) diagramSums_.insert(std::move(terms));
+        return complete;
     } catch (const ResourceExhausted&) {
         return std::nullopt;
     }

@@ -60,6 +60,7 @@ public:
     SatLit relZero(const BitVec& a, Relation rel);
 
     void assertLit(SatLit l);
+    void assertImplication(SatLit premise, SatLit conclusion);
 
     // Hard resource guard: cap the number of fresh SAT variables this encoder
     // will allocate. High-degree QF_NIA can blow the encoding past memory and
