@@ -393,8 +393,39 @@ frozen CLI is
 
 A fresh 36-input comparison retains the preceding controls, all eight verified
 Z3/open-main gaps and the previous full-round loss, and adds four independent
-signed integer interval queries. Results and diagnostic profiles are pending;
-no new fixed160 solved count or main acceptance is claimed.
+signed integer interval queries. Verified counts improve **27 to 28**, versus
+25 for same-round Z3, with no losses or errors. The count gain is the previously
+constructed product-inference control. A separate large negative interval
+control improves **22.318 to 0.116 seconds UNSAT**, independently confirmed.
+The eight original gaps remain unsolved. Diagnostics show finite-factor
+substitutions and less candidate work, without a new fixed160 solve or main
+acceptance claim.
+
+### FULINA development: canonical polynomial sign inputs
+
+The shared integer/real sign closure now merges normalized, scaled source
+aliases before charging its existing input-fact capacity. Repeated premises
+could previously skip all sign reasoning even when their canonical context
+fit that capacity. Input, fact, work and round limits retain their values;
+there is no parameter increase. Explained strengthened facts retain their
+active premises, including after premise withdrawal or a resource exit.
+
+The qualified predecessor fails both independently constructed regressions.
+The implementation passes those tests for guarded nonlinear contradictions,
+strict product consequences, rational scaling and integer/real domains.
+Proof-enabled Panda9 / ExperimentOS qualification passes **2,219 cases /
+1,365,910 assertions**. The frozen CLI is
+`f69f95643232503c37be38c19b4ef0c5ee3d8e4eac3c57c627a82e1b2700f66f`.
+
+A fresh unchanged 36-input comparison against accepted main verifies **27 to
+28 results**, versus 27 for same-round Z3, with no losses or errors. Verified
+PAR-2 totals are **1,242.381 to 1,100.938 seconds**, versus **1,275.895** for
+Z3. Its sole gain remains the earlier generic product-inference control; the
+eight original gaps still time out. A diagnostic context with 133 sources
+normalizes to 102 facts and resumes sign inference, but does not solve within
+60 seconds. This closes the isolated performance trial without a new fixed160
+solve claim or main promotion. Complete new-version suite acceptance remains
+open; no protected-set or final-version QCP result is claimed.
 
 ## Previous checkpoint: sparse integer equality components (2026-11-06)
 

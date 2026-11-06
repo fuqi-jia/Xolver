@@ -129,6 +129,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageSignRefute(TheoryLemmaStorage&,
         if (!profile.empty()) {
             std::ofstream out(profile.string() + ".polynomial-sign.log", std::ios::app);
             out << "rounds=" << stats.rounds << " facts=" << stats.inferredFacts
+                << " sources=" << stats.sourceConstraints << " input_facts=" << stats.inputFacts
                 << " substitutions=" << stats.substitutions << " cancellations=" << stats.cancellations
                 << " divisions=" << stats.divisions << " eliminations=" << stats.eliminations
                 << " var_queries=" << stats.variableLookups << " var_hits=" << stats.variableIndexHits

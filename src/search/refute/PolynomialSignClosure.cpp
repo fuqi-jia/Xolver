@@ -875,10 +875,17 @@ public:
         facts_.reserve(256);
     }
     void run(const std::vector<SignRefuteConstraint>& constraints) {
-        if (constraints.size() > 128) throw ResourceExhausted("sign closure input allocation exhausted");
-        for (const auto& constraint : constraints) add(constraint.poly, signsOf(constraint.rel), {constraint.reason});
-        originalFacts_ = facts_.size();
-        stats_.inferredFacts = 0;
+        // Source aliases and scaled comparisons share their canonical fact.
+        // Charge the same input capacity to that representation, so repeating
+        // an existing premise cannot disable all subsequent sign reasoning.
+        for (const auto& constraint : constraints) {
+            add(constraint.poly, signsOf(constraint.rel), {constraint.reason});
+            originalFacts_ = facts_.size();
+            stats_.inputFacts = originalFacts_;
+            stats_.inferredFacts = 0;
+            if (originalFacts_ > 128)
+                throw ResourceExhausted("sign closure input fact allocation exhausted");
+        }
         bool certificatesTried = false;
         for (size_t round = 0; round < 32; ++round) {
             ++stats_.rounds;
@@ -964,6 +971,7 @@ std::optional<std::vector<SatLit>> refuteByPolynomialSignClosure(
     PolynomialSignStatistics local;
     auto& stats = statistics ? *statistics : local;
     stats = {};
+    stats.sourceConstraints = constraints.size();
     if (consequences) consequences->clear();
     SignClosure closure(stats, domain);
     try { closure.run(constraints); }
