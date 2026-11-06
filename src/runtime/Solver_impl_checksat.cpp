@@ -320,6 +320,8 @@ Result Solver::Impl::checkSatGround() {
                 // Generated definitions belong to the current scope
                 loweredScoped.push_back({ir->currentScopeLevel(), def});
             }
+            for (ExprId bound : lowerer.generatedBounds())
+                loweredScoped.push_back({ir->currentScopeLevel(), bound});
             ir->clearAssertions();
             for (const auto& [level, a] : loweredScoped) {
                 ir->addAssertion(a, level);

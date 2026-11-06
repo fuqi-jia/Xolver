@@ -86,9 +86,45 @@ Proof-enabled Panda9 / ExperimentOS qualification passes **2,246 cases /
 with the predecessor and passes with the repair; it checks fractional-point
 exclusion, integer witnesses and conditional-cut rollback. Frozen CLI SHA-256
 is `1bd4c9d53bba240995ee0ad9a47ed3eb61f191a26dc332b3eea8d04b7a6e1cc3`.
-A fresh 80-input comparison against accepted main and Z3 is running, covering
-all fixed-suite QF_LIA inputs and all development QF_UFNIA controls. No new
-solve, timing benefit or full-stage acceptance is claimed before its audit.
+A fresh 80-input comparison covers all fixed-suite QF_LIA inputs and all
+development QF_UFNIA controls. Both versions retain **71 verified results**,
+versus **69 for Z3**, with no gains, losses or errors. Verified PAR-2 totals
+change **1,518.152 to 1,519.645 seconds**; no solve or timing benefit is
+established. The repair is pushed to FULINA as `b14f1a86`.
+
+Complete fresh comparisons retain all 587 development and 14,408 private
+results without errors. Private-query totals are **1,405.507 to 1,404.842
+seconds**, versus **446.169 for Z3**. Fixed160 loses one UNSAT result:
+**120 to 119 verified**, versus **116 for Z3**, after symmetric independent
+residue-certificate checking. The predecessor solves that input in 58.639
+seconds; the candidate times out at 60 seconds. Mean verified PAR-2 changes
+**34.983 to 35.290 seconds**, versus **34.158 for Z3**. Raw observations are
+retained, with no retake or timeout upgrade. This delivery-priority variant
+is not accepted for main promotion; its measured contract bug still needs a
+repair that preserves useful integer-refinement ordering.
+
+### In development: retain finite ranges through numeric choice lowering
+
+Public linear diagnostics expose 120 integer coordinates but only 12 recognized
+finite domains; the remaining coordinates come from lowered conditional terms.
+The candidate encoder repeats UNSAT searches at heuristic widths without
+covering all source values, so those outcomes cannot establish source UNSAT.
+
+The shared ITE lowerer now derives a finite hull when both branches have
+unconditional exact ranges. It uses rational interval arithmetic for integer
+and real choices, including nested arithmetic over prior choice definitions.
+The runtime adds these consequences in the same scope as their definitions.
+Input-context and branch-dependent bounds never enter the range cache;
+unbounded branches retain the existing guarded definitions. Four new test
+groups check exhaustive branch witnesses, finite candidate admission, absent
+bounds for open branches, and incremental withdrawal. Proof-enabled Panda9 /
+ExperimentOS qualification passes **2,250 cases / 1,372,201 assertions**.
+Two mechanism tests fail with the old implementation; all four new groups
+pass with the candidate. CLI SHA-256 is
+`7772792c5d9ae8d3eb92b9dbd9164af240e46ae6fe1150dde06d9aecafb12a94`.
+Fresh diagnostics and a complete 112-input linear/mixed-theory comparison
+are running. Main promotion and full-stage acceptance remain pending;
+no new solve or timing benefit is claimed.
 
 The affine-product strengthening experiment is closed without promotion:
 both variants retain 62 of 69 controls, add no verified solves and increase

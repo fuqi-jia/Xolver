@@ -1,7 +1,9 @@
 #include "frontend/preprocess/IteLowerer.h"
 #include "base/WorkBudget.h"
+#include "algebra/interval/IntervalQOps.h"
 #include "ir/NumericLiteral.h"
 #include <cassert>
+#include <algorithm>
 #include <iostream>
 #include <map>
 
@@ -155,6 +157,61 @@ std::optional<FactoredChoice> factorIntegerChoice(
 }
 } // namespace
 
+std::optional<IntervalQ> IteLowerer::finiteRange(ExprId expression) {
+    try {
+        WorkBudget budget(8192);
+        auto charge = [&](const IntervalQ& range) {
+            for (const auto* endpoint : {&range.lo, &range.hi})
+                budget.tick(mpz_size(endpoint->get_num_mpz_t()) +
+                            mpz_size(endpoint->get_den_mpz_t()));
+        };
+        std::vector<std::pair<ExprId, bool>> pending{{expression, false}};
+        while (!pending.empty()) {
+            budget.tick();
+            const auto [id, ready] = pending.back();
+            pending.pop_back();
+            if (numericRanges_.contains(id)) continue;
+            const auto node = ir_.get(id);
+            if (const auto value = numericLiteral(node)) {
+                numericRanges_.emplace(id, IntervalQ{*value, *value});
+                continue;
+            }
+            const bool arithmetic = node.kind == Kind::Add || node.kind == Kind::Sub ||
+                node.kind == Kind::Neg || node.kind == Kind::Mul;
+            if (!arithmetic || node.children.empty()) {
+                numericRanges_.emplace(id, std::nullopt);
+                continue;
+            }
+            if (!ready) {
+                pending.emplace_back(id, true);
+                for (const auto child : node.children) pending.emplace_back(child, false);
+                continue;
+            }
+            std::optional<IntervalQ> result;
+            for (size_t index = 0; index < node.children.size(); ++index) {
+                budget.tick();
+                const auto& child = numericRanges_.at(node.children[index]);
+                if (!child) { result.reset(); break; }
+                charge(*child);
+                if (result) charge(*result);
+                if (index == 0) result = *child;
+                else if (node.kind == Kind::Add) result = intervalQAdd(*result, *child);
+                else if (node.kind == Kind::Sub) result = intervalQSub(*result, *child);
+                else if (node.kind == Kind::Mul) result = intervalQMul(*result, *child);
+                else { result.reset(); break; }
+            }
+            if (result && (node.kind == Kind::Neg ||
+                           (node.kind == Kind::Sub && node.children.size() == 1)))
+                result = intervalQNeg(*result);
+            numericRanges_.emplace(id, std::move(result));
+        }
+        return numericRanges_.at(expression);
+    } catch (const ResourceExhausted&) {
+        // Missing optional range information never restricts the choice.
+        return std::nullopt;
+    }
+}
+
 IteLowerer::IteLowerer(NativeTerms& ir)
     : ir_(ir), boolSortId_(ir.boolSortId()) {
 }
@@ -300,6 +357,26 @@ ExprId IteLowerer::lowerTermIte(ExprId iteExpr, SortId S) {
 
     ExprId guardElse = ir_.add(TermExpr{Kind::Or, boolSortId_, {cLower, eqElse}, Payload{}});
     generatedAssertions_.push_back(guardElse);
+
+    // Both guarded definitions hold, so either branch supplies the value.
+    // Their range hull is unconditional even when the condition is unknown.
+    // These bounds depend only on literals and prior choice definitions;
+    // branch-dependent input bounds never enter this cache.
+    const auto kind = ir_.sortKind(S);
+    if (kind == SortKind::Int || kind == SortKind::Real) {
+        const auto thenRange = finiteRange(tLower), elseRange = finiteRange(eLower);
+        if (thenRange && elseRange) {
+            const IntervalQ range{std::min(thenRange->lo, elseRange->lo),
+                                  std::max(thenRange->hi, elseRange->hi)};
+            numericRanges_[v] = range;
+            const auto lower = arithmeticConstant(ir_, S, range.lo);
+            const auto upper = arithmeticConstant(ir_, S, range.hi);
+            generatedBounds_.push_back(ir_.addShared(
+                TermExpr{Kind::Geq, boolSortId_, {v, lower}, Payload{}}));
+            generatedBounds_.push_back(ir_.addShared(
+                TermExpr{Kind::Leq, boolSortId_, {v, upper}, Payload{}}));
+        }
+    }
 
     return result;
 }

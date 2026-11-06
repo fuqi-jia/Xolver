@@ -1,6 +1,8 @@
 #pragma once
 
 #include "ir/NativeTerms.h"
+#include "algebra/interval/IntervalQ.h"
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -31,6 +33,9 @@ public:
     // All ITE definition assertions generated during lowering.
     const std::vector<ExprId>& generatedAssertions() const { return generatedAssertions_; }
 
+    // Unconditional numeric consequences of the generated choice definitions.
+    const std::vector<ExprId>& generatedBounds() const { return generatedBounds_; }
+
 private:
     ExprId lowerExpr(ExprId e, SortId expectedSort);
     ExprId lowerBoolExpr(ExprId e);
@@ -40,6 +45,8 @@ private:
 
     ExprId freshTerm(SortId sort);
     ExprId freshBool();
+
+    std::optional<IntervalQ> finiteRange(ExprId expression);
 
     ExprId rebuildLike(ExprId original, const std::vector<ExprId>& newChildren);
 
@@ -68,6 +75,8 @@ private:
     std::unordered_map<TermKey, ExprId, TermKeyHash> termMemo_;
 
     std::vector<ExprId> generatedAssertions_;
+    std::vector<ExprId> generatedBounds_;
+    std::unordered_map<ExprId, std::optional<IntervalQ>> numericRanges_;
 };
 
 } // namespace xolver
