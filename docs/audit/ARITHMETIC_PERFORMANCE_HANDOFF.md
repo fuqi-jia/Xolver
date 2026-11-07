@@ -1,5 +1,61 @@
 # Arithmetic validation and continuation record
 
+## Qualified candidate: incremental dense SAT assignments (2026-11-07)
+
+Core `1c2af00b` replaces duplicate hash-based live assignments and decision
+levels with the existing dense assignment view and an indexed level vector.
+Assignment notifications and trail-suffix backtracking maintain that view
+incrementally, eliminating its whole-map reconstruction before Standard checks.
+The assigned-variable cardinality, observation/freeze policy, theory-check
+cadence, source assertions, Full-model replay, conflict guards, user callbacks
+and distinct LRA/LIA rollback policies are preserved. The change applies to
+all theories using the common SAT propagator; no parameter or feature gate is
+introduced.
+
+Proof-enabled Panda9 / ExperimentOS qualification passes **2,274 cases /
+1,450,390 assertions**, including random differential assignment updates,
+published-view retraction, connected Boolean encoding/model checks and public
+callback coverage. All **2,179 qualified source contents** match the committed
+core and parser gitlink. Frozen CLI SHA-256 is
+`f74fa61aaef9e3c88774ea32f200e54ef8037df0db660265d8045af667d17fc8`;
+worker SHA-256 is
+`687b7b5fdad3d98666253a77118b3dcd9a21c394f302cf3e83f63735cda6a977`.
+
+Fresh private14408 acceptance verifies all **14,408 results in every arm**:
+8,940 SAT / 5,468 UNSAT, with no losses, unknowns, timeouts, unconfirmed
+decisions or errors. Solver totals are **368.468 main / 360.842 candidate /
+464.542 Z3 seconds**, a **2.07%** reduction against same-round main on this
+authorized development cohort. Development587 retains **587 / 587 / 584**
+verified results, totaling **14.254 / 13.713 / 18.294 seconds**; three reference
+models remain unconfirmed and excluded. All **965 public regressions** pass.
+
+Fresh fixed160 verifies **123 main / 123 candidate / 116 Z3** after a new
+independent original-input-bound residue-certificate check confirms only
+actual timed UNSAT results. There are no same-round gains or losses, with
+**37 timeouts in both Xolver arms**. Mean verified PAR-2 is **32.357 / 32.204 /
+34.360 seconds**. Seven unconfirmed reference decisions remain excluded.
+This round does not reproduce the preceding stage's 124 verified results,
+even in the unchanged main binary; it establishes same-round retention,
+not new coverage or reproduction of every historical solve. Raw reports
+remain unchanged, and neither timeout nor unknown receives certificate credit.
+
+The earlier 171-input pilot retains **167 / 167 / 169** verified results but
+has worse candidate timing: **370.239 / 385.871 / 86.871 seconds**. That formal
+result is preserved. Paired diagnostics retain identical theory-check and
+conflict counts on the examined regressions; diagnostic timings do not replace
+formal rows. The complete cohorts above use the same unchanged candidate.
+
+Every actual timed Xolver SAT model passes both Z3 and cvc5; reference SAT
+models pass cvc5. No invalid model, opposite verdict, crash or protocol error
+is observed. Frozen versions use 60 seconds / one leased physical CPU / 16 GiB
+per input and solver, with up to 40 independent physical CPU leases. Complete
+server acceptance passes; exact-head PR CI and merged-main CI are pending.
+This worker has no original-C QCP qualification. All fixed inputs solved,
+final-program validation, final fair freeze and once-only protected-set
+acceptance remain open. No protected input has been used and no overall
+solver-superiority claim is made. Private inputs and individual evidence stay
+server-only; the cancelled server archive is not a delivery requirement.
+
 ## Delivered stage: refine NIA before global model completion (2026-11-07)
 
 [PR #110](https://github.com/fuqi-jia/Xolver/pull/110) merged as
@@ -80,7 +136,7 @@ opposite verdict is observed. Private inputs and individual evidence remain
 server-only. Diagnostic replays do not replace the formal rows.
 
 The experiment changes SAT preprocessing and theory-check cadence along with
-observation. Those changes are withdrawn. The next implementation retains
+observation. Those changes are withdrawn. The dense-assignment candidate retains
 main's observation and check protocol while replacing duplicate hash-based
 assignment storage and repeated whole-view construction with one incremental
 live snapshot. No memory-pool experiment is repeated, and no protected input
