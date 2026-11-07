@@ -1,6 +1,12 @@
 # Arithmetic validation and continuation record
 
-## Qualified candidate: incremental dense SAT assignments (2026-11-07)
+## Delivered stage: incremental dense SAT assignments (2026-11-07)
+
+[PR #111](https://github.com/fuqi-jia/Xolver/pull/111) merged as
+`4ed05fb4a2d462afa3c0c854ad361d34b447a8d6` after complete server acceptance and
+both exact-head [PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42369699160)
+passed. Both [merged-main CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42371380236)
+also pass. The merge tree matches reviewed head `3ae4c81c` byte for byte.
 
 Core `1c2af00b` replaces duplicate hash-based live assignments and decision
 levels with the existing dense assignment view and an indexed level vector.
@@ -48,13 +54,31 @@ formal rows. The complete cohorts above use the same unchanged candidate.
 Every actual timed Xolver SAT model passes both Z3 and cvc5; reference SAT
 models pass cvc5. No invalid model, opposite verdict, crash or protocol error
 is observed. Frozen versions use 60 seconds / one leased physical CPU / 16 GiB
-per input and solver, with up to 40 independent physical CPU leases. Complete
-server acceptance passes; exact-head PR CI and merged-main CI are pending.
+per input and solver, with up to 40 independent physical CPU leases. Server,
+exact-head PR CI and merged-main CI acceptance all pass.
 This worker has no original-C QCP qualification. All fixed inputs solved,
 final-program validation, final fair freeze and once-only protected-set
 acceptance remain open. No protected input has been used and no overall
 solver-superiority claim is made. Private inputs and individual evidence stay
 server-only; the cancelled server archive is not a delivery requirement.
+
+## Development prototype: shared parser kind tables (2026-11-07)
+
+Frozen production CLI symbol inspection finds 42 copies of each of the three
+immutable kind lookup containers. Forty structurally selected paired private
+instruction profiles complete; static initialization accounts for about 7.3%
+of aggregate sampled instructions, including startup and shutdown. These are
+diagnostics, not formal timing or new solved-result evidence.
+
+SOMTParser core `784553e3` changes the three public definitions to C++17
+`inline const`, preserving every initializer, name and lookup. Its integration
+regression compares table addresses across translation units and checks all
+operator mappings. The same scoped fix is prepared against upstream main.
+An isolated pinned-header probe observes the old identity assertion failure
+and repaired lookup completion; full umbrella-header integration and complete
+Xolver native/cohort acceptance remain pending. No runtime parameter, model
+guard, theory policy, budget or feature gate is changed. Private queries and
+individual profiling records remain server-only.
 
 ## Delivered stage: refine NIA before global model completion (2026-11-07)
 
