@@ -1,5 +1,36 @@
 # Arithmetic validation and continuation record
 
+## Development candidate: refine before global model construction (2026-11-07)
+
+Commits `c5c0a17e` and `b623c781` retain the shared real model constructor while
+running it at Full effort. LRA preserves main's partial-check split vocabulary
+and avoids constructing a new dense point during propagation. NIA applies its
+cheap conflict and sign refinements before consuming the one-shot global model
+request, retaining that request ahead of expensive encodings. Existing search
+budgets, exact arithmetic and LRA/LIA rollback policies remain unchanged.
+
+Proof-enabled Panda9 qualification passes **2,277 cases / 1,373,356 assertions**.
+The scheduling regression fails with the predecessor and passes after the
+correction. All **2,181 qualified source contents** match core `b623c781` and the
+parser gitlink. Frozen CLI SHA-256 is
+`d56782afc524b69d5d38ea201a5b87d30a8563bfac5de78c802ca135ba97463d`;
+worker SHA-256 is
+`6df5268f9aeba76793aed682791956df3d93980b42f2a954b54401766148782c`.
+
+A fresh 13-input pilot verifies **9 main / 9 candidate / 12 Z3**, with no gained
+or lost solve, invalid model, opposite verdict or protocol error. Both earlier
+real-arithmetic regressions return independently checked SAT in this round.
+The nine solved inputs total **145.210 main / 129.051 candidate seconds**.
+One private combination representative improves **14.792 to 0.0353 seconds**;
+both references accept its actual timed model. Four original gaps remain
+timeouts in both Xolver arms. These observations do not establish overall
+solver superiority or additional verified coverage.
+
+Complete private14408, fixed160, development587 and public967 acceptance is
+running against accepted main, using the same frozen binaries and 60 seconds /
+one leased physical CPU / 16 GiB per input/version. This candidate has no PR or
+original-C QCP qualification yet. No protected input has been used.
+
 ## Development prototype: dense real exclusion completion (2026-11-07)
 
 Commit `0f6cb2c9` on FULINA adds shared simplex model construction for finite
