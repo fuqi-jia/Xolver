@@ -1,6 +1,12 @@
 # Arithmetic validation and continuation record
 
-## Server-qualified stage: reduce owning native read handles (2026-11-07)
+## Delivered stage: reduce owning native read handles (2026-11-07)
+
+[PR #113](https://github.com/fuqi-jia/Xolver/pull/113) merged as
+`fc6ffab4e1d949b986aa52e1274632f9a7d9340f` after complete server acceptance and
+both exact-head [PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42382984485)
+passed. Both [merged-main CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42384595013)
+also pass. Its tree matches reviewed head `43e744fc` byte for byte.
 
 Core `7b0c2e2b`, pushed to `FULINA`, reduces repeated ownership work in
 `NativeTerms::get`. The index already owns the parent node, so the reader walks
@@ -43,12 +49,31 @@ worker SHA-256:
 `3577bb5855e16b5137216bd7501d2783b8b5468ab2d8a5dcd764de3d2f92bd87`.
 Server stage-audit SHA-256:
 `6835374d2e20a82d1069dcf71bf084049f4c832d1af4bdcce4518a4e04fef9b5`.
-Server acceptance and the preceding merged-main CI pass; this stage's PR CI
-and subsequent main CI remain pending at this checkpoint. This worker has no
+Server, exact-head PR CI and merged-main CI acceptance pass. This worker has no
 original-C QCP qualification. Remaining fixed inputs, final-program closure,
 final fair comparison and once-only protected acceptance remain open. Neither
 protected set has been used and no overall solver superiority is claimed.
 Private inputs, models and individual evidence remain server-only.
+
+## Closed experiments: full-model replay ordering (2026-11-07)
+
+Two unmerged sorting variants add no verified solve on the frozen 14-input
+development pilot (four verified-reference gaps and ten large solved controls).
+Both retain **10 / 10 / 12** verified baseline/candidate/Z3 results. Filtering
+theory atoms before sorting takes **373.200 / 373.807 / 198.415 seconds**;
+grouping the minimum level before sorting the remainder takes **371.840 /
+374.859 / 196.658 seconds**. Neither round supports promotion. Raw reports
+remain unchanged; no incomplete decision receives credit.
+
+The filtering prototype also misses an atom registered by an earlier replayed
+assertion. The same generic API regression passes the original source, fails
+the prototype and passes the corrected grouping variant. The latter passes
+**2,276 cases / 1,450,418 assertions**, including complete Boolean assignments,
+late atoms, decision levels and stable same-level order, but has no pilot gain.
+Both sorting changes are withdrawn. The original complete-model ordering and
+all source replays are restored; the generic regression tests are retained.
+No model/conflict guard, LRA/LIA rollback policy or budget is relaxed. Neither
+protected set is used, and no original-program or overall claim is made.
 
 ## Delivered stage: shared immutable parser kind tables (2026-11-07)
 
