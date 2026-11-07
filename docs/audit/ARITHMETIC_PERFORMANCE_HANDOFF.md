@@ -1,6 +1,12 @@
 # Arithmetic validation and continuation record
 
-## Current FULINA stage: coherent joint witnesses before arrangement (2026-11-07)
+## Delivered stage: coherent joint witnesses before arrangement (2026-11-07)
+
+[PR #108](https://github.com/fuqi-jia/Xolver/pull/108) merged as
+`c702ab6a2d09699f0c965717b83494f2876bdf5d` after complete server acceptance and
+both exact-head [PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42334669876)
+passed. Both [merged-main CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42335940722)
+also pass. The merge tree matches the qualified reviewed head byte for byte.
 
 The priority is speed on all 14,408 authorized private development queries.
 Profiling identifies repeated theory arrangements in satisfiable UF/integer
@@ -60,8 +66,9 @@ on that input timed out and receives no credit. There is one new verified SAT,
 no losses or errors, and **36 candidate timeouts**. Mean verified PAR-2 is
 **32.641 / 31.937 / 34.183 seconds**. Six unconfirmed reference results remain
 excluded. Raw timed reports are preserved; neither unknown nor timeout is
-upgraded. Exact-head PR CI and main promotion remain pending. No protected input
-has been used, and final-version original-C QCP verification remains open.
+upgraded. This stage is accepted on main. No protected input has been used;
+current-freeze original-C QCP verification is in progress, and final-version
+program performance and overall solver superiority remain unproven.
 Private queries, models, individual identifiers and evidence stay server-only.
 The cancelled `validation/current-main.json` archive is not a requirement.
 
