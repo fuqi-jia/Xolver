@@ -1,6 +1,6 @@
 # Arithmetic validation and continuation record
 
-## Development checkpoint: reuse class interpretations within model construction (2026-11-07)
+## Development checkpoint: reuse class interpretations within model construction (2026-11-08)
 
 The immutable LRA column-definition experiment is closed without demonstrated
 gain. Its frozen 14-input comparison retains **10 / 10 / 12** independently
@@ -16,9 +16,41 @@ Each current representative is resolved once; the local memo is destroyed
 before subsequent merges or backtracking. Model validation, array construction,
 literal choice, full checks and theory rollback semantics are retained.
 Generic regressions cover repeated aliases, function tables, class splits and
-new exact numeric anchors. Server qualification and performance are pending.
-Private inputs, models and individual evidence remain server-only; protected
-sets and current-worker original-C QCP qualification remain unused/incomplete.
+new exact numeric anchors. Panda9 / ExperimentOS passes **2,277 unit cases /
+1,450,712 assertions**, with all **2,338 qualified source contents** bound to
+core `52aef6c7`. The same 40 structural profile pairs reduce class-token member
+reads from **265,678 to 22,286**, and total owning native reads from **695,272 to
+451,880**. Total simulated instructions decrease **4.50%**; these profiles are
+diagnostics rather than formal timing or solve credit.
+
+Fresh complete private14408 comparison retains **14,408 / 14,408 / 14,408**
+independently verified baseline/candidate/Z3 results. Solver totals are
+**302.834 / 288.022 / 467.402 seconds**, reducing candidate time **4.89%**.
+Development587 retains **587 / 587 / 584** verified results and totals
+**11.603 / 11.020 / 17.951 seconds**; its three unconfirmed reference models
+remain excluded. There are no gains, losses or candidate errors in either
+cohort. All **965 public regressions** pass. Each formal solve receives
+**60 seconds / one leased physical CPU / 16 GiB**, with up to 40 distinct
+physical CPU leases. Actual timed candidate SAT models pass Z3 and cvc5 replay.
+Fixed160 verifies **124 / 124 / 118** results after a fresh input-bound residue
+certificate confirms only actual timed UNSAT decisions. Both Xolver arms retain
+**36 timeouts**, with no gains or losses. Mean verified PAR-2 is **31.665 /
+31.559 / 33.160 seconds**. One reference UNSAT retains previously successful
+independent cvc5 evidence on the identical frozen input and reference versions,
+after its fresh independent recheck times out. Its current-round solver time is
+preserved. Six reference decisions remain unconfirmed and excluded; raw timed
+reports are unchanged and no incomplete decision is upgraded.
+Server acceptance passes; exact-head PR CI and merged-main acceptance are pending.
+
+Frozen CLI SHA-256:
+`b79391cd27d3a3cf1d143debd9d9ba29ed05a923e60de4d8094fa9f6f7c78e83`;
+worker SHA-256:
+`f917af900051b5c937feee5a7c956b047f89221b700b276814cb3a63d7e0b697`.
+Server stage-audit SHA-256:
+`518aaeac7a3159382b9afdf4f88c4c1aa81a772a6584e2eab2b6eee5e8d51efe`.
+Private inputs, models and individual evidence remain server-only. Protected
+sets are unused; current-worker original-C QCP qualification and overall solver
+superiority remain unproven.
 
 ## Delivered stage: reduce owning native read handles (2026-11-07)
 
