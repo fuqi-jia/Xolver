@@ -1,13 +1,14 @@
 # Arithmetic validation and continuation record
 
-## Current FULINA work: strict joint witnesses before arrangement (2026-11-07)
+## Current FULINA stage: coherent joint witnesses before arrangement (2026-11-07)
 
-The current priority is speed on all 14,408 authorized private development
-queries. The preceding qualified freeze independently verifies every query:
-8,940 SAT and 5,468 UNSAT, without timeouts, unknowns, unconfirmed results or
-errors. Its fresh total solver time is **1,445.653 seconds**, versus **465.442**
-for same-round Z3. Most Xolver time is in satisfiable UF/integer combinations;
-parsing and preprocessing do not explain the representative slow cases.
+The priority is speed on all 14,408 authorized private development queries.
+Profiling identifies repeated theory arrangements in satisfiable UF/integer
+combinations; parsing and preprocessing do not explain the representative slow
+cases. The implementation also retains the shared incremental-context repair:
+withdrawn interior ordinary/interface bounds trigger replay, successful source
+prefixes remain admitted, and a rejected source stays pending. LRA/LIA assignment
+and rollback policies remain unchanged.
 
 The new shared combination callback checks a concrete joint witness before
 requesting more arrangements. The runtime reconstructs eliminated definitions,
@@ -20,60 +21,68 @@ which only that owner may promote to SAT. Rejected or incomplete candidates
 continue ordinary search. User-propagator final obligations, solver APIs,
 rollback policies, budgets and seeds retain their existing behavior.
 
-Proof-enabled Panda9 / ExperimentOS qualification passes **2,267 cases /
-1,373,180 assertions**, including new exact-arithmetic, Boolean, assumption,
-scope and conflicting-function checks. Eleven capture and 39 model-replay
-tool tests pass. Frozen CLI SHA-256 is
-`8ffedb3872961554117a11184efb6faa2816d939d3163b9616fbac4abf1cc919`.
+Proof-enabled Panda9 / ExperimentOS qualification passes **2,268 cases /
+1,373,187 assertions**, including exact-arithmetic, Boolean, assumption,
+scope, conflicting-function and numeric-class checks. Eleven capture and 39
+model-replay tool tests pass. Frozen CLI SHA-256 is
+`1ac12f4949f8237d82624a52f730e3b82ecc3747db4adc6afa0426238ca31aeb`.
+All 2,179 qualified source contents match the committed code and parser gitlink.
 Four diagnostic representatives reduce aggregate theory checks from **528 to
 133** and scalar arrangements from **65 to 11**. These counters are diagnostic,
-not benchmark timings.
+not benchmark timings, and were collected before the numeric-class guard below.
 
-The fresh 128-query stratified private pilot retains every independently verified
-result in both versions and Z3: **102 SAT / 26 UNSAT**. Solver totals change
-**29.479 to 17.855 seconds**, versus **3.872 for Z3**, with no losses or errors;
-115 candidate observations are faster. The deliberately stratified pilot
-includes a slow nonlinear query and is not a population-wide speed estimate.
-An additional 32 public inputs across eight logic families retain all verified
-results and 80 actual-model replay checks. All timed Xolver SAT models require
-both Z3 and cvc5; Z3 models require cvc5.
+The final 128-query stratified private pilot retains every independently verified
+result in both Xolver versions and Z3: **102 SAT / 26 UNSAT**. Solver totals change
+**29.478 to 17.866 seconds**, versus **3.759 for Z3**. The deliberately stratified
+pilot includes a slow nonlinear query and is not a population-wide speed
+estimate. An additional 32 public inputs across eight logic families retain all
+verified results and 80 actual-model replay checks. All timed Xolver SAT models
+require both Z3 and cvc5; Z3 models require cvc5.
 
 The complete original 14,408-query comparison passes with the same freeze,
 40 independently leased physical CPUs, and 60 seconds / one physical CPU /
 16 GiB per solver and input. All three arms independently verify **8,940 SAT /
 5,468 UNSAT**, with no losses, timeouts, unknowns, unconfirmed results or errors.
-Fresh solver totals are **1,465.914 seconds for the predecessor, 394.418 for the
-candidate and 466.133 for Z3**. Candidate time decreases **73.1%** against its
-predecessor and **15.4%** against Z3. Mean verified PAR-2 is **0.101743 /
-0.027375 / 0.032352 seconds**. This establishes a speed advantage on this
-authorized development cohort; it is not an overall solver or original-program
-claim. Fixed160 acceptance and new-head CI remain pending. No protected input
-has been used, no main promotion is claimed, and final-version original-C QCP
-verification remains open.
+Fresh solver totals are **1,466.905 seconds for the qualified predecessor,
+393.849 for the candidate and 466.222 for Z3**. The predecessor is FULINA
+`c780fb71`, rather than accepted main. Candidate time decreases **73.2%** against
+that predecessor and **15.5%** against Z3. This establishes a speed advantage on
+this authorized development cohort; it is not an overall solver or
+original-program claim.
+
+Fresh development587 acceptance retains **587 main / 587 candidate / 584 Z3**
+independently verified results, with solver totals **50.869 / 15.254 / 18.661
+seconds**. Three reference models remain unconfirmed and excluded. Fresh
+fixed160 acceptance verifies **123 main / 124 candidate / 116 Z3**, including
+an independently rechecked original-input-bound integer residue certificate
+only for the two Xolver arms that actually returned UNSAT. The reference result
+on that input timed out and receives no credit. There is one new verified SAT,
+no losses or errors, and **36 candidate timeouts**. Mean verified PAR-2 is
+**32.641 / 31.937 / 34.183 seconds**. Six unconfirmed reference results remain
+excluded. Raw timed reports are preserved; neither unknown nor timeout is
+upgraded. Exact-head PR CI and main promotion remain pending. No protected input
+has been used, and final-version original-C QCP verification remains open.
 Private queries, models, individual identifiers and evidence stay server-only.
 The cancelled `validation/current-main.json` archive is not a requirement.
 
-Broader acceptance of this freeze exposes one unconfirmed array SAT model:
+Broader acceptance of the preceding pre-guard freeze exposed one unconfirmed array SAT model:
 development587 verifies **587 predecessor / 586 candidate / 584 Z3**. Export
 rejects an opaque numerical class whose scalar bindings carry different exact
 values. Temporary phase counters reproduce the conflict at initial aggregation
 of the local theory models; variable reconstruction and array completion do
 not introduce it. Original-query evaluation alone did not check this internal
-class interpretation. The successor shares exact numerical-class validation
+class interpretation. The final candidate shares exact numerical-class validation
 with export, declining early acceptance until ordinary equality communication
-coordinates the models. The successor passes **2,268 cases / 1,373,187
-assertions**, including exact rational equivalence and large differing class
-values. Frozen CLI SHA-256 is
-`1ac12f4949f8237d82624a52f730e3b82ecc3747db4adc6afa0426238ca31aeb`.
+coordinates the models. Exact rational equivalence and large differing class
+values are covered by regression tests.
 Fresh independent checks verify all 128 private pilot inputs, 32 public inputs
 and the preserved array export regression in both Xolver arms. Its actual timed
 repaired model passes Z3 and cvc5. One reference model for that additional
 regression remains unconfirmed because its independent replay cannot parse it;
 it is excluded, without blocking independently verified candidate correctness.
-The private pilot retains the preceding timing improvement. Full14408 and
-development587 are being rerun with this successor. The complete-cohort timings
-above belong to the pre-guard freeze. Original timed reports remain unchanged,
-and no unsupported model is upgraded to verified.
+The complete-cohort results above belong to this repaired freeze, including all
+587 verified candidate models/verdicts. The failed predecessor's original timed
+reports remain unchanged, and no unsupported model is upgraded to verified.
 
 ## Current checkpoint: finite integer decisions and nonlinear sign partitions (2026-11-07)
 
