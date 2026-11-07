@@ -1,5 +1,25 @@
 # Arithmetic validation and continuation record
 
+## Correctness follow-up: exact integer division in shared evaluation (2026-11-08)
+
+PR #114 is held for a correctness follow-up found during its CI run. An isolated
+Panda9 / ExperimentOS component probe, linked against the qualified class-token
+core, produces **two false EUF conflicts across four generic sign controls**.
+Z3, cvc5 and the production CLI return SAT on all four controls. The confirmed
+issue is the internal builtin's use of truncated remainders for negative
+operands; production preprocessing handles these controls correctly.
+
+The follow-up introduces one exact Euclidean quotient/remainder kernel for
+integer evaluation. EUF builtin division now distinguishes Int from Real, and
+candidate witness evaluation uses the same integer semantics. Zero division
+keeps its existing caller-owned interpretation; the independent model validator
+retains its separate arithmetic implementation. New regressions cover signed
+remainders, quotient congruence, current conflict explanations after backtracking,
+candidate acceptance, exact large integers and real division.
+Controlled old/new implementation checks and fresh complete acceptance are
+pending. The timings and frozen binaries below belong to the preceding
+class-token-only core and do not qualify the new correctness follow-up.
+
 ## Development checkpoint: reuse class interpretations within model construction (2026-11-08)
 
 The immutable LRA column-definition experiment is closed without demonstrated

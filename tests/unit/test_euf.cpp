@@ -428,6 +428,72 @@ static TheoryAtomRecord makeEufRecord(ExprId lhs, ExprId rhs,
                             EufAtomPayload{lhs, rhs, rel, kind}};
 }
 
+TEST_CASE("EUF builtin: modulo keeps Euclidean signs and current explanations") {
+    for (const int numerator : {-3, 3}) for (const int divisor : {-2, 2}) {
+        for (const int forbidden : {-1, 1}) {
+            CAPTURE(numerator); CAPTURE(divisor); CAPTURE(forbidden);
+            NativeTerms ir;
+            ir.registerSort(0, SortKind::Int);
+            auto number = [&](int value) {
+                return ir.add({Kind::ConstInt, 0, {}, Payload(int64_t(value))});
+            };
+            const auto x = ir.add({Kind::Variable, 0, {}, Payload(std::string("x"))});
+            const auto remainder = ir.add({Kind::Mod, 0, {x, number(divisor)}, {}});
+            auto different = makeEufRecord(remainder, number(forbidden), Relation::Neq,
+                                           EufAtomKind::Disequality);
+            EufSolver solver;
+            solver.setNativeTerms(&ir);
+            TheoryLemmaDatabase database;
+            solver.assertLit(different, true, 0, SatLit::positive(1));
+            for (SatVar variable : {SatVar(2), SatVar(3)}) {
+                auto fixed = makeEufRecord(x, number(variable == 2 ? numerator : -numerator));
+                fixed.satVar = variable;
+                solver.assertLit(fixed, true, 1, SatLit::positive(variable));
+                const auto result = solver.check(database, TheoryEffort::Full);
+                if (forbidden == 1) {
+                    REQUIRE(result.kind == TheoryCheckResult::Kind::Conflict);
+                    REQUIRE(result.conflictOpt);
+                    const auto& reasons = result.conflictOpt->clause;
+                    CHECK(std::find(reasons.begin(), reasons.end(), SatLit::positive(1)) != reasons.end());
+                    CHECK(std::find(reasons.begin(), reasons.end(), SatLit::positive(variable)) != reasons.end());
+                    if (variable == 3)
+                        CHECK(std::find(reasons.begin(), reasons.end(), SatLit::positive(2)) == reasons.end());
+                } else {
+                    CHECK(result.kind == TheoryCheckResult::Kind::Consistent);
+                }
+                solver.backtrackToLevel(0);
+            }
+        }
+    }
+}
+
+TEST_CASE("EUF builtin: equal rational ratios need not have equal integer quotients") {
+    for (const int numerator : {-3, 3}) for (const int divisor : {-2, 2}) {
+        CAPTURE(numerator); CAPTURE(divisor);
+        NativeTerms ir;
+        ir.registerSort(0, SortKind::Int);
+        auto number = [&](int value) {
+            return ir.add({Kind::ConstInt, 0, {}, Payload(int64_t(value))});
+        };
+        const auto x = ir.add({Kind::Variable, 0, {}, Payload(std::string("x"))});
+        const auto y = ir.add({Kind::Variable, 0, {}, Payload(std::string("y"))});
+        const auto a = ir.add({Kind::Div, 0, {x, number(divisor)}, {}});
+        const auto b = ir.add({Kind::Div, 0, {y, number(-divisor)}, {}});
+        auto different = makeEufRecord(a, b, Relation::Neq, EufAtomKind::Disequality);
+        auto fixX = makeEufRecord(x, number(numerator));
+        fixX.satVar = 2;
+        auto fixY = makeEufRecord(y, number(-numerator));
+        fixY.satVar = 3;
+        EufSolver solver;
+        solver.setNativeTerms(&ir);
+        TheoryLemmaDatabase database;
+        solver.assertLit(different, true, 0, SatLit::positive(1));
+        solver.assertLit(fixX, true, 1, SatLit::positive(2));
+        solver.assertLit(fixY, true, 1, SatLit::positive(3));
+        CHECK(solver.check(database, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Consistent);
+    }
+}
+
 TEST_CASE("EUF model: full-effort witnesses survive SAT rollback") {
     NativeTerms ir;
     ir.registerSort(0, SortKind::Other);
