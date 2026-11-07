@@ -9,6 +9,13 @@ policies are retained. This closes the real construction experiment without
 claiming it caused the integer encoding timeout below. New native and complete
 comparison qualification is required before promotion.
 
+The first isolated native qualification is rejected because its proposed
+regression also passes accepted main: an earlier reasoner decides the fixture,
+so it does not exercise the changed ordering. The replacement regression
+isolates the production sign-refinement and global-request stages, checking
+that a pending sign lemma preserves the request, installation permits its
+consumption, and later calls do not repeat it. Solver parameters are unchanged.
+
 ## Development candidate: refine before global model construction (2026-11-07)
 
 Commits `c5c0a17e` and `b623c781` retain the shared real model constructor while

@@ -76,25 +76,50 @@ public:
             }, ReasonerSchedule::CandidateModel));
     }
 };
+
+class RefinementCompletionSolver : public NiaSolver {
+public:
+    explicit RefinementCompletionSolver(std::unique_ptr<PolynomialKernel> kernel)
+        : NiaSolver(std::move(kernel)) {
+        // Exercise these production stages without an earlier model or
+        // refutation deciding the fixture before their scheduling contract.
+        std::erase_if(reasoners_, [](const auto& stage) {
+            return stage->name() != "nia.sign-partition" &&
+                   stage->name() != "nia.request-model-completion";
+        });
+    }
+};
 }
 
-TEST_CASE("Arithmetic model scheduling: cheap integer refinements precede global completion") {
+TEST_CASE("Arithmetic model scheduling: sign refinement preserves the one-shot completion request") {
     auto kernel = createPolynomialKernel();
     auto* polynomial = kernel.get();
     const auto x = polynomial->mkVar(polynomial->getOrCreateVar("x"));
-    const auto twiceSquare = polynomial->mul(polynomial->mkConst(2), polynomial->mul(x, x));
+    const auto y = polynomial->mkVar(polynomial->getOrCreateVar("y"));
+    const auto product = polynomial->mul(x, y);
     LinearDeciderContext context;
     unsigned completionRequests = 0;
-    NiaSolver solver(std::move(kernel));
+    RefinementCompletionSolver solver(std::move(kernel));
     solver.setRegistry(&context.registry);
-    solver.setModelCompletionRequest([&] { ++completionRequests; return false; });
+    solver.setModelCompletionRequest([&] { ++completionRequests; return true; });
     const auto reason = context.reason();
     solver.assertLit({reason.var, TheoryId::NIA, false, NullExpr,
-        PolynomialAtomPayload{twiceSquare, Relation::Eq, RealValue::fromInt(1)}}, true, 0, reason);
-    const auto result = solver.check(context.lemmas, TheoryEffort::Full);
-    CHECK((result.kind == TheoryCheckResult::Kind::Conflict ||
-           result.kind == TheoryCheckResult::Kind::Lemma));
+        PolynomialAtomPayload{product, Relation::Gt, RealValue::fromInt(0)}}, true, 0, reason);
+    const auto positiveY = context.reason();
+    solver.assertLit({positiveY.var, TheoryId::NIA, false, NullExpr,
+        PolynomialAtomPayload{y, Relation::Gt, RealValue::fromInt(0)}}, true, 0, positiveY);
+
+    const auto refinement = solver.check(context.lemmas, TheoryEffort::Full);
+    REQUIRE(refinement.kind == TheoryCheckResult::Kind::Lemma);
+    REQUIRE(refinement.lemmaOpt);
+    CHECK(refinement.lemmaOpt->lits.size() == 3);
     CHECK(completionRequests == 0);
+    context.lemmas.markInstalled(*refinement.lemmaOpt);
+    const auto completed = solver.check(context.lemmas, TheoryEffort::Full);
+    CHECK(completed.kind == TheoryCheckResult::Kind::Unknown);
+    CHECK(completionRequests == 1);
+    CHECK(solver.check(context.lemmas, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Consistent);
+    CHECK(completionRequests == 1);
 }
 
 TEST_CASE("NIA shared relaxation: coupled monomials retain branch explanations and withdraw bounds") {
