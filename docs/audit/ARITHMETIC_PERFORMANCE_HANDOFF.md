@@ -388,8 +388,29 @@ the production build. Panda9 / ExperimentOS passes **2,262 unit cases /
 1,373,136 assertions**. Its frozen CLI SHA-256 is
 `bdff685f524dc0c85e7d1541f067def48ab9734acb96934b8ab0e710a5008134`.
 Fresh independent checks accept all **32 synthetic inputs and 80 actual
-exported-model replays**, with no errors or unknowns. Complete-suite acceptance
-remains pending; these component counts establish no new solve.
+exported-model replays**, with no errors or unknowns. The fresh full160 round
+verifies **124 baseline / 123 candidate / 117 Z3**, after symmetric certificate
+checking. It has no gain and retains the LRA loss: **36.465 seconds to timeout**.
+Mean verified PAR-2 is **32.085 / 32.637 / 33.534 seconds**. No wrong verdict,
+unknown or protocol error is observed. Reduced component work has not restored
+whole-suite performance; the correctness repair remains under development.
+
+### In development: join bound withdrawals through the shared context
+
+The current implementation reuses `incremental::Context` for the admitted
+levels of both ordinary and interface sources. Consecutive equal levels share
+one marker because they have the same withdrawal fate. A suffix withdrawal
+can use the simplex's ordinary rollback; an interior withdrawal rebuilds bounds
+from retained sources. Successful admission cursors and rejected-source retry
+are retained. This preserves the original admission order and avoids sorting
+or rebuilding merely because a lower-level fact arrives late.
+
+Proof-enabled Panda9 / ExperimentOS passes **2,262 cases / 1,373,136 assertions**,
+including all four arithmetic/model source regressions. Fresh independent
+checks pass **32 inputs / 80 actual exported-model replays**, with no errors,
+unknowns or unconfirmed results. Frozen CLI SHA-256 is
+`7b36f63f8c4e83472ec801986d753a83d717e419c0b54980b5763fc0a9bf56c0`.
+Complete-suite acceptance remains pending; no solve gain is established.
 The next comparison uses the complete original fixed160 suite and qualified
 main, retaining original logics and identical per-input resources.
 

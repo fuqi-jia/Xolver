@@ -103,18 +103,17 @@ private:
     TrailContext theoryTrail_;
     size_t appliedCursor_ = 0;
     size_t appliedInterfaceCursor_ = 0;
-    int appliedLevel_ = -1;
-    struct BoundSource {
-        size_t index;
+    struct AppliedLevel {
         int level;
-        bool interfaceEquality;
     };
-    std::vector<BoundSource> pendingBoundSources_;
+    using AppliedContext = incremental::Context<AppliedLevel>;
+    AppliedContext appliedLevels_;
     std::optional<TheoryCheckResult> pendingConflict_;
 
     void clearActiveSources();
     void rebuildTrailCaches();
     void resetAppliedBounds(GeneralSimplex::AssignmentPolicy policy);
+    void recordAppliedLevel(int level);
     bool applyEntryToSimplex(const LraTrailEntry& e);
 
     // -------------------------------------------------------------------------

@@ -90,10 +90,17 @@ void LraSolver::resetAppliedBounds(GeneralSimplex::AssignmentPolicy policy) {
     gs_.resetActiveBounds(policy);
     appliedCursor_ = 0;
     appliedInterfaceCursor_ = 0;
-    appliedLevel_ = -1;
+    appliedLevels_.clear();
     pendingConflict_.reset();
     entailmentProps_.clear();
     manager_.invalidateModelHints();
+}
+
+void LraSolver::recordAppliedLevel(int level) {
+    // Consecutive sources at one SAT level have the same withdrawal fate.
+    // One marker per run is sufficient to detect interior bound withdrawals.
+    if (appliedLevels_.empty() || appliedLevels_.back().level != level)
+        appliedLevels_.append({level});
 }
 
 void LraSolver::rebuildTrailCaches() {
@@ -172,13 +179,19 @@ void LraSolver::onBacktrack(int level) {
         resetAppliedBounds(GeneralSimplex::AssignmentPolicy::Preserve);
         clearActiveSources();
     } else {
-        // Backtrack GeneralSimplex bounds by SAT decision level.
-        gs_.backtrackToLevel(level, GeneralSimplex::AssignmentPolicy::Preserve);
+        // Both source streams share the simplex's chronological bound journal.
+        // Its suffix rollback is safe only when no retained level hides a
+        // withdrawn interior source. Keep admission order and use the common
+        // context's withdrawal classification to decide when replay is needed.
+        const auto appliedWithdrawal = appliedLevels_.backtrack(level);
+        if (appliedWithdrawal.kind != AppliedContext::Withdrawal::Filtered)
+            gs_.backtrackToLevel(level, GeneralSimplex::AssignmentPolicy::Preserve);
 
         // Replacement can introduce non-monotone levels. The common context
         // filters interior withdrawals; their derived bounds need full replay.
         const auto withdrawal = theoryTrail_.backtrack(level);
-        if (withdrawal.kind == TrailContext::Withdrawal::Filtered)
+        if (appliedWithdrawal.kind == AppliedContext::Withdrawal::Filtered ||
+            withdrawal.kind == TrailContext::Withdrawal::Filtered)
             resetAppliedBounds(GeneralSimplex::AssignmentPolicy::Preserve);
 
         // Interface equalities / disequalities
@@ -202,8 +215,6 @@ void LraSolver::onBacktrack(int level) {
     if (appliedCursor_ > theoryTrail_.size()) {
         appliedCursor_ = theoryTrail_.size();
     }
-    appliedLevel_ = std::min(appliedLevel_, level);
-
     pendingConflict_.reset();
     if (previousInterfaces != interfaceEqualities_.size() + interfaceDisequalities_.size())
         manager_.invalidateModelHints();
@@ -245,67 +256,55 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
     NO_DBG << "[LRA] theoryTrail=" << theoryTrail_.size()
            << " appliedCursor=" << appliedCursor_ << "\n";
 
-    // Both source streams feed one suffix-rollback bound journal. A newly
-    // delivered interface fact can have a lower SAT level than bounds already
-    // checked. Replay all retained sources in that case, keeping the tableau
-    // assignment policy; otherwise only order the newly admitted suffix.
-    const auto gather = [&] {
-        pendingBoundSources_.clear();
-        for (size_t i = appliedCursor_; i < theoryTrail_.size(); ++i)
-            pendingBoundSources_.push_back({i, theoryTrail_[i].level, false});
-        for (size_t i = appliedInterfaceCursor_; i < interfaceEqualities_.size(); ++i)
-            pendingBoundSources_.push_back({i, interfaceEqualities_[i].level, true});
-    };
-    gather();
-    if (std::any_of(pendingBoundSources_.begin(), pendingBoundSources_.end(),
-                   [&](const auto& source) { return source.level < appliedLevel_; })) {
-        resetAppliedBounds(GeneralSimplex::AssignmentPolicy::Preserve);
-        gather();
-    }
-    const auto byLevel = [](const auto& a, const auto& b) { return a.level < b.level; };
-    if (!std::is_sorted(pendingBoundSources_.begin(), pendingBoundSources_.end(), byLevel))
-        std::stable_sort(pendingBoundSources_.begin(), pendingBoundSources_.end(), byLevel);
-
-    for (const auto& source : pendingBoundSources_) {
-        appliedLevel_ = std::max(appliedLevel_, source.level);
-        bool ok;
-        if (source.interfaceEquality) {
-            const auto& ieq = interfaceEqualities_[source.index];
-            const int aux = getOrCreateInterfaceEqAuxVar(ieq.a, ieq.b);
-            ok = true;
-            if (aux >= 0) {
-                ok = gs_.assertLower(aux, BoundInfo(BoundValue(DeltaRational(0)), ieq.reason), ieq.level);
-                ok = gs_.assertUpper(aux, BoundInfo(BoundValue(DeltaRational(0)), ieq.reason), ieq.level) && ok;
-            }
-        } else {
-            ok = applyEntryToSimplex(theoryTrail_[source.index]);
-        }
-        if (!ok) {
-            auto tc = manager_.translateConflict(gs_);
-            if (source.interfaceEquality)
-                tc.clause.push_back(interfaceEqualities_[source.index].reason);
+    // Preserve the original admission order. The joint applied-level context
+    // detects an interior withdrawal at backtrack time, when retained sources
+    // can be replayed without changing the tableau assignment policy.
+    while (appliedCursor_ < theoryTrail_.size()) {
+        const auto& entry = theoryTrail_[appliedCursor_];
+        recordAppliedLevel(entry.level);
+        if (!applyEntryToSimplex(entry)) {
+            auto conflict = manager_.translateConflict(gs_);
 #ifdef XOLVER_ENABLE_PROOFS
-            if (!source.interfaceEquality) pushLraFarkasCert();
+            pushLraFarkasCert();
 #endif
 #ifdef XOLVER_LRA_PROFILE
-            int sz = static_cast<int>(tc.clause.size());
-            profile_.totalConflictSize += sz;
-            if (sz > profile_.maxConflictSize) profile_.maxConflictSize = sz;
-            profile_.immediateConflictCount++;
+            const int size = static_cast<int>(conflict.clause.size());
+            profile_.totalConflictSize += size;
+            profile_.maxConflictSize = std::max(profile_.maxConflictSize, size);
+            ++profile_.immediateConflictCount;
 #endif
-            // Keep this rejected source pending: backtracking can retain its
-            // SAT level, so clearing the simplex conflict must not forget it.
-            pendingConflict_ = TheoryCheckResult::mkConflict(std::move(tc));
+            // The rejected source stays pending, even if its SAT level survives
+            // a later backtrack that clears the simplex's conflict status.
+            pendingConflict_ = TheoryCheckResult::mkConflict(std::move(conflict));
             return *pendingConflict_;
         }
-        // Commit each successful contiguous prefix even if a later source
-        // conflicts. Sorted admission can visit a stream out of index order;
-        // such holes remain conservative until the complete batch succeeds.
-        auto& cursor = source.interfaceEquality ? appliedInterfaceCursor_ : appliedCursor_;
-        if (source.index == cursor) ++cursor;
+        ++appliedCursor_;
     }
-    appliedCursor_ = theoryTrail_.size();
-    appliedInterfaceCursor_ = interfaceEqualities_.size();
+
+    while (appliedInterfaceCursor_ < interfaceEqualities_.size()) {
+        const auto& equality = interfaceEqualities_[appliedInterfaceCursor_];
+        const int aux = getOrCreateInterfaceEqAuxVar(equality.a, equality.b);
+        recordAppliedLevel(equality.level);
+        if (aux >= 0) {
+            bool ok = gs_.assertLower(aux,
+                BoundInfo(BoundValue(DeltaRational(0)), equality.reason), equality.level);
+            ok = gs_.assertUpper(aux,
+                BoundInfo(BoundValue(DeltaRational(0)), equality.reason), equality.level) && ok;
+            if (!ok) {
+                auto conflict = manager_.translateConflict(gs_);
+                conflict.clause.push_back(equality.reason);
+#ifdef XOLVER_LRA_PROFILE
+                const int size = static_cast<int>(conflict.clause.size());
+                profile_.totalConflictSize += size;
+                profile_.maxConflictSize = std::max(profile_.maxConflictSize, size);
+                ++profile_.immediateConflictCount;
+#endif
+                pendingConflict_ = TheoryCheckResult::mkConflict(std::move(conflict));
+                return *pendingConflict_;
+            }
+        }
+        ++appliedInterfaceCursor_;
+    }
 
 #ifdef XOLVER_LRA_PROFILE
     auto prof_t1 = std::chrono::steady_clock::now();
