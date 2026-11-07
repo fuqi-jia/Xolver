@@ -442,18 +442,17 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
     auto levelOf = [this](SatVar v) -> int {
         return v < assignmentLevels_.size() ? assignmentLevels_[v] : 0;
     };
-    // Decorate-sort-undecorate (perf): the comparator's levelOf() is a hash
-    // lookup; doing it inside stable_sort costs O(n log n) lookups and dominated
-    // cb_check_found_model on large QF_RDL/IDL models (profiled). Precompute each
-    // lit's level ONCE (O(n) lookups), sort by the integer key, and REUSE the key
-    // in the re-assertion below (which also called levelOf per lit). Verdict-
-    // identical: stable sort by .first preserves trail order within a level, the
-    // same order the by-levelOf stable_sort produced.
+    // Only registered atoms need theory replay. Filtering before the stable
+    // sort preserves their relative order at each level while avoiding work
+    // on propositional variables. The full assignment view above still holds
+    // every value, including Boolean and Tseitin variables.
     std::vector<std::pair<int, int>>& ordered = modelSortScratch_;  // (level, lit)
     ordered.clear();
-    ordered.reserve(model.size());
-    for (int lit : model)
-        ordered.emplace_back(levelOf(static_cast<SatVar>(std::abs(lit))), lit);
+    ordered.reserve(std::min(model.size(), registry_.numAtomVars()));
+    for (int lit : model) {
+        const auto var = static_cast<SatVar>(std::abs(lit));
+        if (registry_.findBySatVar(var)) ordered.emplace_back(levelOf(var), lit);
+    }
     std::stable_sort(ordered.begin(), ordered.end(),
                      [](const std::pair<int, int>& a, const std::pair<int, int>& b) {
                          return a.first < b.first;
