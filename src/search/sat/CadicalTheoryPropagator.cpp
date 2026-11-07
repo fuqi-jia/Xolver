@@ -201,10 +201,10 @@ void CadicalTheoryPropagator::notify_assignment(const std::vector<int>& lits) {
                                 userDecFront && _userIdx == 0);
         }
         ++_userIdx;
-        varToLevel_[var] = currentLevel_;
-        auto ins = currentAssignment_.emplace(var, sign);
-        if (ins.second) assignTrail_.emplace_back(var, currentLevel_);
-        else ins.first->second = sign;   // re-assignment without backtrack (shouldn't occur) — no trail dup
+        if (var >= assignmentLevels_.size()) assignmentLevels_.resize(var + 1, 0);
+        assignmentLevels_[var] = currentLevel_;
+        if (partialAssignmentView_.setVarValue(var, sign))
+            assignTrail_.emplace_back(var, currentLevel_);
         const auto* atom = registry_.findBySatVar(var);
         if (!atom) continue;
         tm_.assertTheoryLit(*atom, SatLit{var, sign}, currentLevel_);
@@ -257,7 +257,7 @@ int CadicalTheoryPropagator::cb_decide() {
             // already-assigned pick (defer to the built-in heuristics) instead
             // of letting CaDiCaL abort.
             SatVar dv = static_cast<SatVar>(std::abs(d));
-            if (currentAssignment_.find(dv) == currentAssignment_.end()) {
+            if (!partialAssignmentView_.isAssigned(dv)) {
                 ++steeredDecisions_;
                 return d;
             }
@@ -317,7 +317,7 @@ int CadicalTheoryPropagator::cb_decide() {
         for (size_t p = 0; p < kMaxProbe; ++p) {
             SatVar v = theoryAtomVars_[decideCursor_];
             decideCursor_ = (decideCursor_ + 1) % n;
-            if (currentAssignment_.find(v) != currentAssignment_.end()) continue; // assigned
+            if (partialAssignmentView_.isAssigned(v)) continue;
             ++dbgUnassignedProbes_;
             auto feasible = tm_.evalTheoryAtom(v);
             if (!feasible) { ++dbgEvalNull_; continue; }
@@ -347,14 +347,13 @@ void CadicalTheoryPropagator::notify_backtrack(size_t new_level) {
     currentLevel_ = static_cast<int>(new_level);
     tm_.backtrackToLevel(currentLevel_);
     if (user_) user_->onBacktrack(static_cast<uint32_t>(new_level));
-    // Pop the trail suffix above new_level (O(#popped)) instead of scanning the whole
-    // varToLevel_ map. Equivalent erase set: the trail holds exactly the assigned vars
-    // with their levels, level-sorted, so vars above new_level are precisely the suffix.
+    // Retract the trail suffix from the same live snapshot read by Standard
+    // checks and decision steering.
     while (!assignTrail_.empty() &&
            assignTrail_.back().second > static_cast<int>(new_level)) {
         const SatVar v = assignTrail_.back().first;
-        currentAssignment_.erase(v);
-        varToLevel_.erase(v);
+        partialAssignmentView_.unsetVarValue(v);
+        assignmentLevels_[v] = 0;
         assignTrail_.pop_back();
     }
     if (currentLevel_ == 0) {
@@ -366,7 +365,8 @@ void CadicalTheoryPropagator::notify_backtrack(size_t new_level) {
             const auto* atom = registry_.findBySatVar(var);
             if (!atom) continue;
             assert(level == 0);
-            tm_.restoreRootLiteral(*atom, SatLit{var, currentAssignment_.at(var)});
+            tm_.restoreRootLiteral(*atom, SatLit{var,
+                partialAssignmentView_.value(SatLit::positive(var)) == LitValue::True});
             theoryDirtySinceCheck_ = true;
         }
     }
@@ -428,7 +428,7 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
     // not just Combination atoms, otherwise legacy single-theory paths
     // see an empty active state after backtrack.
     //
-    // Re-assert each atom at its REAL SAT decision level (varToLevel_), but in
+    // Re-assert each atom at its real SAT decision level, but in
     // ASCENDING-LEVEL ORDER. The model vector is in trail/model order, whose
     // levels are non-monotonic; feeding that directly violates the theory
     // solvers' snapshot invariant (ensureSnapshotForLevel assumes non-decreasing
@@ -440,8 +440,7 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
     // leaving model-check merges stale in continued search -> spurious
     // interface-disequality conflicts -> false UNSAT.
     auto levelOf = [this](SatVar v) -> int {
-        auto it = varToLevel_.find(v);
-        return it != varToLevel_.end() ? it->second : 0;
+        return v < assignmentLevels_.size() ? assignmentLevels_[v] : 0;
     };
     // Decorate-sort-undecorate (perf): the comparator's levelOf() is a hash
     // lookup; doing it inside stable_sort costs O(n log n) lookups and dominated
@@ -681,7 +680,7 @@ int CadicalTheoryPropagator::cb_propagate() {
     const int checkEvery = []() {
         return xolver::config::read<xolver::config::ReadKind::Int>("XOLVER_PROP_CHECK_EVERY", 0);
     }();
-    size_t currentSize = currentAssignment_.size();
+    size_t currentSize = partialAssignmentView_.size();
     int threshold = (checkEvery > 0)
                         ? checkEvery
                         : std::max(3, static_cast<int>(currentSize) / 10);
@@ -704,11 +703,8 @@ int CadicalTheoryPropagator::cb_propagate() {
     }
     theoryDirtySinceCheck_ = false;  // committing to a check on the current atom-set
 
-    // Build partial assignment view for defensive validation in TheoryManager
-    partialAssignmentView_.clear();
-    for (const auto& [var, sign] : currentAssignment_) {
-        partialAssignmentView_.setVarValue(var, sign);
-    }
+    // Notifications and backtracks keep this snapshot current. Its cardinality
+    // preserves the existing check cadence without rebuilding all values.
     tm_.setAssignmentView(&partialAssignmentView_);
 
     auto t0 = std::chrono::steady_clock::now();
@@ -742,7 +738,7 @@ int CadicalTheoryPropagator::cb_propagate() {
             // assignment is incomplete and the conflict may be spurious.
             bool allAssigned = true;
             for (SatLit lit : clause) {
-                if (currentAssignment_.find(lit.var) == currentAssignment_.end()) {
+                if (!partialAssignmentView_.isAssigned(lit.var)) {
                     allAssigned = false;
                     break;
                 }
@@ -755,7 +751,7 @@ int CadicalTheoryPropagator::cb_propagate() {
             // Soundness: an external conflict clause must be FALSIFIED — every
             // literal currently assigned to make it false. The clause stores
             // negated reasons (makeFalsifiedConflict), so each lit must be false
-            // now: currentAssignment_[var] != lit.sign. If a lit is currently
+            // now: the live assignment differs from lit.sign. If a lit is currently
             // TRUE, the "conflict" is not actually falsified — it rests on a
             // reason that no longer holds (e.g. an EUF explanation that walked a
             // STALE merge whose interface-equality literal has since been
@@ -763,8 +759,7 @@ int CadicalTheoryPropagator::cb_propagate() {
             // non-falsified clause is always sound (it was never a valid conflict).
             bool falsified = true;
             for (SatLit lit : clause) {
-                auto it = currentAssignment_.find(lit.var);
-                if (it != currentAssignment_.end() && it->second == lit.sign) {
+                if (partialAssignmentView_.value(lit) == LitValue::True) {
                     falsified = false;
                     break;
                 }

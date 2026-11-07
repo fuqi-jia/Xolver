@@ -393,7 +393,7 @@ TEST_CASE("Boolean refutation: the last allowed theory conflict receives a final
         std::unique_ptr<SatSolver> backend_ = createSatSolver();
     public:
         size_t solveCalls = 0;
-        SatVar newVar(VariableRole role = VariableRole::Observable) override { return backend_->newVar(role); }
+        SatVar newVar() override { return backend_->newVar(); }
         void addClause(const std::vector<SatLit>& clause) override { backend_->addClause(clause); }
         void addTheoryClause(const std::vector<SatLit>& clause) override { backend_->addTheoryClause(clause); }
         SolveResult solve() override { ++solveCalls; return backend_->solve(); }

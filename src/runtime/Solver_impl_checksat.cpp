@@ -1495,10 +1495,6 @@ Result Solver::Impl::checkSatGround() {
                 });
         }
 
-        // User hooks retain the full Boolean assignment stream, including
-        // helpers that ordinary theory solving does not need to observe.
-        if (userPropagator_) atomizer.observeBooleanStructure();
-
         auto solveT0 = std::chrono::steady_clock::now();
         auto result = assumptionLits.empty() ? sat->solve() : sat->solve(assumptionLits);
         if (result == SatSolver::SolveResult::Unknown) completeCandidateModel();

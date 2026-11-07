@@ -123,7 +123,7 @@ CadicalBackend::~CadicalBackend() {
 #endif
 }
 
-SatVar CadicalBackend::newVar(VariableRole role) {
+SatVar CadicalBackend::newVar() {
     if (inSolving_) {
         // Inside a SAT solve() call (e.g. theory-propagator callback).
         // declare_more_variables() requires READY state and will fatal here.
@@ -150,10 +150,9 @@ SatVar CadicalBackend::newVar(VariableRole role) {
     // capacity; padding it creates thousands of actual SAT decisions.
     maxVar_ = static_cast<SatVar>(solver_->declare_one_more_variable());
 
-    // Observation controls theory notifications independently of the frozen
-    // Boolean abstraction. Preserve its preprocessing policy for auxiliaries;
-    // dynamic allocations above remain observed for external-clause safety.
-    if (propagatorConnected_ && role == VariableRole::Observable) {
+    // If an external propagator is already connected (pre-solve setup),
+    // observe the variable immediately so it is safe to use in lemmas.
+    if (propagatorConnected_) {
         solver_->add_observed_var(static_cast<int>(maxVar_));
         if (maxVar_ >= observedVars_.size()) {
             size_t newSize = std::max(static_cast<size_t>(maxVar_) + 1,
@@ -161,9 +160,6 @@ SatVar CadicalBackend::newVar(VariableRole role) {
             observedVars_.resize(newSize, false);
         }
         observedVars_[maxVar_] = true;
-    } else if (propagatorConnected_) {
-        solver_->freeze(static_cast<int>(maxVar_));
-        frozenAuxiliaries_.push_back(maxVar_);
     }
     return maxVar_;
 }
@@ -424,10 +420,6 @@ void CadicalBackend::connectPropagator(CadicalTheoryPropagator* propagator) {
 void CadicalBackend::disconnectPropagator() {
     if (!propagatorConnected_) return;
     solver_->disconnect_external_propagator();
-    // Promotion adds CaDiCaL's observation freeze separately. Disconnect
-    // releases that ownership; balance our auxiliary freeze exactly once too.
-    for (const SatVar v : frozenAuxiliaries_) solver_->melt(static_cast<int>(v));
-    frozenAuxiliaries_.clear();
     propagatorConnected_ = false;
     observedVars_.clear();
 }

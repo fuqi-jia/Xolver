@@ -29,7 +29,7 @@ namespace {
 // observeIfNeeded dereferences sat_). addObservedVar is a no-op (default).
 struct StubSat : SatSolver {
     SatVar next_ = 1;
-    SatVar newVar(VariableRole = VariableRole::Observable) override { return next_++; }
+    SatVar newVar() override { return next_++; }
     void addClause(const std::vector<SatLit>&) override {}
     SolveResult solve() override { return SolveResult::Unknown; }
     SolveResult solve(const std::vector<SatLit>&) override { return SolveResult::Unknown; }

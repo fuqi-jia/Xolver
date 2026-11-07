@@ -34,7 +34,7 @@ mpq_class eval(const LinearFormKey& form, const Values& values) {
 }
 struct Allocator : SatSolver, DynamicAtomRegistrar {
     SatVar next = 0;
-    SatVar newVar(VariableRole = VariableRole::Observable) override { return ++next; }
+    SatVar newVar() override { return ++next; }
     void addClause(const std::vector<SatLit>&) override {}
     SolveResult solve() override { throw std::logic_error("allocation only"); }
     SolveResult solve(const std::vector<SatLit>&) override { return solve(); }

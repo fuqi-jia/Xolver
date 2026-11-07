@@ -66,6 +66,26 @@ isolates the production sign-refinement and global-request stages, checking
 that a pending sign lemma preserves the request, installation permits its
 consumption, and later calls do not repeat it. Solver parameters are unchanged.
 
+## Closed development experiment: auxiliary observation roles (2026-11-07)
+
+The unobserved-helper prototype passes 2,275 proof-enabled unit cases, including
+connected random Boolean DAG and source-model checks. Its frozen 171-input
+development comparison verifies **167 main / 166 candidate / 169 Z3**, with
+one gain and two losses. Solver totals are **384.800 / 450.953 / 86.828 seconds**.
+Separately preserving auxiliary freeze ownership passes 2,276 unit cases and
+verifies **167 / 167 / 169**, with one gain and one loss; solver totals are
+**376.929 / 382.788 / 86.912 seconds**. Neither candidate is promotable.
+Every actual timed Xolver SAT model passes Z3 and cvc5; no wrong model or
+opposite verdict is observed. Private inputs and individual evidence remain
+server-only. Diagnostic replays do not replace the formal rows.
+
+The experiment changes SAT preprocessing and theory-check cadence along with
+observation. Those changes are withdrawn. The next implementation retains
+main's observation and check protocol while replacing duplicate hash-based
+assignment storage and repeated whole-view construction with one incremental
+live snapshot. No memory-pool experiment is repeated, and no protected input
+has been used.
+
 ## Development candidate: refine before global model construction (2026-11-07)
 
 Commits `c5c0a17e` and `b623c781` retain the shared real model constructor while

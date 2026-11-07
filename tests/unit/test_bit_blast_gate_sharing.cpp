@@ -23,7 +23,7 @@ private:
     }
 public:
     SatVar bind(SatVar external) { ids.emplace(external,inner->newVar()); return external; }
-    SatVar newVar(VariableRole = VariableRole::Observable) override { while(ids.count(next)) ++next; return bind(next++); }
+    SatVar newVar() override { while(ids.count(next)) ++next; return bind(next++); }
     void addClause(const std::vector<SatLit>& xs) override { ++clauses; inner->addClause(translate(xs)); }
     SolveResult solve() override { return inner->solve(); }
     SolveResult solve(const std::vector<SatLit>& xs) override { return inner->solve(translate(xs)); }

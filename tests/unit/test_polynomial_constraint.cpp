@@ -12,7 +12,7 @@ namespace {
 // theory callbacks, so a successful contradiction must come from the aliases.
 struct ClauseOnlySat : SatSolver {
     std::unique_ptr<SatSolver> backend = createSatSolver();
-    SatVar newVar(VariableRole role = VariableRole::Observable) override { return backend->newVar(role); }
+    SatVar newVar() override { return backend->newVar(); }
     void addClause(const std::vector<SatLit>& clause) override { backend->addClause(clause); }
     SolveResult solve() override { return backend->solve(); }
     SolveResult solve(const std::vector<SatLit>& assumptions) override {

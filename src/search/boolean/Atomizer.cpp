@@ -98,14 +98,9 @@ void Atomizer::bridgeBooleanArgument(ExprId argument, const NativeTerms& ir) {
     atoms_.push_back({literal.var, argument, true, TheoryId::EUF});
 }
 
-SatVar Atomizer::freshVar(SatSolver::VariableRole role) {
-    SatVar v = sat_.newVar(role);
-    if (role == SatSolver::VariableRole::Auxiliary) booleanAuxiliaries_.push_back(v);
+SatVar Atomizer::freshVar() {
+    SatVar v = sat_.newVar();
     return v;
-}
-
-void Atomizer::observeBooleanStructure() {
-    for (const SatVar v : booleanAuxiliaries_) sat_.addObservedVar(v);
 }
 
 void Atomizer::computePolarities(const std::vector<ExprId>& roots, const NativeTerms& ir) {
@@ -171,12 +166,12 @@ SatLit Atomizer::encodeBoolEq(ExprId eid, const NativeTerms& ir) {
     const auto& e = ir.get(eid);
     assert(e.children.size() >= 2);
 
-    SatVar andVar = freshVar(SatSolver::VariableRole::Auxiliary);
+    SatVar andVar = freshVar();
     std::vector<SatLit> eqLits;
     for (size_t i = 0; i + 1 < e.children.size(); ++i) {
         SatLit li = atomizeRec(e.children[i], ir);
         SatLit ri = atomizeRec(e.children[i + 1], ir);
-        SatVar eqVar = freshVar(SatSolver::VariableRole::Auxiliary);
+        SatVar eqVar = freshVar();
         // eqVar ↔ (li ↔ ri):
         sat_.addClause({SatLit::negative(eqVar), li.negated(), ri});
         sat_.addClause({SatLit::negative(eqVar), li, ri.negated()});
@@ -203,7 +198,7 @@ SatLit Atomizer::encodeBoolDistinct(ExprId eid, const NativeTerms& ir) {
     const auto& e = ir.get(eid);
 
     if (e.children.size() <= 1) {
-        SatVar tv = freshVar(SatSolver::VariableRole::Auxiliary);
+        SatVar tv = freshVar();
         sat_.addClause({SatLit::positive(tv)});
         return SatLit::positive(tv);
     }
@@ -212,7 +207,7 @@ SatLit Atomizer::encodeBoolDistinct(ExprId eid, const NativeTerms& ir) {
         SatLit l = atomizeRec(e.children[0], ir);
         SatLit r = atomizeRec(e.children[1], ir);
         // XOR: l ≠ r
-        SatVar xorVar = freshVar(SatSolver::VariableRole::Auxiliary);
+        SatVar xorVar = freshVar();
         sat_.addClause({SatLit::negative(xorVar), l, r});
         sat_.addClause({SatLit::negative(xorVar), l.negated(), r.negated()});
         sat_.addClause({SatLit::positive(xorVar), l.negated(), r});
@@ -221,7 +216,7 @@ SatLit Atomizer::encodeBoolDistinct(ExprId eid, const NativeTerms& ir) {
     }
 
     // n >= 3: impossible in Bool domain
-    SatVar fv = freshVar(SatSolver::VariableRole::Auxiliary);
+    SatVar fv = freshVar();
     sat_.addClause({SatLit::negative(fv)});
     return SatLit::positive(fv);
 }
@@ -339,7 +334,7 @@ SatLit Atomizer::atomizeRec(ExprId eid, const NativeTerms& ir) {
         }
         case Kind::ConstBool: {
             bool val = std::get<bool>(e.payload.value);
-            SatVar v = freshVar(SatSolver::VariableRole::Auxiliary);
+            SatVar v = freshVar();
             if (val) {
                 sat_.addClause({SatLit::positive(v)});
             } else {
@@ -356,7 +351,7 @@ SatLit Atomizer::atomizeRec(ExprId eid, const NativeTerms& ir) {
         case Kind::And:
         case Kind::Or: {
             auto [needPos, needNeg] = pgDirs(eid);
-            SatVar x = freshVar(SatSolver::VariableRole::Auxiliary);
+            SatVar x = freshVar();
             std::vector<SatLit> children;
             children.reserve(e.children.size());
             for (const auto child : e.children) children.push_back(atomizeRec(child, ir));
@@ -372,7 +367,7 @@ SatLit Atomizer::atomizeRec(ExprId eid, const NativeTerms& ir) {
             auto [needPos, needNeg] = pgDirs(eid);
             SatLit a = atomizeRec(e.children[0], ir);
             SatLit b = atomizeRec(e.children[1], ir);
-            SatVar x = freshVar(SatSolver::VariableRole::Auxiliary);
+            SatVar x = freshVar();
             if (needNeg) {
                 sat_.addClause({SatLit::positive(x), a});
                 sat_.addClause({SatLit::positive(x), b.negated()});
@@ -387,7 +382,7 @@ SatLit Atomizer::atomizeRec(ExprId eid, const NativeTerms& ir) {
             assert(e.children.size() == 2);
             SatLit a = atomizeRec(e.children[0], ir);
             SatLit b = atomizeRec(e.children[1], ir);
-            SatVar x = freshVar(SatSolver::VariableRole::Auxiliary);
+            SatVar x = freshVar();
             // x ↔ (a ⊕ b)
             sat_.addClause({SatLit::negative(x), a.negated(), b.negated()});
             sat_.addClause({SatLit::negative(x), a, b});
@@ -402,7 +397,7 @@ SatLit Atomizer::atomizeRec(ExprId eid, const NativeTerms& ir) {
             SatLit c = atomizeRec(e.children[0], ir);
             SatLit t = atomizeRec(e.children[1], ir);
             SatLit f = atomizeRec(e.children[2], ir);
-            SatVar x = freshVar(SatSolver::VariableRole::Auxiliary);
+            SatVar x = freshVar();
             sat_.addClause({SatLit::negative(x), c.negated(), t});
             sat_.addClause({SatLit::negative(x), c, f});
             sat_.addClause({SatLit::positive(x), c.negated(), t.negated()});
@@ -411,6 +406,8 @@ SatLit Atomizer::atomizeRec(ExprId eid, const NativeTerms& ir) {
             break;
         }
         default: {
+            SatVar v = freshVar();
+            result = SatLit::positive(v);
             bool isTheory = (e.kind == Kind::Eq || e.kind == Kind::Distinct ||
                              e.kind == Kind::Lt || e.kind == Kind::Leq ||
                              e.kind == Kind::Gt || e.kind == Kind::Geq);
@@ -437,8 +434,6 @@ SatLit Atomizer::atomizeRec(ExprId eid, const NativeTerms& ir) {
                 }
             }
 
-            SatVar v = freshVar();
-            result = SatLit::positive(v);
             if (isTheory && registry_) {
                 TheoryId targetTheory = defaultTheory_;
                 if (defaultTheory_ == TheoryId::Combination) {

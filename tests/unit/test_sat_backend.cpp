@@ -16,7 +16,6 @@
 #include "search/sat/CadicalBackend.h"
 #include "search/sat/CadicalTheoryPropagator.h"
 #include "search/coordination/TheoryLemmaDatabase.h"
-#include "search/boolean/Atomizer.h"
 #include <algorithm>
 #include <stdexcept>
 #include <filesystem>
@@ -24,197 +23,125 @@
 #include <iterator>
 #include <limits>
 #include <utility>
+#include <array>
+#include <random>
+#include <unordered_map>
 
 using namespace xolver;
 
-TEST_CASE("SAT backend: Boolean encoding helpers stay outside theory callbacks") {
-    NativeTerms ir;
-    const auto boolSort = ir.allocateSortId();
-    ir.registerSort(boolSort, SortKind::Bool);
-    ir.setBoolSortId(boolSort);
-    auto variable = [&](const std::string& name) {
-        return ir.add({Kind::Variable, boolSort, {}, Payload(name)});
-    };
-    const auto p = variable("p");
-    const auto q = variable("q");
-    const auto r = variable("r");
-    const auto disjunction = ir.add({Kind::Or, boolSort, {p, q}, Payload{}});
-    const auto implication = ir.add({Kind::Implies, boolSort, {p, r}, Payload{}});
-    const auto difference = ir.add({Kind::Distinct, boolSort, {q, r}, Payload{}});
-    const auto root = ir.add({Kind::And, boolSort,
-        {disjunction, implication, difference}, Payload{}});
+TEST_CASE("SAT assignment view: overwrite and retraction preserve partial values") {
+    CadicalAssignmentView view;
+    CHECK(view.size() == 0);
+    CHECK(view.value(SatLit::positive(7)) == LitValue::Unknown);
+    CHECK(view.setVarValue(7, true));
+    CHECK_FALSE(view.setVarValue(7, false));
+    CHECK(view.size() == 1);
+    CHECK(view.value(SatLit::positive(7)) == LitValue::False);
+    CHECK(view.value(SatLit::negative(7)) == LitValue::True);
+    CHECK(view.setVarValue(1000, true));
+    view.unsetVarValue(7);
+    view.unsetVarValue(7);
+    CHECK(view.size() == 1);
+    CHECK_FALSE(view.isAssigned(7));
+    CHECK(view.value(SatLit::positive(7)) == LitValue::Unknown);
+    view.clear();
+    CHECK(view.size() == 0);
+    CHECK(view.value(SatLit::positive(1000)) == LitValue::Unknown);
+    CHECK(view.setVarValue(7, true));
+    CHECK(view.size() == 1);
+}
 
+TEST_CASE("SAT assignment view: random updates agree with an independent map") {
+    CadicalAssignmentView view;
+    std::unordered_map<SatVar, bool> reference;
+    std::mt19937 random(0xC0FEBABEu);
+    for (unsigned step = 0; step < 2000; ++step) {
+        const SatVar var = 1 + random() % 1000;
+        const auto action = random() % 17;
+        if (action == 0) {
+            view.clear();
+            reference.clear();
+        } else if (action < 6) {
+            view.unsetVarValue(var);
+            reference.erase(var);
+        } else {
+            const bool value = (random() & 1u) != 0;
+            CHECK(view.setVarValue(var, value) == !reference.contains(var));
+            reference[var] = value;
+        }
+        CHECK(view.size() == reference.size());
+        for (unsigned probe = 0; probe < 16; ++probe) {
+            const SatVar candidate = probe == 0 ? var : 1 + random() % 1100;
+            const auto found = reference.find(candidate);
+            const auto expected = found == reference.end() ? LitValue::Unknown
+                : found->second ? LitValue::True : LitValue::False;
+            CHECK(view.value(SatLit::positive(candidate)) == expected);
+            CHECK(view.isAssigned(candidate) == reference.contains(candidate));
+        }
+    }
+}
+
+TEST_CASE("SAT assignment view: backtracking retracts the published partial snapshot") {
     CadicalBackend backend;
-    TheoryAtomRegistry registry;
-    TheoryManager theories;
-    TheoryLemmaDatabase database;
-    struct RecordingPropagator : CadicalTheoryPropagator {
-        using CadicalTheoryPropagator::CadicalTheoryPropagator;
-        std::vector<int> notifications;
-        std::vector<int> finalModel;
-        void notify_assignment(const std::vector<int>& lits) override {
-            notifications.insert(notifications.end(), lits.begin(), lits.end());
-            CadicalTheoryPropagator::notify_assignment(lits);
+    std::array<SatVar, 6> vars;
+    for (auto& var : vars) var = backend.newVar();
+    struct Lookup : TheoryAtomLookup {
+        std::vector<TheoryAtomRecord> atoms;
+        const TheoryAtomRecord* findBySatVar(SatVar var) const override {
+            for (const auto& atom : atoms) if (atom.satVar == var) return &atom;
+            return nullptr;
         }
-        bool cb_check_found_model(const std::vector<int>& model) override {
-            finalModel = model;
-            return CadicalTheoryPropagator::cb_check_found_model(model);
+    } registry;
+    for (auto var : {vars[0], vars[3]})
+        registry.atoms.push_back({var, TheoryId::LRA, false, NullExpr,
+            LinearAtomPayload{{}, Relation::Eq, RealValue::fromInt(0)}});
+    struct Recorder : TheoryPropagationCallbacks {
+        TheoryAssignmentView* view = nullptr;
+        std::array<SatVar, 6> vars;
+        std::vector<std::array<LitValue, 6>> snapshots;
+        explicit Recorder(std::array<SatVar, 6> variables) : vars(variables) {}
+        void assertTheoryLit(const TheoryAtomRecord&, SatLit, int) override {}
+        void backtrackToLevel(int) override {}
+        void setAssignmentView(TheoryAssignmentView* current) override { view = current; }
+        TheoryCheckResult check(TheoryLemmaStorage&, TheoryEffort) override {
+            REQUIRE(view);
+            std::array<LitValue, 6> snapshot;
+            for (size_t i = 0; i < vars.size(); ++i)
+                snapshot[i] = view->value(SatLit::positive(vars[i]));
+            snapshots.push_back(snapshot);
+            return TheoryCheckResult::consistent();
         }
-    } propagator{registry, theories, database, backend};
+        std::vector<TheoryLemma> takeEntailmentPropagations() override { return {}; }
+    } theories{vars};
+    TheoryLemmaDatabase lemmas;
+    CadicalTheoryPropagator propagator(registry, theories, lemmas, backend);
     backend.connectPropagator(&propagator);
-    Atomizer atomizer(backend);
-    atomizer.setBoolSortId(boolSort);
-    backend.addClause({atomizer.atomize(root, ir)});
-    REQUIRE(backend.solve() == SatSolver::SolveResult::Sat);
-
-    std::vector<SatVar> inputVars;
-    for (const auto& atom : atomizer.atoms()) inputVars.push_back(atom.var);
-    REQUIRE(inputVars.size() == 3);
-    auto isInput = [&](int lit) {
-        const auto var = static_cast<SatVar>(lit < 0 ? -lit : lit);
-        return std::find(inputVars.begin(), inputVars.end(), var) != inputVars.end();
-    };
-    CHECK(propagator.finalModel.size() == inputVars.size());
-    CHECK(std::all_of(propagator.finalModel.begin(), propagator.finalModel.end(), isInput));
-    CHECK(std::all_of(propagator.notifications.begin(), propagator.notifications.end(), isInput));
-    auto value = [&](ExprId expr) {
-        for (const auto& atom : atomizer.atoms())
-            if (atom.expr == expr) return backend.value(atom.var);
-        FAIL("missing Boolean input");
-        return false;
-    };
-    CHECK((value(p) || value(q)));
-    CHECK((!value(p) || value(r)));
-    CHECK(value(q) != value(r));
-    backend.disconnectPropagator();
-}
-
-namespace {
-struct ObservationHarness {
-    CadicalBackend backend;
-    TheoryAtomRegistry registry;
-    TheoryManager theories;
-    TheoryLemmaDatabase database;
-    struct Capture : CadicalTheoryPropagator {
-        using CadicalTheoryPropagator::CadicalTheoryPropagator;
-        std::vector<int> model;
-        bool cb_check_found_model(const std::vector<int>& values) override {
-            model = values;
-            return CadicalTheoryPropagator::cb_check_found_model(values);
-        }
-    } propagator{registry, theories, database, backend};
-    ObservationHarness() { backend.connectPropagator(&propagator); }
-    ~ObservationHarness() { backend.disconnectPropagator(); }
-};
-
-} // namespace
-
-TEST_CASE("SAT observation: auxiliary models and incremental assumptions stay exact") {
-    ObservationHarness h;
-    const auto input = h.backend.newVar();
-    const auto helper = h.backend.newVar(SatSolver::VariableRole::Auxiliary);
-    h.backend.addClause({SatLit::positive(input), SatLit::positive(helper)});
-    h.backend.addClause({SatLit::negative(input), SatLit::negative(helper)});
-    h.backend.addClause({SatLit::positive(input)});
-    REQUIRE(h.backend.solve() == SatSolver::SolveResult::Sat);
-    CHECK(h.backend.value(input));
-    CHECK_FALSE(h.backend.value(helper));
-    CHECK(h.propagator.model == std::vector<int>{static_cast<int>(input)});
-    REQUIRE(h.backend.solve({SatLit::positive(helper)}) == SatSolver::SolveResult::Unsat);
-    CHECK(h.backend.getFailedAssumptions() == std::vector<SatLit>{SatLit::positive(helper)});
-    REQUIRE(h.backend.solve({SatLit::negative(helper)}) == SatSolver::SolveResult::Sat);
-    CHECK(h.backend.value(input));
-    CHECK_FALSE(h.backend.value(helper));
-}
-
-TEST_CASE("SAT observation: Boolean structure can be observed before solving") {
-    ObservationHarness h;
-    NativeTerms ir;
-    const auto sort = ir.allocateSortId();
-    ir.registerSort(sort, SortKind::Bool);
-    ir.setBoolSortId(sort);
-    const auto p = ir.add({Kind::Variable, sort, {}, Payload(std::string("p"))});
-    const auto q = ir.add({Kind::Variable, sort, {}, Payload(std::string("q"))});
-    const auto root = ir.add({Kind::Or, sort, {p, q}, Payload{}});
-    Atomizer atomizer(h.backend);
-    atomizer.setBoolSortId(sort);
-    const auto literal = atomizer.atomize(root, ir);
-    h.backend.addClause({literal});
-    atomizer.observeBooleanStructure();
-    atomizer.observeBooleanStructure(); // Promotion is idempotent.
-    REQUIRE(h.backend.solve() == SatSolver::SolveResult::Sat);
-    CHECK(h.propagator.model.size() == 3);
-    CHECK(std::find(h.propagator.model.begin(), h.propagator.model.end(),
-                    static_cast<int>(literal.var)) != h.propagator.model.end());
-}
-
-TEST_CASE("SAT observation: promoted auxiliaries survive disconnect and reconnect") {
-    ObservationHarness h;
-    const auto input = h.backend.newVar();
-    const auto helper = h.backend.newVar(SatSolver::VariableRole::Auxiliary);
-    h.backend.addClause({SatLit::positive(input), SatLit::positive(helper)});
-    h.backend.addClause({SatLit::negative(input), SatLit::negative(helper)});
-    h.backend.addObservedVar(helper);
-    h.backend.addObservedVar(helper);
-    REQUIRE(h.backend.solve() == SatSolver::SolveResult::Sat);
-    CHECK(h.backend.value(input) != h.backend.value(helper));
-    h.backend.disconnectPropagator();
-    h.backend.disconnectPropagator();
-    h.backend.connectPropagator(&h.propagator);
-    h.backend.addObservedVar(input);
-    h.backend.addObservedVar(helper);
-    REQUIRE(h.backend.solve({SatLit::negative(input)}) == SatSolver::SolveResult::Sat);
-    CHECK_FALSE(h.backend.value(input));
-    CHECK(h.backend.value(helper));
-}
-
-TEST_CASE("SAT observation: helpers introduced during callbacks support external clauses") {
-    CadicalBackend backend;
-    TheoryAtomRegistry registry;
-    TheoryManager theories;
-    TheoryLemmaDatabase database;
-    struct DynamicPropagator : CadicalTheoryPropagator {
+    struct Disconnect {
         CadicalBackend& backend;
-        SatVar helper = 0;
-        bool pending = false;
-        bool delivered = false;
-        bool checkedHelper = false;
-        DynamicPropagator(TheoryAtomRegistry& registry, TheoryManager& theories,
-                          TheoryLemmaDatabase& database, CadicalBackend& sat)
-            : CadicalTheoryPropagator(registry, theories, database, sat), backend(sat) {}
-        bool cb_check_found_model(const std::vector<int>& model) override {
-            if (!helper) {
-                helper = backend.newVar(SatSolver::VariableRole::Auxiliary);
-                pending = true;
-                return false;
-            }
-            checkedHelper = std::find(model.begin(), model.end(),
-                                      static_cast<int>(helper)) != model.end();
-            return CadicalTheoryPropagator::cb_check_found_model(model);
-        }
-        bool cb_has_external_clause(bool& forgettable) override {
-            if (pending) {
-                forgettable = false;
-                return true;
-            }
-            return CadicalTheoryPropagator::cb_has_external_clause(forgettable);
-        }
-        int cb_add_external_clause_lit() override {
-            if (!pending) return CadicalTheoryPropagator::cb_add_external_clause_lit();
-            if (!delivered) {
-                delivered = true;
-                return static_cast<int>(helper);
-            }
-            pending = false;
-            return 0;
-        }
-    } propagator{registry, theories, database, backend};
-    backend.connectPropagator(&propagator);
-    backend.addClause({SatLit::positive(backend.newVar())});
-    REQUIRE(backend.solve() == SatSolver::SolveResult::Sat);
-    CHECK(propagator.checkedHelper);
-    CHECK(backend.value(propagator.helper));
-    backend.disconnectPropagator();
+        ~Disconnect() { backend.disconnectPropagator(); }
+    } disconnect{backend};
+    for (auto var : vars) backend.addObservedVar(var);
+    propagator.notify_assignment({static_cast<int>(vars[0]), -static_cast<int>(vars[1]),
+                                  static_cast<int>(vars[2])});
+    CHECK(propagator.cb_propagate() == 0);
+    propagator.notify_new_decision_level();
+    propagator.notify_assignment({static_cast<int>(vars[3]), -static_cast<int>(vars[4]),
+                                  static_cast<int>(vars[5])});
+    CHECK(propagator.cb_propagate() == 0);
+    propagator.notify_backtrack(0);
+    CHECK(propagator.cb_propagate() == 0);
+    REQUIRE(theories.snapshots.size() == 3);
+    for (const auto& snapshot : theories.snapshots) {
+        CHECK(snapshot[0] == LitValue::True);
+        CHECK(snapshot[1] == LitValue::False);
+        CHECK(snapshot[2] == LitValue::True);
+    }
+    CHECK(theories.snapshots[0][3] == LitValue::Unknown);
+    CHECK(theories.snapshots[1][3] == LitValue::True);
+    CHECK(theories.snapshots[1][4] == LitValue::False);
+    CHECK(theories.snapshots[1][5] == LitValue::True);
+    for (size_t i = 3; i < vars.size(); ++i)
+        CHECK(theories.snapshots[2][i] == LitValue::Unknown);
 }
 
 namespace {

@@ -9,7 +9,7 @@ using namespace xolver;
 namespace {
 struct RegistrySat : SatSolver {
     SatVar next = 1;
-    SatVar newVar(VariableRole = VariableRole::Observable) override { return next++; }
+    SatVar newVar() override { return next++; }
     void addClause(const std::vector<SatLit>&) override {}
     SolveResult solve() override { return SolveResult::Unknown; }
     SolveResult solve(const std::vector<SatLit>&) override { return SolveResult::Unknown; }

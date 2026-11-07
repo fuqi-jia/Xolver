@@ -53,13 +53,7 @@ class SatSolver {
 public:
     virtual ~SatSolver() = default;
 
-    enum class VariableRole { Observable, Auxiliary };
-
-    // Observable variables are reported to a connected external propagator.
-    // Auxiliary variables belong to the Boolean encoding and need no theory
-    // notifications. A backend may still observe auxiliaries introduced during
-    // solving when its external-clause protocol requires this.
-    virtual SatVar newVar(VariableRole role = VariableRole::Observable) = 0;
+    virtual SatVar newVar() = 0;
     virtual void addClause(const std::vector<SatLit>& clause) = 0;
     // A caller-justified theory tautology. Proof backends must distinguish it
     // from original Boolean input, even when it is installed before solve().
