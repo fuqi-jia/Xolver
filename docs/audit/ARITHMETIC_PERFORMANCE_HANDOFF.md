@@ -1,5 +1,67 @@
 # Arithmetic validation and continuation record
 
+## Server-qualified stage: shared immutable parser kind tables (2026-11-07)
+
+Core `02c81794` pins SOMTParser `784553e3`, whose three immutable kind lookup
+containers use C++17 `inline const` definitions. The frozen old CLI contained
+42 separately initialized objects per table; the candidate CLI and worker each
+contain one. Every initializer, name, type, kind number and lookup is unchanged.
+This shared frontend fix applies across theories without changing model guards,
+search parameters, API semantics, theory rollback, budgets or feature gates.
+
+The public-umbrella regression compares all three addresses across translation
+units and checks operator lookups. It fails against the pinned parent and passes
+with the fix in the production CMake target. Panda9 / ExperimentOS passes all
+**2,274 Xolver cases / 1,450,390 assertions**, **64 pinned-parser CTest cases**
+and **965 public regressions**. All **2,338 qualified source contents** match
+the committed core and parser gitlink. The same scoped fix is submitted in
+[SOMTParser PR #68](https://github.com/fuqi-jia/SOMTParser/pull/68); all three
+exact-head upstream CI jobs pass.
+
+Fresh full comparisons freeze accepted main `4ed05fb4`, candidate `02c81794`
+and the same reference Z3. Each solver receives **60 seconds / one leased
+physical CPU / 16 GiB**, with up to 40 independent physical CPU leases.
+Private14408 verifies **14,408 / 14,408 / 14,408** results: 8,940 SAT and
+5,468 UNSAT in every arm, with no losses, unknowns, timeouts, unconfirmed
+decisions or errors. Main/candidate/Z3 solver totals are **369.638 / 316.322 /
+467.193 seconds**, a **14.42%** candidate reduction against same-round main.
+Development587 retains **587 / 587 / 584** verified results and totals
+**14.413 / 12.019 / 18.232 seconds**, a **16.61%** reduction against main;
+three reference models remain unconfirmed and excluded.
+
+Fixed160 verifies **124 / 124 / 117** results after a fresh independently
+checked original-input-bound residue certificate confirms only actual timed
+UNSAT decisions. Both Xolver arms have **36 timeouts**, with no gains, losses
+or errors. Mean verified PAR-2 is **31.636 / 31.677 / 33.882 seconds**:
+candidate timing is slightly worse by **0.041 seconds per input**. The matched
+LRA solved subset totals **70.331 / 87.191 seconds** in the formal comparison.
+Those negative timings and raw reports are preserved. A paired diagnostic of
+the two largest LRA regressions has identical reported propagation, Standard,
+Full, conflict and lemma counts; it does not prove identical internal states
+or replace formal timings.
+
+The user's current priority is private14408 speed with correctness retained.
+The two explicit goal cohorts contain **14,568 inputs**, with no exact-input
+overlap, and retain **14,532 / 14,532 / 14,525** verified results. Their combined
+verified PAR-2 totals are **5,431.468 / 5,384.685 / 5,888.237 seconds**, saving
+**46.783 seconds** against main. Development587 is excluded from this sum.
+This qualifies the primary-cohort improvement while explicitly retaining the
+fixed-suite timing regression; it does not establish that every suite is faster.
+
+Every actual timed Xolver SAT model passes independent Z3 and cvc5 replay;
+reference SAT models pass cvc5. Frozen CLI SHA-256 is
+`9b6a3ecaa3bdd3f09a1bad7aa4290a351da6e7d914a470f06a8102996dec90ef`;
+worker SHA-256 is
+`d38a97e4e79784f645ecf813dbd07ca5f6f706e27797d83ca49db6682e856926`.
+Server stage-audit SHA-256 is
+`01b17b83c16b912c874d9b1ac62ac089a5861f56229d8b294ce1939beb24686c`.
+Exact-head Xolver PR CI and merged-main CI remain pending. This worker has
+no original-C QCP qualification. The remaining fixed160 inputs, final-program
+closure, final fair comparison and once-only protected-set acceptance remain
+open; neither protected set has been used. No overall solver-superiority claim
+is made. Private inputs and individual evidence stay server-only; the cancelled
+extra server archive remains unnecessary.
+
 ## Delivered stage: incremental dense SAT assignments (2026-11-07)
 
 [PR #111](https://github.com/fuqi-jia/Xolver/pull/111) merged as
@@ -61,24 +123,6 @@ final-program validation, final fair freeze and once-only protected-set
 acceptance remain open. No protected input has been used and no overall
 solver-superiority claim is made. Private inputs and individual evidence stay
 server-only; the cancelled server archive is not a delivery requirement.
-
-## Development prototype: shared parser kind tables (2026-11-07)
-
-Frozen production CLI symbol inspection finds 42 copies of each of the three
-immutable kind lookup containers. Forty structurally selected paired private
-instruction profiles complete; static initialization accounts for about 7.3%
-of aggregate sampled instructions, including startup and shutdown. These are
-diagnostics, not formal timing or new solved-result evidence.
-
-SOMTParser core `784553e3` changes the three public definitions to C++17
-`inline const`, preserving every initializer, name and lookup. Its integration
-regression compares table addresses across translation units and checks all
-operator mappings. The same scoped fix is prepared against upstream main.
-An isolated pinned-header probe observes the old identity assertion failure
-and repaired lookup completion; full umbrella-header integration and complete
-Xolver native/cohort acceptance remain pending. No runtime parameter, model
-guard, theory policy, budget or feature gate is changed. Private queries and
-individual profiling records remain server-only.
 
 ## Delivered stage: refine NIA before global model completion (2026-11-07)
 
