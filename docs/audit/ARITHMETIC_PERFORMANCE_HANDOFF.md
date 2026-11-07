@@ -1,5 +1,39 @@
 # Arithmetic validation and continuation record
 
+## Development candidate: dense real exclusion completion (2026-11-07)
+
+Commit `0f6cb2c9` on FULINA adds shared simplex model construction for finite
+excluded coordinate values. Local strict feasibility supplies witnesses; exact
+convex combinations avoid losing earlier affine disequalities. LRA ordinary
+and interface disequalities use it before requesting Boolean splits. Temporary
+bounds are withdrawn; failure supplies no UNSAT certificate. Integer clients
+must separately establish integrality. No new cap, gate or runtime oracle is
+introduced, and caller rollback policies remain unchanged.
+
+Proof-enabled Panda9 / ExperimentOS qualification passes **2,275 cases /
+1,373,346 assertions**, including six new cases / 89 assertions. All **2,181
+qualified source contents** match the committed code and parser gitlink.
+Frozen CLI SHA-256 is
+`3502c13d110395e8d886496e3a42160ddbb4334e9b7bca3a0e10fdc17a22ed06`;
+worker SHA-256 is
+`dab45cffb3424f548a26457407c7a04eec4f59144a7295cf89880a4f9be785d6`.
+
+A fresh ten-input development pilot verifies **6 main / 6 candidate / 10 Z3**,
+with four timeouts in each Xolver arm and no gained/lost solve, invalid model,
+opposite verdict or protocol error. Both independent checkers accept every
+actual timed Xolver SAT model. The six solved inputs total **114.317 main /
+89.246 candidate seconds**; mean verified PAR-2 across all ten is **59.432 /
+56.925 / 1.533 seconds**. This is a narrow timing observation with unchanged
+coverage. Complete fixed160, private14408 and development587 comparisons are
+running with the same frozen binaries and 60 seconds / one leased physical CPU /
+16 GiB per solver/input. PR/main promotion and this worker's original-C QCP
+qualification remain pending. No protected input has been used.
+
+The earlier sampled Standard-effort original-query witness probe is closed:
+104 checks found no positive witness and cost 4.299 seconds of validation.
+It does not justify validating the whole query at every Standard invocation;
+sampling does not prove that no intermediate witness exists.
+
 ## Delivered stage: detect blocked simplex rows before repairs (2026-11-07)
 
 [PR #109](https://github.com/fuqi-jia/Xolver/pull/109) merged as
