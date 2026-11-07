@@ -171,6 +171,7 @@ private:
     // completion may add unnotified sources, whose lifetime is not described
     // by that trail; after such an admission, keep reconciling complete models.
     bool modelSourcesFollowTrail_ = true;
+    bool modelCompletionSeen_ = false;
     std::optional<size_t> sourceRegistrySize_;
     std::unordered_set<SatVar> notifiedTheoryVars_;
     void recordTheorySource(SatVar var);

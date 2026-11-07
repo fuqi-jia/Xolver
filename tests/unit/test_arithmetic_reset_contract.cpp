@@ -168,3 +168,76 @@ TEST_CASE("LRA backtracking withdraws interior sources after level replacement")
     REQUIRE(model);
     CHECK(model->numericAssignments.at("interior-x").tryAsRational() <= mpq_class(1));
 }
+
+TEST_CASE("LRA backtracking orders ordinary and interface bound sources together") {
+    for (bool checkBeforeInterface : {false, true}) {
+        CAPTURE(checkBeforeInterface);
+        NativeTerms terms;
+        terms.registerSort(0, SortKind::Real);
+        const auto y = terms.add({Kind::Variable, 0, {}, Payload(std::string("ordered-y"))});
+        const auto zero = terms.add({Kind::ConstReal, 0, {}, Payload(std::string("0"))});
+        SharedTermRegistry shared;
+        shared.setNativeTerms(&terms);
+        const auto sy = shared.getOrCreate(y, 0, "ordered-y", false);
+        const auto szero = shared.getOrCreate(zero, 0, "0", false);
+        LraSolver engine;
+        engine.setNativeTerms(&terms);
+        engine.setSharedTermRegistry(&shared);
+        TheoryLemmaDatabase lemmas;
+        const LinearFormKey x{{{"ordered-x", 1}}};
+        const TheoryAtomRecord lower{1, TheoryId::LRA, false, NullExpr,
+            LinearAtomPayload{x, Relation::Geq, RealValue::fromInt(2)}};
+        const TheoryAtomRecord upper{3, TheoryId::LRA, false, NullExpr,
+            LinearAtomPayload{x, Relation::Leq, RealValue::fromInt(1)}};
+        engine.assertLit(lower, true, 3, {1, true});
+        if (checkBeforeInterface)
+            REQUIRE(engine.check(lemmas).kind == TheoryCheckResult::Kind::Consistent);
+        REQUIRE(engine.assertInterfaceEquality(sy, szero, {2, true}, 0).kind ==
+                TheoryCheckResult::Kind::Consistent);
+        REQUIRE(engine.check(lemmas).kind == TheoryCheckResult::Kind::Consistent);
+
+        // A late, weaker bound must survive withdrawal of the stronger child.
+        const TheoryAtomRecord retained{4, TheoryId::LRA, false, NullExpr,
+            LinearAtomPayload{x, Relation::Geq, RealValue::fromInt(0)}};
+        engine.assertLit(retained, true, 1, {4, true});
+        REQUIRE(engine.check(lemmas).kind == TheoryCheckResult::Kind::Consistent);
+
+        // The root interface equality must not hide the earlier high-level
+        // ordinary bound from the simplex's suffix rollback.
+        engine.backtrackToLevel(1);
+        engine.assertLit(upper, true, 1, {3, true});
+        REQUIRE(engine.check(lemmas).kind == TheoryCheckResult::Kind::Consistent);
+        const auto model = engine.getModel();
+        REQUIRE(model);
+        CHECK(model->numericAssignments.at("ordered-x").tryAsRational() >= mpq_class(0));
+        CHECK(model->numericAssignments.at("ordered-x").tryAsRational() <= mpq_class(1));
+        CHECK(model->numericAssignments.at("ordered-y").tryAsRational() == mpq_class(0));
+    }
+}
+
+TEST_CASE("LRA interface rollback retains unapplied lower-level sources") {
+    NativeTerms terms;
+    terms.registerSort(0, SortKind::Real);
+    const auto y = terms.add({Kind::Variable, 0, {}, Payload(std::string("pending-y"))});
+    const auto zero = terms.add({Kind::ConstReal, 0, {}, Payload(std::string("0"))});
+    const auto one = terms.add({Kind::ConstReal, 0, {}, Payload(std::string("1"))});
+    SharedTermRegistry shared;
+    shared.setNativeTerms(&terms);
+    const auto sy = shared.getOrCreate(y, 0, "pending-y", false);
+    const auto szero = shared.getOrCreate(zero, 0, "0", false);
+    const auto sone = shared.getOrCreate(one, 0, "1", false);
+    LraSolver engine;
+    engine.setNativeTerms(&terms);
+    engine.setSharedTermRegistry(&shared);
+    TheoryLemmaDatabase lemmas;
+    REQUIRE(engine.assertInterfaceEquality(sy, szero, {1, true}, 3).kind ==
+            TheoryCheckResult::Kind::Consistent);
+    REQUIRE(engine.check(lemmas).kind == TheoryCheckResult::Kind::Consistent);
+    REQUIRE(engine.assertInterfaceEquality(sy, sone, {2, true}, 1).kind ==
+            TheoryCheckResult::Kind::Consistent);
+    engine.backtrackToLevel(1);
+    REQUIRE(engine.check(lemmas).kind == TheoryCheckResult::Kind::Consistent);
+    const auto model = engine.getModel();
+    REQUIRE(model);
+    CHECK(model->numericAssignments.at("pending-y").tryAsRational() == mpq_class(1));
+}

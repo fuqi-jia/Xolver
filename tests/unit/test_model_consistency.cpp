@@ -25,6 +25,31 @@ static std::set<std::string> modelValueSet(const Model& m) {
     return result;
 }
 
+TEST_CASE("MC: UF real branches retain valid reasons across model checks") {
+    const auto path = writeSmt2("uf_real_branch_sources", R"(
+        (set-logic QF_UFLRA)
+        (set-option :produce-models true)
+        (declare-const p Bool)
+        (declare-fun f (Real) Real)
+        (declare-const x Real)
+        (declare-const y Real)
+        (assert (= (f 0) 0))
+        (assert (= (f 1) 1))
+        (assert (or (= x 0) (= x 1)))
+        (assert (or (= y 0) (= y 1)))
+        (assert (= p (= x 0)))
+        (assert (distinct x y))
+        (assert (distinct (f x) (f y)))
+        (check-sat)
+    )");
+    Solver solver;
+    REQUIRE(solver.parseFile(path));
+    REQUIRE_RESULT(solver.checkSat(), Result::Sat);
+    CHECK(solver.validateModel() == Solver::ModelValidation::Satisfied);
+    REQUIRE_RESULT(solver.checkSat(), Result::Sat);
+    CHECK(solver.validateModel() == Solver::ModelValidation::Satisfied);
+}
+
 TEST_CASE("MC: x = 42 has 42 in the model value set") {
     auto path = writeSmt2("eq_42",
         "(set-logic QF_LIA)\n"

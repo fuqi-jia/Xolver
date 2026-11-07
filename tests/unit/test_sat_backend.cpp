@@ -413,6 +413,19 @@ TEST_CASE("Model sources: registration growth and truncated models require compl
         CHECK(h.theories.sources.at(q).first);
         CHECK(h.theories.backtracks == 1);
     }
+    SUBCASE("fully notified registration growth needs one complete admission") {
+        h.propagator.notify_assignment({static_cast<int>(p)});
+        h.registerAtom(q, TheoryId::EUF);
+        h.propagator.notify_new_decision_level();
+        h.propagator.notify_assignment({static_cast<int>(q)});
+        CHECK(h.propagator.cb_check_found_model({static_cast<int>(p), static_cast<int>(q)}));
+        REQUIRE(h.theories.admitted.size() == 4);
+        CHECK(h.theories.backtracks == 1);
+        CHECK(h.propagator.cb_check_found_model({static_cast<int>(q), static_cast<int>(p)}));
+        CHECK(h.theories.admitted.size() == 4);
+        CHECK(h.theories.backtracks == 1);
+        CHECK(h.theories.fullChecks == 2);
+    }
     SUBCASE("a missing observed source cannot remain in a truncated model") {
         h.registerAtom(q, TheoryId::LIA);
         h.propagator.notify_assignment({static_cast<int>(p), -static_cast<int>(q)});

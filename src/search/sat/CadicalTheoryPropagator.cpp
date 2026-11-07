@@ -421,8 +421,7 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
     }
 
     assignmentView_.clear();
-    bool sourcesMatch = modelSourcesFollowTrail_ &&
-        (!sourceRegistrySize_ || *sourceRegistrySize_ == registry_.numAtomVars());
+    bool observedSourcesMatch = true;
     for (int lit : model) {
         SatVar var = static_cast<SatVar>(std::abs(lit));
         assignmentView_.setVarValue(var, lit > 0);
@@ -430,18 +429,28 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
             const auto assigned = currentAssignment_.find(var);
             if (!notifiedTheoryVars_.contains(var) || assigned == currentAssignment_.end() ||
                 assigned->second != (lit > 0) ||
-                !varToLevel_.contains(var)) sourcesMatch = false;
+                !varToLevel_.contains(var)) observedSourcesMatch = false;
         }
     }
-    if (sourcesMatch) {
+    if (observedSourcesMatch) {
         // Check coverage in the other direction too: a truncated model must
         // not retain an observed source that is absent from that model.
         for (const auto var : notifiedTheoryVars_)
             if (assignmentView_.value(SatLit{var, currentAssignment_.at(var)}) != LitValue::True) {
-                sourcesMatch = false;
+                observedSourcesMatch = false;
                 break;
             }
     }
+    const auto registrySize = registry_.numAtomVars();
+    const bool sourcesMatch = observedSourcesMatch && modelSourcesFollowTrail_ &&
+        (!sourceRegistrySize_ || *sourceRegistrySize_ == registrySize);
+    if (satProf && stats_.modelCheckCount == 0)
+        std::fprintf(stderr,
+            "[MODEL-SOURCE-STATE] observed_match=%d follow_trail=%d registry_before=%zu "
+            "registry_now=%zu notified=%zu assignments=%zu model=%zu\n",
+            observedSourcesMatch, modelSourcesFollowTrail_, sourceRegistrySize_.value_or(0),
+            registrySize, notifiedTheoryVars_.size(), currentAssignment_.size(), model.size());
+    modelCompletionSeen_ = modelCompletionSeen_ || !observedSourcesMatch;
     tm_.setAssignmentView(&assignmentView_);
 
     NO_DBG << "[CaDiCaL] cb_check_found_model modelSize=" << model.size() << "\n";
@@ -506,6 +515,14 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
             if (!atom) continue;
             tm_.assertTheoryLit(*atom, SatLit{var, sign}, lvl);
             ++stats_.modelSourceAssertions;
+        }
+        // Atomization and later refinements can register atoms after the first
+        // notification. A complete admission restores this new registry epoch
+        // when all model sources are observed. Unnotified model completions
+        // retain conservative admission for the rest of this query.
+        if (observedSourcesMatch && !modelCompletionSeen_) {
+            sourceRegistrySize_ = registry_.numAtomVars();
+            modelSourcesFollowTrail_ = true;
         }
     }
     for (int lit : model) {

@@ -295,27 +295,61 @@ theory sources. This includes repeated work when notifications already supply
 the complete candidate's exact source assignment and SAT decision levels; the
 timing alone does not attribute all callback cost to replay.
 
-The shared SAT/theory bridge now records actually notified theory sources.
-Before Full checking, it checks both model/trail coverage directions, values,
-levels and registry stability. A matching prefix keeps each theory's existing
-incremental context. A model completion or later registration growth retains
-complete admission in stable decision-level order. Pure Boolean literals do
-not participate in that source sort. Every candidate still receives a Full
-theory check; per-theory rollback, APIs, allocations and seeds are unchanged.
+The shared SAT/theory bridge records actually notified theory sources and
+checks both model/trail coverage directions, values, levels and registry
+stability before reusing a prefix. Later registrations require one complete
+admission; when every model source was notified, that admission synchronizes
+the new registry epoch. Unnotified model completions retain conservative
+complete replay. Pure Boolean literals do not participate in the stable
+source-level sort. Every candidate still receives a Full theory check;
+per-theory rollback, APIs, allocations and seeds are unchanged.
+
+The first strict prototype passed native and independent correctness checks
+but reused no sources on either LRA gap. First-callback diagnostics confirm
+that their model sources are completely observed despite earlier registry
+growth. The corrected epoch transition is covered by a new regression; the
+previous unnotified-completion behavior remains covered.
 
 Proof-enabled Panda9 / ExperimentOS qualification passes **2,261 cases /
-1,373,168 assertions**, including three new callback regression groups and
-342 targeted cases. All **32 independent synthetic inputs** across eight logics
-match expected SAT/UNSAT results in baseline, candidate and Z3. The **80 actual
-exported-model replays** pass; there are no opposite verdicts, unknowns,
-unconfirmed results or errors. This covers linear/nonlinear integer and real
-arithmetic, UF, UF with reals, arrays with integers, and mixed integer/real
-arithmetic. It does not establish performance or private-suite acceptance.
+1,373,183 assertions**, including three callback groups and 342 targeted cases.
+The first strict prototype passes **32 independent synthetic inputs** across
+eight logics and **80 actual exported-model replays**. The subsequent epoch
+variant fails that same audit: one independently satisfiable UF-with-reals
+input returns `unknown`, with a rejected stale linear conflict reason. The
+other 31 inputs pass; no opposite verdict is observed. This is a capability
+regression, so the epoch variant is not eligible for full-suite comparison or
+promotion. Native tests alone did not cover this combination-state failure.
 
-Frozen CLI SHA-256 is
-`ac48a93976861b9cbc2a8d0514f3c6b87f79571bb14091ec695aeb25131bff9f`.
+The corrected diagnostics reuse **1,486 of 1,499** and **2,698 of 2,786** Full
+source contexts, reducing readmissions to **56,925 and 203,436**. Last callback
+time snapshots change **9.520 to 4.150 seconds** and **34.433 to 26.589 seconds**,
+although the candidate performs more Full checks. Both original inputs still
+time out at 60 seconds. This is measured callback work reduction, not a new
+solve or whole-suite performance conclusion.
+
+The rejected epoch variant's CLI SHA-256 is
+`b95f4bc1038b7c8f8270225e0e5fcefd2f719252d2b2f79427eaa72b35eae00e`.
+
+The stale reason exposes a bound-journal ordering defect. LRA admitted
+ordinary sources before interface equalities, even when a later interface
+fact had a lower SAT level. The simplex's suffix rollback could then leave a
+withdrawn higher-level bound behind. A direct arithmetic regression and an
+independently constructed UF/real SAT regression both fail before repair.
+
+LRA now orders both source streams by SAT level. A late lower-level source
+replays retained sources while preserving the existing assignment policy.
+Separate admission cursors retain unapplied interface facts across withdrawal;
+interrupted batches remain replayable. Regressions cover delayed interface
+delivery, weaker retained bounds, pending sources and repeated actual-model
+validation. Proof-enabled Panda9 / ExperimentOS qualification passes **2,264
+cases / 1,373,211 assertions**. All **32 independent synthetic inputs** and
+**80 actual exported-model replays** pass again, with no unknowns or errors.
+The repaired CLI SHA-256 is
+`3839b418932fbe371f76d664f6b34c6b468c7ee1e61843982a379375af67e5fa`.
+Complete fixed-suite comparison and promotion remain pending; no solve or
+whole-suite performance gain is claimed from these correctness checks.
 The next comparison uses the complete original fixed160 suite and qualified
-main, retaining the original logics and identical per-input resources.
+main, retaining original logics and identical per-input resources.
 
 ### Closed experiment: ordered fully reified weighted thresholds
 
