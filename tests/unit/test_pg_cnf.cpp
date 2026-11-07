@@ -9,10 +9,16 @@
 #include "search/boolean/Atomizer.h"
 #include "contracts/SatSolver.h"
 #include "ir/NativeTerms.h"
+#include "search/sat/CadicalBackend.h"
+#include "search/sat/CadicalTheoryPropagator.h"
+#include "search/coordination/TheoryAtomRegistry.h"
+#include "search/coordination/TheoryLemmaDatabase.h"
+#include "search/coordination/TheoryManager.h"
 #include <random>
 #include <vector>
 #include <string>
 #include <functional>
+#include <limits>
 
 using namespace xolver;
 
@@ -102,14 +108,36 @@ int countClauses(NativeTerms& ir, ExprId root, SortId boolS, bool pg) {
 
 // SAT-status of the PG-encoded formula. Fresh SatSolver + Atomizer per call.
 bool encodeAndSolveIsSat(NativeTerms& ir, ExprId root, SortId boolS, bool pg) {
-    auto sat = createSatSolver();
-    REQUIRE(sat);
-    Atomizer atom(*sat);
+    CadicalBackend sat;
+    TheoryAtomRegistry registry;
+    TheoryManager theories;
+    TheoryLemmaDatabase lemmas;
+    CadicalTheoryPropagator propagator(registry, theories, lemmas, sat);
+    sat.connectPropagator(&propagator);
+    struct Disconnect {
+        CadicalBackend& sat;
+        ~Disconnect() { sat.disconnectPropagator(); }
+    } disconnect{sat};
+    Atomizer atom(sat);
     atom.setBoolSortId(boolS);
     if (pg) atom.computePolarities({root}, ir);
     SatLit lit = atom.atomize(root, ir);
-    sat->addClause({lit});
-    return sat->solve() == SatSolver::SolveResult::Sat;
+    sat.addClause({lit});
+    const auto result = sat.solve();
+    REQUIRE(result != SatSolver::SolveResult::Unknown);
+    if (result == SatSolver::SolveResult::Sat) {
+        // Reconstruct the source assignment independently of encoding helpers.
+        // Observation must preserve both satisfiability and concrete models.
+        std::vector<std::string> variables;
+        unsigned mask = 0;
+        for (const auto& input : atom.atoms()) {
+            REQUIRE(variables.size() < std::numeric_limits<unsigned>::digits);
+            if (sat.value(input.var)) mask |= 1u << variables.size();
+            variables.push_back(std::get<std::string>(ir.get(input.expr).payload.value));
+        }
+        CHECK(evalBool(ir, root, mask, variables));
+    }
+    return result == SatSolver::SolveResult::Sat;
 }
 
 } // namespace
