@@ -26,7 +26,7 @@ public:
     CadicalBackend();
     ~CadicalBackend() override;
 
-    SatVar newVar() override;
+    SatVar newVar(VariableRole role = VariableRole::Observable) override;
     void addClause(const std::vector<SatLit>& clause) override;
     void addTheoryClause(const std::vector<SatLit>& clause) override;
     SolveResult solve() override;

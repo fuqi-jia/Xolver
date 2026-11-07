@@ -41,6 +41,10 @@ public:
 
     const std::vector<AtomRecord>& atoms() const { return atoms_; }
 
+    // Before the initial solve, expose encoding helpers as well when a user
+    // propagator requests the complete Boolean assignment stream.
+    void observeBooleanStructure();
+
     // Register a dynamically created theory atom (e.g. branch split, disequality split).
     // Returns the SAT literal. The exprId should be a synthetic id (not in NativeTerms).
     SatLit registerDynamicAtom(ExprId expr, TheoryId theory) override;
@@ -76,7 +80,7 @@ private:
     // Eliminates the deep-formula stack overflow without touching the encoding.
     void preAtomizeIterative(ExprId root, const NativeTerms& ir);
     void bridgeBooleanArgument(ExprId argument, const NativeTerms& ir);
-    SatVar freshVar();
+    SatVar freshVar(SatSolver::VariableRole role = SatSolver::VariableRole::Observable);
 
     // Which halves of a connective's defining biconditional to emit for `eid`:
     // {needPosDir (x->def), needNegDir (def->x)}. Full {true,true} unless PG is
@@ -108,6 +112,7 @@ private:
 
     SatSolver& sat_;
     std::vector<AtomRecord> atoms_;
+    std::vector<SatVar> booleanAuxiliaries_;
     std::unordered_map<ExprId, SatLit> memo_;
     // Non-Boolean DAG nodes have no SAT literal, but their Boolean arguments
     // must still be visited once, including arguments nested below numeric UFs.

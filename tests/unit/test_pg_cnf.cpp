@@ -82,7 +82,7 @@ bool bruteSatisfiable(const NativeTerms& ir, ExprId root,
 struct CountingSat : SatSolver {
     int clauses = 0;
     SatVar nv = 0;
-    SatVar newVar() override { return ++nv; }
+    SatVar newVar(VariableRole = VariableRole::Observable) override { return ++nv; }
     void addClause(const std::vector<SatLit>&) override { ++clauses; }
     SolveResult solve() override { return SolveResult::Unknown; }
     SolveResult solve(const std::vector<SatLit>&) override { return SolveResult::Unknown; }

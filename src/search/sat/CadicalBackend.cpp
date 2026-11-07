@@ -123,7 +123,7 @@ CadicalBackend::~CadicalBackend() {
 #endif
 }
 
-SatVar CadicalBackend::newVar() {
+SatVar CadicalBackend::newVar(VariableRole role) {
     if (inSolving_) {
         // Inside a SAT solve() call (e.g. theory-propagator callback).
         // declare_more_variables() requires READY state and will fatal here.
@@ -150,9 +150,10 @@ SatVar CadicalBackend::newVar() {
     // capacity; padding it creates thousands of actual SAT decisions.
     maxVar_ = static_cast<SatVar>(solver_->declare_one_more_variable());
 
-    // If an external propagator is already connected (pre-solve setup),
-    // observe the variable immediately so it is safe to use in lemmas.
-    if (propagatorConnected_) {
+    // Only externally meaningful variables need observation. Keeping Boolean
+    // auxiliaries unobserved also lets CaDiCaL simplify their definitions.
+    // Dynamic allocations above remain observed for external-clause safety.
+    if (propagatorConnected_ && role == VariableRole::Observable) {
         solver_->add_observed_var(static_cast<int>(maxVar_));
         if (maxVar_ >= observedVars_.size()) {
             size_t newSize = std::max(static_cast<size_t>(maxVar_) + 1,

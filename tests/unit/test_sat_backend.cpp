@@ -16,6 +16,7 @@
 #include "search/sat/CadicalBackend.h"
 #include "search/sat/CadicalTheoryPropagator.h"
 #include "search/coordination/TheoryLemmaDatabase.h"
+#include "search/boolean/Atomizer.h"
 #include <algorithm>
 #include <stdexcept>
 #include <filesystem>
@@ -25,6 +26,176 @@
 #include <utility>
 
 using namespace xolver;
+
+TEST_CASE("SAT backend: Boolean encoding helpers stay outside theory callbacks") {
+    NativeTerms ir;
+    const auto boolSort = ir.allocateSortId();
+    ir.registerSort(boolSort, SortKind::Bool);
+    ir.setBoolSortId(boolSort);
+    auto variable = [&](const std::string& name) {
+        return ir.add({Kind::Variable, boolSort, {}, Payload(name)});
+    };
+    const auto p = variable("p");
+    const auto q = variable("q");
+    const auto r = variable("r");
+    const auto disjunction = ir.add({Kind::Or, boolSort, {p, q}, Payload{}});
+    const auto implication = ir.add({Kind::Implies, boolSort, {p, r}, Payload{}});
+    const auto difference = ir.add({Kind::Distinct, boolSort, {q, r}, Payload{}});
+    const auto root = ir.add({Kind::And, boolSort,
+        {disjunction, implication, difference}, Payload{}});
+
+    CadicalBackend backend;
+    TheoryAtomRegistry registry;
+    TheoryManager theories;
+    TheoryLemmaDatabase database;
+    struct RecordingPropagator : CadicalTheoryPropagator {
+        using CadicalTheoryPropagator::CadicalTheoryPropagator;
+        std::vector<int> notifications;
+        std::vector<int> finalModel;
+        void notify_assignment(const std::vector<int>& lits) override {
+            notifications.insert(notifications.end(), lits.begin(), lits.end());
+            CadicalTheoryPropagator::notify_assignment(lits);
+        }
+        bool cb_check_found_model(const std::vector<int>& model) override {
+            finalModel = model;
+            return CadicalTheoryPropagator::cb_check_found_model(model);
+        }
+    } propagator{registry, theories, database, backend};
+    backend.connectPropagator(&propagator);
+    Atomizer atomizer(backend);
+    atomizer.setBoolSortId(boolSort);
+    backend.addClause({atomizer.atomize(root, ir)});
+    REQUIRE(backend.solve() == SatSolver::SolveResult::Sat);
+
+    std::vector<SatVar> inputVars;
+    for (const auto& atom : atomizer.atoms()) inputVars.push_back(atom.var);
+    REQUIRE(inputVars.size() == 3);
+    auto isInput = [&](int lit) {
+        const auto var = static_cast<SatVar>(lit < 0 ? -lit : lit);
+        return std::find(inputVars.begin(), inputVars.end(), var) != inputVars.end();
+    };
+    CHECK(propagator.finalModel.size() == inputVars.size());
+    CHECK(std::all_of(propagator.finalModel.begin(), propagator.finalModel.end(), isInput));
+    CHECK(std::all_of(propagator.notifications.begin(), propagator.notifications.end(), isInput));
+    auto value = [&](ExprId expr) {
+        for (const auto& atom : atomizer.atoms())
+            if (atom.expr == expr) return backend.value(atom.var);
+        FAIL("missing Boolean input");
+        return false;
+    };
+    CHECK((value(p) || value(q)));
+    CHECK((!value(p) || value(r)));
+    CHECK(value(q) != value(r));
+    backend.disconnectPropagator();
+}
+
+namespace {
+struct ObservationHarness {
+    CadicalBackend backend;
+    TheoryAtomRegistry registry;
+    TheoryManager theories;
+    TheoryLemmaDatabase database;
+    struct Capture : CadicalTheoryPropagator {
+        using CadicalTheoryPropagator::CadicalTheoryPropagator;
+        std::vector<int> model;
+        bool cb_check_found_model(const std::vector<int>& values) override {
+            model = values;
+            return CadicalTheoryPropagator::cb_check_found_model(values);
+        }
+    } propagator{registry, theories, database, backend};
+    ObservationHarness() { backend.connectPropagator(&propagator); }
+    ~ObservationHarness() { backend.disconnectPropagator(); }
+};
+
+} // namespace
+
+TEST_CASE("SAT observation: auxiliary models and incremental assumptions stay exact") {
+    ObservationHarness h;
+    const auto input = h.backend.newVar();
+    const auto helper = h.backend.newVar(SatSolver::VariableRole::Auxiliary);
+    h.backend.addClause({SatLit::positive(input), SatLit::positive(helper)});
+    h.backend.addClause({SatLit::negative(input), SatLit::negative(helper)});
+    h.backend.addClause({SatLit::positive(input)});
+    REQUIRE(h.backend.solve() == SatSolver::SolveResult::Sat);
+    CHECK(h.backend.value(input));
+    CHECK_FALSE(h.backend.value(helper));
+    CHECK(h.propagator.model == std::vector<int>{static_cast<int>(input)});
+    REQUIRE(h.backend.solve({SatLit::positive(helper)}) == SatSolver::SolveResult::Unsat);
+    CHECK(h.backend.getFailedAssumptions() == std::vector<SatLit>{SatLit::positive(helper)});
+    REQUIRE(h.backend.solve({SatLit::negative(helper)}) == SatSolver::SolveResult::Sat);
+    CHECK(h.backend.value(input));
+    CHECK_FALSE(h.backend.value(helper));
+}
+
+TEST_CASE("SAT observation: Boolean structure can be observed before solving") {
+    ObservationHarness h;
+    NativeTerms ir;
+    const auto sort = ir.allocateSortId();
+    ir.registerSort(sort, SortKind::Bool);
+    ir.setBoolSortId(sort);
+    const auto p = ir.add({Kind::Variable, sort, {}, Payload(std::string("p"))});
+    const auto q = ir.add({Kind::Variable, sort, {}, Payload(std::string("q"))});
+    const auto root = ir.add({Kind::Or, sort, {p, q}, Payload{}});
+    Atomizer atomizer(h.backend);
+    atomizer.setBoolSortId(sort);
+    const auto literal = atomizer.atomize(root, ir);
+    h.backend.addClause({literal});
+    atomizer.observeBooleanStructure();
+    atomizer.observeBooleanStructure(); // Promotion is idempotent.
+    REQUIRE(h.backend.solve() == SatSolver::SolveResult::Sat);
+    CHECK(h.propagator.model.size() == 3);
+    CHECK(std::find(h.propagator.model.begin(), h.propagator.model.end(),
+                    static_cast<int>(literal.var)) != h.propagator.model.end());
+}
+
+TEST_CASE("SAT observation: helpers introduced during callbacks support external clauses") {
+    CadicalBackend backend;
+    TheoryAtomRegistry registry;
+    TheoryManager theories;
+    TheoryLemmaDatabase database;
+    struct DynamicPropagator : CadicalTheoryPropagator {
+        CadicalBackend& backend;
+        SatVar helper = 0;
+        bool pending = false;
+        bool delivered = false;
+        bool checkedHelper = false;
+        DynamicPropagator(TheoryAtomRegistry& registry, TheoryManager& theories,
+                          TheoryLemmaDatabase& database, CadicalBackend& sat)
+            : CadicalTheoryPropagator(registry, theories, database, sat), backend(sat) {}
+        bool cb_check_found_model(const std::vector<int>& model) override {
+            if (!helper) {
+                helper = backend.newVar(SatSolver::VariableRole::Auxiliary);
+                pending = true;
+                return false;
+            }
+            checkedHelper = std::find(model.begin(), model.end(),
+                                      static_cast<int>(helper)) != model.end();
+            return CadicalTheoryPropagator::cb_check_found_model(model);
+        }
+        bool cb_has_external_clause(bool& forgettable) override {
+            if (pending) {
+                forgettable = false;
+                return true;
+            }
+            return CadicalTheoryPropagator::cb_has_external_clause(forgettable);
+        }
+        int cb_add_external_clause_lit() override {
+            if (!pending) return CadicalTheoryPropagator::cb_add_external_clause_lit();
+            if (!delivered) {
+                delivered = true;
+                return static_cast<int>(helper);
+            }
+            pending = false;
+            return 0;
+        }
+    } propagator{registry, theories, database, backend};
+    backend.connectPropagator(&propagator);
+    backend.addClause({SatLit::positive(backend.newVar())});
+    REQUIRE(backend.solve() == SatSolver::SolveResult::Sat);
+    CHECK(propagator.checkedHelper);
+    CHECK(backend.value(propagator.helper));
+    backend.disconnectPropagator();
+}
 
 namespace {
 struct ClauseDeliveryHarness {

@@ -142,7 +142,7 @@ TEST_CASE("Linearizer: emitted cuts track changed bound explanations and availab
     REQUIRE(kernel);
     struct Allocator : SatSolver, DynamicAtomRegistrar {
         SatVar next = 0;
-        SatVar newVar() override { return ++next; }
+        SatVar newVar(VariableRole = VariableRole::Observable) override { return ++next; }
         void addClause(const std::vector<SatLit>&) override {}
         SolveResult solve() override { throw std::logic_error("allocation only"); }
         SolveResult solve(const std::vector<SatLit>&) override { return solve(); }
