@@ -1,6 +1,6 @@
 # Arithmetic validation and continuation record
 
-## Development: isolate refinement-first global completion (2026-11-07)
+## Qualified candidate: refine NIA before global model completion (2026-11-07)
 
 Core `13d48ba5` retains the NIA scheduling correction and its focused regression,
 while withdrawing the optional dense-real constructor and its unmerged
@@ -25,11 +25,33 @@ candidate seconds**. The preceding freeze's lost integer SAT completes in
 formal timeout. The private NIA representative improves **14.790 to 0.0328
 seconds**, with both actual models independently accepted.
 
-Fresh complete private14408, fixed160, development587 and public965 acceptance
-is running against accepted main and the same frozen references, at 60 seconds
-/ one leased physical CPU / 16 GiB per input/version. Complete acceptance, PR CI
-and original-C QCP qualification remain open. No protected input has been used;
-there is no overall superiority claim.
+Complete fresh private14408 acceptance verifies **14,408 results in all three
+arms: 8,940 SAT / 5,468 UNSAT**. There are no losses, timeouts, unknowns,
+unconfirmed decisions or errors. Solver totals are **383.007 main / 360.697
+candidate / 466.098 Z3 seconds**: candidate time is **5.82%** lower than accepted
+main and **22.61%** lower than Z3 on this authorized development cohort.
+
+Fresh fixed160 retains **124 main / 124 candidate / 117 Z3** verified results,
+after a fresh independent original-input-bound residue-certificate check
+confirms only actual timed UNSAT arms. Raw reports remain unchanged; no timeout
+or unknown is upgraded. There is no gain or loss, with **36 candidate timeouts**.
+Mean verified PAR-2 is **31.714 / 31.692 / 33.715 seconds**. Seven unconfirmed
+reference decisions remain excluded. This is retained coverage, not a new solve.
+
+Development587 retains **587 / 587 / 584** verified results, with solver totals
+**14.392 / 13.863 / 18.317 seconds**; three unconfirmed reference models remain
+excluded. All **965 public regression expectations** pass. Every actual timed
+Xolver SAT model passes both Z3 and cvc5, and reference models pass cvc5. No
+invalid model, opposite verdict, crash or protocol error is observed. All
+formal inputs/versions use 60 seconds / one leased physical CPU / 16 GiB with
+the same frozen binaries throughout each comparison.
+
+Server stage qualification is complete; exact-head PR CI and merged-main CI
+are pending. This worker has no original-C QCP qualification. Final-version
+program validation, all fixed inputs solved, final fair freeze and once-only
+protected-set acceptance remain open. No protected input has been used, and no
+overall solver-superiority claim is made. Private inputs and individual
+evidence remain server-only; the cancelled server archive is not a requirement.
 
 The first isolated native qualification is rejected because its proposed
 regression also passes accepted main: an earlier reasoner decides the fixture,
