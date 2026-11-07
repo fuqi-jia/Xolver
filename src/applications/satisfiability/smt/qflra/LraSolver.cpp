@@ -444,18 +444,19 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
         (void)gs_.avoidExcludedValues(exclusions);
     };
 
-    // Dense witness construction and branch lemmas require a complete Boolean
-    // candidate. Partial checks retain exact feasibility and explained bound
-    // propagation without selecting a new point for model-only exclusions.
-    if (effort == TheoryEffort::Full && !disequalities.empty()) {
+    // Retain the split vocabulary prepared by partial checks. Constructing a
+    // new dense witness is reserved for a complete Boolean candidate.
+    if (!disequalities.empty()) {
 #ifdef XOLVER_LRA_PROFILE
         profile_.disequalitySplitCount++;
 #endif
         auto dr = handleSimplexDisequalities(
             disequalities, gs_, lemmaDb,
-            [this, &completeDisequalities](const DiseqInfo& d) -> TheoryCheckResult {
-                completeDisequalities();
-                if (gs_.value(d.auxVar).isNonZero()) return TheoryCheckResult::consistent();
+            [this, &completeDisequalities, effort](const DiseqInfo& d) -> TheoryCheckResult {
+                if (effort == TheoryEffort::Full) {
+                    completeDisequalities();
+                    if (gs_.value(d.auxVar).isNonZero()) return TheoryCheckResult::consistent();
+                }
                 if (!registry_) return TheoryCheckResult::consistent();
                 auto litLt = registry_->getOrCreateLinearBoundAtom(
                     d.lhs, Relation::Lt, d.rhs, TheoryId::LRA);

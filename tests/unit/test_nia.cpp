@@ -79,24 +79,26 @@ public:
 };
 }
 
-TEST_CASE("Arithmetic model scheduling: partial LRA checks do not register branch atoms") {
+TEST_CASE("Arithmetic model scheduling: partial LRA checks preserve split vocabulary and point") {
     LinearDeciderContext context;
     LraSolver solver;
     solver.setRegistry(&context.registry);
     const LinearFormKey form{{{"x", 1}}};
-    for (const auto relation : {Relation::Eq, Relation::Neq}) {
-        const auto reason = context.reason();
-        solver.assertLit({reason.var, TheoryId::LRA, false, NullExpr,
-            LinearAtomPayload{form, relation, RealValue::fromInt(0)}}, true, 0, reason);
-    }
+    const auto reason = context.reason();
+    solver.assertLit({reason.var, TheoryId::LRA, false, NullExpr,
+        LinearAtomPayload{form, Relation::Neq, RealValue::fromInt(0)}}, true, 0, reason);
     const auto before = context.registry.numAtomVars();
     const auto partial = solver.check(context.lemmas, TheoryEffort::Standard);
-    CHECK(partial.kind == TheoryCheckResult::Kind::Consistent);
-    CHECK(context.registry.numAtomVars() == before);
+    CHECK(partial.kind == TheoryCheckResult::Kind::Lemma);
+    CHECK(context.registry.numAtomVars() == before + 2);
+    const auto partialModel = solver.getModel();
+    REQUIRE(partialModel);
+    CHECK(partialModel->numericAssignments.at("x").tryAsRational() == mpq_class(0));
     const auto full = solver.check(context.lemmas, TheoryEffort::Full);
-    REQUIRE(full.kind == TheoryCheckResult::Kind::Lemma);
-    REQUIRE(full.lemmaOpt);
-    CHECK(full.lemmaOpt->lits.size() == 3);
+    REQUIRE(full.kind == TheoryCheckResult::Kind::Consistent);
+    const auto model = solver.getModel();
+    REQUIRE(model);
+    CHECK(model->numericAssignments.at("x").tryAsRational() != mpq_class(0));
     CHECK(context.registry.numAtomVars() == before + 2);
 }
 
