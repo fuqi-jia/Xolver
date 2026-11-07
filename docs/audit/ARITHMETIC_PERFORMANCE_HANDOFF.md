@@ -2,12 +2,34 @@
 
 ## Development: isolate refinement-first global completion (2026-11-07)
 
-The next candidate retains the NIA scheduling correction and its focused
-regression, while withdrawing the optional dense-real constructor and its
-unmerged fixtures. Accepted model validation, exact arithmetic and rollback
-policies are retained. This closes the real construction experiment without
-claiming it caused the integer encoding timeout below. New native and complete
-comparison qualification is required before promotion.
+Core `13d48ba5` retains the NIA scheduling correction and its focused regression,
+while withdrawing the optional dense-real constructor and its unmerged
+fixtures. Accepted model validation, exact arithmetic and rollback policies are
+retained. This closes the real construction experiment without claiming it
+caused the integer encoding timeout below.
+
+Proof-enabled Panda9 / ExperimentOS qualification passes **2,270 cases /
+1,373,265 assertions**. The corrected regression fails accepted main and passes
+the candidate. All **2,179 qualified source contents** match the committed core
+and parser gitlink. Frozen CLI SHA-256 is
+`ed294b55070a649721ef3bbcbac29abe76a1a897c9d6f3e6f2ddc3740d0bd2aa`;
+worker SHA-256 is
+`71c4314ba75f3d6a568c0324f0e6c8a1b46c207c0abe0ea97119e83e351bd1b8`.
+
+A fresh 11-input pilot verifies **7 main / 7 candidate / 10 Z3**, with no gain,
+loss, invalid model, opposite verdict or protocol error. Every actual timed
+Xolver SAT model passes both references. Four original gaps remain timeouts
+in both Xolver arms. The seven verified solves total **143.346 main / 129.574
+candidate seconds**. The preceding freeze's lost integer SAT completes in
+**20.311 seconds in both arms** in this pilot; this does not explain its earlier
+formal timeout. The private NIA representative improves **14.790 to 0.0328
+seconds**, with both actual models independently accepted.
+
+Fresh complete private14408, fixed160, development587 and public965 acceptance
+is running against accepted main and the same frozen references, at 60 seconds
+/ one leased physical CPU / 16 GiB per input/version. Complete acceptance, PR CI
+and original-C QCP qualification remain open. No protected input has been used;
+there is no overall superiority claim.
 
 The first isolated native qualification is rejected because its proposed
 regression also passes accepted main: an earlier reasoner decides the fixture,
