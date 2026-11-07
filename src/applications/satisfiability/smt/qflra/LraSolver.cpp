@@ -139,7 +139,8 @@ void LraSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
     // LRA bounds are rational; an algebraic RHS never arises from inputs.
     const mpq_class& rhs = payload.rhs.asRational();
     int auxVar = manager_.getOrCreateAuxVar(gs_, payload.lhs, rhs);
-    columnForms_[auxVar] = {payload.lhs, rhs};
+    // Auxiliary definitions are immutable across bound replay and backtracking.
+    columnForms_.try_emplace(auxVar, payload.lhs, rhs);
     Relation effectiveRel = value ? payload.rel : negateRelation(payload.rel);
     bool isDiseq = (effectiveRel == Relation::Neq);
 
