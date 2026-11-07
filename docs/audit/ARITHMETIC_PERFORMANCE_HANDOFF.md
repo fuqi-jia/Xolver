@@ -1,5 +1,14 @@
 # Arithmetic validation and continuation record
 
+## Development: isolate refinement-first global completion (2026-11-07)
+
+The next candidate retains the NIA scheduling correction and its focused
+regression, while withdrawing the optional dense-real constructor and its
+unmerged fixtures. Accepted model validation, exact arithmetic and rollback
+policies are retained. This closes the real construction experiment without
+claiming it caused the integer encoding timeout below. New native and complete
+comparison qualification is required before promotion.
+
 ## Development candidate: refine before global model construction (2026-11-07)
 
 Commits `c5c0a17e` and `b623c781` retain the shared real model constructor while
@@ -41,9 +50,33 @@ with no gains, losses or errors. Solver totals are **14.290 / 13.977 / 18.279
 seconds**; three unconfirmed reference models remain excluded. All **967 public
 regression expectations** pass without a known-failure waiver.
 
-Fixed160 acceptance is still running. This candidate has no PR or original-C
-QCP qualification yet. These partial-stage results do not establish additional
-coverage or overall solver superiority. No protected input has been used.
+Complete fixed160 acceptance **does not qualify this freeze for promotion**.
+An independently rechecked original-input-bound residue certificate confirms
+only the actual timed UNSAT arms, leaving raw reports unchanged. Verified
+counts are **124 main / 123 candidate / 118 Z3**, with no gain, one lost SAT and
+**37 candidate timeouts**. Mean verified PAR-2 is **31.734 / 32.270 / 32.853
+seconds**. Six unconfirmed reference results remain excluded. The lost QF_LIA
+SAT takes **24.226 seconds** in main and times out at 60 seconds in the
+candidate. There is no opposite verdict, invalid model or runtime error.
+
+The first paired diagnostic locates both versions' successful result in the
+existing whole-formula integer encoding, before any LIA reasoner call. It does
+not establish the cause of the formal timeout. A further diagnostic uses the
+formal timeout/model arguments and records existing encoding counters, with
+independent replay of every actual SAT model; neither diagnostic replaces a
+formal row. This candidate has no PR or original-C QCP qualification. Its
+private-cohort speed gain does not cancel the fixed-suite loss or establish
+overall solver superiority. No protected input has been used.
+
+The exact-argument paired diagnostic returns SAT in both versions, and both
+actual models pass Z3 and cvc5. Both generate 510,018 SAT variables and take
+about 13.2 seconds in SAT search at the first width. This diagnostic does not
+reproduce or explain the original formal timeout. A private UFNIA member of
+the complete cohort improves **14.797 to 0.068 seconds**, with both actual
+models independently accepted. Earlier phase traces attribute that mechanism
+to cheap NIA refinements preceding an unsuccessful global completion search.
+The real construction experiment has no established full-suite gain and is
+withdrawn from the next candidate; raw reports and frozen binaries are kept.
 
 ## Development prototype: dense real exclusion completion (2026-11-07)
 

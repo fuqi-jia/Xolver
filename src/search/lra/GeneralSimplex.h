@@ -114,21 +114,6 @@ public:
     // and returns Unknown; check() retains its existing unlimited semantics.
     Result checkUntil(std::chrono::steady_clock::time_point deadline);
 
-    struct ExcludedValue {
-        int var;
-        mpq_class value;
-    };
-    // After a feasible check, construct a symbolic real point avoiding finitely
-    // many excluded coordinate values. Temporary strict bounds find individual
-    // witnesses; exact convex combinations retain earlier exclusions. A false
-    // result is not an UNSAT certificate. Bounds/scopes remain unchanged and
-    // the retained point stays feasible, including after a failed attempt.
-    // Integer clients must separately check integrality. Concrete delta
-    // instantiation must also avoid roots of the requested differences.
-    bool avoidExcludedValues(std::span<const ExcludedValue> exclusions,
-        std::chrono::steady_clock::time_point deadline =
-            std::chrono::steady_clock::time_point::max());
-
     /** Whether an immediate bound conflict was recorded by assertLower/Upper. */
     bool hasImmediateConflict() const { return hasImmediateConflict_; }
 
