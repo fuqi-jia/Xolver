@@ -1,5 +1,55 @@
 # Arithmetic validation and continuation record
 
+## Qualified candidate: detect blocked simplex rows before repairs (2026-11-07)
+
+Candidate core `7069e3db` is based on accepted main `c702ab6a`. The shared
+`GeneralSimplex` first looks for a violated row with no legal nonbasic movement,
+so an existing Farkas conflict need not wait for unrelated point repairs. If
+none is blocked, it selects the first queued repairable row. Entering-variable
+selection, strict Bland termination, exact bounds, budgets and the separate
+LRA/LIA rollback policies remain unchanged. There is no new gate or runtime
+oracle. The public regression checks strict conflict multipliers and both
+rollback policies among dense repairable rows.
+
+Proof-enabled Panda9 / ExperimentOS checks pass **2,269 cases / 1,373,257
+assertions** and all **965 public regression expectations**. All **2,179
+qualified source contents** match the committed implementation and parser
+gitlink. Frozen CLI SHA-256 is
+`7dce090af4670ee8960f71af2d410c733ca45061f2275115ae93113c3bd72a10`;
+worker SHA-256 is
+`e95aa89052ece254a8072e428f2e607b2b3c795cd82a073ed79c7eb83d8b0ec3`.
+
+Fresh fixed160 verifies **124 main / 124 candidate / 116 Z3**, with no gained or
+lost result and **36 candidate timeouts**. An independently rechecked
+original-input-bound residue certificate confirms only the two Xolver arms
+that actually returned UNSAT; the reference timeout receives no credit. Raw
+reports remain unchanged. Seven unconfirmed reference results stay excluded.
+Mean verified PAR-2 changes **32.132 to 31.707 seconds**, versus **34.248 for Z3**.
+The earlier 17-case pilot's same-round 6-to-7 gain recovers a historically solved
+SAT; it is not a newly solved member of the previous 36 timeouts. All three SATs
+lost by the rejected priced-repair experiment are recovered in that pilot.
+
+All **14,408 private development queries** independently verify in all three
+arms: **8,940 SAT / 5,468 UNSAT**, with no losses, timeouts, unknowns, unconfirmed
+results or errors. Solver totals are **384.097 main / 375.828 candidate /
+466.247 Z3 seconds**. This is **2.15%** less time than accepted main and
+**19.39%** less than Z3 on this authorized development cohort only.
+Development587 retains **587 main / 587 candidate / 584 Z3** verified results,
+with solver totals **13.494 / 12.736 / 16.731 seconds**; three unsupported
+reference models remain unconfirmed and excluded. Every actual timed Xolver
+SAT model passes both Z3 and cvc5; reference models pass cvc5. All formal
+comparisons use 60 seconds / one leased physical CPU / 16 GiB per solver and
+original input, with unchanged frozen binaries throughout each comparison.
+
+Server qualification is complete; PR and merged-main CI acceptance are pending.
+Original-C QCP closure below belongs to the accepted main worker, not this new
+worker. Final-version program validation, all 160 solved, a final frozen fair
+comparison and once-only protected-set validation remain open. No protected
+input has been used. Confidential constraints, models and individual evidence
+remain server-only. This stage establishes a limited performance improvement,
+not overall superiority to Z3. The cancelled `validation/current-main.json`
+archive remains unnecessary.
+
 ## Delivered stage: coherent joint witnesses before arrangement (2026-11-07)
 
 [PR #108](https://github.com/fuqi-jia/Xolver/pull/108) merged as
@@ -132,18 +182,6 @@ gains and three lost SATs across LIA, LRA and NRA. Mean verified PAR-2 worsens
 **32.710 to 34.289 seconds**. No opposite verdict, invalid model or protocol
 error is observed. Commit `3bc7d76c` remains an unmerged development experiment;
 its cost-based repair ordering is removed.
-
-### Candidate: publish blocked-row conflicts before repairing other rows
-
-The new shared `GeneralSimplex` implementation finds a fully blocked violated
-row before changing the point to repair another row. Other violated rows retain
-their original queue order and entering-variable rule. Strict Bland termination,
-budgets, exact bounds and the separate LRA/LIA rollback policies are unchanged.
-The public regression checks strict conflict multipliers and both rollback
-policies among dense repairable rows. Proof-enabled native checks pass
-**2,269 cases / 1,373,257 assertions**. Frozen CLI SHA-256 is
-`7dce090af4670ee8960f71af2d410c733ca45061f2275115ae93113c3bd72a10`.
-Independent comparison is in progress; this candidate is not accepted on main.
 
 ## Current checkpoint: finite integer decisions and nonlinear sign partitions (2026-11-07)
 
