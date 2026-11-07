@@ -5,6 +5,7 @@
 #include "xolver/Propagator.h"   // public user-propagator interface (one-step control)
 #include <chrono>
 #include <deque>
+#include <vector>
 
 
 #ifdef XOLVER_ENABLE_CASESTATS
@@ -48,16 +49,26 @@ struct TheorySearchStats {
 class CadicalBackend;
 
 /**
- * Lightweight assignment view populated from CaDiCaL's cb_check_found_model model.
+ * Dense three-valued assignment snapshot for the live trail and full models.
  * Safe to query from TheoryManager::check() because it does not call back into CaDiCaL.
  */
 class CadicalAssignmentView : public TheoryAssignmentView {
 public:
-    void clear() { values_.clear(); }
-    void setVarValue(SatVar var, bool value) {
+    void clear() { values_.clear(); assignedCount_ = 0; }
+    bool setVarValue(SatVar var, bool value) {
         if (var >= values_.size()) values_.resize(var + 1, 0);
+        const bool inserted = values_[var] == 0;
+        assignedCount_ += inserted;
         values_[var] = value ? 1 : -1;
+        return inserted;
     }
+    void unsetVarValue(SatVar var) {
+        if (!isAssigned(var)) return;
+        values_[var] = 0;
+        --assignedCount_;
+    }
+    bool isAssigned(SatVar var) const { return var < values_.size() && values_[var] != 0; }
+    size_t size() const { return assignedCount_; }
     LitValue value(SatLit lit) const override {
         if (lit.var >= values_.size()) return LitValue::Unknown;
         int v = values_[lit.var];
@@ -68,6 +79,7 @@ public:
     }
 private:
     std::vector<int8_t> values_;
+    size_t assignedCount_ = 0;
 };
 
 /**
@@ -150,11 +162,9 @@ private:
     CadicalAssignmentView assignmentView_;
     CadicalAssignmentView partialAssignmentView_;
     std::string* unknownReasonSink_ = nullptr;
-    std::unordered_map<SatVar, int> varToLevel_;
-    std::unordered_map<SatVar, bool> currentAssignment_;
-    // Assignment trail (var, level) in assignment order, kept in lockstep with the two
-    // maps above. Lets notify_backtrack pop only the vars above the new level — O(#popped)
-    // — instead of scanning the whole varToLevel_ map (profiled ~6% on miplib QF_LRA).
+    std::vector<int> assignmentLevels_;
+    // The partial view owns live values; levels and this trail track their
+    // decision scopes. Backtracking retracts only the suffix above its target.
     // Levels are non-decreasing in trail order, so vars above any level form a suffix.
     std::vector<std::pair<SatVar, int>> assignTrail_;
     size_t lastCheckedAssignmentSize_ = 0;

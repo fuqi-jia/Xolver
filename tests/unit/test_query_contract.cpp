@@ -10,6 +10,7 @@
 #include <optional>
 #include <stdexcept>
 #include <thread>
+#include <unordered_set>
 
 using namespace xolver;
 namespace {
@@ -184,6 +185,30 @@ TEST_CASE("query contract: callback exceptions unwind query resources") {
     CHECK((s.checkSat() == Result::Unknown));
     s.clearPropagator();
     CHECK((s.checkSat() == Result::Sat));
+}
+
+TEST_CASE("query contract: user propagators retain Boolean helper notifications") {
+    struct Capture : Propagator {
+        std::unordered_set<uint32_t> assigned;
+        std::unordered_set<uint32_t> theory;
+        void onAssignment(uint32_t var, bool, bool) override { assigned.insert(var); }
+        void onFixed(uint32_t var, bool, Term) override { theory.insert(var); }
+    } callback;
+    Solver solver;
+    solver.setLogic("QF_LRA");
+    const auto x = solver.mkConst(solver.realSort(), "x");
+    const auto y = solver.mkConst(solver.realSort(), "y");
+    const auto zero = solver.mkReal("0");
+    const auto positive = op(solver, Kind::And,
+        {op(solver, Kind::Gt, {x, zero}), op(solver, Kind::Gt, {y, zero})});
+    const auto negative = op(solver, Kind::And,
+        {op(solver, Kind::Lt, {x, zero}), op(solver, Kind::Lt, {y, zero})});
+    solver.assertFormula(op(solver, Kind::Or, {positive, negative}));
+    solver.setPropagator(&callback);
+    REQUIRE((solver.checkSat() == Result::Sat));
+    CHECK(solver.validateModel() == Solver::ModelValidation::Satisfied);
+    CHECK_FALSE(callback.theory.empty());
+    CHECK(callback.assigned.size() > callback.theory.size());
 }
 
 TEST_CASE("query contract: budgets reject overflow, suffixes and nonfinite values") {

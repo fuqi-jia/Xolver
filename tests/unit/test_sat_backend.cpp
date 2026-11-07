@@ -23,8 +23,126 @@
 #include <iterator>
 #include <limits>
 #include <utility>
+#include <array>
+#include <random>
+#include <unordered_map>
 
 using namespace xolver;
+
+TEST_CASE("SAT assignment view: overwrite and retraction preserve partial values") {
+    CadicalAssignmentView view;
+    CHECK(view.size() == 0);
+    CHECK(view.value(SatLit::positive(7)) == LitValue::Unknown);
+    CHECK(view.setVarValue(7, true));
+    CHECK_FALSE(view.setVarValue(7, false));
+    CHECK(view.size() == 1);
+    CHECK(view.value(SatLit::positive(7)) == LitValue::False);
+    CHECK(view.value(SatLit::negative(7)) == LitValue::True);
+    CHECK(view.setVarValue(1000, true));
+    view.unsetVarValue(7);
+    view.unsetVarValue(7);
+    CHECK(view.size() == 1);
+    CHECK_FALSE(view.isAssigned(7));
+    CHECK(view.value(SatLit::positive(7)) == LitValue::Unknown);
+    view.clear();
+    CHECK(view.size() == 0);
+    CHECK(view.value(SatLit::positive(1000)) == LitValue::Unknown);
+    CHECK(view.setVarValue(7, true));
+    CHECK(view.size() == 1);
+}
+
+TEST_CASE("SAT assignment view: random updates agree with an independent map") {
+    CadicalAssignmentView view;
+    std::unordered_map<SatVar, bool> reference;
+    std::mt19937 random(0xC0FEBABEu);
+    for (unsigned step = 0; step < 2000; ++step) {
+        const SatVar var = 1 + random() % 1000;
+        const auto action = random() % 17;
+        if (action == 0) {
+            view.clear();
+            reference.clear();
+        } else if (action < 6) {
+            view.unsetVarValue(var);
+            reference.erase(var);
+        } else {
+            const bool value = (random() & 1u) != 0;
+            CHECK(view.setVarValue(var, value) == !reference.contains(var));
+            reference[var] = value;
+        }
+        CHECK(view.size() == reference.size());
+        for (unsigned probe = 0; probe < 16; ++probe) {
+            const SatVar candidate = probe == 0 ? var : 1 + random() % 1100;
+            const auto found = reference.find(candidate);
+            const auto expected = found == reference.end() ? LitValue::Unknown
+                : found->second ? LitValue::True : LitValue::False;
+            CHECK(view.value(SatLit::positive(candidate)) == expected);
+            CHECK(view.isAssigned(candidate) == reference.contains(candidate));
+        }
+    }
+}
+
+TEST_CASE("SAT assignment view: backtracking retracts the published partial snapshot") {
+    CadicalBackend backend;
+    std::array<SatVar, 6> vars;
+    for (auto& var : vars) var = backend.newVar();
+    struct Lookup : TheoryAtomLookup {
+        std::vector<TheoryAtomRecord> atoms;
+        const TheoryAtomRecord* findBySatVar(SatVar var) const override {
+            for (const auto& atom : atoms) if (atom.satVar == var) return &atom;
+            return nullptr;
+        }
+    } registry;
+    for (auto var : {vars[0], vars[3]})
+        registry.atoms.push_back({var, TheoryId::LRA, false, NullExpr,
+            LinearAtomPayload{{}, Relation::Eq, RealValue::fromInt(0)}});
+    struct Recorder : TheoryPropagationCallbacks {
+        TheoryAssignmentView* view = nullptr;
+        std::array<SatVar, 6> vars;
+        std::vector<std::array<LitValue, 6>> snapshots;
+        explicit Recorder(std::array<SatVar, 6> variables) : vars(variables) {}
+        void assertTheoryLit(const TheoryAtomRecord&, SatLit, int) override {}
+        void backtrackToLevel(int) override {}
+        void setAssignmentView(TheoryAssignmentView* current) override { view = current; }
+        TheoryCheckResult check(TheoryLemmaStorage&, TheoryEffort) override {
+            REQUIRE(view);
+            std::array<LitValue, 6> snapshot;
+            for (size_t i = 0; i < vars.size(); ++i)
+                snapshot[i] = view->value(SatLit::positive(vars[i]));
+            snapshots.push_back(snapshot);
+            return TheoryCheckResult::consistent();
+        }
+        std::vector<TheoryLemma> takeEntailmentPropagations() override { return {}; }
+    } theories{vars};
+    TheoryLemmaDatabase lemmas;
+    CadicalTheoryPropagator propagator(registry, theories, lemmas, backend);
+    backend.connectPropagator(&propagator);
+    struct Disconnect {
+        CadicalBackend& backend;
+        ~Disconnect() { backend.disconnectPropagator(); }
+    } disconnect{backend};
+    for (auto var : vars) backend.addObservedVar(var);
+    propagator.notify_assignment({static_cast<int>(vars[0]), -static_cast<int>(vars[1]),
+                                  static_cast<int>(vars[2])});
+    CHECK(propagator.cb_propagate() == 0);
+    propagator.notify_new_decision_level();
+    propagator.notify_assignment({static_cast<int>(vars[3]), -static_cast<int>(vars[4]),
+                                  static_cast<int>(vars[5])});
+    CHECK(propagator.cb_propagate() == 0);
+    propagator.notify_backtrack(0);
+    CHECK(propagator.cb_propagate() == 0);
+    REQUIRE(theories.snapshots.size() == 3);
+    for (const auto& snapshot : theories.snapshots) {
+        CHECK(snapshot[0] == LitValue::True);
+        CHECK(snapshot[1] == LitValue::False);
+        CHECK(snapshot[2] == LitValue::True);
+    }
+    CHECK(theories.snapshots[0][3] == LitValue::Unknown);
+    CHECK(theories.snapshots[1][3] == LitValue::True);
+    CHECK(theories.snapshots[1][4] == LitValue::False);
+    CHECK(theories.snapshots[1][5] == LitValue::True);
+    for (size_t i = 3; i < vars.size(); ++i)
+        CHECK(theories.snapshots[2][i] == LitValue::Unknown);
+}
 
 namespace {
 struct ClauseDeliveryHarness {
