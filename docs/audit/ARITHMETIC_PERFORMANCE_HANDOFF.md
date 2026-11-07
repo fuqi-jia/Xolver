@@ -1,8 +1,9 @@
 # Arithmetic validation and continuation record
 
-## Correctness follow-up: exact integer division in shared evaluation (2026-11-08)
+## Server-accepted stage: exact integer evaluation and class interpretations (2026-11-08)
 
-PR #114 is held for a correctness follow-up found during its CI run. An isolated
+[PR #114](https://github.com/fuqi-jia/Xolver/pull/114) includes a correctness
+follow-up found during the preceding class-token-only CI run. An isolated
 Panda9 / ExperimentOS component probe, linked against the qualified class-token
 core, produces **two false EUF conflicts across four generic sign controls**.
 Z3, cvc5 and the production CLI return SAT on all four controls. The confirmed
@@ -15,12 +16,50 @@ candidate witness evaluation uses the same integer semantics. Zero division
 keeps its existing caller-owned interpretation; the independent model validator
 retains its separate arithmetic implementation. New regressions cover signed
 remainders, quotient congruence, current conflict explanations after backtracking,
-candidate acceptance, exact large integers and real division.
-Controlled old/new implementation checks and fresh complete acceptance are
-pending. The timings and frozen binaries below belong to the preceding
-class-token-only core and do not qualify the new correctness follow-up.
+candidate acceptance, exact large integers and real division. Three identical
+new regression cases fail against the old runtime and pass after correction.
+The proof-enabled Panda9 / ExperimentOS build passes **2,281 unit cases /
+1,453,087 assertions**. All **2,339 qualified source contents** match core
+`2853244d`, including the unchanged parser gitlink. Sixteen generic operator
+controls pass independent checks in every solver arm, including actual timed
+model replay. Their production CLI results already passed before this repair;
+the changed behavior is the internal theory/candidate evaluation contract.
 
-## Development checkpoint: reuse class interpretations within model construction (2026-11-08)
+The core retains read-only class-token reuse. On the same 40 structural profile
+pairs, class-token member reads decrease **265,678 to 22,286**, total owning
+native reads decrease **695,272 to 451,880**, and simulated instructions decrease
+**4.51%**. These are diagnostics, not formal timing or solve credit.
+
+Fresh complete comparison against delivered main-equivalent review `43e744fc`
+and the same frozen Z3 verifies **14,408 / 14,408 / 14,408** private results.
+Baseline/candidate/Z3 solver totals are **302.515 / 287.193 / 465.897 seconds**,
+reducing candidate time **5.06%**. Development587 retains **587 / 587 / 584**
+verified results, with totals **11.599 / 11.109 / 18.068 seconds**; three
+unconfirmed reference models remain excluded. All **965 public regressions**
+pass. Every formal solve uses **60 seconds / one leased physical CPU / 16 GiB**,
+with up to 40 distinct physical CPU leases. Actual timed Xolver SAT models pass
+Z3 and cvc5 replay. No cohort loses a verified result or has a candidate error.
+
+Fixed160 verifies **124 / 124 / 117** after a fresh input-bound residue
+certificate confirms only actual timed UNSAT decisions. Both Xolver arms retain
+**36 timeouts**, with no gains or losses. Mean verified PAR-2 is **31.649 /
+31.649 / 33.642 seconds**; the Xolver timing difference is negligible. Six
+reference decisions remain unconfirmed and excluded. Raw timed reports remain
+unchanged, and historical evidence never upgrades a current incomplete decision.
+
+Frozen CLI SHA-256:
+`62a68cfcccb1f7c9aa9fcd1c21f19d3b7618231b9256412ccd7f8b92317a884b`;
+worker SHA-256:
+`2939c9c2fa8b59fcde08908e3ddf6c1e195ecbc27fc1ab0adccd9faa8de6619c`.
+Final server stage-audit SHA-256:
+`ebf036a8786b8c53e9ca20256a8266f90aab99e584e2e35e88cdab24932be6a6`.
+Server acceptance passes. The revised review head requires its own PR CI and
+merged-main CI; the preceding class-token-only CI does not qualify this core.
+Private inputs, models and individual evidence remain server-only. Protected
+sets are unused. Current-worker original-C QCP qualification, the remaining
+fixed inputs and overall solver superiority remain open.
+
+## Superseded stage: class interpretations before the integer repair (2026-11-08)
 
 The immutable LRA column-definition experiment is closed without demonstrated
 gain. Its frozen 14-input comparison retains **10 / 10 / 12** independently
@@ -60,7 +99,9 @@ independent cvc5 evidence on the identical frozen input and reference versions,
 after its fresh independent recheck times out. Its current-round solver time is
 preserved. Six reference decisions remain unconfirmed and excluded; raw timed
 reports are unchanged and no incomplete decision is upgraded.
-Server acceptance passes; exact-head PR CI and merged-main acceptance are pending.
+Server acceptance and both [class-token-only CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42391763832)
+pass for review `c3b3c6b0`. This version was superseded before merging; its
+timings and binaries qualify only this preceding core.
 
 Frozen CLI SHA-256:
 `b79391cd27d3a3cf1d143debd9d9ba29ed05a923e60de4d8094fa9f6f7c78e83`;
