@@ -66,9 +66,9 @@ on that input timed out and receives no credit. There is one new verified SAT,
 no losses or errors, and **36 candidate timeouts**. Mean verified PAR-2 is
 **32.641 / 31.937 / 34.183 seconds**. Six unconfirmed reference results remain
 excluded. Raw timed reports are preserved; neither unknown nor timeout is
-upgraded. This stage is accepted on main. No protected input has been used;
-current-freeze original-C QCP verification is in progress, and final-version
-program performance and overall solver superiority remain unproven.
+upgraded. This stage is accepted on main. No protected input has been used.
+Current-freeze original-C QCP qualification is complete as recorded below;
+final-version program performance and overall solver superiority remain unproven.
 Private queries, models, individual identifiers and evidence stay server-only.
 The cancelled `validation/current-main.json` archive is not a requirement.
 
@@ -90,6 +90,33 @@ it is excluded, without blocking independently verified candidate correctness.
 The complete-cohort results above belong to this repaired freeze, including all
 587 verified candidate models/verdicts. The failed predecessor's original timed
 reports remain unchanged, and no unsupported model is upgraded to verified.
+
+### Current-worker original-C QCP qualification
+
+Fresh canonical workflows for branch, max3 and GCD pass with both frozen
+backends. Every workflow starts from the original C and supplied contracts,
+regenerates obligations through the selected native SMT backend, completes all
+proof groups, and passes current parent/publication/final checks through Rocq.
+No `Admitted`, added axioms or weakened contracts are accepted. The max3
+upper-bound contract and GCD partial-correctness/external-abs contract are
+preserved. This is original-program validation, not extracted-query replay.
+
+Both backends verify **three programs and 23 top-level VCs**. All **4,680 actual
+timed SMT occurrences** are independently verified: **2,340 per backend**, each
+with **1,188 SAT / 1,152 UNSAT**. Every actual timed Xolver SAT model passes both
+Z3 and cvc5; reference models pass cvc5. Original request/response frames, query
+hashes, model hashes, deadlines and CPU leases are checked. Query hash multisets
+match between backends. Frozen worker SHA-256 is
+`a55d5c7d1d3c3e7d63b398844bfab7f519396cb533e40206de15cdde55dd6b9d`.
+
+The three canonical final-checks total **53.582 seconds for Xolver / 56.579 for
+Z3**, with 780 native queries per backend in those phases. C and generated
+obligations match, while some checked manual/library artifacts differ. One
+timing observation with those differences does not establish general backend
+superiority. The native QCP frontend and common proof libraries remain the
+shared trusted base. Confidential inputs, models and individual evidence stay
+server-only. The fixed160's 36 timeouts, final frozen comparison and once-only
+protected-set validation remain open.
 
 ## Current checkpoint: finite integer decisions and nonlinear sign partitions (2026-11-07)
 
