@@ -9,6 +9,7 @@
 #include <array>
 #include <cstdio>
 #include <stdexcept>
+#include <set>
 
 namespace xolver {
 
@@ -723,6 +724,93 @@ int GeneralSimplex::findEnteringVarToIncrease(int basicVar, bool useBland) const
 
 int GeneralSimplex::findEnteringVarToDecrease(int basicVar, bool useBland) const {
     return findEnteringVar(basicVar, false, useBland);
+}
+
+bool GeneralSimplex::avoidExcludedValues(std::span<const ExcludedValue> exclusions,
+        std::chrono::steady_clock::time_point deadline) {
+    std::vector<ExcludedValue> normalized(exclusions.begin(), exclusions.end());
+    for (auto& exclusion : normalized) {
+        if (exclusion.var < 0 || exclusion.var >= numVars() ||
+            mpz_sgn(mpq_denref(exclusion.value.get_mpq_t())) == 0)
+            throw std::invalid_argument("excluded values need an existing column and a rational endpoint");
+        exclusion.value.canonicalize();
+    }
+    if (betaDirty_ || hasImmediateConflict_) return false;
+    for (int var : boundedVars_)
+        if (violatesLower(var) || violatesUpper(var)) return false;
+
+    for (size_t index = 0; index < normalized.size(); ++index) {
+        const auto& exclusion = normalized[index];
+        const DeltaRational excluded(exclusion.value);
+        if (vars_[exclusion.var].beta != excluded) continue;
+        if (std::chrono::steady_clock::now() >= deadline) return false;
+        const auto& variable = vars_[exclusion.var];
+        if (variable.lower.bound.isFinite() && variable.upper.bound.isFinite() &&
+            variable.lower.bound.value == excluded && variable.upper.bound.value == excluded)
+            return false;
+
+        std::vector<DeltaRational> accepted;
+        accepted.reserve(vars_.size());
+        for (const auto& state : vars_) accepted.push_back(state.beta);
+        auto restoreAccepted = [&] {
+            for (size_t var = 0; var < vars_.size(); ++var) vars_[var].beta = accepted[var];
+            betaDirty_ = false;
+            notePointChange();
+            rebuildViolationQueue();
+        };
+
+        bool separated = false;
+        for (bool positive : {true, false}) {
+            push();
+            Result result;
+            try {
+                // These local labels never enter a returned theory explanation.
+                const BoundInfo bound(BoundValue(DeltaRational(exclusion.value, positive ? 1 : -1)),
+                                      SatLit::positive(0));
+                const bool asserted = positive ? assertLower(exclusion.var, bound) :
+                                                 assertUpper(exclusion.var, bound);
+                result = asserted ? checkUntil(deadline) : Result::Unsat;
+            } catch (...) {
+                pop(AssignmentPolicy::Preserve);
+                restoreAccepted();
+                throw;
+            }
+            pop(AssignmentPolicy::Preserve);
+            if (result == Result::Sat) {
+                separated = true;
+                break;
+            }
+            // An infeasible child may retain values outside parent bounds.
+            // Both saved and current points satisfy the same tableau equations,
+            // even if the trial changed the basis.
+            restoreAccepted();
+            if (result == Result::Unknown) return false;
+        }
+        if (!separated) return false;
+
+        // Each previously satisfied exclusion forbids at most one rational
+        // weight on the segment between the two feasible points. Avoid those
+        // weights instead of committing to all previous strict orientations.
+        std::set<mpq_class> forbidden;
+        for (size_t previous = 0; previous < index; ++previous) {
+            const auto& prior = normalized[previous];
+            const auto offset = accepted[prior.var] - DeltaRational(prior.value);
+            const auto motion = vars_[prior.var].beta - accepted[prior.var];
+            std::optional<mpq_class> root;
+            if (motion.a != 0) {
+                const mpq_class candidate = -offset.a / motion.a;
+                if (offset.b + candidate * motion.b == 0) root = candidate;
+            } else if (motion.b != 0 && offset.a == 0) root = -offset.b / motion.b;
+            if (root && *root > 0 && *root < 1) forbidden.insert(*root);
+        }
+        mpq_class weight(1, 2);
+        while (forbidden.contains(weight)) weight /= 2;
+        for (size_t var = 0; var < vars_.size(); ++var)
+            vars_[var].beta = accepted[var] + (vars_[var].beta - accepted[var]) * weight;
+        notePointChange();
+        rebuildViolationQueue();
+    }
+    return true;
 }
 
 // ============================================================================

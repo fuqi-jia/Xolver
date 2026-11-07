@@ -430,13 +430,29 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
     // -------------------------------------------------------------------------
     std::vector<DiseqInfo> disequalities = activeDisequalities_;
 
+    bool attemptedCompletion = false;
+    auto completeDisequalities = [&] {
+        if (attemptedCompletion) return;
+        attemptedCompletion = true;
+        std::vector<GeneralSimplex::ExcludedValue> exclusions;
+        exclusions.reserve(disequalities.size() + interfaceDisequalities_.size());
+        for (const auto& disequality : disequalities) exclusions.push_back({disequality.auxVar, 0});
+        for (const auto& disequality : interfaceDisequalities_) {
+            const int aux = getOrCreateInterfaceEqAuxVar(disequality.a, disequality.b);
+            if (aux >= 0) exclusions.push_back({aux, 0});
+        }
+        (void)gs_.avoidExcludedValues(exclusions);
+    };
+
     if (!disequalities.empty()) {
 #ifdef XOLVER_LRA_PROFILE
         profile_.disequalitySplitCount++;
 #endif
         auto dr = handleSimplexDisequalities(
             disequalities, gs_, lemmaDb,
-            [this](const DiseqInfo& d) -> TheoryCheckResult {
+            [this, &completeDisequalities](const DiseqInfo& d) -> TheoryCheckResult {
+                completeDisequalities();
+                if (gs_.value(d.auxVar).isNonZero()) return TheoryCheckResult::consistent();
                 if (!registry_) return TheoryCheckResult::consistent();
                 auto litLt = registry_->getOrCreateLinearBoundAtom(
                     d.lhs, Relation::Lt, d.rhs, TheoryId::LRA);
@@ -464,6 +480,8 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
             if (aux < 0) continue;
             DeltaRational d = gs_.value(aux);
             if (!(d.a == 0 && d.b == 0)) continue;  // model already separates them
+            completeDisequalities();
+            if (gs_.value(aux).isNonZero()) continue;
             NO_DBG << "[LRA-DISEQ-BRANCH] " << va << " != " << vb
                    << " but model equates them; branching\n";
             LinearFormKey form;
