@@ -1,8 +1,14 @@
 # Arithmetic validation and continuation record
 
-## Qualified candidate: detect blocked simplex rows before repairs (2026-11-07)
+## Delivered stage: detect blocked simplex rows before repairs (2026-11-07)
 
-Candidate core `7069e3db` is based on accepted main `c702ab6a`. The shared
+[PR #109](https://github.com/fuqi-jia/Xolver/pull/109) merged as
+`e50d5ea65f83538b1b584a90798432d0b29c6108` after complete server acceptance and
+both exact-head [PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42347147967)
+passed. Both [merged-main CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42348595687)
+also pass. The merge tree matches the qualified reviewed head byte for byte.
+
+Core `7069e3db` is based on the preceding main `c702ab6a`. The shared
 `GeneralSimplex` first looks for a violated row with no legal nonbasic movement,
 so an existing Farkas conflict need not wait for unrelated point repairs. If
 none is blocked, it selects the first queued repairable row. Entering-variable
@@ -41,9 +47,9 @@ SAT model passes both Z3 and cvc5; reference models pass cvc5. All formal
 comparisons use 60 seconds / one leased physical CPU / 16 GiB per solver and
 original input, with unchanged frozen binaries throughout each comparison.
 
-Server qualification is complete; PR and merged-main CI acceptance are pending.
-Original-C QCP closure below belongs to the accepted main worker, not this new
-worker. Final-version program validation, all 160 solved, a final frozen fair
+Server qualification, PR CI and merged-main CI acceptance are complete.
+Original-C QCP closure below belongs to the previously qualified worker, not
+this stage's new worker. Final-version program validation, all 160 solved, a final frozen fair
 comparison and once-only protected-set validation remain open. No protected
 input has been used. Confidential constraints, models and individual evidence
 remain server-only. This stage establishes a limited performance improvement,
