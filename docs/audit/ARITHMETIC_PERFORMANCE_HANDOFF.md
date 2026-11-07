@@ -1,8 +1,201 @@
 # Arithmetic validation and continuation record
 
-## Qualified candidate: detect blocked simplex rows before repairs (2026-11-07)
+## Qualified candidate: refine NIA before global model completion (2026-11-07)
 
-Candidate core `7069e3db` is based on accepted main `c702ab6a`. The shared
+Core `13d48ba5` retains the NIA scheduling correction and its focused regression,
+while withdrawing the optional dense-real constructor and its unmerged
+fixtures. Accepted model validation, exact arithmetic and rollback policies are
+retained. This closes the real construction experiment without claiming it
+caused the integer encoding timeout below.
+
+Proof-enabled Panda9 / ExperimentOS qualification passes **2,270 cases /
+1,373,265 assertions**. The corrected regression fails accepted main and passes
+the candidate. All **2,179 qualified source contents** match the committed core
+and parser gitlink. Frozen CLI SHA-256 is
+`ed294b55070a649721ef3bbcbac29abe76a1a897c9d6f3e6f2ddc3740d0bd2aa`;
+worker SHA-256 is
+`71c4314ba75f3d6a568c0324f0e6c8a1b46c207c0abe0ea97119e83e351bd1b8`.
+
+A fresh 11-input pilot verifies **7 main / 7 candidate / 10 Z3**, with no gain,
+loss, invalid model, opposite verdict or protocol error. Every actual timed
+Xolver SAT model passes both references. Four original gaps remain timeouts
+in both Xolver arms. The seven verified solves total **143.346 main / 129.574
+candidate seconds**. The preceding freeze's lost integer SAT completes in
+**20.311 seconds in both arms** in this pilot; this does not explain its earlier
+formal timeout. The private NIA representative improves **14.790 to 0.0328
+seconds**, with both actual models independently accepted.
+
+Complete fresh private14408 acceptance verifies **14,408 results in all three
+arms: 8,940 SAT / 5,468 UNSAT**. There are no losses, timeouts, unknowns,
+unconfirmed decisions or errors. Solver totals are **383.007 main / 360.697
+candidate / 466.098 Z3 seconds**: candidate time is **5.82%** lower than accepted
+main and **22.61%** lower than Z3 on this authorized development cohort.
+
+Fresh fixed160 retains **124 main / 124 candidate / 117 Z3** verified results,
+after a fresh independent original-input-bound residue-certificate check
+confirms only actual timed UNSAT arms. Raw reports remain unchanged; no timeout
+or unknown is upgraded. There is no gain or loss, with **36 candidate timeouts**.
+Mean verified PAR-2 is **31.714 / 31.692 / 33.715 seconds**. Seven unconfirmed
+reference decisions remain excluded. This is retained coverage, not a new solve.
+
+Development587 retains **587 / 587 / 584** verified results, with solver totals
+**14.392 / 13.863 / 18.317 seconds**; three unconfirmed reference models remain
+excluded. All **965 public regression expectations** pass. Every actual timed
+Xolver SAT model passes both Z3 and cvc5, and reference models pass cvc5. No
+invalid model, opposite verdict, crash or protocol error is observed. All
+formal inputs/versions use 60 seconds / one leased physical CPU / 16 GiB with
+the same frozen binaries throughout each comparison.
+
+Server stage qualification is complete; exact-head PR CI and merged-main CI
+are pending. This worker has no original-C QCP qualification. Final-version
+program validation, all fixed inputs solved, final fair freeze and once-only
+protected-set acceptance remain open. No protected input has been used, and no
+overall solver-superiority claim is made. Private inputs and individual
+evidence remain server-only; the cancelled server archive is not a requirement.
+
+The first isolated native qualification is rejected because its proposed
+regression also passes accepted main: an earlier reasoner decides the fixture,
+so it does not exercise the changed ordering. The replacement regression
+isolates the production sign-refinement and global-request stages, checking
+that a pending sign lemma preserves the request, installation permits its
+consumption, and later calls do not repeat it. Solver parameters are unchanged.
+
+## Development candidate: refine before global model construction (2026-11-07)
+
+Commits `c5c0a17e` and `b623c781` retain the shared real model constructor while
+running it at Full effort. LRA preserves main's partial-check split vocabulary
+and avoids constructing a new dense point during propagation. NIA applies its
+cheap conflict and sign refinements before consuming the one-shot global model
+request, retaining that request ahead of expensive encodings. Existing search
+budgets, exact arithmetic and LRA/LIA rollback policies remain unchanged.
+
+Proof-enabled Panda9 qualification passes **2,277 cases / 1,373,356 assertions**.
+The scheduling regression fails with the predecessor and passes after the
+correction. All **2,181 qualified source contents** match core `b623c781` and the
+parser gitlink. Frozen CLI SHA-256 is
+`d56782afc524b69d5d38ea201a5b87d30a8563bfac5de78c802ca135ba97463d`;
+worker SHA-256 is
+`6df5268f9aeba76793aed682791956df3d93980b42f2a954b54401766148782c`.
+
+A fresh 13-input pilot verifies **9 main / 9 candidate / 12 Z3**, with no gained
+or lost solve, invalid model, opposite verdict or protocol error. Both earlier
+real-arithmetic regressions return independently checked SAT in this round.
+The nine solved inputs total **145.210 main / 129.051 candidate seconds**.
+One private combination representative improves **14.792 to 0.0353 seconds**;
+both references accept its actual timed model. Four original gaps remain
+timeouts in both Xolver arms. These observations do not establish overall
+solver superiority or additional verified coverage.
+
+Complete private14408 acceptance independently verifies all **14,408 results**
+in main, candidate and Z3: **8,940 SAT / 5,468 UNSAT**, with no losses, timeouts,
+unknowns, unconfirmed decisions, invalid models or errors. Every actual timed
+Xolver SAT model passes both Z3 and cvc5. Solver totals are **383.168 main /
+361.630 candidate / 465.621 Z3 seconds**: candidate time is **5.62%** lower than
+accepted main and **22.33%** lower than Z3 on this authorized development cohort.
+The frozen binaries and 60 seconds / one leased physical CPU / 16 GiB per
+input/version remain unchanged. Confidential inputs and individual evidence
+remain server-only.
+
+Development587 retains **587 main / 587 candidate / 584 Z3** verified results,
+with no gains, losses or errors. Solver totals are **14.290 / 13.977 / 18.279
+seconds**; three unconfirmed reference models remain excluded. All **967 public
+regression expectations** pass without a known-failure waiver.
+
+Complete fixed160 acceptance **does not qualify this freeze for promotion**.
+An independently rechecked original-input-bound residue certificate confirms
+only the actual timed UNSAT arms, leaving raw reports unchanged. Verified
+counts are **124 main / 123 candidate / 118 Z3**, with no gain, one lost SAT and
+**37 candidate timeouts**. Mean verified PAR-2 is **31.734 / 32.270 / 32.853
+seconds**. Six unconfirmed reference results remain excluded. The lost QF_LIA
+SAT takes **24.226 seconds** in main and times out at 60 seconds in the
+candidate. There is no opposite verdict, invalid model or runtime error.
+
+The first paired diagnostic locates both versions' successful result in the
+existing whole-formula integer encoding, before any LIA reasoner call. It does
+not establish the cause of the formal timeout. A further diagnostic uses the
+formal timeout/model arguments and records existing encoding counters, with
+independent replay of every actual SAT model; neither diagnostic replaces a
+formal row. This candidate has no PR or original-C QCP qualification. Its
+private-cohort speed gain does not cancel the fixed-suite loss or establish
+overall solver superiority. No protected input has been used.
+
+The exact-argument paired diagnostic returns SAT in both versions, and both
+actual models pass Z3 and cvc5. Both generate 510,018 SAT variables and take
+about 13.2 seconds in SAT search at the first width. This diagnostic does not
+reproduce or explain the original formal timeout. A private UFNIA member of
+the complete cohort improves **14.797 to 0.068 seconds**, with both actual
+models independently accepted. Earlier phase traces attribute that mechanism
+to cheap NIA refinements preceding an unsuccessful global completion search.
+The real construction experiment has no established full-suite gain and is
+withdrawn from the next candidate; raw reports and frozen binaries are kept.
+
+## Development prototype: dense real exclusion completion (2026-11-07)
+
+Commit `0f6cb2c9` on FULINA adds shared simplex model construction for finite
+excluded coordinate values. Local strict feasibility supplies witnesses; exact
+convex combinations avoid losing earlier affine disequalities. LRA ordinary
+and interface disequalities use it before requesting Boolean splits. Temporary
+bounds are withdrawn; failure supplies no UNSAT certificate. Integer clients
+must separately establish integrality. No new cap, gate or runtime oracle is
+introduced, and caller rollback policies remain unchanged.
+
+Proof-enabled Panda9 / ExperimentOS qualification passes **2,275 cases /
+1,373,346 assertions**, including six new cases / 89 assertions. All **2,181
+qualified source contents** match the committed code and parser gitlink.
+Frozen CLI SHA-256 is
+`3502c13d110395e8d886496e3a42160ddbb4334e9b7bca3a0e10fdc17a22ed06`;
+worker SHA-256 is
+`dab45cffb3424f548a26457407c7a04eec4f59144a7295cf89880a4f9be785d6`.
+
+A fresh ten-input development pilot verifies **6 main / 6 candidate / 10 Z3**,
+with four timeouts in each Xolver arm and no gained/lost solve, invalid model,
+opposite verdict or protocol error. Both independent checkers accept every
+actual timed Xolver SAT model. The six solved inputs total **114.317 main /
+89.246 candidate seconds**; mean verified PAR-2 across all ten is **59.432 /
+56.925 / 1.533 seconds**. This is a narrow timing observation with unchanged
+coverage.
+
+The complete fresh round does **not qualify this prototype for promotion**.
+Fixed160 verifies **123 main / 122 candidate / 116 Z3**, after an independently
+rechecked input-bound residue certificate confirms only actual timed UNSAT
+arms. Raw reports remain unchanged; the reference timeout receives no credit.
+There is one same-round gain and two lost SATs, with **37 main / 38 candidate
+timeouts**. Mean verified PAR-2 is **32.404 / 33.036 / 34.273 seconds**. The
+gain is in LIA and has no established attribution to LRA model completion.
+The two losses use real-arithmetic paths; their completion effort, time and
+state changes are being diagnosed before any further implementation decision.
+
+All **14,408 private queries** independently verify in all three arms, with
+solver totals **372.989 main / 365.480 candidate / 445.532 Z3 seconds**.
+Development587 retains **587 / 587 / 584** verified results, with totals
+**14.783 / 14.629 / 19.131 seconds**. Three reference models remain unconfirmed
+and excluded. All **967 public regression expectations** pass. No invalid
+model, opposite verdict, crash or protocol error is observed. Each formal
+input/version uses 60 seconds / one leased physical CPU / 16 GiB. No PR has
+been opened for this prototype, and its worker has no original-C QCP
+qualification. No protected input has been used.
+
+A separate private-combination diagnostic records 40 completed global
+candidate searches, none finding a witness, before the query ultimately
+returns SAT in 14.797 seconds. This is diagnostic evidence of unsuccessful
+enumeration, not an independently scored additional solve. Identifying the
+later model producer and its available state is the next coordination lead;
+search budgets have not been changed.
+
+The earlier sampled Standard-effort original-query witness probe is closed:
+104 checks found no positive witness and cost 4.299 seconds of validation.
+It does not justify validating the whole query at every Standard invocation;
+sampling does not prove that no intermediate witness exists.
+
+## Delivered stage: detect blocked simplex rows before repairs (2026-11-07)
+
+[PR #109](https://github.com/fuqi-jia/Xolver/pull/109) merged as
+`e50d5ea65f83538b1b584a90798432d0b29c6108` after complete server acceptance and
+both exact-head [PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42347147967)
+passed. Both [merged-main CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42348595687)
+also pass. The merge tree matches the qualified reviewed head byte for byte.
+
+Core `7069e3db` is based on the preceding main `c702ab6a`. The shared
 `GeneralSimplex` first looks for a violated row with no legal nonbasic movement,
 so an existing Farkas conflict need not wait for unrelated point repairs. If
 none is blocked, it selects the first queued repairable row. Entering-variable
@@ -41,9 +234,9 @@ SAT model passes both Z3 and cvc5; reference models pass cvc5. All formal
 comparisons use 60 seconds / one leased physical CPU / 16 GiB per solver and
 original input, with unchanged frozen binaries throughout each comparison.
 
-Server qualification is complete; PR and merged-main CI acceptance are pending.
-Original-C QCP closure below belongs to the accepted main worker, not this new
-worker. Final-version program validation, all 160 solved, a final frozen fair
+Server qualification, PR CI and merged-main CI acceptance are complete.
+Original-C QCP closure below belongs to the previously qualified worker, not
+this stage's new worker. Final-version program validation, all 160 solved, a final frozen fair
 comparison and once-only protected-set validation remain open. No protected
 input has been used. Confidential constraints, models and individual evidence
 remain server-only. This stage establishes a limited performance improvement,
