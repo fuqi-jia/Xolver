@@ -81,6 +81,7 @@ private:
     bool inSolving_ = false;
     std::vector<SatLit> lastAssumptions_;
     std::vector<bool> observedVars_;
+    std::vector<SatVar> frozenAuxiliaries_;
 
     // --- UNSAT proof tracing state (active only when enableProofTrace succeeded;
     // compiled only under XOLVER_ENABLE_PROOFS — see CadicalBackend.cpp). ---

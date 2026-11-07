@@ -148,6 +148,26 @@ TEST_CASE("SAT observation: Boolean structure can be observed before solving") {
                     static_cast<int>(literal.var)) != h.propagator.model.end());
 }
 
+TEST_CASE("SAT observation: promoted auxiliaries survive disconnect and reconnect") {
+    ObservationHarness h;
+    const auto input = h.backend.newVar();
+    const auto helper = h.backend.newVar(SatSolver::VariableRole::Auxiliary);
+    h.backend.addClause({SatLit::positive(input), SatLit::positive(helper)});
+    h.backend.addClause({SatLit::negative(input), SatLit::negative(helper)});
+    h.backend.addObservedVar(helper);
+    h.backend.addObservedVar(helper);
+    REQUIRE(h.backend.solve() == SatSolver::SolveResult::Sat);
+    CHECK(h.backend.value(input) != h.backend.value(helper));
+    h.backend.disconnectPropagator();
+    h.backend.disconnectPropagator();
+    h.backend.connectPropagator(&h.propagator);
+    h.backend.addObservedVar(input);
+    h.backend.addObservedVar(helper);
+    REQUIRE(h.backend.solve({SatLit::negative(input)}) == SatSolver::SolveResult::Sat);
+    CHECK_FALSE(h.backend.value(input));
+    CHECK(h.backend.value(helper));
+}
+
 TEST_CASE("SAT observation: helpers introduced during callbacks support external clauses") {
     CadicalBackend backend;
     TheoryAtomRegistry registry;

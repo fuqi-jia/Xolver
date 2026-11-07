@@ -1,6 +1,12 @@
 # Arithmetic validation and continuation record
 
-## Qualified candidate: refine NIA before global model completion (2026-11-07)
+## Delivered stage: refine NIA before global model completion (2026-11-07)
+
+[PR #110](https://github.com/fuqi-jia/Xolver/pull/110) merged as
+`a1240095328e1f0f99a8588e65bd897fa9b281e3` after complete server acceptance and
+both exact-head [PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42360631766)
+passed. Both [merged-main CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42362071882)
+also pass. The merge tree matches the qualified reviewed head byte for byte.
 
 Core `13d48ba5` retains the NIA scheduling correction and its focused regression,
 while withdrawing the optional dense-real constructor and its unmerged
@@ -46,8 +52,8 @@ invalid model, opposite verdict, crash or protocol error is observed. All
 formal inputs/versions use 60 seconds / one leased physical CPU / 16 GiB with
 the same frozen binaries throughout each comparison.
 
-Server stage qualification is complete; exact-head PR CI and merged-main CI
-are pending. This worker has no original-C QCP qualification. Final-version
+Server, PR CI and merged-main CI acceptance are complete. This worker has no
+original-C QCP qualification. Final-version
 program validation, all fixed inputs solved, final fair freeze and once-only
 protected-set acceptance remain open. No protected input has been used, and no
 overall solver-superiority claim is made. Private inputs and individual

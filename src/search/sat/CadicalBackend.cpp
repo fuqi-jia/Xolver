@@ -150,9 +150,9 @@ SatVar CadicalBackend::newVar(VariableRole role) {
     // capacity; padding it creates thousands of actual SAT decisions.
     maxVar_ = static_cast<SatVar>(solver_->declare_one_more_variable());
 
-    // Only externally meaningful variables need observation. Keeping Boolean
-    // auxiliaries unobserved also lets CaDiCaL simplify their definitions.
-    // Dynamic allocations above remain observed for external-clause safety.
+    // Observation controls theory notifications independently of the frozen
+    // Boolean abstraction. Preserve its preprocessing policy for auxiliaries;
+    // dynamic allocations above remain observed for external-clause safety.
     if (propagatorConnected_ && role == VariableRole::Observable) {
         solver_->add_observed_var(static_cast<int>(maxVar_));
         if (maxVar_ >= observedVars_.size()) {
@@ -161,6 +161,9 @@ SatVar CadicalBackend::newVar(VariableRole role) {
             observedVars_.resize(newSize, false);
         }
         observedVars_[maxVar_] = true;
+    } else if (propagatorConnected_) {
+        solver_->freeze(static_cast<int>(maxVar_));
+        frozenAuxiliaries_.push_back(maxVar_);
     }
     return maxVar_;
 }
@@ -421,6 +424,10 @@ void CadicalBackend::connectPropagator(CadicalTheoryPropagator* propagator) {
 void CadicalBackend::disconnectPropagator() {
     if (!propagatorConnected_) return;
     solver_->disconnect_external_propagator();
+    // Promotion adds CaDiCaL's observation freeze separately. Disconnect
+    // releases that ownership; balance our auxiliary freeze exactly once too.
+    for (const SatVar v : frozenAuxiliaries_) solver_->melt(static_cast<int>(v));
+    frozenAuxiliaries_.clear();
     propagatorConnected_ = false;
     observedVars_.clear();
 }
