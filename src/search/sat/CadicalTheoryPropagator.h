@@ -5,8 +5,6 @@
 #include "xolver/Propagator.h"   // public user-propagator interface (one-step control)
 #include <chrono>
 #include <deque>
-#include <optional>
-#include <unordered_set>
 
 
 #ifdef XOLVER_ENABLE_CASESTATS
@@ -23,9 +21,6 @@ struct TheorySearchStats {
     // --- modelCheck (Full effort) ---
     int modelCheckCount = 0;
     long long modelCheckTotalUs = 0;
-    long long modelSourceReuses = 0;
-    long long modelSourceRebuilds = 0;
-    long long modelSourceAssertions = 0;
     int modelCheckConsistent = 0;
     int modelCheckConflict = 0;
     int modelCheckLemma = 0;
@@ -167,14 +162,6 @@ private:
     // (#88) — a persistent member avoids a per-found-model heap allocation (malloc
     // was visible in the cb_check_found_model profile). clear() keeps capacity.
     std::vector<std::pair<int, int>> modelSortScratch_;
-    // Notifications initially describe every admitted theory source. A model
-    // completion may add unnotified sources, whose lifetime is not described
-    // by that trail; after such an admission, keep reconciling complete models.
-    bool modelSourcesFollowTrail_ = true;
-    bool modelCompletionSeen_ = false;
-    std::optional<size_t> sourceRegistrySize_;
-    std::unordered_set<SatVar> notifiedTheoryVars_;
-    void recordTheorySource(SatVar var);
     // Set true whenever a theory *atom* is asserted (notify_assignment); cleared
     // when cb_propagate runs a Standard check. When the cb_propagate throttle
     // fires on pure-boolean growth (no atom asserted since the last check, no

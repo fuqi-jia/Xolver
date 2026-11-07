@@ -287,7 +287,7 @@ contents through ExperimentOS: **2,258 cases / 1,373,099 assertions** pass, and
 the CLI and worker hashes exactly match the preceding qualified executables.
 No main promotion or whole-suite benefit is attributed to this experiment.
 
-### In development: retain fully observed theory sources at model checks
+### Closed experiment: retain fully observed theory sources at model checks
 
 An accepted-main LRA diagnostic records **2,124 complete model callbacks /
 34.433 seconds**. Each callback unconditionally withdraws and readmits its
@@ -346,8 +346,26 @@ cases / 1,373,211 assertions**. All **32 independent synthetic inputs** and
 **80 actual exported-model replays** pass again, with no unknowns or errors.
 The repaired CLI SHA-256 is
 `3839b418932fbe371f76d664f6b34c6b468c7ee1e61843982a379375af67e5fa`.
-Complete fixed-suite comparison and promotion remain pending; no solve or
-whole-suite performance gain is claimed from these correctness checks.
+A fresh complete fixed160 comparison, followed by symmetric independent
+residue-certificate checking, verifies **123 baseline / 122 candidate / 116 Z3**
+results. The candidate has no gain and loses one nonlinear-integer UNSAT:
+32.597 seconds becomes a 60-second timeout. Mean verified PAR-2 changes
+**32.684 to 33.059 seconds**, versus **34.258 for Z3**. There are no wrong
+verdicts, unknowns or protocol errors. Raw reports remain unchanged. The
+source-reuse variant is rejected; the independently demonstrated LRA ordering
+repair and its public regressions are retained for separate qualification.
+No private-suite expansion or main promotion is attributed to this experiment.
+
+### In development: preserve ordered linear/interface rollback
+
+The standalone LRA repair retains the original shared model-check admission
+path. Its source differs from accepted main only in LRA's bound-source order
+and three public arithmetic/model regression groups. Panda9 / ExperimentOS
+proof-enabled qualification passes **2,261 cases / 1,373,127 assertions**.
+Fresh independent checks accept all **32 synthetic inputs / 80 actual model
+replays**, with no wrong verdicts, unknowns or errors. Frozen CLI SHA-256 is
+`986214248e0a7b329a271b6f29eaf71651fd9c9766104a30d8579ad088459dfa`.
+The standalone complete-suite comparison and main acceptance remain pending.
 The next comparison uses the complete original fixed160 suite and qualified
 main, retaining original logics and identical per-input resources.
 

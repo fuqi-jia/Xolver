@@ -22,73 +22,11 @@
 #include <fstream>
 #include <iterator>
 #include <limits>
-#include <map>
 #include <utility>
 
 using namespace xolver;
 
 namespace {
-struct ModelSourceHarness {
-    struct Lookup : TheoryAtomLookup {
-        std::vector<TheoryAtomRecord> atoms;
-        const TheoryAtomRecord* findBySatVar(SatVar var) const override {
-            for (const auto& atom : atoms) if (atom.satVar == var) return &atom;
-            return nullptr;
-        }
-        std::vector<SatVar> allAtomVars() const override {
-            std::vector<SatVar> result;
-            for (const auto& atom : atoms) result.push_back(atom.satVar);
-            return result;
-        }
-    } registry;
-    struct Callbacks : TheoryPropagationCallbacks {
-        std::map<SatVar, std::pair<bool, int>> sources;
-        std::vector<std::pair<SatLit, int>> admitted;
-        TheoryAssignmentView* view = nullptr;
-        int backtracks = 0, fullChecks = 0;
-        void assertTheoryLit(const TheoryAtomRecord&, SatLit literal, int level) override {
-            sources[literal.var] = {literal.sign, level};
-            admitted.emplace_back(literal, level);
-        }
-        void backtrackToLevel(int level) override {
-            ++backtracks;
-            for (auto it = sources.begin(); it != sources.end();)
-                if (level == 0 || it->second.second > level) it = sources.erase(it);
-                else ++it;
-        }
-        void setAssignmentView(TheoryAssignmentView* value) override { view = value; }
-        TheoryCheckResult check(TheoryLemmaStorage&, TheoryEffort effort) override {
-            CHECK(effort == TheoryEffort::Full);
-            ++fullChecks;
-            REQUIRE(view);
-            for (const auto& [var, source] : sources)
-                CHECK(view->value({var, source.first}) == LitValue::True);
-            return TheoryCheckResult::consistent();
-        }
-    } theories;
-    CadicalBackend backend;
-    TheoryLemmaDatabase database;
-    CadicalTheoryPropagator propagator{registry, theories, database, backend};
-    ModelSourceHarness() { backend.connectPropagator(&propagator); }
-    ~ModelSourceHarness() { backend.disconnectPropagator(); }
-    SatVar boolean() {
-        const auto var = backend.newVar();
-        backend.addObservedVar(var);
-        return var;
-    }
-    void registerAtom(SatVar var, TheoryId theory) {
-        TheoryAtomPayload payload = theory == TheoryId::EUF
-            ? TheoryAtomPayload(EufAtomPayload{NullExpr, NullExpr, Relation::Eq})
-            : TheoryAtomPayload(LinearAtomPayload{{}, Relation::Eq, RealValue::fromInt(0)});
-        registry.atoms.push_back({var, theory, false, NullExpr, std::move(payload)});
-    }
-    SatVar atom(TheoryId theory) {
-        const auto var = boolean();
-        registerAtom(var, theory);
-        return var;
-    }
-};
-
 struct ClauseDeliveryHarness {
     struct Lookup : TheoryAtomLookup {
         TheoryAtomRecord premise{};
@@ -351,89 +289,6 @@ TEST_CASE("SAT delivery: shared equalities remain deliverable until installation
     CHECK(retry.lemmaOpt->lits == first.lemmaOpt->lits);
     database.markInstalled(*retry.lemmaOpt);
     CHECK(manager.check(database, TheoryEffort::Standard).kind == TheoryCheckResult::Kind::Consistent);
-}
-
-TEST_CASE("Model sources: fully observed models retain the incremental theory prefix") {
-    ModelSourceHarness h;
-    const auto p = h.atom(TheoryId::LRA), q = h.atom(TheoryId::EUF), r = h.boolean();
-    h.propagator.notify_assignment({static_cast<int>(p)});
-    h.propagator.notify_new_decision_level();
-    h.propagator.notify_assignment({-static_cast<int>(q)});
-    REQUIRE(h.theories.admitted.size() == 2);
-    CHECK(h.propagator.cb_check_found_model({-static_cast<int>(q), static_cast<int>(r), static_cast<int>(p)}));
-    CHECK(h.propagator.cb_check_found_model({static_cast<int>(p), -static_cast<int>(r), -static_cast<int>(q)}));
-    CHECK(h.theories.admitted.size() == 2);
-    CHECK(h.theories.backtracks == 0);
-    CHECK(h.theories.fullChecks == 2);
-    CHECK(h.theories.sources.at(p).second == 0);
-    CHECK(h.theories.sources.at(q).second == 1);
-    h.propagator.notify_backtrack(0);
-    REQUIRE(h.theories.sources.size() == 1);
-    CHECK(h.theories.sources.at(p).first);
-    h.propagator.notify_new_decision_level();
-    h.propagator.notify_assignment({static_cast<int>(q)});
-    CHECK(h.propagator.cb_check_found_model({static_cast<int>(p), static_cast<int>(q), -static_cast<int>(r)}));
-    CHECK(h.theories.admitted.size() == 4); // root restoration and the changed decision
-    CHECK(h.theories.backtracks == 1);
-    CHECK(h.theories.fullChecks == 3);
-    CHECK(h.theories.sources.at(q).first);
-}
-
-TEST_CASE("Model sources: incomplete observations rebuild at the real source levels") {
-    ModelSourceHarness h;
-    const auto p = h.atom(TheoryId::LIA), q = h.atom(TheoryId::LRA), r = h.boolean();
-    h.propagator.notify_new_decision_level();
-    h.propagator.notify_new_decision_level();
-    h.propagator.notify_assignment({static_cast<int>(p)});
-    CHECK(h.propagator.cb_check_found_model({static_cast<int>(p), static_cast<int>(r), -static_cast<int>(q)}));
-    REQUIRE(h.theories.admitted.size() == 3);
-    CHECK(h.theories.admitted[1].first.var == q);
-    CHECK(h.theories.admitted[1].second == 0);
-    CHECK(h.theories.admitted[2].first.var == p);
-    CHECK(h.theories.admitted[2].second == 2);
-    CHECK(h.theories.backtracks == 1);
-    CHECK(h.propagator.cb_check_found_model({-static_cast<int>(q), -static_cast<int>(r), static_cast<int>(p)}));
-    CHECK(h.theories.admitted.size() == 5);
-    CHECK(h.theories.backtracks == 2);
-    CHECK(h.propagator.cb_check_found_model({-static_cast<int>(p), static_cast<int>(q), static_cast<int>(r)}));
-    CHECK_FALSE(h.theories.sources.at(p).first);
-    CHECK(h.theories.sources.at(p).second == 2);
-    CHECK(h.theories.sources.at(q).first);
-    CHECK(h.theories.fullChecks == 3);
-}
-
-TEST_CASE("Model sources: registration growth and truncated models require complete admission") {
-    ModelSourceHarness h;
-    const auto p = h.atom(TheoryId::LRA), q = h.boolean();
-    SUBCASE("a previous Boolean notification did not admit a later theory atom") {
-        h.propagator.notify_assignment({static_cast<int>(p), static_cast<int>(q)});
-        h.registerAtom(q, TheoryId::EUF);
-        CHECK(h.propagator.cb_check_found_model({static_cast<int>(p), static_cast<int>(q)}));
-        REQUIRE(h.theories.sources.size() == 2);
-        CHECK(h.theories.sources.at(q).first);
-        CHECK(h.theories.backtracks == 1);
-    }
-    SUBCASE("fully notified registration growth needs one complete admission") {
-        h.propagator.notify_assignment({static_cast<int>(p)});
-        h.registerAtom(q, TheoryId::EUF);
-        h.propagator.notify_new_decision_level();
-        h.propagator.notify_assignment({static_cast<int>(q)});
-        CHECK(h.propagator.cb_check_found_model({static_cast<int>(p), static_cast<int>(q)}));
-        REQUIRE(h.theories.admitted.size() == 4);
-        CHECK(h.theories.backtracks == 1);
-        CHECK(h.propagator.cb_check_found_model({static_cast<int>(q), static_cast<int>(p)}));
-        CHECK(h.theories.admitted.size() == 4);
-        CHECK(h.theories.backtracks == 1);
-        CHECK(h.theories.fullChecks == 2);
-    }
-    SUBCASE("a missing observed source cannot remain in a truncated model") {
-        h.registerAtom(q, TheoryId::LIA);
-        h.propagator.notify_assignment({static_cast<int>(p), -static_cast<int>(q)});
-        CHECK(h.propagator.cb_check_found_model({static_cast<int>(p)}));
-        CHECK(h.theories.sources.size() == 1);
-        CHECK_FALSE(h.theories.sources.contains(q));
-        CHECK(h.theories.backtracks == 1);
-    }
 }
 
 TEST_CASE("SAT: theory model decisions include atoms registered after the first request") {
