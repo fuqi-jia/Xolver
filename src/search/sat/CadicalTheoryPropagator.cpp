@@ -442,21 +442,21 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
     auto levelOf = [this](SatVar v) -> int {
         return v < assignmentLevels_.size() ? assignmentLevels_[v] : 0;
     };
-    // Only registered atoms need theory replay. Filtering before the stable
-    // sort preserves their relative order at each level while avoiding work
-    // on propositional variables. The full assignment view above still holds
-    // every value, including Boolean and Tseitin variables.
+    // Most unobserved propositional variables share the minimum level. Group
+    // that bucket stably, then sort only the remaining levels. Keep every
+    // model literal: replaying an earlier atom may register a later one.
     std::vector<std::pair<int, int>>& ordered = modelSortScratch_;  // (level, lit)
     ordered.clear();
-    ordered.reserve(std::min(model.size(), registry_.numAtomVars()));
-    for (int lit : model) {
-        const auto var = static_cast<SatVar>(std::abs(lit));
-        if (registry_.findBySatVar(var)) ordered.emplace_back(levelOf(var), lit);
+    ordered.reserve(model.size());
+    for (int lit : model)
+        ordered.emplace_back(levelOf(static_cast<SatVar>(std::abs(lit))), lit);
+    if (!ordered.empty()) {
+        const auto byLevel = [](const auto& a, const auto& b) { return a.first < b.first; };
+        const int minimumLevel = std::min_element(ordered.begin(), ordered.end(), byLevel)->first;
+        const auto remaining = std::stable_partition(ordered.begin(), ordered.end(),
+            [minimumLevel](const auto& entry) { return entry.first == minimumLevel; });
+        std::stable_sort(remaining, ordered.end(), byLevel);
     }
-    std::stable_sort(ordered.begin(), ordered.end(),
-                     [](const std::pair<int, int>& a, const std::pair<int, int>& b) {
-                         return a.first < b.first;
-                     });
     for (const auto& [lvl, lit] : ordered) {
         SatVar var = static_cast<SatVar>(std::abs(lit));
         bool sign = lit > 0;

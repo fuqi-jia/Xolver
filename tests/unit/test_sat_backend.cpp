@@ -213,6 +213,46 @@ TEST_CASE("SAT backend: full replay retains theory order and complete Boolean as
     CHECK(theories.view == nullptr);
 }
 
+TEST_CASE("SAT backend: full replay includes atoms registered by an earlier assertion") {
+    CadicalBackend backend;
+    const SatVar first = backend.newVar(), later = backend.newVar();
+    struct Lookup : TheoryAtomLookup {
+        std::vector<TheoryAtomRecord> atoms;
+        const TheoryAtomRecord* findBySatVar(SatVar var) const override {
+            for (const auto& atom : atoms) if (atom.satVar == var) return &atom;
+            return nullptr;
+        }
+        void add(SatVar var) {
+            atoms.push_back({var, TheoryId::LRA, false, NullExpr,
+                LinearAtomPayload{{}, Relation::Eq, RealValue::fromInt(0)}});
+        }
+    } registry;
+    registry.add(first);
+    struct Recorder : TheoryPropagationCallbacks {
+        Lookup& registry;
+        SatVar first, later;
+        std::vector<SatVar> replayed;
+        Recorder(Lookup& lookup, SatVar before, SatVar after)
+            : registry(lookup), first(before), later(after) {}
+        void assertTheoryLit(const TheoryAtomRecord&, SatLit lit, int level) override {
+            CHECK(level == 0);
+            replayed.push_back(lit.var);
+            if (lit.var == first && !registry.findBySatVar(later)) registry.add(later);
+        }
+        void backtrackToLevel(int) override { replayed.clear(); }
+        void setAssignmentView(TheoryAssignmentView*) override {}
+        TheoryCheckResult check(TheoryLemmaStorage&, TheoryEffort) override {
+            return TheoryCheckResult::consistent();
+        }
+        std::vector<TheoryLemma> takeEntailmentPropagations() override { return {}; }
+    } theories{registry, first, later};
+    TheoryLemmaDatabase lemmas;
+    CadicalTheoryPropagator propagator(registry, theories, lemmas, backend);
+    CHECK(propagator.cb_check_found_model({static_cast<int>(first), static_cast<int>(later)}));
+    const std::vector<SatVar> expected{first, later};
+    CHECK(theories.replayed == expected);
+}
+
 namespace {
 struct ClauseDeliveryHarness {
     struct Lookup : TheoryAtomLookup {
