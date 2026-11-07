@@ -444,7 +444,10 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
         (void)gs_.avoidExcludedValues(exclusions);
     };
 
-    if (!disequalities.empty()) {
+    // Dense witness construction and branch lemmas require a complete Boolean
+    // candidate. Partial checks retain exact feasibility and explained bound
+    // propagation without selecting a new point for model-only exclusions.
+    if (effort == TheoryEffort::Full && !disequalities.empty()) {
 #ifdef XOLVER_LRA_PROFILE
         profile_.disequalitySplitCount++;
 #endif

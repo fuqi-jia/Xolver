@@ -2,6 +2,7 @@
 #include "xolver/Solver.h"
 #include "applications/satisfiability/smt/qfnia/NiaLinearDecider.h"
 #include "applications/satisfiability/smt/qfnia/NiaSolver.h"
+#include "applications/satisfiability/smt/qflra/LraSolver.h"
 #include "base/EnvParam.h"
 #include "search/arith/Reasoner.h"
 #include "search/coordination/TheoryAtomRegistry.h"
@@ -76,6 +77,46 @@ public:
             }, ReasonerSchedule::CandidateModel));
     }
 };
+}
+
+TEST_CASE("Arithmetic model scheduling: partial LRA checks do not register branch atoms") {
+    LinearDeciderContext context;
+    LraSolver solver;
+    solver.setRegistry(&context.registry);
+    const LinearFormKey form{{{"x", 1}}};
+    for (const auto relation : {Relation::Eq, Relation::Neq}) {
+        const auto reason = context.reason();
+        solver.assertLit({reason.var, TheoryId::LRA, false, NullExpr,
+            LinearAtomPayload{form, relation, RealValue::fromInt(0)}}, true, 0, reason);
+    }
+    const auto before = context.registry.numAtomVars();
+    const auto partial = solver.check(context.lemmas, TheoryEffort::Standard);
+    CHECK(partial.kind == TheoryCheckResult::Kind::Consistent);
+    CHECK(context.registry.numAtomVars() == before);
+    const auto full = solver.check(context.lemmas, TheoryEffort::Full);
+    REQUIRE(full.kind == TheoryCheckResult::Kind::Lemma);
+    REQUIRE(full.lemmaOpt);
+    CHECK(full.lemmaOpt->lits.size() == 3);
+    CHECK(context.registry.numAtomVars() == before + 2);
+}
+
+TEST_CASE("Arithmetic model scheduling: cheap integer refinements precede global completion") {
+    auto kernel = createPolynomialKernel();
+    auto* polynomial = kernel.get();
+    const auto x = polynomial->mkVar(polynomial->getOrCreateVar("x"));
+    const auto twiceSquare = polynomial->mul(polynomial->mkConst(2), polynomial->mul(x, x));
+    LinearDeciderContext context;
+    unsigned completionRequests = 0;
+    NiaSolver solver(std::move(kernel));
+    solver.setRegistry(&context.registry);
+    solver.setModelCompletionRequest([&] { ++completionRequests; return false; });
+    const auto reason = context.reason();
+    solver.assertLit({reason.var, TheoryId::NIA, false, NullExpr,
+        PolynomialAtomPayload{twiceSquare, Relation::Eq, RealValue::fromInt(1)}}, true, 0, reason);
+    const auto result = solver.check(context.lemmas, TheoryEffort::Full);
+    CHECK((result.kind == TheoryCheckResult::Kind::Conflict ||
+           result.kind == TheoryCheckResult::Kind::Lemma));
+    CHECK(completionRequests == 0);
 }
 
 TEST_CASE("NIA shared relaxation: coupled monomials retain branch explanations and withdraw bounds") {

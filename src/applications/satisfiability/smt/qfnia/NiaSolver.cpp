@@ -201,24 +201,13 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
             currentModel_ = std::move(point);
             return TheoryCheckResult::consistent();
         }, ReasonerSchedule::CandidateModel));
-    reasoners_.push_back(std::make_unique<CallbackReasoner>(
-        "nia.request-model-completion",
-        [this](TheoryLemmaStorage&, TheoryEffort) -> std::optional<TheoryCheckResult> {
-            // Consume before calling: failed completion continues the pipeline,
-            // and later Boolean candidates must not repeat a global search.
-            auto request = std::move(modelCompletionRequest_);
-            modelCompletionRequest_ = {};
-            if (request && request())
-                return TheoryCheckResult::unknown("validated global model available");
-            return std::nullopt;
-        }, ReasonerSchedule::CandidateModel));
     // Full-effort shape cuts derived from explained single-variable bounds.
     addFull("nia.nla-cuts",   &NiaSolver::stageNlaCuts);
     add("nia.poly-conflict",  &NiaSolver::stagePolyConflict);
     add("nia.diff-conflict",  &NiaSolver::stageDifferenceConflict);
     add("nia.square-bound",   &NiaSolver::stageSquareBound);
     add("nia.sos-bound",      &NiaSolver::stageSumOfSquares);
-    // Preserve candidate construction and exact conflicts before introducing
+    // Preserve local candidate construction and exact conflicts before introducing
     // factor sign cells. Each installed partition is a reusable tautology.
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nia.sign-partition",
@@ -233,6 +222,18 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
             if (auto lemma = splitNonlinearVariableSigns(constraints, *kernel_, TheoryId::NIA,
                     *registry_, db))
                 return TheoryCheckResult::mkLemma(std::move(*lemma));
+            return std::nullopt;
+        }, ReasonerSchedule::CandidateModel));
+    // Refine the current Boolean candidate before consuming a one-shot search
+    // of the original formula. Retain that search ahead of expensive encodings
+    // and complete decision procedures when the cheap stages are inconclusive.
+    reasoners_.push_back(std::make_unique<CallbackReasoner>(
+        "nia.request-model-completion",
+        [this](TheoryLemmaStorage&, TheoryEffort) -> std::optional<TheoryCheckResult> {
+            auto request = std::move(modelCompletionRequest_);
+            modelCompletionRequest_ = {};
+            if (request && request())
+                return TheoryCheckResult::unknown("validated global model available");
             return std::nullopt;
         }, ReasonerSchedule::CandidateModel));
     // Run explained cuts and cheap exact conflicts before incomplete integer

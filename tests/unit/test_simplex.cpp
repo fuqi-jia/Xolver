@@ -543,6 +543,7 @@ TEST_CASE("LraSolver: dense completion exports one model for all active disequal
         ++variable;
     }
     REQUIRE(solver.check(database, TheoryEffort::Standard).kind == TheoryCheckResult::Kind::Consistent);
+    REQUIRE(solver.check(database, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Consistent);
     const auto model = solver.getModel();
     REQUIRE(model);
     const auto xv = model->numericAssignments.at("x").tryAsRational();
@@ -552,7 +553,6 @@ TEST_CASE("LraSolver: dense completion exports one model for all active disequal
     CHECK(*xv != 0);
     CHECK(*yv != 0);
     CHECK(*xv != *yv);
-    CHECK(solver.check(database, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Consistent);
 }
 
 TEST_CASE("GeneralSimplex: addConstraint semantic contract") {
