@@ -1,6 +1,63 @@
 # Arithmetic validation and continuation record
 
-## Server-qualified stage: shared immutable parser kind tables (2026-11-07)
+## Server-qualified stage: reduce owning native read handles (2026-11-07)
+
+Core `7b0c2e2b`, pushed to `FULINA`, reduces repeated ownership work in
+`NativeTerms::get`. The index already owns the parent node, so the reader walks
+children directly and transfers each temporary handle into alias resolution.
+It reserves child storage and queries numeric sort/value information only for
+constants. Native identity, let aliases, exact literals, comparison reversal,
+model guards, theory rollback and API semantics are preserved. No expression
+graph cache, parameter, runtime oracle or feature gate is introduced.
+
+Panda9 / ExperimentOS passes **2,274 unit cases / 1,450,390 assertions**.
+All **2,338 qualified source contents** match the committed core and unchanged
+parser gitlink. On the same 40 structural diagnostic pairs, the reader is called
+**695,272 times in both arms**; its shared reference-count copies fall from
+**6,257,448 to 21,793**. Total simulated instructions fall from **2,860,799,490
+to 2,625,363,868** (**8.23%**). These profiles establish reduced work on the
+sample, not formal timing or solved-result credit.
+
+Fresh complete comparisons use the previous server-qualified review
+`575320af`, whose entire tree matches merged main `9ed9f6e0`, candidate
+`7b0c2e2b` and the same frozen Z3. Each receives **60 seconds / one leased
+physical CPU / 16 GiB**, with up to 40 independent physical CPU leases.
+Private14408 retains **14,408 / 14,408 / 14,408** independently verified results,
+with main-equivalent baseline/candidate/Z3 totals **320.834 / 297.277 / 466.463
+seconds**: **7.34%** less candidate time. Development587 retains **587 / 587 /
+584** verified results and totals **12.313 / 11.465 / 18.223 seconds**. Its three
+unconfirmed reference models remain excluded. All **965 public regressions**
+pass, with no candidate errors or lost solves in any cohort.
+
+Fixed160 verifies **124 / 124 / 118** results after a fresh original-input-bound
+residue certificate confirms only actual timed UNSAT decisions. Both Xolver
+arms have **36 timeouts**, with no gains or losses. Mean verified PAR-2 is
+**31.699 / 31.610 / 33.161 seconds**. Six unconfirmed reference decisions remain
+excluded; raw reports are unchanged and incomplete decisions receive no credit.
+Every actual timed Xolver SAT model passes Z3 and cvc5 replay; reference SAT
+models pass cvc5.
+
+Frozen CLI SHA-256:
+`640528263e338a57570662575bdf53fc41f59e74b4db132b692222fe98ee0337`;
+worker SHA-256:
+`3577bb5855e16b5137216bd7501d2783b8b5468ab2d8a5dcd764de3d2f92bd87`.
+Server stage-audit SHA-256:
+`6835374d2e20a82d1069dcf71bf084049f4c832d1af4bdcce4518a4e04fef9b5`.
+Server acceptance and the preceding merged-main CI pass; this stage's PR CI
+and subsequent main CI remain pending at this checkpoint. This worker has no
+original-C QCP qualification. Remaining fixed inputs, final-program closure,
+final fair comparison and once-only protected acceptance remain open. Neither
+protected set has been used and no overall solver superiority is claimed.
+Private inputs, models and individual evidence remain server-only.
+
+## Delivered stage: shared immutable parser kind tables (2026-11-07)
+
+[PR #112](https://github.com/fuqi-jia/Xolver/pull/112) merged as
+`9ed9f6e04d5c32d547f089cfe9a736e49bcd64bf` after complete server acceptance and
+both exact-head [PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42378900838)
+passed. Its tree matches reviewed head `575320af` byte for byte. The
+[merged-main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42381084468)
+also passes both jobs.
 
 Core `02c81794` pins SOMTParser `784553e3`, whose three immutable kind lookup
 containers use C++17 `inline const` definitions. The frozen old CLI contained
@@ -16,7 +73,9 @@ with the fix in the production CMake target. Panda9 / ExperimentOS passes all
 and **965 public regressions**. All **2,338 qualified source contents** match
 the committed core and parser gitlink. The same scoped fix is submitted in
 [SOMTParser PR #68](https://github.com/fuqi-jia/SOMTParser/pull/68); all three
-exact-head upstream CI jobs pass.
+exact-head upstream CI jobs pass, and its repository-required review remains
+pending. The scoped parser dependency revision remains reachable through that
+upstream branch; unrelated later parser changes are excluded.
 
 Fresh full comparisons freeze accepted main `4ed05fb4`, candidate `02c81794`
 and the same reference Z3. Each solver receives **60 seconds / one leased
@@ -55,7 +114,7 @@ worker SHA-256 is
 `d38a97e4e79784f645ecf813dbd07ca5f6f706e27797d83ca49db6682e856926`.
 Server stage-audit SHA-256 is
 `01b17b83c16b912c874d9b1ac62ac089a5861f56229d8b294ce1939beb24686c`.
-Exact-head Xolver PR CI and merged-main CI remain pending. This worker has
+Exact-head Xolver PR CI and merged-main CI pass. This worker has
 no original-C QCP qualification. The remaining fixed160 inputs, final-program
 closure, final fair comparison and once-only protected-set acceptance remain
 open; neither protected set has been used. No overall solver-superiority claim
