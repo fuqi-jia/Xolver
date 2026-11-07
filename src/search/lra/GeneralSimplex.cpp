@@ -466,25 +466,48 @@ void GeneralSimplex::refreshViolationStatus(int var) {
     }
 }
 
-int GeneralSimplex::pickViolatedBasic() {
-    while (!violatedQueue_.empty()) {
-        int x = violatedQueue_.front();
-        violatedQueue_.pop_front();
-        inViolationQueue_[x] = false;
-
-        if (vars_[x].basicRow != -1 &&
-            (violatesLower(x) || violatesUpper(x))) {
-            return x;
+int GeneralSimplex::pickViolatedBasic(bool useBland) {
+    int best = -1;
+    size_t bestCost = std::numeric_limits<size_t>::max();
+    auto consider = [&](int basic) {
+        const bool increase = violatesLower(basic);
+        const int entering = findEnteringVar(basic, increase, useBland);
+        // No legal movement already gives the usual explained row conflict.
+        // Repairing another row first can only postpone discovering it.
+        if (entering < 0) { best = basic; return true; }
+        const size_t width = tab_.row(rowOfBasic(basic)).entries.size();
+        const size_t degree = tab_.col(entering).entries.size();
+        assert(degree > 0);
+        const size_t cost = width > std::numeric_limits<size_t>::max() / degree
+            ? std::numeric_limits<size_t>::max() : width * degree;
+        if (best < 0 || cost < bestCost) {
+            best = basic;
+            bestCost = cost;
         }
+        return false;
+    };
+
+    for (auto it = violatedQueue_.begin(); it != violatedQueue_.end();) {
+        const int basic = *it;
+        if (vars_[basic].basicRow == -1 ||
+            (!violatesLower(basic) && !violatesUpper(basic))) {
+            inViolationQueue_[basic] = false;
+            it = violatedQueue_.erase(it);
+            continue;
+        }
+        if (consider(basic)) break;
+        ++it;
+    }
+    if (best >= 0) {
+        violatedQueue_.erase(std::find(violatedQueue_.begin(), violatedQueue_.end(), best));
+        inViolationQueue_[best] = false;
+        return best;
     }
 
-    // Fallback scan (mainly after recomputeBeta)
-    for (int xb : basicVars_) {
-        if (violatesLower(xb) || violatesUpper(xb)) {
-            return xb;
-        }
-    }
-    return -1;
+    // Reconstructed points can have violations without queued notifications.
+    for (int basic : basicVars_)
+        if ((violatesLower(basic) || violatesUpper(basic)) && consider(basic)) break;
+    return best;
 }
 
 int GeneralSimplex::pickViolatedBasicBland() const {
@@ -564,8 +587,8 @@ GeneralSimplex::Result GeneralSimplex::checkInternal(std::chrono::steady_clock::
     //   - iter < kHeuristicPivotBudget: heuristic entering.
     //   - iter >= kHeuristicPivotBudget: Bland entering (smallest index).
     //   - iter >= kStrictBlandThreshold: STRICT Bland — smallest-index leaving AND
-    //     entering, which provably terminates (Dutertre–de Moura). The fast queue
-    //     leaving is used before that, so default performance is unchanged.
+    //     entering, which provably terminates (Dutertre–de Moura). Earlier
+    //     iterations price the violated rows by sparse elimination work.
     // The huge guard below is a last-resort against a genuine non-termination
     // bug, not a normal exit; under strict Bland it is unreachable in practice.
     const int kHeuristicPivotBudget = 4000;
@@ -625,13 +648,12 @@ GeneralSimplex::Result GeneralSimplex::checkInternal(std::chrono::steady_clock::
             return Result::Unknown;
         }
         bool strictBland = iter >= kStrictBlandThreshold;
-        int xi = strictBland ? pickViolatedBasicBland() : pickViolatedBasic();
+        bool useBland = strictBland || iter >= kHeuristicPivotBudget;
+        int xi = strictBland ? pickViolatedBasicBland() : pickViolatedBasic(useBland);
         if (xi == -1) {
             conflict_.clear();
             return Result::Sat;
         }
-
-        bool useBland = strictBland || iter >= kHeuristicPivotBudget;
 
         if (violatesLower(xi)) {
             int xj = findEnteringVarToIncrease(xi, useBland);

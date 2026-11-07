@@ -8,8 +8,66 @@
 #include <random>
 #include <stdexcept>
 #include <array>
+#include <utility>
 
 using namespace xolver;
+
+TEST_CASE("GeneralSimplex: blocked rows keep exact conflicts among repairable rows") {
+    for (auto policy : {GeneralSimplex::AssignmentPolicy::Reinitialize,
+                        GeneralSimplex::AssignmentPolicy::Preserve}) {
+        GeneralSimplex simplex;
+        std::vector<int> variables;
+        for (int i = 0; i < 12; ++i) variables.push_back(simplex.addVar(std::to_string(i)));
+        const int pinned = simplex.addVar("pinned");
+        REQUIRE(simplex.assertUpper(pinned,
+            BoundInfo(BoundValue(DeltaRational(0)), SatLit::positive(1)), 0));
+        std::vector<int> rows;
+        for (int i = 0; i < 8; ++i) {
+            std::vector<std::pair<int, mpq_class>> terms;
+            for (int j = 0; j < 12; ++j) {
+                mpq_class coefficient(i + j + 1, 7);
+                coefficient.canonicalize();
+                terms.emplace_back(variables[j], std::move(coefficient));
+            }
+            const int row = simplex.addConstraint(terms, 0);
+            rows.push_back(row);
+            REQUIRE(simplex.assertLower(row,
+                BoundInfo(BoundValue(DeltaRational(i + 1)), SatLit::positive(i + 2)), 0));
+        }
+        const int blocked = simplex.addConstraint({{pinned, 3}}, 0);
+        simplex.push();
+        REQUIRE(simplex.assertLower(blocked,
+            BoundInfo(BoundValue(DeltaRational(0, 1)), SatLit::positive(10)), 1));
+        REQUIRE(simplex.check() == GeneralSimplex::Result::Unsat);
+        REQUIRE(simplex.getConflict().size() == 2);
+        mpq_class cancellation = 0;
+        for (size_t i = 0; i < simplex.getConflict().size(); ++i) {
+            const auto& reason = simplex.getConflict()[i];
+            CHECK((reason.reason == SatLit::positive(1) || reason.reason == SatLit::positive(10)));
+#ifdef XOLVER_ENABLE_PROOFS
+            REQUIRE(simplex.getConflictCoeffs().size() == 2);
+            const auto& multiplier = simplex.getConflictCoeffs()[i];
+            CHECK(multiplier > 0);
+            cancellation += multiplier * (reason.var == pinned ? 1 : -3);
+#endif
+        }
+        CHECK(cancellation == 0);
+        simplex.pop(policy);
+        REQUIRE(simplex.check() == GeneralSimplex::Result::Sat);
+        for (size_t i = 0; i < rows.size(); ++i)
+            CHECK(simplex.value(rows[i]) >= DeltaRational(static_cast<long>(i + 1)));
+        CHECK(simplex.value(pinned) <= DeltaRational(0));
+        CHECK(simplex.debugCheckInvariants());
+        simplex.push();
+        REQUIRE(simplex.assertLower(variables.front(),
+            BoundInfo(BoundValue(DeltaRational(4, 1)), SatLit::positive(11)), 1));
+        REQUIRE(simplex.check() == GeneralSimplex::Result::Sat);
+        CHECK(simplex.value(variables.front()) >= DeltaRational(4, 1));
+        simplex.pop(policy);
+        REQUIRE(simplex.check() == GeneralSimplex::Result::Sat);
+        CHECK(simplex.debugCheckInvariants());
+    }
+}
 
 TEST_CASE("GeneralSimplex: difference cycles retain scaled strict-bound certificates") {
     for (auto policy : {GeneralSimplex::AssignmentPolicy::Reinitialize,

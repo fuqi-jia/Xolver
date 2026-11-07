@@ -418,7 +418,9 @@ private:
 
     // Violation queue
     void refreshViolationStatus(int var);
-    int pickViolatedBasic();
+    // Prefer an immediately blocked row, otherwise price both sides of the
+    // pivot by the row width and the eligible entering column's degree.
+    int pickViolatedBasic(bool useBland);
     // Strict-Bland leaving selection: smallest-index violated basic var. Used
     // (with Bland entering) as the anti-cycling fallback so check() is
     // guaranteed to terminate on a decidable LRA instance and never has to
