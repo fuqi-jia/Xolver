@@ -365,7 +365,31 @@ proof-enabled qualification passes **2,261 cases / 1,373,127 assertions**.
 Fresh independent checks accept all **32 synthetic inputs / 80 actual model
 replays**, with no wrong verdicts, unknowns or errors. Frozen CLI SHA-256 is
 `986214248e0a7b329a271b6f29eaf71651fd9c9766104a30d8579ad088459dfa`.
-The standalone complete-suite comparison and main acceptance remain pending.
+A fresh complete fixed160 comparison, including symmetric residue-certificate
+checking, verifies **124 baseline / 123 candidate / 116 Z3** results. There are
+no gains and one lost LRA SAT: **42.789 seconds becomes a 60-second timeout**.
+Mean verified PAR-2 changes **32.186 to 32.589 seconds**, versus **34.264 for
+Z3**. No wrong verdict, unknown or protocol error is observed. The preceding
+combined variant's nonlinear-integer loss is absent this round. The correctness
+repair is retained while its admission overhead is investigated; main promotion
+and private-suite acceptance remain pending.
+
+Interrupted admission was discarding cursor progress for successfully admitted
+sources. After withdrawing the conflicting suffix, a retained earlier source
+could trigger a redundant complete rebuild. Each stream now commits its
+successful contiguous prefix immediately. Rejected sources stay pending so a
+backtrack retaining their level cannot forget an unresolved conflict; unordered
+holes remain conservative until the batch completes.
+
+Paired temporary counters on the same constructed source sequence measure
+**9 to 6 source applications and 1 to 0 redundant resets**, with the same
+source/model checks passing. All instrumentation is removed before qualifying
+the production build. Panda9 / ExperimentOS passes **2,262 unit cases /
+1,373,136 assertions**. Its frozen CLI SHA-256 is
+`bdff685f524dc0c85e7d1541f067def48ab9734acb96934b8ab0e710a5008134`.
+Fresh independent checks accept all **32 synthetic inputs and 80 actual
+exported-model replays**, with no errors or unknowns. Complete-suite acceptance
+remains pending; these component counts establish no new solve.
 The next comparison uses the complete original fixed160 suite and qualified
 main, retaining original logics and identical per-input resources.
 

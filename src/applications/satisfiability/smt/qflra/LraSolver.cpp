@@ -293,12 +293,16 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
             if (sz > profile_.maxConflictSize) profile_.maxConflictSize = sz;
             profile_.immediateConflictCount++;
 #endif
-            // Only a complete batch advances either source cursor. A conflict
-            // may interrupt the sorted order inside either original stream;
-            // retained partial bounds can be safely replayed after backtrack.
+            // Keep this rejected source pending: backtracking can retain its
+            // SAT level, so clearing the simplex conflict must not forget it.
             pendingConflict_ = TheoryCheckResult::mkConflict(std::move(tc));
             return *pendingConflict_;
         }
+        // Commit each successful contiguous prefix even if a later source
+        // conflicts. Sorted admission can visit a stream out of index order;
+        // such holes remain conservative until the complete batch succeeds.
+        auto& cursor = source.interfaceEquality ? appliedInterfaceCursor_ : appliedCursor_;
+        if (source.index == cursor) ++cursor;
     }
     appliedCursor_ = theoryTrail_.size();
     appliedInterfaceCursor_ = interfaceEqualities_.size();

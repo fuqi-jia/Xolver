@@ -241,3 +241,39 @@ TEST_CASE("LRA interface rollback retains unapplied lower-level sources") {
     REQUIRE(model);
     CHECK(model->numericAssignments.at("pending-y").tryAsRational() == mpq_class(1));
 }
+
+TEST_CASE("LRA interrupted admission retains successful prefixes and rejected sources") {
+    LraSolver engine;
+    TheoryLemmaDatabase lemmas;
+    const LinearFormKey x{{{"prefix-x", 1}}};
+    const TheoryAtomRecord upper{1, TheoryId::LRA, false, NullExpr,
+        LinearAtomPayload{x, Relation::Leq, RealValue::fromInt(0)}};
+    const TheoryAtomRecord lower{4, TheoryId::LRA, false, NullExpr,
+        LinearAtomPayload{x, Relation::Gt, RealValue::fromInt(0)}};
+    engine.assertLit(upper, true, 0, {1, true});
+    REQUIRE(engine.check(lemmas).kind == TheoryCheckResult::Kind::Consistent);
+
+    for (int level : {1, 2}) {
+        const std::string name = level == 1 ? "prefix-y" : "prefix-z";
+        const TheoryAtomRecord retained{static_cast<SatVar>(level + 1), TheoryId::LRA,
+            false, NullExpr, LinearAtomPayload{LinearFormKey{{{name, 1}}},
+                Relation::Geq, RealValue::fromInt(1)}};
+        engine.assertLit(retained, true, level, {retained.satVar, true});
+    }
+    engine.assertLit(lower, true, 3, {4, true});
+    REQUIRE(engine.check(lemmas).kind == TheoryCheckResult::Kind::Conflict);
+    engine.backtrackToLevel(2);
+    REQUIRE(engine.check(lemmas).kind == TheoryCheckResult::Kind::Consistent);
+    const auto model = engine.getModel();
+    REQUIRE(model);
+    CHECK(model->numericAssignments.at("prefix-x").tryAsRational() <= mpq_class(0));
+    CHECK(model->numericAssignments.at("prefix-y").tryAsRational() >= mpq_class(1));
+    CHECK(model->numericAssignments.at("prefix-z").tryAsRational() >= mpq_class(1));
+
+    engine.assertLit(lower, true, 2, {4, true});
+    REQUIRE(engine.check(lemmas).kind == TheoryCheckResult::Kind::Conflict);
+    // A no-op withdrawal still retains the rejected source. The simplex's
+    // cleared conflict status must not turn that source context into SAT.
+    engine.backtrackToLevel(2);
+    REQUIRE(engine.check(lemmas).kind == TheoryCheckResult::Kind::Conflict);
+}
