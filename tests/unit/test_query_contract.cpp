@@ -205,7 +205,7 @@ TEST_CASE("query contract: user propagators retain Boolean helper notifications"
         {op(solver, Kind::Lt, {x, zero}), op(solver, Kind::Lt, {y, zero})});
     solver.assertFormula(op(solver, Kind::Or, {positive, negative}));
     solver.setPropagator(&callback);
-    REQUIRE(solver.checkSat() == Result::Sat);
+    REQUIRE((solver.checkSat() == Result::Sat));
     CHECK(solver.validateModel() == Solver::ModelValidation::Satisfied);
     CHECK_FALSE(callback.theory.empty());
     CHECK(callback.assigned.size() > callback.theory.size());
