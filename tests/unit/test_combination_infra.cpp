@@ -2,6 +2,7 @@
 #include "search/combination/ConflictMinimizer.h"
 #include "search/coordination/TheoryLemmaDatabase.h"
 #include "contracts/TheoryAtomTypes.h"
+#include "search/coordination/TheoryManager.h"
 #include <cstdlib>
 
 using namespace xolver;
@@ -85,4 +86,79 @@ TEST_CASE("TheoryLemmaDatabase: exact clauses and installation are distinct") {
     CHECK(db.insertIfNew(opposite));
     CHECK(db.insertIfNew(TheoryLemma{}));
     CHECK(db.contains(TheoryLemma{}));
+}
+
+namespace {
+struct CandidateTheory : TheorySolver {
+    TheoryCheckResult next = TheoryCheckResult::consistent();
+    int publications = 0;
+    TheoryId id() const override { return TheoryId::EUF; }
+    void push() override {}
+    void pop(uint32_t) override {}
+    void assertLit(const TheoryAtomRecord&, bool, int, SatLit) override {}
+    void backtrackToLevel(int) override {}
+    void reset() override {}
+    TheoryCheckResult check(TheoryLemmaStorage&, TheoryEffort) override { return next; }
+    std::vector<SharedEqualityPropagation> getDeducedSharedEqualities() override {
+        ++publications;
+        return {};
+    }
+};
+struct CandidateAssignment : TheoryAssignmentView {
+    LitValue value(SatLit) const override { return LitValue::True; }
+};
+} // namespace
+
+TEST_CASE("Combination candidate: only a complete accepted witness stops Full search") {
+    TheoryManager manager;
+    manager.setCombinationMode(true);
+    auto theory = std::make_unique<CandidateTheory>();
+    manager.registerSolver(std::move(theory));
+    CandidateAssignment assignment;
+    manager.setAssignmentView(&assignment);
+    TheoryLemmaDatabase lemmas;
+    int checks = 0;
+    bool accept = false;
+    manager.setModelCandidateCheck([&](const TheoryAssignmentView& view) {
+        ++checks;
+        CHECK(view.value({1, true}) == LitValue::True);
+        return accept;
+    });
+    CHECK(manager.check(lemmas, TheoryEffort::Standard).kind == TheoryCheckResult::Kind::Consistent);
+    CHECK(checks == 0);
+    CHECK(manager.check(lemmas, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Consistent);
+    CHECK(checks == 1);
+    accept = true;
+    const auto completed = manager.check(lemmas, TheoryEffort::Full);
+    CHECK(completed.kind == TheoryCheckResult::Kind::Unknown);
+    CHECK(completed.reason == "validated original-query witness");
+    CHECK(checks == 2);
+
+    // A missing assignment view cannot certify a full candidate.
+    manager.setAssignmentView(nullptr);
+    CHECK(manager.check(lemmas, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Consistent);
+    CHECK(checks == 2);
+    manager.clearSolvers();
+    manager.setAssignmentView(&assignment);
+    CHECK(manager.check(lemmas, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Consistent);
+    CHECK(checks == 2);
+}
+
+TEST_CASE("Combination candidate: unresolved theory results retain their original obligation") {
+    for (const auto pending : {TheoryCheckResult::unknown("pending theory"),
+                              TheoryCheckResult::mkLemma(TheoryLemma{{{1, true}}}),
+                              TheoryCheckResult::mkConflict(TheoryConflict{{{1, true}}})}) {
+        TheoryManager manager;
+        manager.setCombinationMode(true);
+        auto theory = std::make_unique<CandidateTheory>();
+        theory->next = pending;
+        manager.registerSolver(std::move(theory));
+        CandidateAssignment assignment;
+        manager.setAssignmentView(&assignment);
+        int checks = 0;
+        manager.setModelCandidateCheck([&](const TheoryAssignmentView&) { ++checks; return true; });
+        TheoryLemmaDatabase lemmas;
+        CHECK(manager.check(lemmas, TheoryEffort::Full).kind == pending.kind);
+        CHECK(checks == 0);
+    }
 }

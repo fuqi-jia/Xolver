@@ -1,5 +1,80 @@
 # Arithmetic validation and continuation record
 
+## Current FULINA work: strict joint witnesses before arrangement (2026-11-07)
+
+The current priority is speed on all 14,408 authorized private development
+queries. The preceding qualified freeze independently verifies every query:
+8,940 SAT and 5,468 UNSAT, without timeouts, unknowns, unconfirmed results or
+errors. Its fresh total solver time is **1,445.653 seconds**, versus **465.442**
+for same-round Z3. Most Xolver time is in satisfiable UF/integer combinations;
+parsing and preprocessing do not explain the representative slow cases.
+
+The new shared combination callback checks a concrete joint witness before
+requesting more arrangements. The runtime reconstructs eliminated definitions,
+Boolean assignments and partial-function interpretations, then uses the same
+strict evaluator as the public `validateModel()` API on every original assertion
+and assumption. Function tables and array interpretations must themselves
+validate; per-expression theory readbacks are insufficient. Acceptance retains
+the witness in the owner and transports early termination through Unknown,
+which only that owner may promote to SAT. Rejected or incomplete candidates
+continue ordinary search. User-propagator final obligations, solver APIs,
+rollback policies, budgets and seeds retain their existing behavior.
+
+Proof-enabled Panda9 / ExperimentOS qualification passes **2,267 cases /
+1,373,180 assertions**, including new exact-arithmetic, Boolean, assumption,
+scope and conflicting-function checks. Eleven capture and 39 model-replay
+tool tests pass. Frozen CLI SHA-256 is
+`8ffedb3872961554117a11184efb6faa2816d939d3163b9616fbac4abf1cc919`.
+Four diagnostic representatives reduce aggregate theory checks from **528 to
+133** and scalar arrangements from **65 to 11**. These counters are diagnostic,
+not benchmark timings.
+
+The fresh 128-query stratified private pilot retains every independently verified
+result in both versions and Z3: **102 SAT / 26 UNSAT**. Solver totals change
+**29.479 to 17.855 seconds**, versus **3.872 for Z3**, with no losses or errors;
+115 candidate observations are faster. The deliberately stratified pilot
+includes a slow nonlinear query and is not a population-wide speed estimate.
+An additional 32 public inputs across eight logic families retain all verified
+results and 80 actual-model replay checks. All timed Xolver SAT models require
+both Z3 and cvc5; Z3 models require cvc5.
+
+The complete original 14,408-query comparison passes with the same freeze,
+40 independently leased physical CPUs, and 60 seconds / one physical CPU /
+16 GiB per solver and input. All three arms independently verify **8,940 SAT /
+5,468 UNSAT**, with no losses, timeouts, unknowns, unconfirmed results or errors.
+Fresh solver totals are **1,465.914 seconds for the predecessor, 394.418 for the
+candidate and 466.133 for Z3**. Candidate time decreases **73.1%** against its
+predecessor and **15.4%** against Z3. Mean verified PAR-2 is **0.101743 /
+0.027375 / 0.032352 seconds**. This establishes a speed advantage on this
+authorized development cohort; it is not an overall solver or original-program
+claim. Fixed160 acceptance and new-head CI remain pending. No protected input
+has been used, no main promotion is claimed, and final-version original-C QCP
+verification remains open.
+Private queries, models, individual identifiers and evidence stay server-only.
+The cancelled `validation/current-main.json` archive is not a requirement.
+
+Broader acceptance of this freeze exposes one unconfirmed array SAT model:
+development587 verifies **587 predecessor / 586 candidate / 584 Z3**. Export
+rejects an opaque numerical class whose scalar bindings carry different exact
+values. Temporary phase counters reproduce the conflict at initial aggregation
+of the local theory models; variable reconstruction and array completion do
+not introduce it. Original-query evaluation alone did not check this internal
+class interpretation. The successor shares exact numerical-class validation
+with export, declining early acceptance until ordinary equality communication
+coordinates the models. The successor passes **2,268 cases / 1,373,187
+assertions**, including exact rational equivalence and large differing class
+values. Frozen CLI SHA-256 is
+`1ac12f4949f8237d82624a52f730e3b82ecc3747db4adc6afa0426238ca31aeb`.
+Fresh independent checks verify all 128 private pilot inputs, 32 public inputs
+and the preserved array export regression in both Xolver arms. Its actual timed
+repaired model passes Z3 and cvc5. One reference model for that additional
+regression remains unconfirmed because its independent replay cannot parse it;
+it is excluded, without blocking independently verified candidate correctness.
+The private pilot retains the preceding timing improvement. Full14408 and
+development587 are being rerun with this successor. The complete-cohort timings
+above belong to the pre-guard freeze. Original timed reports remain unchanged,
+and no unsupported model is upgraded to verified.
+
 ## Current checkpoint: finite integer decisions and nonlinear sign partitions (2026-11-07)
 
 [PR #107](https://github.com/fuqi-jia/Xolver/pull/107) merged as
@@ -410,9 +485,18 @@ including all four arithmetic/model source regressions. Fresh independent
 checks pass **32 inputs / 80 actual exported-model replays**, with no errors,
 unknowns or unconfirmed results. Frozen CLI SHA-256 is
 `7b36f63f8c4e83472ec801986d753a83d717e419c0b54980b5763fc0a9bf56c0`.
-Complete-suite acceptance remains pending; no solve gain is established.
-The next comparison uses the complete original fixed160 suite and qualified
-main, retaining original logics and identical per-input resources.
+The complete fixed160 round, with symmetric independent residue-certificate
+checking, verifies **123 baseline / 123 candidate / 116 Z3**. Both Xolver arms
+have 68 SAT, 55 UNSAT and 37 timeouts. Z3 has 123 raw decisions, but seven
+remain unconfirmed and excluded. There is one gain in unchanged LIA code and
+one lost LRA SAT; neither is an overall solved-count improvement. Mean verified
+PAR-2 is **32.638 / 32.578 / 34.261 seconds**. All 587 development inputs and
+14,408 private queries remain verified in both Xolver arms. The current real-set
+Z3 raw audit excludes 30 SAT models: 27 cvc5 checks request `--arrays-exp`, and
+three fail parsing. The checker capability repair is qualified above; offline
+replay of those original timed models remains pending, with raw reports and
+solve times preserved. Both CI jobs pass for `c780fb71`; no main promotion or
+overall Z3 win is established by this correctness repair.
 
 ### Closed experiment: ordered fully reified weighted thresholds
 

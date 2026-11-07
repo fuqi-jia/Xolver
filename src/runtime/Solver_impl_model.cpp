@@ -1,10 +1,64 @@
 #include "base/RuntimeConfig.h"
 #include "base/EnvParam.h"
 #include "runtime/SolverImpl.h"
+#include "applications/verification/sl/NativeSeparation.h"
 
 namespace xolver {
 
 // Relocated Solver::Impl method definitions (declared in SolverImpl.h).
+
+Solver::ModelValidation Solver::Impl::validateModelImpl() const {
+    if (!ir || !lastModel_)
+        return ModelValidation::Indeterminate;
+    const auto& model = *lastModel_;
+    if (model.separation) {
+        const auto checked = sl::checkInterpretation(*model.separation);
+        if (!checked.holds) return ModelValidation::Indeterminate;
+        return *checked.holds ? ModelValidation::Satisfied : ModelValidation::Violated;
+    }
+    if (!ArithModelValidator::numericClassValues(model)) return ModelValidation::Violated;
+    ArithModelValidator::NumAssignment nums;
+    ArithModelValidator::BoolAssignment bools;
+    ArithModelValidator::TokenAssignment tokens;
+    for (const auto& [name, value] : model.assignments) {
+        if (value == "true" || value == "false") {
+            bools[name] = value == "true";
+            tokens[name] = value == "true" ? "#b:1" : "#b:0";
+        } else {
+            tokens[name] = value;
+            try {
+                mpq_class q(value.rfind("#n:", 0) == 0 ? value.substr(3) : value);
+                if (q.get_den() == 0) return ModelValidation::Indeterminate;
+                q.canonicalize();
+                nums[name] = q;
+            } catch (const std::exception&) {}
+        }
+    }
+    for (const auto& [name, value] : model.numericAssignments)
+        if (auto q = value.tryAsRational()) nums[name] = *q;
+    if (parser)
+        for (const auto& var : parser->getDeclaredVariables()) {
+            if (!var) continue;
+            if (var->isVBool()) bools.try_emplace(var->getName(), false);
+            else if ((var->isVInt() || var->isVReal()) &&
+                     !model.assignments.contains(var->getName()) &&
+                     !model.numericAssignments.contains(var->getName()))
+                nums.try_emplace(var->getName(), 0);
+        }
+    if (!ArithModelValidator::integerAssignmentsValid(*ir, model.numericAssignments, nums))
+        return ModelValidation::Violated;
+    ArithModelValidator validator(*ir, nums, bools, model.arrayInterps, tokens);
+    validator.setRealAssignments(&model.numericAssignments);
+    validator.setFunctionInterps(&model.functionInterps, &model.arrayValues);
+    validator.setIntegerZeroExtensions(&partialFuncModel_.divZero,
+                                      &partialFuncModel_.modZero);
+    switch (validator.validate(originalAssertions_)) {
+        case ArithModelValidator::Verdict::Satisfied: return ModelValidation::Satisfied;
+        case ArithModelValidator::Verdict::Violated: return ModelValidation::Violated;
+        case ArithModelValidator::Verdict::Indeterminate: return ModelValidation::Indeterminate;
+    }
+    return ModelValidation::Indeterminate;
+}
 
     // True iff the SMT-LIB input set :produce-models / issued (get-model).
 bool Solver::Impl::modelRequestedImpl() const {

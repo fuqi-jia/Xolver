@@ -95,6 +95,7 @@ void TheoryManager::clearSolvers() {
     deducedEqCache_.clear();
     emittedArrangementSplits_.clear();
     careGraph_.clear();
+    modelCandidateCheck_ = {};
     aggStats_ = AggregateStats{};
 }
 
@@ -630,6 +631,14 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
             NO_DBG << "\n";
             return tr;
         }
+    }
+
+    // A complete original-query witness is sufficient even if local equality
+    // classes have not been arranged. Check it before generating more splits;
+    // failed/partial validation grants no local consistency certificate.
+    if (effort == TheoryEffort::Full && assignmentView_ && modelCandidateCheck_ &&
+        modelCandidateCheck_(*assignmentView_)) {
+        return TheoryCheckResult::unknown("validated original-query witness");
     }
 
     // 3. Collect theory-propagated shared equalities.

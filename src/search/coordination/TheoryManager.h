@@ -25,6 +25,14 @@ public:
 
     void setModelCompletionRequest(const TheorySolver::ModelCompletionRequest& request);
 
+    // At Full effort, the owner may validate a concrete joint witness against
+    // the complete original query. Acceptance ends search through Unknown;
+    // only the owner holding that witness may promote the result to SAT.
+    using ModelCandidateCheck = std::function<bool(const TheoryAssignmentView&)>;
+    void setModelCandidateCheck(ModelCandidateCheck check) {
+        modelCandidateCheck_ = std::move(check);
+    }
+
     void setCombinationMode(bool enabled) { combinationMode_ = enabled; }
     bool isCombinationMode() const override { return combinationMode_; }
 
@@ -129,6 +137,7 @@ private:
     TheoryAssignmentView* assignmentView_ = nullptr;
     SharedTermRegistry* sharedTermRegistry_ = nullptr;
     AggregateStats aggStats_;
+    ModelCandidateCheck modelCandidateCheck_;
 
     SharedEqualityManager sharedEqMgr_;
 

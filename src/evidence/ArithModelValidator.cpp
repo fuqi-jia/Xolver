@@ -5,6 +5,19 @@
 #include <functional>
 
 namespace xolver {
+std::optional<ArithModelValidator::RealAssignment>
+ArithModelValidator::numericClassValues(const TheoryModel& model) {
+    RealAssignment classes;
+    for (const auto& [name, token] : model.assignments) {
+        if (!token.starts_with('@')) continue;
+        const auto value = model.numericAssignments.find(name);
+        if (value == model.numericAssignments.end()) continue;
+        const auto [found, inserted] = classes.emplace(token, value->second);
+        if (!inserted && found->second != value->second) return std::nullopt;
+    }
+    return classes;
+}
+
 bool ArithModelValidator::integerAssignmentsValid(const NativeTerms& ir,
         const RealAssignment& real, const NumAssignment& numeric) {
     for (ExprId id = 0; id < ir.size(); ++id) {
