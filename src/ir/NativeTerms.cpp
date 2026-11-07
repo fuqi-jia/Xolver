@@ -296,36 +296,42 @@ const TermExpr NativeTerms::get(ExprId id) const {
     TermExpr out;
     out.kind = nativeKind(node->getKind());
     out.sort = storage_->nodeSorts.at(id);
-    const auto sk = sortKind(out.sort);
     if (out.kind == Kind::ConstReal) {
+        const auto sk = sortKind(out.sort);
         if (sk == SortKind::Int) out.kind = Kind::ConstInt;
         else if (sk == SortKind::BV) out.kind = Kind::ConstBV;
         else if (sk == SortKind::FP) out.kind = Kind::ConstFP;
         else if (sk == SortKind::Bool) out.kind = Kind::ConstBool;
     }
-    for (const auto& child : SOMTParser::children(node))
-        out.children.push_back(storage_->ids.at(resolve(child)));
+    const auto arity = node->getChildrenSize();
+    out.children.reserve(arity);
+    // The index owns the parent. Avoid extra owning range/iterator handles,
+    // and transfer each temporary child handle into alias resolution.
+    for (size_t i = 0; i < arity; ++i)
+        out.children.push_back(storage_->ids.at(resolve(node->getChild(static_cast<int>(i)))));
     if ((out.kind == Kind::Gt || out.kind == Kind::Geq) && out.children.size() == 2) {
         out.kind = out.kind == Kind::Gt ? Kind::Lt : Kind::Leq;
         std::swap(out.children[0], out.children[1]);
     }
-    const auto value = node->getValue();
-    if (out.kind == Kind::ConstBool) {
-        if (value && value->getType() == SOMTParser::BOOLEAN)
-            out.payload = Payload(value->getBooleanValue());
-        else if (node->getKind() == NODE_KIND::NT_CONST_TRUE || node->getName() == "true")
-            out.payload = Payload(true);
-        else if (node->getKind() == NODE_KIND::NT_CONST_FALSE || node->getName() == "false")
-            out.payload = Payload(false);
-        else throw std::invalid_argument("invalid native Boolean literal");
-    } else if (out.isConst()) {
-        std::string literal = value && value->getType() == SOMTParser::NUMBER
-            ? value->getNumberValue().toString() : node->getName();
-        int64_t small = 0;
-        auto [end, ec] = std::from_chars(literal.data(), literal.data() + literal.size(), small);
-        if (out.kind == Kind::ConstInt && ec == std::errc() && end == literal.data() + literal.size())
-            out.payload = Payload(small);
-        else out.payload = Payload(std::move(literal));
+    if (out.isConst()) {
+        const auto value = node->getValue();
+        if (out.kind == Kind::ConstBool) {
+            if (value && value->getType() == SOMTParser::BOOLEAN)
+                out.payload = Payload(value->getBooleanValue());
+            else if (node->getKind() == NODE_KIND::NT_CONST_TRUE || node->getName() == "true")
+                out.payload = Payload(true);
+            else if (node->getKind() == NODE_KIND::NT_CONST_FALSE || node->getName() == "false")
+                out.payload = Payload(false);
+            else throw std::invalid_argument("invalid native Boolean literal");
+        } else {
+            std::string literal = value && value->getType() == SOMTParser::NUMBER
+                ? value->getNumberValue().toString() : node->getName();
+            int64_t small = 0;
+            auto [end, ec] = std::from_chars(literal.data(), literal.data() + literal.size(), small);
+            if (out.kind == Kind::ConstInt && ec == std::errc() && end == literal.data() + literal.size())
+                out.payload = Payload(small);
+            else out.payload = Payload(std::move(literal));
+        }
     } else if (out.kind == Kind::Variable || out.kind == Kind::BoundVariable ||
                out.kind == Kind::UFApply || out.kind == Kind::Constructor ||
                out.kind == Kind::Selector || out.kind == Kind::Tester) {
