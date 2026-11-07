@@ -1687,55 +1687,7 @@ bool Solver::modelMatchesOriginal() const {
 }
 
 Solver::ModelValidation Solver::validateModel() const {
-    if (!pImpl || !pImpl->ir || !pImpl->lastModel_)
-        return ModelValidation::Indeterminate;
-    const auto& model = *pImpl->lastModel_;
-    if (model.separation) {
-        const auto checked = sl::checkInterpretation(*model.separation);
-        if (!checked.holds) return ModelValidation::Indeterminate;
-        return *checked.holds ? ModelValidation::Satisfied : ModelValidation::Violated;
-    }
-    ArithModelValidator::NumAssignment nums;
-    ArithModelValidator::BoolAssignment bools;
-    ArithModelValidator::TokenAssignment tokens;
-    for (const auto& [name, value] : model.assignments) {
-        if (value == "true" || value == "false") {
-            bools[name] = value == "true";
-            tokens[name] = value == "true" ? "#b:1" : "#b:0";
-        } else {
-            tokens[name] = value;
-            try {
-                mpq_class q(value.rfind("#n:", 0) == 0 ? value.substr(3) : value);
-                if (q.get_den() == 0) return ModelValidation::Indeterminate;
-                q.canonicalize();
-                nums[name] = q;
-            } catch (const std::exception&) {}
-        }
-    }
-    for (const auto& [name, value] : model.numericAssignments)
-        if (auto q = value.tryAsRational()) nums[name] = *q;
-    if (pImpl->parser)
-        for (const auto& var : pImpl->parser->getDeclaredVariables()) {
-            if (!var) continue;
-            if (var->isVBool()) bools.try_emplace(var->getName(), false);
-            else if ((var->isVInt() || var->isVReal()) &&
-                     !model.assignments.contains(var->getName()) &&
-                     !model.numericAssignments.contains(var->getName()))
-                nums.try_emplace(var->getName(), 0);
-        }
-    if (!ArithModelValidator::integerAssignmentsValid(*pImpl->ir, model.numericAssignments, nums))
-        return ModelValidation::Violated;
-    ArithModelValidator validator(*pImpl->ir, nums, bools, model.arrayInterps, tokens);
-    validator.setRealAssignments(&model.numericAssignments);
-    validator.setFunctionInterps(&model.functionInterps, &model.arrayValues);
-    validator.setIntegerZeroExtensions(&pImpl->partialFuncModel_.divZero,
-                                      &pImpl->partialFuncModel_.modZero);
-    switch (validator.validate(pImpl->originalAssertions_)) {
-        case ArithModelValidator::Verdict::Satisfied: return ModelValidation::Satisfied;
-        case ArithModelValidator::Verdict::Violated: return ModelValidation::Violated;
-        case ArithModelValidator::Verdict::Indeterminate: return ModelValidation::Indeterminate;
-    }
-    return ModelValidation::Indeterminate;
+    return pImpl ? pImpl->validateModelImpl() : ModelValidation::Indeterminate;
 }
 
 namespace {
@@ -2000,22 +1952,17 @@ void Solver::dumpModel(std::ostream& os) const {
         }
     }
     if (tm) {
+        const auto classes = ArithModelValidator::numericClassValues(*tm);
+        if (!classes) {
+            os << "(error \"inconsistent numeric model class\")\n";
+            return;
+        }
+        for (const auto& [token, value] : *classes)
+            if (const auto rational = value.tryAsRational())
+                emit.numericOpaque.emplace(token, rational->get_str());
         for (const auto& [name, value] : tm->assignments) {
+            (void)name;
             emit.noteToken(value);
-            if (!value.starts_with('@')) continue;
-            const auto numeric = tm->numericAssignments.find(name);
-            if (numeric == tm->numericAssignments.end()) continue;
-            const auto rational = numeric->second.tryAsRational();
-            if (!rational) continue;
-            // ModelConverter reconstructs aliases from this exact numeric
-            // channel. Reuse its class interpretation instead of choosing a
-            // second number while printing the original variable or UF table.
-            const auto number = rational->get_str();
-            const auto [entry, inserted] = emit.numericOpaque.emplace(value, number);
-            if (!inserted && entry->second != number) {
-                os << "(error \"inconsistent numeric model class\")\n";
-                return;
-            }
         }
         for (const auto& [name, value] : tm->numericAssignments) {
             (void)name;

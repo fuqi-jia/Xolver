@@ -220,6 +220,7 @@ public:
     // user variables with the same 0/false defaults dumpModel emits, so the
     // model checked here is exactly the one that would be printed.
     bool modelPositivelyValidates();
+    Solver::ModelValidation validateModelImpl() const;
 
     // Build the partial-function (div/mod-by-zero) model from the final model.
     // For each lowered div/mod whose divisor is 0 under the model, record the

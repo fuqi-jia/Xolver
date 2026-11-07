@@ -85,6 +85,13 @@ def model_arguments(name, source):
     return [] if requests else ['-model']
 
 
+def cvc5_command(binary, timeout):
+    # Exported array models can use constant arrays and write chains even
+    # when the original query needs only the ordinary array vocabulary.
+    return [str(binary), '--lang=smt2', '--arrays-exp',
+            '--tlimit=' + str(timeout * 1000)]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('manifest', 'baseline', 'candidate', 'z3', 'output'):
@@ -175,7 +182,7 @@ def main():
                                else report['observations']['z3']['result'] == 'unsat')
                 if not independent and args.cvc5:
                     checked = invoke(name + '-unsat-check',
-                        [str(args.cvc5), '--lang=smt2', '--tlimit=' + str(args.timeout * 1000)], case['path'])
+                        cvc5_command(args.cvc5, args.timeout), case['path'])
                     observation['unsat_check'] = checked
                     independent = checked['result'] == 'unsat'
                     if checked['result'] == 'sat':
@@ -191,7 +198,7 @@ def main():
                     # Validate the witness from the actual timed decision;
                     # another search need not reproduce that decision in budget.
                     pinned.write_text(replay(prefix, (out / (name + '.stdout')).read_text()))
-                    checker = [str(args.cvc5), '--lang=smt2', '--tlimit=' + str(args.timeout * 1000)] if name == 'z3' and args.cvc5 else commands['z3'] + ['-T:' + str(args.timeout)]
+                    checker = cvc5_command(args.cvc5, args.timeout) if name == 'z3' and args.cvc5 else commands['z3'] + ['-T:' + str(args.timeout)]
                     if name == 'z3' and not args.cvc5:
                         raise ValueError('independent model checker required for Z3')
                     checked = invoke(name + '-replay', checker, pinned)

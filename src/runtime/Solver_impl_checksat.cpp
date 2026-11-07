@@ -1278,7 +1278,8 @@ Result Solver::Impl::checkSatGround() {
         bool completionAttempted = false;
         const bool completionEnabled = (logic == "QF_UFNIA" || logic == "UFNIA");
         auto completeCandidateModel = [&]() {
-            if (completionAttempted || !completionEnabled) return candidateCompletionFound;
+            if (candidateCompletionFound || completionAttempted || !completionEnabled)
+                return candidateCompletionFound;
             completionAttempted = true;
             if (completionEnabled) {
                 CandidateModelSearch::Config cfg;
@@ -1426,6 +1427,72 @@ Result Solver::Impl::checkSatGround() {
                 if (found) cadicalBackend->requestTerminate();
                 return found;
             });
+        }
+
+        // The original assertions describe all obligations only when no user
+        // propagator contributes additional constraints at its final callback.
+        if (!userPropagator_) {
+            std::vector<std::pair<std::string, SatLit>> booleanValues;
+            for (const auto& rec : atomizer.atoms()) {
+                if (rec.expr >= ir->size()) continue;
+                const auto& node = ir->get(rec.expr);
+                if (node.kind == Kind::Variable && node.sort == boolSortId_)
+                    if (const auto* name = std::get_if<std::string>(&node.payload.value))
+                        booleanValues.emplace_back(*name, SatLit::positive(rec.var));
+            }
+            theoryManager.setModelCandidateCheck(
+                [&, booleanValues = std::move(booleanValues)](const TheoryAssignmentView& view) {
+                    auto validate = [&](TheoryModel& candidate) {
+                        auto savedModel = std::move(lastModel_);
+                        auto savedPartial = std::move(partialFuncModel_);
+                        auto restore = [&] {
+                            lastModel_ = std::move(savedModel);
+                            partialFuncModel_ = std::move(savedPartial);
+                        };
+                        try {
+                            lastModel_ = std::move(candidate);
+                            for (const auto& [name, literal] : booleanValues) {
+                                const auto value = view.value(literal);
+                                if (value != LitValue::Unknown)
+                                    lastModel_->assignments.emplace(name,
+                                        value == LitValue::True ? "true" : "false");
+                            }
+                            mergeFixedBindings();
+                            bool valid = modelConverter_.empty() ||
+                                modelConverter_.reconstruct(lastModel_->numericAssignments,
+                                                            lastModel_->assignments, *ir);
+                            if (valid && features.hasArray)
+                                completeArrayModel(*ir, originalAssertions_, *lastModel_);
+                            if (valid) {
+                                completeUnusedFunctionModels();
+                                valid = reconstructReadOnlyArrays();
+                                if (valid && !divModOrigins_.empty()) {
+                                    buildPartialFuncModel();
+                                    valid = !partialFuncModel_.inconsistent;
+                                }
+                            }
+                            // A witness must validate its exported functions
+                            // and arrays. Per-expression theory readbacks do
+                            // not establish one consistent interpretation.
+                            valid = valid && validateModelImpl() == Solver::ModelValidation::Satisfied;
+                            candidate = std::move(*lastModel_);
+                            restore();
+                            return valid;
+                        } catch (...) {
+                            restore();
+                            throw;
+                        }
+                    };
+                    bool validated = false;
+                    auto candidate = theoryManager.getModel([&](TheoryModel& model) {
+                        validated = validate(model);
+                        return validated;
+                    });
+                    if (!candidate || (!validated && !validate(*candidate))) return false;
+                    lastModel_ = std::move(candidate);
+                    candidateCompletionFound = true;
+                    return true;
+                });
         }
 
         auto solveT0 = std::chrono::steady_clock::now();

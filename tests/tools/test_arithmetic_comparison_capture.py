@@ -13,18 +13,21 @@ import compare_arithmetic_case as comparison
 
 class ArithmeticComparisonCapture(unittest.TestCase):
     def run_comparison(self, *, invalid_model=False, missing_model=False, validate=True,
-                       explicit_model=False):
+                       explicit_model=False, array_model=False):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source = root / 'original.smt2'
-            source.write_text('(set-logic QF_LRA)\n(declare-const x Real)\n'
+            arrays = ('(declare-const a (Array Int Int))\n'
+                      '(assert (= (select a 0) 7))\n') if array_model else ''
+            source.write_text('(set-logic ' + ('QF_ALRA' if array_model else 'QF_LRA') +
+                              ')\n(declare-const x Real)\n' + arrays +
                               '(assert (= x 1))\n(check-sat)\n'
                               + ('(get-model)\n' if explicit_model else ''))
             original = source.read_bytes()
             manifest = root / 'manifest.json'
             manifest.write_text(json.dumps(dict(cases=[dict(path=str(source),
                 sha256=hashlib.sha256(original).hexdigest(), expected='sat',
-                logic='QF_LRA', member='original.smt2')])))
+                logic='QF_ALRA' if array_model else 'QF_LRA', member='original.smt2')])))
             binaries = {name: root / name for name in ('baseline', 'candidate', 'z3', 'cvc5')}
             for name, binary in binaries.items():
                 binary.write_text(name)
@@ -59,11 +62,18 @@ class ArithmeticComparisonCapture(unittest.TestCase):
                     if missing_model and name == 'candidate':
                         return b'sat\n', b'', timing
                     value = '(- 1)' if invalid_model and name == 'candidate' else '1'
-                    return ('sat\n(model (define-fun x () Real ' + value + '))\n').encode(), b'', timing
+                    array = ('(define-fun a () (Array Int Int) '
+                             '((as const (Array Int Int)) 7))') if array_model else ''
+                    return ('sat\n(model (define-fun x () Real ' + value + ')' + array + ')\n').encode(), b'', timing
                 self.assertTrue(query.name.endswith('-replay.smt2'), arguments)
                 self.assertIn('(assert (= x 1))', query.read_text())
                 self.assertIn('(define-fun x', query.read_text())
                 replays.append(query.name)
+                if array_model:
+                    self.assertIn('(assert (= (select a 0) 7))', query.read_text())
+                    self.assertIn('(as const (Array Int Int))', query.read_text())
+                    if Path(arguments[0]).name == 'cvc5' and '--arrays-exp' not in arguments:
+                        return b'', b'array model checking requires --arrays-exp\n', dict(timing, returncode=1)
                 result = 'unsat' if invalid_model and query.name == 'candidate-replay.smt2' else 'sat'
                 return (result + '\n').encode(), b'', timing
 
@@ -90,6 +100,13 @@ class ArithmeticComparisonCapture(unittest.TestCase):
 
     def test_an_explicit_model_request_is_not_duplicated(self):
         status, report, metrics, replays = self.run_comparison(explicit_model=True)
+        self.assertEqual(status, 0)
+        self.assertEqual(metrics['errors'], 0)
+        self.assertEqual(len(replays), 3)
+        self.assertTrue(all(row['verified'] for row in report['observations'].values()))
+
+    def test_array_models_receive_a_capable_independent_checker(self):
+        status, report, metrics, replays = self.run_comparison(array_model=True)
         self.assertEqual(status, 0)
         self.assertEqual(metrics['errors'], 0)
         self.assertEqual(len(replays), 3)

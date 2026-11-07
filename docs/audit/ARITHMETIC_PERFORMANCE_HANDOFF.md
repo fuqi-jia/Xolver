@@ -1,23 +1,108 @@
 # Arithmetic validation and continuation record
 
-## Current checkpoint: explained arithmetic projections and polynomial reasoning (2026-11-07)
+## Current FULINA stage: coherent joint witnesses before arrangement (2026-11-07)
 
-[PR #106](https://github.com/fuqi-jia/Xolver/pull/106) merged as
-3210f9aa1f969d770136922ba7ae105983db3b72 after complete server acceptance and
-both final-head [PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42245857681)
+The priority is speed on all 14,408 authorized private development queries.
+Profiling identifies repeated theory arrangements in satisfiable UF/integer
+combinations; parsing and preprocessing do not explain the representative slow
+cases. The implementation also retains the shared incremental-context repair:
+withdrawn interior ordinary/interface bounds trigger replay, successful source
+prefixes remain admitted, and a rejected source stays pending. LRA/LIA assignment
+and rollback policies remain unchanged.
+
+The new shared combination callback checks a concrete joint witness before
+requesting more arrangements. The runtime reconstructs eliminated definitions,
+Boolean assignments and partial-function interpretations, then uses the same
+strict evaluator as the public `validateModel()` API on every original assertion
+and assumption. Function tables and array interpretations must themselves
+validate; per-expression theory readbacks are insufficient. Acceptance retains
+the witness in the owner and transports early termination through Unknown,
+which only that owner may promote to SAT. Rejected or incomplete candidates
+continue ordinary search. User-propagator final obligations, solver APIs,
+rollback policies, budgets and seeds retain their existing behavior.
+
+Proof-enabled Panda9 / ExperimentOS qualification passes **2,268 cases /
+1,373,187 assertions**, including exact-arithmetic, Boolean, assumption,
+scope, conflicting-function and numeric-class checks. Eleven capture and 39
+model-replay tool tests pass. Frozen CLI SHA-256 is
+`1ac12f4949f8237d82624a52f730e3b82ecc3747db4adc6afa0426238ca31aeb`.
+All 2,179 qualified source contents match the committed code and parser gitlink.
+Four diagnostic representatives reduce aggregate theory checks from **528 to
+133** and scalar arrangements from **65 to 11**. These counters are diagnostic,
+not benchmark timings, and were collected before the numeric-class guard below.
+
+The final 128-query stratified private pilot retains every independently verified
+result in both Xolver versions and Z3: **102 SAT / 26 UNSAT**. Solver totals change
+**29.478 to 17.866 seconds**, versus **3.759 for Z3**. The deliberately stratified
+pilot includes a slow nonlinear query and is not a population-wide speed
+estimate. An additional 32 public inputs across eight logic families retain all
+verified results and 80 actual-model replay checks. All timed Xolver SAT models
+require both Z3 and cvc5; Z3 models require cvc5.
+
+The complete original 14,408-query comparison passes with the same freeze,
+40 independently leased physical CPUs, and 60 seconds / one physical CPU /
+16 GiB per solver and input. All three arms independently verify **8,940 SAT /
+5,468 UNSAT**, with no losses, timeouts, unknowns, unconfirmed results or errors.
+Fresh solver totals are **1,466.905 seconds for the qualified predecessor,
+393.849 for the candidate and 466.222 for Z3**. The predecessor is FULINA
+`c780fb71`, rather than accepted main. Candidate time decreases **73.2%** against
+that predecessor and **15.5%** against Z3. This establishes a speed advantage on
+this authorized development cohort; it is not an overall solver or
+original-program claim.
+
+Fresh development587 acceptance retains **587 main / 587 candidate / 584 Z3**
+independently verified results, with solver totals **50.869 / 15.254 / 18.661
+seconds**. Three reference models remain unconfirmed and excluded. Fresh
+fixed160 acceptance verifies **123 main / 124 candidate / 116 Z3**, including
+an independently rechecked original-input-bound integer residue certificate
+only for the two Xolver arms that actually returned UNSAT. The reference result
+on that input timed out and receives no credit. There is one new verified SAT,
+no losses or errors, and **36 candidate timeouts**. Mean verified PAR-2 is
+**32.641 / 31.937 / 34.183 seconds**. Six unconfirmed reference results remain
+excluded. Raw timed reports are preserved; neither unknown nor timeout is
+upgraded. Exact-head PR CI and main promotion remain pending. No protected input
+has been used, and final-version original-C QCP verification remains open.
+Private queries, models, individual identifiers and evidence stay server-only.
+The cancelled `validation/current-main.json` archive is not a requirement.
+
+Broader acceptance of the preceding pre-guard freeze exposed one unconfirmed array SAT model:
+development587 verifies **587 predecessor / 586 candidate / 584 Z3**. Export
+rejects an opaque numerical class whose scalar bindings carry different exact
+values. Temporary phase counters reproduce the conflict at initial aggregation
+of the local theory models; variable reconstruction and array completion do
+not introduce it. Original-query evaluation alone did not check this internal
+class interpretation. The final candidate shares exact numerical-class validation
+with export, declining early acceptance until ordinary equality communication
+coordinates the models. Exact rational equivalence and large differing class
+values are covered by regression tests.
+Fresh independent checks verify all 128 private pilot inputs, 32 public inputs
+and the preserved array export regression in both Xolver arms. Its actual timed
+repaired model passes Z3 and cvc5. One reference model for that additional
+regression remains unconfirmed because its independent replay cannot parse it;
+it is excluded, without blocking independently verified candidate correctness.
+The complete-cohort results above belong to this repaired freeze, including all
+587 verified candidate models/verdicts. The failed predecessor's original timed
+reports remain unchanged, and no unsupported model is upgraded to verified.
+
+## Current checkpoint: finite integer decisions and nonlinear sign partitions (2026-11-07)
+
+[PR #107](https://github.com/fuqi-jia/Xolver/pull/107) merged as
+4be69a7fb59663e6ada00ac234d9c85fb5325fbd after complete server acceptance and
+both final-head [PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42295424156)
 passed. Both jobs in its
-[merged-main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42248876468) pass.
-The qualified source matches the merged tree. Its fresh fixed160 comparison
-improves **118 to 121 independently verified results**, with three gains, no
-losses and no errors. There remain **38 timeouts and one unknown**. Same-round
-Z3 has 125 raw decisions, of which **117 are independently verified**; eight
-unconfirmed decisions remain excluded. Mean verified PAR-2 is **34.031 seconds**
-for Xolver and **33.959** for Z3. Protected inputs remain unused, and overall
+[merged-main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42298823094) pass.
+All 2,179 qualified source contents match its reviewed head and
+parser gitlink. Fresh fixed160 acceptance improves **119 to 122 independently
+verified results**, with three gains, no losses and no errors. There remain
+**38 timeouts**, with no unknown or unconfirmed decisions. Same-round Z3 has
+124 raw decisions, of which **117 are independently verified**; seven
+unconfirmed decisions remain excluded. Mean verified PAR-2 is **33.168 seconds**
+for Xolver and **33.648** for Z3. Protected inputs remain unused, and overall
 superiority is not established.
 
 All **14,408 private queries** remain independently verified: **8,940 SAT and
 5,468 UNSAT**, with no timeouts, unknowns, unconfirmed decisions or errors.
-Total solver time is **1,461.871 seconds versus 467.262 for Z3**. Development587
+Total solver time is **1,403.877 seconds versus 443.938 for Z3**. Development587
 also retains all 587 verified results, versus 584 for Z3. Private inputs, models
 and individual identifiers remain server-only.
 
@@ -250,10 +335,294 @@ decisions. Total solver time changes **1,405.258 to 1,403.877 seconds**, versus
 development results remain verified, with totals **49.928 to 50.099 seconds**,
 versus **18.833 for Z3**; three Z3 decisions remain unconfirmed and excluded.
 Both jobs in [code-head CI42292270895](https://github.com/fuqi-jia/Xolver/actions/runs/42292270895)
-pass for `f139452e`. Stage review and main promotion remain open. Final-version
+pass for `f139452e`. The final documentation head `3e217dc0` also passes both
+jobs in CI42295424156 and is merged through PR #107 above. Final-version
 original-C QCP and protected-set validation remain outstanding; no overall
 superiority is established. Private inputs, models and individual identifiers
 remain server-only.
+
+### Closed experiment: joint Boolean candidates for linear reals
+
+The candidate exposed the existing exactly validated Boolean/integral-coordinate
+search to linear real formulas with Boolean alternatives. Proof-enabled native
+qualification passed **2,261 cases / 1,373,171 assertions**. Three new groups
+checked linear/Boolean witnesses, fractional model reconstruction, assumptions,
+push/pop and fractional fallback. The complete 32-input QF_LRA pilot improved
+**19 to 20 verified results**, with one gain and no losses or errors; a public
+SAT changed from timeout to **15.199 seconds**, with its actual timed model
+independently replayed by both references.
+
+The subsequent complete fixed160 comparison rejects the variant: verified
+counts fall **123 to 121** after symmetric independent residue-certificate
+checking, with no gains, two lost SAT results and no errors. Mean verified
+PAR-2 changes **32.748 to 33.957 seconds**, versus **33.688 for Z3**.
+The pilot's gained input times out in both arms this round. The command, input,
+binary, runtime-control manifest and process-budget helper match the pilot;
+the differing physical CPUs do not establish the cause of the different
+search outcome. One loss is in unchanged nonlinear-real routing. Raw results
+remain intact, without retakes or score substitution. All 587 development and
+14,408 private results are retained. Private totals change **1,404.183 to
+1,405.099 seconds**, versus **442.649 for Z3**; no private gain or loss is
+observed. Four additional independent
+process diagnostics find SAT in **17.156 to 17.460 seconds** with identical
+encoding counters; these diagnostics do not explain or replace the full-run
+timeout. The optional source and new tests are restored to qualified main
+contents through ExperimentOS: **2,258 cases / 1,373,099 assertions** pass, and
+the CLI and worker hashes exactly match the preceding qualified executables.
+No main promotion or whole-suite benefit is attributed to this experiment.
+
+### Closed experiment: retain fully observed theory sources at model checks
+
+An accepted-main LRA diagnostic records **2,124 complete model callbacks /
+34.433 seconds**. Each callback unconditionally withdraws and readmits its
+theory sources. This includes repeated work when notifications already supply
+the complete candidate's exact source assignment and SAT decision levels; the
+timing alone does not attribute all callback cost to replay.
+
+The shared SAT/theory bridge records actually notified theory sources and
+checks both model/trail coverage directions, values, levels and registry
+stability before reusing a prefix. Later registrations require one complete
+admission; when every model source was notified, that admission synchronizes
+the new registry epoch. Unnotified model completions retain conservative
+complete replay. Pure Boolean literals do not participate in the stable
+source-level sort. Every candidate still receives a Full theory check;
+per-theory rollback, APIs, allocations and seeds are unchanged.
+
+The first strict prototype passed native and independent correctness checks
+but reused no sources on either LRA gap. First-callback diagnostics confirm
+that their model sources are completely observed despite earlier registry
+growth. The corrected epoch transition is covered by a new regression; the
+previous unnotified-completion behavior remains covered.
+
+Proof-enabled Panda9 / ExperimentOS qualification passes **2,261 cases /
+1,373,183 assertions**, including three callback groups and 342 targeted cases.
+The first strict prototype passes **32 independent synthetic inputs** across
+eight logics and **80 actual exported-model replays**. The subsequent epoch
+variant fails that same audit: one independently satisfiable UF-with-reals
+input returns `unknown`, with a rejected stale linear conflict reason. The
+other 31 inputs pass; no opposite verdict is observed. This is a capability
+regression, so the epoch variant is not eligible for full-suite comparison or
+promotion. Native tests alone did not cover this combination-state failure.
+
+The corrected diagnostics reuse **1,486 of 1,499** and **2,698 of 2,786** Full
+source contexts, reducing readmissions to **56,925 and 203,436**. Last callback
+time snapshots change **9.520 to 4.150 seconds** and **34.433 to 26.589 seconds**,
+although the candidate performs more Full checks. Both original inputs still
+time out at 60 seconds. This is measured callback work reduction, not a new
+solve or whole-suite performance conclusion.
+
+The rejected epoch variant's CLI SHA-256 is
+`b95f4bc1038b7c8f8270225e0e5fcefd2f719252d2b2f79427eaa72b35eae00e`.
+
+The stale reason exposes a bound-journal ordering defect. LRA admitted
+ordinary sources before interface equalities, even when a later interface
+fact had a lower SAT level. The simplex's suffix rollback could then leave a
+withdrawn higher-level bound behind. A direct arithmetic regression and an
+independently constructed UF/real SAT regression both fail before repair.
+
+LRA now orders both source streams by SAT level. A late lower-level source
+replays retained sources while preserving the existing assignment policy.
+Separate admission cursors retain unapplied interface facts across withdrawal;
+interrupted batches remain replayable. Regressions cover delayed interface
+delivery, weaker retained bounds, pending sources and repeated actual-model
+validation. Proof-enabled Panda9 / ExperimentOS qualification passes **2,264
+cases / 1,373,211 assertions**. All **32 independent synthetic inputs** and
+**80 actual exported-model replays** pass again, with no unknowns or errors.
+The repaired CLI SHA-256 is
+`3839b418932fbe371f76d664f6b34c6b468c7ee1e61843982a379375af67e5fa`.
+A fresh complete fixed160 comparison, followed by symmetric independent
+residue-certificate checking, verifies **123 baseline / 122 candidate / 116 Z3**
+results. The candidate has no gain and loses one nonlinear-integer UNSAT:
+32.597 seconds becomes a 60-second timeout. Mean verified PAR-2 changes
+**32.684 to 33.059 seconds**, versus **34.258 for Z3**. There are no wrong
+verdicts, unknowns or protocol errors. Raw reports remain unchanged. The
+source-reuse variant is rejected; the independently demonstrated LRA ordering
+repair and its public regressions are retained for separate qualification.
+No private-suite expansion or main promotion is attributed to this experiment.
+
+### In development: preserve ordered linear/interface rollback
+
+The standalone LRA repair retains the original shared model-check admission
+path. Its source differs from accepted main only in LRA's bound-source order
+and three public arithmetic/model regression groups. Panda9 / ExperimentOS
+proof-enabled qualification passes **2,261 cases / 1,373,127 assertions**.
+Fresh independent checks accept all **32 synthetic inputs / 80 actual model
+replays**, with no wrong verdicts, unknowns or errors. Frozen CLI SHA-256 is
+`986214248e0a7b329a271b6f29eaf71651fd9c9766104a30d8579ad088459dfa`.
+A fresh complete fixed160 comparison, including symmetric residue-certificate
+checking, verifies **124 baseline / 123 candidate / 116 Z3** results. There are
+no gains and one lost LRA SAT: **42.789 seconds becomes a 60-second timeout**.
+Mean verified PAR-2 changes **32.186 to 32.589 seconds**, versus **34.264 for
+Z3**. No wrong verdict, unknown or protocol error is observed. The preceding
+combined variant's nonlinear-integer loss is absent this round. The correctness
+repair is retained while its admission overhead is investigated; main promotion
+and private-suite acceptance remain pending.
+
+Interrupted admission was discarding cursor progress for successfully admitted
+sources. After withdrawing the conflicting suffix, a retained earlier source
+could trigger a redundant complete rebuild. Each stream now commits its
+successful contiguous prefix immediately. Rejected sources stay pending so a
+backtrack retaining their level cannot forget an unresolved conflict; unordered
+holes remain conservative until the batch completes.
+
+Paired temporary counters on the same constructed source sequence measure
+**9 to 6 source applications and 1 to 0 redundant resets**, with the same
+source/model checks passing. All instrumentation is removed before qualifying
+the production build. Panda9 / ExperimentOS passes **2,262 unit cases /
+1,373,136 assertions**. Its frozen CLI SHA-256 is
+`bdff685f524dc0c85e7d1541f067def48ab9734acb96934b8ab0e710a5008134`.
+Fresh independent checks accept all **32 synthetic inputs and 80 actual
+exported-model replays**, with no errors or unknowns. The fresh full160 round
+verifies **124 baseline / 123 candidate / 117 Z3**, after symmetric certificate
+checking. It has no gain and retains the LRA loss: **36.465 seconds to timeout**.
+Mean verified PAR-2 is **32.085 / 32.637 / 33.534 seconds**. No wrong verdict,
+unknown or protocol error is observed. Reduced component work has not restored
+whole-suite performance; the correctness repair remains under development.
+
+### In development: join bound withdrawals through the shared context
+
+The current implementation reuses `incremental::Context` for the admitted
+levels of both ordinary and interface sources. Consecutive equal levels share
+one marker because they have the same withdrawal fate. A suffix withdrawal
+can use the simplex's ordinary rollback; an interior withdrawal rebuilds bounds
+from retained sources. Successful admission cursors and rejected-source retry
+are retained. This preserves the original admission order and avoids sorting
+or rebuilding merely because a lower-level fact arrives late.
+
+Proof-enabled Panda9 / ExperimentOS passes **2,262 cases / 1,373,136 assertions**,
+including all four arithmetic/model source regressions. Fresh independent
+checks pass **32 inputs / 80 actual exported-model replays**, with no errors,
+unknowns or unconfirmed results. Frozen CLI SHA-256 is
+`7b36f63f8c4e83472ec801986d753a83d717e419c0b54980b5763fc0a9bf56c0`.
+The complete fixed160 round, with symmetric independent residue-certificate
+checking, verifies **123 baseline / 123 candidate / 116 Z3**. Both Xolver arms
+have 68 SAT, 55 UNSAT and 37 timeouts. Z3 has 123 raw decisions, but seven
+remain unconfirmed and excluded. There is one gain in unchanged LIA code and
+one lost LRA SAT; neither is an overall solved-count improvement. Mean verified
+PAR-2 is **32.638 / 32.578 / 34.261 seconds**. All 587 development inputs and
+14,408 private queries remain verified in both Xolver arms. The current real-set
+Z3 raw audit excludes 30 SAT models: 27 cvc5 checks request `--arrays-exp`, and
+three fail parsing. The checker capability repair is qualified above; offline
+replay of those original timed models remains pending, with raw reports and
+solve times preserved. Both CI jobs pass for `c780fb71`; no main promotion or
+overall Z3 win is established by this correctness repair.
+
+### Closed experiment: ordered fully reified weighted thresholds
+
+An encoding probe linked against qualified main finds that four of five
+incompatible threshold pairs do not conflict under unit propagation. Frozen
+Z3 and cvc5 independently refute all five actual CNF instances. This is a
+propagation gap; it does not identify the cause of every remaining timeout.
+
+The shared pseudo-Boolean encoder retains full predicate definitions and
+indexes completed thresholds by the exact normalized signed weighted sum.
+A smaller bound entails its next larger bound; adjacent implications encode
+the order without fresh variables. Equivalent and complemented requests reuse
+completed predicates. Partial encodings are never published, and current
+assignments, candidate boxes and source-scope facts never enter the index.
+APIs, theory admission, resource settings and rollback policies are unchanged.
+
+Proof-enabled Panda9 / ExperimentOS qualification passes **2,261 cases /
+1,374,424 assertions**. Three new groups check decision-free conflicts under
+different insertion orders, exhaustive signed truth tables with 100-bit
+coefficients, and exhausted attempts followed by complete reuse. Actual CNF
+passes **13,896 independent Z3/cvc5 decisions** across 48 synthetic scenarios.
+Frozen CLI SHA-256 is
+`35a67b88cbeea17527225f0b5773d271b8642813c4f1c6a25701c78e2a5511f1`.
+The initial native attempt had a type error in a new test; its failure is
+retained, and only the test operand type was corrected before qualification.
+Complete fixed160 falls **124 to 121 independently verified results**, versus
+**116 for Z3**, after symmetric original-input-bound certificate checking.
+There are no gains, three lost SAT results and no errors. Mean verified PAR-2
+worsens **32.145 to 33.756 seconds**, versus **34.255 for Z3**. Raw rows remain
+unchanged, and no private/development expansion or main promotion is performed.
+
+A mechanism diagnostic retains 369 completed predicates and reduces repeated
+diagram states from **26,345 to 14,006**. However, another diagnostic adds
+1,584 threshold implications and changes a roughly 12-second SAT search into
+an exhausted search followed by integer fallback and timeout. A separate
+pure-LRA diagnostic reverses the formal timing order; its cause remains
+unresolved. Sampled live solver processes consume about one full CPU, which
+does not establish an infrastructure explanation. Diagnostic replays replace
+none of the original formal observations.
+
+The blanket threshold implications, their unused encoder operation and the
+edge-only tests are removed in the successor prototype. That prototype retains
+only fully defined predicate reuse, whose saved diagram traversal is directly
+measured. The successor's separate qualification is recorded below; no
+whole-suite benefit is inferred from the rejected combined prototype.
+
+### Closed experiment: reuse completed weighted threshold predicates
+
+The successor retains only exact predicate reuse. It emits the existing full
+definitions and caches only completed thresholds, including normalized signed,
+GCD-reduced and complemented requests. It removes the extra implication
+clauses and their unused API rather than retaining an alternate implementation
+or configuration gate. Partial resource-limited attempts expose no predicate.
+
+Proof-enabled Panda9 / ExperimentOS qualification passes **2,260 cases /
+1,374,319 assertions**, including two new groups and 1,220 targeted assertions.
+The actual successor CNF independently passes **13,896 Z3/cvc5 decisions**
+across 48 synthetic scenarios. Frozen CLI SHA-256 is
+`7ea65d8276b1394f8c63ce5ce8ef51752b7edbc5a3df02807e53cbae040e5381`.
+Its fresh complete fixed160 comparison falls **123 to 122 independently
+verified results**, versus **118 for Z3**, after symmetric certificate checking.
+There are no gains, one lost SAT and no errors. Mean verified PAR-2 worsens
+**32.555 to 33.151 seconds**, versus **33.136 for Z3**. The lost SAT changes
+from **24.328 seconds to timeout**. Its diagnostic SAT in 24.021 seconds does
+not replace that formal loss. Another diagnostic retains the saved diagram
+states but takes 58.090 seconds; reduced encoding work has not established a
+solver-time benefit. The earlier regressions are retained separately.
+
+No private/development expansion or main promotion is performed. The optional
+predicate-cache implementation and its two new tests are restored to qualified
+main contents through ExperimentOS: **2,258 cases / 1,373,099 assertions** pass.
+All 2,179 source contents and the CLI/worker hashes exactly match qualified
+main. All accepted correctness and reasoning changes are retained; no solver
+allocation or seed is changed.
+
+Three accepted-main parse-only diagnostics take **0.416, 5.782 and 4.177
+seconds** on public inputs from verified Z3/Xolver gaps. They do not explain
+the 60-second failures or establish a parser defect. The next attribution
+examines LRA propagation and search, rather than repeating either rejected
+threshold variant or the previously closed lazy-initialization experiment.
+
+Two subsequent accepted-main diagnostics reach **5,934 and 4,464 LRA core
+checks**, accounting for **30.542 and 27.971 seconds** in their last snapshots.
+Both reach the external timeout. These establish repeated theory work but do
+not identify which producer or callback causes the remaining cost. A separate
+callback profile is running with unchanged solver settings; it is diagnostic
+evidence only and cannot replace formal scores.
+
+### Closed experiment: Boolean directions in weighted threshold diagrams
+
+The prototype forwarded established Boolean occurrence directions through
+weighted threshold diagrams and shared ITE gates. Default calls retained full
+equivalences; opposite occurrences completed earlier definitions. Native
+qualification passed **2,263 cases / 1,397,778 assertions**, including five new
+groups, and actual CNF passed **10,052 independent Z3/cvc5 decisions** across
+63 synthetic scenarios. Signed thresholds, complements, high variable IDs,
+incremental upgrades and exhausted-diagram retries were checked.
+
+Complete fixed160 retains **123 to 123 verified results**, versus **117 for
+Z3**, after symmetric independent residue-certificate checking. There is one
+gain, one loss and no errors. A LIA SAT changes from **15.005 seconds to
+timeout**; the gained pure-LRA result does not enter the changed threshold
+route and does not establish a causal benefit. Mean verified PAR-2 changes
+**32.626 to 32.391 seconds**, versus **33.876 for Z3**. A diagnostic lowers
+three-input gate definition clauses, but this is not a net capability gain.
+Raw formal rows remain unchanged. No further development587 or private14408
+comparison is launched for this rejected variant. Its optional code and five
+new tests are restored to the qualified main contents through ExperimentOS:
+**2,258 cases / 1,373,099 assertions** pass, and the CLI and worker hashes
+exactly match the qualified main executables. No main promotion is attributed
+to it.
+
+A separate propagation preflight retains full definitions. For five pairs of
+thresholds over the same weighted sum, both independent backends confirm the
+incompatible bounds UNSAT. Four pairs fail to conflict under unit propagation
+alone. This motivates checking explicit cross-threshold entailments next;
+it is not a solver performance result or an implemented capability.
 
 ### Closed experiment: presolve inside Boolean polynomial refutation
 

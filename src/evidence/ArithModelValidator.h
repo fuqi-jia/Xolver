@@ -75,6 +75,9 @@ public:
     }
 
     using RealAssignment = std::unordered_map<std::string, RealValue>;
+    // One opaque numeric class must have one exact value across all channels.
+    // The returned map also supplies the common class values to model export.
+    static std::optional<RealAssignment> numericClassValues(const TheoryModel&);
     static bool integerAssignmentsValid(const NativeTerms&, const RealAssignment&,
                                         const NumAssignment&);
     // Provide EXACT real-algebraic values (e.g. √2) for variables, from the
