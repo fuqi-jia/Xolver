@@ -1,6 +1,6 @@
 # Arithmetic validation and continuation record
 
-## Development candidate: dense real exclusion completion (2026-11-07)
+## Development prototype: dense real exclusion completion (2026-11-07)
 
 Commit `0f6cb2c9` on FULINA adds shared simplex model construction for finite
 excluded coordinate values. Local strict feasibility supplies witnesses; exact
@@ -24,10 +24,34 @@ opposite verdict or protocol error. Both independent checkers accept every
 actual timed Xolver SAT model. The six solved inputs total **114.317 main /
 89.246 candidate seconds**; mean verified PAR-2 across all ten is **59.432 /
 56.925 / 1.533 seconds**. This is a narrow timing observation with unchanged
-coverage. Complete fixed160, private14408 and development587 comparisons are
-running with the same frozen binaries and 60 seconds / one leased physical CPU /
-16 GiB per solver/input. PR/main promotion and this worker's original-C QCP
-qualification remain pending. No protected input has been used.
+coverage.
+
+The complete fresh round does **not qualify this prototype for promotion**.
+Fixed160 verifies **123 main / 122 candidate / 116 Z3**, after an independently
+rechecked input-bound residue certificate confirms only actual timed UNSAT
+arms. Raw reports remain unchanged; the reference timeout receives no credit.
+There is one same-round gain and two lost SATs, with **37 main / 38 candidate
+timeouts**. Mean verified PAR-2 is **32.404 / 33.036 / 34.273 seconds**. The
+gain is in LIA and has no established attribution to LRA model completion.
+The two losses use real-arithmetic paths; their completion effort, time and
+state changes are being diagnosed before any further implementation decision.
+
+All **14,408 private queries** independently verify in all three arms, with
+solver totals **372.989 main / 365.480 candidate / 445.532 Z3 seconds**.
+Development587 retains **587 / 587 / 584** verified results, with totals
+**14.783 / 14.629 / 19.131 seconds**. Three reference models remain unconfirmed
+and excluded. All **967 public regression expectations** pass. No invalid
+model, opposite verdict, crash or protocol error is observed. Each formal
+input/version uses 60 seconds / one leased physical CPU / 16 GiB. No PR has
+been opened for this prototype, and its worker has no original-C QCP
+qualification. No protected input has been used.
+
+A separate private-combination diagnostic records 40 completed global
+candidate searches, none finding a witness, before the query ultimately
+returns SAT in 14.797 seconds. This is diagnostic evidence of unsuccessful
+enumeration, not an independently scored additional solve. Identifying the
+later model producer and its available state is the next coordination lead;
+search budgets have not been changed.
 
 The earlier sampled Standard-effort original-query witness probe is closed:
 104 checks found no positive witness and cost 4.299 seconds of validation.
