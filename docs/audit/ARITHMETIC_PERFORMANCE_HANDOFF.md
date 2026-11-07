@@ -1,5 +1,25 @@
 # Arithmetic validation and continuation record
 
+## Development checkpoint: reuse class interpretations within model construction (2026-11-07)
+
+The immutable LRA column-definition experiment is closed without demonstrated
+gain. Its frozen 14-input comparison retains **10 / 10 / 12** independently
+verified baseline/candidate/Z3 results, with no gains or losses. Totals are
+**371.486 / 370.841 / 196.551 seconds**; the 0.17% decrease does not establish a
+robust improvement. The runtime change is withdrawn and raw reports remain
+unchanged. No complete-cohort promotion is claimed.
+
+The next implementation reuses exact EUF class tokens only within the read-only
+function/scalar model-construction pass. On the existing 40 structural profiles,
+class-token scans account for **265,678 of 695,272** owning native term reads.
+Each current representative is resolved once; the local memo is destroyed
+before subsequent merges or backtracking. Model validation, array construction,
+literal choice, full checks and theory rollback semantics are retained.
+Generic regressions cover repeated aliases, function tables, class splits and
+new exact numeric anchors. Server qualification and performance are pending.
+Private inputs, models and individual evidence remain server-only; protected
+sets and current-worker original-C QCP qualification remain unused/incomplete.
+
 ## Delivered stage: reduce owning native read handles (2026-11-07)
 
 [PR #113](https://github.com/fuqi-jia/Xolver/pull/113) merged as

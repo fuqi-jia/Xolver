@@ -392,6 +392,17 @@ void EufSolver::buildArrayModel(TheoryModel& model) const {
 void EufSolver::collectFunctionInterps(TheoryModel& model) const {
     if (!nativeTerms_) return;
 
+    // This pass only reads the live egraph. Resolve each class once for both
+    // function tables and scalar assignments; discard the memo before any
+    // subsequent merge or backtrack can change its representative or members.
+    std::unordered_map<EClassId, std::string> classTokens;
+    auto tokenOf = [&](EufTermId term) -> const std::string& {
+        const auto representative = term == NullEufTerm ? NullEClass : egraph_.rep(term);
+        const auto found = classTokens.find(representative);
+        if (found != classTokens.end()) return found->second;
+        return classTokens.emplace(representative, classToken(term)).first->second;
+    };
+
     // One FuncInterp per uninterpreted function symbol, keyed on the argument
     // CLASS TOKENS (canonical "#n:.."/"#b:.."/"@e.." form). Congruence closure
     // guarantees the table is a genuine function: two applications whose args
@@ -427,8 +438,8 @@ void EufSolver::collectFunctionInterps(TheoryModel& model) const {
         }
         TheoryModel::FuncEntry entry;
         entry.args.reserve(n.args.size());
-        for (EufTermId a : n.args) entry.args.push_back(classToken(a));
-        entry.value = classToken(t);
+        for (EufTermId a : n.args) entry.args.push_back(tokenOf(a));
+        entry.value = tokenOf(t);
         bool dup = false;
         for (const auto& ex : fi.entries)
             if (ex.args == entry.args) { dup = true; break; }
@@ -458,7 +469,7 @@ void EufSolver::collectFunctionInterps(TheoryModel& model) const {
                 model.assignments[name] = "false";
             continue;
         }
-        model.assignments[name] = classToken(t);
+        model.assignments[name] = tokenOf(t);
     }
 }
 

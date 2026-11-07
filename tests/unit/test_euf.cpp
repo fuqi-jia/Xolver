@@ -459,6 +459,70 @@ TEST_CASE("EUF model: full-effort witnesses survive SAT rollback") {
     CHECK_FALSE(solver.getModel());
 }
 
+TEST_CASE("EUF model: repeated class reads preserve tables across splits and new literals") {
+    for (const auto domain : {SortKind::Other, SortKind::Int, SortKind::Real}) {
+        CAPTURE(static_cast<int>(domain));
+        NativeTerms ir;
+        ir.registerSort(0, domain);
+        EufSolver solver;
+        solver.setNativeTerms(&ir);
+        TheoryLemmaDatabase lemmas;
+        constexpr size_t count = 20;
+        std::vector<ExprId> variables, applications;
+        SatVar next = 1;
+        auto assertEqual = [&](ExprId a, ExprId b, int level) {
+            auto record = makeEufRecord(a, b);
+            record.satVar = next++;
+            solver.assertLit(record, true, level, SatLit::positive(record.satVar));
+        };
+        for (size_t i = 0; i < count; ++i) {
+            variables.push_back(ir.add({Kind::Variable, 0, {}, Payload("alias_" + std::to_string(i))}));
+            applications.push_back(ir.add({Kind::UFApply, 0, {variables.back()}, Payload(std::string("f"))}));
+            assertEqual(applications.front(), applications.back(), 0);
+        }
+        auto join = [&] {
+            for (size_t i = 1; i < count; ++i) assertEqual(variables.front(), variables[i], 1);
+        };
+        auto model = [&] {
+            REQUIRE(solver.check(lemmas, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Consistent);
+            auto result = solver.getModel();
+            REQUIRE(result);
+            return *result;
+        };
+        join();
+        const auto joined = model();
+        const auto& first = joined.functionInterps.at("f");
+        REQUIRE(first.entries.size() == 1);
+        for (size_t i = 0; i < count; ++i)
+            CHECK(first.entries.front().args ==
+                  std::vector<std::string>{joined.assignments.at("alias_" + std::to_string(i))});
+
+        solver.backtrackToLevel(0);
+        const auto split = model();
+        const auto& separated = split.functionInterps.at("f");
+        REQUIRE(separated.entries.size() == count);
+        for (size_t i = 0; i < count; ++i) {
+            CHECK(separated.entries[i].args ==
+                  std::vector<std::string>{split.assignments.at("alias_" + std::to_string(i))});
+            CHECK(separated.entries[i].value == first.entries.front().value);
+        }
+        if (domain == SortKind::Other) continue;
+        for (const auto& value : {std::string("7"), std::string("9007199254740993")}) {
+            solver.backtrackToLevel(0);
+            const auto literal = ir.add({domain == SortKind::Int ? Kind::ConstInt : Kind::ConstReal,
+                                        0, {}, Payload(value)});
+            assertEqual(variables.front(), literal, 1);
+            join();
+            const auto anchored = model();
+            const auto& entries = anchored.functionInterps.at("f").entries;
+            REQUIRE(entries.size() == 1);
+            CHECK(entries.front().args == std::vector<std::string>{"#n:" + value});
+            for (size_t i = 0; i < count; ++i)
+                CHECK(anchored.assignments.at("alias_" + std::to_string(i)) == "#n:" + value);
+        }
+    }
+}
+
 TEST_CASE("EUF sharing: equality bases preserve explanations across class splits") {
     NativeTerms ir;
     ir.registerSort(0, SortKind::Int);
