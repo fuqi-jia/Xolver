@@ -118,6 +118,33 @@ shared trusted base. Confidential inputs, models and individual evidence stay
 server-only. The fixed160's 36 timeouts, final frozen comparison and once-only
 protected-set validation remain open.
 
+### Closed experiment: price repairs across violated simplex rows
+
+The shared simplex prototype priced leaving rows by row width and the eligible
+entering column's degree, while retaining strict Bland termination. It passed
+2,269 cases / 1,373,257 assertions, and four solved pilot controls improved from
+171.842 to 128.438 seconds. Those local timings did not predict full-suite behavior.
+
+Fresh fixed160 verifies **123 main / 120 prototype / 117 Z3**, excluding one
+unconfirmed UNSAT in each Xolver arm and six reference results; no fresh residue
+certificate supplement is applied to this rejected comparison. There are no
+gains and three lost SATs across LIA, LRA and NRA. Mean verified PAR-2 worsens
+**32.710 to 34.289 seconds**. No opposite verdict, invalid model or protocol
+error is observed. Commit `3bc7d76c` remains an unmerged development experiment;
+its cost-based repair ordering is removed.
+
+### Candidate: publish blocked-row conflicts before repairing other rows
+
+The new shared `GeneralSimplex` implementation finds a fully blocked violated
+row before changing the point to repair another row. Other violated rows retain
+their original queue order and entering-variable rule. Strict Bland termination,
+budgets, exact bounds and the separate LRA/LIA rollback policies are unchanged.
+The public regression checks strict conflict multipliers and both rollback
+policies among dense repairable rows. Proof-enabled native checks pass
+**2,269 cases / 1,373,257 assertions**. Frozen CLI SHA-256 is
+`7dce090af4670ee8960f71af2d410c733ca45061f2275115ae93113c3bd72a10`.
+Independent comparison is in progress; this candidate is not accepted on main.
+
 ## Current checkpoint: finite integer decisions and nonlinear sign partitions (2026-11-07)
 
 [PR #107](https://github.com/fuqi-jia/Xolver/pull/107) merged as

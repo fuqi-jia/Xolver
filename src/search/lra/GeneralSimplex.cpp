@@ -466,25 +466,18 @@ void GeneralSimplex::refreshViolationStatus(int var) {
     }
 }
 
-int GeneralSimplex::pickViolatedBasic(bool useBland) {
-    int best = -1;
-    size_t bestCost = std::numeric_limits<size_t>::max();
-    auto consider = [&](int basic) {
+int GeneralSimplex::pickViolatedBasic() {
+    int first = -1, blocked = -1;
+    auto isBlocked = [&](int basic) {
         const bool increase = violatesLower(basic);
-        const int entering = findEnteringVar(basic, increase, useBland);
-        // No legal movement already gives the usual explained row conflict.
-        // Repairing another row first can only postpone discovering it.
-        if (entering < 0) { best = basic; return true; }
-        const size_t width = tab_.row(rowOfBasic(basic)).entries.size();
-        const size_t degree = tab_.col(entering).entries.size();
-        assert(degree > 0);
-        const size_t cost = width > std::numeric_limits<size_t>::max() / degree
-            ? std::numeric_limits<size_t>::max() : width * degree;
-        if (best < 0 || cost < bestCost) {
-            best = basic;
-            bestCost = cost;
-        }
-        return false;
+        const auto& row = tab_.row(rowOfBasic(basic));
+        return std::none_of(row.entries.begin(), row.entries.end(), [&](const auto& entry) {
+            return increase
+                ? ((entry.coeff > 0 && canIncrease(entry.col)) ||
+                   (entry.coeff < 0 && canDecrease(entry.col)))
+                : ((entry.coeff < 0 && canIncrease(entry.col)) ||
+                   (entry.coeff > 0 && canDecrease(entry.col)));
+        });
     };
 
     for (auto it = violatedQueue_.begin(); it != violatedQueue_.end();) {
@@ -495,9 +488,13 @@ int GeneralSimplex::pickViolatedBasic(bool useBland) {
             it = violatedQueue_.erase(it);
             continue;
         }
-        if (consider(basic)) break;
+        if (first < 0) first = basic;
+        // A fully blocked violated row already has a conflict explanation.
+        // Other rows need no point changes before publishing that conflict.
+        if (isBlocked(basic)) { blocked = basic; break; }
         ++it;
     }
+    const int best = blocked >= 0 ? blocked : first;
     if (best >= 0) {
         violatedQueue_.erase(std::find(violatedQueue_.begin(), violatedQueue_.end(), best));
         inViolationQueue_[best] = false;
@@ -505,9 +502,12 @@ int GeneralSimplex::pickViolatedBasic(bool useBland) {
     }
 
     // Reconstructed points can have violations without queued notifications.
-    for (int basic : basicVars_)
-        if ((violatesLower(basic) || violatesUpper(basic)) && consider(basic)) break;
-    return best;
+    for (int basic : basicVars_) {
+        if (!violatesLower(basic) && !violatesUpper(basic)) continue;
+        if (first < 0) first = basic;
+        if (isBlocked(basic)) return basic;
+    }
+    return first;
 }
 
 int GeneralSimplex::pickViolatedBasicBland() const {
@@ -588,7 +588,7 @@ GeneralSimplex::Result GeneralSimplex::checkInternal(std::chrono::steady_clock::
     //   - iter >= kHeuristicPivotBudget: Bland entering (smallest index).
     //   - iter >= kStrictBlandThreshold: STRICT Bland — smallest-index leaving AND
     //     entering, which provably terminates (Dutertre–de Moura). Earlier
-    //     iterations price the violated rows by sparse elimination work.
+    //     iterations retain queue order unless a row already proves conflict.
     // The huge guard below is a last-resort against a genuine non-termination
     // bug, not a normal exit; under strict Bland it is unreachable in practice.
     const int kHeuristicPivotBudget = 4000;
@@ -649,7 +649,7 @@ GeneralSimplex::Result GeneralSimplex::checkInternal(std::chrono::steady_clock::
         }
         bool strictBland = iter >= kStrictBlandThreshold;
         bool useBland = strictBland || iter >= kHeuristicPivotBudget;
-        int xi = strictBland ? pickViolatedBasicBland() : pickViolatedBasic(useBland);
+        int xi = strictBland ? pickViolatedBasicBland() : pickViolatedBasic();
         if (xi == -1) {
             conflict_.clear();
             return Result::Sat;
