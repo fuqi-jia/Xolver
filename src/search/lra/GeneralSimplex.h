@@ -418,6 +418,8 @@ private:
 
     // Violation queue
     void refreshViolationStatus(int var);
+    // Find an immediately blocked row before repairing other violations.
+    // Repairable rows retain their queue order and entering-variable policy.
     int pickViolatedBasic();
     // Strict-Bland leaving selection: smallest-index violated basic var. Used
     // (with Bland entering) as the anti-cycling fallback so check() is
