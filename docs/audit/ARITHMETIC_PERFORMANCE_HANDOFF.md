@@ -26,10 +26,24 @@ both references accept its actual timed model. Four original gaps remain
 timeouts in both Xolver arms. These observations do not establish overall
 solver superiority or additional verified coverage.
 
-Complete private14408, fixed160, development587 and public967 acceptance is
-running against accepted main, using the same frozen binaries and 60 seconds /
-one leased physical CPU / 16 GiB per input/version. This candidate has no PR or
-original-C QCP qualification yet. No protected input has been used.
+Complete private14408 acceptance independently verifies all **14,408 results**
+in main, candidate and Z3: **8,940 SAT / 5,468 UNSAT**, with no losses, timeouts,
+unknowns, unconfirmed decisions, invalid models or errors. Every actual timed
+Xolver SAT model passes both Z3 and cvc5. Solver totals are **383.168 main /
+361.630 candidate / 465.621 Z3 seconds**: candidate time is **5.62%** lower than
+accepted main and **22.33%** lower than Z3 on this authorized development cohort.
+The frozen binaries and 60 seconds / one leased physical CPU / 16 GiB per
+input/version remain unchanged. Confidential inputs and individual evidence
+remain server-only.
+
+Development587 retains **587 main / 587 candidate / 584 Z3** verified results,
+with no gains, losses or errors. Solver totals are **14.290 / 13.977 / 18.279
+seconds**; three unconfirmed reference models remain excluded. All **967 public
+regression expectations** pass without a known-failure waiver.
+
+Fixed160 acceptance is still running. This candidate has no PR or original-C
+QCP qualification yet. These partial-stage results do not establish additional
+coverage or overall solver superiority. No protected input has been used.
 
 ## Development prototype: dense real exclusion completion (2026-11-07)
 
