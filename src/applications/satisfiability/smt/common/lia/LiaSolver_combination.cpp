@@ -6,6 +6,7 @@
 #include "search/coordination/TheoryLemmaDatabase.h"
 #include "contracts/TheoryAtomTypes.h"
 #include "search/arith/Reasoner.h"
+#include "search/arith/LinearDifferenceEqualityIndex.h"
 #include "search/linear/SimplexDiseqSplitter.h"
 #include "algebra/linear/LinearConstraintNormalizer.h"
 #include "search/lia/GomoryCut.h"
@@ -292,89 +293,25 @@ LiaSolver::getDeducedSharedEqualities() {
         }
         const int n = static_cast<int>(sharedVars.size());
 
-        // iter-97 perf: assertedVarEqualityReason previously walked the ENTIRE
-        // theoryTrail_ for every pair (i,j), giving O(N² × |trail|) total cost.
-        // Pre-index the trail's 2-var linear non-diseq entries by sorted (n1,n2)
-        // name pair ONCE; the inner loop then does O(log) map lookup + iterate
-        // only the relevant entries. Soundness invariant unchanged: the per-pair
-        // lo/up aggregation is byte-for-byte identical to the original
-        // assertedVarEqualityReason; only the trail-scan ordering is changed.
-        //
-        // Mirrors iter-96 f41de5b LRA fix — same anti-pattern in LIA.
-        struct TwoVarEntry {
-            std::string n0, n1;
-            mpq_class c0;
-            Relation rel;
-            mpq_class rhs;
-            SatLit lit;
-        };
-        std::map<std::pair<std::string, std::string>, std::vector<TwoVarEntry>> twoVarIndex;
-        for (const auto& e : theoryTrail_) {
-            if (e.isDiseq) continue;
-            if (!std::holds_alternative<LinearAtomPayload>(e.atom.payload)) continue;
-            const auto& payload = std::get<LinearAtomPayload>(e.atom.payload);
-            if (payload.lhs.terms.size() != 2) continue;
-            const auto& t0 = payload.lhs.terms[0];
-            const auto& t1 = payload.lhs.terms[1];
-            if (t0.second == 0 || t0.second != -t1.second) continue;
-            Relation rel = e.value ? payload.rel : negateRelation(payload.rel);
-            std::string a = t0.first, b = t1.first;
-            if (a > b) {
-                std::swap(a, b);
-                twoVarIndex[{a, b}].push_back({a, b, t1.second, rel, payload.rhs.asRational(), e.lit});
-            } else {
-                twoVarIndex[{a, b}].push_back({a, b, t0.second, rel, payload.rhs.asRational(), e.lit});
-            }
+        LinearDifferenceEqualityIndex index;
+        for (const auto& entry : theoryTrail_) {
+            if (entry.isDiseq) continue;
+            if (const auto* atom = std::get_if<LinearAtomPayload>(&entry.atom.payload))
+                index.add(*atom, entry.value, entry.lit);
         }
-
-        // Cache shared term names once (was O(N) lookups inside O(N²) loop).
         std::vector<std::string> sharedNames(n);
-        for (int i = 0; i < n; ++i) {
+        for (int i = 0; i < n; ++i)
             sharedNames[i] = getVarNameForSharedTerm(sharedVars[i]);
-        }
 
-        for (int i = 0; i < n; ++i) {
-            const std::string& na = sharedNames[i];
-            if (na.empty()) continue;
-            for (int j = i + 1; j < n; ++j) {
-                const std::string& nb = sharedNames[j];
-                if (nb.empty() || na == nb) continue;
-                std::string ka = na, kb = nb;
-                if (ka > kb) std::swap(ka, kb);
-                auto it = twoVarIndex.find({ka, kb});
-                if (it == twoVarIndex.end()) continue;
-
-                bool haveLo = false, haveUp = false;
-                mpq_class lo = 0, up = 0;
-                SatLit loLit{}, upLit{};
-                auto addLower = [&](const mpq_class& v, SatLit lit) {
-                    if (!haveLo || v > lo) { lo = v; loLit = lit; haveLo = true; }
-                };
-                auto addUpper = [&](const mpq_class& v, SatLit lit) {
-                    if (!haveUp || v < up) { up = v; upLit = lit; haveUp = true; }
-                };
-                for (const auto& te : it->second) {
-                    mpq_class c0;
-                    if (te.n0 == na && te.n1 == nb) c0 = te.c0;
-                    else if (te.n0 == nb && te.n1 == na) c0 = -te.c0;
-                    else continue;
-                    mpq_class bnd = te.rhs / c0;
-                    bool flip = (c0 < 0);
-                    switch (te.rel) {
-                        case Relation::Eq: addLower(bnd, te.lit); addUpper(bnd, te.lit); break;
-                        case Relation::Leq: if (!flip) addUpper(bnd, te.lit); else addLower(bnd, te.lit); break;
-                        case Relation::Geq: if (!flip) addLower(bnd, te.lit); else addUpper(bnd, te.lit); break;
-                        default: break;  // strict bounds don't pin a difference-equality
-                    }
-                }
-                if (!(haveLo && haveUp && lo == 0 && up == 0)) continue;
-                std::vector<SatLit> reasons;
-                reasons.push_back(loLit);
-                if (!(upLit == loLit)) reasons.push_back(upLit);
-
-                result.push_back(TheorySolver::SharedEqualityPropagation{
-                    sharedVars[i], sharedVars[j], std::move(reasons)});
-            }
+        for (const auto& pair : index.pinnedPairs(sharedNames)) {
+            SatLit lower = pair.lowerReason, upper = pair.upperReason;
+            // LIA explains bounds on sharedVars[first] - sharedVars[second].
+            // Reversing the canonical name difference swaps its two bounds.
+            if (sharedNames[pair.first] > sharedNames[pair.second]) std::swap(lower, upper);
+            std::vector<SatLit> reasons{lower};
+            if (upper != lower) reasons.push_back(upper);
+            result.push_back(TheorySolver::SharedEqualityPropagation{
+                sharedVars[pair.first], sharedVars[pair.second], std::move(reasons)});
         }
 
     }
