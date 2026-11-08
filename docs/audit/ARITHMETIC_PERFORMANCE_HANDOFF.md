@@ -12,6 +12,17 @@ both attempts: downloading the pinned independent cvc5 archive returns HTTP
 cvc5. The proof gate passes. Main delivery remains incomplete until the actual
 checks pass; no checker, expected result or verification step is waived.
 
+Core `526a9748` replaces that browser-download URL with the official immutable
+release-asset API. Panda9 / ExperimentOS verifies the actual downloaded archive
+against the unchanged SHA-256 and executes the same cvc5 **1.4.2** binary.
+Four installation-contract tests pass, including corrupt-response rejection and
+transport failure. The first server wrapper's incorrect version-output spelling
+remains recorded as a failed attempt; read-only revalidation preserves its
+archive and logs. Tool-qualification SHA-256:
+`7441e752d7108d9411e5726b20d63c00a6b24087757228e627258acd1af58861`.
+The exact-code [FULINA CI](https://github.com/fuqi-jia/Xolver/actions/runs/42468496162)
+is running; it is not completed PR or main validation.
+
 Core `1f4f2ee1` adds canonical node-kind metadata before owning expression
 materialization. Core `98546bda` batches exact sparse row substitution through
 one position index per affected row, retaining coefficient arithmetic and
@@ -110,7 +121,17 @@ Different instrumented execution prefixes expose **164 candidate probes and
 a concrete new allocation cost, not native timing or solved-result credit.
 Core `04f64553` tests a reusable isolated basis, complete bound synchronization,
 definition identities and copy-on-write witness ownership. Its separate native
-qualification is in progress; no correctness or performance result is claimed.
+qualification passes **2,301 cases / 1,533,041 assertions**; all **2,342**
+qualified contents bind to that core. Its CLI SHA-256 is
+`41691cd260e917a111e24cc46b8183b823bef83d47ae186cb2bf2e7dd9ee81be`.
+An unchanged fresh pilot verifies **10 / 11 / 15** main/candidate/Z3 results,
+gaining one independently verified SAT without losses. Totals are **383.196 /
+365.511 / 55.085 seconds**; actual timed SAT models pass independent replay.
+The pilot audit SHA-256 is
+`9b07bf0922a74efa8f0130e1c5040b8b2e99278ab39b249a95fc5fb758e1f1c1`.
+Complete fixed160, private14408, development587 and 965 public regressions are
+now running under their original budgets. This pilot is not complete-stage
+acceptance, a new complete-fixed score or evidence of overall Z3 superiority.
 Private individual evidence stays on the server; protected sets and current
 original-C QCP closure remain untouched and open.
 
