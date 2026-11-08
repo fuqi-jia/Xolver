@@ -1,5 +1,6 @@
 #pragma once
 
+#include <concepts>
 #include <gmpxx.h>
 #include <string>
 
@@ -24,8 +25,16 @@ struct DeltaRational {
     mpq_class b;  // delta coefficient
 
     DeltaRational() : a(0), b(0) {}
-    explicit DeltaRational(const mpq_class& _a) : a(_a), b(0) {}
-    DeltaRational(const mpq_class& _a, const mpq_class& _b) : a(_a), b(_b) {}
+    // Evaluate GMP expressions directly into the owned components. Const
+    // operands retain the borrowing semantics of rational inputs, including
+    // rvalues; no expression object or operand reference escapes construction.
+    template<typename A = mpq_class>
+        requires std::constructible_from<mpq_class, const A&>
+    explicit DeltaRational(const A& _a) : a(_a), b(0) {}
+    template<typename A = mpq_class, typename B = mpq_class>
+        requires (std::constructible_from<mpq_class, const A&> &&
+                  std::constructible_from<mpq_class, const B&>)
+    DeltaRational(const A& _a, const B& _b) : a(_a), b(_b) {}
 
     bool isZero() const { return a == 0 && b == 0; }
     bool isNonZero() const { return a != 0 || b != 0; }

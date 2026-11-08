@@ -13,6 +13,53 @@
 
 using namespace xolver;
 
+TEST_CASE("DeltaRational: expression construction owns exact components and preserves operands") {
+    const mpz_class huge = (mpz_class(1) << 257) + 19;
+    mpq_class left(huge, 7), right(-huge, 11);
+    left.canonicalize();
+    right.canonicalize();
+    const mpq_class savedLeft = left, savedRight = right;
+    const mpq_class sum = left + right, difference = left - right;
+    const mpq_class product = left * right, quotient = left / right;
+    DeltaRational expression(left + right, left - right);
+    DeltaRational single(left * right);
+    DeltaRational mixed(left / right, right);
+    DeltaRational temporary(mpq_class(3, 5) + mpq_class(7, 11),
+                            mpq_class(-13, 17) * mpq_class(19, 23));
+    DeltaRational borrowed(std::move(left), std::move(right));
+    CHECK(left == savedLeft);
+    CHECK(right == savedRight);
+    CHECK(expression.a == sum);
+    CHECK(expression.b == difference);
+    CHECK(single.a == product);
+    CHECK(single.b == 0);
+    CHECK(mixed.a == quotient);
+    CHECK(mixed.b == savedRight);
+    CHECK(borrowed.a == savedLeft);
+    CHECK(borrowed.b == savedRight);
+    left = 0;
+    right = 1;
+    CHECK(expression == DeltaRational(sum, difference));
+    CHECK(mixed == DeltaRational(quotient, savedRight));
+    CHECK(temporary == DeltaRational(mpq_class(68, 55), mpq_class(-247, 391)));
+
+    // Preserve value construction from braced rationals as well as expressions.
+    DeltaRational braced({mpz_class(5), mpz_class(7)}, {mpz_class(-2), mpz_class(9)});
+    DeltaRational mixedBraced(savedLeft + savedRight, {mpz_class(3), mpz_class(5)});
+    CHECK(braced == DeltaRational(mpq_class(5, 7), mpq_class(-2, 9)));
+    CHECK(mixedBraced == DeltaRational(sum, mpq_class(3, 5)));
+    auto owned = [] {
+        const mpq_class a(29, 31), b(-37, 41);
+        return DeltaRational(a * b, a / b);
+    }();
+    CHECK(owned == DeltaRational(mpq_class(-1073, 1271), mpq_class(-1189, 1147)));
+    const auto before = owned;
+    owned = DeltaRational(owned.a + owned.b, owned.a - owned.b);
+    CHECK(owned == DeltaRational(before.a + before.b, before.a - before.b));
+    CHECK(DeltaRational(0, 1) > DeltaRational(0));
+    CHECK(DeltaRational(0, -1) < DeltaRational(0));
+}
+
 TEST_CASE("SparseTableau: batched substitution preserves exact coefficients and sparse links") {
     for (const int width : {1, 7, 31, 32, 65}) {
         SparseTableau tableau;
