@@ -1,11 +1,72 @@
 # Arithmetic validation and continuation record
 
-## Current development: typed decoding of opaque model classes (2026-11-09)
+## Current development: finite tight-face eligibility (2026-11-09)
+
+Core `e9b08e98712f185fec01f153ab0a2dde41ec1bc2` is pushed on `FULINA`.
+The following main incorporation `120f1eb0` leaves its entire qualified tree
+unchanged. The common LIA/LRA `GeneralSimplex::analyzeFixedValues` now checks
+whether each exact extremum has all required finite endpoints before doing
+rational arithmetic or allocating tentative proof data. Already-fixed terms
+need no endpoint. Exact face tests, minimum-first ordering, explanations,
+closure rescheduling, immutable snapshots and rollback semantics stay intact.
+
+Native observations of the same three previously selected development inputs
+record **645 analyses / 108,838 face attempts**. Every attempt encounters a
+missing endpoint; **91,340** preceding exact multiply-adds are discarded. All
+three actual SAT models pass independent Z3/cvc5 replay, and all production
+source and CLI/worker/unit identities are restored before observations.
+Root-audit SHA-256:
+`29df5a93619580d94b216ebd3f046dbcb9600fbbb252d6607edd152dff5a498b`.
+This is tight-face proof analysis, separate from earlier closed propagation
+snapshot/endpoint experiments; their negative results remain preserved.
+
+Proof-enabled native acceptance passes **37 targeted cases / 148,985
+assertions** and all **2,304 unit cases / 1,537,465 assertions**. Architecture
+reports **743 files / 11 layers / 0 violations**. All **965** public regressions
+pass. The first regression-audit script incorrectly references the parent
+qualification; its script and failure record remain preserved. The corrected
+candidate reference passes every original check without changing or rerunning
+the underlying results. Public-regression audit SHA-256:
+`e3713857d2d09ddf14fa41e74458ca4c5f6e38611bde46fa9ce2cbffcb04736d`.
+Native-qualification SHA-256:
+`e932174bd22b1eca378a15b090d2f9d00eb2de533c8fd0e9aba0d68d648d5b20`;
+all 2,343 source bodies bind to the core, binding SHA-256:
+`1069f0bef445e0eadeb3949ed7a69f475b72de1fd319f498ff0e7d5d678bac2f`.
+CLI SHA-256:
+`e7243610cfac7e862e0cee50bbf5a377520ad9261acbe164270ea9af64fdec73`;
+worker SHA-256:
+`cf7b8dffa0190ba4a46ddfb36b7230a4a0b6258e1121dcc50b0868b45213f63a`.
+
+The frozen three-input parent/candidate profile independently validates all
+six actual SAT models. Both retain **645 analyses / 442 model constructions /
+525 validations**. Analysis instructions fall **897,339,835 to 418,718,144**;
+total simulated instructions fall **8,465,289,776 to 7,987,364,432**, about
+**5.65%**. These diagnostics do not establish formal timing or solve scores.
+Profile-audit SHA-256:
+`4d20f778cbb2d32864ef0775e8b8eb6fed9e649a9711df0b282a9f73bdb03b93`.
+
+Complete private/fixed/development comparisons are running against frozen
+merged main `25807183`, under the unchanged **60 seconds / one leased physical
+CPU / 16 GiB** protocol and 40-core total allocation. Both the main and reviewed
+source trees match; baseline-tree binding SHA-256:
+`bc01e8c1e79a5b943ba2bb99403cf95135561317089f25de3694b660a90ec0a4`.
+The final server-stage gate, PR and corresponding delivery CI remain pending.
+No protected input has been used. Remaining fixed inputs, final-worker original-C
+QCP and the final superiority comparison remain open.
+
+## Merged stage: typed decoding of opaque model classes (2026-11-09)
 
 Core `930f081fb48e46780496e62711d1bee3f8228896` passes complete Panda9 /
 ExperimentOS acceptance against merged main `05f35440`. `FULINA` includes
 both this core and that main merge; its merge does not change the qualified
-candidate's file tree. PR review and its corresponding CI remain pending.
+candidate's file tree. [PR #121](https://github.com/fuqi-jia/Xolver/pull/121)
+passes both exact-head [PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42517026200)
+at `3ed5adbd3dec50be4c12449aa2741b1b68df5049`, then merges normally as
+`25807183914cd6d01ab8b93925a0e2e4d3751aad`. The entire merge tree equals the
+reviewed tree. Reviewed-source binding SHA-256:
+`b21708833bf9a98a1c0fd596220fc3e8a195a89c31cf077ed01cac615f5cacca`.
+Its exact-merge [main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42519275335)
+is running; complete main delivery is not yet claimed.
 
 The common `Solver::Impl::validateModelImpl` path previously attempted GMP
 rational parsing of opaque `@...` equivalence-class tokens. Native observations
