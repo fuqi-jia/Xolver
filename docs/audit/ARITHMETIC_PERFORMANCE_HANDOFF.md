@@ -1,9 +1,69 @@
 # Arithmetic validation and continuation record
 
-## Server-accepted stage: exact integer evaluation and class interpretations (2026-11-08)
+## Server-accepted stage: transfer owned theory model tables (2026-11-08)
 
-[PR #114](https://github.com/fuqi-jia/Xolver/pull/114) includes a correctness
-follow-up found during the preceding class-token-only CI run. An isolated
+Core `38a0c47d`, pushed to `FULINA`, removes an additional copy of all five
+model-table channels in `TheoryManager::getModel`. Scalar correspondences are
+captured before transferring nodes from owned query-local theory snapshots.
+Extraction and insertion follow the original iteration order and single-entry
+rehash behavior, preserving first-registered precedence and model traversal.
+Persistent source models, exact arithmetic, complete validation, theory rollback
+and public API semantics remain unchanged. No pool, parameter, gate or runtime
+oracle is introduced.
+
+The generic regression checks both registration orders, every table channel,
+257-bit exact values and repeated reads without changing source snapshots.
+Panda9 / ExperimentOS passes **2,282 unit cases / 1,453,199 assertions**.
+All **2,339 qualified source contents** match the core and unchanged parser
+gitlink. On the same 40 structural profile pairs, direct model string
+constructions decrease **75,829 to 2,478** and simulated instructions decrease
+**1.20%**. Native term reads and model-call counts are identical. These profiles
+are diagnostics rather than formal solver timing or solved-result credit.
+
+Fresh complete comparisons use delivered main `7d7238c1`'s source-equivalent
+review `caec779a`, the candidate and identical frozen references. Each formal
+solve receives **60 seconds / one leased physical CPU / 16 GiB**, with up to
+40 distinct physical CPU leases. Private14408 retains **14,408 / 14,408 /
+14,408** independently verified baseline/candidate/Z3 results. Solver totals
+are **295.329 / 285.443 / 464.092 seconds**, reducing candidate time **3.35%**.
+All 40 task slots have lower paired candidate totals; this is descriptive
+evidence from one complete round, not an independent repetition or confidence
+interval. Development587 retains **587 / 587 / 584** verified results, with
+totals **11.351 / 10.862 / 17.824 seconds**. Its three unconfirmed reference
+models remain excluded. All **965 public regressions** pass.
+
+Fixed160 verifies **124 / 124 / 118** after a fresh original-input-bound residue
+certificate confirms only actual timed UNSAT decisions. Both Xolver arms
+retain **36 timeouts**, with no gains or losses. Mean verified PAR-2 is
+**31.644 / 31.605 / 32.994 seconds**. One actual reference UNSAT reuses a
+previously successful independent cvc5 check on the identical input and frozen
+reference versions; its current solver time is preserved. Six reference
+decisions remain unconfirmed and excluded. Raw reports are unchanged, and no
+timeout or unknown is upgraded. Every actual timed Xolver SAT model passes Z3
+and cvc5 replay; reference SAT models pass cvc5. No cohort loses a verified
+result or has a candidate error.
+
+Frozen CLI SHA-256:
+`0164cc2407229a8e6213902bc8c81c7d8911d78cf3fe073b3c8883a5634a3476`;
+worker SHA-256:
+`5a45ce8c033e3d30c64e73a20b5bbb23c8c93a6c64ab0075849088ead537c2a7`.
+Final server stage-audit SHA-256:
+`e66d518585a22f89a59d77c2b174e067a9182326b97c94e5382accd92d55f8e2`.
+Server acceptance passes; exact-head PR CI and merged-main CI remain required.
+Private inputs, models and individual evidence remain server-only. Protected
+sets are unused. This worker has no original-C QCP qualification. The remaining
+fixed inputs, final-program closure and overall solver superiority remain open.
+
+## Delivered stage: exact integer evaluation and class interpretations (2026-11-08)
+
+[PR #114](https://github.com/fuqi-jia/Xolver/pull/114) merged as
+`7d7238c10b42a6dbad92e550b24f4f4cb23b728e` after complete server acceptance and
+both exact-head [PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42397273380)
+passed. Both [merged-main CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42450310542)
+also pass. Its tree matches reviewed head `caec779a` byte for byte.
+
+This stage includes a correctness follow-up found during the preceding
+class-token-only CI run. An isolated
 Panda9 / ExperimentOS component probe, linked against the qualified class-token
 core, produces **two false EUF conflicts across four generic sign controls**.
 Z3, cvc5 and the production CLI return SAT on all four controls. The confirmed
@@ -53,8 +113,8 @@ worker SHA-256:
 `2939c9c2fa8b59fcde08908e3ddf6c1e195ecbc27fc1ab0adccd9faa8de6619c`.
 Final server stage-audit SHA-256:
 `ebf036a8786b8c53e9ca20256a8266f90aab99e584e2e35e88cdab24932be6a6`.
-Server acceptance passes. The revised review head requires its own PR CI and
-merged-main CI; the preceding class-token-only CI does not qualify this core.
+Server, revised exact-head PR CI and merged-main CI acceptance pass. The
+preceding class-token-only CI is not used to qualify this corrected core.
 Private inputs, models and individual evidence remain server-only. Protected
 sets are unused. Current-worker original-C QCP qualification, the remaining
 fixed inputs and overall solver superiority remain open.
