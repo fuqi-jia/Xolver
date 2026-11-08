@@ -21,8 +21,9 @@ ArithModelValidator::numericClassValues(const TheoryModel& model) {
 bool ArithModelValidator::integerAssignmentsValid(const NativeTerms& ir,
         const RealAssignment& real, const NumAssignment& numeric) {
     for (ExprId id = 0; id < ir.size(); ++id) {
+        if (ir.kind(id) != Kind::Variable) continue;
         const auto term = ir.get(id);
-        if (term.kind != Kind::Variable || ir.sortKind(term.sort) != SortKind::Int) continue;
+        if (ir.sortKind(term.sort) != SortKind::Int) continue;
         const auto name = std::get_if<std::string>(&term.payload.value);
         if (!name) continue;
         if (auto found = real.find(*name); found != real.end()) {
