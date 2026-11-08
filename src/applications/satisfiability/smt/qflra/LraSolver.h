@@ -195,6 +195,11 @@ private:
         const std::vector<int8_t>& activeValues,
         const std::unordered_set<uint64_t>& queuedConclusions);
 
+    std::optional<TheoryLemma> probeRegisteredBound(
+        const std::vector<int8_t>& activeValues,
+        const std::unordered_set<uint64_t>& queuedConclusions);
+    std::size_t nextProbeRecord_ = 0;
+
     // Buffer of this check's entailment propagations.
     std::vector<TheoryLemma> entailmentProps_;
 
