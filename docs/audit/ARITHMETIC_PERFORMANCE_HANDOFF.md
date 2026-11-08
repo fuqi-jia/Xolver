@@ -1,6 +1,6 @@
 # Arithmetic validation and continuation record
 
-## Development regression: finite tight-face eligibility (2026-11-09)
+## Closed experiment: finite tight-face eligibility (2026-11-09)
 
 Core `e9b08e98712f185fec01f153ab0a2dde41ec1bc2` is pushed on `FULINA`.
 The following main incorporation `120f1eb0` leaves its entire qualified tree
@@ -67,9 +67,24 @@ The unchanged no-loss/private-faster/combined-score gate rejects promotion.
 Final-stage audit SHA-256:
 `e47e83a9bb198cc81113bb641dcac41afb5bf9eb1305d79627b6b8cdb80cf9b3`.
 The failed stage and all raw observations remain unchanged. This core is not
-merged and has no PR; same-budget rotated native controls will diagnose the
-loss before further implementation. Diagnostic instruction savings and the
-private-only speedup do not override the complete-stage failure.
+merged and has no PR. Diagnostic instruction savings and the private-only
+speedup do not override the complete-stage failure.
+
+Three subsequent same-budget rotated controls per arm all return SAT. Median
+main/candidate times are **19.664 / 19.560 seconds**; all six actual models
+pass Z3/cvc5 replay and are byte-identical to the original main output. The
+original candidate timeout has no SAT output. Process launch takes milliseconds
+in every observation. Quiet controls do not reproduce the loss or establish its
+cause, and they never replace complete-stage results. Control-audit SHA-256:
+`de30e7203aaf33cba69657b82854182bfc93d43ba4ed202b64bdf1bda50e942c`.
+
+The optional prefilter is withdrawn by `e1f7837d`, preserving the failed stage
+and its controls. Runtime, tests and tools return exactly to delivered main
+`25807183`; the native server still holds its explicitly qualified experimental
+build, while future builds must apply the full intended source delta. This is
+not a new main-archival requirement or a claim that the unreproduced regression
+has been fixed. Further work moves to independently measured model-evaluation
+demand, whose validator source body is unchanged between both observed arms.
 No protected input has been used. Remaining fixed inputs, final-worker original-C
 QCP and the final superiority comparison remain open.
 
