@@ -9,9 +9,32 @@ evaluations: the second traversal visit reads the expression again before
 calling an evaluator that performs its own required read. Child expansion,
 postorder, exact arithmetic, cache lifetime and all three verdicts remain
 unchanged. A synthetic deep shared DAG checks repeated roots, exact large
-values, changing assignments and missing values. Panda9 / ExperimentOS native
-qualification is running; this successor has no formal performance credit yet.
+values, changing assignments and missing values. Panda9 / ExperimentOS passes
+**2,292 unit cases / 1,532,622 assertions** and the **eight installer contracts**.
+The new fixture initially mistook the copied scalar-assignment constructor
+for a borrowed map; its four failed assertions remain recorded without credit.
+Core `0291b6f6` uses the existing `setRealAssignments` pointer API instead. The
+CLI and worker hashes reproduce the first build exactly: only the fixture
+changes. All **2,340 qualified source contents** bind to this corrected core.
+
+The unchanged 40 diagnostic pairs retain **16,791** evaluations while reducing
+postorder owning reads **33,582 to 16,791** and total owning reads **319,483 to
+302,692**. Model-call counts and independently replayed verdicts are unchanged;
+simulated instructions fall **2,432,362,131 to 2,423,452,041**. This is diagnostic
+evidence only. Fresh frozen complete private14408, fixed160, development587 and
+public965 comparisons are running with the unchanged **60 seconds / one leased
+physical CPU / 16 GiB** budget and at most 40 physical CPU leases. This successor
+has no formal performance credit or promotion approval yet.
 The prior numeric-formatting change is withdrawn from the runtime source.
+
+CLI SHA-256:
+`5619991ee6e0febf35061ee84c36ff9d6d755c169fa70ff0e90eb4a2c1b048e7`;
+native-qualification SHA-256:
+`e373cc84011f379d14964c175a70087b116e559dd20b2fda0ef98d25efdcc24a`;
+complete source-binding SHA-256:
+`7b2d288e03104c8ff3e29962aa5d95ba7ab88e4f1f6117718a8adfe6123f4f06`;
+diagnostic profile-audit SHA-256:
+`0becd9502b7199f0b5931b7e18faadb248bd341a938a0a22cc689a3cb2a90a28`.
 
 ### Closed trial: numeric payload formatting
 
@@ -49,7 +72,7 @@ closure SHA-256:
 Protected evaluation, remaining difficult inputs and current-worker original-C
 QCP closure remain open.
 
-## Server-qualified stage: canonical term reads and sparse elimination (2026-11-08)
+## Delivered stage: canonical term reads and sparse elimination (2026-11-08)
 
 [PR #116](https://github.com/fuqi-jia/Xolver/pull/116) merged as
 `c1b9c67720a1f8ef35e8a4a5947276c051875ad4` after server acceptance and both
@@ -58,8 +81,9 @@ passed. Its tree equals reviewed head `3dc9aa7f`. The corresponding
 [main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42464571303) fails on
 both attempts: downloading the pinned independent cvc5 archive returns HTTP
 504 before native-theory checks run; SV checking subsequently cannot find
-cvc5. The proof gate passes. Main delivery remains incomplete until the actual
-checks pass; no checker, expected result or verification step is waived.
+cvc5. The proof gate passes. The subsequent CI-only merge passes its actual
+main checks as recorded below; no checker, expected result or verification
+step is waived.
 
 Core `526a9748` replaces that browser-download URL with the official immutable
 release-asset API. Panda9 / ExperimentOS verifies the actual downloaded archive
@@ -78,7 +102,9 @@ and merges normally as `ae5b23d5b7cd20296a144aa4d0aa0008f70ec938`; its tree
 equals reviewed head `d2740b46`. The corresponding
 [main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42473103996) first fails
 on transient HTTP **502** from the immutable asset endpoint. The second attempt
-is running; main delivery remains incomplete until its checks actually pass.
+passes both `build-test` and `proof-gate`, with the exact merged head verified
+against current remote main. This completes main delivery of the qualified
+runtime and CI-only transport repair.
 
 Core `1ae5ea7e` adds bounded retries for transient transport failures and caches
 only the pinned archive in CI. The archive is still SHA-256 checked on cache
@@ -126,7 +152,8 @@ The candidate gains one verified result in this round without losing another;
 its **124** results match the historical best, and **36 timeouts remain**.
 Every actual timed Xolver SAT model passes Z3 and cvc5 replay; reference SAT
 models pass cvc5. The unchanged no-loss/private-faster/combined-score server
-criterion passes. PR CI passes; main delivery awaits the checks described above.
+criterion passes. PR CI and the subsequent merged-main CI pass as described
+above.
 
 CLI SHA-256:
 `72a8e6821ade127a9e3cac2619c5afb7305de8d1532981b6996e298813908674`;
