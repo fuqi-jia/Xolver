@@ -1,6 +1,6 @@
 # Arithmetic validation and continuation record
 
-## In progress: shared postorder model validation (2026-11-08)
+## Server-qualified stage: shared postorder model validation (2026-11-08)
 
 Core `4b93e8c6`, pushed to `FULINA`, removes an unused owning term read
 from the processed phase of `ArithModelValidator::warmEval`. The qualified
@@ -21,11 +21,36 @@ The unchanged 40 diagnostic pairs retain **16,791** evaluations while reducing
 postorder owning reads **33,582 to 16,791** and total owning reads **319,483 to
 302,692**. Model-call counts and independently replayed verdicts are unchanged;
 simulated instructions fall **2,432,362,131 to 2,423,452,041**. This is diagnostic
-evidence only. Fresh frozen complete private14408, fixed160, development587 and
-public965 comparisons are running with the unchanged **60 seconds / one leased
-physical CPU / 16 GiB** budget and at most 40 physical CPU leases. This successor
-has no formal performance credit or promotion approval yet.
+evidence only. Fresh frozen complete comparisons use the unchanged **60 seconds /
+one leased physical CPU / 16 GiB** budget and at most 40 physical CPU leases.
 The prior numeric-formatting change is withdrawn from the runtime source.
+
+Private14408 independently verifies **14,408 / 14,408 / 14,408**
+main/candidate/Z3 results at **292.402 / 284.095 / 466.713 seconds**, reducing
+candidate solver time **2.84%**. Candidate totals are lower in **39 of 40**
+paired task slots. These are descriptive observations from one fresh complete
+round, not independent repetitions or a confidence interval. Development587
+retains **587 / 587 / 584** at **11.445 / 11.210 / 18.344 seconds**; three
+unconfirmed reference models remain excluded. All **965 public regressions** pass.
+
+Fixed160 verifies **123 / 123 / 118** after fresh original-input-bound residue
+checking and one applicable independent reference-UNSAT check on the identical
+input and frozen reference versions. Six reference decisions remain unconfirmed
+and excluded. No current timeout or unknown is upgraded. Both Xolver arms have
+**37 timeouts**, without newly solved or lost inputs in this round; the historical
+best of 124 is not improved. Mean verified fixed PAR-2 worsens slightly,
+**32.298 to 32.317 seconds**. Every actual timed Xolver SAT model passes Z3 and
+cvc5 replay; reference SAT models pass cvc5. No opposite verdict, rejected
+model or protocol error is observed.
+
+Combined fixed/private verified PAR-2 improves **5.393 seconds**, so the unchanged
+no-loss/private-faster/combined-score promotion criterion passes. Development587
+is excluded from this combined score to avoid overlap; fixed/private input
+hashes have no overlap. Server acceptance is complete; exact-head PR CI and
+merged-main validation are pending. Remaining difficult inputs, current-worker
+original-C QCP, the final frozen fair comparison and one-time protected evaluation
+remain open. Private inputs, individual identifiers and raw evidence stay on the
+server.
 
 CLI SHA-256:
 `5619991ee6e0febf35061ee84c36ff9d6d755c169fa70ff0e90eb4a2c1b048e7`;
@@ -35,6 +60,8 @@ complete source-binding SHA-256:
 `7b2d288e03104c8ff3e29962aa5d95ba7ab88e4f1f6117718a8adfe6123f4f06`;
 diagnostic profile-audit SHA-256:
 `0becd9502b7199f0b5931b7e18faadb248bd341a938a0a22cc689a3cb2a90a28`.
+Final stage-audit SHA-256:
+`f4581d9428fed0997aabc67ac0b5a32d89dedf8fdda877695be5b2a9186512dd`.
 
 ### Closed trial: numeric payload formatting
 
