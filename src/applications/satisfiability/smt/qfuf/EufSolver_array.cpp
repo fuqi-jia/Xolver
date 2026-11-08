@@ -417,8 +417,8 @@ void EufSolver::collectFunctionInterps(TheoryModel& model) const {
         const auto& n = termManager_.node(t);
         if (n.args.empty()) continue;            // not an application
         if (n.origin == NullExpr) continue;
+        if (nativeTerms_->kind(n.origin) != Kind::UFApply) continue;
         const auto& oe = nativeTerms_->get(n.origin);
-        if (oe.kind != Kind::UFApply) continue;  // only genuine UF applications
         if (!std::holds_alternative<std::string>(oe.payload.value)) continue;
         const std::string& fname = std::get<std::string>(oe.payload.value);
 
@@ -452,8 +452,8 @@ void EufSolver::collectFunctionInterps(TheoryModel& model) const {
     // model's numeric value to remap the function-interp arg/value tokens to the
     // bare rationals the validator expects. (Same mechanism the array path uses.)
     for (ExprId id = 0; id < static_cast<ExprId>(nativeTerms_->size()); ++id) {
+        if (nativeTerms_->kind(id) != Kind::Variable) continue;
         const auto& e = nativeTerms_->get(id);
-        if (e.kind != Kind::Variable) continue;
         if (nativeTerms_->arraySortParams(e.sort) ||
             nativeTerms_->datatypes().isDatatypeSort(e.sort)) continue;
         if (!std::holds_alternative<std::string>(e.payload.value)) continue;

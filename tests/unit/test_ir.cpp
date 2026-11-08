@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 #include "ir/NativeTerms.h"
 #include <somtparser/parser.h>
+#include <utility>
 
 using namespace xolver;
 
@@ -14,6 +15,65 @@ TEST_CASE("NativeTerms basic storage") {
     CHECK(id == 0);
     CHECK(ir.size() == 1);
     CHECK(ir.get(id).kind == Kind::ConstBool);
+}
+
+TEST_CASE("native kind metadata preserves exact literal sorts and comparison direction") {
+    NativeTerms terms;
+    terms.registerSort(0, SortKind::Bool);
+    terms.registerSort(1, SortKind::Int);
+    terms.registerSort(2, SortKind::Real);
+    const auto boolean = terms.add({Kind::ConstBool, 0, {}, Payload(true)});
+    const auto integer = terms.add({Kind::ConstInt, 1, {},
+        Payload(std::string("1606938044258990275541962092341162602522202993782792835301377"))});
+    const auto fraction = terms.add({Kind::ConstReal, 2, {}, Payload(std::string("1/2"))});
+    const auto variable = terms.add({Kind::Variable, 1, {}, Payload(std::string("x"))});
+    const auto bound = terms.add({Kind::BoundVariable, 1, {}, Payload(std::string("x"))});
+    const auto greater = terms.add({Kind::Gt, 0, {variable, integer}, {}});
+    const auto greaterEqual = terms.add({Kind::Geq, 0, {variable, integer}, {}});
+    CHECK(terms.kind(boolean) == Kind::ConstBool);
+    CHECK(terms.kind(integer) == Kind::ConstInt);
+    CHECK(terms.kind(fraction) == Kind::ConstReal);
+    CHECK(terms.kind(variable) == Kind::Variable);
+    CHECK(terms.kind(bound) == Kind::BoundVariable);
+    CHECK(terms.kind(greater) == Kind::Lt);
+    CHECK(terms.kind(greaterEqual) == Kind::Leq);
+    for (const auto comparison : {greater, greaterEqual}) {
+        const auto full = terms.get(comparison);
+        REQUIRE(full.children.size() == 2);
+        CHECK(full.children[0] == integer);
+        CHECK(full.children[1] == variable);
+    }
+    CHECK(terms.get(greater).kind == Kind::Lt);
+    CHECK(terms.get(greaterEqual).kind == Kind::Leq);
+}
+
+TEST_CASE("native kind metadata survives let aliases, copied ownership and index growth") {
+    NativeTerms survivor;
+    ExprId root = NullExpr, application = NullExpr;
+    SortId integerSort = NullSort;
+    {
+        SOMTParser::Parser parser;
+        REQUIRE(parser.parseStr("(set-logic QF_UFLIA)(declare-const x Int)"
+            "(declare-fun f (Int) Int)(assert (let ((a (f x))) (= a 7)))"));
+        NativeTerms terms(parser.getNodeManager());
+        root = terms.index(parser.getAssertions().at(0));
+        CHECK(terms.kind(root) == Kind::Eq);
+        const auto equation = terms.get(root);
+        REQUIRE(equation.children.size() == 2);
+        application = equation.children[0];
+        CHECK(terms.kind(application) == Kind::UFApply);
+        CHECK(terms.kind(equation.children[1]) == Kind::ConstInt);
+        integerSort = terms.get(application).sort;
+        survivor = terms;
+    }
+    CHECK(survivor.kind(root) == Kind::Eq);
+    CHECK(survivor.kind(application) == Kind::UFApply);
+    auto moved = std::move(survivor);
+    const auto fresh = moved.makeFreshVariable(integerSort, "fresh");
+    CHECK(moved.kind(fresh) == Kind::Variable);
+    CHECK(moved.kind(root) == Kind::Eq);
+    CHECK(moved.kind(application) == Kind::UFApply);
+    CHECK_THROWS_AS(moved.kind(static_cast<ExprId>(moved.size())), std::out_of_range);
 }
 
 TEST_CASE("NativeTerms scope management") {
@@ -162,5 +222,7 @@ TEST_CASE("native ambiguous numeral sorts preserve fractions and real division")
     CHECK((terms.sortKind(view.sort) == SortKind::Real));
     CHECK(terms.get(view.children[0]).kind == Kind::ConstReal);
     CHECK(terms.get(view.children[1]).kind == Kind::ConstInt);
+    CHECK(terms.kind(view.children[0]) == Kind::ConstReal);
+    CHECK(terms.kind(view.children[1]) == Kind::ConstInt);
     CHECK(terms.native(id) == sum);
 }

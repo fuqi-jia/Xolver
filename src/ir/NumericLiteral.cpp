@@ -22,6 +22,8 @@ std::optional<mpq_class> numericLiteral(const TermExpr& expr) {
 }
 std::optional<mpq_class> numericLiteral(const NativeTerms& ir, ExprId id) {
     if (id >= ir.size()) return std::nullopt;
+    const auto kind = ir.kind(id);
+    if (kind != Kind::ConstInt && kind != Kind::ConstReal) return std::nullopt;
     return numericLiteral(ir.get(id));
 }
 } // namespace xolver
