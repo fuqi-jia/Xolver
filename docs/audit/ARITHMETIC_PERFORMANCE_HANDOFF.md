@@ -1,6 +1,100 @@
 # Arithmetic validation and continuation record
 
-## Server-qualified stage: shared postorder model validation (2026-11-08)
+## Server-qualified candidate: shared sparse difference equalities (2026-11-08)
+
+Core `76c8c996`, pushed to `FULINA`, replaces LIA's remaining quadratic
+shared-variable pair scan with `LinearDifferenceEqualityIndex`, shared with
+LRA. The index is rebuilt from the current active trail, aggregates exact
+non-strict bounds only for name pairs present in that trail, and emits pinned
+pairs in the original shared-variable order. LIA retains its pair-oriented
+lower/upper explanation order; LRA retains its canonical-name explanation
+order. Fixed-value grouping, other equality channels, rollback, formal budgets
+and independent model checks are unchanged. The duplicated implementations
+are removed without a compatibility entry point or a new feature gate.
+
+Panda9 / ExperimentOS passes **2,297 unit cases / 1,537,194 assertions**.
+The five new cases contribute **4,572 assertions**, covering sparse unrelated
+names, aliases, exact signed rational scales, negative literals, conservative
+non-entailment, independent rational-witness checks of explanations, and Int/Real
+UF scope withdrawal. All **2,343 qualified source contents** match the published
+core. CLI SHA-256:
+`bd2b608e12580a38a88da34949e88470730fdfbe110118e3785f44bfef1c7d1b`;
+native-qualification SHA-256:
+`fc6b4fcf11a722ca01487ea1ecd1c65063dcc66d0bc63cce57e943e0504e386a`;
+complete source-binding SHA-256:
+`002e043654b9f8fe513c6666abf73e18cb99e0c1a5531e9e5220b26096d9cc59`.
+
+The same 40 structurally preselected diagnostic pairs retain **120** LIA
+shared-equality discovery calls, **302,692** owning term reads and **103** model
+calls in both arms. Inclusive simulated instructions in LIA discovery fall
+**201,934,661 to 67,709,598**; total simulated instructions fall
+**2,423,674,986 to 2,289,544,440**. Actual diagnostic SAT models pass Z3 and cvc5
+replay. This is diagnostic evidence only. Profile-audit SHA-256:
+`b5a3c3e264844cafa44c868ff7a997da2db8e37c8cc5468eaa364fc01bb2fdcc`.
+
+Fresh complete comparisons use frozen merged main `e51068f0`, the unchanged
+**60 seconds / one leased physical CPU / 16 GiB** budgets and 40 physical CPU
+leases. Private14408 independently verifies **14,408 / 14,408 / 14,408**
+main/candidate/Z3 results at **291.329 / 279.042 / 466.551 seconds**, a **4.22%**
+candidate reduction without gains or losses. Candidate totals are lower in
+39 of 40 paired slots; these are descriptive observations from one complete
+round, not independent repetitions. Private-cohort audit SHA-256:
+`d6fc11d39f535bd53bb534bd0bcc81911a89131ce05acc6cf50509d5a24c3253`.
+Development587 retains **587 / 587 / 584** verified results at **10.994 /
+10.264 / 17.441 seconds**, without gains or losses; three reference models
+remain unconfirmed and excluded. All **965 public regressions** pass.
+Development-audit SHA-256:
+`98cb4650be3db60a421c5ed133b1cb7d84ad94b97fe86cde7aa0641137db0efa`;
+public-regression-audit SHA-256:
+`a24bf4c5ca46be1ba514fe30d303b21e2cf7be5fba754218248dbd63a2912bad`.
+Fixed160 verifies **123 / 123 / 117** after fresh original-input-bound residue
+checking and one applicable independent reference-UNSAT check on identical
+inputs and frozen reference versions. Six reference decisions remain
+unconfirmed and excluded. Main has **37 timeouts**; the candidate has **36
+timeouts and one additional unconfirmed UNSAT**, excluded from its verified
+score. There are no gained or lost verified solves, opposite verdicts,
+rejected models or protocol errors.
+Mean verified fixed PAR-2 worsens slightly, **32.206 to 32.224 seconds**.
+Combined disjoint fixed/private verified PAR-2 improves **9.364 seconds**, so
+the unchanged no-loss/private-faster/combined-score server gate passes.
+Development587 stays outside the combined score to avoid overlap. Final-stage
+audit SHA-256:
+`ac261105f68d26c769576086a7dbe7b68e63961b83988bd41bd3141423c9a5b2`.
+PR/main CI and normal main delivery remain pending. Private individual inputs,
+identifiers and evidence remain server-only. Remaining difficult inputs,
+final-worker QCP, final fair comparison and protected evaluation remain open.
+
+### Current merged-main original-C QCP closure
+
+The already delivered main worker completes three fresh original-C development
+workflows: all controllers reach `done`, final checks pass, and full Rocq
+checking proves **23 top-level VCs**. The qualified native-query audit checks
+every one of **2,340 actual timed occurrences**, including failed proof attempts:
+**1,188 SAT** models pass independent replay and **1,152 UNSAT** decisions pass
+independent checking. There are no unconfirmed results, opposite verdicts or
+protocol errors. Original C/specification bytes and frozen case libraries stay
+unchanged. This binds to worker SHA-256
+`978bd333c18780f8f92f7d45d24f8e5f999e3d3a015460b4163976022e1366b6`;
+composite audit SHA-256:
+`92216c1af8712b88022beef7f3cbb525e65653613d33eb3ca3dc665653efcffa`.
+
+Raw native-session and standalone proof-promotion qualification fields remain
+unchanged; the composite evidence combines controller/Rocq program completion
+with separately qualified packet, model and decision checks. The original
+upper-bound contract does not prove exact maximum membership; recursive GCD
+remains partial correctness under the unchanged external `abs` contract.
+This does not qualify the newer sparse-index worker. Final-worker QCP validation,
+a fresh Z3 program comparison, and final protected evaluation remain open.
+
+## Delivered stage: shared postorder model validation (2026-11-08)
+
+[PR #118](https://github.com/fuqi-jia/Xolver/pull/118) passes both exact-head
+[PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42478084803) and merges
+normally as `e51068f0d3379974c897ffa5eb30107aec05a20f`. Its entire tree equals
+reviewed head `85a1f3b0`. Both jobs in the corresponding
+[main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42480091399) pass, and
+the current remote-main head is verified. `FULINA` is fast-forwarded to the
+merge. No checker or server acceptance condition is waived.
 
 Core `4b93e8c6`, pushed to `FULINA`, removes an unused owning term read
 from the processed phase of `ArithModelValidator::warmEval`. The qualified
@@ -46,8 +140,8 @@ model or protocol error is observed.
 Combined fixed/private verified PAR-2 improves **5.393 seconds**, so the unchanged
 no-loss/private-faster/combined-score promotion criterion passes. Development587
 is excluded from this combined score to avoid overlap; fixed/private input
-hashes have no overlap. Server acceptance is complete; exact-head PR CI and
-merged-main validation are pending. Remaining difficult inputs, current-worker
+hashes have no overlap. Server acceptance, exact-head PR CI and merged-main
+validation pass. Remaining difficult inputs, current-worker
 original-C QCP, the final frozen fair comparison and one-time protected evaluation
 remain open. Private inputs, individual identifiers and raw evidence stay on the
 server.
