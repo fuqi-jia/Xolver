@@ -229,19 +229,20 @@ TEST_CASE("ArithModelValidator: deep shared roots stay exact across model update
     mpz_mul_2exp(expected.get_mpz_t(), expected.get_mpz_t(), depth);
     const auto value = f.ir.add({Kind::ConstInt, f.intS, {}, Payload(expected.get_str())});
     const auto goal = f.bin(Kind::Eq, n, value, f.boolS);
-    ArithModelValidator::NumAssignment numbers{{"x", 1}};
+    ArithModelValidator::RealAssignment numbers{{"x", RealValue::fromMpq(mpq_class(1))}};
     ArithModelValidator::BoolAssignment booleans;
-    ArithModelValidator validator(f.ir, numbers, booleans);
+    ArithModelValidator validator(f.ir, {}, booleans);
+    validator.setRealAssignments(&numbers);
 
     CHECK(validator.validate({goal, goal}) == ArithModelValidator::Verdict::Satisfied);
     REQUIRE(validator.evalNumber(n));
     CHECK(*validator.evalNumber(n) == mpq_class(expected));
-    numbers["x"] = -1;
+    numbers["x"] = RealValue::fromMpq(mpq_class(-1));
     CHECK(validator.validate({goal}) == ArithModelValidator::Verdict::Violated);
     CHECK(*validator.evalNumber(n) == -mpq_class(expected));
     numbers.erase("x");
     CHECK(validator.validate({goal}) == ArithModelValidator::Verdict::Indeterminate);
     CHECK_FALSE(validator.evalNumber(n));
-    numbers["x"] = 1;
+    numbers["x"] = RealValue::fromMpq(mpq_class(1));
     CHECK(validator.validate({goal}) == ArithModelValidator::Verdict::Satisfied);
 }
