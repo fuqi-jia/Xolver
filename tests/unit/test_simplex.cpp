@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 #include "applications/satisfiability/smt/qflra/LraSolver.h"
 #include "search/lra/GeneralSimplex.h"
+#include "search/lra/SparseTableau.h"
 #include "search/dl/BellmanFord.h"
 #include "algebra/linear/LinearExpr.h"
 #include "search/coordination/TheoryLemmaDatabase.h"
@@ -11,6 +12,106 @@
 #include <utility>
 
 using namespace xolver;
+
+TEST_CASE("SparseTableau: batched substitution preserves exact coefficients and sparse links") {
+    for (const int width : {1, 7, 31, 32, 65}) {
+        SparseTableau tableau;
+        for (int col = 0; col < 72; ++col) tableau.addEmptyCol();
+        for (int row = 0; row < 3; ++row) {
+            tableau.addEmptyRow();
+            for (int col = 0; col < width; ++col)
+                tableau.setCoeff(row, col, mpq_class((row + 1) * (col + 1)));
+        }
+        std::mt19937 random(481);
+        for (int step = 0; step < 24; ++step) {
+            CAPTURE(width);
+            CAPTURE(step);
+            const int row = step % tableau.numRows();
+            const int eliminated = static_cast<int>(random() % tableau.numCols());
+            mpq_class coefficient(step + 1, 7);
+            coefficient.canonicalize();
+            tableau.setCoeff(row, eliminated, coefficient);
+            const mpq_class scale = tableau.getCoeff(row, eliminated);
+            std::vector<mpq_class> expected(tableau.numCols());
+            for (const auto& entry : tableau.row(row).entries) expected[entry.col] = entry.coeff;
+            expected[eliminated] = 0;
+            const mpq_class rhs(mpz_class(1) << 160, mpz_class(7));
+            const mpq_class expectedRhs = tableau.row(row).rhs + scale * rhs;
+            std::vector<std::pair<int, mpq_class>> replacement;
+            for (int i = 0; i < 12; ++i) {
+                const int col = static_cast<int>(random() % tableau.numCols());
+                mpq_class value(static_cast<long>(random() % 17) - 8, 11);
+                value.canonicalize();
+                // Include exact cancellation followed by reinsertion, as well
+                // as repeated columns and the eliminated column itself.
+                if (i % 3 == 0) value = -expected[col] / scale;
+                replacement.emplace_back(col, value);
+                expected[col] += scale * value;
+            }
+            SparseTableau sequential = tableau;
+            sequential.eraseCoeff(row, eliminated);
+            sequential.row(row).rhs += scale * rhs;
+            for (const auto& [col, value] : replacement) sequential.addCoeff(row, col, scale * value);
+            const int version = tableau.row(row).version;
+            tableau.eliminateColumn(row, eliminated, rhs, replacement);
+            CHECK(tableau.row(row).version == version + 1);
+            CHECK(tableau.row(row).rhs == expectedRhs);
+            REQUIRE(tableau.row(row).entries.size() == sequential.row(row).entries.size());
+            for (std::size_t i = 0; i < tableau.row(row).entries.size(); ++i)
+                CHECK(tableau.row(row).entries[i].col == sequential.row(row).entries[i].col);
+            for (int col = 0; col < tableau.numCols(); ++col)
+                CHECK(tableau.getCoeff(row, col) == expected[col]);
+            // Check both cross-link directions explicitly in Release builds.
+            for (int r = 0; r < tableau.numRows(); ++r) {
+                const auto& current = tableau.row(r);
+                if (current.hasIndex) CHECK(current.pos.size() == current.entries.size());
+                for (std::size_t i = 0; i < current.entries.size(); ++i) {
+                    const auto& entry = current.entries[i];
+                    CHECK(entry.coeff != 0);
+                    const auto& back = tableau.col(entry.col).entries[entry.colPos];
+                    CHECK(back.row == r);
+                    CHECK(back.rowPos == static_cast<int>(i));
+                    if (current.hasIndex) CHECK(current.pos.at(entry.col) == static_cast<int>(i));
+                }
+            }
+            for (int col = 0; col < tableau.numCols(); ++col) {
+                const auto& entries = tableau.col(col).entries;
+                for (std::size_t i = 0; i < entries.size(); ++i) {
+                    const auto& back = tableau.row(entries[i].row).entries[entries[i].rowPos];
+                    CHECK(back.col == col);
+                    CHECK(back.colPos == static_cast<int>(i));
+                }
+            }
+            if (step == 11) {
+                tableau.addEmptyCol();
+                tableau.replaceRow(1, 0, 0, {{tableau.numCols() - 1, 3}});
+            }
+        }
+    }
+}
+
+TEST_CASE("SparseTableau: substitutions isolate scratch positions across copies and absent columns") {
+    SparseTableau tableau;
+    for (int i = 0; i < 4; ++i) tableau.addEmptyCol();
+    tableau.addEmptyRow();
+    tableau.replaceRow(0, 3, 2, {{0, 2}, {1, -3}});
+    tableau.eliminateColumn(0, 0, 4, {{1, mpq_class(3, 2)}, {2, 5}});
+    CHECK(tableau.row(0).rhs == 10);
+    CHECK(tableau.getCoeff(0, 1) == 0);
+    CHECK(tableau.getCoeff(0, 2) == 10);
+    SparseTableau copy = tableau;
+    copy.eliminateColumn(0, 2, -1, {{0, 3}});
+    CHECK(copy.row(0).rhs == 0);
+    CHECK(copy.getCoeff(0, 0) == 30);
+    CHECK(tableau.getCoeff(0, 0) == 0);
+    const int version = tableau.row(0).version;
+    tableau.eliminateColumn(0, 1, 99, {{0, 99}});
+    CHECK(tableau.row(0).version == version);
+    CHECK(tableau.row(0).rhs == 10);
+    tableau.eliminateColumn(0, 2, -1, {{1, 1}});
+    CHECK(tableau.getCoeff(0, 1) == 10);
+    CHECK(tableau.row(0).rhs == 0);
+}
 
 TEST_CASE("GeneralSimplex: blocked rows keep exact conflicts among repairable rows") {
     for (auto policy : {GeneralSimplex::AssignmentPolicy::Reinitialize,

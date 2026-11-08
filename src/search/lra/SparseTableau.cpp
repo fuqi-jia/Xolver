@@ -51,7 +51,7 @@ void SparseTableau::setCoeff(int row, int col, const mpq_class& value) {
 
     if (rowPos != -1) {
         if (value == 0) {
-            eraseCoeff(row, col);
+            eraseRowEntry(row, rowPos);
         } else {
             r.entries[rowPos].coeff = value;
         }
@@ -60,6 +60,11 @@ void SparseTableau::setCoeff(int row, int col, const mpq_class& value) {
 
     if (value == 0) return;
 
+    insertCoeff(row, col, value);
+}
+
+void SparseTableau::insertCoeff(int row, int col, const mpq_class& value) {
+    auto& r = rows_[row];
     auto& c = cols_[col];
     int newRowPos = static_cast<int>(r.entries.size());
     int newColPos = static_cast<int>(c.entries.size());
@@ -80,30 +85,26 @@ void SparseTableau::setCoeff(int row, int col, const mpq_class& value) {
 void SparseTableau::addCoeff(int row, int col, const mpq_class& delta) {
     if (delta == 0) return;
     auto& r = rows_[row];
-    // Single findRowPos (vs the old getCoeff+setCoeff double lookup), in the
-    // pivot inner loop.
+    // Direct coefficient updates need only one lookup, including cancellation.
     int rowPos = findRowPos(r, col);
     if (rowPos != -1) {
         r.entries[rowPos].coeff += delta;
-        if (r.entries[rowPos].coeff == 0) eraseCoeff(row, col);
+        if (r.entries[rowPos].coeff == 0) eraseRowEntry(row, rowPos);
         return;
     }
-    // Absent: insert delta (mirror setCoeff's insert path).
-    auto& c = cols_[col];
-    int newRowPos = static_cast<int>(r.entries.size());
-    int newColPos = static_cast<int>(c.entries.size());
-    r.entries.push_back(RowEntry{col, delta, newColPos});
-    c.entries.push_back(ColEntry{row, newRowPos});
-    if (r.hasIndex) {
-        r.pos[col] = newRowPos;
-    }
-    maybeBuildRowIndex(r);
+    insertCoeff(row, col, delta);
 }
 
 void SparseTableau::eraseCoeff(int row, int col) {
     auto& r = rows_[row];
     int rowPos = findRowPos(r, col);
     if (rowPos == -1) return;
+    eraseRowEntry(row, rowPos);
+}
+
+void SparseTableau::eraseRowEntry(int row, int rowPos) {
+    auto& r = rows_[row];
+    const int col = r.entries[rowPos].col;
 
     int colPos = r.entries[rowPos].colPos;
     auto& c = cols_[col];
@@ -113,8 +114,8 @@ void SparseTableau::eraseCoeff(int row, int col) {
 
     // Remove from row by swap-pop
     if (rowPos != lastRowPos) {
-        RowEntry moved = r.entries[lastRowPos];
-        r.entries[rowPos] = moved;
+        r.entries[rowPos] = std::move(r.entries[lastRowPos]);
+        const auto& moved = r.entries[rowPos];
 
         // Fix column back-pointer of moved entry
         cols_[moved.col].entries[moved.colPos].rowPos = rowPos;
@@ -140,14 +141,49 @@ void SparseTableau::eraseCoeff(int row, int col) {
     c.entries.pop_back();
 }
 
+void SparseTableau::eliminateColumn(
+    int row, int col, const mpq_class& rhs,
+    const std::vector<std::pair<int, mpq_class>>& entries) {
+    auto& r = rows_[row];
+    const int eliminated = findRowPos(r, col);
+    if (eliminated < 0) return;
+    const mpq_class scale = r.entries[eliminated].coeff;
+    rowPositions_.resize(cols_.size(), -1);
+    for (int i = 0; i < static_cast<int>(r.entries.size()); ++i)
+        rowPositions_[r.entries[i].col] = i;
+
+    auto erase = [&](int position) {
+        const int removed = r.entries[position].col;
+        eraseRowEntry(row, position);
+        rowPositions_[removed] = -1;
+        if (position < static_cast<int>(r.entries.size()))
+            rowPositions_[r.entries[position].col] = position;
+    };
+    erase(eliminated);
+    r.rhs += scale * rhs;
+    for (const auto& [variable, coefficient] : entries) {
+        const mpq_class delta = scale * coefficient;
+        if (delta == 0) continue;
+        const int position = rowPositions_[variable];
+        if (position < 0) {
+            rowPositions_[variable] = static_cast<int>(r.entries.size());
+            insertCoeff(row, variable, delta);
+        } else {
+            r.entries[position].coeff += delta;
+            if (r.entries[position].coeff == 0) erase(position);
+        }
+    }
+    for (const auto& entry : r.entries) rowPositions_[entry.col] = -1;
+    ++r.version;
+}
+
 void SparseTableau::replaceRow(int row, int basicVar, const mpq_class& rhs,
                                const std::vector<std::pair<int, mpq_class>>& entries) {
     auto& r = rows_[row];
 
     // Remove all old entries from columns
     while (!r.entries.empty()) {
-        int c = r.entries.back().col;
-        eraseCoeff(row, c);
+        eraseRowEntry(row, static_cast<int>(r.entries.size()) - 1);
     }
 
     r.basicVar = basicVar;

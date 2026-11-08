@@ -67,6 +67,12 @@ public:
     void addCoeff(int row, int col, const mpq_class& delta);
     void eraseCoeff(int row, int col);
 
+    // Substitute col = rhs + sum(entries) into one row. A call-local scatter
+    // index avoids looking up every updated coefficient separately. Entry
+    // order and exact arithmetic follow sequential eraseCoeff/addCoeff calls.
+    void eliminateColumn(int row, int col, const mpq_class& rhs,
+                         const std::vector<std::pair<int, mpq_class>>& entries);
+
     // Replace an entire row (clear old entries, insert new ones)
     void replaceRow(int row, int basicVar, const mpq_class& rhs,
                     const std::vector<std::pair<int, mpq_class>>& entries);
@@ -85,12 +91,16 @@ public:
 private:
     std::vector<SparseRow> rows_;
     std::vector<SparseCol> cols_;
+    // Reusable storage only; every slot is empty between row substitutions.
+    std::vector<int> rowPositions_;
 
     // -----------------------------------------------------------------------
     // Row lookup helpers
     // -----------------------------------------------------------------------
     int findRowPos(SparseRow& row, int col);
     void maybeBuildRowIndex(SparseRow& row);
+    void insertCoeff(int row, int col, const mpq_class& value);
+    void eraseRowEntry(int row, int rowPos);
 };
 
 } // namespace xolver
