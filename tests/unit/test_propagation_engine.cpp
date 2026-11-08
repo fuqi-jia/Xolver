@@ -755,3 +755,162 @@ TEST_CASE("LraPropagationEngine: paired row visits share unchanged input snapsho
     CHECK_FALSE(gs.varState(sum).lower.bound.isFinite());
     CHECK_FALSE(gs.varState(sum).upper.bound.isFinite());
 }
+
+TEST_CASE("LraPropagationEngine: explanation refinement finds a default-budget shortcut") {
+    GeneralSimplex gs;
+    const int start = gs.addVar("proof-start");
+    REQUIRE(gs.assertLower(start, mkBound(0, 1)));
+    int previous = start;
+    for (int step = 0; step < 11; ++step) {
+        const int next = gs.addVar("proof-chain-" + std::to_string(step));
+        const int edge = gs.addConstraint({{next, 1}, {previous, -1}}, 0);
+        REQUIRE(gs.assertLower(edge, mkBound(0, 2 + step)));
+        previous = next;
+    }
+    const int shortcut = gs.addConstraint({{previous, 1}, {start, -1}}, 0);
+    REQUIRE(gs.assertLower(shortcut, mkBound(0, 13)));
+    const int result = gs.addVar("proof-result");
+    const int finalEdge = gs.addConstraint({{result, 1}, {previous, -1}}, 0);
+    REQUIRE(gs.assertLower(finalEdge, mkBound(0, 14)));
+    REQUIRE(gs.check() == GeneralSimplex::Result::Sat);
+
+    LraPropagationEngine engine;
+    const auto derived = engine.propagateAll(gs);
+    const auto found = std::find_if(derived.begin(), derived.end(), [result](const auto& bound) {
+        return bound.var == result && bound.isLower && bound.value == DeltaRational(0);
+    });
+    REQUIRE(found != derived.end());
+    CHECK((found->reasons == std::vector<SatLit>{SatLit::positive(1),
+                                               SatLit::positive(13), SatLit::positive(14)}));
+    CHECK_FALSE(gs.varState(result).lower.bound.isFinite());
+    // Check the reported premises independently over exact rational witnesses.
+    for (int a = -4; a <= 4; ++a) {
+        for (int b = -4; b <= 4; ++b) {
+            for (int c = -4; c <= 4; ++c) {
+                const mpq_class first(a, 2), last(b, 2), output(c, 2);
+                if (first >= 0 && last >= first && output >= last) CHECK(output >= 0);
+            }
+        }
+    }
+}
+
+TEST_CASE("LraPropagationEngine: explanation refinement withdraws a child shortcut") {
+    GeneralSimplex gs;
+    const int start = gs.addVar("withdraw-start");
+    REQUIRE(gs.assertLower(start, mkBound(0, 1)));
+    int previous = start;
+    for (int step = 0; step < 11; ++step) {
+        const int next = gs.addVar("withdraw-chain-" + std::to_string(step));
+        const int edge = gs.addConstraint({{next, 1}, {previous, -1}}, 0);
+        REQUIRE(gs.assertLower(edge, mkBound(0, 2 + step)));
+        previous = next;
+    }
+    const int shortcut = gs.addConstraint({{previous, 1}, {start, -1}}, 0);
+    const int result = gs.addVar("withdraw-result");
+    const int finalEdge = gs.addConstraint({{result, 1}, {previous, -1}}, 0);
+    REQUIRE(gs.assertLower(finalEdge, mkBound(0, 14)));
+    REQUIRE(gs.check() == GeneralSimplex::Result::Sat);
+    LraPropagationEngine engine;
+    CHECK_FALSE(hasBound(engine.propagateAll(gs), result, true, 0));
+
+    REQUIRE(gs.assertLower(shortcut, mkBound(0, 13), 1));
+    REQUIRE(gs.check() == GeneralSimplex::Result::Sat);
+    const auto child = engine.propagateAll(gs);
+    CHECK(hasBound(child, result, true, 0));
+    for (const auto& bound : child) CHECK(bound.reasons.size() <= 12);
+
+    gs.backtrackToLevel(0);
+    REQUIRE(gs.check() == GeneralSimplex::Result::Sat);
+    const auto restored = engine.propagateAll(gs);
+    CHECK_FALSE(hasBound(restored, result, true, 0));
+    for (const auto& bound : restored)
+        CHECK(std::find(bound.reasons.begin(), bound.reasons.end(), SatLit::positive(13)) == bound.reasons.end());
+}
+
+
+TEST_CASE("LraPropagationEngine: explanation refinement preserves strict upper endpoints") {
+    GeneralSimplex gs;
+    const int start = gs.addVar("upper-proof-start");
+    const DeltaRational limit(mpq_class(3, 2), mpq_class(-1, 2));
+    REQUIRE(gs.assertUpper(start, BoundInfo(BoundValue(limit), SatLit::positive(1))));
+    int previous = start;
+    for (int step = 0; step < 11; ++step) {
+        const int next = gs.addVar("upper-proof-chain-" + std::to_string(step));
+        const int edge = gs.addConstraint({{next, 1}, {previous, -1}}, 0);
+        REQUIRE(gs.assertUpper(edge, mkBound(0, 2 + step)));
+        previous = next;
+    }
+    const int shortcut = gs.addConstraint({{previous, -2}, {start, 2}}, 0);
+    REQUIRE(gs.assertLower(shortcut, mkBound(0, 13)));
+    const int result = gs.addVar("upper-proof-result");
+    const int finalEdge = gs.addConstraint({{result, -3}, {previous, 3}}, 0);
+    REQUIRE(gs.assertLower(finalEdge, mkBound(0, 14)));
+    REQUIRE(gs.check() == GeneralSimplex::Result::Sat);
+
+    LraPropagationEngine engine;
+    std::vector<LraPropagationEngine::ExplainedBound> streamed;
+    const auto derived = engine.propagateAll(gs, {}, nullptr, [&](const auto& bound) {
+        streamed.push_back(bound);
+        return true;
+    });
+    REQUIRE(streamed.size() == derived.size());
+    const auto found = std::find_if(derived.begin(), derived.end(), [result](const auto& bound) {
+        return bound.var == result && !bound.isLower;
+    });
+    REQUIRE(found != derived.end());
+    CHECK(found->value == limit);
+    CHECK((found->reasons == std::vector<SatLit>{SatLit::positive(1),
+                                               SatLit::positive(13), SatLit::positive(14)}));
+    CHECK(countBounds(derived, previous, false) == 1);
+    CHECK_FALSE(gs.varState(result).upper.bound.isFinite());
+    for (std::size_t i = 0; i < derived.size(); ++i) {
+        CHECK(streamed[i].var == derived[i].var);
+        CHECK(streamed[i].isLower == derived[i].isLower);
+        CHECK(streamed[i].value == derived[i].value);
+        CHECK(streamed[i].reasons == derived[i].reasons);
+    }
+}
+
+TEST_CASE("LraPropagationEngine: a stronger endpoint discards its pending weaker proof") {
+    GeneralSimplex gs;
+    const int start = gs.addVar("pending-start");
+    REQUIRE(gs.assertLower(start, mkBound(0, 1)));
+    int previous = start;
+    for (int step = 0; step < 11; ++step) {
+        const int next = gs.addVar("pending-chain-" + std::to_string(step));
+        const int edge = gs.addConstraint({{next, 1}, {previous, -1}}, 0);
+        REQUIRE(gs.assertLower(edge, mkBound(0, 2 + step)));
+        previous = next;
+    }
+    const int shortcut = gs.addConstraint({{previous, 1}, {start, -1}}, 0);
+    REQUIRE(gs.assertLower(shortcut, mkBound(0, 13)));
+
+    const int high = gs.addVar("pending-high");
+    const int nonnegative = gs.addVar("pending-nonnegative");
+    REQUIRE(gs.assertLower(high, mkBound(2, 15)));
+    REQUIRE(gs.assertLower(nonnegative, mkBound(0, 16)));
+    const int stronger = gs.addConstraint({{previous, 1}, {high, -1}, {nonnegative, -1}}, 0);
+    REQUIRE(gs.assertLower(stronger, mkBound(0, 17)));
+    const int result = gs.addVar("pending-result");
+    const int finalEdge = gs.addConstraint({{result, 1}, {previous, -1}}, 0);
+    REQUIRE(gs.assertLower(finalEdge, mkBound(0, 14)));
+
+    // The equations and asserted endpoints are valid independently of the
+    // current primal assignment, so propagation needs no simplex pivot here.
+    LraPropagationEngine engine;
+    const auto derived = engine.propagateAll(gs);
+    const auto found = std::find_if(derived.begin(), derived.end(), [result](const auto& bound) {
+        return bound.var == result && bound.isLower && bound.value == DeltaRational(2);
+    });
+    REQUIRE(found != derived.end());
+    CHECK((found->reasons == std::vector<SatLit>{SatLit::positive(14), SatLit::positive(15),
+                                               SatLit::positive(16), SatLit::positive(17)}));
+    for (const auto& bound : derived) {
+        if (bound.var != result || !bound.isLower || bound.value.a < 2) continue;
+        // The zero-endpoint shortcut cannot justify the stronger value two.
+        CHECK(std::find(bound.reasons.begin(), bound.reasons.end(), SatLit::positive(13)) ==
+              bound.reasons.end());
+    }
+    CHECK_FALSE(gs.varState(result).lower.bound.isFinite());
+    REQUIRE(gs.check() == GeneralSimplex::Result::Sat);
+}

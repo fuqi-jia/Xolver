@@ -390,3 +390,108 @@ TEST_CASE("Model completion: equivalent real argument spellings use exact ration
         CHECK(entry.value == "17/5");
     }
 }
+
+
+TEST_CASE("Model planning: unchanged completion preserves fallback representations") {
+    auto source = std::make_unique<ModelTheory>(TheoryId::LIA);
+    source->model.assignments = {{"x", "5"}};
+    source->model.numericAssignments = {{"x", RealValue::fromInt(5)}};
+    source->model.functionInterps["f"] = {{"Int"}, "Int",
+        {{{"#n:7"}, "#n:3/1"}}, "#n:0"};
+    source->model.arrayInterps["a"] = {"Int", "Int", "#n:0", {{"#n:7", "#n:3/1"}}};
+    source->model.arrayValues["handle"] = source->model.arrayInterps.at("a");
+    const auto* view = source.get();
+    TheoryManager manager;
+    manager.registerSolver(std::move(source));
+    int validations = 0;
+    for (const bool validate : {true, false}) {
+        const auto model = validate ? manager.getModel([&](TheoryModel&) {
+            ++validations;
+            return true;
+        }) : manager.getModel();
+        REQUIRE(model);
+        CHECK(model->assignments.at("x") == "5");
+        CHECK(model->numericAssignments.at("x").tryAsRational() == mpq_class(5));
+        const auto& function = model->functionInterps.at("f");
+        REQUIRE(function.entries.size() == 1);
+        CHECK(function.entries[0].args == std::vector<std::string>{"7"});
+        CHECK(function.entries[0].value == "3/1");
+        CHECK(function.deflt == "0");
+        for (const auto* array : {&model->arrayInterps.at("a"), &model->arrayValues.at("handle")}) {
+            CHECK(array->defaultVal == "#n:0");
+            REQUIRE(array->entries.size() == 1);
+            CHECK(array->entries[0].first == "#n:7");
+            CHECK(array->entries[0].second == "#n:3/1");
+        }
+    }
+    CHECK(validations == 0);
+    CHECK(view->reads == 2);
+    CHECK(view->model.functionInterps.at("f").entries[0].value == "#n:3/1");
+}
+
+TEST_CASE("Model planning: numeric aliases reach Boolean tables and array values") {
+    for (const bool real : {false, true}) {
+        CAPTURE(real);
+        const std::string domain = real ? "Real" : "Int";
+        const mpq_class number = real ? mpq_class(7, 3) : mpq_class(7);
+        const auto text = number.get_str();
+        auto source = std::make_unique<ModelTheory>(TheoryId::EUF);
+        source->model.assignments = {{"x", "@e4"}, {"y", "@e9"}};
+        source->model.functionInterps["f"] = {{domain}, domain,
+            {{{"#n:0"}, "@e4"}, {{"#n:0"}, "@e9"}, {{"#n:0"}, "#n:" + text}}, "#n:0"};
+        source->model.functionInterps["g"] = {{domain}, "Bool",
+            {{{"@e9"}, "#b:1"}}, "#b:0"};
+        source->model.arrayInterps["a"] = {domain, domain, "@e9", {{"@e9", "@e4"}}};
+        source->model.arrayValues["handle"] = source->model.arrayInterps.at("a");
+        const auto* view = source.get();
+        TheoryManager manager;
+        manager.registerSolver(std::move(source));
+        int validations = 0;
+        const auto model = manager.getModel([&](TheoryModel& candidate) {
+            ++validations;
+            return candidate.numericAssignments.at("x").tryAsRational() == number &&
+                   candidate.numericAssignments.at("y").tryAsRational() == number;
+        });
+        REQUIRE(model);
+        CHECK(validations == 1);
+        CHECK(view->reads == 1);
+        CHECK(model->assignments.at("x") == "#n:" + text);
+        CHECK(model->assignments.at("y") == "#n:" + text);
+        for (const auto& entry : model->functionInterps.at("f").entries)
+            CHECK(entry.value == text);
+        const auto& boolean = model->functionInterps.at("g");
+        REQUIRE(boolean.entries.size() == 1);
+        CHECK(boolean.entries[0].args == std::vector<std::string>{text});
+        CHECK(boolean.entries[0].value == "1");
+        CHECK(boolean.deflt == "0");
+        for (const auto* array : {&model->arrayInterps.at("a"), &model->arrayValues.at("handle")}) {
+            CHECK(array->defaultVal == "#n:" + text);
+            REQUIRE(array->entries.size() == 1);
+            CHECK(array->entries[0].first == "#n:" + text);
+            CHECK(array->entries[0].second == "#n:" + text);
+        }
+        CHECK(view->model.assignments.at("y") == "@e9");
+        CHECK(view->model.functionInterps.at("g").entries[0].args == std::vector<std::string>{"@e9"});
+    }
+}
+
+TEST_CASE("Model planning: malformed tables prevent speculative acceptance") {
+    auto source = std::make_unique<ModelTheory>(TheoryId::EUF);
+    source->model.assignments = {{"x", "@e4"}};
+    source->model.functionInterps["f"] = {{"Int"}, "Int",
+        {{{"#n:0"}, "@e4"}, {{"#n:0"}, "#n:7"}}, "#n:0"};
+    source->model.functionInterps["malformed"] = {{"Int", "Bool"}, "Bool",
+        {{{"#n:0"}, "#b:1"}}, "#b:0"};
+    const auto* view = source.get();
+    TheoryManager manager;
+    manager.registerSolver(std::move(source));
+    int validations = 0;
+    const auto model = manager.getModel([&](TheoryModel&) { ++validations; return true; });
+    REQUIRE(model);
+    CHECK(validations == 0);
+    CHECK(view->reads == 1);
+    CHECK(model->assignments.at("x") == "@e4");
+    CHECK(model->functionInterps.count("f") == 0);
+    CHECK(model->functionInterps.at("malformed").entries[0].args.size() == 1);
+    CHECK(view->model.functionInterps.at("f").entries[0].value == "@e4");
+}
