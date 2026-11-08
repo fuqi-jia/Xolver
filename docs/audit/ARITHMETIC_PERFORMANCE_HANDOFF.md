@@ -1,9 +1,15 @@
 # Arithmetic validation and continuation record
 
-## Server-accepted stage: exact integer evaluation and class interpretations (2026-11-08)
+## Delivered stage: exact integer evaluation and class interpretations (2026-11-08)
 
-[PR #114](https://github.com/fuqi-jia/Xolver/pull/114) includes a correctness
-follow-up found during the preceding class-token-only CI run. An isolated
+[PR #114](https://github.com/fuqi-jia/Xolver/pull/114) merged as
+`7d7238c10b42a6dbad92e550b24f4f4cb23b728e` after complete server acceptance and
+both exact-head [PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42397273380)
+passed. Both [merged-main CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42450310542)
+also pass. Its tree matches reviewed head `caec779a` byte for byte.
+
+This stage includes a correctness follow-up found during the preceding
+class-token-only CI run. An isolated
 Panda9 / ExperimentOS component probe, linked against the qualified class-token
 core, produces **two false EUF conflicts across four generic sign controls**.
 Z3, cvc5 and the production CLI return SAT on all four controls. The confirmed
@@ -53,8 +59,8 @@ worker SHA-256:
 `2939c9c2fa8b59fcde08908e3ddf6c1e195ecbc27fc1ab0adccd9faa8de6619c`.
 Final server stage-audit SHA-256:
 `ebf036a8786b8c53e9ca20256a8266f90aab99e584e2e35e88cdab24932be6a6`.
-Server acceptance passes. The revised review head requires its own PR CI and
-merged-main CI; the preceding class-token-only CI does not qualify this core.
+Server, revised exact-head PR CI and merged-main CI acceptance pass. The
+preceding class-token-only CI is not used to qualify this corrected core.
 Private inputs, models and individual evidence remain server-only. Protected
 sets are unused. Current-worker original-C QCP qualification, the remaining
 fixed inputs and overall solver superiority remain open.
