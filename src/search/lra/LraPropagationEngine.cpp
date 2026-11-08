@@ -139,6 +139,16 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
     std::optional<RowSnapshot> snapshot;
     std::size_t inputRevision = 0;
 
+    // Explanation quality does not change a numerical endpoint. Finish the
+    // current numerical work before revisiting rows for shorter premises.
+    std::map<std::pair<int, bool>, std::vector<SatLit>> pendingExplanations;
+    auto enqueueIncidentRows = [&](int var) {
+        for (const auto& incident : gs.tableau().col(var).entries) {
+            const int affected = gs.tableau().row(incident.row).basicVar;
+            if (affected >= 0) { enqueue(affected, true); enqueue(affected, false); }
+        }
+    };
+
     auto publish = [&](int var, bool lower, const DeltaRational& value,
                        const RowAggregate& aggregate, const Contribution* excluded,
                        const std::vector<SatLit>& required) {
@@ -148,22 +158,27 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
             return false;
         const bool sameValue = target.value && value == *target.value;
         int reasonLimit = budget.maxReasonSize;
-        if (sameValue && target.explained) {
+        if (sameValue) {
+            if (target.explained && required.size() >= target.reasons.size()) return false;
+            auto bestSize = target.explained ? target.reasons.size() :
+                static_cast<std::size_t>(budget.maxReasonSize) + 1;
+            const auto pending = pendingExplanations.find({var, lower});
+            if (pending != pendingExplanations.end())
+                bestSize = std::min(bestSize, pending->second.size());
             // Every candidate contains the required premises. Reconstruct a
-            // proof only when its cardinality can strictly improve this one.
-            if (required.size() >= target.reasons.size()) return false;
-            reasonLimit = std::min(reasonLimit, static_cast<int>(target.reasons.size()) - 1);
+            // proof only when it can improve both current and pending proofs.
+            if (required.size() >= bestSize) return false;
+            reasonLimit = std::min(reasonLimit, static_cast<int>(bestSize - 1));
         }
         auto reasons = aggregate.explain(excluded, required, reasonLimit);
         if (!reasons) return false;
-        if (gs.basicRowOfVar(var) < 0) ++inputRevision;
         if (sameValue) {
-            // Refine the local proof without exporting an equal-valued bound.
-            // Its shorter premises can unlock later numerical deductions.
-            target.reasons = std::move(*reasons);
-            target.explained = true;
-            return true;
+            pendingExplanations.insert_or_assign(std::make_pair(var, lower), std::move(*reasons));
+            return false;
         }
+        // A proof for the previous, weaker endpoint cannot justify this one.
+        pendingExplanations.erase({var, lower});
+        if (gs.basicRowOfVar(var) < 0) ++inputRevision;
         target.value = value;
         target.reasons = *reasons;
         target.explained = true;
@@ -177,7 +192,26 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
     };
 
     int iterations = 0;
-    while (!work.empty() && iterations < budget.maxIterations && !exhausted()) {
+    while ((!work.empty() || !pendingExplanations.empty()) &&
+           iterations < budget.maxIterations && !exhausted()) {
+        if (work.empty()) {
+            // Coalesce proof-only updates between numerical propagation rounds.
+            // Values and pending premises still belong to this immutable tableau
+            // snapshot, and all of them die before returning to the caller.
+            for (auto& [endpoint, reasons] : pendingExplanations) {
+                if (exhausted()) return accepted;
+                const auto [var, lower] = endpoint;
+                auto& target = bounds[var][lower ? 0 : 1];
+                target.reasons = std::move(reasons);
+                target.explained = true;
+                if (gs.basicRowOfVar(var) < 0) {
+                    ++inputRevision;
+                    enqueueIncidentRows(var);
+                } else enqueue(var, lower);
+            }
+            pendingExplanations.clear();
+            continue;
+        }
         const auto item = work.front();
         work.pop_front();
         queued[item.basic][item.lower ? 0 : 1] = false;
@@ -262,10 +296,7 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
             // Only rows incident to the changed non-basic variable can learn
             // something new. Pending visits coalesce, so the queue is bounded
             // by two entries per tableau row.
-            for (const auto& incident : gs.tableau().col(entry.col).entries) {
-                const int affected = gs.tableau().row(incident.row).basicVar;
-                if (affected >= 0) { enqueue(affected, true); enqueue(affected, false); }
-            }
+            enqueueIncidentRows(entry.col);
         }
     }
     return accepted;

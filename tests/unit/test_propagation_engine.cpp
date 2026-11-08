@@ -870,3 +870,47 @@ TEST_CASE("LraPropagationEngine: explanation refinement preserves strict upper e
         CHECK(streamed[i].reasons == derived[i].reasons);
     }
 }
+
+TEST_CASE("LraPropagationEngine: a stronger endpoint discards its pending weaker proof") {
+    GeneralSimplex gs;
+    const int start = gs.addVar("pending-start");
+    REQUIRE(gs.assertLower(start, mkBound(0, 1)));
+    int previous = start;
+    for (int step = 0; step < 11; ++step) {
+        const int next = gs.addVar("pending-chain-" + std::to_string(step));
+        const int edge = gs.addConstraint({{next, 1}, {previous, -1}}, 0);
+        REQUIRE(gs.assertLower(edge, mkBound(0, 2 + step)));
+        previous = next;
+    }
+    const int shortcut = gs.addConstraint({{previous, 1}, {start, -1}}, 0);
+    REQUIRE(gs.assertLower(shortcut, mkBound(0, 13)));
+
+    const int high = gs.addVar("pending-high");
+    const int nonnegative = gs.addVar("pending-nonnegative");
+    REQUIRE(gs.assertLower(high, mkBound(2, 15)));
+    REQUIRE(gs.assertLower(nonnegative, mkBound(0, 16)));
+    const int stronger = gs.addConstraint({{previous, 1}, {high, -1}, {nonnegative, -1}}, 0);
+    REQUIRE(gs.assertLower(stronger, mkBound(0, 17)));
+    const int result = gs.addVar("pending-result");
+    const int finalEdge = gs.addConstraint({{result, 1}, {previous, -1}}, 0);
+    REQUIRE(gs.assertLower(finalEdge, mkBound(0, 14)));
+
+    // The equations and asserted endpoints are valid independently of the
+    // current primal assignment, so propagation needs no simplex pivot here.
+    LraPropagationEngine engine;
+    const auto derived = engine.propagateAll(gs);
+    const auto found = std::find_if(derived.begin(), derived.end(), [result](const auto& bound) {
+        return bound.var == result && bound.isLower && bound.value == DeltaRational(2);
+    });
+    REQUIRE(found != derived.end());
+    CHECK((found->reasons == std::vector<SatLit>{SatLit::positive(14), SatLit::positive(15),
+                                               SatLit::positive(16), SatLit::positive(17)}));
+    for (const auto& bound : derived) {
+        if (bound.var != result || !bound.isLower || bound.value.a < 2) continue;
+        // The zero-endpoint shortcut cannot justify the stronger value two.
+        CHECK(std::find(bound.reasons.begin(), bound.reasons.end(), SatLit::positive(13)) ==
+              bound.reasons.end());
+    }
+    CHECK_FALSE(gs.varState(result).lower.bound.isFinite());
+    REQUIRE(gs.check() == GeneralSimplex::Result::Sat);
+}
