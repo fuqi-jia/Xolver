@@ -1,5 +1,62 @@
 # Arithmetic validation and continuation record
 
+## In progress: shared ITE consensus propagation (2026-11-09)
+
+Core `02a28b06e0bab007af17188637ca8ef924723886` is pushed on `FULINA`.
+`emitBooleanIteDefinition` in the shared BooleanDefinitions module supplies one
+exact definition for Boolean atomization and arithmetic bit encoding. Two selector-free
+consequences let unit propagation determine the output when both branches
+agree. Allocation guards, gate identity, exact arithmetic, model checks and
+LIA/LRA rollback policies stay intact; there is no new parameter or gate.
+
+The original four-clause relation misses two forced literals among its 81
+partial assignments. The shared six-clause relation misses none and has
+exactly the same models. Native tests check all 16 literal-polarity patterns,
+all partial assignments, encoder integration, completed reuse and failed
+allocation without publishing clauses. Proof-enabled native acceptance passes
+**20 targeted cases / 17,254 assertions** and all **2,306 unit cases /
+1,542,294 assertions**. The complete six-file server delta includes withdrawal
+of the previous tight-face experiment. All **2,343** qualified source bodies
+match the core, including its SOMTParser gitlink.
+
+Native-qualification SHA-256:
+`23f45460eafb854dfc054d3bb9e0a4fbcaeedd44fa1889d36150986320ef31b0`.
+Complete-source-binding SHA-256:
+`ff29ac703977e2ff39aca7f612780c5222f099bb3f198ed6c73741154d62f569`.
+CLI SHA-256:
+`d2725db030101a8262e353019d4a34b1156bc30207b3349bc95849672984bef5`;
+worker SHA-256:
+`c685b97994f98d700a453f6e2006950c4df667d58aaf94861b9c29d1fbf3eae2`.
+
+Main CPU sampling resolves 42 samples, 33 including CaDiCaL. Existing encoding
+observations record 510,018 variables; the definition trace contains 167,598
+ITE nodes in the previously selected development diagnostic. The trace uses
+the qualified e9 diagnostic source with an encoder body identical to main and
+finds **zero** sharing or folding opportunities
+from complementary gate normalization across 463,038 definitions. That
+alternative is closed without a production implementation. Encoding-audit
+SHA-256: `6ef0ade146034e225c53323fcf0a8c44e3cde71cc06896bf2756dd8551f5d00f`;
+structure-audit SHA-256:
+`3631f9a4d91b2c33c4404f83c191b8a075ef7ce2adeb36e90c1acb31058d4212`.
+The original encoding audit mistakenly includes a separate width-only message
+as a completed result; that failure remains preserved. Corrected result-line
+selection retains every source, budget and actual-model check.
+
+A same-CPU frozen main/candidate pilot independently replays all **eight**
+actual SAT models with Z3 and cvc5. Fixed diagnostic time falls **18.005 to
+15.828 seconds**, with SAT time **12.259 to 10.762 seconds** and unchanged
+variable count. The three private diagnostics have no bit-encoding rounds;
+their small timing difference is not attributed to this algorithm. Pilot-audit
+SHA-256: `8cb46bae96a26864426e3b2e4f406b4ca47998bc986b1839bc926a29315beab7`.
+
+Complete same-round comparisons against delivered main `25807183` and frozen
+Z3 are in progress, beginning with private14408 experiment `ae7bf423afa7`
+(r3470). Stage watcher r3473 sequences fixed160, development587 and all 965
+public regressions after each preceding cohort finishes and passes its raw
+audit. Certificate supplements and the final promotion audit remain pending.
+The unchanged full-stage gate applies; no PR or overall solver-superiority,
+protected-set or final-worker original-C QCP claim is made.
+
 ## Closed experiment: finite tight-face eligibility (2026-11-09)
 
 Core `e9b08e98712f185fec01f153ab0a2dde41ec1bc2` is pushed on `FULINA`.
