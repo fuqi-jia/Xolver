@@ -1,5 +1,45 @@
 # Arithmetic validation and continuation record
 
+## Pending follow-up: batch exact sparse row elimination (2026-11-08)
+
+Core `98546bda` replaces repeated per-coefficient position lookups in
+`GeneralSimplex::pivot` with one scatter index per affected row. Substitution
+retains the original exact arithmetic order, swap-pop entry order, column
+back-pointers and pivot choice. Coefficient deletion uses its known position;
+the pivot row is read before mutation instead of copying its coefficients and
+hash index. This is shared simplex work, without a budget, threshold, gate or
+LRA/LIA rollback change. Synthetic checks cover dense exact algebra, sparse
+links, entry order, cancellation, growth and copying.
+
+Core `66eb7ca9` additionally captures the replacement constant before row
+mutation. A native synthetic probe against the preceding component returns
+**6 instead of 4** when that argument aliases a moved coefficient. The repaired
+regression also covers a removed coefficient. Production pivot calls supply an
+independent constant, so this is a component API repair, not an observed
+production wrong verdict or additional SMT solve credit. Panda9 / ExperimentOS
+passes **2,289 cases / 1,532,524 assertions**, and all **2,339 qualified source
+contents** match the corrected core. Both commits are pushed to `FULINA`.
+
+Corrected CLI SHA-256:
+`72a8e6821ade127a9e3cac2619c5afb7305de8d1532981b6996e298813908674`;
+worker SHA-256:
+`2983d4fdd05010f0411a34adc50b3ad492371fe011dfc2a936dec74cbc535ef3`.
+Complete source-binding SHA-256:
+`7f8aaa0b3ddfbef322db036111fd12586e4d45f38cbcf86853185e6c4f1f22d3`.
+
+Fresh complete fixed160, private14408, development587 and public965 checks for
+the corrected binary are running. The preceding frozen trial retains **587 /
+587 / 584** verified main/trial/Z3 development results, with totals **11.832 /
+11.376 / 19.146 seconds**, and passes all **965 public regressions**. Those are
+historical trial observations, not acceptance of the corrected binary. No PR or
+main promotion is qualified yet. The unchanged performance criterion requires
+no lost verified result, lower complete-private solver time and improved combined
+fixed/private verified score. Neither component correctness repair overrides
+that criterion. All formal instances retain **60 seconds / one physical CPU /
+16 GiB**; ExperimentOS permits at most 40 distinct physical CPU leases across
+experiments. Private individual evidence remains server-only. Protected sets,
+current-worker original-C QCP closure and overall superiority remain open.
+
 ## Pending stage: canonical kind metadata and difference graph correctness (2026-11-08)
 
 Core `1f4f2ee1`, merged into `FULINA`, adds a canonical node-kind query and
