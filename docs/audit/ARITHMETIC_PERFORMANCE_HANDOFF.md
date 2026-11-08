@@ -1,6 +1,12 @@
 # Arithmetic validation and continuation record
 
-## Server-accepted stage: transfer owned theory model tables (2026-11-08)
+## Delivered stage: transfer owned theory model tables (2026-11-08)
+
+[PR #115](https://github.com/fuqi-jia/Xolver/pull/115) merged as
+`036dcb1da6d016cfdf6515ed6060d76033977ca4` after complete server acceptance and
+both exact-head [PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42453150057)
+passed. Both [merged-main CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42454456337)
+also pass. Its tree matches reviewed head `abe22965` byte for byte.
 
 Core `38a0c47d`, pushed to `FULINA`, removes an additional copy of all five
 model-table channels in `TheoryManager::getModel`. Scalar correspondences are
@@ -49,7 +55,7 @@ worker SHA-256:
 `5a45ce8c033e3d30c64e73a20b5bbb23c8c93a6c64ab0075849088ead537c2a7`.
 Final server stage-audit SHA-256:
 `e66d518585a22f89a59d77c2b174e067a9182326b97c94e5382accd92d55f8e2`.
-Server acceptance passes; exact-head PR CI and merged-main CI remain required.
+Server, exact-head PR CI and merged-main CI acceptance pass.
 Private inputs, models and individual evidence remain server-only. Protected
 sets are unused. This worker has no original-C QCP qualification. The remaining
 fixed inputs, final-program closure and overall solver superiority remain open.
