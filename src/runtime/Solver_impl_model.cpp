@@ -26,6 +26,9 @@ Solver::ModelValidation Solver::Impl::validateModelImpl() const {
             tokens[name] = value == "true" ? "#b:1" : "#b:0";
         } else {
             tokens[name] = value;
+            // Class identity stays in tokens; any concrete numeric witness is
+            // read from the typed channel below.
+            if (value.starts_with('@')) continue;
             try {
                 mpq_class q(value.rfind("#n:", 0) == 0 ? value.substr(3) : value);
                 if (q.get_den() == 0) return ModelValidation::Indeterminate;
