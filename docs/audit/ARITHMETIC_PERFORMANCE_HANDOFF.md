@@ -1,6 +1,105 @@
 # Arithmetic validation and continuation record
 
-## Server-qualified stage: canonical term reads and sparse elimination (2026-11-08)
+## Server-qualified stage: shared postorder model validation (2026-11-08)
+
+Core `4b93e8c6`, pushed to `FULINA`, removes an unused owning term read
+from the processed phase of `ArithModelValidator::warmEval`. The qualified
+40-pair profile shows **33,582** reads in that traversal for **16,791**
+evaluations: the second traversal visit reads the expression again before
+calling an evaluator that performs its own required read. Child expansion,
+postorder, exact arithmetic, cache lifetime and all three verdicts remain
+unchanged. A synthetic deep shared DAG checks repeated roots, exact large
+values, changing assignments and missing values. Panda9 / ExperimentOS passes
+**2,292 unit cases / 1,532,622 assertions** and the **eight installer contracts**.
+The new fixture initially mistook the copied scalar-assignment constructor
+for a borrowed map; its four failed assertions remain recorded without credit.
+Core `0291b6f6` uses the existing `setRealAssignments` pointer API instead. The
+CLI and worker hashes reproduce the first build exactly: only the fixture
+changes. All **2,340 qualified source contents** bind to this corrected core.
+
+The unchanged 40 diagnostic pairs retain **16,791** evaluations while reducing
+postorder owning reads **33,582 to 16,791** and total owning reads **319,483 to
+302,692**. Model-call counts and independently replayed verdicts are unchanged;
+simulated instructions fall **2,432,362,131 to 2,423,452,041**. This is diagnostic
+evidence only. Fresh frozen complete comparisons use the unchanged **60 seconds /
+one leased physical CPU / 16 GiB** budget and at most 40 physical CPU leases.
+The prior numeric-formatting change is withdrawn from the runtime source.
+
+Private14408 independently verifies **14,408 / 14,408 / 14,408**
+main/candidate/Z3 results at **292.402 / 284.095 / 466.713 seconds**, reducing
+candidate solver time **2.84%**. Candidate totals are lower in **39 of 40**
+paired task slots. These are descriptive observations from one fresh complete
+round, not independent repetitions or a confidence interval. Development587
+retains **587 / 587 / 584** at **11.445 / 11.210 / 18.344 seconds**; three
+unconfirmed reference models remain excluded. All **965 public regressions** pass.
+
+Fixed160 verifies **123 / 123 / 118** after fresh original-input-bound residue
+checking and one applicable independent reference-UNSAT check on the identical
+input and frozen reference versions. Six reference decisions remain unconfirmed
+and excluded. No current timeout or unknown is upgraded. Both Xolver arms have
+**37 timeouts**, without newly solved or lost inputs in this round; the historical
+best of 124 is not improved. Mean verified fixed PAR-2 worsens slightly,
+**32.298 to 32.317 seconds**. Every actual timed Xolver SAT model passes Z3 and
+cvc5 replay; reference SAT models pass cvc5. No opposite verdict, rejected
+model or protocol error is observed.
+
+Combined fixed/private verified PAR-2 improves **5.393 seconds**, so the unchanged
+no-loss/private-faster/combined-score promotion criterion passes. Development587
+is excluded from this combined score to avoid overlap; fixed/private input
+hashes have no overlap. Server acceptance is complete; exact-head PR CI and
+merged-main validation are pending. Remaining difficult inputs, current-worker
+original-C QCP, the final frozen fair comparison and one-time protected evaluation
+remain open. Private inputs, individual identifiers and raw evidence stay on the
+server.
+
+CLI SHA-256:
+`5619991ee6e0febf35061ee84c36ff9d6d755c169fa70ff0e90eb4a2c1b048e7`;
+native-qualification SHA-256:
+`e373cc84011f379d14964c175a70087b116e559dd20b2fda0ef98d25efdcc24a`;
+complete source-binding SHA-256:
+`7b2d288e03104c8ff3e29962aa5d95ba7ab88e4f1f6117718a8adfe6123f4f06`;
+diagnostic profile-audit SHA-256:
+`0becd9502b7199f0b5931b7e18faadb248bd341a938a0a22cc689a3cb2a90a28`.
+Final stage-audit SHA-256:
+`f4581d9428fed0997aabc67ac0b5a32d89dedf8fdda877695be5b2a9186512dd`.
+
+### Closed trial: numeric payload formatting
+
+Published core `e990dab0` avoids a temporary numeric-object copy through the
+existing value formatter. Its source-equivalent frozen build passes **2,291
+unit cases / 1,532,614 assertions** and all **965 public regressions**.
+The same 40 diagnostic pairs retain **319,483** owning reads while reducing
+numeric copies on that path **14,953 to zero** and simulated instructions
+**2,432,278,034 to 2,421,655,830**. These are diagnostic observations, not
+native timing or solved-result evidence.
+
+Fresh complete private14408 comparisons independently verify **14,408 /
+14,408 / 14,408** main/candidate/Z3 results. Totals are **291.826 / 283.664 /
+465.167 seconds**, a **2.80%** candidate reduction in this round. Development587
+retains **587 / 587 / 584**; three reference results remain unconfirmed and
+excluded. Actual timed SAT models are independently replayed.
+
+Fixed160 verifies **124 / 123 / 119** after fresh original-input-bound residue
+checking; applicable old reference evidence adds no confirmations this round.
+Both Xolver arms have **36 timeouts**. One main SAT at **24.126 seconds**
+times out in the candidate; an additional candidate UNSAT remains unconfirmed
+and excluded, as do six reference decisions. Mean verified PAR-2 worsens
+**31.852 to 32.200 seconds**. Combined fixed/private verified PAR-2 worsens
+**47.416 seconds**, so the unchanged no-loss/private-faster/combined-score
+promotion criterion fails. The trial is closed without promotion; no main
+runtime change is delivered from it. Formal budgets remain **60 seconds /
+one leased physical CPU / 16 GiB**. Private individual evidence stays server-only.
+
+Candidate CLI SHA-256:
+`525271eacb72646ee9b87d4d4c4447ddf6c3c792049c15818404d695517a3a6c`;
+final stage-audit SHA-256:
+`8c177e5ea6a3abde5c47c0fd7f8631aaa0f0b765a2fc00ac9a238d8d90d840ad`;
+closure SHA-256:
+`691537f5aa39d665063bc2af50b482af33e017e5ab040d1e80e8037d091d38a4`.
+Protected evaluation, remaining difficult inputs and current-worker original-C
+QCP closure remain open.
+
+## Delivered stage: canonical term reads and sparse elimination (2026-11-08)
 
 [PR #116](https://github.com/fuqi-jia/Xolver/pull/116) merged as
 `c1b9c67720a1f8ef35e8a4a5947276c051875ad4` after server acceptance and both
@@ -9,8 +108,9 @@ passed. Its tree equals reviewed head `3dc9aa7f`. The corresponding
 [main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42464571303) fails on
 both attempts: downloading the pinned independent cvc5 archive returns HTTP
 504 before native-theory checks run; SV checking subsequently cannot find
-cvc5. The proof gate passes. Main delivery remains incomplete until the actual
-checks pass; no checker, expected result or verification step is waived.
+cvc5. The proof gate passes. The subsequent CI-only merge passes its actual
+main checks as recorded below; no checker, expected result or verification
+step is waived.
 
 Core `526a9748` replaces that browser-download URL with the official immutable
 release-asset API. Panda9 / ExperimentOS verifies the actual downloaded archive
@@ -22,8 +122,25 @@ archive and logs. Tool-qualification SHA-256:
 `7441e752d7108d9411e5726b20d63c00a6b24087757228e627258acd1af58861`.
 Both jobs in the exact-code
 [FULINA CI](https://github.com/fuqi-jia/Xolver/actions/runs/42468496162) pass.
-This run includes the subsequently rejected probe prototype. The final CI-only
-repair still requires its own reviewed-head PR CI and merged-main validation.
+This run includes the subsequently rejected probe prototype.
+[PR #117](https://github.com/fuqi-jia/Xolver/pull/117) subsequently passes both
+exact-head [PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42471371218)
+and merges normally as `ae5b23d5b7cd20296a144aa4d0aa0008f70ec938`; its tree
+equals reviewed head `d2740b46`. The corresponding
+[main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42473103996) first fails
+on transient HTTP **502** from the immutable asset endpoint. The second attempt
+passes both `build-test` and `proof-gate`, with the exact merged head verified
+against current remote main. This completes main delivery of the qualified
+runtime and CI-only transport repair.
+
+Core `1ae5ea7e` adds bounded retries for transient transport failures and caches
+only the pinned archive in CI. The archive is still SHA-256 checked on cache
+hits; permanent failures and corrupt responses fail. Panda9 / ExperimentOS
+passes **eight** installer contracts and installs/executes the actual unchanged
+cached cvc5 **1.4.2**. Tool-qualification SHA-256:
+`b4bf51bcbc07b6863db6a54ddb889abddd5c36f9f00e64c3eb30393bb5dddbe8`.
+No solver budget or verification requirement changes. This follow-up is on
+`FULINA` and has not been merged.
 
 Core `1f4f2ee1` adds canonical node-kind metadata before owning expression
 materialization. Core `98546bda` batches exact sparse row substitution through
@@ -62,7 +179,8 @@ The candidate gains one verified result in this round without losing another;
 its **124** results match the historical best, and **36 timeouts remain**.
 Every actual timed Xolver SAT model passes Z3 and cvc5 replay; reference SAT
 models pass cvc5. The unchanged no-loss/private-faster/combined-score server
-criterion passes. PR CI passes; main delivery awaits the checks described above.
+criterion passes. PR CI and the subsequent merged-main CI pass as described
+above.
 
 CLI SHA-256:
 `72a8e6821ade127a9e3cac2619c5afb7305de8d1532981b6996e298813908674`;
@@ -156,7 +274,7 @@ installer and its test. Restoration qualification SHA-256:
 `a255b89f4df7e8005186a1a175640b6ea624aae0e08e3b5e6eaa593922d6f48a`.
 The retained oracle transport fix changes no solver budget, verification policy
 or pinned checker version. Original reports and rejected-source snapshots
-remain intact; the final CI-only PR and merged-main checks are pending.
+remain intact; PR #117 is merged and its main validation is tracked above.
 Private individual evidence stays on the server; protected sets and current
 original-C QCP closure remain untouched and open.
 

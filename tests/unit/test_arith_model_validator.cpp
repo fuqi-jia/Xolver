@@ -218,3 +218,31 @@ TEST_CASE("ArithModelValidator: eval memo prevents shared-DAG blowup") {
     ArithModelValidator v(f.ir, num, {});
     CHECK(v.validate({assertion}) == ArithModelValidator::Verdict::Satisfied);
 }
+
+TEST_CASE("ArithModelValidator: deep shared roots stay exact across model updates") {
+    Fix f;
+    ExprId n = f.var("x", f.intS);
+    constexpr unsigned depth = 2048;
+    for (unsigned i = 0; i < depth; ++i)
+        n = f.bin(Kind::Add, n, n, f.intS);
+    mpz_class expected = 1;
+    mpz_mul_2exp(expected.get_mpz_t(), expected.get_mpz_t(), depth);
+    const auto value = f.ir.add({Kind::ConstInt, f.intS, {}, Payload(expected.get_str())});
+    const auto goal = f.bin(Kind::Eq, n, value, f.boolS);
+    ArithModelValidator::RealAssignment numbers{{"x", RealValue::fromMpq(mpq_class(1))}};
+    ArithModelValidator::BoolAssignment booleans;
+    ArithModelValidator validator(f.ir, {}, booleans);
+    validator.setRealAssignments(&numbers);
+
+    CHECK(validator.validate({goal, goal}) == ArithModelValidator::Verdict::Satisfied);
+    REQUIRE(validator.evalNumber(n));
+    CHECK(*validator.evalNumber(n) == mpq_class(expected));
+    numbers["x"] = RealValue::fromMpq(mpq_class(-1));
+    CHECK(validator.validate({goal}) == ArithModelValidator::Verdict::Violated);
+    CHECK(*validator.evalNumber(n) == -mpq_class(expected));
+    numbers.erase("x");
+    CHECK(validator.validate({goal}) == ArithModelValidator::Verdict::Indeterminate);
+    CHECK_FALSE(validator.evalNumber(n));
+    numbers["x"] = RealValue::fromMpq(mpq_class(1));
+    CHECK(validator.validate({goal}) == ArithModelValidator::Verdict::Satisfied);
+}

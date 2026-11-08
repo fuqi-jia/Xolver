@@ -54,6 +54,12 @@ jobs:
           path: build/bin/xolver
           retention-days: 1
 
+      - name: Cache pinned independent oracle archive
+        uses: actions/cache@v4
+        with:
+          path: .validation-oracles/cvc5-1.4.2.zip
+          key: cvc5-${{ runner.os }}-${{ runner.arch }}-7eb18f8c814c36a46c5a7d003983e9cfbc4b0a9828d6dd596239291bd4cc61d8
+
       - name: Native-theory differential and model checks
         timeout-minutes: 12
         run: |
