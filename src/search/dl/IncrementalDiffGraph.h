@@ -4,6 +4,7 @@
 #include "search/dl/BellmanFord.h"
 #include <vector>
 #include <algorithm>
+#include <optional>
 
 namespace xolver {
 
@@ -26,7 +27,9 @@ namespace xolver {
 //       * feasible        => adopt the new feasible potential (bf.dist).
 // backtrack(level): pop edges enabled above `level`. Removing constraints can
 //   never make a feasible assignment infeasible, so pot_ stays valid with no
-//   recompute.
+//   recompute. A negative cycle is retained while its first conflicting edge
+//   remains enabled. Removing that edge also removes all later unchecked edges,
+//   restoring a prefix certified by the previous feasible potential.
 //
 // Soundness: feasibility verdict + the negative cycle both come from the proven
 // full Bellman-Ford; pot_ is only ever set to a BF-certified feasible
@@ -71,6 +74,9 @@ public:
         edges_.push_back(DlEdge<Weight>{from, to, w, reason, id});
         edgeLevel_.push_back(level);
 
+        // Additional constraints cannot repair a still-enabled negative cycle.
+        if (firstConflictEdge_) return false;
+
         // Already satisfied by the current feasible potential? O(1), no BF.
         // slack >= 0  <=>  pot_[to] - pot_[from] <= w  <=>  NOT (... > w).
         if (!((pot_[to] - pot_[from]) > w)) {
@@ -81,6 +87,7 @@ public:
         BfResult<Weight> bf = runFullOnEnabled();
         if (bf.negativeCycle) {
             lastCycle_ = std::move(bf.cycle);
+            firstConflictEdge_ = id;
             return false;
         }
         pot_ = std::move(bf.dist);   // adopt the new BF-certified feasible potential
@@ -88,13 +95,18 @@ public:
         return true;
     }
 
-    // Undo every enable recorded with level > `level`. pot_ remains feasible
-    // (removing constraints preserves feasibility), so it is NOT recomputed.
+    // Undo trailing enables above `level`. Preserve an active conflict until
+    // its first conflicting edge is removed; a feasible prefix needs no rebuild.
     void backtrack(int level) {
         while (!edgeLevel_.empty() && edgeLevel_.back() > level) {
             edges_.pop_back();
             edgeLevel_.pop_back();
         }
+        // The old potential was feasible before the first conflicting edge.
+        // Removing that edge also removes every later, unchecked edge. Until
+        // then the same negative cycle remains a valid conflict explanation.
+        if (firstConflictEdge_ && edges_.size() > *firstConflictEdge_) return;
+        firstConflictEdge_.reset();
         lastCycle_.clear();
     }
 
@@ -102,6 +114,7 @@ public:
         edges_.clear();
         edgeLevel_.clear();
         lastCycle_.clear();
+        firstConflictEdge_.reset();
         std::fill(pot_.begin(), pot_.end(), Weight{});
     }
 
@@ -122,6 +135,7 @@ private:
     std::vector<int> edgeLevel_;
     std::vector<Weight> pot_;
     std::vector<EdgeId> lastCycle_;
+    std::optional<EdgeId> firstConflictEdge_;
 };
 
 } // namespace xolver

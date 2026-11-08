@@ -10,6 +10,7 @@
 #include "search/dl/BellmanFord.h"
 #include "contracts/SatSolver.h"
 #include <random>
+#include <type_traits>
 #include <vector>
 
 using namespace xolver;
@@ -28,6 +29,52 @@ bool fullFeasibleIdl(int nNodes, const std::vector<E>& edges) {
 }
 
 } // namespace
+
+TEST_CASE_TEMPLATE("IncrementalDiffGraph: conflict stays active until its edge is removed",
+                   Weight, IdlWeight, RdlWeight) {
+    IncrementalDiffGraph<Weight> graph;
+    const int x = graph.getOrCreateNode("x");
+    const Weight negative = [] {
+        if constexpr (std::is_same_v<Weight, RdlWeight>) return RdlWeight(0, -1);
+        else return Weight(-1);
+    }();
+    REQUIRE_FALSE(graph.enableEdge(x, x, negative, SatLit::positive(1), 1));
+    const auto cycle = graph.lastCycle();
+    REQUIRE_FALSE(cycle.empty());
+    auto checkCycle = [&] {
+        CHECK(graph.lastCycle() == cycle);
+        Weight total;
+        for (const auto id : graph.lastCycle()) {
+            REQUIRE(id < graph.numEnabledEdges());
+            total = total + graph.edge(id).weight;
+        }
+        CHECK(total < Weight{});
+    };
+    CHECK_FALSE(graph.enableEdge(graph.zeroNode(), x, Weight(0), SatLit::positive(2), 2));
+    checkCycle();
+    graph.backtrack(1);
+    CHECK(graph.numEnabledEdges() == 1);
+    checkCycle();
+    CHECK_FALSE(graph.enableEdge(x, graph.zeroNode(), Weight(0), SatLit::positive(3), 2));
+    checkCycle();
+
+    auto recovered = graph;
+    recovered.backtrack(0);
+    CHECK(recovered.lastCycle().empty());
+    CHECK(recovered.enableEdge(recovered.zeroNode(), x, Weight(1), SatLit::positive(4), 1));
+    checkCycle();
+    graph.backtrack(0);
+    CHECK(graph.lastCycle().empty());
+    CHECK(graph.enableEdge(graph.zeroNode(), x, Weight(1), SatLit::positive(5), 1));
+    for (EdgeId id = 0; id < graph.numEnabledEdges(); ++id) {
+        const auto& edge = graph.edge(id);
+        CHECK((graph.potential(edge.to) - graph.potential(edge.from) <= edge.weight));
+    }
+    REQUIRE_FALSE(graph.enableEdge(x, x, negative, SatLit::positive(6), 2));
+    graph.clear();
+    CHECK(graph.lastCycle().empty());
+    CHECK(graph.enableEdge(graph.zeroNode(), x, Weight(0), SatLit::positive(7), 0));
+}
 
 TEST_CASE_TEMPLATE("Difference graphs keep the constant vertex outside the symbol map",
                    Weight, IdlWeight, RdlWeight) {

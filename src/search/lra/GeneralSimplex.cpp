@@ -824,8 +824,7 @@ void GeneralSimplex::pivot(int leaving, int entering) {
 
     mpq_class inv_d = 1 / d;
 
-    // Copy old pivot row
-    SparseRow oldPivot = tab_.row(r);
+    const SparseRow& oldPivot = tab_.row(r);
 
     // Build new pivot row: entering = -rhs/a + (1/a)*leaving + Σ(-coeff/a)*x
     std::vector<std::pair<int, mpq_class>> newEntries;
@@ -851,20 +850,7 @@ void GeneralSimplex::pivot(int leaving, int entering) {
         int row = ce.row;
         if (row == r) continue;
 
-        mpq_class c = tab_.getCoeff(row, entering);
-        if (c == 0) continue;
-
-        tab_.eraseCoeff(row, entering);
-
-        // row_rhs += c * newRhs
-        tab_.row(row).rhs += c * newRhs;
-
-        // row += c * newEntries
-        for (const auto& [col, coeff] : newEntries) {
-            tab_.addCoeff(row, col, c * coeff);
-        }
-
-        tab_.row(row).version++;
+        tab_.eliminateColumn(row, entering, newRhs, newEntries);
 
         int xb = tab_.row(row).basicVar;
         refreshViolationStatus(xb);

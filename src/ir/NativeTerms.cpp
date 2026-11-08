@@ -291,27 +291,36 @@ ExprId NativeTerms::addShared(TermExpr expr) {
     return index(construct(expr, sort, storage_->nodes, storage_->manager.get()));
 }
 
+Kind NativeTerms::kind(ExprId id) const {
+    const Node& node = storage_->nodes.at(id);
+    auto result = nativeKind(node->getKind());
+    if (result == Kind::ConstReal) {
+        const auto sk = sortKind(storage_->nodeSorts.at(id));
+        if (sk == SortKind::Int) result = Kind::ConstInt;
+        else if (sk == SortKind::BV) result = Kind::ConstBV;
+        else if (sk == SortKind::FP) result = Kind::ConstFP;
+        else if (sk == SortKind::Bool) result = Kind::ConstBool;
+    }
+    if ((result == Kind::Gt || result == Kind::Geq) && node->getChildrenSize() == 2)
+        result = result == Kind::Gt ? Kind::Lt : Kind::Leq;
+    return result;
+}
+
 const TermExpr NativeTerms::get(ExprId id) const {
     const Node& node = storage_->nodes.at(id);
     TermExpr out;
-    out.kind = nativeKind(node->getKind());
+    out.kind = kind(id);
     out.sort = storage_->nodeSorts.at(id);
-    if (out.kind == Kind::ConstReal) {
-        const auto sk = sortKind(out.sort);
-        if (sk == SortKind::Int) out.kind = Kind::ConstInt;
-        else if (sk == SortKind::BV) out.kind = Kind::ConstBV;
-        else if (sk == SortKind::FP) out.kind = Kind::ConstFP;
-        else if (sk == SortKind::Bool) out.kind = Kind::ConstBool;
-    }
     const auto arity = node->getChildrenSize();
     out.children.reserve(arity);
     // The index owns the parent. Avoid extra owning range/iterator handles,
     // and transfer each temporary child handle into alias resolution.
     for (size_t i = 0; i < arity; ++i)
         out.children.push_back(storage_->ids.at(resolve(node->getChild(static_cast<int>(i)))));
-    if ((out.kind == Kind::Gt || out.kind == Kind::Geq) && out.children.size() == 2) {
-        out.kind = out.kind == Kind::Gt ? Kind::Lt : Kind::Leq;
-        std::swap(out.children[0], out.children[1]);
+    if (out.children.size() == 2) {
+        const auto nativeOp = node->getKind();
+        if (nativeOp == NODE_KIND::NT_GT || nativeOp == NODE_KIND::NT_GE)
+            std::swap(out.children[0], out.children[1]);
     }
     if (out.isConst()) {
         const auto value = node->getValue();
