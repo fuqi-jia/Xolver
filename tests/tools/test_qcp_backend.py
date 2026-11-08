@@ -37,7 +37,7 @@ class QcpBackendTests(unittest.TestCase):
         self.assertTrue(result['timed_out'])
         self.assertTrue(result['budget_overrun'])
         self.assertAlmostEqual(result['seconds'], 61.1)
-        process.wait.assert_called_once_with(timeout=5)
+        process.wait.assert_called_once_with()
 
     def fixture(self, root):
         goals = root / 'goal.v'
