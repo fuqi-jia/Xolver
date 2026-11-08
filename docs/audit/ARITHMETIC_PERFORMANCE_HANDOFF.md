@@ -1,6 +1,14 @@
 # Arithmetic validation and continuation record
 
-## Server-qualified stage: shared postorder model validation (2026-11-08)
+## Delivered stage: shared postorder model validation (2026-11-08)
+
+[PR #118](https://github.com/fuqi-jia/Xolver/pull/118) passes both exact-head
+[PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42478084803) and merges
+normally as `e51068f0d3379974c897ffa5eb30107aec05a20f`. Its entire tree equals
+reviewed head `85a1f3b0`. Both jobs in the corresponding
+[main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42480091399) pass, and
+the current remote-main head is verified. `FULINA` is fast-forwarded to the
+merge. No checker or server acceptance condition is waived.
 
 Core `4b93e8c6`, pushed to `FULINA`, removes an unused owning term read
 from the processed phase of `ArithModelValidator::warmEval`. The qualified
@@ -46,8 +54,8 @@ model or protocol error is observed.
 Combined fixed/private verified PAR-2 improves **5.393 seconds**, so the unchanged
 no-loss/private-faster/combined-score promotion criterion passes. Development587
 is excluded from this combined score to avoid overlap; fixed/private input
-hashes have no overlap. Server acceptance is complete; exact-head PR CI and
-merged-main validation are pending. Remaining difficult inputs, current-worker
+hashes have no overlap. Server acceptance, exact-head PR CI and merged-main
+validation pass. Remaining difficult inputs, current-worker
 original-C QCP, the final frozen fair comparison and one-time protected evaluation
 remain open. Private inputs, individual identifiers and raw evidence stay on the
 server.
