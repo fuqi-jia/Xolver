@@ -113,6 +113,22 @@ TEST_CASE("SparseTableau: substitutions isolate scratch positions across copies 
     CHECK(tableau.row(0).rhs == 0);
 }
 
+TEST_CASE("SparseTableau: substitution reads aliased constants before moving or removing coefficients") {
+    SparseTableau tableau;
+    for (int i = 0; i < 4; ++i) tableau.addEmptyCol();
+    tableau.addEmptyRow();
+    tableau.replaceRow(0, 3, 0, {{0, 2}, {1, 3}});
+    tableau.eliminateColumn(0, 0, tableau.getCoeff(0, 0), {{2, 1}});
+    CHECK(tableau.row(0).rhs == 4);
+    CHECK(tableau.getCoeff(0, 0) == 0);
+    CHECK(tableau.getCoeff(0, 1) == 3);
+    CHECK(tableau.getCoeff(0, 2) == 2);
+    tableau.eliminateColumn(0, 2, tableau.getCoeff(0, 2), {{0, 1}});
+    CHECK(tableau.row(0).rhs == 8);
+    CHECK(tableau.getCoeff(0, 0) == 2);
+    CHECK(tableau.getCoeff(0, 2) == 0);
+}
+
 TEST_CASE("GeneralSimplex: blocked rows keep exact conflicts among repairable rows") {
     for (auto policy : {GeneralSimplex::AssignmentPolicy::Reinitialize,
                         GeneralSimplex::AssignmentPolicy::Preserve}) {

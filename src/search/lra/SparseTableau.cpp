@@ -148,6 +148,8 @@ void SparseTableau::eliminateColumn(
     const int eliminated = findRowPos(r, col);
     if (eliminated < 0) return;
     const mpq_class scale = r.entries[eliminated].coeff;
+    // The supplied constant may refer to a coefficient removed or moved below.
+    const mpq_class rhsDelta = scale * rhs;
     rowPositions_.resize(cols_.size(), -1);
     for (int i = 0; i < static_cast<int>(r.entries.size()); ++i)
         rowPositions_[r.entries[i].col] = i;
@@ -160,7 +162,7 @@ void SparseTableau::eliminateColumn(
             rowPositions_[r.entries[position].col] = position;
     };
     erase(eliminated);
-    r.rhs += scale * rhs;
+    r.rhs += rhsDelta;
     for (const auto& [variable, coefficient] : entries) {
         const mpq_class delta = scale * coefficient;
         if (delta == 0) continue;
