@@ -4,6 +4,7 @@ import signal
 import subprocess
 import tempfile
 import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as WaitTimeout
 
 
 def run_with_budget(command, timeout, environment):
@@ -16,17 +17,29 @@ def run_with_budget(command, timeout, environment):
         launched = time.monotonic()
         expired = False
         notified = None
-        try:
-            process.wait(timeout=max(0, timeout - (launched - start)))
-        except subprocess.TimeoutExpired:
-            expired = True
-            notified = time.monotonic()
+        # A timed Popen.wait() polls on POSIX, rounding short lifetimes up to
+        # its next sleep interval. A blocking reaper wakes the future on exit;
+        # only the caller's notification wait carries the remaining deadline.
+        with ThreadPoolExecutor(max_workers=1) as reaper:
+            completion = reaper.submit(process.wait)
             try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            process.wait()
-        end = time.monotonic()
+                completion.result(timeout=max(0, timeout - (time.monotonic() - start)))
+            except WaitTimeout:
+                expired = True
+                notified = time.monotonic()
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                completion.result()
+            except BaseException:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                process.wait()
+                raise
+            end = time.monotonic()
         stdout_file.seek(0)
         stderr_file.seek(0)
         stdout, stderr = stdout_file.read(), stderr_file.read()
