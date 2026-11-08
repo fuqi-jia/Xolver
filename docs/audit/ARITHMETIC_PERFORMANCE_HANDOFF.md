@@ -1,5 +1,72 @@
 # Arithmetic validation and continuation record
 
+## Current development: shorter explanations and precise process timing
+
+Arithmetic core `56a73abd`, followed by timing commits `c20bdc75` and
+`0b823e77`, is pushed to `FULINA`; no PR or main delivery is claimed yet.
+The unchanged propagation implementation fails an independently constructed
+negative control under its default configuration: a twelve-premise path masks
+a two-premise proof of the same endpoint, preventing the next implied bound
+from fitting the existing explanation limit. The candidate retains strictly
+shorter proofs in its call-local overlay and revisits affected rows, while
+exporting only numerically stronger endpoints. No bound or proof survives a
+call or backtrack. All numerical and public budget policies stay unchanged.
+
+Panda9 / ExperimentOS passes **2,300 native unit cases / 1,537,359 assertions**.
+Three added cases cover the default-configuration shortcut, child-scope
+withdrawal, and strict upper endpoints with negative coefficients and streamed
+output. The old implementation's expected failed control is retained separately,
+without passed-test credit. The native CLI is
+`61fc03545318e26fdf01ffdfecd24dd3b07e8e9836e100de4577ec2c4dfbaade`;
+worker is `27afccfcdaa689d0eeef1b5e5ba583a0876794db4ed008796bfbd87ce7041ba0`.
+
+The first complete comparison independently verifies **14,408 / 14,408 /
+14,408** private results and **124 / 124 / 117** fixed results for merged main
+`d4eecb78`, candidate and Z3 after original-input-bound certificate checking.
+There are no gained or lost verified results. Candidate Fixed160 has **35
+timeouts and one additional unconfirmed UNSAT**, excluded from its score;
+main has **36 timeouts**, and six reference decisions remain unconfirmed.
+Development587 retains **587 / 587 / 584**; all **965** public regressions pass.
+The first stage-audit SHA-256 is
+`a1247b90c0483926c4f34a990fac7b02782e25efffebb347b6696345cf2d698e`.
+Its recorded timing gate passes, but timing precision must be corrected before
+using the small differences as performance evidence. The inspected 40 private
+profiles do not call the modified row propagator, so the private timing delta
+is not attributed to its explanation algorithm.
+
+The shared `tools/process_budget.py` used timed POSIX `Popen.wait`, whose polling
+can delay observing a short child's exit. Controlled children record a shared
+monotonic timestamp immediately before exit: 24 samples show a median **6.639
+ms** and maximum **49.552 ms** post-exit tail. A blocking child reaper with
+remaining-deadline notification reduces these to **0.582 ms / 1.078 ms** over
+24 new samples. These residuals also include termination and scheduling cost;
+this is timing validation, not a solver speedup. All old raw records remain
+unchanged. Historical short-query totals below have this coarse exit-observation
+limitation; correctness evidence and instruction profiles retain their own scope.
+
+The helper keeps the existing single budget including process creation,
+process-group timeout cleanup, cancellation handling and return fields. All
+**36** affected arithmetic/model-capture/QCP tool contracts pass. The first tool
+qualification's one stale QCP call-shape assertion and its failure log remain
+preserved; the late-success rejection assertions were never removed. Native
+compile and unit sources and all three native binary identities are unchanged,
+so their qualified 2,300-case evidence is reused explicitly. Every one of
+**2,343** qualified source bodies binds to `0b823e77`. Updated qualification
+SHA-256: `f29812079c2001b7c46693ba9ae7af8f4bf02661ae12148d5895f20ba9ac4d3e`;
+complete source-binding SHA-256:
+`90cb3cc0894307317833d6ab112e914180de215f347679f89f5488ece502d2cc`;
+timing-precision audit SHA-256:
+`26e5136f6a0db0fe1c6f1e374853d28517c11e91c57cf51abf906ec738ba6927`.
+
+Fresh complete comparisons now use the same qualified notification helper in
+all three arms, with unchanged frozen solvers and **60 seconds / one leased
+physical CPU / 16 GiB** budgets: Private14408 `0625cac26eee`, Fixed160
+`93f583576401`, and Development587 `56b370357712`. Their inputs and timing method
+are frozen; continue these exact ExperimentOS runs. Their results, normal PR/main
+CI delivery, remaining difficult inputs, final-worker original-C QCP and final
+protected evaluation remain open. Private inputs and individual evidence stay
+server-only.
+
 ## Delivered stage: shared sparse difference equalities (2026-11-08)
 
 Core `76c8c996`, pushed to `FULINA`, replaces LIA's remaining quadratic
