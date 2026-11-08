@@ -20,8 +20,10 @@ transport failure. The first server wrapper's incorrect version-output spelling
 remains recorded as a failed attempt; read-only revalidation preserves its
 archive and logs. Tool-qualification SHA-256:
 `7441e752d7108d9411e5726b20d63c00a6b24087757228e627258acd1af58861`.
-The exact-code [FULINA CI](https://github.com/fuqi-jia/Xolver/actions/runs/42468496162)
-is running; it is not completed PR or main validation.
+Both jobs in the exact-code
+[FULINA CI](https://github.com/fuqi-jia/Xolver/actions/runs/42468496162) pass.
+This run includes the subsequently rejected probe prototype. The final CI-only
+repair still requires its own reviewed-head PR CI and merged-main validation.
 
 Core `1f4f2ee1` adds canonical node-kind metadata before owning expression
 materialization. Core `98546bda` batches exact sparse row substitution through
@@ -129,9 +131,26 @@ gaining one independently verified SAT without losses. Totals are **383.196 /
 365.511 / 55.085 seconds**; actual timed SAT models pass independent replay.
 The pilot audit SHA-256 is
 `9b07bf0922a74efa8f0130e1c5040b8b2e99278ab39b249a95fc5fb758e1f1c1`.
-Complete fixed160, private14408, development587 and 965 public regressions are
-now running under their original budgets. This pilot is not complete-stage
-acceptance, a new complete-fixed score or evidence of overall Z3 superiority.
+Complete frozen comparisons now reject this successor too. Private14408
+verifies **14,408 / 14,408 / 14,408** at **291.738 / 284.198 / 465.492 seconds**,
+a **2.58%** candidate reduction. Development587 retains **587 / 587 / 584**,
+and all **965 public regressions** pass. Fixed160 verifies **123 / 123 / 116**
+after fresh original-input-bound residue checking and applicable independent
+reference-UNSAT evidence. Both Xolver arms have **37 timeouts**; six reference
+decisions remain unconfirmed and excluded. No timeout or unknown is upgraded,
+and actual timed SAT models are independently replayed. Mean verified fixed
+PAR-2 worsens **32.265 to 32.326 seconds**. There are no complete-round gains
+or losses; the pilot gain does not reproduce in this full round. The historical
+best remains 124, rather than a newly improved complete-fixed score.
+
+Combined fixed/private verified PAR-2 worsens **2.146 seconds**, so the unchanged
+preregistered promotion criterion fails. This successor is closed without
+promotion; closure SHA-256:
+`e5ecabfde6b09f10f67be963e548adaa85c56946674d7e8eefcfc4406e071972`.
+The optional probe implementation is withdrawn from the development tree.
+Native restoration and exact binary-identity checks are pending. The retained
+oracle transport fix changes no solver budget, verification policy or pinned
+checker version. Original reports and rejected-source snapshots remain intact.
 Private individual evidence stays on the server; protected sets and current
 original-C QCP closure remain untouched and open.
 

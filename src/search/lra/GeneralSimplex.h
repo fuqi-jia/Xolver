@@ -212,13 +212,6 @@ public:
         if (pointRevision_ == std::numeric_limits<uint64_t>::max()) return std::nullopt;
         return pointRevision_;
     }
-    // Copies share equation identities until either copy adds a definition or
-    // resets. Bounds, points and equivalent pivot bases do not change them.
-    // Allocate only for clients that actually retain an isolated equation base.
-    std::shared_ptr<const void> definitionsIdentity() const {
-        if (!definitionsIdentity_) definitionsIdentity_ = std::make_shared<const char>(0);
-        return definitionsIdentity_;
-    }
     bool hasCoherentPoint() const noexcept { return !betaDirty_; }
     int numVars() const { return static_cast<int>(vars_.size()); }
     int numRows() const { return tab_.numRows(); }
@@ -299,7 +292,6 @@ public:
 #endif
 
 private:
-    mutable std::shared_ptr<const void> definitionsIdentity_;
     mutable std::shared_ptr<const FixedValueAnalysis> fixedValueAnalysis_;
     std::unordered_set<int> boundedVars_;
     // Sparse column-to-slot index and reusable owned endpoint storage. Scratch

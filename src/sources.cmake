@@ -152,7 +152,6 @@ set(XOLVER_SEARCH_SOURCES
     "search/linear/IntegerLinearSystem.cpp"
     "search/linear/IntegerModelCompletion.cpp"
     "search/linear/IntegerReasoner.cpp"
-    "search/linear/LinearAssumptionProbe.cpp"
     "search/linear/LinearAtomManager.cpp"
     "search/linear/LinearBoundPropagation.cpp"
     "search/linear/LinearConstraintRegistration.cpp"

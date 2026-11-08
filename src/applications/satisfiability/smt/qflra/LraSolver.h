@@ -6,7 +6,6 @@
 #include "search/combination/SharedTermRegistry.h"
 #include "search/lra/GeneralSimplex.h"
 #include "search/lra/LraPropagationEngine.h"
-#include "search/linear/LinearAssumptionProbe.h"
 #include <gmpxx.h>
 #include <optional>
 #include <unordered_map>
@@ -195,12 +194,6 @@ private:
         const LraPropagationEngine::ExplainedBound& eb,
         const std::vector<int8_t>& activeValues,
         const std::unordered_set<uint64_t>& queuedConclusions);
-
-    std::optional<TheoryLemma> probeRegisteredBound(
-        const std::vector<int8_t>& activeValues,
-        const std::unordered_set<uint64_t>& queuedConclusions);
-    std::size_t nextProbeRecord_ = 0;
-    LinearAssumptionProber assumptionProber_;
 
     // Buffer of this check's entailment propagations.
     std::vector<TheoryLemma> entailmentProps_;

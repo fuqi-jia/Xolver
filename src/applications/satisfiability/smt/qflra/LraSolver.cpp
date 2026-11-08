@@ -1,5 +1,4 @@
 #include "base/RuntimeConfig.h"
-#include "base/SolveClock.h"
 #include "ir/NumericLiteral.h"
 #include "base/MpqUtils.h"
 #include "applications/satisfiability/smt/qflra/LraSolver.h"
@@ -10,7 +9,6 @@
 #include "search/coordination/TheoryAtomRegistry.h"
 #include "search/coordination/TheoryLemmaDatabase.h"
 #include "search/linear/SimplexDiseqSplitter.h"
-#include "search/linear/LinearAssumptionProbe.h"
 #include "contracts/TheoryAtomTypes.h"
 #ifdef XOLVER_ENABLE_PROOFS
 #include "evidence/TheoryProofSink.h"
@@ -131,8 +129,6 @@ void LraSolver::onReset() {
     scopes_.clear();
     clearActiveSources();
     currentLevel_ = 0;
-    nextProbeRecord_ = 0;
-    assumptionProber_.reset();
     resetAppliedBounds(GeneralSimplex::AssignmentPolicy::Reinitialize);
 }
 
@@ -401,10 +397,6 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
             }
             return entailmentProps_.size() < kMaxProps;
         });
-    if (entailmentProps_.size() < kMaxProps) {
-        if (auto lemma = probeRegisteredBound(activeValues, queuedConclusions))
-            entailmentProps_.push_back(std::move(*lemma));
-    }
     // Interface disequality vs. an entailed equality: if an asserted 2-var
     // equality atom or two complementary inequalities pin (x - y) to 0, then
     // x = y is entailed and an interface disequality x != y is a hard conflict
@@ -890,46 +882,6 @@ std::optional<TheoryLemma> LraSolver::buildEntailmentLemma(
 
 std::vector<TheoryLemma> LraSolver::takeEntailmentPropagations() {
     return std::move(entailmentProps_);
-}
-
-std::optional<TheoryLemma> LraSolver::probeRegisteredBound(
-    const std::vector<int8_t>& activeValues,
-    const std::unordered_set<uint64_t>& queuedConclusions) {
-    if (!registry_) return std::nullopt;
-    const auto& records = registry_->records();
-    for (std::size_t visited = 0; visited < records.size(); ++visited) {
-        nextProbeRecord_ %= records.size();
-        const auto& record = records[nextProbeRecord_++];
-        if (record.theory != TheoryId::LRA) continue;
-        if (record.satVar < activeValues.size() && activeValues[record.satVar]) continue;
-        const auto key = static_cast<uint64_t>(record.satVar) << 1;
-        if (queuedConclusions.contains(key) || queuedConclusions.contains(key | 1)) continue;
-        const auto* atom = std::get_if<LinearAtomPayload>(&record.payload);
-        if (!atom) continue;
-        const auto rhs = atom->rhs.tryAsRational();
-        const auto phase = manager_.evaluateAtModel(gs_, *atom, SortKind::Real);
-        if (!rhs || !phase) continue;
-        const SatLit conclusion{record.satVar, *phase};
-        const auto opposite = conclusion.negated();
-        const LinearProbeAssumption assumption{atom->lhs,
-            *phase ? negateRelation(atom->rel) : atom->rel, *rhs, opposite};
-        // One existing predicate is selected per check. The cursor gives the
-        // remaining vocabulary a turn; only an exact refutation yields a fact.
-        const auto proof = assumptionProber_.probe(gs_, manager_,
-            std::span<const LinearProbeAssumption>(&assumption, 1), wall::deadline());
-        if (proof.status != GeneralSimplex::Result::Unsat) return std::nullopt;
-        TheoryLemma lemma;
-        lemma.kind = LemmaKind::Entailment;
-        for (const auto reason : proof.conflictReasons) {
-            if (reason == opposite) continue;
-            if (reason.var == conclusion.var) return std::nullopt;
-            lemma.lits.push_back(reason.negated());
-        }
-        if (!normalizeTheoryClause(lemma.lits)) return std::nullopt;
-        lemma.lits.push_back(conclusion);
-        return lemma;
-    }
-    return std::nullopt;
 }
 
 std::optional<bool> LraSolver::evalAtomAtModel(SatVar v) {
