@@ -11,6 +11,7 @@
 #include "search/coordination/TheoryAtomRegistry.h"
 #include "search/datatype/DtModelValidator.h"
 #include "ir/NativeTerms.h"
+#include "algebra/integer/EuclideanDivision.h"
 #include <somtparser/parser.h>
 #include <cassert>
 #include <algorithm>
@@ -163,20 +164,21 @@ void EufSolver::tryEvaluateBuiltin(EufTermId t, int level) {
         if (values.size() != 2) return;
         result = values[0] * values[1];
         ok = true;
-    } else if (symName == "#builtin.Div") {
+    } else if (symName == "#builtin.Div" || symName == "#builtin.Mod") {
         if (values.size() != 2) return;
         if (values[1] == 0) return;
-        result = values[0] / values[1];
-        ok = true;
-    } else if (symName == "#builtin.Mod") {
-        if (values.size() != 2) return;
-        if (values[1] == 0) return;
-        // mpq_class doesn't have mod; use integer mod if both are integers
-        if (values[0].get_den() == 1 && values[1].get_den() == 1) {
-            mpz_class r = values[0].get_num() % values[1].get_num();
-            result = mpq_class(r);
-            ok = true;
+        const auto domain = nativeTerms_->sortKind(node.sort);
+        if (domain == SortKind::Int) {
+            if (values[0].get_den() != 1 || values[1].get_den() != 1) return;
+            const auto division = euclideanDivMod(values[0].get_num(), values[1].get_num());
+            if (!division) return;
+            result = symName == "#builtin.Div" ? division->quotient : division->remainder;
+        } else if (domain == SortKind::Real && symName == "#builtin.Div") {
+            result = values[0] / values[1];
+        } else {
+            return;
         }
+        ok = true;
     } else if (symName == "#builtin.Abs") {
         if (values.size() != 1) return;
         result = abs(values[0]);

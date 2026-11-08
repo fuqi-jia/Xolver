@@ -67,6 +67,37 @@ TEST_CASE("CandidateModelSearch: default UF search emits an independently valid 
     CHECK(validator.validate(f.ir.assertions()) == ArithModelValidator::Verdict::Satisfied);
 }
 
+TEST_CASE("CandidateModelSearch: integer division validates Euclidean quotients") {
+    struct Example { int numerator, divisor, quotient; };
+    for (const auto example : {Example{3, 2, 1}, Example{3, -2, -1},
+                               Example{-3, 2, -2}, Example{-3, -2, 2}}) {
+        CAPTURE(example.numerator); CAPTURE(example.divisor);
+        for (const bool equality : {true, false}) {
+            CAPTURE(equality);
+            CandidateFixture f;
+            const auto x = f.variable();
+            f.equal(x, f.number(example.numerator));
+            const auto quotient = f.ir.add({Kind::Div, f.integer,
+                                            {x, f.number(example.divisor)}, {}});
+            f.ir.addAssertion(f.ir.add({equality ? Kind::Eq : Kind::Distinct, f.boolean,
+                                       {quotient, f.number(example.quotient)}, {}}));
+            const auto result = CandidateModelSearch(f.ir, "QF_LIA").run();
+            if (equality) f.check(result);
+            else CHECK_FALSE(result.found);
+        }
+    }
+    CandidateFixture real;
+    const auto sort = real.ir.allocateSortId();
+    real.ir.registerSort(sort, SortKind::Real);
+    auto number = [&](const std::string& value) {
+        return real.ir.add({Kind::ConstReal, sort, {}, Payload(value)});
+    };
+    const auto x = real.ir.add({Kind::Variable, sort, {}, Payload(std::string("x"))});
+    real.equal(x, number("3"));
+    real.equal(real.ir.add({Kind::Div, sort, {x, number("2")}, {}}), number("3/2"));
+    real.check(CandidateModelSearch(real.ir, "QF_LRA").run());
+}
+
 TEST_CASE("CandidateModelSearch: equal evaluated arguments cannot have unequal function values") {
     CandidateFixture f;
     auto x = f.ir.add(TermExpr{Kind::Variable, f.integer, {}, Payload(std::string("x"))});

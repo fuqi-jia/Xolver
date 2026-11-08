@@ -1,6 +1,125 @@
 # Arithmetic validation and continuation record
 
-## Server-qualified stage: reduce owning native read handles (2026-11-07)
+## Server-accepted stage: exact integer evaluation and class interpretations (2026-11-08)
+
+[PR #114](https://github.com/fuqi-jia/Xolver/pull/114) includes a correctness
+follow-up found during the preceding class-token-only CI run. An isolated
+Panda9 / ExperimentOS component probe, linked against the qualified class-token
+core, produces **two false EUF conflicts across four generic sign controls**.
+Z3, cvc5 and the production CLI return SAT on all four controls. The confirmed
+issue is the internal builtin's use of truncated remainders for negative
+operands; production preprocessing handles these controls correctly.
+
+The follow-up introduces one exact Euclidean quotient/remainder kernel for
+integer evaluation. EUF builtin division now distinguishes Int from Real, and
+candidate witness evaluation uses the same integer semantics. Zero division
+keeps its existing caller-owned interpretation; the independent model validator
+retains its separate arithmetic implementation. New regressions cover signed
+remainders, quotient congruence, current conflict explanations after backtracking,
+candidate acceptance, exact large integers and real division. Three identical
+new regression cases fail against the old runtime and pass after correction.
+The proof-enabled Panda9 / ExperimentOS build passes **2,281 unit cases /
+1,453,087 assertions**. All **2,339 qualified source contents** match core
+`2853244d`, including the unchanged parser gitlink. Sixteen generic operator
+controls pass independent checks in every solver arm, including actual timed
+model replay. Their production CLI results already passed before this repair;
+the changed behavior is the internal theory/candidate evaluation contract.
+
+The core retains read-only class-token reuse. On the same 40 structural profile
+pairs, class-token member reads decrease **265,678 to 22,286**, total owning
+native reads decrease **695,272 to 451,880**, and simulated instructions decrease
+**4.51%**. These are diagnostics, not formal timing or solve credit.
+
+Fresh complete comparison against delivered main-equivalent review `43e744fc`
+and the same frozen Z3 verifies **14,408 / 14,408 / 14,408** private results.
+Baseline/candidate/Z3 solver totals are **302.515 / 287.193 / 465.897 seconds**,
+reducing candidate time **5.06%**. Development587 retains **587 / 587 / 584**
+verified results, with totals **11.599 / 11.109 / 18.068 seconds**; three
+unconfirmed reference models remain excluded. All **965 public regressions**
+pass. Every formal solve uses **60 seconds / one leased physical CPU / 16 GiB**,
+with up to 40 distinct physical CPU leases. Actual timed Xolver SAT models pass
+Z3 and cvc5 replay. No cohort loses a verified result or has a candidate error.
+
+Fixed160 verifies **124 / 124 / 117** after a fresh input-bound residue
+certificate confirms only actual timed UNSAT decisions. Both Xolver arms retain
+**36 timeouts**, with no gains or losses. Mean verified PAR-2 is **31.649 /
+31.649 / 33.642 seconds**; the Xolver timing difference is negligible. Six
+reference decisions remain unconfirmed and excluded. Raw timed reports remain
+unchanged, and historical evidence never upgrades a current incomplete decision.
+
+Frozen CLI SHA-256:
+`62a68cfcccb1f7c9aa9fcd1c21f19d3b7618231b9256412ccd7f8b92317a884b`;
+worker SHA-256:
+`2939c9c2fa8b59fcde08908e3ddf6c1e195ecbc27fc1ab0adccd9faa8de6619c`.
+Final server stage-audit SHA-256:
+`ebf036a8786b8c53e9ca20256a8266f90aab99e584e2e35e88cdab24932be6a6`.
+Server acceptance passes. The revised review head requires its own PR CI and
+merged-main CI; the preceding class-token-only CI does not qualify this core.
+Private inputs, models and individual evidence remain server-only. Protected
+sets are unused. Current-worker original-C QCP qualification, the remaining
+fixed inputs and overall solver superiority remain open.
+
+## Superseded stage: class interpretations before the integer repair (2026-11-08)
+
+The immutable LRA column-definition experiment is closed without demonstrated
+gain. Its frozen 14-input comparison retains **10 / 10 / 12** independently
+verified baseline/candidate/Z3 results, with no gains or losses. Totals are
+**371.486 / 370.841 / 196.551 seconds**; the 0.17% decrease does not establish a
+robust improvement. The runtime change is withdrawn and raw reports remain
+unchanged. No complete-cohort promotion is claimed.
+
+The next implementation reuses exact EUF class tokens only within the read-only
+function/scalar model-construction pass. On the existing 40 structural profiles,
+class-token scans account for **265,678 of 695,272** owning native term reads.
+Each current representative is resolved once; the local memo is destroyed
+before subsequent merges or backtracking. Model validation, array construction,
+literal choice, full checks and theory rollback semantics are retained.
+Generic regressions cover repeated aliases, function tables, class splits and
+new exact numeric anchors. Panda9 / ExperimentOS passes **2,277 unit cases /
+1,450,712 assertions**, with all **2,338 qualified source contents** bound to
+core `52aef6c7`. The same 40 structural profile pairs reduce class-token member
+reads from **265,678 to 22,286**, and total owning native reads from **695,272 to
+451,880**. Total simulated instructions decrease **4.50%**; these profiles are
+diagnostics rather than formal timing or solve credit.
+
+Fresh complete private14408 comparison retains **14,408 / 14,408 / 14,408**
+independently verified baseline/candidate/Z3 results. Solver totals are
+**302.834 / 288.022 / 467.402 seconds**, reducing candidate time **4.89%**.
+Development587 retains **587 / 587 / 584** verified results and totals
+**11.603 / 11.020 / 17.951 seconds**; its three unconfirmed reference models
+remain excluded. There are no gains, losses or candidate errors in either
+cohort. All **965 public regressions** pass. Each formal solve receives
+**60 seconds / one leased physical CPU / 16 GiB**, with up to 40 distinct
+physical CPU leases. Actual timed candidate SAT models pass Z3 and cvc5 replay.
+Fixed160 verifies **124 / 124 / 118** results after a fresh input-bound residue
+certificate confirms only actual timed UNSAT decisions. Both Xolver arms retain
+**36 timeouts**, with no gains or losses. Mean verified PAR-2 is **31.665 /
+31.559 / 33.160 seconds**. One reference UNSAT retains previously successful
+independent cvc5 evidence on the identical frozen input and reference versions,
+after its fresh independent recheck times out. Its current-round solver time is
+preserved. Six reference decisions remain unconfirmed and excluded; raw timed
+reports are unchanged and no incomplete decision is upgraded.
+Server acceptance and both [class-token-only CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42391763832)
+pass for review `c3b3c6b0`. This version was superseded before merging; its
+timings and binaries qualify only this preceding core.
+
+Frozen CLI SHA-256:
+`b79391cd27d3a3cf1d143debd9d9ba29ed05a923e60de4d8094fa9f6f7c78e83`;
+worker SHA-256:
+`f917af900051b5c937feee5a7c956b047f89221b700b276814cb3a63d7e0b697`.
+Server stage-audit SHA-256:
+`518aaeac7a3159382b9afdf4f88c4c1aa81a772a6584e2eab2b6eee5e8d51efe`.
+Private inputs, models and individual evidence remain server-only. Protected
+sets are unused; current-worker original-C QCP qualification and overall solver
+superiority remain unproven.
+
+## Delivered stage: reduce owning native read handles (2026-11-07)
+
+[PR #113](https://github.com/fuqi-jia/Xolver/pull/113) merged as
+`fc6ffab4e1d949b986aa52e1274632f9a7d9340f` after complete server acceptance and
+both exact-head [PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42382984485)
+passed. Both [merged-main CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42384595013)
+also pass. Its tree matches reviewed head `43e744fc` byte for byte.
 
 Core `7b0c2e2b`, pushed to `FULINA`, reduces repeated ownership work in
 `NativeTerms::get`. The index already owns the parent node, so the reader walks
@@ -43,12 +162,31 @@ worker SHA-256:
 `3577bb5855e16b5137216bd7501d2783b8b5468ab2d8a5dcd764de3d2f92bd87`.
 Server stage-audit SHA-256:
 `6835374d2e20a82d1069dcf71bf084049f4c832d1af4bdcce4518a4e04fef9b5`.
-Server acceptance and the preceding merged-main CI pass; this stage's PR CI
-and subsequent main CI remain pending at this checkpoint. This worker has no
+Server, exact-head PR CI and merged-main CI acceptance pass. This worker has no
 original-C QCP qualification. Remaining fixed inputs, final-program closure,
 final fair comparison and once-only protected acceptance remain open. Neither
 protected set has been used and no overall solver superiority is claimed.
 Private inputs, models and individual evidence remain server-only.
+
+## Closed experiments: full-model replay ordering (2026-11-07)
+
+Two unmerged sorting variants add no verified solve on the frozen 14-input
+development pilot (four verified-reference gaps and ten large solved controls).
+Both retain **10 / 10 / 12** verified baseline/candidate/Z3 results. Filtering
+theory atoms before sorting takes **373.200 / 373.807 / 198.415 seconds**;
+grouping the minimum level before sorting the remainder takes **371.840 /
+374.859 / 196.658 seconds**. Neither round supports promotion. Raw reports
+remain unchanged; no incomplete decision receives credit.
+
+The filtering prototype also misses an atom registered by an earlier replayed
+assertion. The same generic API regression passes the original source, fails
+the prototype and passes the corrected grouping variant. The latter passes
+**2,276 cases / 1,450,418 assertions**, including complete Boolean assignments,
+late atoms, decision levels and stable same-level order, but has no pilot gain.
+Both sorting changes are withdrawn. The original complete-model ordering and
+all source replays are restored; the generic regression tests are retained.
+No model/conflict guard, LRA/LIA rollback policy or budget is relaxed. Neither
+protected set is used, and no original-program or overall claim is made.
 
 ## Delivered stage: shared immutable parser kind tables (2026-11-07)
 

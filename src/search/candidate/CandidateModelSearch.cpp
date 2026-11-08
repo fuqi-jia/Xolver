@@ -3,6 +3,7 @@
 #include "base/EnvParam.h"
 #include "ir/RequiredFacts.h"
 #include "ir/NumericLiteral.h"
+#include "algebra/integer/EuclideanDivision.h"
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
@@ -971,11 +972,19 @@ CandidateModelSearch::TermResult CandidateModelSearch::evalArithmeticTerm(
             TermResult a = evalTerm(n.children[0], assignment);
             if (a.kind != TermVerdict::Number) return r;
             mpq_class acc = a.numValue;
+            const bool integer = ir_.sortKind(n.sort) == SortKind::Int;
             for (size_t i = 1; i < n.children.size(); ++i) {
                 TermResult bi = evalTerm(n.children[i], assignment);
                 if (bi.kind != TermVerdict::Number) return r;
                 if (bi.numValue == 0) return r;
-                acc /= bi.numValue;
+                if (integer) {
+                    if (acc.get_den() != 1 || bi.numValue.get_den() != 1) return r;
+                    const auto division = euclideanDivMod(acc.get_num(), bi.numValue.get_num());
+                    if (!division) return r;
+                    acc = division->quotient;
+                } else {
+                    acc /= bi.numValue;
+                }
             }
             r.kind = TermVerdict::Number;
             r.numValue = acc;
@@ -1011,14 +1020,10 @@ CandidateModelSearch::TermResult CandidateModelSearch::evalArithmeticTerm(
             TermResult b = evalTerm(n.children[1], assignment);
             if (a.kind != TermVerdict::Number || b.kind != TermVerdict::Number) return r;
             if (a.numValue.get_den() != 1 || b.numValue.get_den() != 1) return r;
-            mpz_class ai = a.numValue.get_num();
-            mpz_class bi = b.numValue.get_num();
-            if (bi == 0) return r;
-            mpz_class absB = abs(bi);
-            mpz_class q, rem;
-            mpz_fdiv_qr(q.get_mpz_t(), rem.get_mpz_t(), ai.get_mpz_t(), absB.get_mpz_t());
+            const auto division = euclideanDivMod(a.numValue.get_num(), b.numValue.get_num());
+            if (!division) return r;
             r.kind = TermVerdict::Number;
-            r.numValue = mpq_class(rem);
+            r.numValue = division->remainder;
             return r;
         }
         case Kind::Abs: {

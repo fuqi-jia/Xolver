@@ -428,6 +428,72 @@ static TheoryAtomRecord makeEufRecord(ExprId lhs, ExprId rhs,
                             EufAtomPayload{lhs, rhs, rel, kind}};
 }
 
+TEST_CASE("EUF builtin: modulo keeps Euclidean signs and current explanations") {
+    for (const int numerator : {-3, 3}) for (const int divisor : {-2, 2}) {
+        for (const int forbidden : {-1, 1}) {
+            CAPTURE(numerator); CAPTURE(divisor); CAPTURE(forbidden);
+            NativeTerms ir;
+            ir.registerSort(0, SortKind::Int);
+            auto number = [&](int value) {
+                return ir.add({Kind::ConstInt, 0, {}, Payload(int64_t(value))});
+            };
+            const auto x = ir.add({Kind::Variable, 0, {}, Payload(std::string("x"))});
+            const auto remainder = ir.add({Kind::Mod, 0, {x, number(divisor)}, {}});
+            auto different = makeEufRecord(remainder, number(forbidden), Relation::Neq,
+                                           EufAtomKind::Disequality);
+            EufSolver solver;
+            solver.setNativeTerms(&ir);
+            TheoryLemmaDatabase database;
+            solver.assertLit(different, true, 0, SatLit::positive(1));
+            for (SatVar variable : {SatVar(2), SatVar(3)}) {
+                auto fixed = makeEufRecord(x, number(variable == 2 ? numerator : -numerator));
+                fixed.satVar = variable;
+                solver.assertLit(fixed, true, 1, SatLit::positive(variable));
+                const auto result = solver.check(database, TheoryEffort::Full);
+                if (forbidden == 1) {
+                    REQUIRE(result.kind == TheoryCheckResult::Kind::Conflict);
+                    REQUIRE(result.conflictOpt);
+                    const auto& reasons = result.conflictOpt->clause;
+                    CHECK(std::find(reasons.begin(), reasons.end(), SatLit::positive(1)) != reasons.end());
+                    CHECK(std::find(reasons.begin(), reasons.end(), SatLit::positive(variable)) != reasons.end());
+                    if (variable == 3)
+                        CHECK(std::find(reasons.begin(), reasons.end(), SatLit::positive(2)) == reasons.end());
+                } else {
+                    CHECK(result.kind == TheoryCheckResult::Kind::Consistent);
+                }
+                solver.backtrackToLevel(0);
+            }
+        }
+    }
+}
+
+TEST_CASE("EUF builtin: equal rational ratios need not have equal integer quotients") {
+    for (const int numerator : {-3, 3}) for (const int divisor : {-2, 2}) {
+        CAPTURE(numerator); CAPTURE(divisor);
+        NativeTerms ir;
+        ir.registerSort(0, SortKind::Int);
+        auto number = [&](int value) {
+            return ir.add({Kind::ConstInt, 0, {}, Payload(int64_t(value))});
+        };
+        const auto x = ir.add({Kind::Variable, 0, {}, Payload(std::string("x"))});
+        const auto y = ir.add({Kind::Variable, 0, {}, Payload(std::string("y"))});
+        const auto a = ir.add({Kind::Div, 0, {x, number(divisor)}, {}});
+        const auto b = ir.add({Kind::Div, 0, {y, number(-divisor)}, {}});
+        auto different = makeEufRecord(a, b, Relation::Neq, EufAtomKind::Disequality);
+        auto fixX = makeEufRecord(x, number(numerator));
+        fixX.satVar = 2;
+        auto fixY = makeEufRecord(y, number(-numerator));
+        fixY.satVar = 3;
+        EufSolver solver;
+        solver.setNativeTerms(&ir);
+        TheoryLemmaDatabase database;
+        solver.assertLit(different, true, 0, SatLit::positive(1));
+        solver.assertLit(fixX, true, 1, SatLit::positive(2));
+        solver.assertLit(fixY, true, 1, SatLit::positive(3));
+        CHECK(solver.check(database, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Consistent);
+    }
+}
+
 TEST_CASE("EUF model: full-effort witnesses survive SAT rollback") {
     NativeTerms ir;
     ir.registerSort(0, SortKind::Other);
@@ -457,6 +523,70 @@ TEST_CASE("EUF model: full-effort witnesses survive SAT rollback") {
     CHECK(second->assignments.at("a") != second->assignments.at("b"));
     solver.reset();
     CHECK_FALSE(solver.getModel());
+}
+
+TEST_CASE("EUF model: repeated class reads preserve tables across splits and new literals") {
+    for (const auto domain : {SortKind::Other, SortKind::Int, SortKind::Real}) {
+        CAPTURE(static_cast<int>(domain));
+        NativeTerms ir;
+        ir.registerSort(0, domain);
+        EufSolver solver;
+        solver.setNativeTerms(&ir);
+        TheoryLemmaDatabase lemmas;
+        constexpr size_t count = 20;
+        std::vector<ExprId> variables, applications;
+        SatVar next = 1;
+        auto assertEqual = [&](ExprId a, ExprId b, int level) {
+            auto record = makeEufRecord(a, b);
+            record.satVar = next++;
+            solver.assertLit(record, true, level, SatLit::positive(record.satVar));
+        };
+        for (size_t i = 0; i < count; ++i) {
+            variables.push_back(ir.add({Kind::Variable, 0, {}, Payload("alias_" + std::to_string(i))}));
+            applications.push_back(ir.add({Kind::UFApply, 0, {variables.back()}, Payload(std::string("f"))}));
+            assertEqual(applications.front(), applications.back(), 0);
+        }
+        auto join = [&] {
+            for (size_t i = 1; i < count; ++i) assertEqual(variables.front(), variables[i], 1);
+        };
+        auto model = [&] {
+            REQUIRE(solver.check(lemmas, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Consistent);
+            auto result = solver.getModel();
+            REQUIRE(result);
+            return *result;
+        };
+        join();
+        const auto joined = model();
+        const auto& first = joined.functionInterps.at("f");
+        REQUIRE(first.entries.size() == 1);
+        for (size_t i = 0; i < count; ++i)
+            CHECK(first.entries.front().args ==
+                  std::vector<std::string>{joined.assignments.at("alias_" + std::to_string(i))});
+
+        solver.backtrackToLevel(0);
+        const auto split = model();
+        const auto& separated = split.functionInterps.at("f");
+        REQUIRE(separated.entries.size() == count);
+        for (size_t i = 0; i < count; ++i) {
+            CHECK(separated.entries[i].args ==
+                  std::vector<std::string>{split.assignments.at("alias_" + std::to_string(i))});
+            CHECK(separated.entries[i].value == first.entries.front().value);
+        }
+        if (domain == SortKind::Other) continue;
+        for (const auto& value : {std::string("7"), std::string("9007199254740993")}) {
+            solver.backtrackToLevel(0);
+            const auto literal = ir.add({domain == SortKind::Int ? Kind::ConstInt : Kind::ConstReal,
+                                        0, {}, Payload(value)});
+            assertEqual(variables.front(), literal, 1);
+            join();
+            const auto anchored = model();
+            const auto& entries = anchored.functionInterps.at("f").entries;
+            REQUIRE(entries.size() == 1);
+            CHECK(entries.front().args == std::vector<std::string>{"#n:" + value});
+            for (size_t i = 0; i < count; ++i)
+                CHECK(anchored.assignments.at("alias_" + std::to_string(i)) == "#n:" + value);
+        }
+    }
 }
 
 TEST_CASE("EUF sharing: equality bases preserve explanations across class splits") {

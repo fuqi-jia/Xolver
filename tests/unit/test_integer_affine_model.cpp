@@ -1,7 +1,25 @@
 #include <doctest/doctest.h>
 #include "search/linear/IntegerAffineModel.h"
+#include "algebra/integer/EuclideanDivision.h"
 
 using namespace xolver;
+
+TEST_CASE("integer arithmetic: Euclidean division is exact for both signs and unbounded values") {
+    CHECK_FALSE(euclideanDivMod(mpz_class(3), mpz_class(0)));
+    auto verify = [](const mpz_class& numerator, const mpz_class& divisor) {
+        const auto result = euclideanDivMod(numerator, divisor);
+        REQUIRE(result);
+        CHECK(numerator == divisor * result->quotient + result->remainder);
+        CHECK(result->remainder >= 0);
+        CHECK(result->remainder < abs(divisor));
+    };
+    for (int numerator = -20; numerator <= 20; ++numerator)
+        for (int divisor = -7; divisor <= 7; ++divisor)
+            if (divisor) verify(mpz_class(numerator), mpz_class(divisor));
+    const mpz_class large = (mpz_class(1) << 257) + 17;
+    for (const mpz_class& numerator : {mpz_class(-large), large})
+        for (const int divisor : {-31, 31}) verify(numerator, mpz_class(divisor));
+}
 
 namespace {
 NormalizedConstraint constraint(int a, int b, Relation relation, int rhs) {

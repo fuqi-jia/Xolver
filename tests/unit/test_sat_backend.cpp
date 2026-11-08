@@ -25,6 +25,7 @@
 #include <utility>
 #include <array>
 #include <random>
+#include <tuple>
 #include <unordered_map>
 
 using namespace xolver;
@@ -142,6 +143,114 @@ TEST_CASE("SAT assignment view: backtracking retracts the published partial snap
     CHECK(theories.snapshots[1][5] == LitValue::True);
     for (size_t i = 3; i < vars.size(); ++i)
         CHECK(theories.snapshots[2][i] == LitValue::Unknown);
+}
+
+TEST_CASE("SAT backend: full replay retains theory order and complete Boolean assignments") {
+    CadicalBackend backend;
+    std::array<SatVar, 10> vars;
+    for (auto& var : vars) var = backend.newVar();
+    struct Lookup : TheoryAtomLookup {
+        std::vector<TheoryAtomRecord> atoms;
+        const TheoryAtomRecord* findBySatVar(SatVar var) const override {
+            for (const auto& atom : atoms) if (atom.satVar == var) return &atom;
+            return nullptr;
+        }
+    } registry;
+    // A lookup need not enumerate atoms; an unnotified atom must still replay.
+    for (auto var : {vars[1], vars[3], vars[7], vars[9]})
+        registry.atoms.push_back({var, TheoryId::LRA, false, NullExpr,
+            LinearAtomPayload{{}, Relation::Eq, RealValue::fromInt(0)}});
+    const std::vector<int> model{
+        static_cast<int>(vars[3]), -static_cast<int>(vars[0]),
+        -static_cast<int>(vars[7]), static_cast<int>(vars[4]),
+        static_cast<int>(vars[1]), -static_cast<int>(vars[9]),
+        static_cast<int>(vars[2]), -static_cast<int>(vars[5]),
+        static_cast<int>(vars[6]), -static_cast<int>(vars[8])};
+    struct Recorder : TheoryPropagationCallbacks {
+        TheoryAssignmentView* view = nullptr;
+        const std::vector<int>& model;
+        std::vector<std::tuple<int, SatVar, bool>> replayed;
+        int fullChecks = 0;
+        explicit Recorder(const std::vector<int>& assignment) : model(assignment) {}
+        void assertTheoryLit(const TheoryAtomRecord& atom, SatLit lit, int level) override {
+            CHECK(atom.satVar == lit.var);
+            replayed.emplace_back(level, lit.var, lit.sign);
+        }
+        void backtrackToLevel(int level) override {
+            CHECK(level == 0);
+            replayed.clear();
+        }
+        void setAssignmentView(TheoryAssignmentView* current) override { view = current; }
+        TheoryCheckResult check(TheoryLemmaStorage&, TheoryEffort effort) override {
+            CHECK(effort == TheoryEffort::Full);
+            REQUIRE(view);
+            for (int lit : model)
+                CHECK(view->value(SatLit{static_cast<SatVar>(std::abs(lit)), lit > 0})
+                      == LitValue::True);
+            ++fullChecks;
+            return TheoryCheckResult::consistent();
+        }
+        std::vector<TheoryLemma> takeEntailmentPropagations() override { return {}; }
+    } theories{model};
+    TheoryLemmaDatabase lemmas;
+    CadicalTheoryPropagator propagator(registry, theories, lemmas, backend);
+    backend.connectPropagator(&propagator);
+    struct Disconnect {
+        CadicalBackend& backend;
+        ~Disconnect() { backend.disconnectPropagator(); }
+    } disconnect{backend};
+    for (auto var : vars) backend.addObservedVar(var);
+    propagator.notify_assignment({static_cast<int>(vars[1])});
+    propagator.notify_new_decision_level();
+    propagator.notify_assignment({-static_cast<int>(vars[7])});
+    propagator.notify_new_decision_level();
+    propagator.notify_assignment({static_cast<int>(vars[3])});
+    CHECK(propagator.cb_check_found_model(model));
+    const std::vector<std::tuple<int, SatVar, bool>> expected{
+        {0, vars[1], true}, {0, vars[9], false}, {1, vars[7], false}, {2, vars[3], true}};
+    CHECK(theories.replayed == expected);
+    CHECK(theories.fullChecks == 1);
+    CHECK(theories.view == nullptr);
+}
+
+TEST_CASE("SAT backend: full replay includes atoms registered by an earlier assertion") {
+    CadicalBackend backend;
+    const SatVar first = backend.newVar(), later = backend.newVar();
+    struct Lookup : TheoryAtomLookup {
+        std::vector<TheoryAtomRecord> atoms;
+        const TheoryAtomRecord* findBySatVar(SatVar var) const override {
+            for (const auto& atom : atoms) if (atom.satVar == var) return &atom;
+            return nullptr;
+        }
+        void add(SatVar var) {
+            atoms.push_back({var, TheoryId::LRA, false, NullExpr,
+                LinearAtomPayload{{}, Relation::Eq, RealValue::fromInt(0)}});
+        }
+    } registry;
+    registry.add(first);
+    struct Recorder : TheoryPropagationCallbacks {
+        Lookup& registry;
+        SatVar first, later;
+        std::vector<SatVar> replayed;
+        Recorder(Lookup& lookup, SatVar before, SatVar after)
+            : registry(lookup), first(before), later(after) {}
+        void assertTheoryLit(const TheoryAtomRecord&, SatLit lit, int level) override {
+            CHECK(level == 0);
+            replayed.push_back(lit.var);
+            if (lit.var == first && !registry.findBySatVar(later)) registry.add(later);
+        }
+        void backtrackToLevel(int) override { replayed.clear(); }
+        void setAssignmentView(TheoryAssignmentView*) override {}
+        TheoryCheckResult check(TheoryLemmaStorage&, TheoryEffort) override {
+            return TheoryCheckResult::consistent();
+        }
+        std::vector<TheoryLemma> takeEntailmentPropagations() override { return {}; }
+    } theories{registry, first, later};
+    TheoryLemmaDatabase lemmas;
+    CadicalTheoryPropagator propagator(registry, theories, lemmas, backend);
+    CHECK(propagator.cb_check_found_model({static_cast<int>(first), static_cast<int>(later)}));
+    const std::vector<SatVar> expected{first, later};
+    CHECK(theories.replayed == expected);
 }
 
 namespace {
