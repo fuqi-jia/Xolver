@@ -148,9 +148,15 @@ preregistered promotion criterion fails. This successor is closed without
 promotion; closure SHA-256:
 `e5ecabfde6b09f10f67be963e548adaa85c56946674d7e8eefcfc4406e071972`.
 The optional probe implementation is withdrawn from the development tree.
-Native restoration and exact binary-identity checks are pending. The retained
-oracle transport fix changes no solver budget, verification policy or pinned
-checker version. Original reports and rejected-source snapshots remain intact.
+Panda9 / ExperimentOS restoration passes **2,289 cases / 1,532,524 assertions**
+and the **four installer contracts**. CLI, parallel worker and unit binary
+hashes exactly reproduce the qualified main versions. All **2,340** source
+contents retain main's runtime implementation plus the separately qualified CI
+installer and its test. Restoration qualification SHA-256:
+`a255b89f4df7e8005186a1a175640b6ea624aae0e08e3b5e6eaa593922d6f48a`.
+The retained oracle transport fix changes no solver budget, verification policy
+or pinned checker version. Original reports and rejected-source snapshots
+remain intact; the final CI-only PR and merged-main checks are pending.
 Private individual evidence stays on the server; protected sets and current
 original-C QCP closure remain untouched and open.
 
