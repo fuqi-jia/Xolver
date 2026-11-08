@@ -168,9 +168,14 @@ TEST_CASE("NativeTerms: numeric read values own their text across native updates
         const auto integer = mkIntSort(ir);
         const auto id = ir.add({Kind::ConstInt, integer, {}, Payload(original)});
         auto before = ir.get(id);
-        ir.native(id)->setValue(SOMTParser::Number(replacement, true));
+        ir.native(id)->getValue()->setValue(SOMTParser::Number(replacement, true));
         auto after = ir.get(id);
         CHECK(ir.native(id)->getValue()->toString() == replacement);
+        ir.native(id)->setValue(SOMTParser::Interval(SOMTParser::Number(-1), SOMTParser::Number(1)));
+        CHECK(ir.native(id)->getValue()->getType() == SOMTParser::INTERVAL);
+        const auto cached = ir.get(id);
+        REQUIRE(std::holds_alternative<std::string>(cached.payload.value));
+        CHECK(std::get<std::string>(cached.payload.value) == original);
         return std::pair{std::move(before), std::move(after)};
     }();
     REQUIRE(std::holds_alternative<std::string>(reads.first.payload.value));
