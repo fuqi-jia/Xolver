@@ -1137,13 +1137,59 @@ bool TheoryManager::hasCompleteSatCertificate(std::string* reason) const {
 
 
 namespace {
+using FunctionInterpretations = decltype(TheoryModel::functionInterps);
+using NumericClassAliases = std::unordered_map<std::string, std::string>;
+
+struct NumericFunctionClassPlan {
+    FunctionInterpretations functions;
+    NumericClassAliases aliases;
+    bool changed = false;
+};
+
+void remapModelToken(std::string& value, const NumericClassAliases& anchors) {
+    const auto found = anchors.find(value);
+    if (found != anchors.end() && found->second != "@CONFLICT") value = found->second;
+}
+
+void remapFunctionInterpretations(FunctionInterpretations& functions,
+                                  const NumericClassAliases& anchors) {
+    auto toBare = [&](std::string& value) {
+        remapModelToken(value, anchors);
+        if (value.rfind("#n:", 0) == 0) value = value.substr(3);
+        else if (value == "#b:1") value = "1";
+        else if (value == "#b:0") value = "0";
+    };
+    for (auto& [name, function] : functions) {
+        (void)name;
+        for (auto& entry : function.entries) {
+            for (auto& argument : entry.args) toBare(argument);
+            toBare(entry.value);
+        }
+        toBare(function.deflt);
+    }
+}
+
+std::string resolveNumericFunctionClass(std::string value, NumericClassAliases& aliases) {
+    std::vector<std::string> path;
+    while (aliases.count(value)) {
+        path.push_back(value);
+        value = aliases.at(value);
+    }
+    for (const auto& token : path) aliases[token] = value;
+    return value;
+}
+
 // Closing a concrete argument equality may identify previously free numeric
 // result classes. Propagate those identities before assigning fresh values.
 // This proposes a witness, never an entailment: the caller must validate the
 // completed interpretation against every original assertion.
-std::optional<bool> completeNumericFunctionClasses(
-    TheoryModel& model, const std::unordered_map<std::string, std::string>& anchors) {
-    std::unordered_map<std::string, std::string> aliases;
+std::optional<NumericFunctionClassPlan> planNumericFunctionClasses(
+    const TheoryModel& model, const NumericClassAliases& anchors) {
+    // Compute closure on function cells before copying scalar and array models.
+    // An unchanged or invalid plan leaves the ordinary model untouched.
+    NumericFunctionClassPlan plan{model.functionInterps, {}, false};
+    remapFunctionInterpretations(plan.functions, anchors);
+    auto& aliases = plan.aliases;
     auto numeric = [](const std::string& sort) { return sort == "Int" || sort == "Real"; };
     auto freeClass = [&](const std::string& value) {
         const auto anchor = anchors.find(value);
@@ -1151,13 +1197,7 @@ std::optional<bool> completeNumericFunctionClasses(
             (anchor == anchors.end() || anchor->second != "@CONFLICT");
     };
     auto resolve = [&](std::string value) {
-        std::vector<std::string> path;
-        while (aliases.count(value)) {
-            path.push_back(value);
-            value = aliases.at(value);
-        }
-        for (const auto& token : path) aliases[token] = value;
-        return value;
+        return resolveNumericFunctionClass(std::move(value), aliases);
     };
     auto canonical = [&](std::string& value, const std::string& sort) {
         if (!numeric(sort) || (!value.empty() && value[0] == '@')) return true;
@@ -1170,7 +1210,7 @@ std::optional<bool> completeNumericFunctionClasses(
             return true;
         } catch (...) { return false; }
     };
-    for (auto& [name, function] : model.functionInterps) {
+    for (auto& [name, function] : plan.functions) {
         (void)name;
         for (auto& entry : function.entries) {
             if (entry.args.size() != function.argSorts.size()) return std::nullopt;
@@ -1179,11 +1219,11 @@ std::optional<bool> completeNumericFunctionClasses(
             if (!canonical(entry.value, function.retSort)) return std::nullopt;
         }
     }
-    bool changed = false;
+
     bool progress;
     do {
         progress = false;
-        for (const auto& [name, function] : model.functionInterps) {
+        for (const auto& [name, function] : plan.functions) {
             (void)name;
             if (!numeric(function.retSort)) continue;
             std::map<std::vector<std::string>, std::string> outputs;
@@ -1204,11 +1244,21 @@ std::optional<bool> completeNumericFunctionClasses(
                 if (!previousFree || (currentFree && previous < current))
                     std::swap(previous, current);
                 aliases[previous] = current;
-                progress = changed = true;
+                progress = plan.changed = true;
             }
         }
     } while (progress); // Every merge removes one free class; no search cap.
-    if (!changed) return false;
+    return plan;
+}
+
+bool applyNumericFunctionClassPlan(TheoryModel& model, NumericFunctionClassPlan& plan) {
+    assert(plan.changed);
+    model.functionInterps = std::move(plan.functions);
+    auto& aliases = plan.aliases;
+    auto numeric = [](const std::string& sort) { return sort == "Int" || sort == "Real"; };
+    auto resolve = [&](std::string value) {
+        return resolveNumericFunctionClass(std::move(value), aliases);
+    };
     auto complete = [&](std::string& value, const std::string& sort, bool tagged) {
         if (!numeric(sort)) return;
         const auto original = value;
@@ -1233,10 +1283,10 @@ std::optional<bool> completeNumericFunctionClasses(
             const auto number = RealValue::fromMpq(mpq_class(completed));
             const auto typed = model.numericAssignments.find(name);
             if (typed != model.numericAssignments.end() && typed->second != number)
-                return std::nullopt;
+                return false;
             model.numericAssignments.insert_or_assign(name, number);
             value = "#n:" + completed;
-        } catch (...) { return std::nullopt; }
+        } catch (...) { return false; }
     }
     auto completeArray = [&](auto& array) {
         complete(array.defaultVal, array.elemSort, true);
@@ -1252,7 +1302,7 @@ std::optional<bool> completeNumericFunctionClasses(
 
 std::optional<TheoryModel> assembleModel(
     TheoryModel aggregated, const std::unordered_map<std::string, std::string>& tokenToNum,
-    const SharedTermRegistry* sharedTermRegistry, bool completeCongruence, bool& changed) {
+    const SharedTermRegistry* sharedTermRegistry, NumericFunctionClassPlan* completion = nullptr) {
     // Separate e-classes do not assert disequality. Different classes may
     // legitimately receive the same arithmetic value. Discarding those values
     // loses constrained witnesses (including UF results) and later invents
@@ -1260,8 +1310,7 @@ std::optional<TheoryModel> assembleModel(
     // actual disequalities and function congruence remain model obligations.
 
     auto remap = [&](std::string& v) {
-        auto it = tokenToNum.find(v);
-        if (it != tokenToNum.end() && it->second != "@CONFLICT") v = it->second;
+        remapModelToken(v, tokenToNum);
     };
 
     // Rewrite scalar assignments and array interp index/element tokens.
@@ -1287,26 +1336,12 @@ std::optional<TheoryModel> assembleModel(
     // CMS-format interps (already bare rationals) pass through unchanged (the
     // remap is idempotent on a bare rational). No-op when no function interps.
     if (!aggregated.functionInterps.empty()) {
-        auto toBare = [&](std::string& v) {
-            remap(v);
-            if (v.rfind("#n:", 0) == 0) v = v.substr(3);
-            else if (v == "#b:1") v = "1";
-            else if (v == "#b:0") v = "0";
-        };
+        if (completion) {
+            if (!applyNumericFunctionClassPlan(aggregated, *completion)) return std::nullopt;
+        } else {
+            remapFunctionInterpretations(aggregated.functionInterps, tokenToNum);
+        }
         const bool diagFi = xolver::config::read<xolver::config::ReadKind::Presence>("XOLVER_DIAG_FI");
-        for (auto& [name, fi] : aggregated.functionInterps) {
-            (void)name;
-            for (auto& entry : fi.entries) {
-                for (auto& arg : entry.args) toBare(arg);
-                toBare(entry.value);
-            }
-            toBare(fi.deflt);
-        }
-        if (completeCongruence) {
-            const auto completion = completeNumericFunctionClasses(aggregated, tokenToNum);
-            if (!completion) return std::nullopt;
-            changed = *completion;
-        }
         std::vector<std::string> dropFns;
         for (auto& [fname, fi] : aggregated.functionInterps) {
             // Soundness backstop: if after the remap two entries share an identical
@@ -1554,12 +1589,13 @@ std::optional<TheorySolver::TheoryModel> TheoryManager::getModel(const ModelVali
     }
 
     if (validate && !aggregated.functionInterps.empty()) {
-        bool changed = false;
-        auto candidate = assembleModel(aggregated, tokenToNum, sharedTermRegistry_, true, changed);
-        if (candidate && changed && validate(*candidate)) return candidate;
+        auto completion = planNumericFunctionClasses(aggregated, tokenToNum);
+        if (completion && completion->changed) {
+            auto candidate = assembleModel(aggregated, tokenToNum, sharedTermRegistry_, &*completion);
+            if (candidate && validate(*candidate)) return candidate;
+        }
     }
-    bool changed = false;
-    return assembleModel(std::move(aggregated), tokenToNum, sharedTermRegistry_, false, changed);
+    return assembleModel(std::move(aggregated), tokenToNum, sharedTermRegistry_);
 }
 
 } // namespace xolver
