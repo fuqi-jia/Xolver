@@ -4,6 +4,8 @@
 
 #include "ir/NativeTerms.h"
 #include <doctest/doctest.h>
+#include <somtparser/parser.h>
+#include <limits>
 
 using namespace xolver;
 
@@ -119,4 +121,60 @@ TEST_CASE("addShared dedup is sort-aware") {
     ExprId five_real = ir.addShared(std::move(e2));
 
     CHECK(five_int != five_real);  // sort field distinguishes
+}
+
+TEST_CASE("NativeTerms: numeric reads preserve exact payloads and literal sorts") {
+    NativeTerms ir;
+    const auto integer = mkIntSort(ir);
+    const auto real = ir.allocateSortId();
+    ir.registerSort(real, SortKind::Real);
+    for (const int64_t value : {std::numeric_limits<int64_t>::min(), int64_t(-1),
+                                int64_t(0), std::numeric_limits<int64_t>::max()}) {
+        const auto id = ir.add({Kind::ConstInt, integer, {}, Payload(value)});
+        for (int repeat = 0; repeat < 3; ++repeat) {
+            const auto read = ir.get(id);
+            CHECK(read.kind == Kind::ConstInt);
+            CHECK(read.sort == integer);
+            REQUIRE(std::holds_alternative<int64_t>(read.payload.value));
+            CHECK(std::get<int64_t>(read.payload.value) == value);
+            CHECK(ir.native(id)->getValue()->toString() == std::to_string(value));
+        }
+    }
+    for (const std::string literal : {"340282366920938463463374607431768211457",
+                                      "-340282366920938463463374607431768211457"}) {
+        const auto id = ir.add({Kind::ConstInt, integer, {}, Payload(literal)});
+        const auto read = ir.get(id);
+        REQUIRE(std::holds_alternative<std::string>(read.payload.value));
+        CHECK(std::get<std::string>(read.payload.value) == literal);
+        CHECK(read.kind == Kind::ConstInt);
+    }
+    for (const auto& [literal, expected] :
+         std::vector<std::pair<std::string, std::string>>{
+             {"7/11", "7/11"}, {"-2/3", "-2/3"}, {"12/4", "3"}, {"0.125", "1/8"}}) {
+        const auto id = ir.add({Kind::ConstReal, real, {}, Payload(literal)});
+        const auto read = ir.get(id);
+        CHECK(read.kind == Kind::ConstReal);
+        CHECK(read.sort == real);
+        REQUIRE(std::holds_alternative<std::string>(read.payload.value));
+        CHECK(std::get<std::string>(read.payload.value) == expected);
+    }
+}
+
+TEST_CASE("NativeTerms: numeric read values own their text across native updates and destruction") {
+    const std::string original = "340282366920938463463374607431768211457";
+    const std::string replacement = "-340282366920938463463374607431768211459";
+    const auto reads = [&] {
+        NativeTerms ir;
+        const auto integer = mkIntSort(ir);
+        const auto id = ir.add({Kind::ConstInt, integer, {}, Payload(original)});
+        auto before = ir.get(id);
+        ir.native(id)->setValue(SOMTParser::Number(replacement, true));
+        auto after = ir.get(id);
+        CHECK(ir.native(id)->getValue()->toString() == replacement);
+        return std::pair{std::move(before), std::move(after)};
+    }();
+    REQUIRE(std::holds_alternative<std::string>(reads.first.payload.value));
+    REQUIRE(std::holds_alternative<std::string>(reads.second.payload.value));
+    CHECK(std::get<std::string>(reads.first.payload.value) == original);
+    CHECK(std::get<std::string>(reads.second.payload.value) == replacement);
 }

@@ -334,7 +334,7 @@ const TermExpr NativeTerms::get(ExprId id) const {
             else throw std::invalid_argument("invalid native Boolean literal");
         } else {
             std::string literal = value && value->getType() == SOMTParser::NUMBER
-                ? value->getNumberValue().toString() : node->getName();
+                ? value->toString() : node->getName();
             int64_t small = 0;
             auto [end, ec] = std::from_chars(literal.data(), literal.data() + literal.size(), small);
             if (out.kind == Kind::ConstInt && ec == std::errc() && end == literal.data() + literal.size())
