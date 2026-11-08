@@ -1,5 +1,54 @@
 # Arithmetic validation and continuation record
 
+## In progress: shared postorder model validation (2026-11-08)
+
+Core `4b93e8c6`, pushed to `FULINA`, removes an unused owning term read
+from the processed phase of `ArithModelValidator::warmEval`. The qualified
+40-pair profile shows **33,582** reads in that traversal for **16,791**
+evaluations: the second traversal visit reads the expression again before
+calling an evaluator that performs its own required read. Child expansion,
+postorder, exact arithmetic, cache lifetime and all three verdicts remain
+unchanged. A synthetic deep shared DAG checks repeated roots, exact large
+values, changing assignments and missing values. Panda9 / ExperimentOS native
+qualification is running; this successor has no formal performance credit yet.
+The prior numeric-formatting change is withdrawn from the runtime source.
+
+### Closed trial: numeric payload formatting
+
+Published core `e990dab0` avoids a temporary numeric-object copy through the
+existing value formatter. Its source-equivalent frozen build passes **2,291
+unit cases / 1,532,614 assertions** and all **965 public regressions**.
+The same 40 diagnostic pairs retain **319,483** owning reads while reducing
+numeric copies on that path **14,953 to zero** and simulated instructions
+**2,432,278,034 to 2,421,655,830**. These are diagnostic observations, not
+native timing or solved-result evidence.
+
+Fresh complete private14408 comparisons independently verify **14,408 /
+14,408 / 14,408** main/candidate/Z3 results. Totals are **291.826 / 283.664 /
+465.167 seconds**, a **2.80%** candidate reduction in this round. Development587
+retains **587 / 587 / 584**; three reference results remain unconfirmed and
+excluded. Actual timed SAT models are independently replayed.
+
+Fixed160 verifies **124 / 123 / 119** after fresh original-input-bound residue
+checking; applicable old reference evidence adds no confirmations this round.
+Both Xolver arms have **36 timeouts**. One main SAT at **24.126 seconds**
+times out in the candidate; an additional candidate UNSAT remains unconfirmed
+and excluded, as do six reference decisions. Mean verified PAR-2 worsens
+**31.852 to 32.200 seconds**. Combined fixed/private verified PAR-2 worsens
+**47.416 seconds**, so the unchanged no-loss/private-faster/combined-score
+promotion criterion fails. The trial is closed without promotion; no main
+runtime change is delivered from it. Formal budgets remain **60 seconds /
+one leased physical CPU / 16 GiB**. Private individual evidence stays server-only.
+
+Candidate CLI SHA-256:
+`525271eacb72646ee9b87d4d4c4447ddf6c3c792049c15818404d695517a3a6c`;
+final stage-audit SHA-256:
+`8c177e5ea6a3abde5c47c0fd7f8631aaa0f0b765a2fc00ac9a238d8d90d840ad`;
+closure SHA-256:
+`691537f5aa39d665063bc2af50b482af33e017e5ab040d1e80e8037d091d38a4`.
+Protected evaluation, remaining difficult inputs and current-worker original-C
+QCP closure remain open.
+
 ## Server-qualified stage: canonical term reads and sparse elimination (2026-11-08)
 
 [PR #116](https://github.com/fuqi-jia/Xolver/pull/116) merged as
@@ -22,8 +71,23 @@ archive and logs. Tool-qualification SHA-256:
 `7441e752d7108d9411e5726b20d63c00a6b24087757228e627258acd1af58861`.
 Both jobs in the exact-code
 [FULINA CI](https://github.com/fuqi-jia/Xolver/actions/runs/42468496162) pass.
-This run includes the subsequently rejected probe prototype. The final CI-only
-repair still requires its own reviewed-head PR CI and merged-main validation.
+This run includes the subsequently rejected probe prototype.
+[PR #117](https://github.com/fuqi-jia/Xolver/pull/117) subsequently passes both
+exact-head [PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42471371218)
+and merges normally as `ae5b23d5b7cd20296a144aa4d0aa0008f70ec938`; its tree
+equals reviewed head `d2740b46`. The corresponding
+[main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42473103996) first fails
+on transient HTTP **502** from the immutable asset endpoint. The second attempt
+is running; main delivery remains incomplete until its checks actually pass.
+
+Core `1ae5ea7e` adds bounded retries for transient transport failures and caches
+only the pinned archive in CI. The archive is still SHA-256 checked on cache
+hits; permanent failures and corrupt responses fail. Panda9 / ExperimentOS
+passes **eight** installer contracts and installs/executes the actual unchanged
+cached cvc5 **1.4.2**. Tool-qualification SHA-256:
+`b4bf51bcbc07b6863db6a54ddb889abddd5c36f9f00e64c3eb30393bb5dddbe8`.
+No solver budget or verification requirement changes. This follow-up is on
+`FULINA` and has not been merged.
 
 Core `1f4f2ee1` adds canonical node-kind metadata before owning expression
 materialization. Core `98546bda` batches exact sparse row substitution through
@@ -156,7 +220,7 @@ installer and its test. Restoration qualification SHA-256:
 `a255b89f4df7e8005186a1a175640b6ea624aae0e08e3b5e6eaa593922d6f48a`.
 The retained oracle transport fix changes no solver budget, verification policy
 or pinned checker version. Original reports and rejected-source snapshots
-remain intact; the final CI-only PR and merged-main checks are pending.
+remain intact; PR #117 is merged and its main validation is tracked above.
 Private individual evidence stays on the server; protected sets and current
 original-C QCP closure remain untouched and open.
 
