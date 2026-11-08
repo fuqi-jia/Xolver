@@ -1,6 +1,95 @@
 # Arithmetic validation and continuation record
 
-## Current development: shorter explanations and precise process timing
+## Current development: numeric propagation before proof refinement
+
+Core `99879d7d70c4c39f1a9951c479a5e3fe8f0fa02f`, including model-planning core
+`da02ac54`, is pushed to `FULINA` and passes complete Panda9 / ExperimentOS
+server acceptance. PR and main CI delivery are still pending.
+
+The earlier immediate explanation-refinement candidate passes native tests and
+improves private-cohort time, but fails the combined fixed/private performance
+gate. Its largest verified slowdown is isolated by three rotated native
+main/direct-parent/candidate controls; only `LraPropagationEngine.cpp` changes
+between main and that direct parent. Full-model planning does not cause this
+pure LRA regression. The failed stage remains preserved, with final-audit
+SHA-256 `6d4043ea0072e68f6a59e925f376741341471a090abeb0a0d332fc59ef1d4941`.
+
+The propagation engine now finishes its current numerical work before applying
+coalesced equal-valued proof improvements. A stronger numerical endpoint
+discards pending explanations for its old value. Shorter proofs can still
+unlock subsequent bounds; only numerically stronger bounds reach consumers.
+All overlays and pending proofs remain call-local. Existing public budgets,
+consumer behavior, exact arithmetic and LIA/LRA rollback strategies stay intact.
+
+The same native regression's three rotated controls have median times
+**0.986 / 12.729 / 0.988 seconds** for main, the immediate parent and the fix.
+Every actual SAT model passes both Z3 and cvc5 replay. Separate instrumented
+observations reduce propagation calls **1,744 to 145**, row visits **2,853,337
+to 185,262**, and proof-only updates **3,418 to 14**. Counter collection can
+affect bounded search timing, so these are diagnostic observations, not formal
+scores. Control-audit SHA-256:
+`6754b6b28769556679a4b44e6a87031ad6fa3c758bb8a0ab1850c59dc1c085e9`.
+
+The shared model coordinator also plans numeric function-class closure before
+copying complete scalar/array models. Unchanged or invalid plans leave ordinary
+fallback representations intact; changed candidates retain all original model
+checks and rejection quarantine. Tests cover Int/Real aliases through Boolean
+function tables and arrays, malformed tables, and unchanged rational spellings.
+The earlier model-only instruction sample remains evidence for the identical
+`TheoryManager.cpp` contents; it is not presented as a new measurement of the
+final executable. Its changed LRA path is absent from those private profiles.
+
+Native acceptance passes **2,304 unit cases / 1,537,465 assertions**, including
+the retained default-budget shortcut, scope-withdrawal and strict-bound tests,
+plus a new regression checking that an old endpoint's proof cannot justify a
+stronger endpoint. All **2,343** qualified source bodies match the published
+core. The architecture checker reports **743 files / 11 layers / 0 violations**.
+CLI SHA-256:
+`77b3a130003e209f02359a48a034328bc3f0a27a0291a68b30bdd88226b44df3`;
+worker SHA-256:
+`65a34ee1f0a26fe0effd4143af9b11940463ff669adb5f4f27a503efd7a38065`;
+native-qualification SHA-256:
+`e697587a91832ace7cc70f5ffb0de10d1442bfa01dfd9c27d0ed330d0a278a96`;
+complete source-binding SHA-256:
+`2f5ed53d3b97eefeb0a6381a52998f90eeb5a654b3acf93577da13c3c86ea346`.
+
+Fresh complete comparisons use frozen merged main `d4eecb78`, the same frozen
+reference versions, the qualified exit-notification timing helper in every arm,
+and **60 seconds / one leased physical CPU / 16 GiB** per solver invocation.
+Up to 40 distinct physical CPU leases run independent tasks; solver order
+rotates on the same CPU. Results below are main/candidate/Z3:
+
+- Private14408 verifies **14,408 / 14,408 / 14,408**, comprising **8,940 SAT
+  and 5,468 UNSAT** in each arm. All actual timed SAT models are independently
+  replayed. Solver totals are **209.124 / 207.131 / 294.135 seconds**: a
+  **0.95%** candidate reduction, with all 40 paired slot totals lower. These
+  are descriptive observations from one complete round, not independent
+  repetitions or an overall superiority claim. Audit SHA-256:
+  `6a1347ca8ad0a0de6b48e1fc44304d7e2dab979f579ffc953c7fdd7f24c9b151`.
+- Development587 verifies **587 / 587 / 584** at **7.851 / 7.730 / 11.090
+  seconds**, without gained or lost verified results. Unconfirmed reference
+  models remain excluded. Audit SHA-256:
+  `9b5a0b23017793dac2806001b8511bef4446717b7b892e5a8fa62525497f2c22`.
+- All **965** public regressions pass. Audit SHA-256:
+  `c3ba598a4340dd2dd3e4f8c2e5bac9e1d2dcc887e7f5ca4257b2cd855e4f0d36`.
+- Fixed160 verifies **124 / 124 / 117** after fresh original-input-bound
+  certificate checking and one applicable prior independent reference UNSAT
+  check on the identical input and frozen reference versions. Actual current
+  solver times and all raw reports remain unchanged. Main has **36 timeouts**;
+  the candidate has **35 timeouts and one additional unconfirmed UNSAT**.
+  Six reference decisions remain unconfirmed and excluded. There are no gained
+  or lost verified solves. Mean verified PAR-2 improves **31.721799 to
+  31.509486 seconds**; reference mean is **33.509030 seconds**.
+
+The disjoint fixed/private combined verified PAR-2 improves **35.962892 seconds**.
+The unchanged no-loss/private-faster/combined-score gate passes. Development587
+stays outside that combined score to avoid overlap. Final-stage audit SHA-256:
+`0e3f0f3b90694d1e10783a3c56dce1a3fb9ef87414ea16da23eec30d77ee7fe6`.
+Private inputs, identifiers, per-input hashes, models and raw evidence remain
+server-only. Remaining difficult inputs, final-worker original-C QCP, the final
+fair comparison and one-time protected evaluation remain open.
+
+## Earlier candidate: immediate explanations and precise process timing
 
 Arithmetic core `56a73abd`, followed by timing commits `c20bdc75` and
 `0b823e77`, is pushed to `FULINA`; no PR or main delivery is claimed yet.
@@ -58,14 +147,16 @@ complete source-binding SHA-256:
 timing-precision audit SHA-256:
 `26e5136f6a0db0fe1c6f1e374853d28517c11e91c57cf51abf906ec738ba6927`.
 
-Fresh complete comparisons now use the same qualified notification helper in
-all three arms, with unchanged frozen solvers and **60 seconds / one leased
-physical CPU / 16 GiB** budgets: Private14408 `0625cac26eee`, Fixed160
-`93f583576401`, and Development587 `56b370357712`. Their inputs and timing method
-are frozen; continue these exact ExperimentOS runs. Their results, normal PR/main
-CI delivery, remaining difficult inputs, final-worker original-C QCP and final
-protected evaluation remain open. Private inputs and individual evidence stay
-server-only.
+Those corrected-method comparisons have completed: Private14408 `0625cac26eee`,
+Fixed160 `93f583576401`, and Development587 `56b370357712`. They verify
+**14,408 / 14,408 / 14,408**, **124 / 124 / 117**, and **587 / 587 / 584**
+respectively, without paired gains or losses. Private totals are **209.776 /
+209.415 / 294.106 seconds**; the candidate's approximately **0.17%** difference
+does not establish a material arithmetic speedup. Corrected-stage audit SHA-256:
+`c23580615ce107e04e0f8b33c3a3edc4e1baa9434e9bbfcf91da2e96498160d2`.
+Do not repeat these completed runs or attribute the old polling-based timing
+deltas to the explanation algorithm. The later model-planning attempt's failed
+combined gate and its propagation repair are recorded above.
 
 ## Delivered stage: shared sparse difference equalities (2026-11-08)
 
