@@ -75,17 +75,4 @@ void emitBooleanNaryDefinition(SatSolver& solver, SatLit output,
     }
 }
 
-void emitBooleanIteDefinition(SatSolver& solver, SatLit output,
-                              SatLit selector, SatLit thenBranch, SatLit elseBranch) {
-    solver.addClause({selector.negated(), thenBranch.negated(), output});
-    solver.addClause({selector.negated(), thenBranch, output.negated()});
-    solver.addClause({selector, elseBranch.negated(), output});
-    solver.addClause({selector, elseBranch, output.negated()});
-    // Resolve away the selector: agreeing branches determine the output even
-    // while the selector is unassigned. These consequences preserve exactly
-    // the same models and avoid requiring a SAT decision to discover them.
-    solver.addClause({thenBranch.negated(), elseBranch.negated(), output});
-    solver.addClause({thenBranch, elseBranch, output.negated()});
-}
-
 } // namespace xolver

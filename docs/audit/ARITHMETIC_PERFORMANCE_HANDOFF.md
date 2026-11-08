@@ -1,6 +1,6 @@
 # Arithmetic validation and continuation record
 
-## In progress: shared ITE consensus propagation (2026-11-09)
+## Closed experiment: shared ITE consensus propagation (2026-11-09)
 
 Core `02a28b06e0bab007af17188637ca8ef924723886` is pushed on `FULINA`.
 `emitBooleanIteDefinition` in the shared BooleanDefinitions module supplies one
@@ -50,12 +50,39 @@ their small timing difference is not attributed to this algorithm. Pilot-audit
 SHA-256: `8cb46bae96a26864426e3b2e4f406b4ca47998bc986b1839bc926a29315beab7`.
 
 Complete same-round comparisons against delivered main `25807183` and frozen
-Z3 are in progress, beginning with private14408 experiment `ae7bf423afa7`
-(r3470). Stage watcher r3473 sequences fixed160, development587 and all 965
-public regressions after each preceding cohort finishes and passes its raw
-audit. Certificate supplements and the final promotion audit remain pending.
-The unchanged full-stage gate applies; no PR or overall solver-superiority,
-protected-set or final-worker original-C QCP claim is made.
+Z3 finish under the unchanged 60 seconds / one physical CPU / 16 GiB protocol.
+Private14408 verifies **14,408 / 14,408 / 14,408** for main/candidate/Z3 at
+**204.409 / 203.662 / 293.534 seconds**, about 0.37% less candidate time,
+with 33/40 paired slot totals lower and no lost solve. Development587 retains
+**587 / 587 / 584**; all **965** public regressions pass.
+
+The complete stage **fails**. Fixed160 verifies **124 / 123 / 116** after the
+original-input-bound independent certificate replay. Six reference decisions
+remain unconfirmed and excluded; no additional applicable prior reference
+evidence is found in this round. Mean verified fixed PAR-2 is
+**31.504596 / 32.497849 / 34.183993 seconds**. There is one lost verified QF_LIA
+SAT: main **15.678 seconds**, candidate timeout **60 seconds**, Z3 **0.659
+seconds**. This differs from the earlier tight-face loss. Combined disjoint
+fixed/private verified PAR-2 worsens **158.174081 seconds**. The unchanged
+no-loss/private-faster/combined-score gate rejects promotion.
+Final-stage audit SHA-256:
+`076fd7916fe63c927365e3240af992532214efb68c6f0f299c0ba74baba96bd6`.
+
+A frozen same-CPU phase trace reproduces the new loss. Main takes **9.269
+seconds**, including **8.374 seconds** of SAT search. Candidate reaches an
+open SAT search after **19.462 seconds**, exits the eager arm after **19.911
+seconds**, and times out at the unchanged 60-second total deadline. Both use
+125,408 encoded variables. The actual main SAT model passes Z3/cvc5 replay;
+there is no completed candidate model. Phase-audit SHA-256:
+`3a2f33db358082b820425ad139e89b4d22e7548b1173c6f58294fc45c59c54ec`.
+These diagnostics do not replace any full-stage measurement.
+
+The optional six-clause implementation and its two experimental tests are
+withdrawn; failure evidence and frozen binaries remain unchanged. No PR is
+created. The next supported direction exploits the proven local ordering of
+positive-weight threshold branches, retaining four clauses with fewer literal
+occurrences. It does not change the existing solver budgets. Protected sets,
+final-worker original-C QCP and overall solver superiority remain open.
 
 ## Closed experiment: finite tight-face eligibility (2026-11-09)
 

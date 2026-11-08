@@ -241,7 +241,10 @@ SatLit BitBlastEncoder::internTernaryGate(TernaryGateKind kind, SatLit a, SatLit
     if (over_) return output;
     const auto x = key.inputs[0], y = key.inputs[1], z = key.inputs[2];
     if (kind == TernaryGateKind::Ite) {
-        emitBooleanIteDefinition(sat_, output, x, y, z);
+        sat_.addClause({x.negated(), y.negated(), output});
+        sat_.addClause({x.negated(), y, output.negated()});
+        sat_.addClause({x, z.negated(), output});
+        sat_.addClause({x, z, output.negated()});
     } else {
         // Every pair of true inputs forces output; every pair of false inputs
         // forces its negation. No intermediate sum or selector is needed.
