@@ -35,6 +35,7 @@ jobs:
         run: |
           python3 -B tools/governance/control_catalog.py
           python3 -B tests/tools/test_control_catalog.py
+          python3 -B tests/tools/test_install_oracles.py
 
       - name: Configure (Release)
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
