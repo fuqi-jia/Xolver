@@ -398,10 +398,7 @@ SatLit Atomizer::atomizeRec(ExprId eid, const NativeTerms& ir) {
             SatLit t = atomizeRec(e.children[1], ir);
             SatLit f = atomizeRec(e.children[2], ir);
             SatVar x = freshVar();
-            sat_.addClause({SatLit::negative(x), c.negated(), t});
-            sat_.addClause({SatLit::negative(x), c, f});
-            sat_.addClause({SatLit::positive(x), c.negated(), t.negated()});
-            sat_.addClause({SatLit::positive(x), c, f.negated()});
+            emitBooleanIteDefinition(sat_, SatLit::positive(x), c, t, f);
             result = SatLit::positive(x);
             break;
         }

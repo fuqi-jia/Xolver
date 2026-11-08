@@ -30,4 +30,9 @@ void emitBooleanNaryDefinition(SatSolver& solver, SatLit output,
                                std::span<const SatLit> inputs, bool conjunction,
                                BooleanDefinitionDirections directions = {});
 
+// Full equivalence with selector-independent propagation when both branches
+// agree. The caller owns allocation and any simplification or gate sharing.
+void emitBooleanIteDefinition(SatSolver& solver, SatLit output,
+                              SatLit selector, SatLit thenBranch, SatLit elseBranch);
+
 } // namespace xolver
