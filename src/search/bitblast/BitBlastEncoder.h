@@ -32,6 +32,9 @@ public:
     SatLit orGate(SatLit a, SatLit b);
     SatLit xorGate(SatLit a, SatLit b);
     SatLit iteGate(SatLit s, SatLit t, SatLit e);
+    // The caller proves t -> e. Positive-weight threshold diagrams supply
+    // this ordering from their completed child functions.
+    SatLit orderedIteGate(SatLit s, SatLit t, SatLit e);
     SatLit majorityGate(SatLit a, SatLit b, SatLit c);
     // Full equivalences by default. With one direction requested, the caller
     // must have established the connective's occurrence polarity first.
@@ -142,7 +145,7 @@ private:
     SatLit internGate(GateKind kind, SatLit a, SatLit b);
     std::unordered_map<GateKey, SatLit, GateKeyHash> gateCache_;
 
-    enum class TernaryGateKind : uint8_t { Ite, Majority };
+    enum class TernaryGateKind : uint8_t { Ite, Majority, OrderedIte };
     struct TernaryGateKey {
         TernaryGateKind kind;
         std::array<SatLit, 3> inputs;
