@@ -28,11 +28,19 @@ Complete source-binding SHA-256:
 `7f8aaa0b3ddfbef322db036111fd12586e4d45f38cbcf86853185e6c4f1f22d3`.
 
 Fresh complete fixed160, private14408, development587 and public965 checks for
-the corrected binary are running. The preceding frozen trial retains **587 /
-587 / 584** verified main/trial/Z3 development results, with totals **11.832 /
-11.376 / 19.146 seconds**, and passes all **965 public regressions**. Those are
-historical trial observations, not acceptance of the corrected binary. No PR or
-main promotion is qualified yet. The unchanged performance criterion requires
+the corrected binary are running. The preceding frozen trial verifies all
+**14,408** private results in each arm, with main/trial/Z3 totals **290.541 /
+280.420 / 455.770 seconds**, reducing trial solver time **3.48%**. It retains
+**587 / 587 / 584** verified development results, with totals **11.832 / 11.376 /
+19.146 seconds**, and passes all **965 public regressions**. However, fixed160
+loses one verified SAT to timeout: raw verified counts are **122 / 121 / 117**,
+with **37 / 38 / 36 timeouts**. One actual UNSAT in each Xolver arm and seven
+reference decisions remain unconfirmed and excluded; no certificate supplement
+is applied to this rejected trial. It **fails performance acceptance** despite
+the private timing improvement. Its preserved trial-record SHA-256 is
+`0aa98233b1e2918b9113d9efc1b8ed39bbb03c76ae461539f69a50c74dbe643a`.
+Those are historical trial observations, not acceptance of the corrected
+binary. No PR or main promotion is qualified yet. The unchanged criterion requires
 no lost verified result, lower complete-private solver time and improved combined
 fixed/private verified score. Neither component correctness repair overrides
 that criterion. All formal instances retain **60 seconds / one physical CPU /
