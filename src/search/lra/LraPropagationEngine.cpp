@@ -51,16 +51,17 @@ struct RowAggregate {
     std::optional<std::vector<SatLit>> explain(
         const Contribution* excluded, const std::vector<SatLit>& required,
         int maxReasons) const {
+        if (static_cast<int>(required.size()) > maxReasons) return std::nullopt;
         std::vector<SatLit> result = required; // sorted and unique
-        if (static_cast<int>(result.size()) > maxReasons) return std::nullopt;
         for (const auto& [reason, count] : reasonCounts) {
             const bool removed = excluded && excluded->available &&
                 std::binary_search(excluded->reasons.begin(), excluded->reasons.end(),
                                    reason, LiteralLess{});
             if (count == static_cast<size_t>(removed)) continue;
-            if (!std::binary_search(required.begin(), required.end(), reason, LiteralLess{}))
+            if (!std::binary_search(required.begin(), required.end(), reason, LiteralLess{})) {
+                if (static_cast<int>(result.size()) == maxReasons) return std::nullopt;
                 result.push_back(reason);
-            if (static_cast<int>(result.size()) > maxReasons) return std::nullopt;
+            }
         }
         std::sort(result.begin(), result.end(), LiteralLess{});
         return result;
@@ -143,12 +144,26 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
                        const std::vector<SatLit>& required) {
         if (exhausted()) return false;
         auto& target = bounds[var][lower ? 0 : 1];
-        if (target.value && (lower ? value <= *target.value : value >= *target.value))
+        if (target.value && (lower ? value < *target.value : value > *target.value))
             return false;
-        // Materialize explanations only for a genuinely stronger bound.
-        auto reasons = aggregate.explain(excluded, required, budget.maxReasonSize);
+        const bool sameValue = target.value && value == *target.value;
+        int reasonLimit = budget.maxReasonSize;
+        if (sameValue && target.explained) {
+            // Every candidate contains the required premises. Reconstruct a
+            // proof only when its cardinality can strictly improve this one.
+            if (required.size() >= target.reasons.size()) return false;
+            reasonLimit = std::min(reasonLimit, static_cast<int>(target.reasons.size()) - 1);
+        }
+        auto reasons = aggregate.explain(excluded, required, reasonLimit);
         if (!reasons) return false;
         if (gs.basicRowOfVar(var) < 0) ++inputRevision;
+        if (sameValue) {
+            // Refine the local proof without exporting an equal-valued bound.
+            // Its shorter premises can unlock later numerical deductions.
+            target.reasons = std::move(*reasons);
+            target.explained = true;
+            return true;
+        }
         target.value = value;
         target.reasons = *reasons;
         target.explained = true;

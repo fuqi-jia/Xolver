@@ -1,6 +1,6 @@
 # Arithmetic validation and continuation record
 
-## Server-qualified candidate: shared sparse difference equalities (2026-11-08)
+## Delivered stage: shared sparse difference equalities (2026-11-08)
 
 Core `76c8c996`, pushed to `FULINA`, replaces LIA's remaining quadratic
 shared-variable pair scan with `LinearDifferenceEqualityIndex`, shared with
@@ -60,13 +60,18 @@ the unchanged no-loss/private-faster/combined-score server gate passes.
 Development587 stays outside the combined score to avoid overlap. Final-stage
 audit SHA-256:
 `ac261105f68d26c769576086a7dbe7b68e63961b83988bd41bd3141423c9a5b2`.
-PR/main CI and normal main delivery remain pending. Private individual inputs,
+[PR #119](https://github.com/fuqi-jia/Xolver/pull/119) passes both exact-head
+[PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42487264923) and merges
+normally as `d4eecb7858e581fec115bfb7ae88366ddd5fe79b`. Its entire tree equals
+reviewed head `0bc9fe15`. Both jobs in the corresponding
+[main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42489627688) pass.
+`FULINA` is fast-forwarded to that merge. Private individual inputs,
 identifiers and evidence remain server-only. Remaining difficult inputs,
 final-worker QCP, final fair comparison and protected evaluation remain open.
 
-### Current merged-main original-C QCP closure
+### Earlier merged-main original-C QCP closure
 
-The already delivered main worker completes three fresh original-C development
+The earlier main `e51068f0` worker completes three fresh original-C development
 workflows: all controllers reach `done`, final checks pass, and full Rocq
 checking proves **23 top-level VCs**. The qualified native-query audit checks
 every one of **2,340 actual timed occurrences**, including failed proof attempts:
