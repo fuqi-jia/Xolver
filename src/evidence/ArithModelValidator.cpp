@@ -194,8 +194,8 @@ void ArithModelValidator::warmEval(ExprId root, std::unordered_map<ExprId, TR>& 
         Frame& fr = stack.back();
         ExprId e = fr.e;
         if (e >= ir_.size() || cache.find(e) != cache.end()) { stack.pop_back(); continue; }
-        const TermExpr& n = ir_.get(e);
         if (!fr.processed) {
+            const TermExpr& n = ir_.get(e);
             fr.processed = true;
             for (ExprId c : n.children)
                 if (c < ir_.size() && cache.find(c) == cache.end()) stack.push_back({c, false});
