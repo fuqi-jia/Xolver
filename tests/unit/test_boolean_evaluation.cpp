@@ -2,7 +2,6 @@
 #include "evidence/ModelValidator.h"
 #include "search/boolean/BooleanDefinitions.h"
 #include <doctest/doctest.h>
-#include <array>
 #include <utility>
 #include <vector>
 
@@ -27,97 +26,6 @@ struct BooleanFixture {
         return terms.add(std::move(result));
     }
 };
-class BooleanClauseCollector final : public SatSolver {
-public:
-    SatVar variables = 0;
-    std::vector<std::vector<SatLit>> clauses;
-    SatVar newVar() override { return ++variables; }
-    void addClause(const std::vector<SatLit>& clause) override { clauses.push_back(clause); }
-    SolveResult solve() override { return SolveResult::Unknown; }
-    SolveResult solve(const std::vector<SatLit>&) override { return SolveResult::Unknown; }
-    bool value(SatVar) const override { return false; }
-    void setDeadline(std::chrono::steady_clock::time_point) override {}
-
-    // Exhaustive tests compare clause propagation against the independently
-    // enumerated Boolean relation, without a SAT search hiding missed units.
-    bool propagate(std::vector<int>& values) const {
-        bool changed;
-        do {
-            changed = false;
-            for (const auto& clause : clauses) {
-                bool satisfied = false;
-                unsigned unassigned = 0;
-                SatLit remaining;
-                for (const auto literal : clause) {
-                    if (values[literal.var] < 0) {
-                        ++unassigned;
-                        remaining = literal;
-                    } else if (values[literal.var] == int(literal.sign)) {
-                        satisfied = true;
-                        break;
-                    }
-                }
-                if (satisfied) continue;
-                if (unassigned == 0) return false;
-                if (unassigned == 1) {
-                    values[remaining.var] = int(remaining.sign);
-                    changed = true;
-                }
-            }
-        } while (changed);
-        return true;
-    }
-};
-}
-
-TEST_CASE("Boolean definitions: ordered ITE propagates its full relation") {
-    for (unsigned polarity = 0; polarity < 16; ++polarity) {
-        BooleanClauseCollector sat;
-        std::array<SatLit, 4> literals;
-        for (unsigned i = 0; i < literals.size(); ++i)
-            literals[i] = SatLit(sat.newVar(), bool(polarity & (1u << i)));
-        emitBooleanOrderedIteDefinition(sat, literals[3], literals[0], literals[1], literals[2]);
-        std::vector<unsigned> models;
-        for (unsigned mask = 0; mask < 16; ++mask) {
-            const auto value = [&](unsigned i) {
-                return bool(mask & (1u << i)) == literals[i].sign;
-            };
-            const bool expected = (!value(1) || value(2)) &&
-                                  value(3) == (value(0) ? value(1) : value(2));
-            bool clausesHold = true;
-            for (const auto& clause : sat.clauses) {
-                bool holds = false;
-                for (const auto literal : clause)
-                    holds |= bool(mask & (1u << (literal.var - 1))) == literal.sign;
-                clausesHold &= holds;
-            }
-            CHECK(clausesHold == expected);
-            if (expected) models.push_back(mask);
-        }
-        for (unsigned partial = 0; partial < 81; ++partial) {
-            std::vector<int> initial(5, -1);
-            auto digits = partial;
-            for (unsigned i = 1; i <= 4; ++i, digits /= 3)
-                initial[i] = int(digits % 3) - 1;
-            std::vector<unsigned> compatible;
-            for (const auto mask : models) {
-                bool matches = true;
-                for (unsigned i = 1; i <= 4; ++i)
-                    matches &= initial[i] < 0 || initial[i] == int(bool(mask & (1u << (i - 1))));
-                if (matches) compatible.push_back(mask);
-            }
-            auto closure = initial;
-            CHECK(sat.propagate(closure) == !compatible.empty());
-            if (compatible.empty()) continue;
-            for (unsigned i = 1; i <= 4; ++i) {
-                const int first = bool(compatible.front() & (1u << (i - 1)));
-                bool forced = true;
-                for (const auto mask : compatible)
-                    forced &= int(bool(mask & (1u << (i - 1)))) == first;
-                if (forced) CHECK(closure[i] == first);
-            }
-        }
-    }
 }
 
 TEST_CASE("PartialBooleanEvaluation: nary connectives agree with exact truth tables") {

@@ -36,56 +36,6 @@ SatLit gate(bitblast::BitBlastEncoder& enc,unsigned type,SatLit a,SatLit b) {
 }
 }
 
-TEST_CASE("Encoder: ordered ITE preserves polarity high IDs sharing and allocation guards") {
-    for (SatVar high : {(SatVar(1) << 30) + 3, (SatVar(1) << 31) + 3,
-                        std::numeric_limits<SatVar>::max()}) {
-        for (unsigned polarity = 0; polarity < 8; ++polarity) {
-            SparseSat sat;
-            bitblast::BitBlastEncoder encoder(sat);
-            const auto s = sat.newVar(), t = sat.newVar();
-            sat.bind(high);
-            const SatLit selector(s, polarity & 1), lower(t, polarity & 2);
-            const SatLit upper(high, polarity & 4);
-            // This standalone gate receives the same proven ordering that a
-            // threshold diagram obtains from its completed child functions.
-            sat.addClause({lower.negated(), upper});
-            const auto before = sat.clauses;
-            const auto output = encoder.orderedIteGate(selector, lower, upper);
-            CHECK(sat.clauses == before + 4);
-            const auto general = encoder.iteGate(selector, lower, upper);
-            CHECK(general != output);
-            const auto allocated = encoder.varCount();
-            const auto clauses = sat.clauses;
-            encoder.setVarBudget(allocated);
-            CHECK(encoder.orderedIteGate(selector, lower, upper) == output);
-            CHECK(encoder.varCount() == allocated);
-            CHECK(sat.clauses == clauses);
-            CHECK_FALSE(encoder.overflowed());
-            for (unsigned mask = 0; mask < 8; ++mask) {
-                const bool sv = bool(mask & 1) == selector.sign;
-                const bool tv = bool(mask & 2) == lower.sign;
-                const bool ev = bool(mask & 4) == upper.sign;
-                std::vector<SatLit> assumptions{{s, bool(mask & 1)}, {t, bool(mask & 2)},
-                                                 {high, bool(mask & 4)}};
-                if (tv && !ev) {
-                    CHECK(sat.solve(assumptions) == SatSolver::SolveResult::Unsat);
-                    continue;
-                }
-                const bool expected = sv ? tv : ev;
-                assumptions.push_back(expected ? output : output.negated());
-                REQUIRE(sat.solve(assumptions) == SatSolver::SolveResult::Sat);
-                CHECK(bitblast::litValue(sat, general) == expected);
-                assumptions.back() = assumptions.back().negated();
-                CHECK(sat.solve(assumptions) == SatSolver::SolveResult::Unsat);
-            }
-            const auto freshSelector = SatLit::positive(sat.newVar());
-            CHECK(encoder.orderedIteGate(freshSelector, lower, upper) == encoder.constFalse());
-            CHECK(encoder.overflowed());
-            CHECK(sat.clauses == clauses);
-        }
-    }
-}
-
 TEST_CASE("Encoder: nary definitions preserve the requested implication directions") {
     for (const bool conjunction : {false, true}) {
         for (unsigned arity = 0; arity <= 5; ++arity) {

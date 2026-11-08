@@ -1,5 +1,44 @@
 # Arithmetic validation and continuation record
 
+## Closed pilot: ordered threshold selectors (2026-11-09)
+
+Core `dbbb23408e68b516da566944c6ccad7dec27bfdc` implements a shared ordered
+selector for positive-weight threshold diagrams. In `S <= b`, the completed
+then branch `F(i+1,b-w)` implies the else branch `F(i+1,b)`. Four clauses,
+including two binary explanations, use this premise while reducing literal
+occurrences from 12 to 10. Original ITE semantics, budgets, exact arithmetic,
+model checks and rollback policies remain intact. No global threshold cache
+or separate implication pass is introduced.
+
+Proof-enabled native acceptance passes **20 targeted cases / 17,553 assertions**
+and all **2,306 unit cases / 1,542,593 assertions**. The tests check all 16
+literal-polarity patterns, 81 partial assignments, high variable IDs, sharing
+and allocation failure. All 2,343 source bodies match the core.
+Native-qualification SHA-256:
+`6f3018b798a2f6d16f63a333e30d8c2ed27242aa96cf7c721a872a36c1548797`;
+source-binding SHA-256:
+`7ec1e5b1e7e2bae1c0f325e4d145608072b3ee3452440a21542a9ae8fa2cf122`;
+CLI SHA-256:
+`d8a9883dc519b855c03be4f88393ed7b18d0404a26d1bd548834a5375cf66380`.
+
+The same-budget five-pair pilot **rejects** this optional performance change.
+Main solves both fixed diagnostics, totaling **28.127 seconds**. Candidate
+solves one and times out on the other, totaling **76.710 seconds**. Candidate
+restores SAT on the prior six-clause loss but loses the other diagnostic.
+All three private diagnostics retain SAT in both arms and have no bit-encoding
+rounds. All **nine completed actual SAT models** pass Z3/cvc5 replay; the tenth
+run times out and supplies no candidate model. No opposite decision occurs.
+Pilot-audit SHA-256:
+`3d2133f1b2658dc53d566b8403745abb7e2f246d9b9649750071d95f449b04b9`.
+
+Propagation completeness alone does not establish better SAT search. The
+candidate reaches an open eager search near the existing 19.8-second share
+and then reaches the unchanged 60-second total deadline. The pilot does not
+replace any full-suite result. No new complete stage or PR is started. The
+optional implementation and its tests are withdrawn; native artifacts and
+diagnostics remain preserved. Current priority returns to measured private
+model-construction and validation costs, retaining every consistency guard.
+
 ## Closed experiment: shared ITE consensus propagation (2026-11-09)
 
 Core `02a28b06e0bab007af17188637ca8ef924723886` is pushed on `FULINA`.

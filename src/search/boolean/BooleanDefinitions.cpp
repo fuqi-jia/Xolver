@@ -75,12 +75,4 @@ void emitBooleanNaryDefinition(SatSolver& solver, SatLit output,
     }
 }
 
-void emitBooleanOrderedIteDefinition(SatSolver& solver, SatLit output,
-                                     SatLit selector, SatLit thenBranch, SatLit elseBranch) {
-    solver.addClause({thenBranch.negated(), output});
-    solver.addClause({output.negated(), elseBranch});
-    solver.addClause({selector, elseBranch.negated(), output});
-    solver.addClause({selector.negated(), thenBranch, output.negated()});
-}
-
 } // namespace xolver

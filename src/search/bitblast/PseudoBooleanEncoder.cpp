@@ -197,9 +197,9 @@ std::optional<SatLit> PseudoBooleanEncoder::lessEqual(
                     if (keepDiagram) ++statistics_.diagramBudgetProofs;
                 }
                 if (expanded > circuitCost && !keepDiagram) {
-                    // Completed children keep their exact threshold semantics;
-                    // their ordered branch relations hold for every source
-                    // assignment. Unasserted partial diagrams restrict no input.
+                    // Every emitted gate is only a total-function definition;
+                    // no source predicate has been asserted. Discarding the
+                    // partial diagram therefore cannot restrict the inputs.
                     stack.clear();
                     memo.clear();
                     return oriented(carrySaveThreshold(terms, target));
@@ -213,10 +213,7 @@ std::optional<SatLit> PseudoBooleanEncoder::lessEqual(
                 const mpz_class highBound = frame.bound - terms[index].weight;
                 stack.push_back({index + 1, highBound, 0, {}});
             } else {
-                // Positive weights give F(i+1,b-w) -> F(i+1,b). The ordered
-                // selector propagates these exact local bounds with four
-                // clauses, including two binary explanations.
-                result = encoder_.orderedIteGate(terms[index].literal, result, frame.low);
+                result = encoder_.iteGate(terms[index].literal, result, frame.low);
                 if (encoder_.overflowed()) return std::nullopt;
                 memo[index].emplace(frame.bound, result);
                 stack.pop_back();

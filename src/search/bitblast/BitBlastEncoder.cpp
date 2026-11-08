@@ -207,14 +207,6 @@ SatLit BitBlastEncoder::iteGate(SatLit s, SatLit t, SatLit e) {
     return internTernaryGate(TernaryGateKind::Ite, s, t, e);
 }
 
-SatLit BitBlastEncoder::orderedIteGate(SatLit s, SatLit t, SatLit e) {
-    if (over_) return false_;
-    if (s == true_ || s == false_ || t == e ||
-        t == true_ || t == false_ || e == true_ || e == false_)
-        return iteGate(s, t, e);
-    return internTernaryGate(TernaryGateKind::OrderedIte, s, t, e);
-}
-
 SatLit BitBlastEncoder::majorityGate(SatLit a, SatLit b, SatLit c) {
     if (over_) return false_;
     if (a == b || a == c) return a;
@@ -237,7 +229,7 @@ SatLit BitBlastEncoder::internTernaryGate(TernaryGateKind kind, SatLit a, SatLit
         std::sort(key.inputs.begin(), key.inputs.end(), [](SatLit left, SatLit right) {
             return left.var < right.var || (left.var == right.var && left.sign < right.sign);
         });
-    } else if (kind == TernaryGateKind::Ite && !a.sign) {
+    } else if (!a.sign) {
         key.inputs[0] = a.negated();
         std::swap(key.inputs[1], key.inputs[2]);
     }
@@ -253,10 +245,6 @@ SatLit BitBlastEncoder::internTernaryGate(TernaryGateKind kind, SatLit a, SatLit
         sat_.addClause({x.negated(), y, output.negated()});
         sat_.addClause({x, z.negated(), output});
         sat_.addClause({x, z, output.negated()});
-    } else if (kind == TernaryGateKind::OrderedIte) {
-        // Swapping ordered branches would reverse the caller's premise, so
-        // retain the original selector polarity in both the key and clauses.
-        emitBooleanOrderedIteDefinition(sat_, output, x, y, z);
     } else {
         // Every pair of true inputs forces output; every pair of false inputs
         // forces its negation. No intermediate sum or selector is needed.

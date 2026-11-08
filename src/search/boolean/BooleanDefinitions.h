@@ -30,11 +30,4 @@ void emitBooleanNaryDefinition(SatSolver& solver, SatLit output,
                                std::span<const SatLit> inputs, bool conjunction,
                                BooleanDefinitionDirections directions = {});
 
-// Requires thenBranch -> elseBranch, justified by the caller's definitions.
-// Encodes output <-> ite(selector, thenBranch, elseBranch), with the ordered
-// consequences thenBranch -> output -> elseBranch propagated independently of
-// selector. Allocation and the proof of branch ordering belong to the caller.
-void emitBooleanOrderedIteDefinition(SatSolver& solver, SatLit output,
-                                     SatLit selector, SatLit thenBranch, SatLit elseBranch);
-
 } // namespace xolver
