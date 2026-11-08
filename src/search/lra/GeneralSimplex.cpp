@@ -1307,23 +1307,6 @@ GeneralSimplex::FixedValueAnalysis GeneralSimplex::analyzeFixedValues() const {
         if (unknown[r] == 0) continue;
         const auto& row = tab_.row(r);
         if (unknown[r] > 1) {
-            // A finite extremum needs an endpoint for every unfixed term.
-            // Check bound kinds before exact arithmetic or proof allocation.
-            bool minimumFinite = true, maximumFinite = true;
-            const auto inspectBounds = [&](int var, bool positive) {
-                if (result.values_[var]) return;
-                const bool lower = vars_[var].lower.bound.isFinite();
-                const bool upper = vars_[var].upper.bound.isFinite();
-                minimumFinite &= positive ? lower : upper;
-                maximumFinite &= positive ? upper : lower;
-            };
-            inspectBounds(row.basicVar, true);
-            for (const auto& entry : row.entries) {
-                if (!minimumFinite && !maximumFinite) break;
-                if (entry.coeff != 0) inspectBounds(entry.col, entry.coeff < 0);
-            }
-            if (!minimumFinite && !maximumFinite) continue;
-
             // If a row's exact minimum/maximum equals its required value,
             // every remaining coordinate must attain the corresponding
             // endpoint. The proof uses all selected bounds and already-fixed
@@ -1362,7 +1345,7 @@ GeneralSimplex::FixedValueAnalysis GeneralSimplex::analyzeFixedValues() const {
                 }
                 return true;
             };
-            if ((!minimumFinite || !pinFace(true)) && maximumFinite) pinFace(false);
+            if (!pinFace(true)) pinFace(false);
             continue;
         }
         int var = -1;
