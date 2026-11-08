@@ -60,9 +60,16 @@ TEST_CASE("native kind metadata survives let aliases, copied ownership and index
         CHECK(terms.kind(root) == Kind::Eq);
         const auto equation = terms.get(root);
         REQUIRE(equation.children.size() == 2);
-        application = equation.children[0];
+        ExprId literal = NullExpr;
+        for (const auto child : equation.children) {
+            if (terms.native(child)->getKind() == SOMTParser::NODE_KIND::NT_UF_APPLY)
+                application = child;
+            else literal = child;
+        }
+        REQUIRE(application != NullExpr);
+        REQUIRE(literal != NullExpr);
         CHECK(terms.kind(application) == Kind::UFApply);
-        CHECK(terms.kind(equation.children[1]) == Kind::ConstInt);
+        CHECK(terms.kind(literal) == Kind::ConstInt);
         integerSort = terms.get(application).sort;
         survivor = terms;
     }
