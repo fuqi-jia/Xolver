@@ -28,7 +28,7 @@ std::optional<LinearProbeModel> LinearProbeResult::model() const {
     return model;
 }
 
-LinearProbeResult probeLinearAssumptions(
+LinearProbeResult LinearAssumptionProber::probe(
     const GeneralSimplex& source, const LinearAtomManager& manager,
     std::span<const LinearProbeAssumption> assumptions,
     std::chrono::steady_clock::time_point deadline) {
@@ -52,8 +52,39 @@ LinearProbeResult probeLinearAssumptions(
                std::chrono::steady_clock::now() >= deadline;
     };
     if (expired()) return unknown();
-    GeneralSimplex worker = source;
-    LinearAtomManager symbols = manager;
+    if (source.hasImmediateConflict()) {
+        result.status = GeneralSimplex::Result::Unsat;
+        for (const auto& entry : source.getConflict()) result.conflictReasons.push_back(entry.reason);
+        std::sort(result.conflictReasons.begin(), result.conflictReasons.end(),
+            [](SatLit a, SatLit b) { return a.var != b.var ? a.var < b.var : a.sign < b.sign; });
+        result.conflictReasons.erase(std::unique(result.conflictReasons.begin(), result.conflictReasons.end()),
+                                     result.conflictReasons.end());
+        return result;
+    }
+    const auto definitions = source.definitionsIdentity();
+    const bool fresh = !state_ || definitions_ != definitions;
+    if (fresh) {
+        state_ = std::make_shared<LinearProbeResult::State>(GeneralSimplex(source), LinearAtomManager(manager));
+        definitions_ = definitions;
+        ++result.tableauCopies;
+    } else if (!state_.unique()) {
+        // An outstanding result owns this exact point and its strict bounds.
+        state_ = std::make_shared<LinearProbeResult::State>(*state_);
+        ++result.tableauCopies;
+    }
+    auto& worker = state_->simplex;
+    auto& symbols = state_->manager;
+    if (!fresh) {
+        std::vector<GeneralSimplex::ActiveBoundView> bounds;
+        for (int variable = 0; variable < source.numVars(); ++variable) {
+            const auto view = source.varState(variable);
+            if (view.lower.bound.isFinite())
+                bounds.push_back({variable, true, &view.lower.bound.value, *view.lower.reason});
+            if (view.upper.bound.isFinite())
+                bounds.push_back({variable, false, &view.upper.bound.value, *view.upper.reason});
+        }
+        worker.replaceActiveBoundViews(bounds, GeneralSimplex::AssignmentPolicy::Preserve);
+    }
     struct Disequality { int auxiliary; SatLit reason; };
     std::vector<Disequality> disequalities;
     auto rememberConflict = [&] {
@@ -70,7 +101,7 @@ LinearProbeResult probeLinearAssumptions(
     auto finishSat = [&] {
         result.status = GeneralSimplex::Result::Sat;
         result.conflictReasons.clear();
-        result.state_ = std::make_unique<LinearProbeResult::State>(std::move(worker), std::move(symbols));
+        result.state_ = state_;
     };
     auto check = [&] {
         ++result.simplexChecks;
@@ -131,6 +162,13 @@ LinearProbeResult probeLinearAssumptions(
     }
     finishSat();
     return result;
+}
+
+LinearProbeResult probeLinearAssumptions(
+    const GeneralSimplex& source, const LinearAtomManager& manager,
+    std::span<const LinearProbeAssumption> assumptions,
+    std::chrono::steady_clock::time_point deadline) {
+    return LinearAssumptionProber{}.probe(source, manager, assumptions, deadline);
 }
 
 } // namespace xolver

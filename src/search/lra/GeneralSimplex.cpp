@@ -47,6 +47,7 @@ GeneralSimplex::GeneralSimplex() {
 // ---------------------------------------------------------------------------
 
 int GeneralSimplex::addVar(const std::string& name) {
+    definitionsIdentity_.reset();
     notePointChange();
     noteAnalysisChange();
     int id = static_cast<int>(vars_.size());
@@ -1060,6 +1061,7 @@ void GeneralSimplex::resetActiveBounds(AssignmentPolicy policy) {
 }
 
 void GeneralSimplex::reset() {
+    definitionsIdentity_.reset();
     notePointChange();
     noteBoundChange();
     vars_.clear();

@@ -35,6 +35,7 @@ public:
     std::vector<SatLit> conflictReasons;
     std::size_t simplexChecks = 0;
     std::size_t disequalityBranches = 0;
+    std::size_t tableauCopies = 0;
 
     // Materialize the owned witness only when requested. A refutation caller
     // need not build and discard all variable names and exact model values.
@@ -42,10 +43,26 @@ public:
 
 private:
     struct State;
-    std::unique_ptr<State> state_;
-    friend LinearProbeResult probeLinearAssumptions(
-        const GeneralSimplex&, const LinearAtomManager&,
-        std::span<const LinearProbeAssumption>, std::chrono::steady_clock::time_point);
+    std::shared_ptr<State> state_;
+    friend class LinearAssumptionProber;
+};
+
+// Retains an independent pivot basis and query-only definitions. Every probe
+// replaces its complete bound base, so weakening, withdrawal and changed
+// reasons cannot reuse a previous query's assumptions. Equation changes refresh
+// the snapshot. Results retain immutable witnesses through copy-on-write.
+class LinearAssumptionProber {
+public:
+    LinearProbeResult probe(
+        const GeneralSimplex& source, const LinearAtomManager& manager,
+        std::span<const LinearProbeAssumption> assumptions,
+        std::chrono::steady_clock::time_point deadline =
+            std::chrono::steady_clock::time_point::max());
+    void reset() noexcept { state_.reset(); definitions_.reset(); }
+
+private:
+    std::shared_ptr<LinearProbeResult::State> state_;
+    std::shared_ptr<const void> definitions_;
 };
 
 // The manager must describe the supplied simplex's symbols and auxiliary forms.

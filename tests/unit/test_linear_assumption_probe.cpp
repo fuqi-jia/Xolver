@@ -214,6 +214,125 @@ TEST_CASE("Linear assumption probe: an expired caller deadline has no conclusion
     CHECK_THROWS_AS(probeLinearAssumptions(context.simplex, context.manager, invalid), std::invalid_argument);
 }
 
+TEST_CASE("Linear assumption probe: retained contexts synchronize strengthening withdrawal and reasons") {
+    Context context;
+    context.admit(xForm, Relation::Geq, 0, SatLit::positive(1));
+    LinearAssumptionProber prober;
+    const std::vector<LinearProbeAssumption> negative{
+        {xForm, Relation::Lt, 0, SatLit::positive(2)}};
+    const auto first = prober.probe(context.simplex, context.manager, negative);
+    REQUIRE(first.status == GeneralSimplex::Result::Unsat);
+    CHECK(first.tableauCopies == 1);
+    const auto repeat = prober.probe(context.simplex, context.manager, negative);
+    CHECK(repeat.status == GeneralSimplex::Result::Unsat);
+    CHECK(repeat.tableauCopies == 0);
+    const int auxiliary = context.manager.getOrCreateAuxVar(context.simplex, xForm, 0);
+    const DeltaRational zero(0);
+    const std::vector<GeneralSimplex::ActiveBoundView> replacement{
+        {auxiliary, true, &zero, SatLit::positive(17)}};
+    REQUIRE(context.simplex.replaceActiveBoundViews(replacement));
+    const auto changed = prober.probe(context.simplex, context.manager, negative);
+    REQUIRE(changed.status == GeneralSimplex::Result::Unsat);
+    CHECK(changed.tableauCopies == 0);
+    CHECK((changed.conflictReasons == std::vector<SatLit>{SatLit::positive(2), SatLit::positive(17)}));
+    for (const auto policy : {GeneralSimplex::AssignmentPolicy::Preserve,
+                              GeneralSimplex::AssignmentPolicy::Reinitialize}) {
+        context.simplex.push();
+        context.admit(xForm, Relation::Geq, 2, SatLit::positive(3), 1);
+        const std::vector<LinearProbeAssumption> belowOne{
+            {xForm, Relation::Lt, 1, SatLit::positive(4)}};
+        const auto child = prober.probe(context.simplex, context.manager, belowOne);
+        REQUIRE(child.status == GeneralSimplex::Result::Unsat);
+        CHECK(std::find(child.conflictReasons.begin(), child.conflictReasons.end(),
+                        SatLit::positive(3)) != child.conflictReasons.end());
+        context.simplex.pop(policy);
+        const auto parent = prober.probe(context.simplex, context.manager, belowOne);
+        REQUIRE(parent.status == GeneralSimplex::Result::Sat);
+        const auto model = parent.model();
+        REQUIRE(model);
+        CHECK(model->assignments.at("x") >= DeltaRational(0));
+        CHECK(model->assignments.at("x") < DeltaRational(1));
+    }
+    context.simplex.resetActiveBounds();
+    const auto free = prober.probe(context.simplex, context.manager, negative);
+    CHECK(free.status == GeneralSimplex::Result::Sat);
+    CHECK(free.conflictReasons.empty());
+}
+
+TEST_CASE("Linear assumption probe: retained witnesses survive later queries and context reset") {
+    Context context;
+    LinearAssumptionProber prober;
+    const std::vector<LinearProbeAssumption> one{{xForm, Relation::Eq, 1, SatLit::positive(1)}};
+    const std::vector<LinearProbeAssumption> two{{xForm, Relation::Eq, 2, SatLit::positive(2)}};
+    const auto first = prober.probe(context.simplex, context.manager, one);
+    REQUIRE(first.status == GeneralSimplex::Result::Sat);
+    REQUIRE(first.model());
+    const auto second = prober.probe(context.simplex, context.manager, two);
+    REQUIRE(second.status == GeneralSimplex::Result::Sat);
+    CHECK(second.tableauCopies == 1);
+    CHECK(first.model()->assignments.at("x") == DeltaRational(1));
+    CHECK(second.model()->assignments.at("x") == DeltaRational(2));
+    prober.reset();
+    CHECK(first.model()->assignments.at("x") == DeltaRational(1));
+    CHECK(second.model()->assignments.at("x") == DeltaRational(2));
+    const auto expired = prober.probe(context.simplex, context.manager, one,
+        std::chrono::steady_clock::now() - std::chrono::milliseconds(1));
+    CHECK(expired.status == GeneralSimplex::Result::Unknown);
+    CHECK(expired.tableauCopies == 0);
+    CHECK_FALSE(expired.model());
+    CHECK(prober.probe(context.simplex, context.manager, one).tableauCopies == 1);
+}
+
+TEST_CASE("Linear assumption probe: source growth replaces colliding query-only coordinates") {
+    GeneralSimplex source;
+    LinearAtomManager manager;
+    manager.getOrCreateVar(source, "x");
+    LinearAssumptionProber prober;
+    const LinearFormKey fresh{{{"fresh", 1}}};
+    const std::vector<LinearProbeAssumption> initial{{fresh, Relation::Eq, 3, SatLit::positive(1)}};
+    CHECK(prober.probe(source, manager, initial).status == GeneralSimplex::Result::Sat);
+    CHECK(source.numVars() == 1);
+    const int auxiliary = manager.getOrCreateAuxVar(source, fresh, 7);
+    REQUIRE(manager.assertBound(source, auxiliary, Relation::Eq, true, SatLit::positive(2)));
+    const auto result = prober.probe(source, manager, initial);
+    REQUIRE(result.status == GeneralSimplex::Result::Unsat);
+    CHECK(result.tableauCopies == 1);
+    CHECK((result.conflictReasons == std::vector<SatLit>{SatLit::positive(1), SatLit::positive(2)}));
+    source.reset();
+    manager = LinearAtomManager{};
+    const auto unconstrained = prober.probe(source, manager, initial);
+    REQUIRE(unconstrained.status == GeneralSimplex::Result::Sat);
+    CHECK(unconstrained.tableauCopies == 1);
+    REQUIRE(unconstrained.model());
+    CHECK(unconstrained.model()->assignments.at("fresh") == DeltaRational(3));
+}
+
+TEST_CASE("Linear assumption probe: equation identities track definitions independently of bounds and pivots") {
+    Context context;
+    context.admit(sumForm, Relation::Eq, 2, SatLit::positive(1));
+    const auto equations = context.simplex.definitionsIdentity();
+    auto copied = context.simplex;
+    CHECK(copied.definitionsIdentity() == equations);
+    REQUIRE(context.simplex.assertLower(context.x,
+        BoundInfo(BoundValue(DeltaRational(1)), SatLit::positive(2))));
+    REQUIRE(context.simplex.check() == GeneralSimplex::Result::Sat);
+    CHECK(context.simplex.definitionsIdentity() == equations);
+    copied.addVar("independent");
+    CHECK(copied.definitionsIdentity() != equations);
+    CHECK(context.simplex.definitionsIdentity() == equations);
+    Context other;
+    other.admit(sumForm, Relation::Eq, 5, SatLit::positive(3));
+    REQUIRE(other.simplex.numVars() == context.simplex.numVars());
+    const auto replacement = other.simplex.definitionsIdentity();
+    context.simplex = other.simplex;
+    context.manager = other.manager;
+    CHECK(context.simplex.definitionsIdentity() == replacement);
+    CHECK(context.simplex.definitionsIdentity() != equations);
+    LinearAssumptionProber prober;
+    const std::vector<LinearProbeAssumption> wrong{{sumForm, Relation::Eq, 2, SatLit::positive(4)}};
+    CHECK(prober.probe(context.simplex, context.manager, wrong).status == GeneralSimplex::Result::Unsat);
+}
+
 TEST_CASE("LraSolver: exact assumption projection combines rows using the existing vocabulary") {
     AllocationOnly allocator;
     TheoryAtomRegistry registry;

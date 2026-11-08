@@ -132,6 +132,7 @@ void LraSolver::onReset() {
     clearActiveSources();
     currentLevel_ = 0;
     nextProbeRecord_ = 0;
+    assumptionProber_.reset();
     resetAppliedBounds(GeneralSimplex::AssignmentPolicy::Reinitialize);
 }
 
@@ -914,7 +915,7 @@ std::optional<TheoryLemma> LraSolver::probeRegisteredBound(
             *phase ? negateRelation(atom->rel) : atom->rel, *rhs, opposite};
         // One existing predicate is selected per check. The cursor gives the
         // remaining vocabulary a turn; only an exact refutation yields a fact.
-        const auto proof = probeLinearAssumptions(gs_, manager_,
+        const auto proof = assumptionProber_.probe(gs_, manager_,
             std::span<const LinearProbeAssumption>(&assumption, 1), wall::deadline());
         if (proof.status != GeneralSimplex::Result::Unsat) return std::nullopt;
         TheoryLemma lemma;
