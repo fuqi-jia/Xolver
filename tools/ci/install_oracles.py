@@ -9,7 +9,9 @@ import zipfile
 
 VERSION = '1.4.2'
 SHA256 = '7eb18f8c814c36a46c5a7d003983e9cfbc4b0a9828d6dd596239291bd4cc61d8'
-URL = f'https://github.com/cvc5/cvc5/releases/download/cvc5-{VERSION}/cvc5-Linux-x86_64-static.zip'
+# The immutable release asset is the same version/archive checked below. Use
+# the official asset API rather than a failing browser-download redirect.
+URL = 'https://api.github.com/repos/cvc5/cvc5/releases/assets/620335595'
 
 
 def main():
@@ -22,7 +24,11 @@ def main():
     archive = args.directory / f'cvc5-{VERSION}.zip'
     if not archive.exists() or hashlib.sha256(archive.read_bytes()).hexdigest() != SHA256:
         temporary = archive.with_suffix('.download')
-        with urllib.request.urlopen(URL, timeout=60) as response, temporary.open('wb') as out:
+        request = urllib.request.Request(URL, headers={
+            'Accept': 'application/octet-stream',
+            'X-GitHub-Api-Version': '2022-11-28',
+        })
+        with urllib.request.urlopen(request, timeout=60) as response, temporary.open('wb') as out:
             while chunk := response.read(1024 * 1024):
                 out.write(chunk)
         if hashlib.sha256(temporary.read_bytes()).hexdigest() != SHA256:

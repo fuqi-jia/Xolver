@@ -2,6 +2,16 @@
 
 ## Server-qualified stage: canonical term reads and sparse elimination (2026-11-08)
 
+[PR #116](https://github.com/fuqi-jia/Xolver/pull/116) merged as
+`c1b9c67720a1f8ef35e8a4a5947276c051875ad4` after server acceptance and both
+exact-head [PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42463105976)
+passed. Its tree equals reviewed head `3dc9aa7f`. The corresponding
+[main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42464571303) fails on
+both attempts: downloading the pinned independent cvc5 archive returns HTTP
+504 before native-theory checks run; SV checking subsequently cannot find
+cvc5. The proof gate passes. Main delivery remains incomplete until the actual
+checks pass; no checker, expected result or verification step is waived.
+
 Core `1f4f2ee1` adds canonical node-kind metadata before owning expression
 materialization. Core `98546bda` batches exact sparse row substitution through
 one position index per affected row, retaining coefficient arithmetic and
@@ -39,7 +49,7 @@ The candidate gains one verified result in this round without losing another;
 its **124** results match the historical best, and **36 timeouts remain**.
 Every actual timed Xolver SAT model passes Z3 and cvc5 replay; reference SAT
 models pass cvc5. The unchanged no-loss/private-faster/combined-score server
-criterion passes. Corresponding PR CI and main delivery are still pending.
+criterion passes. PR CI passes; main delivery awaits the checks described above.
 
 CLI SHA-256:
 `72a8e6821ade127a9e3cac2619c5afb7305de8d1532981b6996e298813908674`;
@@ -71,6 +81,38 @@ this candidate. The exact qualified source and CLI/worker/unit binary hashes
 have been restored. Private individual evidence remains server-only.
 Protected sets, current-worker original-C QCP closure, remaining difficult
 inputs and overall superiority remain open.
+
+### Closed trial: eager exact assumption projection
+
+Core `cf5f2247` and allocation-fixture repair `a0d0ed34`, pushed to `FULINA`,
+add shared isolated linear-assumption refutation and project existing LRA
+predicates. Panda9 / ExperimentOS passes **2,297 unit cases / 1,532,982
+assertions**; all **2,342 source contents** bind to `a0d0ed34`. The failed first
+fixture attempt remains unqualified with its original logs. CLI SHA-256 is
+`01dc081f9fa10d078935544fd62ee2d5a2451a2eccfc60447efdad8e24234956`.
+
+An unchanged 15-input development pilot verifies **10 / 9 / 14**
+main/candidate/Z3 results. Candidate time increases **379.743 to 438.041
+seconds** and one verified SAT is lost to timeout, with no gains. One
+unconfirmed reference result remains excluded. Fresh complete private14408
+comparison verifies **14,408 / 14,408 / 14,408**, taking **288.361 / 280.815 /
+459.184 seconds**. Its **2.62%** candidate reduction cannot offset the pilot
+loss. Both cohorts check actual timed SAT models independently. Formal budgets
+remain **60 seconds / one physical CPU / 16 GiB**. No opposite verdict,
+rejected timed model or protocol error is observed. Full fixed160 and public
+regression qualification were not run for this rejected version.
+
+The eager-copy trial is closed without promotion; original reports remain
+unchanged. Closure SHA-256:
+`070125a6867aaa7bfb6eb7a19883ad6b26b04e1d00362b1b74b4803f59e5228f`.
+Different instrumented execution prefixes expose **164 candidate probes and
+164 complete simplex copies**, with **37 refutations**. These profiles explain
+a concrete new allocation cost, not native timing or solved-result credit.
+Core `04f64553` tests a reusable isolated basis, complete bound synchronization,
+definition identities and copy-on-write witness ownership. Its separate native
+qualification is in progress; no correctness or performance result is claimed.
+Private individual evidence stays on the server; protected sets and current
+original-C QCP closure remain untouched and open.
 
 ## Superseded isolated trial: canonical kind metadata (2026-11-08)
 
