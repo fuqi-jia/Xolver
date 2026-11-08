@@ -2,6 +2,7 @@
 #include "search/coordination/TheoryManager.h"
 #include "evidence/ArithModelValidator.h"
 #include <memory>
+#include <utility>
 
 using namespace xolver;
 
@@ -26,6 +27,64 @@ struct ModelTheory : TheorySolver {
     }
 };
 } // namespace
+
+TEST_CASE("Model reconciliation: table precedence and source snapshots survive repeated reads") {
+    for (const bool reverse : {false, true}) {
+        CAPTURE(reverse);
+        auto make = [](TheoryId id, int tag) {
+            auto source = std::make_unique<ModelTheory>(id);
+            const mpz_class value = (mpz_class(1) << 257) + tag;
+            const auto text = value.get_str();
+            const auto suffix = std::to_string(tag);
+            source->model.assignments = {{"shared", text}, {"unique" + suffix, text}};
+            source->model.numericAssignments = {{"shared", RealValue::fromMpz(value)},
+                                                {"unique" + suffix, RealValue::fromMpz(value)}};
+            const TheoryModel::FuncInterp function{{"Int"}, "Int",
+                {{{"#n:0"}, "#n:" + text}}, "#n:0"};
+            source->model.functionInterps = {{"f", function}, {"f" + suffix, function}};
+            const TheoryModel::ArrayInterp array{"Int", "Int", "#n:0", {{"#n:0", "#n:" + text}}};
+            source->model.arrayInterps = {{"a", array}, {"a" + suffix, array}};
+            source->model.arrayValues = {{"handle", array}, {"handle" + suffix, array}};
+            return source;
+        };
+        auto first = make(TheoryId::NIA, 1);
+        auto second = make(TheoryId::LIA, 2);
+        const auto* firstView = first.get();
+        const auto* secondView = second.get();
+        const mpz_class expected = (mpz_class(1) << 257) + (reverse ? 2 : 1);
+        TheoryManager manager;
+        if (reverse) manager.registerSolver(std::move(second));
+        manager.registerSolver(std::move(first));
+        if (!reverse) manager.registerSolver(std::move(second));
+        for (int query = 0; query < 2; ++query) {
+            const auto model = manager.getModel();
+            REQUIRE(model);
+            CHECK(model->assignments.size() == 3);
+            CHECK(model->numericAssignments.size() == 3);
+            CHECK(model->functionInterps.size() == 3);
+            CHECK(model->arrayInterps.size() == 3);
+            CHECK(model->arrayValues.size() == 3);
+            CHECK(model->assignments.at("shared") == expected.get_str());
+            CHECK(model->numericAssignments.at("shared").tryAsRational() == mpq_class(expected));
+            CHECK(model->functionInterps.at("f").entries.front().value == expected.get_str());
+            CHECK(model->functionInterps.at("f").deflt == "0");
+            CHECK(model->arrayInterps.at("a").entries.front().second == "#n:" + expected.get_str());
+            CHECK(model->arrayValues.at("handle").entries.front().second == "#n:" + expected.get_str());
+            for (const auto& [tag, source] : {std::pair{1, firstView}, std::pair{2, secondView}}) {
+                const mpz_class value = (mpz_class(1) << 257) + tag;
+                const auto suffix = std::to_string(tag);
+                CHECK(source->reads == query + 1);
+                CHECK(source->model.assignments.at("shared") == value.get_str());
+                CHECK(source->model.functionInterps.at("f").deflt == "#n:0");
+                CHECK(model->assignments.at("unique" + suffix) == value.get_str());
+                CHECK(model->numericAssignments.at("unique" + suffix).tryAsRational() == mpq_class(value));
+                CHECK(model->functionInterps.at("f" + suffix).entries.front().value == value.get_str());
+                CHECK(model->arrayInterps.at("a" + suffix).entries.front().second == "#n:" + value.get_str());
+                CHECK(model->arrayValues.at("handle" + suffix).entries.front().second == "#n:" + value.get_str());
+            }
+        }
+    }
+}
 
 TEST_CASE("Model reconciliation: source class tokens survive numeric precedence") {
     for (const bool real : {false, true}) {

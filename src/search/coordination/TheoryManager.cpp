@@ -1516,22 +1516,19 @@ std::optional<TheorySolver::TheoryModel> TheoryManager::getModel(const ModelVali
         }
     }
 
-    for (const auto& [theory, model] : models) {
+    auto transfer = [](auto& target, auto& source) {
+        // Retain the original insertion order and rehash behavior.
+        while (!source.empty()) target.insert(source.extract(source.begin()));
+    };
+    for (auto& [theory, model] : models) {
         (void)theory;
-        for (const auto& [name, value] : model.assignments) {
-            aggregated.assignments.insert({name, value});  // first wins
-        }
-        for (const auto& [name, value] : model.numericAssignments) {
-            aggregated.numericAssignments.insert({name, value});  // first wins
-        }
-        for (const auto& [name, interp] : model.functionInterps) {
-            aggregated.functionInterps.insert({name, interp});  // first wins
-        }
-        for (const auto& [name, interp] : model.arrayInterps) {
-            aggregated.arrayInterps.insert({name, interp});  // first wins
-        }
-        for (const auto& [value, interp] : model.arrayValues)
-            aggregated.arrayValues.insert({value, interp});
+        // These are owned query-local copies. Source correspondences were
+        // captured above; transfer nodes while retaining first-registered wins.
+        transfer(aggregated.assignments, model.assignments);
+        transfer(aggregated.numericAssignments, model.numericAssignments);
+        transfer(aggregated.functionInterps, model.functionInterps);
+        transfer(aggregated.arrayInterps, model.arrayInterps);
+        transfer(aggregated.arrayValues, model.arrayValues);
     }
 
     // Build token -> "#n:<rational>" using each scalar that has BOTH an EUF
