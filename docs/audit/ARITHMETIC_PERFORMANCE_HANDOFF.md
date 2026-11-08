@@ -1,10 +1,89 @@
 # Arithmetic validation and continuation record
 
-## Current development: numeric propagation before proof refinement
+## Current development: typed decoding of opaque model classes (2026-11-09)
+
+Core `930f081fb48e46780496e62711d1bee3f8228896` passes complete Panda9 /
+ExperimentOS acceptance against merged main `05f35440`. `FULINA` includes
+both this core and that main merge; its merge does not change the qualified
+candidate's file tree. PR review and its corresponding CI remain pending.
+
+The common `Solver::Impl::validateModelImpl` path previously attempted GMP
+rational parsing of opaque `@...` equivalence-class tokens. Native observations
+of three development queries record **525 validations / 74,724 decode attempts**,
+including **23,265** attempts on class tokens, all throwing exceptions. The
+implementation now keeps these tokens for identity checks and reads concrete
+numeric witnesses from the existing typed assignment channel. Exact numeric
+class consistency, integer validation, original-assertion checks and all model
+formats remain unchanged. This is shared model validation, without a theory
+feature gate, a cache, or an external runtime oracle. Root-audit SHA-256:
+`20f0b27802a33bb0187dce146997acdc7e36701236a89f8d715f53742f2d1f0d`.
+
+The same frozen three-input parent/candidate profile independently checks all
+six actual SAT models with Z3 and cvc5. Validations remain **525** and model
+constructions **442**; exceptions fall **23,267 to 2**. Total simulated
+instructions fall **8,865,655,220 to 8,465,313,132**, with the validation path
+falling **1,818,346,649 to 1,417,978,481**. These are diagnostic instruction
+counts, not formal timing or solve scores. Profile-audit SHA-256:
+`7bd3efd8ad0f8b4b42e2085587d58943fa497d2295908e473bafbf3a5b9d76d0`.
+
+Proof-enabled native acceptance passes **2,304 unit cases / 1,537,465
+assertions**, including **14 model-consistency cases / 71 assertions**. All
+**2,343** qualified source bodies bind to the published core. CLI SHA-256:
+`e7711af8d583f1ac1f7654c338b8b54c3122b67918bc6061587e54649eb1d73e`;
+worker SHA-256:
+`1ef774a996b529f1ff8cd6831918658b77d774478e213348fd7518d06a34e9c2`;
+native-qualification SHA-256:
+`f01ebd4d35b5e686f206e26996d3577a75a2ed461ace526da2b8060a8e7ca348`;
+complete core source-binding SHA-256:
+`38af412be843e0eb9c65a4987b2724648acb3e4adcc1748d2c9185c160f7aa28`.
+
+Fresh complete comparisons freeze the merged main, candidate and reference
+versions with the same exit-notification timer and **60 seconds / one leased
+physical CPU / 16 GiB** per invocation. Independent jobs use up to 40 allocated
+physical CPUs; solver order rotates on the same CPU. Results are
+main/candidate/Z3:
+
+- Private14408 verifies **14,408 / 14,408 / 14,408**, with all actual timed
+  SAT models independently replayed. Solver totals are **208.380 / 205.108 /
+  294.066 seconds**, a **1.57%** candidate reduction; all 40 paired slot
+  totals improve. This is one complete round, not independent repetitions or
+  an overall superiority claim. Audit SHA-256:
+  `f5140c671950c8043825a11aef09a255e530332f5bb9f3035fa12298da0ce6eb`.
+- Fixed160 verifies **124 / 124 / 116** after fresh original-input-bound
+  certificate checking. Main and candidate each have **36 timeouts**, with
+  no gained or lost verified solves. Six reference decisions remain
+  unconfirmed and excluded. Mean verified PAR-2 is **31.679524 / 31.536779 /
+  34.164527 seconds**. Other rounds' reference counts are not substituted.
+- Development587 verifies **587 / 587 / 584** at **7.913 / 7.779 / 11.213
+  seconds**, without gained or lost candidate verified results. It stays
+  outside the combined score to avoid overlap. Audit SHA-256:
+  `3574ef4d1886fa78d953420b2b4c6ffd0397ef72877cd52aa654825c3026c20c`.
+- All **965** public regressions pass. Audit SHA-256:
+  `7f27283ae7e0ee5875eb67226d250390a6209e4ee607a60fcef5870b3e7cd8af`.
+
+The disjoint fixed/private combined verified PAR-2 improves **26.111136
+seconds**. The unchanged no-loss/private-faster/combined-score gate passes.
+Final-stage audit SHA-256:
+`24174d23fafe8f25d6c9bac157d2731b422b5401c192a05a974cafb9bd8b9464`.
+Private inputs, identifiers, per-input hashes, models and raw evidence stay
+server-only. The remaining 36 fixed inputs, final-worker original-C QCP, final
+fair comparison and one-time protected evaluation remain open.
+
+## Delivered stage: numeric propagation before proof refinement (2026-11-09)
 
 Core `99879d7d70c4c39f1a9951c479a5e3fe8f0fa02f`, including model-planning core
-`da02ac54`, is pushed to `FULINA` and passes complete Panda9 / ExperimentOS
-server acceptance. PR and main CI delivery are still pending.
+`da02ac54`, passes complete Panda9 / ExperimentOS server acceptance.
+[PR #120](https://github.com/fuqi-jia/Xolver/pull/120) passes both exact-head
+[PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42512140871) at
+reviewed commit `6eb15629b8d4f3f2321e72b7ac961a7a6afad72d`, then merges normally
+as `05f354409646ad87fa80c6cdea687cdce57bf178`. The entire merge tree equals the
+reviewed tree, and both corresponding
+[main CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42514306723) pass.
+Reviewed-source binding SHA-256:
+`f8c0f7a89a01f25ac33f8b02055845b3772f134046e3b51dacb67d22ebbee8a8`.
+`FULINA` incorporates that main merge while preserving the following local
+development. Remaining difficult inputs, final-worker QCP and final protected
+evaluation remain open.
 
 The earlier immediate explanation-refinement candidate passes native tests and
 improves private-cohort time, but fails the combined fixed/private performance
