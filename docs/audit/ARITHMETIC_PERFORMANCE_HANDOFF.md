@@ -1,54 +1,78 @@
 # Arithmetic validation and continuation record
 
-## Pending follow-up: batch exact sparse row elimination (2026-11-08)
+## Server-qualified stage: canonical term reads and sparse elimination (2026-11-08)
 
-Core `98546bda` replaces repeated per-coefficient position lookups in
-`GeneralSimplex::pivot` with one scatter index per affected row. Substitution
-retains the original exact arithmetic order, swap-pop entry order, column
-back-pointers and pivot choice. Coefficient deletion uses its known position;
-the pivot row is read before mutation instead of copying its coefficients and
-hash index. This is shared simplex work, without a budget, threshold, gate or
-LRA/LIA rollback change. Synthetic checks cover dense exact algebra, sparse
-links, entry order, cancellation, growth and copying.
+Core `1f4f2ee1` adds canonical node-kind metadata before owning expression
+materialization. Core `98546bda` batches exact sparse row substitution through
+one position index per affected row, retaining coefficient arithmetic and
+swap-pop entry order. Core `66eb7ca9` reads a possibly aliased replacement
+constant before moving or removing coefficients; a native synthetic probe
+returns **6 instead of 4** before that repair. The shared difference-graph
+conflict-lifetime repair `675dfb58` is retained. Its template is not instantiated
+by production solvers and contributes no additional SMT solve credit.
 
-Core `66eb7ca9` additionally captures the replacement constant before row
-mutation. A native synthetic probe against the preceding component returns
-**6 instead of 4** when that argument aliases a moved coefficient. The repaired
-regression also covers a removed coefficient. Production pivot calls supply an
-independent constant, so this is a component API repair, not an observed
-production wrong verdict or additional SMT solve credit. Panda9 / ExperimentOS
-passes **2,289 cases / 1,532,524 assertions**, and all **2,339 qualified source
-contents** match the corrected core. Both commits are pushed to `FULINA`.
+The corrected source passes **2,289 unit cases / 1,532,524 assertions** on
+Panda9 / ExperimentOS, including exact dense algebra, sparse cross-links,
+entry order, cancellation, growth, copying and argument aliases. All **2,339
+qualified source contents** match. Exact arithmetic, model validation, full
+replay and LRA/LIA's distinct rollback policies retain their semantics.
 
-Corrected CLI SHA-256:
+Fresh complete comparisons use delivered main `036dcb1d`'s source-equivalent
+review, the frozen corrected candidate and identical frozen references. Every
+formal solve receives **60 seconds / one leased physical CPU / 16 GiB**, with
+at most 40 distinct physical CPU leases. Private14408 verifies **14,408 /
+14,408 / 14,408** main/candidate/Z3 results. Totals are **288.417 / 277.757 /
+452.566 seconds**, reducing candidate solver time **3.70%**; all 40 paired task
+slots have lower candidate totals. These are descriptive observations from one
+fresh complete round, not independent repetitions or a confidence interval.
+Development587 retains **587 / 587 / 584**, with totals **11.798 / 11.405 /
+18.984 seconds**. Its three unconfirmed reference models remain excluded.
+All **965 public regressions** pass.
+
+Fixed160 verifies **123 / 124 / 117** after a fresh original-input-bound residue
+certificate confirms actual timed Xolver UNSAT decisions, and one independently
+checked reference UNSAT is reconciled on the identical input and frozen
+reference versions. Current solver timings and raw reports are preserved;
+no timeout or unknown is upgraded. Six reference decisions remain unconfirmed
+and excluded. Mean verified PAR-2 is **32.433 / 31.716 / 33.664 seconds**.
+The candidate gains one verified result in this round without losing another;
+its **124** results match the historical best, and **36 timeouts remain**.
+Every actual timed Xolver SAT model passes Z3 and cvc5 replay; reference SAT
+models pass cvc5. The unchanged no-loss/private-faster/combined-score server
+criterion passes. Corresponding PR CI and main delivery are still pending.
+
+CLI SHA-256:
 `72a8e6821ade127a9e3cac2619c5afb7305de8d1532981b6996e298813908674`;
 worker SHA-256:
 `2983d4fdd05010f0411a34adc50b3ad492371fe011dfc2a936dec74cbc535ef3`.
 Complete source-binding SHA-256:
-`7f8aaa0b3ddfbef322db036111fd12586e4d45f38cbcf86853185e6c4f1f22d3`.
+`7f8aaa0b3ddfbef322db036111fd12586e4d45f38cbcf86853185e6c4f1f22d3`;
+final stage-audit SHA-256:
+`c7ff161d2ef843d3b60df7ddacbb013e566ebc16bad659ded13138791209f83a`.
 
-Fresh complete fixed160, private14408, development587 and public965 checks for
-the corrected binary are running. The preceding frozen trial verifies all
-**14,408** private results in each arm, with main/trial/Z3 totals **290.541 /
-280.420 / 455.770 seconds**, reducing trial solver time **3.48%**. It retains
-**587 / 587 / 584** verified development results, with totals **11.832 / 11.376 /
-19.146 seconds**, and passes all **965 public regressions**. However, fixed160
-loses one verified SAT to timeout: raw verified counts are **122 / 121 / 117**,
-with **37 / 38 / 36 timeouts**. One actual UNSAT in each Xolver arm and seven
-reference decisions remain unconfirmed and excluded; no certificate supplement
-is applied to this rejected trial. It **fails performance acceptance** despite
-the private timing improvement. Its preserved trial-record SHA-256 is
+The preceding `98546bda` trial is closed without promotion: private14408 was
+**3.48%** faster, but fixed160 lost one verified SAT to timeout. Raw verified
+counts **122 / 121 / 117** exclude each Xolver arm's one unconfirmed UNSAT and
+seven unconfirmed reference decisions. No certificate supplement is applied to
+that rejected trial. Its preserved closure SHA-256 is
 `0aa98233b1e2918b9113d9efc1b8ed39bbb03c76ae461539f69a50c74dbe643a`.
-Those are historical trial observations, not acceptance of the corrected
-binary. No PR or main promotion is qualified yet. The unchanged criterion requires
-no lost verified result, lower complete-private solver time and improved combined
-fixed/private verified score. Neither component correctness repair overrides
-that criterion. All formal instances retain **60 seconds / one physical CPU /
-16 GiB**; ExperimentOS permits at most 40 distinct physical CPU leases across
-experiments. Private individual evidence remains server-only. Protected sets,
-current-worker original-C QCP closure and overall superiority remain open.
+The current acceptance is a separate frozen corrected-source comparison.
 
-## Pending stage: canonical kind metadata and difference graph correctness (2026-11-08)
+Temporary native diagnostics preserve propagation limits and observe **18,777**
+completed propagation calls: **8,600** stop at the derived-bound limit,
+**10,046** at the iteration limit, and **49** at the time limit. **7,042,020**
+derived endpoints yield **41,251** direct SAT conclusions; intermediate bounds
+may still support later deductions. This narrows the next investigation toward
+repeated closure work rather than treating wall-clock truncation as the main
+cause. Four observed contexts contain general linear forms; one contains only
+unary/difference forms, a necessary condition rather than a routing proof.
+Diagnostics have no formal score credit, and their source is not included in
+this candidate. The exact qualified source and CLI/worker/unit binary hashes
+have been restored. Private individual evidence remains server-only.
+Protected sets, current-worker original-C QCP closure, remaining difficult
+inputs and overall superiority remain open.
+
+## Superseded isolated trial: canonical kind metadata (2026-11-08)
 
 Core `1f4f2ee1`, merged into `FULINA`, adds a canonical node-kind query and
 filters discarded expressions before materializing their children and payloads.
@@ -69,9 +93,9 @@ a fresh input-bound residue check; both Xolver arms still have **36 timeouts**.
 Six reference decisions remain unconfirmed and excluded. Fixed mean verified
 PAR-2 worsens **31.632 to 31.712 seconds**. One solved LRA regression accounts
 for about **15 seconds**; the combined fixed/private verified PAR-2 also worsens
-slightly. **The preregistered aggregate promotion criterion fails.** Keep this
-candidate in development while investigating the regression; no PR or main
-promotion is qualified by the private timing improvement alone.
+slightly. **The preregistered aggregate promotion criterion fails.** That isolated
+trial was not promoted. The combined corrected-source stage above has its own
+complete validation; the isolated private improvement did not qualify promotion.
 
 The frozen candidate CLI is
 `fb1fd6b50e3c3db3936cbc08cfc3786fee5fa1649b6fd21685e2ddfa55fd2a82`;
