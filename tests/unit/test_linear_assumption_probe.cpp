@@ -37,6 +37,16 @@ struct Context {
         REQUIRE(manager.assertBound(simplex, auxiliary, relation, true, reason, level));
     }
 };
+
+struct AllocationOnly : SatSolver {
+    SatVar next = 0;
+    SatVar newVar() override { return ++next; }
+    void addClause(const std::vector<SatLit>&) override {}
+    SolveResult solve() override { throw std::logic_error("allocation only"); }
+    SolveResult solve(const std::vector<SatLit>&) override { return solve(); }
+    bool value(SatVar) const override { throw std::logic_error("allocation only"); }
+    void setDeadline(std::chrono::steady_clock::time_point) override {}
+};
 }
 
 TEST_CASE("Linear assumption probe: combined constraints refute an opposite bound without source mutation") {
@@ -205,13 +215,13 @@ TEST_CASE("Linear assumption probe: an expired caller deadline has no conclusion
 }
 
 TEST_CASE("LraSolver: exact assumption projection combines rows using the existing vocabulary") {
-    auto allocator = createSatSolver();
+    AllocationOnly allocator;
     TheoryAtomRegistry registry;
-    registry.setContext(allocator.get(), nullptr);
+    registry.setContext(&allocator, nullptr);
     LraSolver solver;
     solver.setRegistry(&registry);
     auto atom = [&](const LinearFormKey& lhs, const mpq_class& rhs) {
-        const auto variable = allocator->newVar();
+        const auto variable = allocator.newVar();
         registry.registerParsedTheoryAtom(variable, NullExpr, TheoryId::LRA,
             LinearAtomPayload{lhs, Relation::Leq, RealValue::fromMpq(rhs)});
         return SatLit::positive(variable);
