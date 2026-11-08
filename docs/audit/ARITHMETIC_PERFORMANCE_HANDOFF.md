@@ -1,6 +1,6 @@
 # Arithmetic validation and continuation record
 
-## Current development: finite tight-face eligibility (2026-11-09)
+## Development regression: finite tight-face eligibility (2026-11-09)
 
 Core `e9b08e98712f185fec01f153ab0a2dde41ec1bc2` is pushed on `FULINA`.
 The following main incorporation `120f1eb0` leaves its entire qualified tree
@@ -45,16 +45,35 @@ total simulated instructions fall **8,465,289,776 to 7,987,364,432**, about
 Profile-audit SHA-256:
 `4d20f778cbb2d32864ef0775e8b8eb6fed9e649a9711df0b282a9f73bdb03b93`.
 
-Complete private/fixed/development comparisons are running against frozen
+Complete private/fixed/development comparisons finish against frozen
 merged main `25807183`, under the unchanged **60 seconds / one leased physical
 CPU / 16 GiB** protocol and 40-core total allocation. Both the main and reviewed
 source trees match; baseline-tree binding SHA-256:
 `bc01e8c1e79a5b943ba2bb99403cf95135561317089f25de3694b660a90ec0a4`.
-The final server-stage gate, PR and corresponding delivery CI remain pending.
+Private14408 independently verifies **14,408 / 14,408 / 14,408** for
+main/candidate/Z3 at **205.706 / 200.508 / 294.218 seconds**, a **2.53%**
+candidate reduction, with all 40 paired slot totals lower. Development587
+retains **587 / 587 / 584** at **7.979 / 7.791 / 11.532 seconds**. These
+overlapping development results stay outside the combined score.
+
+The complete stage **fails acceptance**: Fixed160 verifies **124 / 123 / 117**
+after fresh original-input-bound certificate checking and one applicable prior
+independent reference UNSAT check. Six reference decisions remain unconfirmed
+and excluded. There is one lost verified QF_LIA SAT: main **24.155 seconds**,
+candidate timeout **60 seconds**. No opposite decision is observed. Mean
+verified fixed PAR-2 is **31.564834 / 32.172412 / 33.519376 seconds**; the
+disjoint fixed/private combined verified score worsens **92.014519 seconds**.
+The unchanged no-loss/private-faster/combined-score gate rejects promotion.
+Final-stage audit SHA-256:
+`e47e83a9bb198cc81113bb641dcac41afb5bf9eb1305d79627b6b8cdb80cf9b3`.
+The failed stage and all raw observations remain unchanged. This core is not
+merged and has no PR; same-budget rotated native controls will diagnose the
+loss before further implementation. Diagnostic instruction savings and the
+private-only speedup do not override the complete-stage failure.
 No protected input has been used. Remaining fixed inputs, final-worker original-C
 QCP and the final superiority comparison remain open.
 
-## Merged stage: typed decoding of opaque model classes (2026-11-09)
+## Delivered stage: typed decoding of opaque model classes (2026-11-09)
 
 Core `930f081fb48e46780496e62711d1bee3f8228896` passes complete Panda9 /
 ExperimentOS acceptance against merged main `05f35440`. `FULINA` includes
@@ -65,8 +84,10 @@ at `3ed5adbd3dec50be4c12449aa2741b1b68df5049`, then merges normally as
 `25807183914cd6d01ab8b93925a0e2e4d3751aad`. The entire merge tree equals the
 reviewed tree. Reviewed-source binding SHA-256:
 `b21708833bf9a98a1c0fd596220fc3e8a195a89c31cf077ed01cac615f5cacca`.
-Its exact-merge [main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42519275335)
-is running; complete main delivery is not yet claimed.
+Both jobs in its exact-merge
+[main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42519275335) pass.
+This completes the stage's main delivery; the following development regression
+does not change its qualified source or frozen binaries.
 
 The common `Solver::Impl::validateModelImpl` path previously attempted GMP
 rational parsing of opaque `@...` equivalence-class tokens. Native observations
