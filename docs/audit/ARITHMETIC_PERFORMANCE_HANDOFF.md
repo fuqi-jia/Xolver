@@ -54,8 +54,9 @@ retains **10 / 10 / 14** verified parent/prototype/Z3 results, with **no gains o
 losses**. Totals are **373.148 / 373.486 / 56.415 seconds**. The optional change
 is closed without demonstrated benefit; no full-cohort promotion or budget
 retuning follows. Original sources and reports remain preserved on the server.
-The server is restored to the exact qualified metadata source and its original
-CLI, worker and unit-binary hashes, and the temporary local worktree is removed.
+The restoration check reproduced the exact qualified metadata source and its
+original CLI, worker and unit-binary hashes before the separate graph repair
+above was built. The temporary local worktree is removed.
 
 ## Delivered stage: transfer owned theory model tables (2026-11-08)
 
