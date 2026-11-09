@@ -734,60 +734,6 @@ TEST_CASE("SAT: expired local deadline consumes assumptions and permits reuse") 
     CHECK(s->value(p));
 }
 
-TEST_CASE("SAT: cooperative yield consumes assumptions and supports independent search") {
-    auto primary = createSatSolver();
-    auto secondary = createSatSolver();
-    const auto p = primary->newVar();
-    const auto q = secondary->newVar();
-    primary->addClause({SatLit::positive(p)});
-    secondary->addClause({SatLit::negative(q)});
-    unsigned polls = 0;
-    primary->setProgressCallback([&] {
-        ++polls;
-        CHECK(secondary->solve() == SatSolver::SolveResult::Sat);
-        CHECK_FALSE(secondary->value(q));
-        return true;
-    });
-    CHECK(primary->solve({SatLit::negative(p)}) == SatSolver::SolveResult::Unknown);
-    CHECK(polls == 1);
-    primary->setProgressCallback({});
-    CHECK(primary->solve() == SatSolver::SolveResult::Sat);
-    CHECK(primary->value(p));
-}
-
-TEST_CASE("SAT: cooperative polling can run an independent solver during live search") {
-    auto primary = createSatSolver();
-    auto secondary = createSatSolver();
-    const auto q = secondary->newVar();
-    secondary->addClause({SatLit::positive(q)});
-    constexpr unsigned pigeons = 8, holes = 7;
-    SatVar variables[pigeons][holes];
-    for (auto& pigeon : variables) {
-        std::vector<SatLit> choices;
-        for (auto& variable : pigeon) {
-            variable = primary->newVar();
-            choices.push_back(SatLit::positive(variable));
-        }
-        primary->addClause(choices);
-    }
-    for (unsigned hole = 0; hole < holes; ++hole)
-        for (unsigned a = 0; a < pigeons; ++a)
-            for (unsigned b = a + 1; b < pigeons; ++b)
-                primary->addClause({SatLit::negative(variables[a][hole]),
-                                    SatLit::negative(variables[b][hole])});
-    unsigned polls = 0;
-    primary->setProgressCallback([&] {
-        if (++polls == 1) return false; // Enter the primary backend first.
-        CHECK(secondary->solve() == SatSolver::SolveResult::Sat);
-        CHECK(secondary->value(q));
-        return true;
-    });
-    CHECK(primary->solve() == SatSolver::SolveResult::Unknown);
-    CHECK(polls >= 2);
-    primary->setProgressCallback({});
-    CHECK(primary->solve() == SatSolver::SolveResult::Unsat);
-}
-
 TEST_CASE("SAT: local deadline interrupts an internal pigeonhole search") {
     auto s = createSatSolver();
     constexpr int pigeons = 16, holes = 15;

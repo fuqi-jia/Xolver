@@ -85,29 +85,12 @@ void armSamplerOnce() {
 } // namespace
 
 bool CadicalBackend::WallClockTerminator::terminate() {
-    auto expired = [&] {
-        return std::chrono::steady_clock::now() >= deadline ||
-               (wall::hasDeadline() && wall::remainingMs() == 0);
-    };
-    if (expired()) return true;
-    if (!progress || polling) return false;
-    if (progress && !polling) {
-        struct Guard {
-            bool& polling;
-            ~Guard() { polling = false; }
-        } guard{polling};
-        polling = true;
-        if (progress()) return true;
-    }
-    return expired();
+    return std::chrono::steady_clock::now() >= deadline ||
+           (wall::hasDeadline() && wall::remainingMs() == 0);
 }
 
 void CadicalBackend::setDeadline(std::chrono::steady_clock::time_point deadline) {
     wallTerm_.deadline = deadline;
-}
-
-void CadicalBackend::setProgressCallback(std::function<bool()> callback) {
-    wallTerm_.progress = std::move(callback);
 }
 
 bool CadicalBackend::inconsistent() const {

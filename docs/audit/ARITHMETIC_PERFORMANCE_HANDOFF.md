@@ -1,5 +1,66 @@
 # Arithmetic validation and continuation record
 
+## Closed preliminary: resumable arithmetic SAT search (2026-11-09)
+
+Cores `49b42264b2dfb52e69d93fe4edacb4ce9228f20e` and
+`d04cc1d29c51015298a643db2eeffaeb201096ad` retain interrupted eager SAT
+contexts, active assumptions and an owned Boolean validation graph. A generic
+single-thread cooperative scheduler resumes them under the original global
+deadline. Reconstructed witnesses require original-root validation; only the
+existing complete integer interpretations can refute. The second commit also
+invalidates a continuation after an exceptional backend or validation step.
+No budget constant, full theory-model replay or LRA/LIA rollback policy changes.
+
+Proof-enabled native acceptance **fb78fad42f46** passes **35 targeted cases /
+367 assertions** and all **2,313 unit cases / 1,537,529 assertions**. Nine new
+deterministic regressions cover repeated yields, input ownership, cancellation,
+query replacement, exceptional invalidation, refutation completeness and nested
+independent SAT calls. All **2,346** source bodies match the qualified core:
+2,185 root blobs and 161 SOMTParser blobs.
+Qualification SHA-256:
+`dfa48fb144287e95d341ac48f0a81f4a90c3a24b18d58f225cc7415e46a4c5b0`;
+source-manifest SHA-256:
+`026056aece9349c15a1b66b0ececb804b2ff93fa365e5f0cfcf18327a182c60e`;
+complete-source-binding SHA-256:
+`a3f44ffc15403f692c7961160ec04ddfb06eeb7a0b4f57569921341cb6b39ffe`;
+CLI SHA-256:
+`38838ced9bac5e35bcf4921184037cfd238645d57883ea67168f59324ee4d0ea`.
+
+Diagnostic **1ab3a9cad29f** completes **41 same-core pairs**: all 36 open
+fixed inputs plus two fixed and three private SAT controls. Each run receives
+60 seconds, one leased physical core and 16 GiB, with rotated solver order.
+Both versions retain the five controls; all ten actual timed SAT models pass
+Z3 and cvc5 replay. **All 36 open inputs remain timeouts in both versions**;
+there are no gained/lost verified solves or opposite decisions. Control times
+are main/candidate **38.262/38.127 seconds** for fixed and **1.4525/1.4510
+seconds** for private. These small diagnostic differences establish no speedup.
+Pilot-audit SHA-256:
+`4d323a736a4978f33673d5e2b447642d498085a1dbc49b81f15f5cee21a6921d`.
+
+Fourteen open inputs have an initial interrupted SAT call. Native sampling
+**5ea696195618** checks one such representative in each of LIA, NIA and NRA.
+All three still time out. Of **447 CPU stack samples**, **147** contain the
+initial eager search and **136** contain an actual resumed eager search.
+Categories overlap: these are not independent elapsed-time measurements.
+The sampled implementation does execute its continuation; missing activation
+or safe points do not explain these three failures. The samples never upgrade
+the completed pilot timeouts.
+Profile-audit SHA-256:
+`223ac3eddcbe09ded7c88b6f39ddb7d8ad6ba6c8d140f322202cf1f1e4d5e959`;
+closure-audit SHA-256:
+`2e8989284432a52978a315297da7a81cfd72aec35fc3fd026cb9dea344a8ae43`.
+
+The experiment is closed and its implementation/tests are withdrawn. No full
+performance stage, PR, protected-set run or final original-C qualification is
+created. The existing delivered-main qualification remains authoritative.
+The server source/build still contains qualified **d04cc1d2**; the next native
+build must apply the complete withdrawal before its new implementation, then
+verify all source bodies. Do not assume a local revert changed the server.
+Further private speed work follows the existing allocation call graph: the
+private workload is dominated by UFLIA SAT, with extensive exact numeric copies.
+Do not repeat the rejected constructor, propagation-pool or metadata-cache
+experiments, or remove independent model/consistency checks to save allocations.
+
 ## Closed preliminary: retained linear assertion definitions (2026-11-09)
 
 Core `c924303df5b34d8c189cb371d08220089dc69f26` validates retained auxiliary

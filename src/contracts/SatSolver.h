@@ -3,7 +3,6 @@
 #include "ir/types.h"
 #include <chrono>
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -76,11 +75,6 @@ public:
     // solve. Portfolio arms must forward their allocation to the backend.
     // The deadline persists until replaced; max() removes the local limit.
     virtual void setDeadline(std::chrono::steady_clock::time_point deadline) = 0;
-
-    // Cooperative work at safe backend polling points. Returning true yields
-    // Unknown; clauses and learned search state remain available for reuse.
-    // The callback must not call into this same SAT instance recursively.
-    virtual void setProgressCallback(std::function<bool()> callback) { (void)callback; }
 
     // A known contradiction of permanent clauses, independent of assumptions.
     // Encoding clients may stop adding clauses once this holds. False means
