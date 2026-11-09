@@ -2,6 +2,7 @@
 #include "search/coordination/TheoryAtomRegistry.h"
 #include "contracts/TheoryAssignmentView.h"
 #include "contracts/TheoryPropagatorCallbacks.h"
+#include "algebra/linear/LinearExpr.h"
 #include <algorithm>
 #include <utility>
 
@@ -24,15 +25,18 @@ void LinearPredicatePropagation::reset() {
     familyIndex_.clear();
     families_.clear();
     atoms_.clear();
-    dirty_.clear();
+    dirtyHead_ = dirtyTail_ = kNoFamily;
     pending_.clear();
 }
 
-void LinearPredicatePropagation::markDirty(size_t family) {
+void LinearPredicatePropagation::markDirty(size_t family) noexcept {
     auto& entry = families_[family];
     if (entry.atoms.size() < 2 || entry.dirty) return;
     entry.dirty = true;
-    dirty_.push_back(family);
+    entry.nextDirty = kNoFamily;
+    if (dirtyTail_ != kNoFamily) families_[dirtyTail_].nextDirty = family;
+    else dirtyHead_ = family;
+    dirtyTail_ = family;
 }
 
 void LinearPredicatePropagation::synchronize(const TheoryAtomRegistry& registry) {
@@ -249,9 +253,11 @@ std::optional<TheoryCheckResult> LinearPredicatePropagation::check(
     TheoryLemmaStorage& lemmas) {
     synchronize(registry);
     if (auto result = takePending(assignment, lemmas)) return result;
-    while (!dirty_.empty()) {
-        const auto family = dirty_.front();
-        dirty_.pop_front();
+    while (dirtyHead_ != kNoFamily) {
+        const auto family = dirtyHead_;
+        dirtyHead_ = families_[family].nextDirty;
+        if (dirtyHead_ == kNoFamily) dirtyTail_ = kNoFamily;
+        families_[family].nextDirty = kNoFamily;
         families_[family].dirty = false;
         derive(family, assignment);
         if (auto result = takePending(assignment, lemmas)) return result;

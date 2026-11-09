@@ -25,6 +25,7 @@ public:
         const TheoryAssignmentView* assignment, TheoryLemmaStorage& lemmas);
 
 private:
+    static constexpr size_t kNoFamily = static_cast<size_t>(-1);
     struct Atom {
         size_t family;
         Relation relation;
@@ -34,6 +35,7 @@ private:
     struct Family {
         std::vector<SatVar> atoms;
         bool dirty = false;
+        size_t nextDirty = kNoFamily;
     };
     struct Assertion {
         SatLit literal;
@@ -56,11 +58,11 @@ private:
         std::unordered_map<LinearFormKey, size_t, LinearFormKeyHash>> familyIndex_;
     std::vector<Family> families_;
     std::unordered_map<SatVar, Atom> atoms_;
-    std::deque<size_t> dirty_;
+    size_t dirtyHead_ = kNoFamily, dirtyTail_ = kNoFamily;
     std::deque<Inference> pending_;
 
     void synchronize(const TheoryAtomRegistry& registry);
-    void markDirty(size_t family);
+    void markDirty(size_t family) noexcept;
     std::optional<bool> value(SatVar variable, const TheoryAssignmentView* assignment) const;
     void derive(size_t family, const TheoryAssignmentView* assignment);
     std::optional<TheoryCheckResult> takePending(const TheoryAssignmentView* assignment,
