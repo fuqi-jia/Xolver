@@ -1,6 +1,6 @@
 # Arithmetic validation and continuation record
 
-## In progress: owned delta-rational expression construction (2026-11-09)
+## Closed experiment: owned delta-rational expression construction (2026-11-09)
 
 Core `da1aea140eadc18150f1908bd67c38a61567c8cc` is pushed on `FULINA`.
 The production change is confined to `DeltaRational.h`: constrained borrowed
@@ -52,17 +52,58 @@ The earlier allocation-root audit `r3492` corrects a metadata field in its
 preserved first report; every included main profile had already been checked
 against the correct binary before aggregation.
 
-Fresh complete-private comparison **04b2c74eeff0** is registered for all
-**14,408** inputs. Forty live jobs are confirmed on forty distinct physical
-cores allocated by ExperimentOS. Each arm retains **60 seconds / one physical
-CPU / 16 GiB**, actual timed model capture, rotated solver order and independent
-checking. Freeze SHA-256:
+Fresh complete-private comparison **04b2c74eeff0** verifies all **14,408**
+inputs in main, candidate and Z3, with no loss or error. Solver totals are
+**205.056 / 200.738 / 293.654 seconds**; candidate time falls **2.11%** from
+main, with all **40/40** paired slot totals lower. Forty distinct physical
+cores are confirmed under ExperimentOS. Each arm retains **60 seconds / one
+physical CPU / 16 GiB**, actual timed model capture, rotated order and
+independent checking. Freeze SHA-256:
 `4a5832c3c70eea60ae258e56f82b66a428ea6553eda2fb3defd3692aa2357e02`.
-The existing controller enforces the global forty-core limit. Stage watcher
-PID **2374992** continues with the complete fixed160, development587 and
-public965 cohorts after the private audit. Complete performance acceptance,
-certificate reconciliation and PR eligibility remain pending. There is no
-new PR, protected-set evaluation or overall superiority claim.
+Private-audit SHA-256:
+`7a50baa7859ae5dba9000d731f8df692fd6e8377c49529b08dbf433ffb86c2b8`.
+
+The complete stage **fails**. Fixed160 **548481ae17d5** verifies **124 / 123 /
+117** after independent certificate replay and applicable existing reference
+evidence. One candidate UNSAT and six reference decisions remain unconfirmed
+and excluded. Candidate loses one verified QF_LIA SAT: main **23.938 seconds**,
+candidate and Z3 timeout at 60 seconds. Both Xolver arms have 36 timeouts;
+the additional candidate unconfirmed decision is not a solved input.
+Mean verified fixed PAR-2 is **31.562695 / 32.136769 / 33.518997 seconds**.
+Combined disjoint fixed/private verified PAR-2 worsens **87.534509 seconds**.
+Development587 retains **587 / 587 / 584** at **7.899 / 7.728 / 11.446 seconds**;
+all **965** public regressions pass. The unchanged no-loss/private-faster/
+combined-score gate rejects promotion despite the private-cohort improvement.
+Final-stage-audit SHA-256:
+`42e8b5e1304f95aed385ffabdfa308b963d5373441cbf48d17554ca209b05958`.
+
+Fresh same-CPU diagnostic **aa3c0301afcc** does not reproduce the loss. Both
+versions return SAT at **17.661 / 17.885 seconds**, generate **510,018** SAT
+variables and spend **12.617 / 12.664 seconds** in SAT search. Both actual
+models pass Z3/cvc5 replay. This does not explain or replace the failed formal
+row. Loss-trace-audit SHA-256:
+`0d7a55076ed56c32b8d00e4ca3f007d58b86a66878e9573af5a2e8b71500b945`.
+An additional inventory of 26 qualified earlier fixed audits finds no
+independent checker result or checked SAT contradiction for either raw
+unconfirmed candidate UNSAT. It does not replace the separate successful
+certificate check or grant extra score credit. History-audit SHA-256:
+`892f1da83ba6e740af2a4202775056fbd723f9712ed896577e8103a04280ed0c`.
+
+The optional constructor change and its experimental test are withdrawn.
+Frozen binaries and all failed-stage evidence remain intact. Both stage
+watchers (PIDs **2374992**, **2531143**) and certificate job **139e26c9ba0c**
+completed normally; do not restart them. No PR is created. The next direction
+profiles delivered main on actual verified-reference gaps, primarily real
+arithmetic, rather than repeating this performance candidate. Protected
+evaluation, final-worker original-C QCP and overall solver superiority remain
+open.
+
+Native CPU-sampling job **f74b7575ddc9** is registered for all three current
+raw-audit gaps with independently verified reference decisions: **two QF_LRA
+and one QF_NRA**. It uses the frozen delivered-main binary, existing self-profile
+and phase diagnostics, and one allocated physical CPU / 16 GiB / 60 seconds
+per input. These are diagnostic observations only. Freeze SHA-256:
+`8a2292ea98e0613140664788f15e1afb4987069e0057330a34d22e0e992b9864`.
 
 ## Closed pilot: ordered threshold selectors (2026-11-09)
 
