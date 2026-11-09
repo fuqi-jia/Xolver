@@ -100,6 +100,13 @@ struct NativeTerms::Storage {
 
     void readChildren(const Node& node, SmallVector<ExprId, 4>& out) const {
         const auto arity = node->getChildrenSize();
+        // Keep leaf reads out of the allocating, alias-resolving copy path.
+        // This small wrapper can inline without expanding that path in get().
+        if (arity != 0) readNonemptyChildren(node, arity, out);
+    }
+
+    void readNonemptyChildren(const Node& node, size_t arity,
+                             SmallVector<ExprId, 4>& out) const {
         out.reserve(arity);
         // The index owns the parent. Transfer temporary child handles into
         // alias resolution without constructing names or literal values.
