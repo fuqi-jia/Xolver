@@ -1,5 +1,69 @@
 # Arithmetic validation and continuation record
 
+## In progress: owned delta-rational expression construction (2026-11-09)
+
+Core `da1aea140eadc18150f1908bd67c38a61567c8cc` is pushed on `FULINA`.
+The production change is confined to `DeltaRational.h`: constrained borrowed
+constructor arguments let GMP expressions initialize their owned rational
+components directly, eliminating intermediate materialization and copying.
+Default template arguments preserve braced rational construction. Inputs,
+including rvalues, remain unmodified; no expression reference escapes the
+constructor. Exact values, infinitesimals, object layout, model checks,
+search policies and LIA/LRA rollback semantics remain intact.
+
+Proof-enabled native acceptance **85464bb900b5** passes **39 targeted cases /
+227,157 assertions** and all **2,305 unit cases / 1,537,484 assertions**.
+New tests cover large rationals, expressions with temporary operands,
+independent ownership, unchanged rvalue operands, braced construction,
+self-referential assignment and strict infinitesimal comparisons. All
+**2,343** qualified source bodies match the core, including the complete
+withdrawal of the rejected ordered-selector implementation.
+Native-qualification SHA-256:
+`442130d8abdf93f7575913634e232542d3affb9f2c4a214df65bed876877c3eb`;
+complete-source-binding SHA-256:
+`d1e3a8391a164c3609b8dae12afec32e40951b5e992a28373043dcbc9b8f57be`;
+CLI SHA-256:
+`fe716a0e123c47b17ec1719745578fcba402d8a96c48c25772ef5df4862385e5`;
+worker SHA-256:
+`38477730ee438537916405a1563879180e731f3c084a569a03a92a024db593da`.
+
+The preselected five-pair diagnostic **ef7a53579c7e** completes all ten SAT
+runs. Every actual model passes frozen Z3/cvc5 replay, with no opposite
+decision. The two fixed diagnostics total **28.958 / 27.512 seconds** for
+main/candidate; three private diagnostics total **1.232 / 1.185 seconds**.
+These samples do not establish complete-suite performance.
+Pilot-audit SHA-256:
+`bd63e7e072ee54d581e7faad1f253e6bba42c266930825fafd8302cfe7996795`.
+
+Fresh same-CPU Callgrind pairs **283d3e04cbe7** on the same three private
+diagnostics confirm the mechanism. GMP integer-component copy calls fall
+from **8,153,212 to 6,204,340** (23.90%); malloc calls fall from **18,663,266
+to 16,801,338** (9.98%). Total simulated instructions fall from
+**8,465,313,825 to 8,013,675,707** (5.34%). Both arms retain **525** model
+validation calls, **442** model construction calls, **113,136** warm
+evaluations and **108,838** face-analysis attempts. All six actual SAT
+models pass independent Z3/cvc5 replay. Instruction counts are diagnostic;
+inclusive costs overlap and are not independent elapsed-time savings.
+The first audit attempted to read unfinished jobs and preserved its readiness
+failure; the completed audit uses the same runs without rerunning a solver.
+Profile-audit SHA-256:
+`f225f75752c0ad18889e77647a4cce37814118f77383d159a0839fd98aeb024e`.
+The earlier allocation-root audit `r3492` corrects a metadata field in its
+preserved first report; every included main profile had already been checked
+against the correct binary before aggregation.
+
+Fresh complete-private comparison **04b2c74eeff0** is registered for all
+**14,408** inputs. Forty live jobs are confirmed on forty distinct physical
+cores allocated by ExperimentOS. Each arm retains **60 seconds / one physical
+CPU / 16 GiB**, actual timed model capture, rotated solver order and independent
+checking. Freeze SHA-256:
+`4a5832c3c70eea60ae258e56f82b66a428ea6553eda2fb3defd3692aa2357e02`.
+The existing controller enforces the global forty-core limit. Stage watcher
+PID **2374992** continues with the complete fixed160, development587 and
+public965 cohorts after the private audit. Complete performance acceptance,
+certificate reconciliation and PR eligibility remain pending. There is no
+new PR, protected-set evaluation or overall superiority claim.
+
 ## Closed pilot: ordered threshold selectors (2026-11-09)
 
 Core `dbbb23408e68b516da566944c6ccad7dec27bfdc` implements a shared ordered
