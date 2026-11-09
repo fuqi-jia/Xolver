@@ -200,11 +200,15 @@ ExprId FormulaRewriter::rewriteRec(ExprId root) {
             while (!todo.empty()) {
                 const auto child = todo.back(); todo.pop_back();
                 if (child == NullExpr) { frame.children.push_back(child); continue; }
-                const auto n = ir_.get(child);
                 if (associative && uses.at(child) == 1 && !memo_.count(child) &&
-                    n.kind == node.kind && n.sort == node.sort) {
-                    todo.insert(todo.end(), std::make_reverse_iterator(n.children.end()), std::make_reverse_iterator(n.children.begin()));
-                } else frame.children.push_back(child);
+                    ir_.kind(child) == node.kind) {
+                    const auto n = ir_.get(child);
+                    if (n.sort == node.sort) {
+                        todo.insert(todo.end(), std::make_reverse_iterator(n.children.end()), std::make_reverse_iterator(n.children.begin()));
+                        continue;
+                    }
+                }
+                frame.children.push_back(child);
             }
             // Copy before push_back can invalidate the frame reference.
             const auto children = frame.children;
