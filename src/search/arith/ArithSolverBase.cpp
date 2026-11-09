@@ -19,33 +19,28 @@ namespace xolver {
 ArithSolverBase::ArithSolverBase() = default;
 ArithSolverBase::~ArithSolverBase() = default;
 
-std::string ArithSolverBase::getVarNameForSharedTerm(SharedTermId s) {
-    auto it = sharedTermToVarName_.find(s);
-    if (it != sharedTermToVarName_.end()) return it->second;
-
+std::string ArithSolverBase::getVarNameForSharedTerm(SharedTermId s) const {
     if (!sharedTermRegistry_ || !nativeTerms_) return "";
     const auto* st = sharedTermRegistry_->get(s);
     if (!st) return "";
 
+    const auto identity = nativeTerms_->expressionIndexIdentity();
+    if (identity != variableNameIndexIdentity_) {
+        sourceVariableNames_.clear();
+        variableNameIndexIdentity_ = identity;
+    }
+    const auto it = sourceVariableNames_.find(st->nativeExpr);
+    if (it != sourceVariableNames_.end()) return it->second;
+
+    // Only source variables have arithmetic coordinates. Literal identity is
+    // its exact value, independently of any diagnostic or user spelling.
+    if (nativeTerms_->kind(st->nativeExpr) != Kind::Variable) return "";
     const auto& expr = nativeTerms_->get(st->nativeExpr);
+    const auto sort = nativeTerms_->sortKind(expr.sort);
+    if (sort != SortKind::Int && sort != SortKind::Real) return "";
     std::string name;
-    if (expr.kind == Kind::Variable) {
-        if (std::holds_alternative<std::string>(expr.payload.value)) {
-            name = std::get<std::string>(expr.payload.value);
-        }
-    } else if (expr.isConst()) {
-        // Constants participate in LIA's interface-equality channel via a
-        // synthetic "__const_<sharedName>" var; the LIA simplex pins it to
-        // the actual constant value via a bound assertion. Solvers whose
-        // DomainStore-equivalent has no entry for such tags (e.g. NIA)
-        // naturally skip them in their getDeducedSharedEqualities loop --
-        // fine, since EUF merges identical constants by signature without
-        // needing an arith propagation.
-        name = "__const_" + st->name;
-    }
-    if (!name.empty()) {
-        sharedTermToVarName_[s] = name;
-    }
+    if (const auto* value = std::get_if<std::string>(&expr.payload.value)) name = *value;
+    if (!name.empty()) sourceVariableNames_[st->nativeExpr] = name;
     return name;
 }
 

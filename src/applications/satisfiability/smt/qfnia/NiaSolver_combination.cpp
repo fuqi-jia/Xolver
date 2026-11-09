@@ -235,35 +235,25 @@ NiaSolver::sharedTermArithValue(SharedTermId s) const {
 
 std::vector<TheorySolver::SharedEqualityPropagation>
 NiaSolver::getDeducedSharedEqualities() {
-    // Nelson-Oppen fixed-value seam: when two shared integer variables both
-    // have their NIA domain pinned to the same singleton {v}, propagate the
-    // equality to EUF so the e-graph can fire array/UF axioms (read-over-
-    // write, congruence) that depend on the equality.
-    //
-    // Without this, QF_ANIA / QF_AUFNIA combination instances where the
-    // equality is implied by NIA bounds (e.g. `a = b` follows from
-    // `a >= n /\ a <= n /\ b >= n /\ b <= n`) are unreachable: NIA never
-    // tells EUF, EUF never closes the read-over-write, and the combined
-    // verdict stays Unknown. NiaSolver previously returned {} unconditionally,
-    // closing this seam entirely (the LIA path was the only one open).
-    //
-    // SOUND: a pair is emitted only when both vars' integer domains pin them
-    // to the same value, and the propagation reasons are the (deduped) union
-    // of the four bound-reason literals (lo_a, hi_a, lo_b, hi_b). If any
-    // bound is later relaxed by backtrack, the propagation's reason becomes
-    // unsatisfied and the SAT layer retracts it through normal conflict
-    // analysis. Same proof contract as LiaSolver::getDeducedSharedEqualities'
-    // fixed-value loop.
+    // A literal contributes its exact value without premises; a singleton
+    // domain contributes its endpoint reasons. Never interpret a diagnostic
+    // label as a source-variable name. Retraction withdraws the domain facts.
     if (!sharedTermRegistry_) return {};
 
     struct Entry {
         SharedTermId stId;
         std::vector<SatLit> reasons;
     };
-    // map<mpz_class, ...> for determinism (autotuner / oracle reproducibility).
+    // Exact integer keys keep the propagation order deterministic.
     std::map<mpz_class, std::vector<Entry>> groups;
 
     for (SharedTermId stId : sharedTermRegistry_->allSharedTerms()) {
+        if (auto value = sharedTermRegistry_->constValue(stId)) {
+            if (value->get_den() == 1) {
+                groups[value->get_num()].push_back({stId, {}});
+            }
+            continue;
+        }
         std::string name = getVarNameForSharedTerm(stId);
         if (name.empty()) continue;
         const IntDomain* d = domains_.getDomain(name);

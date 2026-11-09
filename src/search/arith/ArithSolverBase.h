@@ -186,21 +186,16 @@ protected:
     const NativeTerms* nativeTerms_ = nullptr;
     const SharedTermRegistry* sharedTermRegistry_ = nullptr;
 
-    // SharedTermId -> integer-variable-name lookup cache for the Nelson-Oppen
-    // fixed-value seam. Lazily populated on first lookup of each term;
-    // invariant for the term's lifetime (the SharedTermRegistry is monotone
-    // within a solve, so the name is structural, not assignment-dependent).
-    std::unordered_map<SharedTermId, std::string> sharedTermToVarName_;
+    // Names are structural properties of native expressions. Shared-term IDs
+    // can be reused after registry reset; index identities distinguish copied
+    // or replaced NativeTerms stores even when their addresses are reused.
+    mutable std::unordered_map<ExprId, std::string> sourceVariableNames_;
+    mutable std::shared_ptr<const void> variableNameIndexIdentity_;
 
-    // Resolve a shared-term id to the variable name the arith solvers use
-    // internally. Returns the variable name when the shared term is an
-    // integer/real variable; returns a synthetic "__const_<sharedName>" tag
-    // for constant shared terms (LIA's simplex hooks the tag to a synthetic
-    // bound; solvers whose DomainStore-equivalent has no entry for the tag
-    // simply skip that shared term in their getDeducedSharedEqualities loop).
-    // Returns "" when the shared term cannot be resolved (no nativeTerms, no
-    // registry entry, or an unsupported kind) — caller treats "" as skip.
-    std::string getVarNameForSharedTerm(SharedTermId s);
+    // Resolve a shared Int/Real source variable to its arithmetic name. Literals do
+    // not name coordinates; consumers use SharedTermRegistry::constValue().
+    // Missing metadata and unsupported expression kinds return an empty name.
+    std::string getVarNameForSharedTerm(SharedTermId s) const;
 };
 
 } // namespace xolver

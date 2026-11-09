@@ -505,25 +505,6 @@ static std::optional<mpq_class> getConstantRationalValue(const NativeTerms& ir, 
     return term ? numericLiteral(ir, term->nativeExpr) : std::nullopt;
 }
 
-std::string LraSolver::getVarNameForSharedTerm(SharedTermId s) {
-    auto it = sharedTermToVarName_.find(s);
-    if (it != sharedTermToVarName_.end()) return it->second;
-
-    if (!sharedTermRegistry_ || !nativeTerms_) return "";
-    const auto* st = sharedTermRegistry_->get(s);
-    if (!st) return "";
-
-    const auto& expr = nativeTerms_->get(st->nativeExpr);
-    if (expr.kind == Kind::Variable) {
-        if (std::holds_alternative<std::string>(expr.payload.value)) {
-            std::string name = std::get<std::string>(expr.payload.value);
-            sharedTermToVarName_[s] = name;
-            return name;
-        }
-    }
-    return "";
-}
-
 int LraSolver::getOrCreateInterfaceEqAuxVar(SharedTermId a, SharedTermId b) {
     SharedTermId lo = a < b ? a : b;
     SharedTermId hi = a < b ? b : a;
@@ -565,20 +546,8 @@ int LraSolver::getOrCreateInterfaceEqAuxVar(SharedTermId a, SharedTermId b) {
 std::vector<SatLit>
 LraSolver::assertedVarEqualityReason(SharedTermId a, SharedTermId b) const {
     if (!sharedTermRegistry_ || !nativeTerms_) return {};
-    auto nameOf = [&](SharedTermId s) -> std::string {
-        if (const auto* st = sharedTermRegistry_->get(s)) {
-            if (nativeTerms_->get(st->nativeExpr).isConst()) return "";
-            auto it = sharedTermToVarName_.find(s);
-            if (it != sharedTermToVarName_.end()) return it->second;
-            const auto& e = nativeTerms_->get(st->nativeExpr);
-            if (e.kind == Kind::Variable &&
-                std::holds_alternative<std::string>(e.payload.value)) {
-                return std::get<std::string>(e.payload.value);
-            }
-        }
-        return "";
-    };
-    std::string na = nameOf(a), nb = nameOf(b);
+    const std::string na = getVarNameForSharedTerm(a);
+    const std::string nb = getVarNameForSharedTerm(b);
     if (na.empty() || nb.empty() || na == nb) return {};
 
     // Aggregate asserted 2-var difference (in)equalities into an interval on

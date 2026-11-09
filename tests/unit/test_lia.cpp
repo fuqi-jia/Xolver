@@ -782,3 +782,158 @@ TEST_CASE("LIA: shared coordinates observe late variables and withdrawn bounds")
     pin("s0", 7, 4, 2);
     CHECK_FALSE(equal());
 }
+
+#include "search/combination/SharedTermRegistry.h"
+
+TEST_CASE("LIA: shared numeric literals retain their value across source-name collisions") {
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Int);
+    SharedTermRegistry shared;
+    shared.setNativeTerms(&ir);
+    LiaSolver solver;
+    solver.setNativeTerms(&ir);
+    solver.setSharedTermRegistry(&shared);
+    auto term = [&](Kind kind, Payload payload, const std::string& name) {
+        const auto expr = ir.add({kind, 0, {}, std::move(payload)});
+        const auto id = shared.getOrCreate(expr, 0, name, false);
+        shared.addOwner(id, TheoryId::LIA);
+        shared.addOwner(id, TheoryId::EUF);
+        return id;
+    };
+    const auto zero = term(Kind::ConstInt, Payload(int64_t(0)), "zero");
+    const auto source = term(Kind::Variable, Payload(std::string("__const_zero")), "__const_zero");
+    const auto other = term(Kind::Variable, Payload(std::string("other")), "other");
+    int sourceValue = 5;
+    SUBCASE("unequal literal and source values never imply equality") { sourceValue = 5; }
+    SUBCASE("equal literal and source values retain their justified equality") { sourceValue = 0; }
+    auto pin = [&](const std::string& name, int value, SatVar variable) {
+        solver.assertLit({variable, TheoryId::LIA, false, NullExpr,
+            LinearAtomPayload{LinearFormKey{{{name, 1}}}, Relation::Eq,
+                              RealValue::fromInt(value)}},
+            true, 1, SatLit::positive(variable));
+    };
+    pin("__const_zero", sourceValue, 1);
+    pin("other", 0, 2);
+    TheoryLemmaDatabase lemmas;
+    REQUIRE(solver.check(lemmas, TheoryEffort::Standard).kind ==
+            TheoryCheckResult::Kind::Consistent);
+    bool sourceEqual = false, otherEqual = false;
+    for (const auto& equality : solver.getDeducedSharedEqualities()) {
+        auto pair = [&](SharedTermId a, SharedTermId b) {
+            return (equality.a == a && equality.b == b) ||
+                   (equality.a == b && equality.b == a);
+        };
+        if (pair(zero, source)) {
+            sourceEqual = true;
+            CHECK(sourceValue == 0);
+            CHECK(std::find(equality.reasons.begin(), equality.reasons.end(),
+                            SatLit::positive(1)) != equality.reasons.end());
+        }
+        if (pair(zero, other)) {
+            otherEqual = true;
+            CHECK(std::find(equality.reasons.begin(), equality.reasons.end(),
+                            SatLit::positive(2)) != equality.reasons.end());
+        }
+    }
+    CHECK(sourceEqual == (sourceValue == 0));
+    CHECK(otherEqual);
+}
+
+TEST_CASE("Arithmetic shared names follow native expressions across registry reuse") {
+    struct NameProbe : LiaSolver {
+        using ArithSolverBase::getVarNameForSharedTerm;
+    };
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Int);
+    SharedTermRegistry shared;
+    shared.setNativeTerms(&ir);
+    NameProbe solver;
+    solver.setNativeTerms(&ir);
+    solver.setSharedTermRegistry(&shared);
+    const auto x = ir.add({Kind::Variable, 0, {}, Payload(std::string("x"))});
+    const auto sx = shared.getOrCreate(x, 0, "display-x", false);
+    CHECK(solver.getVarNameForSharedTerm(sx) == "x");
+    solver.reset();
+    shared.clear();
+    const auto zero = ir.add({Kind::ConstInt, 0, {}, Payload(int64_t(0))});
+    const auto szero = shared.getOrCreate(zero, 0, "zero", false);
+    REQUIRE(szero == sx);
+    CHECK(solver.getVarNameForSharedTerm(szero).empty());
+    shared.clear();
+    const auto y = ir.add({Kind::Variable, 0, {}, Payload(std::string("y"))});
+    const auto sy = shared.getOrCreate(y, 0, "display-y", false);
+    REQUIRE(sy == sx);
+    CHECK(solver.getVarNameForSharedTerm(sy) == "y");
+    ir.registerSort(1, SortKind::Bool);
+    const auto flag = ir.add({Kind::Variable, 1, {}, Payload(std::string("flag"))});
+    const auto sflag = shared.getOrCreate(flag, 1, "display-flag", false);
+    CHECK(solver.getVarNameForSharedTerm(sflag).empty());
+    NativeTerms replacement;
+    replacement.registerSort(0, SortKind::Int);
+    const auto z = replacement.add({Kind::Variable, 0, {}, Payload(std::string("z"))});
+    REQUIRE(z == x);
+    solver.reset();
+    ir = std::move(replacement);
+    shared.clear();
+    shared.setNativeTerms(&ir);
+    const auto sz = shared.getOrCreate(z, 0, "display-z", false);
+    CHECK(solver.getVarNameForSharedTerm(sz) == "z");
+}
+
+TEST_CASE("LIA: shared literals withdraw variable premises across backtracking") {
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Int);
+    SharedTermRegistry shared;
+    shared.setNativeTerms(&ir);
+    LiaSolver solver;
+    solver.setNativeTerms(&ir);
+    solver.setSharedTermRegistry(&shared);
+    auto term = [&](Kind kind, Payload payload, const std::string& name) {
+        const auto expr = ir.add({kind, 0, {}, std::move(payload)});
+        const auto id = shared.getOrCreate(expr, 0, name, false);
+        shared.addOwner(id, TheoryId::LIA);
+        shared.addOwner(id, TheoryId::EUF);
+        return id;
+    };
+    const auto zero = term(Kind::ConstInt, Payload(int64_t(0)), "zero");
+    const auto source = term(Kind::Variable, Payload(std::string("__const_zero")), "__const_zero");
+    const auto anchor = term(Kind::Variable, Payload(std::string("anchor")), "anchor");
+    auto pin = [&](const std::string& name, int value, SatVar variable, int level) {
+        solver.assertLit({variable, TheoryId::LIA, false, NullExpr,
+            LinearAtomPayload{LinearFormKey{{{name, 1}}}, Relation::Eq,
+                              RealValue::fromInt(value)}},
+            true, level, SatLit::positive(variable));
+    };
+    auto observe = [&](bool expectedSource) {
+        TheoryLemmaDatabase lemmas;
+        REQUIRE(solver.check(lemmas, TheoryEffort::Standard).kind ==
+                TheoryCheckResult::Kind::Consistent);
+        bool sourceEqual = false, anchorEqual = false;
+        for (const auto& equality : solver.getDeducedSharedEqualities()) {
+            auto pair = [&](SharedTermId a, SharedTermId b) {
+                return (equality.a == a && equality.b == b) ||
+                       (equality.a == b && equality.b == a);
+            };
+            if (pair(zero, source)) {
+                sourceEqual = true;
+                CHECK(std::find(equality.reasons.begin(), equality.reasons.end(),
+                                SatLit::positive(3)) != equality.reasons.end());
+                CHECK(std::find(equality.reasons.begin(), equality.reasons.end(),
+                                SatLit::positive(2)) == equality.reasons.end());
+            }
+            if (pair(zero, anchor)) anchorEqual = true;
+        }
+        CHECK(sourceEqual == expectedSource);
+        CHECK(anchorEqual);
+    };
+    pin("anchor", 0, 1, 1);
+    observe(false);
+    pin("__const_zero", 5, 2, 2);
+    observe(false);
+    solver.backtrackToLevel(1);
+    observe(false);
+    pin("__const_zero", 0, 3, 2);
+    observe(true);
+    solver.backtrackToLevel(1);
+    observe(false);
+}

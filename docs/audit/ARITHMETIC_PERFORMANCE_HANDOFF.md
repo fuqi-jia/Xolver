@@ -1,5 +1,73 @@
 # Arithmetic validation and continuation record
 
+## Server-qualified: preserve shared literal identity (2026-11-09)
+
+Core `1e854416cebd797fe87e567680757a6074cdd139` corrects an arithmetic
+combination identity error. The old shared-term resolver invents a variable
+name for a numeric literal. A legal source variable can have that same name,
+causing fixed-value grouping to propagate an invalid literal/variable equality
+and miss a valid equality. An independently constructed native regression
+reproduces the invalid theory lemma before the change; Z3 and cvc5 accept its
+countermodel. This is not a newly observed opposite whole-SMT verdict.
+
+LIA and NIA now group literals by their exact values, without premises, and
+retain the full conditional reasons for fixed source variables. The common
+resolver accepts only actual Int/Real source variables. Its structural cache
+uses native expression identities and the expression-index lifetime token,
+instead of reusable shared-term IDs. LRA uses this common resolver and removes
+its duplicate cache. Valid user names, exact models, incremental semantics and
+the separate LRA/LIA rollback policies are preserved.
+
+Panda9 / ExperimentOS qualification passes **2,323 unit cases / 1,554,962
+assertions**, including four new cases / 45 assertions for literals, source-name
+collisions, registry reuse, expression-index replacement and withdrawn premises.
+All **965 public regressions** pass. Eight diagnostic pairs retain all five SAT
+controls; all ten actual models pass Z3/cvc5 replay. Three gaps remain timeouts
+in both arms, with no verified gain, loss or opposite verdict in that pilot.
+All **2,345 source bodies** independently match the Git core. A single build
+writer lock coordinates 832 ExperimentOS compiler tasks, with at most 39
+compiler CPUs plus one coordinator CPU, followed by ordinary CMake linking.
+
+The fresh complete comparison against delivered PR #125 retains the original
+manifests, frozen references and 60-second / one-physical-CPU / 16-GiB budgets.
+All **14,408 private results** independently verify in all three arms, with no
+gain or loss. Baseline/candidate/Z3 total solver times are **196.3518 / 195.4263 /
+295.5062 seconds**: a small **0.47%** improvement against the same-round parent.
+Fixed160 verifies **124 / 124 / 118 results**, with zero verified gains or losses.
+The candidate retains 35 timeouts and one unconfirmed UNSAT; Z3 retains six
+unconfirmed UNSATs. All seven independent checks time out. Original hashes and
+archive bindings are rechecked; no verified SAT counterpart is found in two
+explicit historical audits. These observations remain excluded, without an
+UNSAT proof. Fixed verified PAR-2 means are **31.533519 / 31.573485 / 33.127560
+seconds**. Candidate fixed timing is slightly worse.
+
+The disjoint 14,568-input fixed/private union verifies **14,532 / 14,532 /
+14,526 results**; verified PAR-2 totals are **5,241.7148 / 5,247.1839 /
+5,595.9159 seconds**. The candidate is **5.4692 seconds worse overall**, so
+the optional performance gate fails. This necessary correctness repair remains
+eligible on its reproduced soundness error and passing correctness qualification;
+it is not delivered as an overall speed improvement. Development587 separately
+retains **587 / 587 / 584**, with total solver times **7.6903 / 7.6165 /
+11.4773 seconds**, and is not added to the scored union. No new opposite verdict,
+invalid actual model or verified solve loss is observed. All three queues pass
+the cross-cohort physical-CPU audit, with a peak of 40 distinct physical CPUs
+and no overlapping sibling leases. Original reports, current timings and
+unconfirmed exclusions are preserved. Server acceptance passes; PR/main CI
+delivery remains pending. Final original-C and protected evaluation remain open.
+Private inputs, models, per-input identifiers and raw reports stay on the server.
+
+| Shared-literal artifact | SHA-256 |
+| --- | --- |
+| Before-version reproduction | `581d1d2163014a91829ad8f7ac13010d682a4759fd986a233ae28c5502c34c11` |
+| Native qualification | `2bfcd6c3d0b7fa8d6ed1f9069d2da10822ab959b0635918b17add773dcc2f72b` |
+| Complete source binding | `f2c931452ff93b75bdadd4ce680a6839ca7a229e2c202849b5d31e8d570d33b1` |
+| Frozen CLI | `dcaed69acc544737aeab95923cc5f1ca4607cfb3a37202b2bb865080b616aa60` |
+| Public regression audit | `9eff021f6468d13d13b67275e1b8d5da225594a692729e681cf2830ed7757769` |
+| Diagnostic pilot audit | `3b7eafce3aa44706b722b4b716adc56eab1b91ccdf9b90994e8890f6dc279357` |
+| Complete private cohort audit | `9bd68df857acf35e443d4fae4662bd6fd7b673ef251bf8ac2d22f0572323baf8` |
+| Complete stage audit | `6eaa5aaf583848079534c6e55dde1fadea7a082285b0f22936b200f5f425497e` |
+| Remaining unconfirmed audit | `dacb345f8d9967c0c6dc95a83b125cf4ac4078583dd4b6b30eb5867a171378a1` |
+
 ## Delivered: preserve canonical source-coordinate identity (2026-11-09)
 
 The existing independently checked private diagnostic profiles of the accepted
@@ -107,7 +175,7 @@ assertions**. Its frozen CLI SHA-256 equals the delivered binary exactly,
 Restoration qualification SHA-256:
 `a9cdc22175c39256c2d221f015d74031a1ee3a3ad70c6e151cd37bdac390b658`.
 
-## Server-qualified: direct exact payloads and feasible interface checks (2026-11-09)
+## Delivered: direct exact payloads and feasible interface checks (2026-11-09)
 
 Core `2cc1f37a2293d14d2e8c30c657098d813ffac0ed` combines two measured changes.
 `RealValue` factories construct their owned rational or algebraic payload directly,
@@ -163,7 +231,14 @@ checked independently. Certificate-confirmed membership is never counted twice;
 existing independent UNSAT evidence applies equally to successful current UNSAT
 observations in every arm. Raw reports and current solver times are unchanged;
 old models and timeout/unknown upgrades are not used. Server and optional
-performance acceptance pass; PR and exact-commit CI delivery remain pending.
+performance acceptance pass. [PR #125](https://github.com/fuqi-jia/Xolver/pull/125)
+reviewed `ea0e5d84a95bc264d73fb1de127ee9f75ab48724`; both jobs pass in
+[PR CI 42598489094](https://github.com/fuqi-jia/Xolver/actions/runs/42598489094).
+The normal squash merge is `0bc0b25e94ccf83d4f2d765f2e77f3d480811296`,
+with the identical reviewed tree `4d6ed7bcdd6319af228b97b26db149f762b05ddf`.
+Both jobs also pass in the exact merge's
+[main CI 42601483361](https://github.com/fuqi-jia/Xolver/actions/runs/42601483361).
+FULINA is synchronized by a normal merge without deleting or forcing a branch.
 Protected sets and original-C end-to-end verification remain open. Private inputs,
 models, per-input identifiers and raw evidence stay on the server.
 
