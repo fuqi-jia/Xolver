@@ -649,7 +649,7 @@ TEST_CASE("LraSolver: ordinary propagation preserves the registered vocabulary")
     }
 }
 
-TEST_CASE("BoundAxiomGenerator: selecting LIA preserves other theories and the input vocabulary") {
+TEST_CASE("BoundAxiomGenerator: integer and real inequalities retain their domain and vocabulary") {
     struct Clauses : Allocator {
         std::vector<std::vector<SatLit>> clauses;
         void addClause(const std::vector<SatLit>& clause) override { clauses.push_back(clause); }
@@ -657,33 +657,35 @@ TEST_CASE("BoundAxiomGenerator: selecting LIA preserves other theories and the i
     TheoryAtomRegistry registry;
     registry.setContext(&allocator, &allocator);
     const LinearFormKey form{{{"x", 1}}};
-    const auto first = registry.getOrCreateLinearBoundAtom(form, Relation::Leq, 1, TheoryId::LIA);
-    const auto second = registry.getOrCreateLinearBoundAtom(form, Relation::Leq, 2, TheoryId::LIA);
-    const auto realFirst = registry.getOrCreateLinearBoundAtom(form, Relation::Geq, -1, TheoryId::LRA);
+    registry.getOrCreateLinearBoundAtom(form, Relation::Leq, 1, TheoryId::LIA);
+    registry.getOrCreateLinearBoundAtom(form, Relation::Leq, 2, TheoryId::LIA);
+    registry.getOrCreateLinearBoundAtom(form, Relation::Geq, -1, TheoryId::LRA);
     registry.getOrCreateLinearBoundAtom(form, Relation::Geq, -2, TheoryId::LRA);
     const auto count = allocator.next;
-    CHECK(BoundAxiomGenerator::generate(registry, allocator, TheoryId::LIA) == 1);
-    REQUIRE(allocator.clauses.size() == 1);
-    CHECK(allocator.clauses[0] == std::vector<SatLit>{first.negated(), second});
+    CHECK(BoundAxiomGenerator::generate(registry, allocator) == 2);
+    REQUIRE(allocator.clauses.size() == 2);
     CHECK(allocator.next == count);
     CHECK(registry.numAtomVars() == count);
-    for (const auto& clause : allocator.clauses)
-        for (const auto literal : clause) CHECK(literal.var < realFirst.var);
-    // Check the actual emitted clause, not only an expected implementation shape.
-    for (int n = -12; n <= 12; ++n) {
-        const mpq_class x(n, 3);
-        bool holds = false;
-        for (const auto literal : allocator.clauses[0]) {
-            const auto* record = registry.findBySatVar(literal.var);
-            REQUIRE(record != nullptr);
-            const auto& atom = std::get<LinearAtomPayload>(record->payload);
-            holds |= compare(atom.rel, x, atom.rhs.asRational()) == literal.sign;
+    for (const auto& clause : allocator.clauses) {
+        REQUIRE_FALSE(clause.empty());
+        const auto domain = registry.findBySatVar(clause.front().var)->theory;
+        for (const auto literal : clause)
+            CHECK(registry.findBySatVar(literal.var)->theory == domain);
+        for (int n = -12; n <= 12; ++n) {
+            const mpq_class x(n, 3);
+            bool holds = false;
+            for (const auto literal : clause) {
+                const auto* record = registry.findBySatVar(literal.var);
+                REQUIRE(record != nullptr);
+                const auto& atom = std::get<LinearAtomPayload>(record->payload);
+                holds |= compare(atom.rel, x, atom.rhs.asRational()) == literal.sign;
+            }
+            CHECK(holds);
         }
-        CHECK(holds);
     }
 }
 
-TEST_CASE("BoundAxiomGenerator: eager family size preserves the default and original vocabulary") {
+TEST_CASE("BoundAxiomGenerator: ordered chains cover all families without new inequality atoms") {
     struct RecordingAllocator : Allocator {
         std::vector<std::vector<SatLit>> clauses;
         void addClause(const std::vector<SatLit>& clause) override { clauses.push_back(clause); }
@@ -693,7 +695,7 @@ TEST_CASE("BoundAxiomGenerator: eager family size preserves the default and orig
     for (const auto& name : {"x", "y"}) for (int rhs = 0; rhs < (name[0] == 'x' ? 3 : 2); ++rhs)
         registry.getOrCreateLinearBoundAtom(LinearFormKey{{{name, 1}}}, Relation::Leq, rhs, TheoryId::LIA);
     const auto variables = registry.numAtomVars();
-    CHECK(BoundAxiomGenerator::generate(registry, allocator, TheoryId::LIA, 3) == 3);
+    CHECK(BoundAxiomGenerator::generate(registry, allocator) == 3);
     CHECK(allocator.clauses.size() == 3);
     for (const auto& clause : allocator.clauses) for (int n = -4; n <= 8; ++n) {
         mpq_class point(n, 2); point.canonicalize();
@@ -702,14 +704,13 @@ TEST_CASE("BoundAxiomGenerator: eager family size preserves the default and orig
             const auto* atom = registry.findBySatVar(literal.var);
             REQUIRE(atom != nullptr);
             const auto& payload = std::get<LinearAtomPayload>(atom->payload);
-            CHECK(payload.lhs.terms.front().first == "x");
             holds |= compare(payload.rel, point, payload.rhs.asRational()) == literal.sign;
         }
         CHECK(holds);
     }
     allocator.clauses.clear();
-    CHECK(BoundAxiomGenerator::generate(registry, allocator, TheoryId::LIA) == 4);
-    CHECK(allocator.clauses.size() == 4);
+    CHECK(BoundAxiomGenerator::generate(registry, allocator) == 3);
+    CHECK(allocator.clauses.size() == 3);
     CHECK(registry.numAtomVars() == variables);
 }
 
