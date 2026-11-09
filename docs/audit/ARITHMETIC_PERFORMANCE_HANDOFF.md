@@ -1,5 +1,75 @@
 # Arithmetic validation and continuation record
 
+## Format native numeric payloads without copying values (2026-11-10)
+
+`NativeTerms::get` formatted NUMBER values through `getNumberValue()`, which
+returns an owning `Number` copy. The existing `Value::toString()` NUMBER branch
+formats the same stored value directly. Core
+`08efb931b343402e23910b18fe7097de5338cb40` uses that existing branch under the
+unchanged NUMBER guard. Literal classification, exact arithmetic, owning term
+snapshots, public APIs, model validation and resource limits are unchanged.
+
+The ordinary profiles identify **2,712** copies at this call site. The frozen
+candidate removes all 2,712; total numeric getter calls fall **2,847 to 135**
+and Number copy constructors **3,416 to 704**. Full term reads (59,382), model
+validations (4), term evaluations (879) and proof requests (48) are unchanged.
+Instructions fall **273,661,162 to 271,861,036 (0.66%)**. All four actual
+profile SAT models pass independent Z3/cvc5 replay. These counters establish
+the mechanism, not whole-suite wall time.
+
+Panda9 / ExperimentOS verifies all 832 parent object/dependency hashes,
+compiles the two changed translation units using leased physical CPUs, retains
+830 byte-identical objects and serially relinks under the single build writer
+lock. Proofs remain enabled. All **2,331 unit cases / 1,556,261 assertions**,
+**965 public regressions** and ten actual pilot SAT models pass. The added
+regression checks signed 64-bit limits, larger integers, exact rationals and
+decimals, repeated reads and payload ownership after store destruction.
+All 2,345 public source bodies match Git, including the pinned parser.
+
+The fresh complete comparison freezes delivered main `846e03ed` / e39,
+this candidate and Z3/cvc5, each with **60 seconds, one physical CPU and
+16 GiB per solver/input**. All three independently verify all **14,408 private
+queries** (8,940 SAT / 5,468 UNSAT). Main/candidate/Z3 cumulative solver times
+are **193.3250 / 192.1376 / 295.7992 seconds**: an observed **0.61%** reduction
+against same-round main. Fixed160 verifies **124 / 124 / 117**, with identical
+main/candidate verified membership and zero gains or losses. Verified PAR-2
+means are **31.497217 / 31.438419 / 33.521622 seconds**. Earlier rounds' scores
+are not substituted.
+
+The disjoint 14,568-input union verifies **14,532 / 14,532 / 14,525**.
+Verified PAR-2 totals are **5,232.8798 / 5,222.2847 / 5,659.2587 seconds**:
+**10.5950 seconds saved** against main. Development587 stays separate,
+verifying **587 / 587 / 584**, with solver times **7.4740 / 7.3663 /
+11.3566 seconds**. No opposite verdict, invalid actual model, protocol error
+or verified loss is observed. At most 40 physical CPUs are leased without
+overlapping sibling leases.
+
+The candidate's **35 timeouts plus one unconfirmed UNSAT**, and Z3's
+**37 timeouts plus six unconfirmed UNSATs**, remain unresolved. The seven
+remaining independent checks time out. Original hashes and archive bindings
+are rechecked, without a contrary verified SAT in the two specified historical
+qualified audits. This does not prove UNSAT; unconfirmed results stay excluded.
+Input-bound independent evidence supplements only successful current UNSAT
+observations, never timeouts, unknowns or reused SAT models.
+
+Server acceptance and the optional performance gate pass with unchanged
+verified coverage. Exact review/main CI receipts belong to the merging PR.
+Original-C QCP, remaining fixed inputs and the once-only protected comparison
+remain open; these development results do not establish overall superiority
+over Z3. Private inputs, models, identifiers and per-input evidence remain
+on the server.
+
+| Numeric-format artifact | SHA-256 |
+| --- | --- |
+| Measured copy root | `716426bbf48d950e10b0005781321d7db1d0bb881e5e83945b5b188ad5c10594` |
+| Native qualification | `040d4212e87f7a9ec7df827683d8975a8018291a8bdebfcf6b1820330aeb7e2c` |
+| Complete qualified source manifest | `9cad5c403e494f5d3f121f46fddcab458c8c118ade034e7619d3e8e3236debd2` |
+| Frozen CLI | `a95627edcad6f0c02a315efa576d067908d520435ecfd31b71f5e46ad2888a28` |
+| Mechanism audit | `125f690b3c9cbcf46c389e5bd5a9fa7e58b24137c88a8fc026dd4ad11c45f8ce` |
+| Complete private cohort | `f79b1bb7dbc60e7bb4e0354a1c2bfe58b5ee0a366d4983eecee2b8c7a3362115` |
+| Complete stage | `f3dd3ffc1e0e315a45fd74fd23e762621f13796e06c1f89b1987180dd9de63cd` |
+| Remaining unconfirmed audit | `5e2be523b7d3c57081145542342cdf1bf7da1a0a5b7cadc34c0f1f46b03b2e0f` |
+
 ## Read cast payloads only in Real contexts (2026-11-10)
 
 `ArithCastNormalizer::rewriteRec` previously constructed a full child snapshot
@@ -56,10 +126,18 @@ unconfirmed results stay excluded. Input-bound independent evidence supplements
 only successful current UNSAT observations, never timeouts or reused SAT models.
 
 Server acceptance and the optional performance gate pass with unchanged
-verified coverage. Exact PR/main CI receipts belong to the merging PR. Original-C
-QCP, remaining fixed inputs and the once-only protected comparison remain open;
-this is not an overall Z3-superiority result. Private inputs, models, identifiers
-and per-input evidence remain on the server.
+verified coverage. [PR #129](https://github.com/fuqi-jia/Xolver/pull/129) reviewed
+`9d602ee93b639ad24521453a6ba0d3862cebc318`; both jobs passed in
+[PR CI 42668797257](https://github.com/fuqi-jia/Xolver/actions/runs/42668797257).
+The normal squash merge `846e03ed0f5102cbc9d5f360523ce544581488bb` has the same
+complete tree; both jobs passed in its exact
+[main CI 42674490058](https://github.com/fuqi-jia/Xolver/actions/runs/42674490058).
+The original push run failed inside GitHub before creating jobs; the existing
+full manual workflow validated the same commit with unchanged checks. This
+stage is delivered without another server archive gate. Original-C QCP,
+remaining fixed inputs and the once-only protected comparison remain open;
+this is not an overall Z3-superiority result. Private inputs, models,
+identifiers and per-input evidence remain on the server.
 
 | Context-guarded cast artifact | SHA-256 |
 | --- | --- |
