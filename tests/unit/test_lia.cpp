@@ -649,6 +649,50 @@ TEST_CASE("LIA: fractional disequality gaps use the explained aggregate lattice 
 }
 
 
+TEST_CASE("LIA: interface disequalities distinguish feasible witnesses from forced equalities") {
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Int);
+    SharedTermRegistry shared;
+    shared.setNativeTerms(&ir);
+    LiaSolver solver;
+    solver.setNativeTerms(&ir);
+    solver.setSharedTermRegistry(&shared);
+    auto term = [&](const std::string& name) {
+        const auto expr = ir.add({Kind::Variable, 0, {}, Payload(name)});
+        const auto id = shared.getOrCreate(expr, 0, name, false);
+        shared.addOwner(id, TheoryId::LIA);
+        shared.addOwner(id, TheoryId::EUF);
+        return id;
+    };
+    const auto x = term("x"), y = term("y");
+    int offset = 1;
+    SUBCASE("different offsets admit an exact disequality witness") { offset = 2; }
+    SUBCASE("equal offsets still require the complete conflict explanation") { offset = 1; }
+    auto define = [&](const std::string& name, int value, SatVar variable) {
+        solver.assertLit({variable, TheoryId::LIA, false, NullExpr,
+            LinearAtomPayload{LinearFormKey{{{name, 1}, {"z", -1}}}, Relation::Eq,
+                              RealValue::fromInt(value)}},
+            true, 1, SatLit::positive(variable));
+    };
+    define("x", 1, 1);
+    define("y", offset, 2);
+    solver.assertInterfaceDisequality(x, y, SatLit::positive(3), 1);
+    for (const auto effort : {TheoryEffort::Standard, TheoryEffort::Full}) {
+        TheoryLemmaDatabase lemmas;
+        const auto result = solver.check(lemmas, effort);
+        if (offset != 1) {
+            CHECK(result.kind == TheoryCheckResult::Kind::Consistent);
+            continue;
+        }
+        REQUIRE(result.kind == TheoryCheckResult::Kind::Conflict);
+        REQUIRE(result.conflictOpt.has_value());
+        for (SatVar variable : {1, 2, 3}) {
+            CHECK(std::find(result.conflictOpt->clause.begin(), result.conflictOpt->clause.end(),
+                            SatLit::positive(variable)) != result.conflictOpt->clause.end());
+        }
+    }
+}
+
 TEST_CASE("LIA: shared coordinates keep source names distinct from tableau labels") {
     NativeTerms ir;
     ir.registerSort(0, SortKind::Int);

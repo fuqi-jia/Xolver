@@ -52,6 +52,40 @@ TEST_CASE("RealValue: rational constructors round-trip") {
     CHECK(c.asRational() == mpq_class(-12));
 }
 
+TEST_CASE("RealValue: factories preserve canonical owned payloads") {
+    const mpz_class integer = (mpz_class(1) << 256) + 1;
+    mpq_class source;
+    const mpz_class numerator = -2 * integer;
+    mpz_set(mpq_numref(source.get_mpq_t()), numerator.get_mpz_t());
+    mpz_set_ui(mpq_denref(source.get_mpq_t()), 6);
+    const auto rational = RealValue::fromMpq(source);
+    CHECK(rational.kind() == RealValue::Kind::Rational);
+    CHECK(rational.asRational() == mpq_class(-integer, 3));
+    CHECK(rational.asRational().get_den() == 3);
+    CHECK(source.get_num() == numerator);
+    CHECK(source.get_den() == 6);
+    source = 0;
+    CHECK(RealValue::parse(rational.toSmtLib2()) == rational);
+    CHECK_THROWS_AS(rational.asAlgebraic(), std::bad_variant_access);
+
+    auto root = sqrt2();
+    auto algebraic = RealValue::fromAlgebraic(root);
+    root.coefficients[0] = -3;
+    root.lower = 10;
+    CHECK(algebraic.kind() == RealValue::Kind::Algebraic);
+    CHECK(algebraic.asAlgebraic().coefficients[0] == -2);
+    CHECK(algebraic.asAlgebraic().lower == 1);
+    CHECK_FALSE(algebraic.tryAsRational().has_value());
+    CHECK_THROWS_AS(algebraic.asRational(), std::bad_variant_access);
+    CHECK(algebraic * algebraic == RealValue::fromInt(2));
+
+    const auto copy = algebraic;
+    algebraic = rational;
+    CHECK(copy.isAlgebraic());
+    CHECK(algebraic == rational);
+    CHECK(RealValue().isZero());
+}
+
 TEST_CASE("RealValue: parse canonical literals") {
     CHECK(RealValue::parse("3").asRational() == mpq_class(3));
     CHECK(RealValue::parse("(/ 3 4)").asRational() == mpq_class(3, 4));

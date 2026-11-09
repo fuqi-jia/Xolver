@@ -1,6 +1,6 @@
 # Arithmetic validation and continuation record
 
-## Server-qualified: preserve canonical source-coordinate identity (2026-11-09)
+## Delivered: preserve canonical source-coordinate identity (2026-11-09)
 
 The existing independently checked private diagnostic profiles of the accepted
 core make **285 calls** to `LiaSolver::getDeducedSharedEqualities`. Each call
@@ -77,7 +77,15 @@ results, not a combination with the previous cache experiment or a permanent
 capability claim from one timing-boundary gain.
 
 This necessary correctness repair must remain if later performance changes.
-Server qualification is complete; PR and exact-commit CI delivery remain open.
+Server qualification and exact-commit CI delivery are complete.
+[PR #124](https://github.com/fuqi-jia/Xolver/pull/124) reviewed
+`bd1310691bcba7ce32f3b21033d51cab6e4b8a48`; both jobs passed in
+[PR CI 42588685881](https://github.com/fuqi-jia/Xolver/actions/runs/42588685881).
+The normal squash merge is `875b86279a0d5bc768ab83a811ef8b4c0ff0606b`,
+with the identical reviewed tree `6a0296f2d4543e6d297a07e9711799686818bd60`.
+Both jobs also passed in the exact merge's
+[main CI 42590755504](https://github.com/fuqi-jia/Xolver/actions/runs/42590755504).
+FULINA was synchronized by a normal merge; no branch was deleted or forced.
 Remaining fixed inputs, original-C QCP verification and one-time protected
 evaluation are still open. This is not an overall Z3-superiority claim.
 
@@ -98,6 +106,74 @@ assertions**. Its frozen CLI SHA-256 equals the delivered binary exactly,
 `558ef3b8e361235ebc700c9f7ffc0403f8840a66a8c5b0a98159958bbcfd2bb8`.
 Restoration qualification SHA-256:
 `a9cdc22175c39256c2d221f015d74031a1ee3a3ad70c6e151cd37bdac390b658`.
+
+## Server-qualified: direct exact payloads and feasible interface checks (2026-11-09)
+
+Core `2cc1f37a2293d14d2e8c30c657098d813ffac0ed` combines two measured changes.
+`RealValue` factories construct their owned rational or algebraic payload directly,
+retaining canonicalization, kind and public APIs. LIA interface disequality checks
+first inspect their exact feasible difference: a nonzero witness disproves forced
+zero; a zero witness still receives the complete proof, conflict and split paths.
+No model check, search budget or LRA/LIA rollback policy is removed.
+
+Eight diagnostic profiles cover unchanged SAT and UNSAT timing quantiles of the
+accepted corpus. All four actual SAT models pass both independent checkers.
+Factory default-zero constructions fall from **1,328 to zero**, fixed-value proof
+requests from **85 to 50**, and global fixed analyses from **34 to 30**. Total
+sampled instructions fall **284,542,592 to 281,373,480 (-1.11%)**. This does not
+attribute all fixed-analysis cost to eliminated work or measure whole-suite speed.
+
+Panda9 / ExperimentOS qualification passes **2,319 unit cases / 1,554,917
+assertions**, including exact owned-payload and interface-witness regressions.
+All **965 public regressions** pass without waivers. All **2,345 source bodies**
+match the frozen Git core. Eight diagnostic pairs retain five SAT controls and
+three timeouts in both arms; all ten actual SAT models pass both independent
+checkers. There is no diagnostic gain, loss or opposite verdict.
+
+Fresh complete comparisons use the accepted source-coordinate repair
+(`256ecfad`, delivered main `875b8627`) and the new candidate, with identical
+frozen references, original manifests and **60-second / one-physical-CPU /
+16-GiB** budgets. All **14,408 private results** are independently confirmed in
+all three arms: **8,940 SAT / 5,468 UNSAT**. Baseline/candidate/Z3 total solver
+times are **199.2916 / 195.9176 / 295.1660 seconds**. The candidate is **1.69%
+faster** than its same-round baseline, without a lost result.
+
+After input-bound certificate and independent-reference checks, fixed160 verifies
+**124 / 124 / 118 results**, with **zero verified gains or losses**. Candidate
+35 timeouts and one unconfirmed UNSAT remain unresolved; baseline has 36 timeouts;
+Z3 has 36 timeouts and six unconfirmed UNSATs. The candidate's extra raw UNSAT
+receives no verified solve credit. All seven remaining independent checks time
+out; original hashes and archive bindings are rechecked. The candidate's pending
+input matches the earlier pending input, with no verified SAT counterpart in two
+explicit historical audits. This is not an UNSAT proof; all remain excluded.
+
+Fixed verified PAR-2 means are **31.531076 / 31.547248 / 32.980789 seconds**:
+the candidate is slightly worse on fixed160 timing. The disjoint fixed/private
+14,568-input union verifies **14,532 / 14,532 / 14,526 results**, with PAR-2 totals
+**5,244.2638 / 5,243.4772 / 5,572.0921 seconds**. The net candidate improvement is
+only **0.7866 seconds**. Development587 separately retains **587 / 587 / 584**,
+with total solver times **7.8365 / 7.7164 / 11.5274 seconds**; it is not added to
+the scored union. These are small measured gains under the preregistered optional
+performance gate, without an increase in verified coverage or an overall claim
+of superiority to Z3.
+
+The final audit reconstructs all three cohorts' CPU leases: at most **40 distinct
+physical CPUs**, without overlapping sibling leases. Actual SAT models are
+checked independently. Certificate-confirmed membership is never counted twice;
+existing independent UNSAT evidence applies equally to successful current UNSAT
+observations in every arm. Raw reports and current solver times are unchanged;
+old models and timeout/unknown upgrades are not used. Server and optional
+performance acceptance pass; PR and exact-commit CI delivery remain pending.
+Protected sets and original-C end-to-end verification remain open. Private inputs,
+models, per-input identifiers and raw evidence stay on the server.
+
+| Exact-payload/interface artifact | SHA-256 |
+| --- | --- |
+| Native qualification | `b6e704d03bee6f765efd1cfc1123a499c53aa0bc08abce6c596558604b630a25` |
+| Complete source binding | `bef6270d172dd13f5d80dda243d78ececed68a4b302e03a7d6f8fb2ef7ee204a` |
+| Frozen CLI | `86cba803f586d77b7b69e1f6777fc58a0ad3ea3b5312aeaef42f2ea07f1e42e0` |
+| Complete stage audit | `5fac8f4b0b03d9f106e07c8867765d41295bd77bb1f1328d6109f24e5f46d03f` |
+| Remaining unconfirmed audit | `2a648e60b8d755c440c804f3fb9e099a63affbb611929722ff660d1e2278b5fd` |
 
 ## Closed: cached-value borrowing fails complete performance acceptance (2026-11-09)
 

@@ -14,27 +14,21 @@ namespace xolver {
 // Construction
 // ---------------------------------------------------------------------------
 RealValue::RealValue() : storage_(mpq_class(0)) {}
+RealValue::RealValue(mpq_class&& value) : storage_(std::move(value)) {}
+RealValue::RealValue(AlgebraicNumber&& value) : storage_(std::move(value)) {}
 
 RealValue RealValue::fromInt(int64_t v) {
-    RealValue r;
-    r.storage_ = mpq_class(static_cast<long>(v));
-    return r;
+    return RealValue(mpq_class(static_cast<long>(v)));
 }
 RealValue RealValue::fromMpz(const mpz_class& v) {
-    RealValue r;
-    r.storage_ = mpq_class(v);
-    return r;
+    return RealValue(mpq_class(v));
 }
 RealValue RealValue::fromMpq(mpq_class q) {
     q.canonicalize();
-    RealValue r;
-    r.storage_ = std::move(q);
-    return r;
+    return RealValue(std::move(q));
 }
 RealValue RealValue::fromAlgebraic(AlgebraicNumber a) {
-    RealValue r;
-    r.storage_ = std::move(a);
-    return r;
+    return RealValue(std::move(a));
 }
 
 // ---------------------------------------------------------------------------

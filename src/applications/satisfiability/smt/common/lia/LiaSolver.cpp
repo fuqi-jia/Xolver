@@ -439,7 +439,10 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
         }
         int aux = getOrCreateInterfaceEqAuxVar(ieq.a, ieq.b);
         if (aux >= 0) {
-            auto fixedOpt = gs_.proveFixedValue(aux);
+            // The simplex point is feasible. A nonzero difference already
+            // disproves forced equality, so only a zero witness needs a proof.
+            const auto difference = gs_.value(aux);
+            auto fixedOpt = difference.isZero() ? gs_.proveFixedValue(aux) : std::nullopt;
             if (fixedOpt && fixedOpt->first.isZero()) {
                 // The difference x - y is provably pinned to 0 by bounds (e.g.
                 // x<=y ∧ y<=x), so x = y is entailed and the interface
@@ -467,8 +470,7 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
             // suppress repair of an already asserted disequality, including
             // array extensionality witnesses that were never arrangement pairs.
             if (effort == TheoryEffort::Full && registry_ && !fixedOpt) {
-                DeltaRational d = gs_.value(aux);
-                if (d.a == 0 && d.b == 0) {
+                if (difference.isZero()) {
                     LinearFormKey form;
                     mpq_class rhs = 0;
                     auto addTerm = [&](SharedTermId id, int coefficient) {

@@ -102,6 +102,11 @@ public:
     std::string toDebugString() const;
 
 private:
+    // Factories construct their payload directly instead of allocating a
+    // rational zero that is immediately replaced.
+    explicit RealValue(mpq_class&& value);
+    explicit RealValue(AlgebraicNumber&& value);
+
     // The variant is the single source of truth for the kind (index 0 ==
     // Rational, 1 == Algebraic); no separate tag field is stored.
     std::variant<mpq_class, AlgebraicNumber> storage_;
