@@ -157,6 +157,7 @@ set(XOLVER_SEARCH_SOURCES
     "search/linear/LinearBoundPropagation.cpp"
     "search/linear/LinearConstraintRegistration.cpp"
     "search/linear/LinearModelValidator.cpp"
+    "search/linear/LinearPredicatePropagation.cpp"
     "search/linear/NonnegativeWitness.cpp"
     "search/linearizer/DomainStoreBoundStore.cpp"
     "search/linearizer/IncrementalLinearizer.cpp"
