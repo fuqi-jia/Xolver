@@ -19,8 +19,13 @@ equality for unequal source values; both Z3 and cvc5 accept the independently
 constructed countermodel. The corrected index passes the identity regression.
 The first native attempt still fails the incremental test: its root backtrack
 incorrectly assumed retained root premises, contrary to the existing LIA
-reset/replay contract. The test now uses a positive parent level. That failed
-native attempt is retained; complete repaired-source qualification is pending.
+reset/replay contract. The test now uses a positive parent level. A second native attempt retains
+correct equality propagation but reveals the same display-label identity bug
+in `LinearModelValidator`: its first-wins map rejects valid late-source models.
+The shared checker now receives the existing canonical coordinate index and
+still independently evaluates every original form. Missing coordinates reject
+validation. Both failed attempts are retained; complete repaired-source
+qualification is pending.
 No new whole-SMT opposite verdict, performance gain or promotion is claimed.
 LRA/LIA rollback policies and all model checks are unchanged.
 
