@@ -260,8 +260,9 @@ public:
         std::vector<int> proofGroup_;
     };
     FixedValueAnalysis analyzeFixedValues() const;
-    // Reuse an immutable snapshot while bounds and tableau are unchanged.
-    // A mutation invalidates the stored snapshot, never an outstanding handle.
+    // Reuse an immutable snapshot, extending it lazily for free columns and
+    // affine definitions. Bound/basis changes invalidate it; outstanding
+    // handles are never modified.
     std::shared_ptr<const FixedValueAnalysis> sharedFixedValueAnalysis() const;
     std::optional<FixedValueProof> proveFixedValue(int var) const;
 
@@ -314,9 +315,12 @@ private:
     void notePointChange() noexcept {
         if (pointRevision_ != std::numeric_limits<uint64_t>::max()) ++pointRevision_;
     }
+    void advanceAnalysisRevision() noexcept {
+        if (analysisRevision_ != std::numeric_limits<uint64_t>::max()) ++analysisRevision_;
+    }
     void noteAnalysisChange() noexcept {
         fixedValueAnalysis_.reset();
-        if (analysisRevision_ != std::numeric_limits<uint64_t>::max()) ++analysisRevision_;
+        advanceAnalysisRevision();
     }
     uint64_t boundRevision_ = 0;
     void noteBoundChange() noexcept {

@@ -48,7 +48,9 @@ GeneralSimplex::GeneralSimplex() {
 
 int GeneralSimplex::addVar(const std::string& name) {
     notePointChange();
-    noteAnalysisChange();
+    // A free column cannot change an existing fixed value or its premises.
+    // Keep the owning prefix snapshot until a query needs the new columns.
+    advanceAnalysisRevision();
     int id = static_cast<int>(vars_.size());
     VarState vs;
     vs.name = name;
@@ -1381,8 +1383,37 @@ GeneralSimplex::FixedValueAnalysis::fixedValue(int var) const {
 
 std::shared_ptr<const GeneralSimplex::FixedValueAnalysis>
 GeneralSimplex::sharedFixedValueAnalysis() const {
-    if (!fixedValueAnalysis_)
+    if (!fixedValueAnalysis_) {
         fixedValueAnalysis_ = std::make_shared<const FixedValueAnalysis>(analyzeFixedValues());
+    } else if (fixedValueAnalysis_->values_.size() < vars_.size()) {
+        const size_t first = fixedValueAnalysis_->values_.size();
+        auto extended = std::make_shared<FixedValueAnalysis>(*fixedValueAnalysis_);
+        extended->values_.resize(vars_.size());
+        extended->dependencies_.resize(vars_.size());
+        extended->premises_.resize(vars_.size());
+        extended->proofGroup_.resize(vars_.size(), -1);
+        // Without a bound or basis change, every appended row only defines its
+        // new basic column in terms of earlier non-basic columns. Its unbounded
+        // basic column cannot constrain the prefix or create a tight face.
+        for (size_t var = first; var < vars_.size(); ++var) {
+            const int rowId = vars_[var].basicRow;
+            if (rowId < 0) continue;
+            const auto& row = tab_.row(rowId);
+            if (std::any_of(row.entries.begin(), row.entries.end(), [&](const auto& entry) {
+                    assert(entry.col >= 0 && static_cast<size_t>(entry.col) < var);
+                    return !extended->values_[entry.col];
+                })) continue;
+            DeltaRational value(row.rhs);
+            auto& dependencies = extended->dependencies_[var];
+            dependencies.reserve(row.entries.size());
+            for (const auto& entry : row.entries) {
+                value += entry.coeff * *extended->values_[entry.col];
+                dependencies.push_back(entry.col);
+            }
+            extended->values_[var] = std::move(value);
+        }
+        fixedValueAnalysis_ = std::move(extended);
+    }
     return fixedValueAnalysis_;
 }
 

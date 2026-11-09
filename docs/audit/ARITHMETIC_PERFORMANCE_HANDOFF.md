@@ -1,6 +1,56 @@
 # Arithmetic validation and continuation record
 
-## Server-qualified: preserve shared literal identity (2026-11-09)
+## In development: extend fixed analyses across definitions (2026-11-09)
+
+Eight unchanged ordinary diagnostic queries show 74 fixed-analysis requests,
+29 complete analyses and **18 nonrestricting definition additions that discard
+an existing snapshot**. All four actual SAT models pass Z3 and cvc5 replay.
+Existing accepted-core profiles attribute 22,278,634 inclusive instructions to
+the 29 analyses, out of 280,884,206 total instructions; overlapping inclusive
+costs are not additive. These are mechanism observations, not timing gains.
+
+The common `GeneralSimplex` now retains the owning, closed prefix on free-column
+addition and lazily copies/extends it on the next analysis request. New affine
+definitions derive only from fixed earlier coordinates. Bounds, pivots, scope
+removal and reset retain their existing invalidation rules. Exact infinitesimals,
+premise DAGs, immutable outstanding handles and revision semantics are preserved.
+The implementation serves every client of this shared arithmetic kernel.
+Candidate native qualification and full comparisons remain pending; no speed
+or solve improvement is claimed for this change yet.
+
+The diagnostic setup first requested the nonexistent CMake target `xolver`.
+The failed job and successful 832-unit compilation are preserved. A corrected
+job uses `xolver-cli`, reuses that completed compilation, restores the accepted
+source and original binaries byte-for-byte, and passes the original 2,323 unit
+cases / 1,554,962 assertions. Its separately frozen counter-only derivative is
+never eligible for formal performance or solve credit.
+Restoration qualification SHA-256:
+`902c7c47fac3bda892fae13a6a3d5022cc28aa221650c2bf1d18fe7fcc1e944c`;
+observation SHA-256:
+`29cf5c96c479b890cc2b7099f9862b1d41cb67f540fe8eaa9ef61c696247d14c`.
+
+## Closed: indexed-sort reading experiment (2026-11-09)
+
+Core `dbd369f989a5ef2b01269ded27dc4080abc48371` passes native and public
+correctness checks and reduces sampled instructions by 0.65%. The full fresh
+comparison verifies all 14,408 private results in all arms: parent/candidate/Z3
+times are 195.6242 / 194.9171 / 295.3390 seconds, a 0.36% local reduction.
+Fixed160 verifies 123 / 123 / 117, with no candidate gain or loss. The candidate's
+one and Z3's six unconfirmed UNSAT observations remain excluded. The disjoint
+14,568-input union verifies 14,531 / 14,531 / 14,525, with PAR-2 totals
+5,336.6030 / 5,342.2028 / 5,660.7035 seconds. The candidate is **5.5998 seconds
+worse overall**, so the optional performance gate fails. This is a separate
+fresh round; its fixed123 is not combined with the preceding round's fixed124.
+
+The experiment is closed and reverted in pushed FULINA commit
+`86617ef7da779fa3fc08adfe611e5f61a0f6538b`, whose entire tree equals accepted
+main `f311425e`. No PR was opened for it. Final audit SHA-256:
+`4b2cc0721c6a009b83b40d2810fb7f6707470192177cef9c135403e25dc34df1`;
+remaining-unconfirmed audit:
+`02677e7d5db14156d1678a1b35df54a249635a0ae5fb3f31d56ab61b6d65ae62`.
+Do not rerun this unchanged optional candidate to select a favorable result.
+
+## Delivered: preserve shared literal identity (2026-11-09)
 
 Core `1e854416cebd797fe87e567680757a6074cdd139` corrects an arithmetic
 combination identity error. The old shared-term resolver invents a variable
@@ -52,8 +102,14 @@ retains **587 / 587 / 584**, with total solver times **7.6903 / 7.6165 /
 invalid actual model or verified solve loss is observed. All three queues pass
 the cross-cohort physical-CPU audit, with a peak of 40 distinct physical CPUs
 and no overlapping sibling leases. Original reports, current timings and
-unconfirmed exclusions are preserved. Server acceptance passes; PR/main CI
-delivery remains pending. Final original-C and protected evaluation remain open.
+unconfirmed exclusions are preserved. Server acceptance and CI delivery pass.
+[PR #126](https://github.com/fuqi-jia/Xolver/pull/126) reviewed
+`a6c6d169df73453abc374eaa0a662b262587c5b5`; both jobs passed in
+[PR CI 42609472632](https://github.com/fuqi-jia/Xolver/actions/runs/42609472632).
+The squash merge `f311425eded74e201051f17e66e0f8d8f72c910a` has the same
+complete tree; both jobs passed in its exact
+[main CI 42613026485](https://github.com/fuqi-jia/Xolver/actions/runs/42613026485).
+Final original-C and protected evaluation remain open.
 Private inputs, models, per-input identifiers and raw reports stay on the server.
 
 | Shared-literal artifact | SHA-256 |
