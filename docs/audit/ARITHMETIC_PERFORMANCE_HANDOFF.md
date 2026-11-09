@@ -19,21 +19,46 @@ exact arithmetic and the independent evaluator. No model check is skipped or
 shared with the model producer.
 
 Two new public regressions exercise independent array-store versions and
-mixed array/rational/Boolean/token UF arguments across model changes. Native
-acceptance, memory diagnosis, actual-model checks and fresh complete timings
-remain pending. No performance or solved-result gain is claimed for this
-candidate.
+mixed array/rational/Boolean/token UF arguments across model changes. Qualified
+core `9b99d568df4a1ce06997f481c2c7b1bbe8323962` passes **2,315 unit cases /
+1,554,865 assertions**, including both new cases / 20 assertions. All **2,345
+source bodies** match that core. Memcheck passes **17 public model-validator
+cases / 60 assertions**, with zero errors and exit code 0. All **965 public
+regressions** pass without waivers. A versioned regression audit corrects a
+predecessor unit-count assertion while preserving the original test results
+and the initial audit rejection.
 
-## Merged, main CI pending: EUF lifetime repair and stable priority drain (2026-11-09)
+Eight diagnostic pairs retain five SAT controls, with all ten actual models
+independently replayed; three gaps remain timeouts in both arms. There is no
+verified gain, loss or opposite verdict. Three fresh paired profiles also
+validate all six actual models. Cache-read `TR` copies fall from **176,591 to
+zero**, while total instructions fall from **7,743,536,469 to 7,576,839,688
+(-2.15%)** and malloc calls from **16,991,436 to 16,456,038**. Model construction
+(442), validation (525) and warm evaluations (113,136) remain unchanged.
+These are diagnostic observations, not complete-cohort wall-time or solve
+credit. Fresh complete private/fixed/development timing and acceptance remain
+open.
 
-Read-only Memcheck on the qualified priority candidate confirms **six invalid
+| Cache-read artifact | SHA-256 |
+| --- | --- |
+| Native qualification | `e4baf47bc4f7dc8d22f6513fcfce0d802d411aefb1858e57f726b6fd902d723a` |
+| Complete source binding | `345b73e98116f4b51f043b573c58ed22146b7ba76cf54d9fb350d5e403526ab8` |
+| Frozen CLI | `7e296ac9ef4237c24c011b47e95f9763aa90312b53c64c86694d25399cfe5d7d` |
+| Public memory-check audit | `38e2654a280dc2bae62b9e2ab7ef1e8ec32cd2ab84772cdb596d70ddfc9f740a` |
+| Diagnostic pilot audit | `763db84e049e1f6677921142f80d97d3884c2d1c20815ad9b27fdfaa8b1553ad` |
+| Paired profile audit | `5245828a4ec22eb83a6c0d27c73f7c5586f5385f3e37049c0760eb3ed94020b7` |
+| Corrected public regression audit | `2efa2680cbcc63520e84d4fd070780f83c97332063051a03d2da6a1ba25520e3` |
+
+## Delivered: EUF lifetime repair and stable priority drain (2026-11-09)
+
+Before the repair, Memcheck on the qualified priority candidate confirms **six invalid
 read contexts and six invalid write contexts** in `EufSolver::onEclassMerged`.
 All **16 public incremental EUF cases / 20 assertions** still pass, showing
 that ordinary test success does not exclude this memory error. The trace
 identifies a read inside a freed four-byte metadata vector, released by
 `classInfo(killed)` after the retained `kept` reference was acquired. Union by
 size can retain an earlier class while admitting a later class identifier.
-The merge-handler source is identical in delivered main and the candidate.
+The affected handler was shared by the then-delivered main and that candidate.
 Memory-diagnosis audit SHA-256:
 `bbc868ad2300ed573a43373bd17eb5658a92cc5cabded514f2d40a3de01e250e`.
 
@@ -82,7 +107,8 @@ PR **#123** passes both jobs in CI **42571109166** at exact reviewed head
 `2697160d53361a667b3769bdfa096428da632010` and is normally squash-merged as
 `2da2dda62b93e0d2b77fd6bae01ebc5de11fe10d`. The entire merged tree matches
 the reviewed tree, `2f088287a4ced5d6eb81576b9f219fc53396a31c`. Exact main
-push CI **42572960000** is running; main CI acceptance remains pending.
+push CI **42572960000** passes both build-test and proof-gate at that exact
+merged head. This stage is delivered.
 Remaining fixed inputs, final original-C QCP verification and one-time
 protected evaluation remain open; this is not an overall solver-superiority
 claim.
