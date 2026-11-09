@@ -215,11 +215,9 @@ std::vector<TheorySolver::SharedEqualityPropagation>
 LiaSolver::getDeducedSharedEqualities() {
     if (!sharedTermRegistry_) return {};
 
-    // Build name -> simplex var map
-    std::unordered_map<std::string, int> nameToVar;
-    for (int i = 0; i < gs_.numVars(); ++i) {
-        nameToVar[gs_.varName(i)] = i;
-    }
+    // Shared terms use registered source coordinates. Tableau display labels
+    // such as "s0" can also be legal source names; only the atom manager owns
+    // their identity, independently of auxiliary rows and later pivots.
 
     // Map fixed-value shared terms
     using GroupEntry = std::pair<SharedTermId, std::vector<SatLit>>;
@@ -229,9 +227,8 @@ LiaSolver::getDeducedSharedEqualities() {
     for (SharedTermId stId : sharedTermRegistry_->allSharedTerms()) {
         std::string name = getVarNameForSharedTerm(stId);
         if (name.empty()) continue;
-        auto it = nameToVar.find(name);
-        if (it == nameToVar.end()) continue;
-        int var = it->second;
+        const int var = manager_.findVarIndex(name);
+        if (var < 0) continue;
 
         if (!fixedAnalysis) fixedAnalysis = gs_.sharedFixedValueAnalysis();
         auto fixedOpt = fixedAnalysis->prove(var);
@@ -288,7 +285,7 @@ LiaSolver::getDeducedSharedEqualities() {
             }
             std::string nm = getVarNameForSharedTerm(stId);
             if (nm.empty()) continue;
-            if (nameToVar.find(nm) == nameToVar.end()) continue;
+            if (manager_.findVarIndex(nm) < 0) continue;
             sharedVars.push_back(stId);
         }
         const int n = static_cast<int>(sharedVars.size());

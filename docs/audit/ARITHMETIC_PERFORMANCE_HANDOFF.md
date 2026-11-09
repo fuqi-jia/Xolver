@@ -1,5 +1,23 @@
 # Arithmetic validation and continuation record
 
+## In development: preserve canonical source-coordinate identity (2026-11-09)
+
+The existing independently checked private diagnostic profiles of the accepted
+core make **285 calls** to `LiaSolver::getDeducedSharedEqualities`. Each call
+rebuilds a name-to-column hash table from every simplex column; direct insertion
+calls alone account for **33,372,839 simulated instructions**. These are sampled
+instruction costs, not whole-cohort timing. The shared `LinearAtomManager`
+already maintains the source-variable index used by model and entailment paths.
+
+The LIA equality seam now queries that index directly. Auxiliary tableau display
+labels such as `s0` can also be legal source names; rebuilding an identity map
+from those labels can select the auxiliary coordinate instead of the source.
+Two independently constructed regressions cover unequal/equal fixed source
+values with such a name, premise literals, late variable registration and
+withdrawn/reasserted bounds. Native before/after reproduction and qualification
+are pending; no new opposite SMT verdict, performance gain or promotion is
+claimed. LRA/LIA rollback policies and all model checks are unchanged.
+
 ## Closed: cached-value borrowing fails complete performance acceptance (2026-11-09)
 
 Three existing qualified profiles of core `b535fe02` record **176,591 calls**
@@ -65,6 +83,15 @@ native qualification; the tests and profiles above describe frozen `9b99d568`,
 not a rebuilt restored executable. Original reports and frozen binaries remain
 unchanged. A subsequent focused QF_LIA diagnosis may explain the timeout but
 cannot overwrite this failed round or earn additional formal score credit.
+
+The focused diagnostic has completed: both frozen arms return independently
+model-checked SAT in **17.1318 / 17.1153 seconds**, with **85.91% / 85.72%** of
+solver time in early integer bit encoding, before general SAT/theory setup.
+A separate private control also passes both arms. All four actual SAT outputs
+receive eight successful independent model checks. This observation does not
+reproduce or explain the formal timeout and does not prove a cache defect.
+Diagnostic-audit SHA-256:
+`203df95ae6d0bf6a59e638ace2285b418ef8f9a50b84177aa5077eb9f60bdf10`.
 
 | Cache-read artifact | SHA-256 |
 | --- | --- |
