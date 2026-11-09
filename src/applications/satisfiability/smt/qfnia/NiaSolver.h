@@ -277,7 +277,7 @@ private:
     std::optional<TheoryCheckResult> stageFiniteDomainSplit(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageBranch(TheoryLemmaStorage&, TheoryEffort);
 
-    // nativeTerms_, sharedTermRegistry_, sharedTermToVarName_, getVarNameForSharedTerm
+    // nativeTerms_, sharedTermRegistry_, sourceVariableNames_, getVarNameForSharedTerm
     // now live in ArithSolverBase (hoisted 2026-06-04; was duplicated 4x).
     TheoryAtomRegistry* registry_ = nullptr;
     std::unique_ptr<NiaLinearizationAdapter> linAdapter_;

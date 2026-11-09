@@ -158,10 +158,6 @@ private:
 
     // nativeTerms_, sharedTermRegistry_ hoisted to ArithSolverBase (2026-06-04).
 
-    // Map from SharedTermId to variable name for simplex
-    std::unordered_map<SharedTermId, std::string> sharedTermToVarName_;
-
-    std::string getVarNameForSharedTerm(SharedTermId s);
     int getOrCreateInterfaceEqAuxVar(SharedTermId a, SharedTermId b);
 
     // If the asserted linear (in)equality atoms entail that the two shared

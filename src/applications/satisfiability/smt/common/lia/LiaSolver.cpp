@@ -479,7 +479,7 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
                             return true;
                         }
                         const auto name = getVarNameForSharedTerm(id);
-                        if (name.empty() || name.rfind("__const_", 0) == 0) return false;
+                        if (name.empty()) return false;
                         form.terms.push_back({name, mpq_class(coefficient)});
                         return true;
                     };

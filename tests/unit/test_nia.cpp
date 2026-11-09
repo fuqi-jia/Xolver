@@ -690,3 +690,65 @@ TEST_CASE("NIA linear-decide: root conflict carries exactly the asserted branch 
         CHECK((literal == first || literal == second));
     }
 }
+
+#include "ir/NativeTerms.h"
+#include "search/combination/SharedTermRegistry.h"
+
+TEST_CASE("NIA: shared numeric literals retain their value across source-name collisions") {
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Int);
+    SharedTermRegistry shared;
+    shared.setNativeTerms(&ir);
+    auto kernel = createPolynomialKernel();
+    auto* polynomial = kernel.get();
+    const auto sourcePoly = polynomial->mkVar(polynomial->getOrCreateVar("__const_zero"));
+    const auto otherPoly = polynomial->mkVar(polynomial->getOrCreateVar("other"));
+    LinearDeciderContext context;
+    NiaSolver solver(std::move(kernel));
+    solver.setNativeTerms(&ir);
+    solver.setSharedTermRegistry(&shared);
+    solver.setRegistry(&context.registry);
+    auto term = [&](Kind kind, Payload payload, const std::string& name) {
+        const auto expr = ir.add({kind, 0, {}, std::move(payload)});
+        const auto id = shared.getOrCreate(expr, 0, name, false);
+        shared.addOwner(id, TheoryId::NIA);
+        shared.addOwner(id, TheoryId::EUF);
+        return id;
+    };
+    const auto zero = term(Kind::ConstInt, Payload(int64_t(0)), "zero");
+    const auto source = term(Kind::Variable, Payload(std::string("__const_zero")), "__const_zero");
+    const auto other = term(Kind::Variable, Payload(std::string("other")), "other");
+    int sourceValue = 5;
+    SUBCASE("different exact values never imply equality") { sourceValue = 5; }
+    SUBCASE("equal exact values retain their justified equality") { sourceValue = 0; }
+    const auto sourceReason = context.reason(), otherReason = context.reason();
+    auto pin = [&](PolyId poly, int value, SatLit reason) {
+        solver.assertLit({reason.var, TheoryId::NIA, false, NullExpr,
+            PolynomialAtomPayload{poly, Relation::Eq, RealValue::fromInt(value)}},
+            true, 1, reason);
+    };
+    pin(sourcePoly, sourceValue, sourceReason);
+    pin(otherPoly, 0, otherReason);
+    REQUIRE(solver.check(context.lemmas, TheoryEffort::Full).kind ==
+            TheoryCheckResult::Kind::Consistent);
+    bool sourceEqual = false, otherEqual = false;
+    for (const auto& equality : solver.getDeducedSharedEqualities()) {
+        auto pair = [&](SharedTermId a, SharedTermId b) {
+            return (equality.a == a && equality.b == b) ||
+                   (equality.a == b && equality.b == a);
+        };
+        if (pair(zero, source)) {
+            sourceEqual = true;
+            CHECK(sourceValue == 0);
+            CHECK(std::find(equality.reasons.begin(), equality.reasons.end(),
+                            sourceReason) != equality.reasons.end());
+        }
+        if (pair(zero, other)) {
+            otherEqual = true;
+            CHECK(std::find(equality.reasons.begin(), equality.reasons.end(),
+                            otherReason) != equality.reasons.end());
+        }
+    }
+    CHECK(sourceEqual == (sourceValue == 0));
+    CHECK(otherEqual);
+}

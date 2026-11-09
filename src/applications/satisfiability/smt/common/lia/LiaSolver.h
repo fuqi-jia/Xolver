@@ -173,7 +173,7 @@ private:
     };
     std::optional<PendingConflict> pendingConflict_;
 
-    // nativeTerms_, sharedTermRegistry_, sharedTermToVarName_ hoisted to
+    // nativeTerms_, sharedTermRegistry_, sourceVariableNames_ hoisted to
     // ArithSolverBase (2026-06-04 with getVarNameForSharedTerm).
 
     // Buffered entailment lemmas; drained by takeEntailmentPropagations().

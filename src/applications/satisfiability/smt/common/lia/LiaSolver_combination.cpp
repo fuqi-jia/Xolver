@@ -90,21 +90,8 @@ int LiaSolver::getOrCreateInterfaceEqAuxVar(SharedTermId a, SharedTermId b) {
 std::vector<SatLit>
 LiaSolver::assertedVarEqualityReason(SharedTermId a, SharedTermId b) const {
     if (!sharedTermRegistry_) return {};
-    // Names of the two (non-const) shared variables.
-    auto nameOf = [&](SharedTermId s) -> std::string {
-        if (const auto* st = sharedTermRegistry_->get(s)) {
-            if (nativeTerms_ && nativeTerms_->get(st->nativeExpr).isConst()) return "";
-            auto it = sharedTermToVarName_.find(s);
-            if (it != sharedTermToVarName_.end()) return it->second;
-            const auto& e = nativeTerms_->get(st->nativeExpr);
-            if (e.kind == Kind::Variable &&
-                std::holds_alternative<std::string>(e.payload.value)) {
-                return std::get<std::string>(e.payload.value);
-            }
-        }
-        return "";
-    };
-    std::string na = nameOf(a), nb = nameOf(b);
+    const std::string na = getVarNameForSharedTerm(a);
+    const std::string nb = getVarNameForSharedTerm(b);
     if (na.empty() || nb.empty() || na == nb) return {};
 
     // Aggregate the asserted linear (in)equality atoms whose canonical LHS is a
@@ -225,6 +212,10 @@ LiaSolver::getDeducedSharedEqualities() {
     std::shared_ptr<const GeneralSimplex::FixedValueAnalysis> fixedAnalysis;
 
     for (SharedTermId stId : sharedTermRegistry_->allSharedTerms()) {
+        if (auto value = sharedTermRegistry_->constValue(stId)) {
+            groups[DeltaRational(*value)].push_back({stId, {}});
+            continue;
+        }
         std::string name = getVarNameForSharedTerm(stId);
         if (name.empty()) continue;
         const int var = manager_.findVarIndex(name);
