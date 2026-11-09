@@ -1,6 +1,6 @@
 # Arithmetic validation and continuation record
 
-## In development: preserve canonical source-coordinate identity (2026-11-09)
+## Server-qualified: preserve canonical source-coordinate identity (2026-11-09)
 
 The existing independently checked private diagnostic profiles of the accepted
 core make **285 calls** to `LiaSolver::getDeducedSharedEqualities`. Each call
@@ -44,13 +44,42 @@ constructions (442) remain unchanged on this sample. Owned cache-read copies
 also remain unchanged, confirming that the rejected cache borrowing is absent.
 These measurements are diagnostic, not full-cohort timing or solve credit.
 
-Fresh complete **14,408 private / 160 fixed / 587 development** comparisons are
-registered with the same frozen baseline and references, original inputs,
-60-second / one-physical-CPU / 16-GiB budgets and independent actual-model
-checks. They remain open. This necessary correctness repair must be retained
-if performance changes; all verified gains/losses and timings still require
-reporting. No new whole-SMT opposite verdict, complete-cohort performance gain,
-protected-set result or promotion is claimed.
+Fresh complete **14,408 private / 160 fixed / 587 development** comparisons
+now pass server acceptance and the unchanged optional performance gate. They
+use the same frozen baseline and references, original inputs, 60-second /
+one-physical-CPU / 16-GiB budgets and independent actual-model checks. The
+40-job private cohort independently verifies every result in all three arms:
+**8,940 SAT / 5,468 UNSAT**. Baseline/repaired/Z3 total solver times are
+**201.2572 / 199.3644 / 295.1848 seconds**; the repair is **0.94% faster** than
+the same-round baseline.
+
+After current-result certificate checks and input-bound independent reference
+evidence, fixed160 verifies **123 / 124 / 117 results**. The repaired version
+gains **one verified SAT** and loses none in this round. Its 35 timeouts and
+one unconfirmed UNSAT remain unresolved. The baseline has 37 timeouts; Z3 has
+37 timeouts and six unconfirmed UNSATs. Independent checks for all seven
+remaining unconfirmed observations time out. Their original hashes and archive
+bindings are rechecked; the candidate's pending result matches the earlier
+unconfirmed input. Two explicit qualified historical audits contain no verified
+SAT counterexample for it. This is an evidence boundary, not an UNSAT proof;
+none of these observations earns verified credit.
+
+The disjoint 14,568-input fixed/private union verifies **14,531 / 14,532 /
+14,525 results**. Verified PAR-2 totals are **5,348.3049 / 5,236.7543 /
+5,659.7717 seconds**, an improvement of **111.5506 seconds** over baseline.
+Development587 separately retains **587 / 587 / 584**, with total times
+**7.9050 / 7.8306 / 11.6519 seconds**; it is not added to the scored union.
+The final audit reconstructs cross-cohort CPU leases and confirms at most
+40 distinct physical CPUs without sibling overlap. No new opposite verdict,
+invalid model or verified loss is observed. Raw reports, current solver times
+and remaining unconfirmed results are preserved. These are this frozen round's
+results, not a combination with the previous cache experiment or a permanent
+capability claim from one timing-boundary gain.
+
+This necessary correctness repair must remain if later performance changes.
+Server qualification is complete; PR and exact-commit CI delivery remain open.
+Remaining fixed inputs, original-C QCP verification and one-time protected
+evaluation are still open. This is not an overall Z3-superiority claim.
 
 | Source-coordinate artifact | SHA-256 |
 | --- | --- |
@@ -61,6 +90,8 @@ protected-set result or promotion is claimed.
 | Public regression audit | `a0423509289a31aacf41de89da320f4ed3830f1d03da4e739f6c6bd6792d6186` |
 | Diagnostic pilot audit | `c0ec8f4266d879f1b1faa705d9986caf45f2d059441fc4de384c7e05c60a570f` |
 | Paired profile audit | `aaa74c08c47537c1e1edcd3e6675b55914abdc6be5b938cf0d63998f9738e227` |
+| Complete stage audit | `b0a7f8751cadfeebdaa9a7a6d8c9f489642211c6653dd244ca2d36a09c4839cf` |
+| Remaining unconfirmed audit | `e4fab7f854130ec5b25ce11af5ba4e4dcfdd20ea098f557a47a90b287d22d14f` |
 
 The cache-withdrawal core separately passes all **2,315 unit cases / 1,554,865
 assertions**. Its frozen CLI SHA-256 equals the delivered binary exactly,
