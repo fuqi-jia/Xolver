@@ -260,8 +260,9 @@ public:
         std::vector<int> proofGroup_;
     };
     FixedValueAnalysis analyzeFixedValues() const;
-    // Reuse an immutable snapshot while bounds and tableau are unchanged.
-    // A mutation invalidates the stored snapshot, never an outstanding handle.
+    // Reuse an immutable snapshot, extending it lazily for free columns and
+    // affine definitions. First finite endpoints resume the affected rows;
+    // other bound/basis changes invalidate it. Outstanding handles never change.
     std::shared_ptr<const FixedValueAnalysis> sharedFixedValueAnalysis() const;
     std::optional<FixedValueProof> proveFixedValue(int var) const;
 
@@ -303,6 +304,9 @@ public:
 
 private:
     mutable std::shared_ptr<const FixedValueAnalysis> fixedValueAnalysis_;
+    mutable std::vector<int> fixedAnalysisChangedBounds_;
+    void propagateFixedValues(FixedValueAnalysis& result, size_t firstNewColumn,
+                              std::span<const int> changedBounds) const;
     std::unordered_set<int> boundedVars_;
     // Sparse column-to-slot index and reusable owned endpoint storage. Scratch
     // state is separate from the current bounds and immutable proof snapshots.
@@ -314,14 +318,21 @@ private:
     void notePointChange() noexcept {
         if (pointRevision_ != std::numeric_limits<uint64_t>::max()) ++pointRevision_;
     }
-    void noteAnalysisChange() noexcept {
-        fixedValueAnalysis_.reset();
+    void advanceAnalysisRevision() noexcept {
         if (analysisRevision_ != std::numeric_limits<uint64_t>::max()) ++analysisRevision_;
     }
+    void noteAnalysisChange() noexcept {
+        fixedValueAnalysis_.reset();
+        fixedAnalysisChangedBounds_.clear();
+        advanceAnalysisRevision();
+    }
     uint64_t boundRevision_ = 0;
+    void advanceBoundRevision() noexcept {
+        if (boundRevision_ != std::numeric_limits<uint64_t>::max()) ++boundRevision_;
+    }
     void noteBoundChange() noexcept {
         noteAnalysisChange();
-        if (boundRevision_ != std::numeric_limits<uint64_t>::max()) ++boundRevision_;
+        advanceBoundRevision();
     }
 
     // ========================================================================

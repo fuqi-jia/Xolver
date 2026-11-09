@@ -48,7 +48,9 @@ GeneralSimplex::GeneralSimplex() {
 
 int GeneralSimplex::addVar(const std::string& name) {
     notePointChange();
-    noteAnalysisChange();
+    // A free column cannot change an existing fixed value or its premises.
+    // Keep the owning prefix snapshot until a query needs the new columns.
+    advanceAnalysisRevision();
     int id = static_cast<int>(vars_.size());
     VarState vs;
     vs.name = name;
@@ -259,7 +261,25 @@ bool GeneralSimplex::assertLower(int var, const BoundInfo& info, int level) {
 
     if (info.bound <= vars_[var].lower.bound) return true;
     const auto retainedAnalysis = fixedValueAnalysis_;
-    noteBoundChange();
+    const bool retainedClean = fixedAnalysisChangedBounds_.empty();
+    // A first finite endpoint withdraws no premise from the closed snapshot.
+    // Resume only its incident rows, unless it excludes an already proved value.
+    const bool compatible = !retainedAnalysis ||
+        static_cast<size_t>(var) >= retainedAnalysis->values_.size() ||
+        !retainedAnalysis->values_[var] ||
+        info.bound.value <= *retainedAnalysis->values_[var];
+    const bool extend = retainedAnalysis && !vars_[var].lower.bound.isFinite() &&
+        info.bound <= vars_[var].upper.bound && compatible;
+    if (extend) {
+        if (isBasic(var) || !tab_.col(var).entries.empty() ||
+            (vars_[var].upper.bound.isFinite() &&
+             info.bound.value == vars_[var].upper.bound.value))
+            fixedAnalysisChangedBounds_.push_back(var);
+        advanceAnalysisRevision();
+        advanceBoundRevision();
+    } else {
+        noteBoundChange();
+    }
     const auto boundAnalysisRevision = analysisRevision();
     if (info.bound > vars_[var].upper.bound) {
         explainImmediateConflict(var, true, info.reason.value());
@@ -278,7 +298,7 @@ bool GeneralSimplex::assertLower(int var, const BoundInfo& info, int level) {
     }
     // A connected one-sided bound can create a tight face even without an
     // explicit equality pin. Only isolated, unpinned columns are irrelevant.
-    if (retainedAnalysis && !isBasic(var) && tab_.col(var).entries.empty() &&
+    if (!extend && retainedClean && retainedAnalysis && !isBasic(var) && tab_.col(var).entries.empty() &&
         !fixedValue(var) && boundAnalysisRevision &&
         analysisRevision() == boundAnalysisRevision)
         fixedValueAnalysis_ = retainedAnalysis;
@@ -292,7 +312,25 @@ bool GeneralSimplex::assertUpper(int var, const BoundInfo& info, int level) {
 
     if (info.bound >= vars_[var].upper.bound) return true;
     const auto retainedAnalysis = fixedValueAnalysis_;
-    noteBoundChange();
+    const bool retainedClean = fixedAnalysisChangedBounds_.empty();
+    // A first finite endpoint withdraws no premise from the closed snapshot.
+    // Resume only its incident rows, unless it excludes an already proved value.
+    const bool compatible = !retainedAnalysis ||
+        static_cast<size_t>(var) >= retainedAnalysis->values_.size() ||
+        !retainedAnalysis->values_[var] ||
+        info.bound.value >= *retainedAnalysis->values_[var];
+    const bool extend = retainedAnalysis && !vars_[var].upper.bound.isFinite() &&
+        info.bound >= vars_[var].lower.bound && compatible;
+    if (extend) {
+        if (isBasic(var) || !tab_.col(var).entries.empty() ||
+            (vars_[var].lower.bound.isFinite() &&
+             info.bound.value == vars_[var].lower.bound.value))
+            fixedAnalysisChangedBounds_.push_back(var);
+        advanceAnalysisRevision();
+        advanceBoundRevision();
+    } else {
+        noteBoundChange();
+    }
     const auto boundAnalysisRevision = analysisRevision();
     if (info.bound < vars_[var].lower.bound) {
         explainImmediateConflict(var, false, info.reason.value());
@@ -309,7 +347,7 @@ bool GeneralSimplex::assertUpper(int var, const BoundInfo& info, int level) {
     } else {
         refreshViolationStatus(var);
     }
-    if (retainedAnalysis && !isBasic(var) && tab_.col(var).entries.empty() &&
+    if (!extend && retainedClean && retainedAnalysis && !isBasic(var) && tab_.col(var).entries.empty() &&
         !fixedValue(var) && boundAnalysisRevision &&
         analysisRevision() == boundAnalysisRevision)
         fixedValueAnalysis_ = retainedAnalysis;
@@ -1149,6 +1187,7 @@ bool GeneralSimplex::replaceActiveBoundViews(std::span<const ActiveBoundView> bo
     boundMergeChanged_.reserve(boundedVars_.size() + sourceOrder.size());
     std::vector<std::unordered_set<int>::node_type> membership(sourceOrder.size());
     const auto retainedAnalysis = fixedValueAnalysis_;
+    const bool retainedClean = fixedAnalysisChangedBounds_.empty();
     bool proofSourcesChanged = false;
     noteBoundChange();
     const auto replacementRevision = analysisRevision();
@@ -1222,7 +1261,7 @@ bool GeneralSimplex::replaceActiveBoundViews(std::span<const ActiveBoundView> bo
     // Tight-face proofs depend on connected one-sided bounds as well as pins.
     // Identical bases and isolated unpinned changes can reuse the snapshot;
     // outstanding handles remain immutable when a fresh analysis is needed.
-    if (retainedAnalysis && !proofSourcesChanged && replacementRevision &&
+    if (retainedClean && retainedAnalysis && !proofSourcesChanged && replacementRevision &&
         analysisRevision() == replacementRevision)
         fixedValueAnalysis_ = retainedAnalysis;
     return !hasImmediateConflict_;
@@ -1268,31 +1307,51 @@ GeneralSimplex::FixedValueAnalysis GeneralSimplex::analyzeFixedValues() const {
         }
     }
 
+    propagateFixedValues(result, 0, {});
+    return result;
+}
+
+void GeneralSimplex::propagateFixedValues(FixedValueAnalysis& result,
+                                         size_t firstNewColumn,
+                                         std::span<const int> changedBounds) const {
     // Row equation: basic - sum(coeff * nonbasic) = rhs. Count unknowns
     // without rational arithmetic; evaluate only rows that can determine a
     // value. Most partially known rows never fire during a closure pass.
-    std::vector<size_t> unknown(tab_.numRows());
+    constexpr size_t unvisited = std::numeric_limits<size_t>::max();
+    std::vector<size_t> unknown(tab_.numRows(), unvisited);
     std::vector<int> pending, faces;
     std::vector<unsigned char> queued(tab_.numRows(), 0);
     const auto schedule = [&](int row) {
+        if (unknown[row] == unvisited) {
+            const auto& equation = tab_.row(row);
+            unknown[row] = !result.values_[equation.basicVar];
+            for (const auto& entry : equation.entries)
+                unknown[row] += !result.values_[entry.col];
+        }
         if (unknown[row] == 0) return;
         const unsigned char priority = unknown[row] == 1 ? 2 : 1;
         if (queued[row] >= priority) return;
         queued[row] = priority;
         (priority == 2 ? pending : faces).push_back(row);
     };
-    for (int r = 0; r < tab_.numRows(); ++r) {
-        const auto& row = tab_.row(r);
-        if (!result.values_[row.basicVar]) ++unknown[r];
-        for (const auto& entry : row.entries) {
-            if (!result.values_[entry.col]) ++unknown[r];
+    if (firstNewColumn == 0) {
+        for (int row = 0; row < tab_.numRows(); ++row) schedule(row);
+    } else {
+        for (size_t var = firstNewColumn; var < vars_.size(); ++var)
+            if (isBasic(static_cast<int>(var))) schedule(vars_[var].basicRow);
+        for (int var : changedBounds) {
+            if (isBasic(var)) schedule(basicRowOfVar(var));
+            for (const auto& entry : tab_.col(var).entries) schedule(entry.row);
         }
-        schedule(r);
     }
     const auto notify = [&](int var) {
         const auto updateRow = [&](int affected) {
-            assert(unknown[affected] > 0);
-            --unknown[affected];
+            // Unvisited rows count against the values after this notification.
+            // Already scheduled rows still include the newly fixed coordinate.
+            if (unknown[affected] != unvisited) {
+                assert(unknown[affected] > 0);
+                --unknown[affected];
+            }
             schedule(affected);
         };
         if (isBasic(var)) updateRow(basicRowOfVar(var));
@@ -1370,7 +1429,6 @@ GeneralSimplex::FixedValueAnalysis GeneralSimplex::analyzeFixedValues() const {
 
         notify(var);
     }
-    return result;
 }
 
 std::optional<DeltaRational>
@@ -1381,8 +1439,29 @@ GeneralSimplex::FixedValueAnalysis::fixedValue(int var) const {
 
 std::shared_ptr<const GeneralSimplex::FixedValueAnalysis>
 GeneralSimplex::sharedFixedValueAnalysis() const {
-    if (!fixedValueAnalysis_)
+    if (!fixedValueAnalysis_) {
         fixedValueAnalysis_ = std::make_shared<const FixedValueAnalysis>(analyzeFixedValues());
+    } else if (fixedValueAnalysis_->values_.size() < vars_.size() ||
+               !fixedAnalysisChangedBounds_.empty()) {
+        const size_t first = fixedValueAnalysis_->values_.size();
+        auto extended = std::make_shared<FixedValueAnalysis>(*fixedValueAnalysis_);
+        extended->values_.resize(vars_.size());
+        extended->dependencies_.resize(vars_.size());
+        extended->premises_.resize(vars_.size());
+        extended->proofGroup_.resize(vars_.size(), -1);
+        const auto seed = [&](int var) {
+            if (extended->values_[var]) return;
+            if (auto value = fixedValue(var)) {
+                extended->values_[var] = *value;
+                extended->premises_[var] = explainFixedValue(var);
+            }
+        };
+        for (size_t var = first; var < vars_.size(); ++var) seed(static_cast<int>(var));
+        for (int var : fixedAnalysisChangedBounds_) seed(var);
+        propagateFixedValues(*extended, first, fixedAnalysisChangedBounds_);
+        fixedValueAnalysis_ = std::move(extended);
+        fixedAnalysisChangedBounds_.clear();
+    }
     return fixedValueAnalysis_;
 }
 

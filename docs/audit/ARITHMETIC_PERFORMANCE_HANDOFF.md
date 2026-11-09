@@ -1,6 +1,141 @@
 # Arithmetic validation and continuation record
 
-## Server-qualified: preserve shared literal identity (2026-11-09)
+## Server-qualified: resume closure after first finite bounds (2026-11-09)
+
+The standalone prefix experiment below did not realize any reuse. A separate
+counter-only derivative then measured actual snapshot invalidations on the
+same eight ordinary queries: **19 active-bound resets and 10 first finite
+lower endpoints**, followed by 29 complete analyses; prefix extensions were
+zero. All four actual SAT models pass both independent replay checkers, and
+the source, CLI, worker and unit executable are restored byte-for-byte.
+Observation SHA-256:
+`a36e06544d16b3e1ff7ff0c0973068f66ab8b57a2ff159f0debd77cf1f61d321`.
+
+The common fixed-value work queue now supports resuming from affected rows.
+A first finite endpoint withdraws no old premise; compatible owning facts and
+proof dependencies can therefore be retained while new pins and tight faces
+propagate through incident rows. Pure definitions use that same work queue.
+Other bound changes keep their previous invalidation rules; pivots, bound
+resets and backtracking still invalidate completely. Dirty work survives context copies and is never silently
+lost through complete-base replacement. Outstanding snapshots stay immutable;
+exact infinitesimals, revisions, APIs and LRA/LIA rollback policies remain.
+Frozen core `c9d3678eb59f13e5081eed7eb513a4a65c1521fe` passes the complete
+proof-enabled Panda9 / ExperimentOS build of 832 units and **2,326 unit cases /
+1,556,154 assertions**, including three focused cases / 469 assertions and
+260 targeted cases. All **965 public regressions** pass. All 2,345 qualified
+source bodies independently match Git (2,184 root and 161 pinned parser files).
+The unchanged pilot retains five SAT controls and independently replays all ten
+actual models with Z3/cvc5; three gaps remain timeouts in both arms, with no
+verified gain, loss or opposite verdict.
+
+On eight unchanged ordinary queries, the separate source observer confirms
+**29 to 20 complete analyses plus nine resumed closures**. Counted rows fall
+from 2,017 to 1,307. Callgrind instructions from the unmodified qualified executable fall from
+280,884,206 to 275,391,164 (**1.96%**), and malloc calls from 481,406 to 461,653.
+Model validations (4), term evaluations (879) and interface proof requests (48)
+remain unchanged; all four actual SAT models pass both replay checkers. The
+observer restores source, CLI, worker and unit executable byte-for-byte. Its
+source counters supply the pass counts: broad helper-symbol prefixes include
+nested lambdas and are not source-path counts. These observations establish the
+mechanism, not whole-suite wall-clock performance.
+
+A fresh complete comparison uses delivered main `f311425e`, this
+frozen candidate and unchanged frozen Z3/cvc5, with **60 seconds, one physical
+CPU and 16 GiB per solver/input**. All **14,408 private results** independently
+verify in all three arms (8,940 SAT / 5,468 UNSAT). Main/candidate/Z3 total solver
+times are **195.3085 / 194.0446 / 295.6066 seconds**: an observed
+**0.65%** reduction against the same-round main, with no verified loss.
+
+Fixed160 verifies **124 / 124 / 117 results**, with identical main/candidate
+verified membership and zero gains or losses. The candidate's 35 timeouts and
+one unconfirmed UNSAT remain unresolved; main has 36 timeouts, and Z3 has 37
+timeouts plus six unconfirmed UNSATs. All seven independent unresolved checks
+time out. Original hashes and archive bindings are rechecked; the candidate
+matches the earlier pending input, with no verified SAT counterpart in two
+explicit qualified historical audits. These boundaries do not prove UNSAT,
+and all remaining unconfirmed results stay excluded. Fixed verified PAR-2 means
+are **31.563095 / 31.510110 / 33.709894 seconds**.
+
+The disjoint 14,568-input fixed/private union verifies **14,532 / 14,532 /
+14,525**, with verified PAR-2 totals **5,245.4037 / 5,235.6621 / 5,689.1897
+seconds**: **9.7416 seconds saved** against main. Development587 separately
+retains **587 / 587 / 584**, with total solver times **7.6394 / 7.6076 /
+11.5454 seconds**; it is not added to the scored union. No new opposite verdict,
+invalid actual model, protocol error or verified loss is observed. The resource
+audit reconstructs at most 40 distinct physical CPUs without overlapping sibling
+leases across all three cohorts. Original reports and current timings remain
+unchanged; the input-bound certificate and independent evidence supplement only
+successful current UNSAT observations, never timeout/unknown or reused SAT models.
+
+Server acceptance and the preregistered optional performance gate pass. This is
+a modest observed speed improvement with unchanged verified coverage, not an
+overall Z3-superiority claim. Final original-C QCP, remaining fixed inputs and
+one-time protected evaluation remain open. Exact PR/main CI delivery receipts
+are maintained in the pull request merging this frozen source. Private inputs,
+models, identifiers and per-input evidence stay on the server.
+
+| Incremental-closure artifact | SHA-256 |
+| --- | --- |
+| Native qualification | `9c249b50aa5170082ac8db1d6e3ebd7ac4c80b123ae7803fc17dc13e849e4aae` |
+| Complete qualified source manifest | `d3ebb0da18ed7bafd69acdd4b2426e2a502f23da977d32192af5044ef47454bf` |
+| Frozen CLI | `3058ae6b25f7f5795fa2953dfa804985071bf3e47b0e13f84848df4146e4c7cf` |
+| Source-path observation | `d289cbbb0b9cc38d56d539fa527091a29754f3205a9ae6b4199b5492f28bcfae` |
+| Mechanism audit | `2d68f9b91f3064c1a5cb14f978c500a8fc868d459e11da8942494c52b99f63e0` |
+| Complete private cohort | `e3f28a0607f1b1a72a76a7961380f64a9a2d6092949d64c6e6183b80839eb168` |
+| Complete stage | `96476f7be04172770a1f82b89bc7dfef797b29b1dc21098011210c42052b7872` |
+| Remaining unconfirmed audit | `6af87289f6f4d3187c9a24fb46fc6cb816b70e4aa01bf728cbdb327681d638fb` |
+
+## Closed: standalone definition-prefix retention (2026-11-09)
+
+Core `1793423a065caf55851b39a330d36e3703a27705` retains closed fixed-value
+snapshots across nonrestricting free columns and definitions. It passes all
+2,325 unit cases / 1,556,058 assertions, including two new cases / 437
+assertions, 259 targeted cases, and all 965 public regressions. The pilot keeps
+five SAT controls with ten independently replayed actual models; three gaps
+remain timeouts in both arms, with no verified gain, loss or opposite verdict.
+
+On eight unchanged ordinary diagnostic inputs, however, complete analyses stay
+**29 to 29** and allocator counts are identical. Instructions rise from
+280,884,206 to 280,959,140 (**+0.0267%**). Four actual SAT models still pass
+Z3/cvc5 replay. Merely observing 18 additions with a cached prefix did not prove
+that a later query could reuse it. The mechanism gate rejects this standalone
+candidate before any whole-suite comparison; it is closed and is not submitted
+for promotion. Its prefix machinery is only a component of the new, separately
+qualified affected-row algorithm above, not an accepted speed improvement.
+Closure audit SHA-256:
+`2ac4907823cf04465a21edc087153f4ab31846eeb7f40f53f1836bd839017e8f`;
+profile audit:
+`3f2e25488048426a3b3c428ed910195b37496014e0d3390f950fa656ee61faee`;
+native qualification:
+`cd5721e77063cb56c9a83268a4393f31e2276f8bf2cc6d7e3645ab90feb0f8f4`.
+
+The earlier diagnostic setup's nonexistent CMake target `xolver` failure and
+successful 832-unit compilation remain recorded. Its corrected `xolver-cli`
+job restores the accepted version and passes the original 2,323 tests. Those
+counter-only derivatives never supply formal performance or solve credit.
+
+## Closed: indexed-sort reading experiment (2026-11-09)
+
+Core `dbd369f989a5ef2b01269ded27dc4080abc48371` passes native and public
+correctness checks and reduces sampled instructions by 0.65%. The full fresh
+comparison verifies all 14,408 private results in all arms: parent/candidate/Z3
+times are 195.6242 / 194.9171 / 295.3390 seconds, a 0.36% local reduction.
+Fixed160 verifies 123 / 123 / 117, with no candidate gain or loss. The candidate's
+one and Z3's six unconfirmed UNSAT observations remain excluded. The disjoint
+14,568-input union verifies 14,531 / 14,531 / 14,525, with PAR-2 totals
+5,336.6030 / 5,342.2028 / 5,660.7035 seconds. The candidate is **5.5998 seconds
+worse overall**, so the optional performance gate fails. This is a separate
+fresh round; its fixed123 is not combined with the preceding round's fixed124.
+
+The experiment is closed and reverted in pushed FULINA commit
+`86617ef7da779fa3fc08adfe611e5f61a0f6538b`, whose entire tree equals accepted
+main `f311425e`. No PR was opened for it. Final audit SHA-256:
+`4b2cc0721c6a009b83b40d2810fb7f6707470192177cef9c135403e25dc34df1`;
+remaining-unconfirmed audit:
+`02677e7d5db14156d1678a1b35df54a249635a0ae5fb3f31d56ab61b6d65ae62`.
+Do not rerun this unchanged optional candidate to select a favorable result.
+
+## Delivered: preserve shared literal identity (2026-11-09)
 
 Core `1e854416cebd797fe87e567680757a6074cdd139` corrects an arithmetic
 combination identity error. The old shared-term resolver invents a variable
@@ -52,8 +187,14 @@ retains **587 / 587 / 584**, with total solver times **7.6903 / 7.6165 /
 invalid actual model or verified solve loss is observed. All three queues pass
 the cross-cohort physical-CPU audit, with a peak of 40 distinct physical CPUs
 and no overlapping sibling leases. Original reports, current timings and
-unconfirmed exclusions are preserved. Server acceptance passes; PR/main CI
-delivery remains pending. Final original-C and protected evaluation remain open.
+unconfirmed exclusions are preserved. Server acceptance and CI delivery pass.
+[PR #126](https://github.com/fuqi-jia/Xolver/pull/126) reviewed
+`a6c6d169df73453abc374eaa0a662b262587c5b5`; both jobs passed in
+[PR CI 42609472632](https://github.com/fuqi-jia/Xolver/actions/runs/42609472632).
+The squash merge `f311425eded74e201051f17e66e0f8d8f72c910a` has the same
+complete tree; both jobs passed in its exact
+[main CI 42613026485](https://github.com/fuqi-jia/Xolver/actions/runs/42613026485).
+Final original-C and protected evaluation remain open.
 Private inputs, models, per-input identifiers and raw reports stay on the server.
 
 | Shared-literal artifact | SHA-256 |
