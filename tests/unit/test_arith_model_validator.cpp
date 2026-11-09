@@ -246,3 +246,90 @@ TEST_CASE("ArithModelValidator: deep shared roots stay exact across model update
     numbers["x"] = RealValue::fromMpq(mpq_class(1));
     CHECK(validator.validate({goal}) == ArithModelValidator::Verdict::Satisfied);
 }
+
+TEST_CASE("ArithModelValidator: shared array versions remain independent across cached reads") {
+    Fix f;
+    const auto arraySort = f.ir.allocateSortId();
+    f.ir.registerArraySort(arraySort, f.intS, f.intS);
+    const auto zero = f.cint(0), index = f.cint(1);
+    const auto five = f.cint(5), nine = f.cint(9);
+    const auto base = f.ir.add({Kind::ConstArray, arraySort, {zero}, {}});
+    const auto first = f.ir.add({Kind::Store, arraySort, {base, index, five}, {}});
+    const auto second = f.ir.add({Kind::Store, arraySort, {base, index, nine}, {}});
+    const auto readBase = f.bin(Kind::Select, base, index, f.intS);
+    const auto readFirst = f.bin(Kind::Select, first, index, f.intS);
+    const auto readSecond = f.bin(Kind::Select, second, index, f.intS);
+    const auto allDifferent = f.ir.add({Kind::Distinct, f.boolS, {base, first, second}, {}});
+    const std::vector<ExprId> assertions{
+        f.bin(Kind::Eq, readBase, zero, f.boolS),
+        f.bin(Kind::Eq, readFirst, five, f.boolS),
+        f.bin(Kind::Eq, readSecond, nine, f.boolS), allDifferent};
+    ArithModelValidator validator(f.ir, {}, {});
+
+    CHECK(validator.validate(assertions) == ArithModelValidator::Verdict::Satisfied);
+    const auto saved = validator.evalNumber(readFirst);
+    REQUIRE(saved);
+    CHECK(validator.evalNumber(readSecond) == mpq_class(9));
+    CHECK(validator.evalNumber(readBase) == mpq_class(0));
+    CHECK(*saved == 5);
+    CHECK(validator.validate({f.bin(Kind::Eq, readBase, five, f.boolS)}) ==
+          ArithModelValidator::Verdict::Violated);
+    CHECK(validator.validate(assertions) == ArithModelValidator::Verdict::Satisfied);
+}
+
+TEST_CASE("ArithModelValidator: mixed UF cache values are rebuilt after model changes") {
+    Fix f;
+    const auto arraySort = f.ir.allocateSortId();
+    f.ir.registerArraySort(arraySort, f.intS, f.intS);
+    const auto tokenSort = f.ir.allocateSortId();
+    f.ir.registerSort(tokenSort, SortKind::Other);
+    const auto array = f.var("array", arraySort);
+    const auto number = f.var("number", f.realS);
+    const auto flag = f.var("flag", f.boolS);
+    const auto tag = f.var("tag", tokenSort);
+    const auto application = f.ir.add({Kind::UFApply, f.intS,
+        {array, number, flag, tag}, Payload(std::string("mixed"))});
+    const auto sum = f.bin(Kind::Add, application, application, f.intS);
+    const auto goal = f.bin(Kind::Eq, sum, f.cint(22), f.boolS);
+
+    ArithModelValidator::ArrayAssignment arrays, values;
+    arrays["array"] = {"Int", "Int", "#n:0", {{"#n:1", "#n:7"}}};
+    values["@expected"] = arrays["array"];
+    ArithModelValidator::RealAssignment numbers{
+        {"number", RealValue::fromMpq(mpq_class(3, 2))}};
+    ArithModelValidator::TokenAssignment tokens{{"tag", "@tag-a"}};
+    ArithModelValidator::FuncInterpMap functions;
+    auto& function = functions["mixed"];
+    function.argSorts = {"(Array Int Int)", "Real", "Bool", "Element"};
+    function.retSort = "Int";
+    function.deflt = "0";
+    function.entries = {{{"@expected", "3/2", "true", "@tag-a"}, "11"}};
+    ArithModelValidator validator(f.ir, {}, {{"flag", true}}, arrays, tokens);
+    validator.setRealAssignments(&numbers);
+    validator.setFunctionInterps(&functions, &values);
+
+    CHECK(validator.validate({goal, goal}) == ArithModelValidator::Verdict::Satisfied);
+    const auto savedNumber = validator.evalNumber(sum);
+    const auto savedToken = validator.evalToken(sum);
+    REQUIRE(savedNumber);
+    REQUIRE(savedToken);
+    function.entries.front().value = "12";
+    CHECK(validator.validate({goal}) == ArithModelValidator::Verdict::Violated);
+    CHECK(validator.evalNumber(sum) == mpq_class(24));
+    CHECK(*savedNumber == 22);
+    CHECK(*savedToken == "#n:22");
+
+    numbers.erase("number");
+    CHECK(validator.validate({goal}) == ArithModelValidator::Verdict::Indeterminate);
+    CHECK_FALSE(validator.evalToken(sum));
+    numbers["number"] = RealValue::fromMpq(mpq_class(3, 2));
+    function.entries.front().value = "11";
+    CHECK(validator.validate({goal}) == ArithModelValidator::Verdict::Satisfied);
+    arrays["array"].entries.front().second = "#n:8";
+    CHECK(validator.validate({goal}) == ArithModelValidator::Verdict::Violated);
+    arrays["array"].entries.front().second = "#n:7";
+    tokens["tag"] = "@tag-b";
+    CHECK(validator.validate({goal}) == ArithModelValidator::Verdict::Violated);
+    tokens["tag"] = "@tag-a";
+    CHECK(validator.validate({goal}) == ArithModelValidator::Verdict::Satisfied);
+}

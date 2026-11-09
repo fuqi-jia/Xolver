@@ -1,6 +1,30 @@
 # Arithmetic validation and continuation record
 
-## Qualified for review: EUF lifetime repair and stable priority drain (2026-11-09)
+## In development: borrow cached independent-model values (2026-11-09)
+
+Three existing qualified profiles of core `b535fe02` record **176,591 calls**
+to `ArithModelValidator::eval`, each calling the full `TR` copy constructor.
+The relevant evaluator source is identical in the corrected `3bd0865c` core.
+This identifies owned copies on cache reads; it is not a timing measurement
+for the new candidate. Diagnosis-audit SHA-256:
+`90766960edbf5ffb0c3166434dab212d68e7c824f9cb6a68085b7b1ed7b6fc32`.
+
+The implementation returns immutable references to cache-owned values and
+borrows them in arithmetic, Boolean, array and UF readers. Distinctness and UF
+argument collections retain references to these same values. Cache insertion
+owns each newly evaluated result; `Store` still creates an independent array
+version. Public numeric/token results still own their values. Each validation
+entry rebuilds the caches, preserving model updates, missing-value semantics,
+exact arithmetic and the independent evaluator. No model check is skipped or
+shared with the model producer.
+
+Two new public regressions exercise independent array-store versions and
+mixed array/rational/Boolean/token UF arguments across model changes. Native
+acceptance, memory diagnosis, actual-model checks and fresh complete timings
+remain pending. No performance or solved-result gain is claimed for this
+candidate.
+
+## Merged, main CI pending: EUF lifetime repair and stable priority drain (2026-11-09)
 
 Read-only Memcheck on the qualified priority candidate confirms **six invalid
 read contexts and six invalid write contexts** in `EufSolver::onEclassMerged`.
@@ -54,9 +78,14 @@ preserved. The corrected source has its own acceptance; the preceding
 queue-only instruction measurements remain diagnostic evidence for that
 earlier version. Final-audit SHA-256:
 `eaa44528948dbb0bba69d8424e25337db60c3137e0d1173b7841598670b65ab1`.
-PR and exact merged-main CI acceptance are pending. Remaining fixed inputs,
-final original-C QCP verification and one-time protected evaluation remain
-open; this is not an overall solver-superiority claim.
+PR **#123** passes both jobs in CI **42571109166** at exact reviewed head
+`2697160d53361a667b3769bdfa096428da632010` and is normally squash-merged as
+`2da2dda62b93e0d2b77fd6bae01ebc5de11fe10d`. The entire merged tree matches
+the reviewed tree, `2f088287a4ced5d6eb81576b9f219fc53396a31c`. Exact main
+push CI **42572960000** is running; main CI acceptance remains pending.
+Remaining fixed inputs, final original-C QCP verification and one-time
+protected evaluation remain open; this is not an overall solver-superiority
+claim.
 
 | Corrected-core artifact | SHA-256 |
 | --- | --- |
