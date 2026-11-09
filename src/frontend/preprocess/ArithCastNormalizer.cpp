@@ -165,29 +165,30 @@ ExprId ArithCastNormalizer::rewriteRec(ExprId root) {
                     auto it = memo_.find(c);
                     ExprId rc = (it != memo_.end()) ? it->second : c;
 
-                    // Coerce integer constant to real when in a Real context.
-                    // Value copy: ir_.addShared() in this loop reallocates exprs_,
-                    // dangling a reference (use-after-realloc -> SIGSEGV).
-                    const auto childNode = ir_.get(c);
-                    if (realContext && childNode.kind == Kind::ConstInt) {
-                        if (auto* v = std::get_if<int64_t>(&childNode.payload.value)) {
-                            TermExpr ne;
-                            ne.kind = Kind::ConstReal;
-                            ne.sort = ir_.realSortId();
-                            ne.payload = Payload(mpq_class(*v).get_str());
-                            rc = ir_.addShared(std::move(ne));
-                            changed = true;
-                        }
-                    } else if (realContext && childNode.kind == Kind::ConstReal &&
-                               childNode.sort == ir_.intSortId()) {
-                        // ConstReal node that was classified as Int (e.g. IntOrReal parser constant)
-                        if (auto* s = std::get_if<std::string>(&childNode.payload.value)) {
-                            TermExpr ne;
-                            ne.kind = Kind::ConstReal;
-                            ne.sort = ir_.realSortId();
-                            ne.payload = Payload(*s);
-                            rc = ir_.addShared(std::move(ne));
-                            changed = true;
+                    // Only Real contexts need the original child's numeric payload.
+                    // Keep an owning snapshot across construction of a coerced term.
+                    if (realContext) {
+                        const auto childNode = ir_.get(c);
+                        if (childNode.kind == Kind::ConstInt) {
+                            if (auto* v = std::get_if<int64_t>(&childNode.payload.value)) {
+                                TermExpr ne;
+                                ne.kind = Kind::ConstReal;
+                                ne.sort = ir_.realSortId();
+                                ne.payload = Payload(mpq_class(*v).get_str());
+                                rc = ir_.addShared(std::move(ne));
+                                changed = true;
+                            }
+                        } else if (childNode.kind == Kind::ConstReal &&
+                                   childNode.sort == ir_.intSortId()) {
+                            // Preserve coercion of parser constants classified as Int.
+                            if (auto* s = std::get_if<std::string>(&childNode.payload.value)) {
+                                TermExpr ne;
+                                ne.kind = Kind::ConstReal;
+                                ne.sort = ir_.realSortId();
+                                ne.payload = Payload(*s);
+                                rc = ir_.addShared(std::move(ne));
+                                changed = true;
+                            }
                         }
                     }
 
