@@ -186,29 +186,25 @@ ExprId FormulaRewriter::rewriteRec(ExprId root) {
         auto& frame = stack.back();
         const auto e = frame.e;
         if (memo_.count(e)) { stack.pop_back(); continue; }
-        if (!frame.processed && ir_.isLeaf(e)) {
-            memo_[e] = e;
-            stack.pop_back();
-            continue;
-        }
         const auto node = ir_.get(e);
         if (!frame.processed) {
             frame.processed = true;
+            if (node.children.empty()) {
+                memo_[e] = e;
+                stack.pop_back();
+                continue;
+            }
             const bool associative = node.kind == Kind::Add || node.kind == Kind::Mul ||
                                      node.kind == Kind::And || node.kind == Kind::Or;
             std::vector<ExprId> todo(std::make_reverse_iterator(node.children.end()), std::make_reverse_iterator(node.children.begin()));
             while (!todo.empty()) {
                 const auto child = todo.back(); todo.pop_back();
                 if (child == NullExpr) { frame.children.push_back(child); continue; }
+                const auto n = ir_.get(child);
                 if (associative && uses.at(child) == 1 && !memo_.count(child) &&
-                    ir_.kind(child) == node.kind) {
-                    const auto n = ir_.get(child);
-                    if (n.sort == node.sort) {
-                        todo.insert(todo.end(), std::make_reverse_iterator(n.children.end()), std::make_reverse_iterator(n.children.begin()));
-                        continue;
-                    }
-                }
-                frame.children.push_back(child);
+                    n.kind == node.kind && n.sort == node.sort) {
+                    todo.insert(todo.end(), std::make_reverse_iterator(n.children.end()), std::make_reverse_iterator(n.children.begin()));
+                } else frame.children.push_back(child);
             }
             // Copy before push_back can invalidate the frame reference.
             const auto children = frame.children;

@@ -37,11 +37,6 @@ ExprId ArithCastNormalizer::rewriteRec(ExprId root) {
         }
 
         if (!frame.processed) {
-            if (ir_.isLeaf(e)) {
-                memo_[e] = e;
-                stack.pop_back();
-                continue;
-            }
             // First visit: mark as processed, then push children
             frame.processed = true;
 
@@ -109,11 +104,17 @@ ExprId ArithCastNormalizer::rewriteRec(ExprId root) {
             }
 
             // Push children (right-to-left so left is processed first)
-            for (int i = static_cast<int>(node.children.size()) - 1; i >= 0; --i) {
-                ExprId c = node.children[i];
-                if (memo_.find(c) == memo_.end()) {
-                    stack.push_back({c, false});
+            if (!node.children.empty()) {
+                for (int i = static_cast<int>(node.children.size()) - 1; i >= 0; --i) {
+                    ExprId c = node.children[i];
+                    if (memo_.find(c) == memo_.end()) {
+                        stack.push_back({c, false});
+                    }
                 }
+            } else {
+                // Leaf node
+                memo_[e] = e;
+                stack.pop_back();
             }
         } else {
             // Second visit: all children are memoized, build result

@@ -327,10 +327,6 @@ Kind NativeTerms::kind(ExprId id) const {
     return result;
 }
 
-bool NativeTerms::isLeaf(ExprId id) const {
-    return storage_->nodes.at(id)->getChildrenSize() == 0;
-}
-
 SmallVector<ExprId, 4> NativeTerms::children(ExprId id) const {
     SmallVector<ExprId, 4> out;
     storage_->readChildren(storage_->nodes.at(id), out);

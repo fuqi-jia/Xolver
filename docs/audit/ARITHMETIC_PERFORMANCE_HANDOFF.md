@@ -1,5 +1,58 @@
 # Arithmetic validation and continuation record
 
+## Closed: defer structural snapshots at leaves and flattening guards (2026-11-10)
+
+Frozen core `276c2df522e951ede5b05924b2530b66de515cfc` adds a canonical
+leaf predicate, skips unchanged leaf snapshots, uses owning child projections
+in constant-folding first visits and active-term release, and delays operand
+snapshots until associative flattening guards pass. It preserves payloads,
+sorts, sharing, exact models and proof checks. All **2,328 unit cases /
+1,556,195 assertions**, **965 public regressions** and ten actual pilot SAT
+model replays pass. The same eight diagnostic queries reduce full reads from
+60,658 to 57,750 and instructions by **0.43%**. These mechanism results do not
+establish whole-suite speed.
+
+The fresh Panda9 / ExperimentOS comparison uses delivered main `96831ee4`,
+the candidate and frozen Z3/cvc5, each with **60 seconds, one physical CPU
+and 16 GiB per solver/input**. All three verify all **14,408 private queries**.
+Main/candidate/Z3 cumulative solver times are **193.3783 / 192.9361 /
+295.2238 seconds**. The observed private reduction is **0.23%**. Fixed160
+independently verifies **123 / 123 / 116**, with identical main/candidate
+membership and zero verified gains or losses. Fixed verified PAR-2 means
+are **32.128516 / 32.136564 / 34.165960 seconds**. These are this round's
+results; the earlier round's 124 verified results must not be spliced into it.
+
+The disjoint 14,568-input union verifies **14,531 / 14,531 / 14,524**.
+Verified PAR-2 totals are **5,333.9409 / 5,334.7864 / 5,761.7774 seconds**:
+the candidate is **0.8455 seconds worse than main**. Development587 remains
+separate, verifying **587 / 587 / 584**, with solver times **7.4100 /
+7.3628 / 11.3113 seconds**. There are no opposite verdicts, invalid actual
+models, protocol errors or verified losses. At most 40 physical CPUs are
+leased, without overlapping sibling leases.
+
+The candidate retains 36 timeouts and one unconfirmed UNSAT; Z3 retains
+38 timeouts and six unconfirmed UNSATs. All seven remaining independent
+checks time out. Original hashes and archive bindings are rechecked, without
+a contrary verified SAT in the two specified historical qualified audits.
+This does not prove UNSAT; unconfirmed results remain excluded.
+
+The optional performance gate **fails**. This experiment is closed, its
+source changes are withdrawn, and no promotion PR is opened. All delivered
+correctness repairs and the accepted main implementation are retained. A
+future attempt needs a new measured cause; this candidate is not rerun to
+select a more favorable result. Original-C QCP, remaining fixed inputs and
+the once-only protected comparison remain open. Private inputs, models,
+identifiers and per-input evidence remain on the server.
+
+| Deferred-snapshot artifact | SHA-256 |
+| --- | --- |
+| Native qualification | `f6546a50f081968c861a278a617515a3cfc444877565b883e283852bc7fb0ac2` |
+| Complete qualified source manifest | `18ea8465deb16e6919079ce51ccdacf2938bd56faa517ff8c8d43c152fc7e643` |
+| Frozen CLI | `cf9bd7ae66c73500f70a2dea4e1ccba11ced89908cc40b6d0d2303dcf3b2b757` |
+| Mechanism audit | `1a4bdf341f9e35256f5666570609a6ba201f0b1583ebb0b412852f0db43254c8` |
+| Complete stage | `7a53c62005a8cd5294fde38341cf88c2a7118e305c28b73669c125c3e34397f3` |
+| Remaining unconfirmed audit | `373ca4adea84a144a274a5e6f80f992cc6682f1c5289be408dfdcbfe571730e2` |
+
 ## Server-qualified: read canonical children in structural traversals (2026-11-09)
 
 Graph traversal currently constructs a complete `TermExpr`, including copied
@@ -64,8 +117,14 @@ actual model, protocol error or verified loss is observed. The resource audit
 reconstructs at most 40 physical CPUs with no overlapping sibling leases.
 
 Server acceptance and the preregistered optional-performance gate pass. This is
-a modest observed speed improvement with unchanged verified coverage. The exact
-PR/main CI receipts belong to the PR merging the reviewed source. Original-C
+a modest observed speed improvement with unchanged verified coverage.
+[PR #128](https://github.com/fuqi-jia/Xolver/pull/128) reviewed
+`729234d2974aca2989a3e81bd380e30c3dcf4027`; both jobs passed in
+[PR CI 42649350865](https://github.com/fuqi-jia/Xolver/actions/runs/42649350865).
+The normal squash merge `96831ee44207640b077c08aab2dbc5f28956ad28` has the same
+complete tree; both jobs passed in its exact
+[main CI 42653643552](https://github.com/fuqi-jia/Xolver/actions/runs/42653643552).
+This stage is delivered without another server archive gate. Original-C
 QCP, remaining fixed inputs and the one-time protected evaluation are still open;
 no overall Z3-superiority claim follows. Private inputs, models, identifiers and
 per-input evidence stay on the server.
