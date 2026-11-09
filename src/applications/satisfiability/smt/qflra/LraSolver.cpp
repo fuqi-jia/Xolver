@@ -139,12 +139,16 @@ void LraSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
     const auto& payload = std::get<LinearAtomPayload>(atom.payload);
     // LRA bounds are rational; an algebraic RHS never arises from inputs.
     const mpq_class& rhs = payload.rhs.asRational();
-    int auxVar = manager_.getOrCreateAuxVar(gs_, payload.lhs, rhs);
-    columnForms_[auxVar] = {payload.lhs, rhs};
+    const auto position = theoryTrail_.find(atom.satVar);
+    const int retainedAux = position ? theoryTrail_[*position].auxVar : -1;
+    const int auxVar = position && manager_.matchesAuxiliary(retainedAux, payload.lhs, rhs)
+        ? retainedAux : manager_.getOrCreateAuxVar(gs_, payload.lhs, rhs);
+    // A coordinate has one immutable source definition, even after a pivot.
+    columnForms_.try_emplace(auxVar, payload.lhs, rhs);
     Relation effectiveRel = value ? payload.rel : negateRelation(payload.rel);
     bool isDiseq = (effectiveRel == Relation::Neq);
 
-    if (const auto position = theoryTrail_.find(atom.satVar)) {
+    if (position) {
         const auto& previous = theoryTrail_[*position];
         if (previous.auxVar == auxVar && previous.level == level && previous.lit == assertedLit &&
             previous.atom.exprId == atom.exprId && previous.value == value &&

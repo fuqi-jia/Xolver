@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 #include "applications/satisfiability/smt/qflra/LraSolver.h"
+#include "applications/satisfiability/smt/common/lia/LiaSolver.h"
 #include "search/lra/GeneralSimplex.h"
 #include "search/lra/SparseTableau.h"
 #include "search/dl/BellmanFord.h"
@@ -12,6 +13,73 @@
 #include <utility>
 
 using namespace xolver;
+
+TEST_CASE("Linear arithmetic: retained assertions preserve exact definitions across scopes") {
+    auto exercise = []<class LinearSolver>(TheoryId theory) {
+        LinearSolver solver;
+        TheoryLemmaDatabase db;
+        auto source = [&](SatVar variable, const std::string& name, int coefficient,
+                          Relation relation, int rhs, int level, bool value = true) {
+            LinearFormKey form;
+            form.terms.emplace_back(name, coefficient);
+            const TheoryAtomRecord atom{variable, theory, false, ExprId(3000 + variable),
+                LinearAtomPayload{form, relation, RealValue::fromMpq(rhs)}};
+            solver.assertLit(atom, value, level,
+                value ? SatLit::positive(variable) : SatLit::negative(variable));
+        };
+        auto consistent = [&] {
+            CHECK(solver.check(db).kind == TheoryCheckResult::Kind::Consistent);
+        };
+        source(1, "x", 1, Relation::Geq, 0, 0);
+        source(2, "x", 1, Relation::Leq, 2, 0);
+        source(3, "y", 1, Relation::Geq, 0, 0);
+        source(4, "y", 1, Relation::Leq, 2, 0);
+        consistent();
+        solver.push();
+        for (int repeat = 0; repeat < 32; ++repeat)
+            source(10, "x", 2, Relation::Eq, 2, 1);
+        consistent();
+        // Reusing the source ID cannot hide a changed variable, coefficient or RHS.
+        source(10, "y", 2, Relation::Eq, 2, 1);
+        source(11, "x", 1, Relation::Eq, 0, 1);
+        consistent();
+        for (const auto [coefficient, rhs] : {std::pair{1, 2}, std::pair{2, 4}}) {
+            CAPTURE(coefficient);
+            CAPTURE(rhs);
+            solver.push();
+            source(10, "y", coefficient, Relation::Eq, rhs, 2);
+            consistent();
+            source(12, "y", 1, Relation::Eq, 1, 2);
+            CHECK(solver.check(db).kind == TheoryCheckResult::Kind::Conflict);
+            solver.pop(1);
+            consistent();
+        }
+        solver.push();
+        source(10, "y", 2, Relation::Geq, 2, 2);
+        source(12, "y", 1, Relation::Eq, 2, 2);
+        consistent();
+        solver.pop(1);
+        consistent();
+        solver.push();
+        source(10, "y", 2, Relation::Geq, 2, 2);
+        consistent();
+        source(10, "y", 2, Relation::Geq, 2, 2, false);
+        source(12, "y", 1, Relation::Eq, 0, 2);
+        consistent();
+        solver.pop(1);
+        solver.pop(1);
+        source(20, "x", 1, Relation::Eq, 2, 0);
+        source(21, "y", 1, Relation::Eq, 2, 0);
+        consistent();
+        solver.reset();
+        source(10, "x", 2, Relation::Eq, 0, 0);
+        consistent();
+        source(22, "x", 1, Relation::Eq, 1, 0);
+        CHECK(solver.check(db).kind == TheoryCheckResult::Kind::Conflict);
+    };
+    SUBCASE("real arithmetic") { exercise.template operator()<LraSolver>(TheoryId::LRA); }
+    SUBCASE("integer arithmetic") { exercise.template operator()<LiaSolver>(TheoryId::LIA); }
+}
 
 TEST_CASE("SparseTableau: batched substitution preserves exact coefficients and sparse links") {
     for (const int width : {1, 7, 31, 32, 65}) {
