@@ -1,5 +1,32 @@
 # Arithmetic validation and continuation record
 
+## In development: preserve merge-class references during growth (2026-11-09)
+
+Read-only Memcheck on the qualified priority candidate confirms **six invalid
+read contexts and six invalid write contexts** in `EufSolver::onEclassMerged`.
+All **16 public incremental EUF cases / 20 assertions** still pass, showing
+that ordinary test success does not exclude this memory error. The trace
+identifies a read inside a freed four-byte metadata vector, released by
+`classInfo(killed)` after the retained `kept` reference was acquired. Union by
+size can retain an earlier class while admitting a later class identifier.
+The merge-handler source is identical in delivered main and the candidate.
+Memory-diagnosis audit SHA-256:
+`bbc868ad2300ed573a43373bd17eb5658a92cc5cabded514f2d40a3de01e250e`.
+
+The fix ensures storage for both identifiers before acquiring either
+reference. A general regression repeatedly introduces late classes, checks
+equality/disequality conflicts, and withdraws each scope. The production change
+does not alter merge ordering, explanations or the separate LRA/LIA rollback
+policies. Native acceptance and a fresh memory check remain pending. This
+correctness fix must be retained even if its performance changes; the optional
+queue improvement remains subject to its performance requirements.
+
+The first two memory diagnostics failed before executing the tests because
+the isolated debug search tree did not expose the loader's GNU debuglink name.
+The successful run verifies the loader build ID and uses matching existing
+debug data; it neither suppresses errors nor modifies production binaries.
+No private query is involved in these diagnostics.
+
 ## In development: stable priority draining for EUF saturation (2026-11-09)
 
 Instruction-level diagnosis uses the preceding frozen versions and private
@@ -54,9 +81,25 @@ Fresh complete comparisons are registered for **private14,408**, **fixed160**
 and **development587**, against the finite-bound version delivered below and
 the same frozen Z3. They retain every input, actual-model capture, independent
 checks, rotated solver order and **60 seconds / one physical core / 16 GiB**.
-ExperimentOS limits the three queues together to 40 physical cores. **Complete
-performance validation remains pending.** Do not repeat those registrations,
-claim a whole-cohort gain from profiles, or open a new PR before acceptance.
+ExperimentOS limits the three queues together to 40 physical cores. The full
+round is complete: all arms verify **14,408 private results**, with main/
+candidate/Z3 totals **201.4821 / 200.4680 / 293.6215 seconds**. The candidate
+is **0.50% faster** on this cohort. Fixed160 retains **124 / 124 / 118**
+independently confirmed results; main/candidate verified PAR-2 means are
+**31.5314 / 31.5196 seconds**. Each Xolver arm still has one unconfirmed UNSAT,
+and six reference results remain unconfirmed; none receives solve credit.
+There are no verified losses. Development587 retains **587 / 587 / 584**.
+
+The disjoint fixed/private union retains **14,532 verified** in both Xolver
+arms and improves verified PAR-2 total by **2.8982 seconds**. Independent
+certificate checking confirms actual current UNSAT only; no timeout or unknown
+is upgraded. Final-audit SHA-256:
+`66ab6e526f86062fd550b497378d8c7d53eeb29eba3edffd257f1bd1f0690c9d`.
+This passes the existing performance gate for frozen **b535fe02**. All jobs and
+watchers are terminal; do not repeat them. No PR is opened: the confirmed
+memory-lifetime fix above takes priority. The combined version requires its
+own acceptance and fresh timings before these gains can be attributed to it.
+Protected evaluation and final original-C QCP acceptance remain open.
 
 | Current artifact | SHA-256 |
 | --- | --- |

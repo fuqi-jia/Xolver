@@ -960,6 +960,36 @@ TEST_CASE("EUF incremental: nested congruence closure conflict") {
     CHECK(r.kind == TheoryCheckResult::Kind::Conflict);
 }
 
+TEST_CASE("EUF incremental: late classes survive repeated equality conflicts and pop") {
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Other);
+    ir.registerSort(1, SortKind::Real);
+    ir.registerSort(2, SortKind::Int);
+    const ExprId anchor = ir.add(TermExpr{Kind::Variable, 0, {}, Payload(std::string("anchor"))});
+    EufSolver solver;
+    solver.setNativeTerms(&ir);
+    TheoryLemmaDatabase lemmaDb;
+
+    for (int index = 0; index < 128; ++index) {
+        const ExprId late = ir.add(TermExpr{Kind::Variable, 0, {},
+            Payload("late_" + std::to_string(index))});
+        const auto equality = makeEufRecord(anchor, late);
+        solver.push();
+        solver.assertLit(equality, true, 1, SatLit::positive(2000 + 3 * index));
+        REQUIRE(solver.check(lemmaDb).kind == TheoryCheckResult::Kind::Consistent);
+        solver.assertLit(equality, false, 1, SatLit::positive(2001 + 3 * index));
+        CHECK(solver.check(lemmaDb).kind == TheoryCheckResult::Kind::Conflict);
+        solver.pop(1);
+        REQUIRE(solver.check(lemmaDb).kind == TheoryCheckResult::Kind::Consistent);
+
+        solver.push();
+        solver.assertLit(equality, false, 1, SatLit::positive(2002 + 3 * index));
+        CHECK(solver.check(lemmaDb).kind == TheoryCheckResult::Kind::Consistent);
+        solver.pop(1);
+        CHECK(solver.check(lemmaDb).kind == TheoryCheckResult::Kind::Consistent);
+    }
+}
+
 TEST_CASE("EUF incremental: push pop restores equality class") {
     NativeTerms ir;
     ir.registerSort(0, SortKind::Other);
