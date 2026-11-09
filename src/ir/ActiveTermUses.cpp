@@ -44,7 +44,7 @@ void ActiveTermUses::release(ExprId root) {
         ++work_;
         assert(references_[id] > 0);
         if (--references_[id] != 0) continue;
-        for (const auto child : ir_.get(id).children) {
+        for (const auto child : ir_.children(id)) {
             parents_[child].erase(id);
             pending.push_back(child);
         }

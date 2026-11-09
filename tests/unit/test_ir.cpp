@@ -124,9 +124,14 @@ TEST_CASE("native child projection preserves ordered operands and owns wide resu
         Payload(std::string("1606938044258990275541962092341162602522202993782792835301377"))});
     CHECK(terms.children(variable).empty());
     CHECK(terms.children(literal).empty());
+    CHECK(terms.isLeaf(variable));
+    CHECK(terms.isLeaf(literal));
+    const auto nullary = terms.add({Kind::UFApply, 1, {}, Payload(std::string("c"))});
+    CHECK(terms.isLeaf(nullary));
     for (const auto op : {Kind::Gt, Kind::Geq}) {
         const auto comparison = terms.add({op, 0, {variable, literal}, {}});
         const auto children = terms.children(comparison);
+        CHECK_FALSE(terms.isLeaf(comparison));
         REQUIRE(children.size() == 2);
         CHECK(children[0] == literal);
         CHECK(children[1] == variable);
@@ -138,6 +143,7 @@ TEST_CASE("native child projection preserves ordered operands and owns wide resu
     TermExpr wide{Kind::Add, 1, {}, {}};
     for (size_t i = 0; i < 9; ++i) wide.children.push_back(i % 2 ? literal : variable);
     const auto sum = terms.add(std::move(wide));
+    CHECK_FALSE(terms.isLeaf(sum));
     auto retained = terms.children(sum);
     const auto original = retained;
     auto copy = terms;
@@ -147,8 +153,10 @@ TEST_CASE("native child projection preserves ordered operands and owns wide resu
     CHECK(terms.children(sum) == original);
     terms = NativeTerms{};
     CHECK(copy.children(sum) == original);
+    CHECK_FALSE(copy.isLeaf(sum));
     CHECK(original.size() == 9);
     CHECK_THROWS_AS(copy.children(static_cast<ExprId>(copy.size())), std::out_of_range);
+    CHECK_THROWS_AS(copy.isLeaf(static_cast<ExprId>(copy.size())), std::out_of_range);
 }
 
 TEST_CASE("native child projection resolves preserved lets and distinct bound identities") {
@@ -163,10 +171,12 @@ TEST_CASE("native child projection resolves preserved lets and distinct bound id
         NativeTerms terms(parser.getNodeManager());
         root = terms.index(parser.getAssertions().at(0));
         REQUIRE(terms.kind(root) == Kind::Forall);
+        CHECK_FALSE(terms.isLeaf(root));
         retained = terms.children(root);
         REQUIRE(retained.size() == 2);
         CHECK(terms.kind(retained[0]) == Kind::Eq);
         CHECK(terms.kind(retained[1]) == Kind::BoundVariable);
+        CHECK(terms.isLeaf(retained[1]));
         ExprId freeVariable = NullExpr;
         for (ExprId id = 0; id < terms.size(); ++id) {
             CHECK(terms.children(id) == terms.get(id).children);
@@ -182,6 +192,7 @@ TEST_CASE("native child projection resolves preserved lets and distinct bound id
     }
     auto moved = std::move(survivor);
     CHECK(moved.children(root) == retained);
+    CHECK_FALSE(moved.isLeaf(root));
 }
 
 TEST_CASE("native term indexing preserves parser node identity and immutable views") {

@@ -186,14 +186,14 @@ ExprId FormulaRewriter::rewriteRec(ExprId root) {
         auto& frame = stack.back();
         const auto e = frame.e;
         if (memo_.count(e)) { stack.pop_back(); continue; }
+        if (!frame.processed && ir_.isLeaf(e)) {
+            memo_[e] = e;
+            stack.pop_back();
+            continue;
+        }
         const auto node = ir_.get(e);
         if (!frame.processed) {
             frame.processed = true;
-            if (node.children.empty()) {
-                memo_[e] = e;
-                stack.pop_back();
-                continue;
-            }
             const bool associative = node.kind == Kind::Add || node.kind == Kind::Mul ||
                                      node.kind == Kind::And || node.kind == Kind::Or;
             std::vector<ExprId> todo(std::make_reverse_iterator(node.children.end()), std::make_reverse_iterator(node.children.begin()));
