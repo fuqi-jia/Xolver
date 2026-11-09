@@ -12,11 +12,6 @@ using SOMTParser::SortManager;
 using SortPtr = std::shared_ptr<SOMTParser::Sort>;
 
 Node resolve(Node node) {
-    if (node) {
-        const auto kind = node->getKind();
-        if (kind != NODE_KIND::NT_LET_BIND_VAR && kind != NODE_KIND::NT_LET &&
-            kind != NODE_KIND::NT_LET_CHAIN) return node;
-    }
     std::unordered_set<Node> seen;
     while (node) {
         auto k = node->getKind();
