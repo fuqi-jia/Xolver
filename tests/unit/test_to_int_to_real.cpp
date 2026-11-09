@@ -91,6 +91,69 @@ TEST_CASE("ArithCastNormalizer: to_int(ConstReal)") {
     REQUIRE(*v == 3);
 }
 
+TEST_CASE("ArithCastNormalizer: integer and Boolean contexts preserve shared terms") {
+    NativeTerms ir;
+    SortId boolSort, intSort, realSort;
+    setupBasicSorts(ir, boolSort, intSort, realSort);
+    ExprId x = ir.add(TermExpr{Kind::Variable, intSort, {}, Payload(std::string("x"))});
+    ExprId one = ir.add(TermExpr{Kind::ConstInt, intSort, {}, Payload(int64_t(1))});
+    ExprId sum = ir.add(TermExpr{Kind::Add, intSort, {x, one}, {}});
+    ExprId eq = ir.add(TermExpr{Kind::Eq, boolSort, {sum, sum}, {}});
+    ExprId conjunction = ir.add(TermExpr{Kind::And, boolSort, {eq, eq}, {}});
+    ir.addAssertion(conjunction, 0);
+    ir.addAssertion(eq, 2);
+
+    ArithCastNormalizer norm(ir);
+    auto result = norm.run();
+    REQUIRE(result.assertions.size() == 2);
+    CHECK(result.assertions[0].first == 0);
+    CHECK(result.assertions[0].second == conjunction);
+    CHECK(result.assertions[1].first == 2);
+    CHECK(result.assertions[1].second == eq);
+    CHECK(ir.get(sum).sort == intSort);
+    CHECK(ir.get(one).kind == Kind::ConstInt);
+}
+
+TEST_CASE("ArithCastNormalizer: real contexts coerce exact constants and preserve symbols") {
+    NativeTerms ir;
+    SortId boolSort, intSort, realSort;
+    setupBasicSorts(ir, boolSort, intSort, realSort);
+    ExprId x = ir.add(TermExpr{Kind::Variable, realSort, {}, Payload(std::string("x"))});
+    ExprId negative = ir.add(TermExpr{Kind::ConstInt, intSort, {}, Payload(int64_t(-7))});
+    ExprId rational = ir.add(TermExpr{Kind::ConstReal, realSort, {}, Payload(std::string("5/2"))});
+    ExprId expression = NullExpr;
+    SUBCASE("Real-valued arithmetic") {
+        expression = ir.add(TermExpr{Kind::Add, realSort, {x, negative, rational}, {}});
+    }
+    SUBCASE("Boolean-valued comparison with a Real sibling") {
+        expression = ir.add(TermExpr{Kind::Leq, boolSort, {x, negative}, {}});
+    }
+    const bool arithmetic = ir.get(expression).sort == realSort;
+    ExprId assertion = arithmetic
+        ? ir.add(TermExpr{Kind::Eq, boolSort, {expression, rational}, {}})
+        : expression;
+    ir.addAssertion(assertion);
+
+    ArithCastNormalizer norm(ir);
+    auto result = norm.run();
+    REQUIRE(result.assertions.size() == 1);
+    const auto root = ir.get(result.assertions[0].second);
+    const auto rewritten = arithmetic ? ir.get(root.children[0]) : root;
+    REQUIRE(rewritten.children.size() >= 2);
+    CHECK(rewritten.children[0] == x);
+    const auto coerced = ir.get(rewritten.children[1]);
+    CHECK(coerced.kind == Kind::ConstReal);
+    CHECK(coerced.sort == realSort);
+    const auto* value = std::get_if<std::string>(&coerced.payload.value);
+    REQUIRE(value != nullptr);
+    CHECK(*value == "-7");
+    if (rewritten.kind == Kind::Add) {
+        REQUIRE(rewritten.children.size() == 3);
+        CHECK(rewritten.children[2] == rational);
+    }
+    CHECK(ir.get(negative).kind == Kind::ConstInt);
+}
+
 TEST_CASE("ToIntDefinitionalLowerer: linear to_int succeeds and emits bridge") {
     NativeTerms ir;
     SortId boolSort, intSort, realSort;
