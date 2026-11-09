@@ -1,6 +1,6 @@
 # Arithmetic validation and continuation record
 
-## In development: preserve merge-class references during growth (2026-11-09)
+## Qualified for review: EUF lifetime repair and stable priority drain (2026-11-09)
 
 Read-only Memcheck on the qualified priority candidate confirms **six invalid
 read contexts and six invalid write contexts** in `EufSolver::onEclassMerged`.
@@ -17,9 +17,55 @@ The fix ensures storage for both identifiers before acquiring either
 reference. A general regression repeatedly introduces late classes, checks
 equality/disequality conflicts, and withdraws each scope. The production change
 does not alter merge ordering, explanations or the separate LRA/LIA rollback
-policies. Native acceptance and a fresh memory check remain pending. This
-correctness fix must be retained even if its performance changes; the optional
-queue improvement remains subject to its performance requirements.
+policies. Corrected core `3bd0865c702871ff041a9fd9085af4a89762145c`
+passes proof-enabled native acceptance: **2,313 unit cases / 1,554,845
+assertions**, including **128 late-class rounds / 640 new assertions**.
+All **965 public regressions** pass. A fresh Memcheck run passes **17 public
+incremental EUF cases / 660 assertions**, with **zero invalid reads, zero
+invalid writes, zero reported errors and exit code 0**. The before/after
+audit binds both frozen test binaries and all 2,345 qualified source bodies.
+This correctness fix must be retained even if its performance changes; the
+optional queue improvement remains subject to its performance requirements.
+
+The corrected version also completes eight diagnostic pairs: five SAT controls
+retain all ten independently replayed actual models, while three difficult
+controls remain timeouts in both arms. There is no diagnostic verified gain,
+loss or opposite verdict. Fresh complete private/fixed/development comparisons
+have now passed the unchanged performance gate. All arms independently verify
+**14,408 private results**, with main/corrected/Z3 total solver times
+**201.1806 / 199.7612 / 293.1442 seconds**; the corrected version is **0.71%
+faster** than main. Independent checks use the actual timed-run SAT models.
+
+Fixed160 retains **124 / 124 / 117** independently verified results after
+input-bound certificate checking and existing independent reference evidence.
+Main has 36 timeouts; the corrected version has 35 timeouts and one remaining
+unconfirmed UNSAT. Z3 has 37 timeouts and six unconfirmed results. All
+unconfirmed results remain excluded. Main/corrected verified PAR-2 means are
+**31.5849 / 31.5171 seconds**. There is no verified loss in any cohort.
+Development587 retains **587 / 587 / 584**, reported separately because it
+can overlap the scored cohorts.
+
+The disjoint fixed/private union retains **14,532 verified results** in both
+Xolver arms. Verified PAR-2 totals fall from **5,254.7697 to 5,242.4962
+seconds**, an improvement of **12.2736 seconds**. The remaining candidate
+UNSAT is the same unconfirmed input as in the preceding queue-only round;
+it receives no additional credit. Raw reports and current timings are
+preserved. The corrected source has its own acceptance; the preceding
+queue-only instruction measurements remain diagnostic evidence for that
+earlier version. Final-audit SHA-256:
+`eaa44528948dbb0bba69d8424e25337db60c3137e0d1173b7841598670b65ab1`.
+PR and exact merged-main CI acceptance are pending. Remaining fixed inputs,
+final original-C QCP verification and one-time protected evaluation remain
+open; this is not an overall solver-superiority claim.
+
+| Corrected-core artifact | SHA-256 |
+| --- | --- |
+| Native qualification | `1efa5551bb0236d31d7ef9b290f5f75e16df294c75c819be9fd13c5f527388db` |
+| Complete source binding | `5e525375f4ba29acd862ec3c1a614cf56b4ca86e8e26e5153a61e45c66fbe992` |
+| Frozen CLI | `558ef3b8e361235ebc700c9f7ffc0403f8840a66a8c5b0a98159958bbcfd2bb8` |
+| Memory-lifetime repair audit | `27028e7b47137110bbc451161c7dbb2a9bf00d511094a243fa4ef611bf43c1f7` |
+| Public regression audit | `d3b7e0881e177bf372808e8cc7c3106fd605c057c48e118fc26f6dafdfd672f5` |
+| Diagnostic model audit | `17d8c476bd3caeadd189e900e111d42ebdbe065c1deec814666b235ede48cb4d` |
 
 The first two memory diagnostics failed before executing the tests because
 the isolated debug search tree did not expose the loader's GNU debuglink name.
@@ -86,7 +132,7 @@ round is complete: all arms verify **14,408 private results**, with main/
 candidate/Z3 totals **201.4821 / 200.4680 / 293.6215 seconds**. The candidate
 is **0.50% faster** on this cohort. Fixed160 retains **124 / 124 / 118**
 independently confirmed results; main/candidate verified PAR-2 means are
-**31.5314 / 31.5196 seconds**. Each Xolver arm still has one unconfirmed UNSAT,
+**31.5314 / 31.5196 seconds**. The candidate still has one unconfirmed UNSAT,
 and six reference results remain unconfirmed; none receives solve credit.
 There are no verified losses. Development587 retains **587 / 587 / 584**.
 
