@@ -1,33 +1,55 @@
 # Arithmetic validation and continuation record
 
-## In development: extend fixed analyses across definitions (2026-11-09)
+## In development: resume closure after first finite bounds (2026-11-09)
 
-Eight unchanged ordinary diagnostic queries show 74 fixed-analysis requests,
-29 complete analyses and **18 nonrestricting definition additions that discard
-an existing snapshot**. All four actual SAT models pass Z3 and cvc5 replay.
-Existing accepted-core profiles attribute 22,278,634 inclusive instructions to
-the 29 analyses, out of 280,884,206 total instructions; overlapping inclusive
-costs are not additive. These are mechanism observations, not timing gains.
+The standalone prefix experiment below did not realize any reuse. A separate
+counter-only derivative then measured actual snapshot invalidations on the
+same eight ordinary queries: **19 active-bound resets and 10 first finite
+lower endpoints**, followed by 29 complete analyses; prefix extensions were
+zero. All four actual SAT models pass both independent replay checkers, and
+the source, CLI, worker and unit executable are restored byte-for-byte.
+Observation SHA-256:
+`a36e06544d16b3e1ff7ff0c0973068f66ab8b57a2ff159f0debd77cf1f61d321`.
 
-The common `GeneralSimplex` now retains the owning, closed prefix on free-column
-addition and lazily copies/extends it on the next analysis request. New affine
-definitions derive only from fixed earlier coordinates. Bounds, pivots, scope
-removal and reset retain their existing invalidation rules. Exact infinitesimals,
-premise DAGs, immutable outstanding handles and revision semantics are preserved.
-The implementation serves every client of this shared arithmetic kernel.
-Candidate native qualification and full comparisons remain pending; no speed
-or solve improvement is claimed for this change yet.
+The common fixed-value work queue now supports resuming from affected rows.
+A first finite endpoint withdraws no old premise; compatible owning facts and
+proof dependencies can therefore be retained while new pins and tight faces
+propagate through incident rows. Pure definitions use that same work queue.
+Replacing finite endpoints, resetting bounds, pivots and backtracking retain
+full invalidation. Dirty work survives context copies and is never silently
+lost through complete-base replacement. Outstanding snapshots stay immutable;
+exact infinitesimals, revisions, APIs and LRA/LIA rollback policies remain.
+Candidate native qualification and fresh performance comparisons are pending;
+no measured speed or solve gain is claimed for this implementation yet.
 
-The diagnostic setup first requested the nonexistent CMake target `xolver`.
-The failed job and successful 832-unit compilation are preserved. A corrected
-job uses `xolver-cli`, reuses that completed compilation, restores the accepted
-source and original binaries byte-for-byte, and passes the original 2,323 unit
-cases / 1,554,962 assertions. Its separately frozen counter-only derivative is
-never eligible for formal performance or solve credit.
-Restoration qualification SHA-256:
-`902c7c47fac3bda892fae13a6a3d5022cc28aa221650c2bf1d18fe7fcc1e944c`;
-observation SHA-256:
-`29cf5c96c479b890cc2b7099f9862b1d41cb67f540fe8eaa9ef61c696247d14c`.
+## Closed: standalone definition-prefix retention (2026-11-09)
+
+Core `1793423a065caf55851b39a330d36e3703a27705` retains closed fixed-value
+snapshots across nonrestricting free columns and definitions. It passes all
+2,325 unit cases / 1,556,058 assertions, including two new cases / 437
+assertions, 259 targeted cases, and all 965 public regressions. The pilot keeps
+five SAT controls with ten independently replayed actual models; three gaps
+remain timeouts in both arms, with no verified gain, loss or opposite verdict.
+
+On eight unchanged ordinary diagnostic inputs, however, complete analyses stay
+**29 to 29** and allocator counts are identical. Instructions rise from
+280,884,206 to 280,959,140 (**+0.0267%**). Four actual SAT models still pass
+Z3/cvc5 replay. Merely observing 18 additions with a cached prefix did not prove
+that a later query could reuse it. The mechanism gate rejects this standalone
+candidate before any whole-suite comparison; it is closed and is not submitted
+for promotion. Its prefix machinery is only a component of the new, separately
+qualified affected-row algorithm above, not an accepted speed improvement.
+Closure audit SHA-256:
+`2ac4907823cf04465a21edc087153f4ab31846eeb7f40f53f1836bd839017e8f`;
+profile audit:
+`3f2e25488048426a3b3c428ed910195b37496014e0d3390f950fa656ee61faee`;
+native qualification:
+`cd5721e77063cb56c9a83268a4393f31e2276f8bf2cc6d7e3645ab90feb0f8f4`.
+
+The earlier diagnostic setup's nonexistent CMake target `xolver` failure and
+successful 832-unit compilation remain recorded. Its corrected `xolver-cli`
+job restores the accepted version and passes the original 2,323 tests. Those
+counter-only derivatives never supply formal performance or solve credit.
 
 ## Closed: indexed-sort reading experiment (2026-11-09)
 

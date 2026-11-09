@@ -867,6 +867,9 @@ TEST_CASE("GeneralSimplex: fixed-value proofs replay against independent small l
             const int appended = gs.addConstraint({{variables[0], coefficients[0]},
                 {variables[1], coefficients[1]}, {variables[2], coefficients[2]}}, pass);
             equations.push_back({appended, coefficients, pass});
+            const int endpoint = evaluate(witness)[appended];
+            REQUIRE(gs.assertLower(appended,
+                BoundInfo(BoundValue(DeltaRational(endpoint)), SatLit::positive(reason++))));
             const auto analysis = gs.sharedFixedValueAnalysis();
             CHECK_FALSE(before->prove(appended));
             const auto fresh = gs.analyzeFixedValues();
@@ -921,6 +924,60 @@ TEST_CASE("GeneralSimplex: fixed-value proof chains use iterative shared depende
     REQUIRE(proof.has_value());
     CHECK(proof->first == DeltaRational(1));
     CHECK(proof->second.size() == 2 * (depth + 1));
+}
+
+TEST_CASE("GeneralSimplex: first finite bounds resume closure without stale scoped premises") {
+    GeneralSimplex gs;
+    const int x = gs.addVar("resumed-x"), y = gs.addVar("resumed-y");
+    const int z = gs.addVar("resumed-z");
+    const int sum = gs.addConstraint({{x, 1}, {y, 1}}, 0);
+    const int difference = gs.addConstraint({{z, 1}, {x, -1}}, 0);
+    auto bound = [](int value, SatVar reason) {
+        return BoundInfo(BoundValue(DeltaRational(value)), SatLit::positive(reason));
+    };
+    REQUIRE(gs.assertLower(x, bound(0, 1)));
+    REQUIRE(gs.assertLower(y, bound(0, 2)));
+    REQUIRE(gs.assertLower(difference, bound(0, 3)));
+    REQUIRE(gs.assertUpper(difference, bound(0, 4)));
+    const auto before = gs.sharedFixedValueAnalysis();
+    CHECK_FALSE(before->prove(x));
+    CHECK_FALSE(before->prove(z));
+    gs.push();
+    REQUIRE(gs.assertUpper(sum, bound(0, 5), 1));
+    GeneralSimplex copy = gs; // pending rows belong to each independent context
+    const auto after = gs.sharedFixedValueAnalysis();
+    for (int var : {x, y, z}) {
+        REQUIRE(after->prove(var));
+        CHECK(after->prove(var)->first == DeltaRational(0));
+    }
+    REQUIRE(after->prove(z));
+    CHECK(after->prove(z)->second.size() == 5);
+    CHECK_FALSE(before->prove(y));
+    const auto fresh = gs.analyzeFixedValues();
+    for (int var = 0; var < gs.numVars(); ++var)
+        CHECK(after->fixedValue(var) == fresh.fixedValue(var));
+    gs.pop(GeneralSimplex::AssignmentPolicy::Preserve);
+    CHECK_FALSE(gs.proveFixedValue(x));
+    CHECK_FALSE(gs.proveFixedValue(z));
+    REQUIRE(copy.proveFixedValue(z));
+    CHECK(copy.proveFixedValue(z)->first == DeltaRational(0));
+    copy.pop();
+    CHECK_FALSE(copy.sharedFixedValueAnalysis()->prove(z));
+    REQUIRE(copy.assertUpper(sum, bound(0, 6)));
+    // An identical complete-base replacement must not discard pending work
+    // while restoring a snapshot that predates its first finite endpoint.
+    std::vector<GeneralSimplex::ActiveBound> base;
+    for (int var = 0; var < copy.numVars(); ++var) {
+        const auto state = copy.varState(var);
+        if (state.lower.bound.isFinite()) base.push_back({var, true, state.lower});
+        if (state.upper.bound.isFinite()) base.push_back({var, false, state.upper});
+    }
+    REQUIRE(copy.replaceActiveBounds(base, GeneralSimplex::AssignmentPolicy::Preserve));
+    REQUIRE(copy.proveFixedValue(z));
+    CHECK(copy.proveFixedValue(z)->first == DeltaRational(0));
+    copy.resetActiveBounds();
+    CHECK_FALSE(copy.proveFixedValue(z));
+    CHECK(after->prove(z)->first == DeltaRational(0));
 }
 
 TEST_CASE("GeneralSimplex: appended affine definitions retain exact fixed-value explanations") {
