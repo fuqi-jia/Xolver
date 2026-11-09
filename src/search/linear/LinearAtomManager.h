@@ -44,11 +44,6 @@ public:
                           const LinearFormKey& lhs,
                           const mpq_class& rhs);
 
-    // Auxiliary definitions survive tableau pivots. Check a retained coordinate
-    // against its exact source form without hashing all rational coefficients.
-    bool matchesAuxiliary(int auxVar, const LinearFormKey& lhs,
-                          const mpq_class& rhs) const;
-
     // -------------------------------------------------------------------------
     // Assert a bound on an aux var.
     // Records bound reasons for later conflict translation.

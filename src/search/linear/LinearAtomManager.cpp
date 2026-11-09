@@ -93,12 +93,6 @@ int LinearAtomManager::getOrCreateAuxVar(GeneralSimplex& gs,
     return auxVar;
 }
 
-bool LinearAtomManager::matchesAuxiliary(int auxVar, const LinearFormKey& lhs,
-                                       const mpq_class& rhs) const {
-    const auto found = auxToForm_.find(auxVar);
-    return found != auxToForm_.end() && found->second.lhs == lhs && found->second.rhs == rhs;
-}
-
 bool LinearAtomManager::auxForm(int aux, LinearFormKey& lhsOut, mpq_class& rhsOut) const {
     auto it = auxToForm_.find(aux);
     if (it == auxToForm_.end()) return false;

@@ -1,5 +1,59 @@
 # Arithmetic validation and continuation record
 
+## Closed preliminary: retained linear assertion definitions (2026-11-09)
+
+Core `c924303df5b34d8c189cb371d08220089dc69f26` validates retained auxiliary
+definitions through the common `LinearAtomManager` and avoids overwriting
+immutable LRA column forms. LRA/LIA keep their own source trails, replacement
+rules and rollback policies. A generic scope regression covers changed
+variables, coefficients, RHS, relations and polarity under repeated assertion,
+push/pop and reset. Proof-enabled native acceptance **bc382b677156** passes
+**64 targeted cases / 227,700 assertions** and all **2,305 unit cases /
+1,537,497 assertions**. All **2,343** source bodies match the core.
+Native-qualification SHA-256:
+`06f79698a0a5abec3b6b051f6418bfe39a5097a6cd606589acacea26c35abb5e`;
+source-binding SHA-256:
+`a846c55482574afddeafc6298f600ab1f24ae0c6676d537134f4bb4fb0010094`;
+CLI SHA-256:
+`4227d412738d56e749f062df2032ed64b10b724e0fd0ef4180f1d8546858f7a5`.
+
+Eight same-CPU diagnostic pairs **b266eb36acad** preserve SAT on all five
+controls in both arms; all ten actual models pass Z3/cvc5 replay. The three
+actual verified-reference gaps remain timeouts in both versions. Fixed
+controls total **32.200 / 31.543 seconds**, and private controls total
+**1.240 / 1.232 seconds** for main/candidate. These observations do not
+establish a source-level speedup or a complete-cohort result.
+Pilot-audit SHA-256:
+`9cfb197d6789b534efd454ecadbfe60a3287702303c8c28cfca53b1ccddb3429`.
+
+Paired private profiles **39eafb2dfcd2** reject the private reuse hypothesis:
+both arms still perform **8,669** auxiliary lookups, and the new retained-entry
+match is never called. All allocation counts and model-validation work remain
+identical. Total instructions change from **8,465,313,825 to 8,465,314,358**.
+The baseline creates only **54** source auxiliary rows and has **972** LIA
+backtracks. The lookup path, including necessary new-row construction, costs
+**9,101,029** inclusive instructions, about **0.108%** of this private sample.
+The data does not justify adding a broader definition cache. Inclusive costs
+overlap and are not independent elapsed-time fractions.
+Profile-audit SHA-256:
+`8682ba9eb18252885eabb31b7e0deeac788b53b706dc87bb314788ac44a00614`;
+preliminary-audit SHA-256:
+`70fac9e262609fe1f0f3559395ad47f0ec46ab2e24df5db4e3edad27203a7aa5`.
+
+No full performance stage or PR is created. The optional implementation and
+its experimental test are withdrawn; all frozen evidence remains preserved.
+The original complete-model replay remains intact. The earlier R1624 source
+synchronization experiment changed conflict explanations and stays closed.
+The next inspected limitation is unfinished eager SAT search: its encoding
+context is local to `EagerBitBlastSolver::solveImpl` and is destroyed when the
+arm yields Unknown. The earlier controlled trace records an open search
+ending near 19.9 seconds before the full 60-second timeout; it does not explain
+every formal loss. Work should preserve resumable search state and exact
+candidate validation under the original global budget. Native-term copies
+have distinct expression-index identities; a deferred candidate must own its
+validation inputs and respect query/cancellation lifetimes. No protected set
+or final-worker original-C qualification is claimed.
+
 ## Closed experiment: owned delta-rational expression construction (2026-11-09)
 
 Core `da1aea140eadc18150f1908bd67c38a61567c8cc` is pushed on `FULINA`.
