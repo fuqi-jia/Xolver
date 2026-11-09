@@ -1,11 +1,554 @@
 # Arithmetic validation and continuation record
 
-## Current development: typed decoding of opaque model classes (2026-11-09)
+## Qualified performance stage: directly owned finite bounds (2026-11-09)
+
+Core `328c3b3ef3ce6466bfaf871606713fb02241c351` constructs finite simplex
+endpoints without intermediate ownership copies. `BoundInfo::finite` directly
+initializes the final owned `BoundValue`; `LinearAtomManager::assertBound`
+reuses that endpoint when lower and upper views are identical. LIA and LRA
+interface equalities reuse their existing canonical zero and one owned
+endpoint. Existing constructors, exact values, explanations, failure ordering
+and each theory's level/rollback policy remain unchanged. Both interface
+bound assertions still execute after a lower-bound failure; ordinary linear
+assertion still short-circuits. No model check, search rule or budget changes.
+
+The measured interface path makes **81,495 lower and 81,495 upper calls**,
+but previously enters numeric copy initialization **1,629,900 times**.
+Paired native profiles reduce total copy initializations from **8,153,212 to
+6,802,472 (-16.6%)**, malloc calls from **18,663,266 to 16,986,546 (-9.0%)**,
+and instructions from **8,465,313,200 to 8,053,828,275 (-4.86%)**. Model
+construction, validation, warm-point evaluation and face-attempt counts stay
+identical. All six profiled SAT models pass independent replay. These are
+diagnostic instruction/allocation measurements, not elapsed-time estimates.
+Profile-audit SHA-256:
+`c2b9221c6f0d5f0732d5704030d17aab496d08b73325e7c9181376100dcd1ebe`.
+
+Proof-enabled native acceptance **150ce02c9a8a** passes **64 targeted cases /
+227,808 assertions**, all **2,305 unit cases / 1,537,605 assertions**, and
+**965 public regressions**. The new general regression covers large rationals,
+both infinitesimal signs, independent ownership, unchanged rvalue inputs,
+explanation polarity, conflicting bounds and restoration after pop. All
+**2,343** qualified source bodies match the core: **2,182** root Git blobs
+and **161** SOMTParser blobs; architecture checks report 743 files, 11 layers
+and zero violations.
+
+Complete development acceptance uses fresh frozen main/candidate/Z3 runs,
+rotated solver order, **60 seconds / one leased physical core / 16 GiB** per
+run, through ExperimentOS on Panda9 with at most 40 distinct physical cores.
+The main baseline is `25807183914cd6d01ab8b93925a0e2e4d3751aad`.
+Actual timed SAT models require independent Z3/cvc5 replay; UNSAT requires
+independent evidence bound to the original input. Current timeouts and unknowns
+never inherit historical credit, and previous SAT models never replace current
+witnesses.
+
+| Complete cohort | Main | Candidate | Frozen Z3 |
+| --- | ---: | ---: | ---: |
+| Private verified / 14,408 | 14,408 | 14,408 | 14,408 |
+| Private solver seconds | 204.9451 | 201.7892 | 294.1353 |
+| Fixed verified / 160 | 124 | 124 | 118 |
+| Fixed verified PAR-2 mean, seconds | 31.6212 | 31.5415 | 33.1295 |
+| Development verified / 587 | 587 | 587 | 584 |
+| Development solver seconds | 8.0594 | 7.9414 | 11.6037 |
+
+The private cohort retains **8,940 SAT and 5,468 UNSAT** and is **1.54% faster
+than main** in this complete paired round. All 40 private batches improve;
+they are partitions of one run, not independent repetitions. There are no
+lost verified solves, wrong models or opposite independent verdicts. The
+disjoint fixed/private union has **14,568 inputs**, **14,532 verified** in
+both Xolver arms, and verified PAR-2 totals **5,264.3368 / 5,248.4325 seconds**:
+an improvement of **15.9043 seconds**. Development587 is audited separately
+and excluded from that union to avoid overlapping credit.
+
+The candidate's additional raw UNSAT remains **unconfirmed** and is not a
+gained verified solve. It has **35 timeouts and one unconfirmed result**;
+Z3 has **36 timeouts and six unconfirmed results**. One actual UNSAT in each
+Xolver arm is independently certificate-checked; one actual current Z3 UNSAT
+uses a previously successful independent check on the identical input and
+frozen reference versions, preserving this round's timing. A bounded search
+of **27 prior qualified audits** finds neither a verified SAT contradiction
+nor independent UNSAT confirmation for the remaining candidate result.
+This absence is not a proof, so its status remains unconfirmed.
+Historical-evidence-audit SHA-256:
+`6245b34c89d12e6738bde663f50d5a2561d2ca917ffbf95313c154bc34ad23e8`.
+
+The complete stage passes the preregistered performance gate: no verified
+losses, a faster complete private cohort, and an improved disjoint-union
+count-first/PAR-2 score. All native jobs and both watchers are terminal;
+do not restart them or register duplicate formal runs. The stage is eligible
+for PR review. Exact-review-source binding, PR CI and normal main merge/CI
+must complete before claiming delivery. This is **not** a final overall
+superiority claim: remaining fixed inputs, final original-C QCP acceptance,
+the final frozen comparison and the one-time protected evaluation remain
+open. No protected set was read or run. Private inputs, models and per-case
+evidence remain exclusively on the server.
+
+Evidence hashes:
+
+| Artifact | SHA-256 |
+| --- | --- |
+| Native qualification | `b7e3edc79ab13f4a534e2042faf5b935d1ab17c52df8ca9a93a0bcc78e088d64` |
+| Source manifest | `ed576341a1494495459d40ee74645670d09bd33f465665edce94a22fa1d3f23a` |
+| Complete source binding | `69da66a93e2e9f8bd83ab702e3cf4a709706367af8768cdfed3d7966afa1044b` |
+| Frozen CLI | `332609d662bed3084ba58de670b6fa9cd21998a380b9ca468b754d9c4473370f` |
+| Frozen worker | `77a7ef07ce056b387869f693ecc1c2986fc51ad97f2447fcb196e0c9eee8d209` |
+| Private complete audit | `ecfe7df87a10ec97b60834170dc3f66877ecc1c17dc2f4d7ff01b0880ebcf489` |
+| Fixed raw audit | `75f765f5061931da33ddb0e3a7c9aa2bc1516309c258da878b813e9929590d28` |
+| Development complete audit | `913a0f0b319b0be1bb1921c9759e679afa9a51cdd474653d2aaf79068e3f2e05` |
+| Final complete-stage audit | `8015e2a7ad97f25f7e590bda663a9e9c4b30a1d987445a492f9ca5bc2c520e78` |
+
+Continue with this stage's single FULINA-to-main PR, exact-head CI and normal
+merge; retain FULINA. After delivery, continue private UFLIA performance work
+from measured hotspots while preserving independent model checks. The user
+cancelled `validation/current-main.json`; it is not required and must not
+become a new post-CI archive gate.
+
+## Closed preliminary: resumable arithmetic SAT search (2026-11-09)
+
+Cores `49b42264b2dfb52e69d93fe4edacb4ce9228f20e` and
+`d04cc1d29c51015298a643db2eeffaeb201096ad` retain interrupted eager SAT
+contexts, active assumptions and an owned Boolean validation graph. A generic
+single-thread cooperative scheduler resumes them under the original global
+deadline. Reconstructed witnesses require original-root validation; only the
+existing complete integer interpretations can refute. The second commit also
+invalidates a continuation after an exceptional backend or validation step.
+No budget constant, full theory-model replay or LRA/LIA rollback policy changes.
+
+Proof-enabled native acceptance **fb78fad42f46** passes **35 targeted cases /
+367 assertions** and all **2,313 unit cases / 1,537,529 assertions**. Nine new
+deterministic regressions cover repeated yields, input ownership, cancellation,
+query replacement, exceptional invalidation, refutation completeness and nested
+independent SAT calls. All **2,346** source bodies match the qualified core:
+2,185 root blobs and 161 SOMTParser blobs.
+Qualification SHA-256:
+`dfa48fb144287e95d341ac48f0a81f4a90c3a24b18d58f225cc7415e46a4c5b0`;
+source-manifest SHA-256:
+`026056aece9349c15a1b66b0ececb804b2ff93fa365e5f0cfcf18327a182c60e`;
+complete-source-binding SHA-256:
+`a3f44ffc15403f692c7961160ec04ddfb06eeb7a0b4f57569921341cb6b39ffe`;
+CLI SHA-256:
+`38838ced9bac5e35bcf4921184037cfd238645d57883ea67168f59324ee4d0ea`.
+
+Diagnostic **1ab3a9cad29f** completes **41 same-core pairs**: all 36 open
+fixed inputs plus two fixed and three private SAT controls. Each run receives
+60 seconds, one leased physical core and 16 GiB, with rotated solver order.
+Both versions retain the five controls; all ten actual timed SAT models pass
+Z3 and cvc5 replay. **All 36 open inputs remain timeouts in both versions**;
+there are no gained/lost verified solves or opposite decisions. Control times
+are main/candidate **38.262/38.127 seconds** for fixed and **1.4525/1.4510
+seconds** for private. These small diagnostic differences establish no speedup.
+Pilot-audit SHA-256:
+`4d323a736a4978f33673d5e2b447642d498085a1dbc49b81f15f5cee21a6921d`.
+
+Fourteen open inputs have an initial interrupted SAT call. Native sampling
+**5ea696195618** checks one such representative in each of LIA, NIA and NRA.
+All three still time out. Of **447 CPU stack samples**, **147** contain the
+initial eager search and **136** contain an actual resumed eager search.
+Categories overlap: these are not independent elapsed-time measurements.
+The sampled implementation does execute its continuation; missing activation
+or safe points do not explain these three failures. The samples never upgrade
+the completed pilot timeouts.
+Profile-audit SHA-256:
+`223ac3eddcbe09ded7c88b6f39ddb7d8ad6ba6c8d140f322202cf1f1e4d5e959`;
+closure-audit SHA-256:
+`2e8989284432a52978a315297da7a81cfd72aec35fc3fd026cb9dea344a8ae43`.
+
+The experiment is closed and its implementation/tests are withdrawn. No full
+performance stage, PR, protected-set run or final original-C qualification is
+created. The existing delivered-main qualification remains authoritative.
+At closure the server source/build still contained qualified **d04cc1d2**.
+The finite-bound stage above subsequently applies the complete withdrawal and
+verifies all source bodies against **328c3b3e**; its qualification supersedes
+that server starting point. Do not assume a local revert changes the server.
+Further private speed work follows the existing allocation call graph: the
+private workload is dominated by UFLIA SAT, with extensive exact numeric copies.
+Do not repeat the rejected constructor, propagation-pool or metadata-cache
+experiments, or remove independent model/consistency checks to save allocations.
+
+## Closed preliminary: retained linear assertion definitions (2026-11-09)
+
+Core `c924303df5b34d8c189cb371d08220089dc69f26` validates retained auxiliary
+definitions through the common `LinearAtomManager` and avoids overwriting
+immutable LRA column forms. LRA/LIA keep their own source trails, replacement
+rules and rollback policies. A generic scope regression covers changed
+variables, coefficients, RHS, relations and polarity under repeated assertion,
+push/pop and reset. Proof-enabled native acceptance **bc382b677156** passes
+**64 targeted cases / 227,700 assertions** and all **2,305 unit cases /
+1,537,497 assertions**. All **2,343** source bodies match the core.
+Native-qualification SHA-256:
+`06f79698a0a5abec3b6b051f6418bfe39a5097a6cd606589acacea26c35abb5e`;
+source-binding SHA-256:
+`a846c55482574afddeafc6298f600ab1f24ae0c6676d537134f4bb4fb0010094`;
+CLI SHA-256:
+`4227d412738d56e749f062df2032ed64b10b724e0fd0ef4180f1d8546858f7a5`.
+
+Eight same-CPU diagnostic pairs **b266eb36acad** preserve SAT on all five
+controls in both arms; all ten actual models pass Z3/cvc5 replay. The three
+actual verified-reference gaps remain timeouts in both versions. Fixed
+controls total **32.200 / 31.543 seconds**, and private controls total
+**1.240 / 1.232 seconds** for main/candidate. These observations do not
+establish a source-level speedup or a complete-cohort result.
+Pilot-audit SHA-256:
+`9cfb197d6789b534efd454ecadbfe60a3287702303c8c28cfca53b1ccddb3429`.
+
+Paired private profiles **39eafb2dfcd2** reject the private reuse hypothesis:
+both arms still perform **8,669** auxiliary lookups, and the new retained-entry
+match is never called. All allocation counts and model-validation work remain
+identical. Total instructions change from **8,465,313,825 to 8,465,314,358**.
+The baseline creates only **54** source auxiliary rows and has **972** LIA
+backtracks. The lookup path, including necessary new-row construction, costs
+**9,101,029** inclusive instructions, about **0.108%** of this private sample.
+The data does not justify adding a broader definition cache. Inclusive costs
+overlap and are not independent elapsed-time fractions.
+Profile-audit SHA-256:
+`8682ba9eb18252885eabb31b7e0deeac788b53b706dc87bb314788ac44a00614`;
+preliminary-audit SHA-256:
+`70fac9e262609fe1f0f3559395ad47f0ec46ab2e24df5db4e3edad27203a7aa5`.
+
+No full performance stage or PR is created. The optional implementation and
+its experimental test are withdrawn; all frozen evidence remains preserved.
+The original complete-model replay remains intact. The earlier R1624 source
+synchronization experiment changed conflict explanations and stays closed.
+The next inspected limitation is unfinished eager SAT search: its encoding
+context is local to `EagerBitBlastSolver::solveImpl` and is destroyed when the
+arm yields Unknown. The earlier controlled trace records an open search
+ending near 19.9 seconds before the full 60-second timeout; it does not explain
+every formal loss. Work should preserve resumable search state and exact
+candidate validation under the original global budget. Native-term copies
+have distinct expression-index identities; a deferred candidate must own its
+validation inputs and respect query/cancellation lifetimes. No protected set
+or final-worker original-C qualification is claimed.
+
+## Closed experiment: owned delta-rational expression construction (2026-11-09)
+
+Core `da1aea140eadc18150f1908bd67c38a61567c8cc` is pushed on `FULINA`.
+The production change is confined to `DeltaRational.h`: constrained borrowed
+constructor arguments let GMP expressions initialize their owned rational
+components directly, eliminating intermediate materialization and copying.
+Default template arguments preserve braced rational construction. Inputs,
+including rvalues, remain unmodified; no expression reference escapes the
+constructor. Exact values, infinitesimals, object layout, model checks,
+search policies and LIA/LRA rollback semantics remain intact.
+
+Proof-enabled native acceptance **85464bb900b5** passes **39 targeted cases /
+227,157 assertions** and all **2,305 unit cases / 1,537,484 assertions**.
+New tests cover large rationals, expressions with temporary operands,
+independent ownership, unchanged rvalue operands, braced construction,
+self-referential assignment and strict infinitesimal comparisons. All
+**2,343** qualified source bodies match the core, including the complete
+withdrawal of the rejected ordered-selector implementation.
+Native-qualification SHA-256:
+`442130d8abdf93f7575913634e232542d3affb9f2c4a214df65bed876877c3eb`;
+complete-source-binding SHA-256:
+`d1e3a8391a164c3609b8dae12afec32e40951b5e992a28373043dcbc9b8f57be`;
+CLI SHA-256:
+`fe716a0e123c47b17ec1719745578fcba402d8a96c48c25772ef5df4862385e5`;
+worker SHA-256:
+`38477730ee438537916405a1563879180e731f3c084a569a03a92a024db593da`.
+
+The preselected five-pair diagnostic **ef7a53579c7e** completes all ten SAT
+runs. Every actual model passes frozen Z3/cvc5 replay, with no opposite
+decision. The two fixed diagnostics total **28.958 / 27.512 seconds** for
+main/candidate; three private diagnostics total **1.232 / 1.185 seconds**.
+These samples do not establish complete-suite performance.
+Pilot-audit SHA-256:
+`bd63e7e072ee54d581e7faad1f253e6bba42c266930825fafd8302cfe7996795`.
+
+Fresh same-CPU Callgrind pairs **283d3e04cbe7** on the same three private
+diagnostics confirm the mechanism. GMP integer-component copy calls fall
+from **8,153,212 to 6,204,340** (23.90%); malloc calls fall from **18,663,266
+to 16,801,338** (9.98%). Total simulated instructions fall from
+**8,465,313,825 to 8,013,675,707** (5.34%). Both arms retain **525** model
+validation calls, **442** model construction calls, **113,136** warm
+evaluations and **108,838** face-analysis attempts. All six actual SAT
+models pass independent Z3/cvc5 replay. Instruction counts are diagnostic;
+inclusive costs overlap and are not independent elapsed-time savings.
+The first audit attempted to read unfinished jobs and preserved its readiness
+failure; the completed audit uses the same runs without rerunning a solver.
+Profile-audit SHA-256:
+`f225f75752c0ad18889e77647a4cce37814118f77383d159a0839fd98aeb024e`.
+The earlier allocation-root audit `r3492` corrects a metadata field in its
+preserved first report; every included main profile had already been checked
+against the correct binary before aggregation.
+
+Fresh complete-private comparison **04b2c74eeff0** verifies all **14,408**
+inputs in main, candidate and Z3, with no loss or error. Solver totals are
+**205.056 / 200.738 / 293.654 seconds**; candidate time falls **2.11%** from
+main, with all **40/40** paired slot totals lower. Forty distinct physical
+cores are confirmed under ExperimentOS. Each arm retains **60 seconds / one
+physical CPU / 16 GiB**, actual timed model capture, rotated order and
+independent checking. Freeze SHA-256:
+`4a5832c3c70eea60ae258e56f82b66a428ea6553eda2fb3defd3692aa2357e02`.
+Private-audit SHA-256:
+`7a50baa7859ae5dba9000d731f8df692fd6e8377c49529b08dbf433ffb86c2b8`.
+
+The complete stage **fails**. Fixed160 **548481ae17d5** verifies **124 / 123 /
+117** after independent certificate replay and applicable existing reference
+evidence. One candidate UNSAT and six reference decisions remain unconfirmed
+and excluded. Candidate loses one verified QF_LIA SAT: main **23.938 seconds**,
+candidate and Z3 timeout at 60 seconds. Both Xolver arms have 36 timeouts;
+the additional candidate unconfirmed decision is not a solved input.
+Mean verified fixed PAR-2 is **31.562695 / 32.136769 / 33.518997 seconds**.
+Combined disjoint fixed/private verified PAR-2 worsens **87.534509 seconds**.
+Development587 retains **587 / 587 / 584** at **7.899 / 7.728 / 11.446 seconds**;
+all **965** public regressions pass. The unchanged no-loss/private-faster/
+combined-score gate rejects promotion despite the private-cohort improvement.
+Final-stage-audit SHA-256:
+`42e8b5e1304f95aed385ffabdfa308b963d5373441cbf48d17554ca209b05958`.
+
+Fresh same-CPU diagnostic **aa3c0301afcc** does not reproduce the loss. Both
+versions return SAT at **17.661 / 17.885 seconds**, generate **510,018** SAT
+variables and spend **12.617 / 12.664 seconds** in SAT search. Both actual
+models pass Z3/cvc5 replay. This does not explain or replace the failed formal
+row. Loss-trace-audit SHA-256:
+`0d7a55076ed56c32b8d00e4ca3f007d58b86a66878e9573af5a2e8b71500b945`.
+An additional inventory of 26 qualified earlier fixed audits finds no
+independent checker result or checked SAT contradiction for either raw
+unconfirmed candidate UNSAT. It does not replace the separate successful
+certificate check or grant extra score credit. History-audit SHA-256:
+`892f1da83ba6e740af2a4202775056fbd723f9712ed896577e8103a04280ed0c`.
+
+The optional constructor change and its experimental test are withdrawn.
+Frozen binaries and all failed-stage evidence remain intact. Both stage
+watchers (PIDs **2374992**, **2531143**) and certificate job **139e26c9ba0c**
+completed normally; do not restart them. No PR is created. The next direction
+profiles delivered main on actual verified-reference gaps, primarily real
+arithmetic, rather than repeating this performance candidate. Protected
+evaluation, final-worker original-C QCP and overall solver superiority remain
+open.
+
+Native CPU-sampling job **f74b7575ddc9** is registered for all three current
+raw-audit gaps with independently verified reference decisions: **two QF_LRA
+and one QF_NRA**. It uses the frozen delivered-main binary, existing self-profile
+and phase diagnostics, and one allocated physical CPU / 16 GiB / 60 seconds
+per input. These are diagnostic observations only. Freeze SHA-256:
+`8a2292ea98e0613140664788f15e1afb4987069e0057330a34d22e0e992b9864`.
+
+## Closed pilot: ordered threshold selectors (2026-11-09)
+
+Core `dbbb23408e68b516da566944c6ccad7dec27bfdc` implements a shared ordered
+selector for positive-weight threshold diagrams. In `S <= b`, the completed
+then branch `F(i+1,b-w)` implies the else branch `F(i+1,b)`. Four clauses,
+including two binary explanations, use this premise while reducing literal
+occurrences from 12 to 10. Original ITE semantics, budgets, exact arithmetic,
+model checks and rollback policies remain intact. No global threshold cache
+or separate implication pass is introduced.
+
+Proof-enabled native acceptance passes **20 targeted cases / 17,553 assertions**
+and all **2,306 unit cases / 1,542,593 assertions**. The tests check all 16
+literal-polarity patterns, 81 partial assignments, high variable IDs, sharing
+and allocation failure. All 2,343 source bodies match the core.
+Native-qualification SHA-256:
+`6f3018b798a2f6d16f63a333e30d8c2ed27242aa96cf7c721a872a36c1548797`;
+source-binding SHA-256:
+`7ec1e5b1e7e2bae1c0f325e4d145608072b3ee3452440a21542a9ae8fa2cf122`;
+CLI SHA-256:
+`d8a9883dc519b855c03be4f88393ed7b18d0404a26d1bd548834a5375cf66380`.
+
+The same-budget five-pair pilot **rejects** this optional performance change.
+Main solves both fixed diagnostics, totaling **28.127 seconds**. Candidate
+solves one and times out on the other, totaling **76.710 seconds**. Candidate
+restores SAT on the prior six-clause loss but loses the other diagnostic.
+All three private diagnostics retain SAT in both arms and have no bit-encoding
+rounds. All **nine completed actual SAT models** pass Z3/cvc5 replay; the tenth
+run times out and supplies no candidate model. No opposite decision occurs.
+Pilot-audit SHA-256:
+`3d2133f1b2658dc53d566b8403745abb7e2f246d9b9649750071d95f449b04b9`.
+
+Propagation completeness alone does not establish better SAT search. The
+candidate reaches an open eager search near the existing 19.8-second share
+and then reaches the unchanged 60-second total deadline. The pilot does not
+replace any full-suite result. No new complete stage or PR is started. The
+optional implementation and its tests are withdrawn; native artifacts and
+diagnostics remain preserved. Current priority returns to measured private
+model-construction and validation costs, retaining every consistency guard.
+
+## Closed experiment: shared ITE consensus propagation (2026-11-09)
+
+Core `02a28b06e0bab007af17188637ca8ef924723886` is pushed on `FULINA`.
+`emitBooleanIteDefinition` in the shared BooleanDefinitions module supplies one
+exact definition for Boolean atomization and arithmetic bit encoding. Two selector-free
+consequences let unit propagation determine the output when both branches
+agree. Allocation guards, gate identity, exact arithmetic, model checks and
+LIA/LRA rollback policies stay intact; there is no new parameter or gate.
+
+The original four-clause relation misses two forced literals among its 81
+partial assignments. The shared six-clause relation misses none and has
+exactly the same models. Native tests check all 16 literal-polarity patterns,
+all partial assignments, encoder integration, completed reuse and failed
+allocation without publishing clauses. Proof-enabled native acceptance passes
+**20 targeted cases / 17,254 assertions** and all **2,306 unit cases /
+1,542,294 assertions**. The complete six-file server delta includes withdrawal
+of the previous tight-face experiment. All **2,343** qualified source bodies
+match the core, including its SOMTParser gitlink.
+
+Native-qualification SHA-256:
+`23f45460eafb854dfc054d3bb9e0a4fbcaeedd44fa1889d36150986320ef31b0`.
+Complete-source-binding SHA-256:
+`ff29ac703977e2ff39aca7f612780c5222f099bb3f198ed6c73741154d62f569`.
+CLI SHA-256:
+`d2725db030101a8262e353019d4a34b1156bc30207b3349bc95849672984bef5`;
+worker SHA-256:
+`c685b97994f98d700a453f6e2006950c4df667d58aaf94861b9c29d1fbf3eae2`.
+
+Main CPU sampling resolves 42 samples, 33 including CaDiCaL. Existing encoding
+observations record 510,018 variables; the definition trace contains 167,598
+ITE nodes in the previously selected development diagnostic. The trace uses
+the qualified e9 diagnostic source with an encoder body identical to main and
+finds **zero** sharing or folding opportunities
+from complementary gate normalization across 463,038 definitions. That
+alternative is closed without a production implementation. Encoding-audit
+SHA-256: `6ef0ade146034e225c53323fcf0a8c44e3cde71cc06896bf2756dd8551f5d00f`;
+structure-audit SHA-256:
+`3631f9a4d91b2c33c4404f83c191b8a075ef7ce2adeb36e90c1acb31058d4212`.
+The original encoding audit mistakenly includes a separate width-only message
+as a completed result; that failure remains preserved. Corrected result-line
+selection retains every source, budget and actual-model check.
+
+A same-CPU frozen main/candidate pilot independently replays all **eight**
+actual SAT models with Z3 and cvc5. Fixed diagnostic time falls **18.005 to
+15.828 seconds**, with SAT time **12.259 to 10.762 seconds** and unchanged
+variable count. The three private diagnostics have no bit-encoding rounds;
+their small timing difference is not attributed to this algorithm. Pilot-audit
+SHA-256: `8cb46bae96a26864426e3b2e4f406b4ca47998bc986b1839bc926a29315beab7`.
+
+Complete same-round comparisons against delivered main `25807183` and frozen
+Z3 finish under the unchanged 60 seconds / one physical CPU / 16 GiB protocol.
+Private14408 verifies **14,408 / 14,408 / 14,408** for main/candidate/Z3 at
+**204.409 / 203.662 / 293.534 seconds**, about 0.37% less candidate time,
+with 33/40 paired slot totals lower and no lost solve. Development587 retains
+**587 / 587 / 584**; all **965** public regressions pass.
+
+The complete stage **fails**. Fixed160 verifies **124 / 123 / 116** after the
+original-input-bound independent certificate replay. Six reference decisions
+remain unconfirmed and excluded; no additional applicable prior reference
+evidence is found in this round. Mean verified fixed PAR-2 is
+**31.504596 / 32.497849 / 34.183993 seconds**. There is one lost verified QF_LIA
+SAT: main **15.678 seconds**, candidate timeout **60 seconds**, Z3 **0.659
+seconds**. This differs from the earlier tight-face loss. Combined disjoint
+fixed/private verified PAR-2 worsens **158.174081 seconds**. The unchanged
+no-loss/private-faster/combined-score gate rejects promotion.
+Final-stage audit SHA-256:
+`076fd7916fe63c927365e3240af992532214efb68c6f0f299c0ba74baba96bd6`.
+
+A frozen same-CPU phase trace reproduces the new loss. Main takes **9.269
+seconds**, including **8.374 seconds** of SAT search. Candidate reaches an
+open SAT search after **19.462 seconds**, exits the eager arm after **19.911
+seconds**, and times out at the unchanged 60-second total deadline. Both use
+125,408 encoded variables. The actual main SAT model passes Z3/cvc5 replay;
+there is no completed candidate model. Phase-audit SHA-256:
+`3a2f33db358082b820425ad139e89b4d22e7548b1173c6f58294fc45c59c54ec`.
+These diagnostics do not replace any full-stage measurement.
+
+The optional six-clause implementation and its two experimental tests are
+withdrawn; failure evidence and frozen binaries remain unchanged. No PR is
+created. The next supported direction exploits the proven local ordering of
+positive-weight threshold branches, retaining four clauses with fewer literal
+occurrences. It does not change the existing solver budgets. Protected sets,
+final-worker original-C QCP and overall solver superiority remain open.
+
+## Closed experiment: finite tight-face eligibility (2026-11-09)
+
+Core `e9b08e98712f185fec01f153ab0a2dde41ec1bc2` is pushed on `FULINA`.
+The following main incorporation `120f1eb0` leaves its entire qualified tree
+unchanged. The common LIA/LRA `GeneralSimplex::analyzeFixedValues` now checks
+whether each exact extremum has all required finite endpoints before doing
+rational arithmetic or allocating tentative proof data. Already-fixed terms
+need no endpoint. Exact face tests, minimum-first ordering, explanations,
+closure rescheduling, immutable snapshots and rollback semantics stay intact.
+
+Native observations of the same three previously selected development inputs
+record **645 analyses / 108,838 face attempts**. Every attempt encounters a
+missing endpoint; **91,340** preceding exact multiply-adds are discarded. All
+three actual SAT models pass independent Z3/cvc5 replay, and all production
+source and CLI/worker/unit identities are restored before observations.
+Root-audit SHA-256:
+`29df5a93619580d94b216ebd3f046dbcb9600fbbb252d6607edd152dff5a498b`.
+This is tight-face proof analysis, separate from earlier closed propagation
+snapshot/endpoint experiments; their negative results remain preserved.
+
+Proof-enabled native acceptance passes **37 targeted cases / 148,985
+assertions** and all **2,304 unit cases / 1,537,465 assertions**. Architecture
+reports **743 files / 11 layers / 0 violations**. All **965** public regressions
+pass. The first regression-audit script incorrectly references the parent
+qualification; its script and failure record remain preserved. The corrected
+candidate reference passes every original check without changing or rerunning
+the underlying results. Public-regression audit SHA-256:
+`e3713857d2d09ddf14fa41e74458ca4c5f6e38611bde46fa9ce2cbffcb04736d`.
+Native-qualification SHA-256:
+`e932174bd22b1eca378a15b090d2f9d00eb2de533c8fd0e9aba0d68d648d5b20`;
+all 2,343 source bodies bind to the core, binding SHA-256:
+`1069f0bef445e0eadeb3949ed7a69f475b72de1fd319f498ff0e7d5d678bac2f`.
+CLI SHA-256:
+`e7243610cfac7e862e0cee50bbf5a377520ad9261acbe164270ea9af64fdec73`;
+worker SHA-256:
+`cf7b8dffa0190ba4a46ddfb36b7230a4a0b6258e1121dcc50b0868b45213f63a`.
+
+The frozen three-input parent/candidate profile independently validates all
+six actual SAT models. Both retain **645 analyses / 442 model constructions /
+525 validations**. Analysis instructions fall **897,339,835 to 418,718,144**;
+total simulated instructions fall **8,465,289,776 to 7,987,364,432**, about
+**5.65%**. These diagnostics do not establish formal timing or solve scores.
+Profile-audit SHA-256:
+`4d20f778cbb2d32864ef0775e8b8eb6fed9e649a9711df0b282a9f73bdb03b93`.
+
+Complete private/fixed/development comparisons finish against frozen
+merged main `25807183`, under the unchanged **60 seconds / one leased physical
+CPU / 16 GiB** protocol and 40-core total allocation. Both the main and reviewed
+source trees match; baseline-tree binding SHA-256:
+`bc01e8c1e79a5b943ba2bb99403cf95135561317089f25de3694b660a90ec0a4`.
+Private14408 independently verifies **14,408 / 14,408 / 14,408** for
+main/candidate/Z3 at **205.706 / 200.508 / 294.218 seconds**, a **2.53%**
+candidate reduction, with all 40 paired slot totals lower. Development587
+retains **587 / 587 / 584** at **7.979 / 7.791 / 11.532 seconds**. These
+overlapping development results stay outside the combined score.
+
+The complete stage **fails acceptance**: Fixed160 verifies **124 / 123 / 117**
+after fresh original-input-bound certificate checking and one applicable prior
+independent reference UNSAT check. Six reference decisions remain unconfirmed
+and excluded. There is one lost verified QF_LIA SAT: main **24.155 seconds**,
+candidate timeout **60 seconds**. No opposite decision is observed. Mean
+verified fixed PAR-2 is **31.564834 / 32.172412 / 33.519376 seconds**; the
+disjoint fixed/private combined verified score worsens **92.014519 seconds**.
+The unchanged no-loss/private-faster/combined-score gate rejects promotion.
+Final-stage audit SHA-256:
+`e47e83a9bb198cc81113bb641dcac41afb5bf9eb1305d79627b6b8cdb80cf9b3`.
+The failed stage and all raw observations remain unchanged. This core is not
+merged and has no PR. Diagnostic instruction savings and the private-only
+speedup do not override the complete-stage failure.
+
+Three subsequent same-budget rotated controls per arm all return SAT. Median
+main/candidate times are **19.664 / 19.560 seconds**; all six actual models
+pass Z3/cvc5 replay and are byte-identical to the original main output. The
+original candidate timeout has no SAT output. Process launch takes milliseconds
+in every observation. Quiet controls do not reproduce the loss or establish its
+cause, and they never replace complete-stage results. Control-audit SHA-256:
+`de30e7203aaf33cba69657b82854182bfc93d43ba4ed202b64bdf1bda50e942c`.
+
+The optional prefilter is withdrawn by `e1f7837d`, preserving the failed stage
+and its controls. Runtime, tests and tools return exactly to delivered main
+`25807183`; the native server still holds its explicitly qualified experimental
+build, while future builds must apply the full intended source delta. This is
+not a new main-archival requirement or a claim that the unreproduced regression
+has been fixed. Further work moves to independently measured model-evaluation
+demand, whose validator source body is unchanged between both observed arms.
+No protected input has been used. Remaining fixed inputs, final-worker original-C
+QCP and the final superiority comparison remain open.
+
+## Delivered stage: typed decoding of opaque model classes (2026-11-09)
 
 Core `930f081fb48e46780496e62711d1bee3f8228896` passes complete Panda9 /
 ExperimentOS acceptance against merged main `05f35440`. `FULINA` includes
 both this core and that main merge; its merge does not change the qualified
-candidate's file tree. PR review and its corresponding CI remain pending.
+candidate's file tree. [PR #121](https://github.com/fuqi-jia/Xolver/pull/121)
+passes both exact-head [PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42517026200)
+at `3ed5adbd3dec50be4c12449aa2741b1b68df5049`, then merges normally as
+`25807183914cd6d01ab8b93925a0e2e4d3751aad`. The entire merge tree equals the
+reviewed tree. Reviewed-source binding SHA-256:
+`b21708833bf9a98a1c0fd596220fc3e8a195a89c31cf077ed01cac615f5cacca`.
+Both jobs in its exact-merge
+[main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42519275335) pass.
+This completes the stage's main delivery; the following development regression
+does not change its qualified source or frozen binaries.
 
 The common `Solver::Impl::validateModelImpl` path previously attempted GMP
 rational parsing of opaque `@...` equivalence-class tokens. Native observations

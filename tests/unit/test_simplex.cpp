@@ -1370,3 +1370,44 @@ TEST_CASE("GeneralSimplex: explicit preserved rollback keeps feasible child poin
         CHECK(gs.value(sum) == gs.value(x) + gs.value(y));
     }
 }
+
+TEST_CASE("GeneralSimplex: direct finite endpoints own values and preserve explanations") {
+    const mpz_class large = (mpz_class(1) << 257) + 19;
+    const std::array<DeltaRational, 5> values{
+        DeltaRational(0), DeltaRational(7), DeltaRational(-3, 1),
+        DeltaRational(mpq_class(large, 11), mpq_class(-5, 13)),
+        DeltaRational(mpq_class(-large, 17), mpq_class(2, 7))};
+    for (const auto& expected : values) {
+        for (const bool polarity : {false, true}) {
+            auto source = expected;
+            const SatLit reason(37, polarity);
+            const auto endpoint = BoundInfo::finite(std::move(source), reason);
+            CHECK(source == expected);
+            CHECK(endpoint.bound.isFinite());
+            CHECK(endpoint.bound.value == expected);
+            REQUIRE(endpoint.reason.has_value());
+            CHECK(*endpoint.reason == reason);
+            source.a += 123;
+            source.b -= 17;
+            CHECK(endpoint.bound.value == expected);
+
+            GeneralSimplex simplex;
+            const int x = simplex.addVar("endpoint_value");
+            REQUIRE(simplex.assertLower(x, endpoint, 0));
+            REQUIRE(simplex.assertUpper(x, endpoint, 0));
+            REQUIRE(simplex.check() == GeneralSimplex::Result::Sat);
+            CHECK(simplex.value(x) == expected);
+            simplex.push();
+            const auto stronger = BoundInfo::finite(expected + DeltaRational(1),
+                                                    SatLit::positive(38));
+            CHECK_FALSE(simplex.assertLower(x, stronger, 1));
+            const auto conflict = simplex.getConflict();
+            CHECK(std::any_of(conflict.begin(), conflict.end(), [&](const auto& premise) {
+                return premise.reason == reason;
+            }));
+            simplex.pop();
+            REQUIRE(simplex.check() == GeneralSimplex::Result::Sat);
+            CHECK(simplex.value(x) == expected);
+        }
+    }
+}

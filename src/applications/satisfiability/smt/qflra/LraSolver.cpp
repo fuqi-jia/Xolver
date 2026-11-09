@@ -287,10 +287,10 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
         const int aux = getOrCreateInterfaceEqAuxVar(equality.a, equality.b);
         recordAppliedLevel(equality.level);
         if (aux >= 0) {
-            bool ok = gs_.assertLower(aux,
-                BoundInfo(BoundValue(DeltaRational(0)), equality.reason), equality.level);
-            ok = gs_.assertUpper(aux,
-                BoundInfo(BoundValue(DeltaRational(0)), equality.reason), equality.level) && ok;
+            const auto endpoints = LinearAtomManager::effectiveBoundViews(Relation::Eq, true, false);
+            const auto endpoint = BoundInfo::finite(*endpoints.lower, equality.reason);
+            bool ok = gs_.assertLower(aux, endpoint, equality.level);
+            ok = gs_.assertUpper(aux, endpoint, equality.level) && ok;
             if (!ok) {
                 auto conflict = manager_.translateConflict(gs_);
                 conflict.clause.push_back(equality.reason);
