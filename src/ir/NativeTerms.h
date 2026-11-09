@@ -77,8 +77,6 @@ public:
     ExprId addShared(TermExpr);
     // Canonical classification without materializing children or payload.
     Kind kind(ExprId) const;
-    // Indexed opaque sort without materializing children or payload.
-    SortId sortId(ExprId) const;
     const TermExpr get(ExprId) const;
     size_t size() const;
     // Index the original DAG by identity, including all reachable children.

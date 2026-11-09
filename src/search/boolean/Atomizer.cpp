@@ -137,7 +137,7 @@ bool Atomizer::isFormulaPositionTerm(Kind k) {
 
 bool Atomizer::areAllChildrenBool(const TermExpr& e, const NativeTerms& ir) const {
     for (ExprId cid : e.children) {
-        if (ir.sortId(cid) != boolSortId_) {
+        if (ir.get(cid).sort != boolSortId_) {
             return false;
         }
     }
@@ -145,12 +145,12 @@ bool Atomizer::areAllChildrenBool(const TermExpr& e, const NativeTerms& ir) cons
 }
 
 bool Atomizer::isProvablyBool(ExprId eid, const NativeTerms& ir) const {
-    const auto sort = ir.sortId(eid);
-    if (sort == boolSortId_) return true;
-    auto sk = ir.sortKind(sort);
+    const auto& e = ir.get(eid);
+    if (e.sort == boolSortId_) return true;
+    auto sk = ir.sortKind(e.sort);
     if (sk && *sk == SortKind::Bool) return true;
     // Boolean-producing operators are Bool regardless of sort registration.
-    switch (ir.kind(eid)) {
+    switch (e.kind) {
         case Kind::Not: case Kind::And: case Kind::Or:
         case Kind::Implies: case Kind::Xor: case Kind::ConstBool:
         case Kind::Eq: case Kind::Distinct:

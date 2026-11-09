@@ -282,11 +282,11 @@ bool FormulaRewriter::isFalse(ExprId e) const { bool b; return isBoolConst(e, b)
 bool FormulaRewriter::isProvablyBool(ExprId e) const {
     if (e == TrueSentinelExpr || e == FalseSentinelExpr) return true;
     if (e == NullExpr) return false;
-    const auto sort = ir_.sortId(e);
-    if (sort == boolSort_ && boolSort_ != NullSort) return true;
-    auto sk = ir_.sortKind(sort);
+    const TermExpr& n = ir_.get(e);
+    if (n.sort == boolSort_ && boolSort_ != NullSort) return true;
+    auto sk = ir_.sortKind(n.sort);
     if (sk && *sk == SortKind::Bool) return true;
-    switch (ir_.kind(e)) {
+    switch (n.kind) {
         case Kind::Not: case Kind::And: case Kind::Or:
         case Kind::Implies: case Kind::Xor: case Kind::ConstBool:
         case Kind::Eq: case Kind::Distinct:
