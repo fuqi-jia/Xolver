@@ -52,29 +52,29 @@ void EagerBitBlastSolver::cancel() { pending_.reset(); }
 EagerBitBlastSolver::Result EagerBitBlastSolver::resume(
     std::chrono::steady_clock::time_point deadline, std::function<bool()> interrupted) {
     if (!pending_) return {};
-    auto& search = *pending_;
-    auto& sat = search.context->solver();
-    sat.setDeadline(deadline);
-    sat.setProgressCallback(std::move(interrupted));
-    if (search.conflictLimit > 0) sat.limit("conflicts", search.conflictLimit);
-    SatSolver::SolveResult verdict;
     try {
-        verdict = sat.solve(search.assumptions);
-    } catch (...) {
+        auto& search = *pending_;
+        auto& sat = search.context->solver();
+        sat.setDeadline(deadline);
+        sat.setProgressCallback(std::move(interrupted));
+        if (search.conflictLimit > 0) sat.limit("conflicts", search.conflictLimit);
+        const auto verdict = sat.solve(search.assumptions);
         sat.setProgressCallback({});
+        if (verdict == SatSolver::SolveResult::Unknown) return {};
+        Result result;
+        if (verdict == SatSolver::SolveResult::Unsat) {
+            if (search.completeIntegerLinear) result.status = Status::Unsat;
+        } else {
+            result = validateCandidate(sat, search.variables, search.booleans,
+                search.assertions, [&](ExprId id) { return search.nodes.at(id); });
+        }
+        pending_.reset();
+        return result;
+    } catch (...) {
+        if (pending_) pending_->context->solver().setProgressCallback({});
+        cancel();
         throw;
     }
-    sat.setProgressCallback({});
-    if (verdict == SatSolver::SolveResult::Unknown) return {};
-    Result result;
-    if (verdict == SatSolver::SolveResult::Unsat) {
-        if (search.completeIntegerLinear) result.status = Status::Unsat;
-    } else {
-        result = validateCandidate(sat, search.variables, search.booleans,
-            search.assertions, [&](ExprId id) { return search.nodes.at(id); });
-    }
-    pending_.reset();
-    return result;
 }
 
 EagerBitBlastSolver::Result EagerBitBlastSolver::solveLinear(

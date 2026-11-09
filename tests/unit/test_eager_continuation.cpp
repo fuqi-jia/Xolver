@@ -1,5 +1,6 @@
 #include "search/bitblast/EagerBitBlastSolver.h"
 #include <doctest/doctest.h>
+#include <stdexcept>
 
 using namespace xolver;
 using Eager = bitblast::EagerBitBlastSolver;
@@ -126,4 +127,24 @@ TEST_CASE("Eager continuation: only a complete integer interpretation can refute
         CHECK(result.status == (real ? Eager::Status::Unknown : Eager::Status::Unsat));
         CHECK_FALSE(solver.hasPendingSearch());
     }
+}
+
+TEST_CASE("Eager continuation: an exceptional step discards its invalidated backend") {
+    unsigned allocations = 0, clauses = 0;
+    Eager solver([&] { return std::make_unique<YieldingSat>(allocations, clauses); });
+    Query query;
+    auto roots = query.bounded();
+    roots.push_back(query.predicate(Kind::Eq, query.x, query.constant(3)));
+    REQUIRE(solver.decide(query.terms, roots).status == Eager::Status::Unknown);
+    REQUIRE(solver.hasPendingSearch());
+    CHECK_THROWS_AS(solver.resume(std::chrono::steady_clock::time_point::max(), []() -> bool {
+        throw std::runtime_error("interrupted search callback failed");
+    }), std::runtime_error);
+    CHECK_FALSE(solver.hasPendingSearch());
+    CHECK(solver.resume(std::chrono::steady_clock::time_point::max()).status == Eager::Status::Unknown);
+    REQUIRE(solver.decide(query.terms, roots).status == Eager::Status::Unknown);
+    const auto result = solver.resume(std::chrono::steady_clock::time_point::max());
+    REQUIRE(result.status == Eager::Status::Sat);
+    CHECK(result.model.at("x") == 3);
+    CHECK(allocations == 2);
 }
