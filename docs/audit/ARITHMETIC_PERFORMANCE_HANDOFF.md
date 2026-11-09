@@ -31,11 +31,44 @@ LRA/LIA rollback policy changes.
 Seven general regressions cover interleaved appends against independent linear
 selection, interrupted scopes, key/comparison exceptions and recovery,
 noncopyable ownership, subquadratic comparisons, nonintegral priorities and
-reversed ordering. **Native build, unit acceptance, candidate profiles and
-complete performance validation remain pending.** This code has no demonstrated
-solver gain yet and must pass the existing performance gate.
+reversed ordering. Qualified core
+`b535fe02bca2f981ea811f3bffdaa3a3f1a616e8` passes proof-enabled native acceptance
+**f80f489d83bc**: **7 new cases / 16,600 assertions**, **125 targeted cases /
+245,355 assertions**, and all **2,312 unit cases / 1,554,205 assertions**.
+All **2,345** source bodies match the core (2,184 root blobs and 161
+SOMTParser blobs); architecture checks report 744 files, 11 layers and no
+violations. All **965 public regressions** pass without waivers.
 
-## Qualified performance stage: directly owned finite bounds (2026-11-09)
+Eight same-core diagnostic pairs **dad0e5315c7b** retain the five SAT
+controls, with all ten actual models independently replayed. Three reference
+gaps remain timeouts in both arms; no verified solve is gained or lost and
+there is no opposite verdict. Three paired profiles **94032be0a319** also
+validate all six actual models. Total instructions fall from **8,053,828,211
+to 7,743,112,438 (-3.86%)**; EUF-check exclusive instructions fall from
+**377,103,789 to 9,912,182**. Model construction (442), validation (525),
+warm evaluation (113,136) and face attempts (108,838) are unchanged. Numeric
+copies stay unchanged; malloc increases by 4,890. These are structural and
+small-sample observations, not complete-cohort timing or solve credit.
+
+Fresh complete comparisons are registered for **private14,408**, **fixed160**
+and **development587**, against the finite-bound version delivered below and
+the same frozen Z3. They retain every input, actual-model capture, independent
+checks, rotated solver order and **60 seconds / one physical core / 16 GiB**.
+ExperimentOS limits the three queues together to 40 physical cores. **Complete
+performance validation remains pending.** Do not repeat those registrations,
+claim a whole-cohort gain from profiles, or open a new PR before acceptance.
+
+| Current artifact | SHA-256 |
+| --- | --- |
+| Native qualification | `cd50bb9388ac36fa5d84f891eda04f19f1885248457a4177c56056c3e225ed81` |
+| Source manifest | `886210dd020ad424298de1cdfde4b5050b2b55aaa0bbf45c19255e711aa4551e` |
+| Complete source binding | `80cd2653e4f6e7c4d8771f8b07e00b18f3f5b5edd6bc824491fb9ecdda9d326b` |
+| Frozen CLI | `b277c4e47395792106cc28e274ef8417280d7d444e6cfbe79de0b1849cd72d46` |
+| Pilot audit | `90aa0e645ce0c3116e45573754e6c6022feb5baba6dd9a19ac6ef55ed66ccb7e` |
+| Profile audit | `cb7534281fe86bba11bf7e9b3e40ae19fe790bcb407c0e9c7e748a72ae3589b5` |
+| Public regression audit | `b59dc38585d449c59c9154bb0a59843ad9716b698151cd29b20dc4c8208e42e2` |
+
+## Delivered performance stage: directly owned finite bounds (2026-11-09)
 
 Core `328c3b3ef3ce6466bfaf871606713fb02241c351` constructs finite simplex
 endpoints without intermediate ownership copies. `BoundInfo::finite` directly
@@ -116,8 +149,8 @@ Both exact-head [PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/425
 pass. [PR #122](https://github.com/fuqi-jia/Xolver/pull/122) merges normally as
 `c2d85b4d4952a099a8832c0a8e514a9e69199886`; its entire tree matches the
 reviewed tree. FULINA is retained. Exact merged-main
-[CI](https://github.com/fuqi-jia/Xolver/actions/runs/42562749855) is still in
-progress; delivery confirmation awaits its result. This is **not** a final overall
+[CI](https://github.com/fuqi-jia/Xolver/actions/runs/42562749855) completes with
+both build-test and proof-gate successful, closing this delivery. This is **not** a final overall
 superiority claim: remaining fixed inputs, final original-C QCP acceptance,
 the final frozen comparison and the one-time protected evaluation remain
 open. No protected set was read or run. Private inputs, models and per-case
@@ -137,8 +170,8 @@ Evidence hashes:
 | Development complete audit | `913a0f0b319b0be1bb1921c9759e679afa9a51cdd474653d2aaf79068e3f2e05` |
 | Final complete-stage audit | `8015e2a7ad97f25f7e590bda663a9e9c4b30a1d987445a492f9ca5bc2c520e78` |
 
-Continue checking the existing merged-main CI; do not create another PR for
-this stage. Continue private UFLIA performance work
+This stage is delivered; do not create another PR or server archive gate for
+it. Continue private UFLIA performance work
 from measured hotspots while preserving independent model checks. The user
 cancelled `validation/current-main.json`; it is not required and must not
 become a new post-CI archive gate.
