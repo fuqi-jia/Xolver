@@ -97,6 +97,20 @@ struct NativeTerms::Storage {
         bool operator()(const SortPtr& a, const SortPtr& b) const { return *a == *b; }
     };
     std::unordered_map<SortPtr, SortId, SortHash, SortEqual> sortIds;
+
+    void readChildren(const Node& node, SmallVector<ExprId, 4>& out) const {
+        const auto arity = node->getChildrenSize();
+        out.reserve(arity);
+        // The index owns the parent. Transfer temporary child handles into
+        // alias resolution without constructing names or literal values.
+        for (size_t i = 0; i < arity; ++i)
+            out.push_back(ids.at(resolve(node->getChild(static_cast<int>(i)))));
+        if (out.size() == 2) {
+            const auto nativeOp = node->getKind();
+            if (nativeOp == NODE_KIND::NT_GT || nativeOp == NODE_KIND::NT_GE)
+                std::swap(out[0], out[1]);
+        }
+    }
 };
 
 NativeTerms::NativeTerms() : NativeTerms(std::make_shared<SOMTParser::NodeManager>()) {}
@@ -306,22 +320,18 @@ Kind NativeTerms::kind(ExprId id) const {
     return result;
 }
 
+SmallVector<ExprId, 4> NativeTerms::children(ExprId id) const {
+    SmallVector<ExprId, 4> out;
+    storage_->readChildren(storage_->nodes.at(id), out);
+    return out;
+}
+
 const TermExpr NativeTerms::get(ExprId id) const {
     const Node& node = storage_->nodes.at(id);
     TermExpr out;
     out.kind = kind(id);
     out.sort = storage_->nodeSorts.at(id);
-    const auto arity = node->getChildrenSize();
-    out.children.reserve(arity);
-    // The index owns the parent. Avoid extra owning range/iterator handles,
-    // and transfer each temporary child handle into alias resolution.
-    for (size_t i = 0; i < arity; ++i)
-        out.children.push_back(storage_->ids.at(resolve(node->getChild(static_cast<int>(i)))));
-    if (out.children.size() == 2) {
-        const auto nativeOp = node->getKind();
-        if (nativeOp == NODE_KIND::NT_GT || nativeOp == NODE_KIND::NT_GE)
-            std::swap(out.children[0], out.children[1]);
-    }
+    storage_->readChildren(node, out.children);
     if (out.isConst()) {
         const auto value = node->getValue();
         if (out.kind == Kind::ConstBool) {

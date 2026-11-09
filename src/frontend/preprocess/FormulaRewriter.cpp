@@ -173,7 +173,7 @@ ExprId FormulaRewriter::rewriteRec(ExprId root) {
     uses[root] = 1;
     while (!pending.empty()) {
         const auto e = pending.back(); pending.pop_back();
-        for (auto child : ir_.get(e).children) {
+        for (auto child : ir_.children(e)) {
             if (child == NullExpr) continue;
             auto [it, fresh] = uses.emplace(child, 1);
             if (fresh) pending.push_back(child);
