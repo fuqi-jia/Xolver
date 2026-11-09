@@ -86,7 +86,6 @@ void TheoryManager::registerSolver(std::unique_ptr<TheorySolver> solver) {
 }
 
 void TheoryManager::clearSolvers() {
-    linearPredicates_.reset();
     solvers_.clear();
     solverByTheory_.clear();
     if (sharedTermRegistry_) sharedTermRegistry_->clear();
@@ -175,7 +174,6 @@ void TheoryManager::discardSnapshotsAbove(int level) {
 
 void TheoryManager::assertTheoryLit(const TheoryAtomRecord& atom,
                                     SatLit assignedLit, int level) {
-    if (registry_) linearPredicates_.assertLit(*registry_, atom, assignedLit, level);
     if (combinationMode_ && atom.theory == TheoryId::Combination) {
         auto& payload = std::get<SharedEqualityPayload>(atom.payload);
         SatLit reasonLit = assignedLit; // already the actual assigned literal
@@ -195,7 +193,6 @@ void TheoryManager::assertTheoryLit(const TheoryAtomRecord& atom,
 }
 
 void TheoryManager::restoreRootLiteral(const TheoryAtomRecord& atom, SatLit lit) {
-    if (registry_) linearPredicates_.assertLit(*registry_, atom, lit, 0);
     if (combinationMode_ && atom.theory == TheoryId::Combination) {
         const auto& payload = std::get<SharedEqualityPayload>(atom.payload);
         // An unprocessed root event already survived withdrawal. Processed
@@ -215,7 +212,6 @@ void TheoryManager::restoreRootLiteral(const TheoryAtomRecord& atom, SatLit lit)
 }
 
 void TheoryManager::backtrackToLevel(int level) {
-    linearPredicates_.backtrackToLevel(level);
     // Remove pending events from levels above target
     auto it = std::remove_if(
         pendingSharedEqEvents_.begin(),
@@ -413,17 +409,8 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         }
     };
 
-    // Reuse relations between existing predicates before invoking the arithmetic
-    // engines. Every result is an explained clause, never a SAT certificate.
-    if (registry_) {
-        if (auto result = linearPredicates_.check(*registry_, assignmentView_, lemmaDb)) {
-            recordCheckResult(*result);
-            return std::move(*result);
-        }
-    }
-
     if (!combinationMode_) {
-        // Single-theory path
+        // Legacy single-theory path
         if (solvers_.empty()) {
             return TheoryCheckResult::consistent();
         }
