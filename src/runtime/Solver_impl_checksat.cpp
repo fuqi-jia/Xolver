@@ -1236,10 +1236,10 @@ Result Solver::Impl::checkSatGround() {
             assumptionReportTerms.push_back(indicatorCoreTerms_[k]);
         }
 
-        // Compile exact ordered predicate relations for both integer and real
-        // linear arithmetic before Boolean search. Ordinary theory checks still
-        // handle relationships between different expressions and later atoms.
-        BoundAxiomGenerator::generate(registry, *sat);
+        // Compile branch-independent relations for multi-predicate threshold
+        // families once. Isolated pairs retain ordinary explained theory
+        // conflicts, limiting preprocessing's effect on Boolean search.
+        BoundAxiomGenerator::generate(registry, *sat, TheoryId::LIA, 3);
         phase("bound-axioms-done");
 
         // P3: Do NOT eagerly create all shared-term-pair equality atoms.

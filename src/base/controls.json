@@ -412,6 +412,15 @@
       "semantics": "canonical Boolean; caller supplies missing/invalid default"
     },
     {
+      "name": "XOLVER_LRA_BOUND_AXIOMS_MAXGROUP",
+      "reads": [
+        {
+          "kind": "Int"
+        }
+      ],
+      "legacy_text": false
+    },
+    {
       "name": "XOLVER_LRA_PROFILE_EVERY",
       "reads": [
         {
