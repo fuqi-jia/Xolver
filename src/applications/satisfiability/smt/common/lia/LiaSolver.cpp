@@ -340,9 +340,11 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
         const auto& ieq = interfaceEqualities_[i];
         int aux = getOrCreateInterfaceEqAuxVar(ieq.a, ieq.b);
         if (aux >= 0) {
+            const auto endpoints = LinearAtomManager::effectiveBoundViews(Relation::Eq, true, true);
+            const auto endpoint = BoundInfo::finite(*endpoints.lower, ieq.reason);
             bool ok = true;
-            ok = gs_.assertLower(aux, BoundInfo(BoundValue(DeltaRational(0)), ieq.reason)) && ok;
-            ok = gs_.assertUpper(aux, BoundInfo(BoundValue(DeltaRational(0)), ieq.reason)) && ok;
+            ok = gs_.assertLower(aux, endpoint) && ok;
+            ok = gs_.assertUpper(aux, endpoint) && ok;
             if (!ok) {
                 auto tc = manager_.translateConflict(gs_);
                 tc.clause.push_back(ieq.reason);

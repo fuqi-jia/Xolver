@@ -130,9 +130,13 @@ bool LinearAtomManager::assertBound(GeneralSimplex& gs, int auxVar, Relation rel
                                     bool value, SatLit reasonLit, int level,
                                     bool integerForm) {
     const auto bounds = effectiveBoundViews(rel, value, integerForm);
-    if (bounds.lower && !gs.assertLower(auxVar, BoundInfo(BoundValue(*bounds.lower), reasonLit), level))
-        return false;
-    return !bounds.upper || gs.assertUpper(auxVar, BoundInfo(BoundValue(*bounds.upper), reasonLit), level);
+    if (bounds.lower) {
+        const auto endpoint = BoundInfo::finite(*bounds.lower, reasonLit);
+        if (!gs.assertLower(auxVar, endpoint, level)) return false;
+        if (bounds.upper == bounds.lower)
+            return gs.assertUpper(auxVar, endpoint, level);
+    }
+    return !bounds.upper || gs.assertUpper(auxVar, BoundInfo::finite(*bounds.upper, reasonLit), level);
 }
 
 TheoryConflict LinearAtomManager::translateConflict(const GeneralSimplex& gs) const {

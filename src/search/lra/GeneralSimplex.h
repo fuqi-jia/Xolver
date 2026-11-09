@@ -55,6 +55,16 @@ struct BoundInfo {
     BoundInfo() : bound(BoundValue::posInf()) {}
     explicit BoundInfo(const BoundValue& b) : bound(b) {}
     BoundInfo(const BoundValue& b, SatLit r) : bound(b), reason(r) {}
+    // Construct the owned finite endpoint in place, without an intermediate
+    // BoundValue copy. Neither rational component borrows the caller's storage.
+    static BoundInfo finite(const DeltaRational& value, SatLit r) {
+        return BoundInfo(FiniteEndpoint{}, value, r);
+    }
+
+private:
+    struct FiniteEndpoint {};
+    BoundInfo(FiniteEndpoint, const DeltaRational& value, SatLit r)
+        : bound(value), reason(r) {}
 };
 
 // ---------------------------------------------------------------------------
