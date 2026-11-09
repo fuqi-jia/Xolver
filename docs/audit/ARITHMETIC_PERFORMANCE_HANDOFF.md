@@ -1,6 +1,6 @@
 # Arithmetic validation and continuation record
 
-## Server-qualified: preserve canonical source-coordinate identity (2026-11-09)
+## Delivered: preserve canonical source-coordinate identity (2026-11-09)
 
 The existing independently checked private diagnostic profiles of the accepted
 core make **285 calls** to `LiaSolver::getDeducedSharedEqualities`. Each call
@@ -77,7 +77,15 @@ results, not a combination with the previous cache experiment or a permanent
 capability claim from one timing-boundary gain.
 
 This necessary correctness repair must remain if later performance changes.
-Server qualification is complete; PR and exact-commit CI delivery remain open.
+Server qualification and exact-commit CI delivery are complete.
+[PR #124](https://github.com/fuqi-jia/Xolver/pull/124) reviewed
+`bd1310691bcba7ce32f3b21033d51cab6e4b8a48`; both jobs passed in
+[PR CI 42588685881](https://github.com/fuqi-jia/Xolver/actions/runs/42588685881).
+The normal squash merge is `875b86279a0d5bc768ab83a811ef8b4c0ff0606b`,
+with the identical reviewed tree `6a0296f2d4543e6d297a07e9711799686818bd60`.
+Both jobs also passed in the exact merge's
+[main CI 42590755504](https://github.com/fuqi-jia/Xolver/actions/runs/42590755504).
+FULINA was synchronized by a normal merge; no branch was deleted or forced.
 Remaining fixed inputs, original-C QCP verification and one-time protected
 evaluation are still open. This is not an overall Z3-superiority claim.
 
@@ -98,6 +106,30 @@ assertions**. Its frozen CLI SHA-256 equals the delivered binary exactly,
 `558ef3b8e361235ebc700c9f7ffc0403f8840a66a8c5b0a98159958bbcfd2bb8`.
 Restoration qualification SHA-256:
 `a9cdc22175c39256c2d221f015d74031a1ee3a3ad70c6e151cd37bdac390b658`.
+
+## In progress: avoid unnecessary numeric construction and equality proofs
+
+Existing accepted profiles identify 269,987 calls in which `RealValue` factories
+default-construct a rational zero and immediately replace it. Core `af1b9af8`
+constructs the actual owned rational or algebraic payload directly, retaining
+canonicalization, kind and public APIs. Panda9 / ExperimentOS qualification
+passes **2,318 unit cases / 1,554,905 assertions**. Its frozen CLI SHA-256 is
+`f1333ffe2dfccd36709afcc7639362e127129ce214b09351e067f29567905c5d`.
+This is a qualified prototype, without complete performance acceptance.
+
+Eight additional diagnostic profiles cover SAT and UNSAT timing quantiles of
+the accepted private corpus; all four actual SAT models pass both independent
+checkers. Factory zero construction is a small share of these ordinary queries.
+The four SAT profiles instead show **85 fixed-value proof requests / 34 global
+analyses / 25,391,968 inclusive instructions**, all requested by interface
+disequality checking. Core `2cc1f37a` tests the exact feasible difference before
+asking whether it is forced to zero. A nonzero feasible witness disproves that
+claim; a zero witness retains the complete proof, conflict and split paths.
+An independent constructed regression covers different and equal affine
+offsets and checks the full conflict reasons at both theory efforts. This
+second core is awaiting native qualification. Neither prototype earns a new
+solve or speed claim; complete fresh comparisons remain required. Private
+inputs, models, per-input identifiers and raw profiles stay on the server.
 
 ## Closed: cached-value borrowing fails complete performance acceptance (2026-11-09)
 
