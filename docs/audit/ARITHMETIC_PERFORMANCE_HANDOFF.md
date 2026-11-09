@@ -1,6 +1,6 @@
 # Arithmetic validation and continuation record
 
-## In development: borrow cached independent-model values (2026-11-09)
+## Closed: cached-value borrowing fails complete performance acceptance (2026-11-09)
 
 Three existing qualified profiles of core `b535fe02` record **176,591 calls**
 to `ArithModelValidator::eval`, each calling the full `TR` copy constructor.
@@ -9,7 +9,7 @@ This identifies owned copies on cache reads; it is not a timing measurement
 for the new candidate. Diagnosis-audit SHA-256:
 `90766960edbf5ffb0c3166434dab212d68e7c824f9cb6a68085b7b1ed7b6fc32`.
 
-The implementation returns immutable references to cache-owned values and
+The experimental implementation returns immutable references to cache-owned values and
 borrows them in arithmetic, Boolean, array and UF readers. Distinctness and UF
 argument collections retain references to these same values. Cache insertion
 owns each newly evaluated result; `Store` still creates an independent array
@@ -36,8 +36,35 @@ zero**, while total instructions fall from **7,743,536,469 to 7,576,839,688
 (-2.15%)** and malloc calls from **16,991,436 to 16,456,038**. Model construction
 (442), validation (525) and warm evaluations (113,136) remain unchanged.
 These are diagnostic observations, not complete-cohort wall-time or solve
-credit. Fresh complete private/fixed/development timing and acceptance remain
-open.
+credit. The fresh complete round has now finished and **fails the unchanged
+performance gate**; this optional optimization is withdrawn, with no PR.
+
+The frozen main-equivalent baseline, candidate and Z3 all independently verify
+**14,408 private inputs**, with total solver times **201.0600 / 200.1497 /
+293.9912 seconds**. The candidate is 0.45% faster on that cohort. Fixed160,
+however, verifies **124 / 123 / 118 results**: the candidate loses one baseline
+SAT to a timeout. No new opposite verdict or invalid model is observed; a
+mathematical or memory defect has not been established. Six reference
+unconfirmed results remain excluded. Verified PAR-2 means are **31.6542 /
+32.1450 / 32.8630 seconds**.
+
+The disjoint 14,568-input fixed/private union verifies **14,532 / 14,531 /
+14,526 results**, with PAR-2 totals **5,265.7343 / 5,343.3567 / 5,552.0684
+seconds**. The candidate is **77.6224 seconds worse** than baseline. The
+separately reported development587 cohort retains **587 / 587 / 584**;
+its timings cannot repair the failed disjoint score. All processes use the
+same formal 60-second, one-physical-CPU, 16-GiB budget. The final audit proves
+a peak of 40 physical CPUs without cross-cohort CPU overlap. Its
+`server_qualified=true` records completed evidence processing;
+`eligible_for_pr=false` records the failed promotion decision.
+
+The production evaluator is restored exactly to delivered main `2da2dda6`.
+Both independent public semantic regressions remain. The already delivered
+EUF lifetime repair is retained. This restoration has not yet received a new
+native qualification; the tests and profiles above describe frozen `9b99d568`,
+not a rebuilt restored executable. Original reports and frozen binaries remain
+unchanged. A subsequent focused QF_LIA diagnosis may explain the timeout but
+cannot overwrite this failed round or earn additional formal score credit.
 
 | Cache-read artifact | SHA-256 |
 | --- | --- |
@@ -48,6 +75,7 @@ open.
 | Diagnostic pilot audit | `763db84e049e1f6677921142f80d97d3884c2d1c20815ad9b27fdfaa8b1553ad` |
 | Paired profile audit | `5245828a4ec22eb83a6c0d27c73f7c5586f5385f3e37049c0760eb3ed94020b7` |
 | Corrected public regression audit | `2efa2680cbcc63520e84d4fd070780f83c97332063051a03d2da6a1ba25520e3` |
+| Failed complete-stage audit | `14ae77e7ed330a38da87f3e12ebd21b76e58b56f138f948ed83253303408c6a0` |
 
 ## Delivered: EUF lifetime repair and stable priority drain (2026-11-09)
 

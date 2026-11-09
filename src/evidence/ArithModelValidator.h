@@ -153,10 +153,7 @@ private:
         ArrVal arr;          // Array kind
     };
 
-    // Borrow immutable cache-owned values for this evaluation. References stay
-    // valid across unordered_map insertions and rehashes; each public entry
-    // point rebuilds its caches before evaluating a possibly changed model.
-    const TR& eval(ExprId e) const;
+    TR eval(ExprId e) const;       // cached dispatcher (memo when enabled)
     TR evalImpl(ExprId e) const;   // the actual evaluator (recurses via eval)
     // Iterative bottom-up pre-pass: fills `cache` with every subterm's TR so the
     // recursive eval/evalImpl resolves children from it and never recurses deeply

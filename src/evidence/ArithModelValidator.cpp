@@ -50,14 +50,14 @@ ArithModelValidator::validate(const std::vector<ExprId>& assertions) const {
     const bool diag = xolver::config::read<xolver::config::ReadKind::Presence>("XOLVER_DIAG_AMV");
     const bool diagDeep = xolver::config::read<xolver::config::ReadKind::Presence>("XOLVER_DIAG_AMV_DEEP");
     for (ExprId a : assertions) {
-        const TR& r = eval(a);
+        TR r = eval(a);
         if (r.kind == Kind2::Indeterminate || r.kind != Kind2::Bool) {
             if (diag) {
                 std::cerr << "[AMV] INDETERMINATE assertion eid=" << a
                           << " kind2=" << (int)r.kind << "\n";
                 amvDumpExpr(ir_, a, 0, 4);
                 std::function<void(ExprId,int)> drill = [&](ExprId e, int depth) {
-                    const TR& sr = eval(e);
+                    TR sr = eval(e);
                     const char* k = sr.kind == Kind2::Bool ? "Bool"
                                   : sr.kind == Kind2::Number ? "Number"
                                   : sr.kind == Kind2::Token ? "Token"
@@ -84,7 +84,7 @@ ArithModelValidator::validate(const std::vector<ExprId>& assertions) const {
                 // where the floor caught a model violation but the cause is in
                 // a complex arith+UF subterm. Depth-capped at 12 to bound output.
                 std::function<void(ExprId, int)> drill = [&](ExprId e, int depth) {
-                    const TR& sr = eval(e);
+                    TR sr = eval(e);
                     std::string val;
                     if (sr.kind == Kind2::Bool) val = sr.b ? "TRUE" : "FALSE";
                     else if (sr.kind == Kind2::Number) val = "Num(" + sr.n.tryAsRational().value_or(mpq_class(0)).get_str() + ")";
@@ -117,7 +117,7 @@ std::optional<mpq_class> ArithModelValidator::evalNumber(ExprId e) const {
     std::unordered_map<ExprId, TR> prepass;
     prepassCache_ = &prepass;
     warmEval(e, prepass);
-    const TR& r = eval(e);
+    TR r = eval(e);
     prepassCache_ = nullptr;
     if (r.kind == Kind2::Number) return r.n.tryAsRational();  // algebraic → nullopt
     return std::nullopt;
@@ -128,7 +128,7 @@ std::optional<std::string> ArithModelValidator::evalToken(ExprId e) const {
     std::unordered_map<ExprId, TR> prepass;
     prepassCache_ = &prepass;
     warmEval(e, prepass);
-    const TR& r = eval(e);
+    TR r = eval(e);
     prepassCache_ = nullptr;
     return asToken(r);
 }
@@ -169,7 +169,7 @@ std::optional<bool> ArithModelValidator::equalArrays(
     return std::nullopt;
 }
 
-const ArithModelValidator::TR& ArithModelValidator::eval(ExprId eid) const {
+ArithModelValidator::TR ArithModelValidator::eval(ExprId eid) const {
     // Pre-pass cache (warmEval): a hit returns immediately, so the recursion
     // below never descends more than one level past already-evaluated children.
     if (prepassCache_) {
@@ -178,9 +178,9 @@ const ArithModelValidator::TR& ArithModelValidator::eval(ExprId eid) const {
     }
     auto it = evalMemo_.find(eid);
     if (it != evalMemo_.end()) return it->second;
-    // Store the owned result before lending it to readers. Recursive insertion
-    // may rehash this map, but does not invalidate references to its values.
-    return evalMemo_.emplace(eid, evalImpl(eid)).first->second;
+    TR r = evalImpl(eid);                 // recurses via eval() -> fills the cache
+    evalMemo_.emplace(eid, r);
+    return r;
 }
 
 void ArithModelValidator::warmEval(ExprId root, std::unordered_map<ExprId, TR>& cache) const {
@@ -293,7 +293,7 @@ ArithModelValidator::TR ArithModelValidator::evalImpl(ExprId eid) const {
         case Kind::Add: {
             RealValue acc;  // 0
             for (ExprId c : n.children) {
-                const TR& cr = eval(c);
+                TR cr = eval(c);
                 if (cr.kind != Kind2::Number) return r;
                 acc = acc + cr.n;
             }
@@ -301,11 +301,11 @@ ArithModelValidator::TR ArithModelValidator::evalImpl(ExprId eid) const {
         }
         case Kind::Sub: {
             if (n.children.empty()) return r;
-            const TR& f = eval(n.children[0]);
+            TR f = eval(n.children[0]);
             if (f.kind != Kind2::Number) return r;
             RealValue acc = f.n;
             for (size_t i = 1; i < n.children.size(); ++i) {
-                const TR& cr = eval(n.children[i]);
+                TR cr = eval(n.children[i]);
                 if (cr.kind != Kind2::Number) return r;
                 acc = acc - cr.n;
             }
@@ -313,14 +313,14 @@ ArithModelValidator::TR ArithModelValidator::evalImpl(ExprId eid) const {
         }
         case Kind::Neg: {
             if (n.children.size() != 1) return r;
-            const TR& cr = eval(n.children[0]);
+            TR cr = eval(n.children[0]);
             if (cr.kind != Kind2::Number) return r;
             return num(-cr.n);
         }
         case Kind::Mul: {
             RealValue acc = RealValue::fromInt(1);
             for (ExprId c : n.children) {
-                const TR& cr = eval(c);
+                TR cr = eval(c);
                 if (cr.kind != Kind2::Number) return r;
                 acc = acc * cr.n;
             }
@@ -328,8 +328,7 @@ ArithModelValidator::TR ArithModelValidator::evalImpl(ExprId eid) const {
         }
         case Kind::Div: {
             if (n.children.size() != 2) return r;
-            const TR& a = eval(n.children[0]);
-            const TR& b = eval(n.children[1]);
+            TR a = eval(n.children[0]), b = eval(n.children[1]);
             if (a.kind != Kind2::Number || b.kind != Kind2::Number) return r;
             if (b.n.isZero()) {
                 if (n.sort != ir_.intSortId() || !divZero_ || !a.n.isExactInteger()) return r;
@@ -352,8 +351,7 @@ ArithModelValidator::TR ArithModelValidator::evalImpl(ExprId eid) const {
         }
         case Kind::Pow: {
             if (n.children.size() != 2) return r;
-            const TR& base = eval(n.children[0]);
-            const TR& exp = eval(n.children[1]);
+            TR base = eval(n.children[0]), exp = eval(n.children[1]);
             if (base.kind != Kind2::Number || exp.kind != Kind2::Number) return r;
             if (!exp.n.isExactInteger()) return r;
             mpz_class e = exp.n.floor();
@@ -367,14 +365,13 @@ ArithModelValidator::TR ArithModelValidator::evalImpl(ExprId eid) const {
         }
         case Kind::Abs: {
             if (n.children.size() != 1) return r;
-            const TR& cr = eval(n.children[0]);
+            TR cr = eval(n.children[0]);
             if (cr.kind != Kind2::Number) return r;
             return num(cr.n.sign() < 0 ? -cr.n : cr.n);
         }
         case Kind::Mod: {
             if (n.children.size() != 2) return r;
-            const TR& a = eval(n.children[0]);
-            const TR& b = eval(n.children[1]);
+            TR a = eval(n.children[0]), b = eval(n.children[1]);
             if (a.kind != Kind2::Number || b.kind != Kind2::Number) return r;
             if (!a.n.isExactInteger() || !b.n.isExactInteger()) return r;
             if (b.n.isZero()) {
@@ -393,20 +390,19 @@ ArithModelValidator::TR ArithModelValidator::evalImpl(ExprId eid) const {
         }
         case Kind::ToInt: {
             if (n.children.size() != 1) return r;
-            const TR& cr = eval(n.children[0]);
+            TR cr = eval(n.children[0]);
             if (cr.kind != Kind2::Number) return r;
             return num(RealValue::fromMpz(cr.n.floor()));  // floor (Euclidean)
         }
         case Kind::IsInt: {
             if (n.children.size() != 1) return r;
-            const TR& cr = eval(n.children[0]);
+            TR cr = eval(n.children[0]);
             if (cr.kind != Kind2::Number) return r;
             return bl(cr.n.isExactInteger());
         }
         case Kind::Eq: {
             if (n.children.size() != 2) return r;
-            const TR& a = eval(n.children[0]);
-            const TR& b = eval(n.children[1]);
+            TR a = eval(n.children[0]), b = eval(n.children[1]);
             if (a.kind == Kind2::Indeterminate || b.kind == Kind2::Indeterminate) return r;
             if (a.kind == Kind2::Array && b.kind == Kind2::Array) {
                 const auto sorts = ir_.arraySortParams(ir_.get(n.children[0]).sort);
@@ -423,31 +419,29 @@ ArithModelValidator::TR ArithModelValidator::evalImpl(ExprId eid) const {
             return bl(*at == *bt);
         }
         case Kind::Distinct: {
-            std::vector<const TR*> vals;
+            std::vector<TR> vals;
             vals.reserve(n.children.size());
             for (ExprId c : n.children) {
-                const TR& cr = eval(c);
+                TR cr = eval(c);
                 if (cr.kind == Kind2::Indeterminate) return r;
-                vals.push_back(&cr);
+                vals.push_back(cr);
             }
             bool anyIndet = false;
             for (size_t i = 0; i < vals.size(); ++i)
                 for (size_t j = i + 1; j < vals.size(); ++j) {
-                    const auto& left = *vals[i];
-                    const auto& right = *vals[j];
-                    if (left.kind == Kind2::Array && right.kind == Kind2::Array) {
+                    if (vals[i].kind == Kind2::Array && vals[j].kind == Kind2::Array) {
                         const auto sorts = ir_.arraySortParams(ir_.get(n.children[i]).sort);
                         if (!sorts) { anyIndet = true; continue; }
-                        const auto same = equalArrays(left.arr, right.arr, sorts->first);
+                        const auto same = equalArrays(vals[i].arr, vals[j].arr, sorts->first);
                         if (same && *same) return bl(false);
                         if (!same) anyIndet = true;
                         continue;
                     }
-                    if (left.kind == Kind2::Number && right.kind == Kind2::Number) {
-                        if (left.n == right.n) return bl(false);
+                    if (vals[i].kind == Kind2::Number && vals[j].kind == Kind2::Number) {
+                        if (vals[i].n == vals[j].n) return bl(false);
                         continue;
                     }
-                    auto ti = asToken(left), tj = asToken(right);
+                    auto ti = asToken(vals[i]), tj = asToken(vals[j]);
                     if (!ti || !tj) { anyIndet = true; continue; }
                     if (*ti == *tj) return bl(false);
                 }
@@ -455,8 +449,7 @@ ArithModelValidator::TR ArithModelValidator::evalImpl(ExprId eid) const {
         }
         case Kind::Lt: case Kind::Leq: case Kind::Gt: case Kind::Geq: {
             if (n.children.size() != 2) return r;
-            const TR& a = eval(n.children[0]);
-            const TR& b = eval(n.children[1]);
+            TR a = eval(n.children[0]), b = eval(n.children[1]);
             if (a.kind != Kind2::Number || b.kind != Kind2::Number) return r;
             switch (n.kind) {
                 case Kind::Lt:  return bl(a.n <  b.n);
@@ -468,7 +461,7 @@ ArithModelValidator::TR ArithModelValidator::evalImpl(ExprId eid) const {
         case Kind::And: {
             bool ind = false;
             for (ExprId c : n.children) {
-                const TR& cr = eval(c);
+                TR cr = eval(c);
                 if (cr.kind == Kind2::Indeterminate) { ind = true; continue; }
                 if (cr.kind != Kind2::Bool) return r;
                 if (!cr.b) return bl(false);
@@ -478,7 +471,7 @@ ArithModelValidator::TR ArithModelValidator::evalImpl(ExprId eid) const {
         case Kind::Or: {
             bool ind = false;
             for (ExprId c : n.children) {
-                const TR& cr = eval(c);
+                TR cr = eval(c);
                 if (cr.kind == Kind2::Indeterminate) { ind = true; continue; }
                 if (cr.kind != Kind2::Bool) return r;
                 if (cr.b) return bl(true);
@@ -487,21 +480,20 @@ ArithModelValidator::TR ArithModelValidator::evalImpl(ExprId eid) const {
         }
         case Kind::Not: {
             if (n.children.size() != 1) return r;
-            const TR& cr = eval(n.children[0]);
+            TR cr = eval(n.children[0]);
             if (cr.kind != Kind2::Bool) return r;
             return bl(!cr.b);
         }
         case Kind::Implies: {
             if (n.children.size() != 2) return r;
-            const TR& a = eval(n.children[0]);
-            const TR& b = eval(n.children[1]);
+            TR a = eval(n.children[0]), b = eval(n.children[1]);
             if (a.kind != Kind2::Bool || b.kind != Kind2::Bool) return r;
             return bl(!a.b || b.b);
         }
         case Kind::Xor: {
             bool acc = false, seen = false;
             for (ExprId c : n.children) {
-                const TR& cr = eval(c);
+                TR cr = eval(c);
                 if (cr.kind != Kind2::Bool) return r;
                 acc = seen ? (acc != cr.b) : cr.b;
                 seen = true;
@@ -510,14 +502,14 @@ ArithModelValidator::TR ArithModelValidator::evalImpl(ExprId eid) const {
         }
         case Kind::Ite: {
             if (n.children.size() != 3) return r;
-            const TR& c = eval(n.children[0]);
+            TR c = eval(n.children[0]);
             if (c.kind != Kind2::Bool) return r;
             return eval(c.b ? n.children[1] : n.children[2]);
         }
         case Kind::ConstArray: {
             // const(v): λi.v. Default = token of v, no overrides.
             if (n.children.size() != 1) return r;
-            const TR& vr = eval(n.children[0]);
+            TR vr = eval(n.children[0]);
             auto vt = asToken(vr);
             if (!vt) return r;
             TR t; t.kind = Kind2::Array; t.arr.deflt = *vt;
@@ -526,10 +518,10 @@ ArithModelValidator::TR ArithModelValidator::evalImpl(ExprId eid) const {
         case Kind::Store: {
             // store(a,i,v): override a at index-token(i) with token(v).
             if (n.children.size() != 3) return r;
-            const TR& ar = eval(n.children[0]);
+            TR ar = eval(n.children[0]);
             if (ar.kind != Kind2::Array) return r;
-            const TR& ir2 = eval(n.children[1]);
-            const TR& vr = eval(n.children[2]);
+            TR ir2 = eval(n.children[1]);
+            TR vr = eval(n.children[2]);
             auto it = asToken(ir2);
             auto vt = asToken(vr);
             if (!it || !vt) return r;
@@ -545,7 +537,7 @@ ArithModelValidator::TR ArithModelValidator::evalImpl(ExprId eid) const {
             // M)` over a bridged read validates instead of seeing a stale array
             // default. Robust to nested reads and compound indices. No string.
             if (selOverride_) {
-                const TR& iv = eval(n.children[1]);
+                TR iv = eval(n.children[1]);
                 if (iv.kind == Kind2::Number) {
                     if (auto q = iv.n.tryAsRational()) {
                         auto so = selOverride_->find({n.children[0], *q});
@@ -554,9 +546,9 @@ ArithModelValidator::TR ArithModelValidator::evalImpl(ExprId eid) const {
                 }
             }
             // select(a,i): apply a's interpretation at index-token(i).
-            const TR& ar = eval(n.children[0]);
+            TR ar = eval(n.children[0]);
             if (ar.kind != Kind2::Array) return r;
-            const TR& ir2 = eval(n.children[1]);
+            TR ir2 = eval(n.children[1]);
             auto it = asToken(ir2);
             if (!it) return r;
             auto ov = ar.arr.overrides.find(*it);
@@ -611,14 +603,14 @@ ArithModelValidator::TR ArithModelValidator::evalImpl(ExprId eid) const {
             if (fit == funcInterps_->end()) return r;
             const auto& fi = fit->second;
             if (fi.argSorts.size() != n.children.size()) return r;
-            std::vector<const TR*> args;
-            if (!fi.entries.empty()) for (ExprId c : n.children) args.push_back(&eval(c));
+            std::vector<TR> args;
+            if (!fi.entries.empty()) for (ExprId c : n.children) args.push_back(eval(c));
             const std::string* valStr = nullptr;
             for (const auto& entry : fi.entries) {
                 if (entry.args.size() != args.size()) return r;
                 bool match = true, uncertain = false;
                 for (std::size_t i = 0; i < args.size(); ++i) {
-                    const auto& arg = *args[i];
+                    const auto& arg = args[i];
                     const auto& key = entry.args[i];
                     if (arg.kind == Kind2::Array) {
                         const auto sorts = ir_.arraySortParams(ir_.get(n.children[i]).sort);
