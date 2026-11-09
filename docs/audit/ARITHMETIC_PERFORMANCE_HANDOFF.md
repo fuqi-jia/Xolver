@@ -14,9 +14,21 @@ labels such as `s0` can also be legal source names; rebuilding an identity map
 from those labels can select the auxiliary coordinate instead of the source.
 Two independently constructed regressions cover unequal/equal fixed source
 values with such a name, premise literals, late variable registration and
-withdrawn/reasserted bounds. Native before/after reproduction and qualification
-are pending; no new opposite SMT verdict, performance gain or promotion is
-claimed. LRA/LIA rollback policies and all model checks are unchanged.
+withdrawn/reasserted bounds. Native reproduction confirms an invalid theory
+equality for unequal source values; both Z3 and cvc5 accept the independently
+constructed countermodel. The corrected index passes the identity regression.
+The first native attempt still fails the incremental test: its root backtrack
+incorrectly assumed retained root premises, contrary to the existing LIA
+reset/replay contract. The test now uses a positive parent level. That failed
+native attempt is retained; complete repaired-source qualification is pending.
+No new whole-SMT opposite verdict, performance gain or promotion is claimed.
+LRA/LIA rollback policies and all model checks are unchanged.
+
+The cache-withdrawal core separately passes all **2,315 unit cases / 1,554,865
+assertions**. Its frozen CLI SHA-256 equals the delivered binary exactly,
+`558ef3b8e361235ebc700c9f7ffc0403f8840a66a8c5b0a98159958bbcfd2bb8`.
+Restoration qualification SHA-256:
+`a9cdc22175c39256c2d221f015d74031a1ee3a3ad70c6e151cd37bdac390b658`.
 
 ## Closed: cached-value borrowing fails complete performance acceptance (2026-11-09)
 
@@ -78,9 +90,9 @@ a peak of 40 physical CPUs without cross-cohort CPU overlap. Its
 
 The production evaluator is restored exactly to delivered main `2da2dda6`.
 Both independent public semantic regressions remain. The already delivered
-EUF lifetime repair is retained. This restoration has not yet received a new
-native qualification; the tests and profiles above describe frozen `9b99d568`,
-not a rebuilt restored executable. Original reports and frozen binaries remain
+EUF lifetime repair is retained. The restoration has its own native
+qualification described above; this experiment's diagnostic tests and profiles
+describe frozen `9b99d568`, not a new performance claim for the restoration. Original reports and frozen binaries remain
 unchanged. A subsequent focused QF_LIA diagnosis may explain the timeout but
 cannot overwrite this failed round or earn additional formal score credit.
 

@@ -725,16 +725,16 @@ TEST_CASE("LIA: shared coordinates observe late variables and withdrawn bounds")
                    (equality.a == other && equality.b == source);
         });
     };
-    pin("other", 0, 1, 0);
+    pin("other", 0, 1, 1);
     CHECK_FALSE(equal());
-    pin("s0", 5, 2, 1);
+    pin("s0", 5, 2, 2);
     CHECK_FALSE(equal());
-    solver.backtrackToLevel(0);
+    solver.backtrackToLevel(1);
     CHECK_FALSE(equal());
-    pin("s0", 0, 3, 1);
+    pin("s0", 0, 3, 2);
     CHECK(equal());
-    solver.backtrackToLevel(0);
+    solver.backtrackToLevel(1);
     CHECK_FALSE(equal());
-    pin("s0", 7, 4, 1);
+    pin("s0", 7, 4, 2);
     CHECK_FALSE(equal());
 }
