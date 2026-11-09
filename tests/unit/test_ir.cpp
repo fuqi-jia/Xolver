@@ -17,7 +17,7 @@ TEST_CASE("NativeTerms basic storage") {
     CHECK(ir.get(id).kind == Kind::ConstBool);
 }
 
-TEST_CASE("native kind metadata preserves exact literal sorts and comparison direction") {
+TEST_CASE("native kind and sort metadata preserve exact literal sorts and comparison direction") {
     NativeTerms terms;
     terms.registerSort(0, SortKind::Bool);
     terms.registerSort(1, SortKind::Int);
@@ -37,6 +37,13 @@ TEST_CASE("native kind metadata preserves exact literal sorts and comparison dir
     CHECK(terms.kind(bound) == Kind::BoundVariable);
     CHECK(terms.kind(greater) == Kind::Lt);
     CHECK(terms.kind(greaterEqual) == Kind::Leq);
+    CHECK(terms.sortKind(terms.sortId(boolean)) == SortKind::Bool);
+    CHECK(terms.sortKind(terms.sortId(integer)) == SortKind::Int);
+    CHECK(terms.sortKind(terms.sortId(fraction)) == SortKind::Real);
+    CHECK(terms.sortKind(terms.sortId(variable)) == SortKind::Int);
+    CHECK(terms.sortKind(terms.sortId(bound)) == SortKind::Int);
+    CHECK(terms.sortKind(terms.sortId(greater)) == SortKind::Bool);
+    CHECK(terms.sortKind(terms.sortId(greaterEqual)) == SortKind::Bool);
     for (const auto comparison : {greater, greaterEqual}) {
         const auto full = terms.get(comparison);
         REQUIRE(full.children.size() == 2);
@@ -47,7 +54,7 @@ TEST_CASE("native kind metadata preserves exact literal sorts and comparison dir
     CHECK(terms.get(greaterEqual).kind == Kind::Leq);
 }
 
-TEST_CASE("native kind metadata survives let aliases, copied ownership and index growth") {
+TEST_CASE("native kind and sort metadata survive let aliases, copied ownership and index growth") {
     NativeTerms survivor;
     ExprId root = NullExpr, application = NullExpr;
     SortId integerSort = NullSort;
@@ -70,17 +77,25 @@ TEST_CASE("native kind metadata survives let aliases, copied ownership and index
         REQUIRE(literal != NullExpr);
         CHECK(terms.kind(application) == Kind::UFApply);
         CHECK(terms.kind(literal) == Kind::ConstInt);
-        integerSort = terms.get(application).sort;
+        integerSort = terms.sortId(application);
+        CHECK(terms.sortKind(integerSort) == SortKind::Int);
+        CHECK(terms.sortKind(terms.sortId(root)) == SortKind::Bool);
+        CHECK(terms.sortKind(terms.sortId(literal)) == SortKind::Int);
         survivor = terms;
     }
     CHECK(survivor.kind(root) == Kind::Eq);
     CHECK(survivor.kind(application) == Kind::UFApply);
+    CHECK(survivor.sortId(application) == integerSort);
     auto moved = std::move(survivor);
     const auto fresh = moved.makeFreshVariable(integerSort, "fresh");
     CHECK(moved.kind(fresh) == Kind::Variable);
     CHECK(moved.kind(root) == Kind::Eq);
     CHECK(moved.kind(application) == Kind::UFApply);
+    CHECK(moved.sortId(application) == integerSort);
+    CHECK(moved.sortKind(moved.sortId(root)) == SortKind::Bool);
+    CHECK(moved.sortKind(moved.sortId(fresh)) == SortKind::Int);
     CHECK_THROWS_AS(moved.kind(static_cast<ExprId>(moved.size())), std::out_of_range);
+    CHECK_THROWS_AS(moved.sortId(static_cast<ExprId>(moved.size())), std::out_of_range);
 }
 
 TEST_CASE("NativeTerms scope management") {

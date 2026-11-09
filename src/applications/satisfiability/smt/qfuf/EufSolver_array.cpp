@@ -428,7 +428,7 @@ void EufSolver::collectFunctionInterps(TheoryModel& model) const {
             // The original application's children retain the declared sorts;
             // export those rather than an egraph implementation marker.
             for (ExprId child : oe.children)
-                fi.argSorts.push_back(sortName(nativeTerms_->get(child).sort));
+                fi.argSorts.push_back(sortName(nativeTerms_->sortId(child)));
             fi.retSort = sortName(oe.sort);
             // Empty default: a tuple absent from the table -> the validator's
             // UFApply lookup sees an empty value -> Indeterminate (sound floor),

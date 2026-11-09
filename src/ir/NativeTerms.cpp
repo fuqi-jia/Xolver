@@ -125,6 +125,7 @@ NativeTerms& NativeTerms::operator=(const NativeTerms& other) {
 }
 
 size_t NativeTerms::size() const { return storage_->nodes.size(); }
+SortId NativeTerms::sortId(ExprId id) const { return storage_->nodeSorts.at(id); }
 Node NativeTerms::native(ExprId id) const { return storage_->nodes.at(id); }
 SortPtr NativeTerms::nativeSort(SortId id) const {
     const auto found = storage_->sorts.find(id);
