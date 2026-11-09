@@ -1,4 +1,5 @@
 #include "base/RuntimeConfig.h"
+#include "base/CooperativeProgress.h"
 #include "base/SolveClock.h"
 #include "base/EnvParam.h"
 #include "runtime/SolverImpl.h"
@@ -904,6 +905,26 @@ Result Solver::Impl::checkSatGround() {
             }
         }
 
+        std::unique_ptr<bitblast::EagerBitBlastSolver> eagerSearch;
+        std::chrono::steady_clock::duration eagerService{};
+        auto importEagerModel = [&](const bitblast::EagerBitBlastSolver::Result& witness) {
+            lastModel_ = TheorySolver::TheoryModel{};
+            for (const auto& [name, value] : witness.model) {
+                lastModel_->assignments.emplace(name, value.get_str());
+                lastModel_->numericAssignments.emplace(name, RealValue::fromMpz(value));
+            }
+            for (const auto& [name, value] : witness.boolModel)
+                lastModel_->assignments.emplace(name, value ? "true" : "false");
+            if (!modelConverter_.empty() &&
+                !modelConverter_.reconstruct(lastModel_->numericAssignments,
+                                             lastModel_->assignments, *ir)) {
+                lastModel_.reset();
+                return false;
+            }
+            mergeFixedBindings();
+            return true;
+        };
+
         // -------------------------------------------------------------------
         // Whole-formula EAGER BIT-BLAST portfolio arm (BLAN-style): translate
         // the entire numeric formula into one SAT encoding. SAT models receive
@@ -949,7 +970,8 @@ Result Solver::Impl::checkSatGround() {
                 !features.hasMixedIntReal &&
                 !features.hasUF && !features.hasArray && !features.hasDatatype) {
                 phase("eager-bb-start");
-                bitblast::EagerBitBlastSolver eagerbb;
+                eagerSearch = std::make_unique<bitblast::EagerBitBlastSolver>();
+                auto& eagerbb = *eagerSearch;
                 // Farkas/termination routing: eager-bb diverges on the
                 // bilinear-λ width search of Stroeder/VeryMax UNSAT cases. When
                 // the bounded-B refutation lane is opted in and the formula IS
@@ -979,8 +1001,10 @@ Result Solver::Impl::checkSatGround() {
                             config::read<config::ReadKind::Long>("XOLVER_NIA_FARKAS_EAGER_BUDGET_MS", 2000));
                     }
                 }
+                const auto eagerStart = std::chrono::steady_clock::now();
                 auto ibr = realCandidates ? eagerbb.solve(*ir, eagerRoots) :
                                            eagerbb.decide(*ir, eagerRoots);
+                eagerService = std::chrono::steady_clock::now() - eagerStart;
                 phase("eager-bb-done");
                 if (ibr.status == bitblast::EagerBitBlastSolver::Status::Unsat) {
 #ifdef XOLVER_ENABLE_CASESTATS
@@ -989,51 +1013,20 @@ Result Solver::Impl::checkSatGround() {
                     return Result::Unsat;
                 }
                 if (ibr.status == bitblast::EagerBitBlastSolver::Status::Sat) {
-                    // Transfer the validated integer model from EagerBitBlast
-                    // to lastModel_, then run the ModelConverter to restore
-                    // ANY variable that SolveEqs/UnconstrainedElim eliminated
-                    // before the eager-bb solve. Pre-existing bug: previous
-                    // eager-bb early-return path skipped reconstruct() so an
-                    // eliminated x in `(assert (= x 1))(assert (distinct x y))`
-                    // showed up as x=0 in the model. The kernel-validated
-                    // `ibr.model` IS the sound value for vars eager-bb saw;
-                    // reconstruct adds the missing eliminated vars on top.
-                    lastModel_ = TheorySolver::TheoryModel{};
-                    for (const auto& [name, value] : ibr.model) {
-                        lastModel_->assignments.emplace(name, value.get_str());
-                        lastModel_->numericAssignments.emplace(
-                            name, RealValue::fromMpz(value));
-                    }
-                    // Bool model (now exported by EagerBitBlast). Without this,
-                    // ModelConverter::evalBool defaulted missing Bool vars to
-                    // false, producing wrong Ite-branch selection in reconstruct.
-                    for (const auto& [name, bval] : ibr.boolModel) {
-                        lastModel_->assignments.emplace(name, bval ? "true" : "false");
-                    }
-                    if (!modelConverter_.empty()) {
-                        if (!modelConverter_.reconstruct(lastModel_->numericAssignments,
-                                                          lastModel_->assignments, *ir)) {
-                            lastUnknownReason_ =
-                                "eager-bb + solve-eqs: eliminated variable not reconstructable";
-                            lastModel_.reset();
+                    if (!importEagerModel(ibr)) {
+                        lastUnknownReason_ =
+                            "eager-bb + solve-eqs: eliminated variable not reconstructable";
 #ifdef XOLVER_ENABLE_CASESTATS
-                            finalizeCaseStats(Result::Unknown, 0.0, nullptr, nullptr, cadicalBackend);
+                        finalizeCaseStats(Result::Unknown, 0.0, nullptr, nullptr, cadicalBackend);
 #endif
-                            return Result::Unknown;
-                        }
+                        return Result::Unknown;
                     }
-                    // Merge note (eqnia <- integration): ALSO restore UCP-pinned
-                    // vars. reconstruct() above replays ModelConverter steps
-                    // (SolveEqs / UnconstrainedElim); mergeFixedBindings() replays
-                    // the *separate* fixedBindings_ map for `(= var const)` atoms
-                    // folded to true by UCP. Distinct elimination paths — both
-                    // needed so get-model is complete on the EAGER Sat path.
-                    mergeFixedBindings();
 #ifdef XOLVER_ENABLE_CASESTATS
                     finalizeCaseStats(Result::Sat, 0.0, nullptr, nullptr, cadicalBackend);
 #endif
                     return Result::Sat;
                 }
+                if (!eagerbb.hasPendingSearch()) eagerSearch.reset();
             }
         }
 
@@ -1495,8 +1488,63 @@ Result Solver::Impl::checkSatGround() {
                 });
         }
 
+        std::optional<bitblast::EagerBitBlastSolver::Result> resumedWitness;
+        bool resumeCancelled = false;
+        std::unique_ptr<CooperativeProgress> progress;
+        if (!userPropagator_ && eagerSearch && eagerSearch->hasPendingSearch()) {
+            progress = std::make_unique<CooperativeProgress>(eagerService,
+                [&](auto deadline) {
+                    auto witness = eagerSearch->resume(deadline, [&] {
+                        resumeCancelled = resumeCancelled || cadicalBackend->terminationRequested();
+                        return resumeCancelled;
+                    });
+                    if (witness.status == bitblast::EagerBitBlastSolver::Status::Sat) {
+                        // The candidate is independent of the live CDCL(T)
+                        // assignment. Reconstruct and validate original roots
+                        // before interrupting that search; preserve its model
+                        // and function state when this candidate is rejected.
+                        auto savedModel = std::move(lastModel_);
+                        auto savedPartial = std::move(partialFuncModel_);
+                        bool valid = false;
+                        try {
+                            valid = importEagerModel(witness) &&
+                                validateModelImpl() == Solver::ModelValidation::Satisfied;
+                            if (valid) resumedWitness = std::move(witness);
+                        } catch (...) {
+                            lastModel_ = std::move(savedModel);
+                            partialFuncModel_ = std::move(savedPartial);
+                            throw;
+                        }
+                        lastModel_ = std::move(savedModel);
+                        partialFuncModel_ = std::move(savedPartial);
+                    } else if (witness.status == bitblast::EagerBitBlastSolver::Status::Unsat) {
+                        resumedWitness = std::move(witness);
+                    }
+                    return eagerSearch->hasPendingSearch() ? CooperativeProgress::Step::Pending :
+                                                            CooperativeProgress::Step::Finished;
+                });
+            sat->setProgressCallback([&] {
+                progress->poll(wall::deadline());
+                return resumedWitness.has_value();
+            });
+        }
+        struct ClearProgress {
+            SatSolver& sat;
+            ~ClearProgress() { sat.setProgressCallback({}); }
+        } clearProgress{*sat};
         auto solveT0 = std::chrono::steady_clock::now();
         auto result = assumptionLits.empty() ? sat->solve() : sat->solve(assumptionLits);
+        sat->setProgressCallback({});
+        if (resumedWitness && !resumeCancelled) {
+            if (resumedWitness->status == bitblast::EagerBitBlastSolver::Status::Unsat) {
+                result = SatSolver::SolveResult::Unsat;
+                candidateCompletionFound = false;
+                lastModel_.reset();
+            } else if (importEagerModel(*resumedWitness)) {
+                candidateCompletionFound = true;
+                result = SatSolver::SolveResult::Sat;
+            }
+        }
         if (result == SatSolver::SolveResult::Unknown) completeCandidateModel();
         if (candidateCompletionFound) {
             result = SatSolver::SolveResult::Sat;
@@ -1525,7 +1573,7 @@ Result Solver::Impl::checkSatGround() {
         // those logics need proof tracking (Track C2) or external deletion
         // (check_unsat_core.py --minimize). Soundness-first: never emit a core we
         // cannot stand behind.
-        if (!assumptionLits.empty() && result == SatSolver::SolveResult::Unsat &&
+        if (!resumedWitness && !assumptionLits.empty() && result == SatSolver::SolveResult::Unsat &&
             !features.hasNonlinear && !features.hasMixedIntReal) {
             std::vector<SatLit> failed = sat->getFailedAssumptions();
             std::vector<Term> core;

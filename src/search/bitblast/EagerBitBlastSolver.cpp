@@ -28,9 +28,54 @@
 namespace xolver::bitblast {
 
 
-EagerBitBlastSolver::EagerBitBlastSolver()
-    : kernel_(createPolynomialKernel()),
+struct EagerBitBlastSolver::PendingSearch {
+    std::unique_ptr<IntegerEncodingContext> context;
+    std::unordered_map<std::string, BitVec> variables;
+    std::unordered_map<ExprId, SatLit> booleans;
+    std::unordered_map<ExprId, TermExpr> nodes;
+    std::vector<ExprId> assertions;
+    std::vector<SatLit> assumptions;
+    bool completeIntegerLinear = false;
+    int conflictLimit = 0;
+};
+
+EagerBitBlastSolver::EagerBitBlastSolver(SatFactory factory)
+    : satFactory_(std::move(factory)), kernel_(createPolynomialKernel()),
       converter_(std::make_unique<PolynomialConverter>(*kernel_)) {}
+
+EagerBitBlastSolver::~EagerBitBlastSolver() = default;
+
+bool EagerBitBlastSolver::hasPendingSearch() const { return bool(pending_); }
+
+void EagerBitBlastSolver::cancel() { pending_.reset(); }
+
+EagerBitBlastSolver::Result EagerBitBlastSolver::resume(
+    std::chrono::steady_clock::time_point deadline, std::function<bool()> interrupted) {
+    if (!pending_) return {};
+    auto& search = *pending_;
+    auto& sat = search.context->solver();
+    sat.setDeadline(deadline);
+    sat.setProgressCallback(std::move(interrupted));
+    if (search.conflictLimit > 0) sat.limit("conflicts", search.conflictLimit);
+    SatSolver::SolveResult verdict;
+    try {
+        verdict = sat.solve(search.assumptions);
+    } catch (...) {
+        sat.setProgressCallback({});
+        throw;
+    }
+    sat.setProgressCallback({});
+    if (verdict == SatSolver::SolveResult::Unknown) return {};
+    Result result;
+    if (verdict == SatSolver::SolveResult::Unsat) {
+        if (search.completeIntegerLinear) result.status = Status::Unsat;
+    } else {
+        result = validateCandidate(sat, search.variables, search.booleans,
+            search.assertions, [&](ExprId id) { return search.nodes.at(id); });
+    }
+    pending_.reset();
+    return result;
+}
 
 EagerBitBlastSolver::Result EagerBitBlastSolver::solveLinear(
     const NativeTerms& ir, const std::vector<ExprId>& assertions) {
@@ -414,6 +459,7 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::decide(
 EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
     const NativeTerms& ir, const std::vector<ExprId>& assertions,
     bool finiteLinearOnly, bool allowFiniteRefutation) {
+    cancel();
     Result out;
     if (assertions.empty()) return out;
     atomCs_.clear();
@@ -660,7 +706,7 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
         config::read<config::ReadKind::Long>("XOLVER_NIA_EAGER_BITBLAST_UNSAT_CAP", 4));
 
     auto makeContext = [&] {
-        auto sat = createSatSolver();
+        auto sat = satFactory_();
         sat->setDeadline(deadline);
         return std::make_unique<IntegerEncodingContext>(std::move(sat), budget);
     };
@@ -1111,84 +1157,118 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solveImpl(
         }
         consecutiveUnsat = 0;  // reset on any non-Unsat (Unknown counts as continue too)
         if (res != SatSolver::SolveResult::Sat) {
-            if (fixedInterpretation) break;
+            if (fixedInterpretation || expired()) {
+                auto search = std::make_unique<PendingSearch>();
+                search->variables = std::move(varBits);
+                search->booleans = std::move(boolVars);
+                search->assertions = assertions;
+                search->assumptions = std::move(assumptions);
+                search->completeIntegerLinear = completeIntegerLinear;
+                search->conflictLimit = confLimit;
+                // Copy only the Boolean validation graph. Arithmetic nodes
+                // are represented by the already owned exact polynomials.
+                std::vector<ExprId> nodes(assertions.begin(), assertions.end());
+                while (!nodes.empty()) {
+                    const auto id = nodes.back(); nodes.pop_back();
+                    if (search->nodes.contains(id)) continue;
+                    auto node = ir.get(id);
+                    if (!atomCs_.contains(id))
+                        nodes.insert(nodes.end(), node.children.begin(), node.children.end());
+                    search->nodes.emplace(id, std::move(node));
+                }
+                search->context = std::move(context);
+                pending_ = std::move(search);
+                return out;
+            }
             continue;
         }
 
-        // Candidate model -> EXACT integer re-validation over all assertions.
-        std::unordered_map<std::string, mpz_class> model;
-        for (const auto& v : intVars_) model[v] = readBitVec(sat, varBits.at(v));
-        std::unordered_map<ExprId, bool> boolModel;
-        for (const auto& kv : boolVars) boolModel[kv.first] = litValue(sat, kv.second);
-        const auto evaluation = makePolynomialEvaluation(*kernel_, model);
-
-        std::function<bool(ExprId)> ev = [&](ExprId eid) -> bool {
-            const TermExpr& e = ir.get(eid);
-            switch (e.kind) {
-                case Kind::ConstBool: { auto* b = std::get_if<bool>(&e.payload.value); return b && *b; }
-                case Kind::Variable: { auto it = boolModel.find(eid); return it != boolModel.end() && it->second; }
-                case Kind::Not: return !ev(e.children[0]);
-                case Kind::And: { for (ExprId c : e.children) if (!ev(c)) return false; return true; }
-                case Kind::Or:  { for (ExprId c : e.children) if (ev(c)) return true; return false; }
-                case Kind::Implies: {
-                    for (size_t i = 0; i + 1 < e.children.size(); ++i) if (!ev(e.children[i])) return true;
-                    return ev(e.children.back());
-                }
-                case Kind::Xor: { bool x = false; for (ExprId c : e.children) x ^= ev(c); return x; }
-                case Kind::Ite: return ev(e.children[0]) ? ev(e.children[1]) : ev(e.children[2]);
-                case Kind::Eq: case Kind::Distinct:
-                case Kind::Lt: case Kind::Leq: case Kind::Gt: case Kind::Geq: {
-                    if (isArithAtom(eid, ir)) {
-                        auto it = atomCs_.find(eid);
-                        if (it == atomCs_.end()) return false;
-                        for (const auto& part : it->second.parts) {
-                            if (part.first == NullPoly) {
-                                if (part.second != Relation::Eq) return false;  // conflict marker
-                                continue;                                       // tautology marker
-                            }
-                            auto val = evaluation->evaluateInteger(part.first);
-                            if (!val || !relationHolds(*val, part.second)) return false;
-                        }
-                        return true;
-                    } else if (e.kind == Kind::Eq) {
-                        for (size_t i = 0; i + 1 < e.children.size(); ++i)
-                            if (ev(e.children[i]) != ev(e.children[i + 1])) return false;
-                        return true;
-                    } else {
-                        const auto& ch = e.children;
-                        for (size_t i = 0; i < ch.size(); ++i)
-                            for (size_t j = i + 1; j < ch.size(); ++j)
-                                if (ev(ch[i]) == ev(ch[j])) return false;
-                        return true;
-                    }
-                }
-                default: return false;
-            }
-        };
-
-        bool valid = true;
-        for (ExprId a : assertions) if (!ev(a)) { valid = false; break; }
-        if (diag) std::cerr << "[EAGER-BB] width=" << K << " candidate valid=" << valid << "\n";
-        if (valid) {
-            out.status = Status::Sat;
-            out.model = std::move(model);
-            // Export Bool model keyed by variable name. Without this, the
-            // caller's ModelConverter::evalBool sees missing Bool vars and
-            // defaults them to false — wrong Ite-branch selection during
-            // reconstruct (test_model_consistency.cpp:104).
-            for (const auto& kv : boolVars) {
-                const TermExpr& bex = ir.get(kv.first);
-                if (bex.kind != Kind::Variable) continue;
-                auto* nm = std::get_if<std::string>(&bex.payload.value);
-                if (!nm) continue;
-                out.boolModel[*nm] = boolModel[kv.first];
-            }
-            return out;
-        }
+        auto candidate = validateCandidate(sat, varBits, boolVars, assertions,
+            [&](ExprId id) { return ir.get(id); });
+        if (diag) std::cerr << "[EAGER-BB] width=" << K
+                            << " candidate valid=" << (candidate.status == Status::Sat) << "\n";
+        if (candidate.status == Status::Sat) return candidate;
         if (fixedInterpretation) break;
         // SAT but candidate failed exact validation (narrow-width artifact) -> wider K.
     }
     return out;   // Unknown
+}
+
+EagerBitBlastSolver::Result EagerBitBlastSolver::validateCandidate(
+    const SatSolver& sat, const std::unordered_map<std::string, BitVec>& variables,
+    const std::unordered_map<ExprId, SatLit>& booleans,
+    const std::vector<ExprId>& assertions,
+    const std::function<TermExpr(ExprId)>& node) const {
+    Result out;
+    std::unordered_map<std::string, mpz_class> model;
+    for (const auto& v : intVars_) model[v] = readBitVec(sat, variables.at(v));
+    std::unordered_map<ExprId, bool> boolModel;
+    for (const auto& kv : booleans) boolModel[kv.first] = litValue(sat, kv.second);
+    const auto evaluation = makePolynomialEvaluation(*kernel_, model);
+
+    std::function<bool(ExprId)> ev = [&](ExprId eid) -> bool {
+        const TermExpr& e = node(eid);
+        switch (e.kind) {
+            case Kind::ConstBool: { auto* b = std::get_if<bool>(&e.payload.value); return b && *b; }
+            case Kind::Variable: { auto it = boolModel.find(eid); return it != boolModel.end() && it->second; }
+            case Kind::Not: return !ev(e.children[0]);
+            case Kind::And: { for (ExprId c : e.children) if (!ev(c)) return false; return true; }
+            case Kind::Or:  { for (ExprId c : e.children) if (ev(c)) return true; return false; }
+            case Kind::Implies: {
+                for (size_t i = 0; i + 1 < e.children.size(); ++i) if (!ev(e.children[i])) return true;
+                return ev(e.children.back());
+            }
+            case Kind::Xor: { bool x = false; for (ExprId c : e.children) x ^= ev(c); return x; }
+            case Kind::Ite: return ev(e.children[0]) ? ev(e.children[1]) : ev(e.children[2]);
+            case Kind::Eq: case Kind::Distinct:
+            case Kind::Lt: case Kind::Leq: case Kind::Gt: case Kind::Geq: {
+                if (atomCs_.contains(eid)) {
+                    auto it = atomCs_.find(eid);
+                    if (it == atomCs_.end()) return false;
+                    for (const auto& part : it->second.parts) {
+                        if (part.first == NullPoly) {
+                            if (part.second != Relation::Eq) return false;  // conflict marker
+                            continue;                                       // tautology marker
+                        }
+                        auto val = evaluation->evaluateInteger(part.first);
+                        if (!val || !relationHolds(*val, part.second)) return false;
+                    }
+                    return true;
+                } else if (e.kind == Kind::Eq) {
+                    for (size_t i = 0; i + 1 < e.children.size(); ++i)
+                        if (ev(e.children[i]) != ev(e.children[i + 1])) return false;
+                    return true;
+                } else {
+                    const auto& ch = e.children;
+                    for (size_t i = 0; i < ch.size(); ++i)
+                        for (size_t j = i + 1; j < ch.size(); ++j)
+                            if (ev(ch[i]) == ev(ch[j])) return false;
+                    return true;
+                }
+            }
+            default: return false;
+        }
+    };
+
+    bool valid = true;
+    for (ExprId a : assertions) if (!ev(a)) { valid = false; break; }
+    if (valid) {
+        out.status = Status::Sat;
+        out.model = std::move(model);
+        // Export Bool model keyed by variable name. Without this, the
+        // caller's ModelConverter::evalBool sees missing Bool vars and
+        // defaults them to false — wrong Ite-branch selection during
+        // reconstruct (test_model_consistency.cpp:104).
+        for (const auto& kv : booleans) {
+            const TermExpr& bex = node(kv.first);
+            if (bex.kind != Kind::Variable) continue;
+            auto* nm = std::get_if<std::string>(&bex.payload.value);
+            if (!nm) continue;
+            out.boolModel[*nm] = boolModel[kv.first];
+        }
+        return out;
+    }
+    return out;
 }
 
 } // namespace xolver::bitblast

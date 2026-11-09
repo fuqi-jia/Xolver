@@ -35,6 +35,7 @@ public:
     bool configure(const char* name, int64_t value) override;
     bool limit(const char* name, int value) override;
     void setDeadline(std::chrono::steady_clock::time_point deadline) override;
+    void setProgressCallback(std::function<bool()> callback) override;
     bool inconsistent() const override;
     std::vector<SatLit> getFailedAssumptions() const override;
     void addObservedVar(SatVar v) override;
@@ -43,6 +44,9 @@ public:
     void connectPropagator(CadicalTheoryPropagator* propagator);
     void disconnectPropagator();
     void requestTerminate();
+    bool terminationRequested() const {
+        return terminateRequested_.load(std::memory_order_acquire);
+    }
 
     bool enableProofTrace(const std::string& base, bool lrat) override;
     void finalizeProof() override;
@@ -69,6 +73,8 @@ private:
     struct WallClockTerminator : public CaDiCaL::Terminator {
         std::chrono::steady_clock::time_point deadline =
             std::chrono::steady_clock::time_point::max();
+        std::function<bool()> progress;
+        bool polling = false;
         bool terminate() override;
     };
     WallClockTerminator wallTerm_;

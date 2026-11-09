@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ir/NativeTerms.h"
+#include "contracts/SatSolver.h"
 #include "algebra/poly/PolynomialKernel.h"
 #include "algebra/poly/PolynomialConverter.h"
 #include <gmpxx.h>
@@ -10,6 +11,8 @@
 #include <vector>
 
 namespace xolver::bitblast {
+
+struct BitVec;
 
 // Whole-formula eager bit-blaster (BLAN-style) as a SOUND PORTFOLIO ARM.
 //
@@ -33,8 +36,8 @@ namespace xolver::bitblast {
 // whole attempt to Unknown.
 //
 // Self-contained: owns its own PolynomialKernel + PolynomialConverter + a fresh
-// SAT instance with reusable gates across widths. Does NOT touch the CDCL(T) main loop
-// (invariant 5) — it is a parallel strategy, exactly what BLAN is.
+// SAT instance with reusable gates across widths. An interrupted interpretation
+// can be resumed cooperatively without sharing literals with CDCL(T).
 class EagerBitBlastSolver {
 public:
     enum class Status { Sat, Unknown, Unsat };
@@ -48,7 +51,16 @@ public:
         std::unordered_map<std::string, bool> boolModel;      // Bool variables
     };
 
-    EagerBitBlastSolver();
+    using SatFactory = std::function<std::unique_ptr<SatSolver>()>;
+    explicit EagerBitBlastSolver(SatFactory factory = createSatSolver);
+    ~EagerBitBlastSolver();
+
+    // The continuation owns its SAT instance, active assumptions and a frozen
+    // Boolean validation graph. A new solve or cancel discards the old query.
+    bool hasPendingSearch() const;
+    Result resume(std::chrono::steady_clock::time_point deadline,
+                  std::function<bool()> interrupted = {});
+    void cancel();
 
     // Attempt to find (and exactly validate) a model for `assertions` in `ir`.
     Result solve(const NativeTerms& ir, const std::vector<ExprId>& assertions);
@@ -77,6 +89,14 @@ public:
     }
 
 private:
+    struct PendingSearch;
+    std::unique_ptr<PendingSearch> pending_;
+    SatFactory satFactory_;
+    Result validateCandidate(const SatSolver& sat,
+        const std::unordered_map<std::string, bitblast::BitVec>& variables,
+        const std::unordered_map<ExprId, SatLit>& booleans,
+        const std::vector<ExprId>& assertions,
+        const std::function<TermExpr(ExprId)>& node) const;
     Result solveImpl(const NativeTerms& ir, const std::vector<ExprId>& assertions,
                      bool finiteLinearOnly, bool allowFiniteRefutation = false);
     long budgetPctOverride_ = -1;
