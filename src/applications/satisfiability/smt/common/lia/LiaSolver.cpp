@@ -537,7 +537,7 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
         for (const auto& d : disequalities_) {
             diseqInfos.push_back({d.auxVar});
         }
-        if (!validator_.validateLiaModel(activeAtoms_, diseqInfos, integerVars_, gs_)) {
+        if (!validator_.validateLiaModel(activeAtoms_, diseqInfos, integerVars_, gs_, manager_)) {
             dumpState("sat_validator_failed");
             return TheoryCheckResult::unknown();
         }

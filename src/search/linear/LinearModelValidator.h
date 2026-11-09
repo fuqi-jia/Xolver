@@ -6,10 +6,11 @@
 #include <gmpxx.h>
 #include <vector>
 #include <unordered_set>
-#include <unordered_map>
 #include <string>
 
 namespace xolver {
+
+class LinearAtomManager;
 
 /**
  * ActiveLinearAtom: record of an asserted theory literal for validation.
@@ -35,9 +36,9 @@ struct DiseqValidationInfo {
  * LinearModelValidator: validates that a GeneralSimplex model satisfies
  * all active LIA constraints.
  *
- * Uses aux variables for evaluation: each atom's aux var represents
- * aux = lhs - rhs, so checking the aux value against 0 is equivalent
- * to checking the original constraint.
+ * Re-evaluates original source forms at canonical source coordinates.
+ * Tableau display names and auxiliary row values do not establish identity
+ * or replace this independent arithmetic check.
  */
 class LinearModelValidator {
 public:
@@ -55,11 +56,11 @@ public:
         const std::vector<ActiveLinearAtom>& activeAtoms,
         const std::vector<DiseqValidationInfo>& disequalities,
         const std::unordered_set<int>& integerVars,
-        const GeneralSimplex& gs);
+        const GeneralSimplex& gs, const LinearAtomManager& manager);
 
 private:
     bool checkAtom(const ActiveLinearAtom& atom, const GeneralSimplex& gs,
-                   const std::unordered_map<std::string, int>& nameToIdx);
+                   const LinearAtomManager& manager);
     bool satisfiesRelation(const DeltaRational& val, Relation rel, bool value);
 };
 

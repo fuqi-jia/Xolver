@@ -1,15 +1,200 @@
 # Arithmetic validation and continuation record
 
-## Qualified for review: EUF lifetime repair and stable priority drain (2026-11-09)
+## Server-qualified: preserve canonical source-coordinate identity (2026-11-09)
 
-Read-only Memcheck on the qualified priority candidate confirms **six invalid
+The existing independently checked private diagnostic profiles of the accepted
+core make **285 calls** to `LiaSolver::getDeducedSharedEqualities`. Each call
+rebuilds a name-to-column hash table from every simplex column: **69,921
+insertions / 33,372,839 simulated instructions** in the sample. These are sampled
+instruction costs, not whole-cohort timing. The shared `LinearAtomManager`
+already maintains the source-variable index used by model and entailment paths.
+
+The LIA equality seam now queries that index directly. Auxiliary tableau display
+labels such as `s0` can also be legal source names; rebuilding an identity map
+from those labels can select the auxiliary coordinate instead of the source.
+Two independently constructed regressions cover unequal/equal fixed source
+values with such a name, premise literals, late variable registration and
+withdrawn/reasserted bounds. Native reproduction confirms an invalid theory
+equality for unequal source values; both Z3 and cvc5 accept the independently
+constructed countermodel. The corrected index passes the identity regression.
+The first native attempt still fails the incremental test: its root backtrack
+incorrectly assumed retained root premises, contrary to the existing LIA
+reset/replay contract. The test now uses a positive parent level. A second native attempt retains
+correct equality propagation but reveals the same display-label identity bug
+in `LinearModelValidator`: its first-wins map rejects valid late-source models.
+The shared checker now receives the existing canonical coordinate index and
+still independently evaluates every original form. Missing coordinates reject
+validation. Both failed attempts are retained. The combined repair
+`256ecfad2645b3407938d9269286dbf29c330600` now passes **2,317 native unit cases /
+1,554,889 assertions**, including both new cases / **24 assertions**.
+All **2,345 qualified source bodies** independently match that Git core.
+All **965 public regressions** pass without waivers.
+LRA/LIA rollback policies and all model checks are preserved.
+
+Eight unique diagnostic pairs retain all five SAT controls; all ten actual
+models pass both independent replay checkers. Three gaps remain timeouts in
+both arms, with no gain, loss or opposite verdict. The preceding cache-round
+regression is already one of these controls; it is not duplicated.
+Three fresh paired profiles validate all six actual SAT models. The **69,921
+identity-map insertions fall to zero**; the shared checker makes **14,692
+canonical coordinate lookups across 630 validations**. Total sampled instructions
+fall from **7,743,575,759 to 7,598,926,737 (-1.87%)**, and malloc calls from
+**16,991,436 to 16,756,766**. Full independent-model validations (525) and model
+constructions (442) remain unchanged on this sample. Owned cache-read copies
+also remain unchanged, confirming that the rejected cache borrowing is absent.
+These measurements are diagnostic, not full-cohort timing or solve credit.
+
+Fresh complete **14,408 private / 160 fixed / 587 development** comparisons
+now pass server acceptance and the unchanged optional performance gate. They
+use the same frozen baseline and references, original inputs, 60-second /
+one-physical-CPU / 16-GiB budgets and independent actual-model checks. The
+40-job private cohort independently verifies every result in all three arms:
+**8,940 SAT / 5,468 UNSAT**. Baseline/repaired/Z3 total solver times are
+**201.2572 / 199.3644 / 295.1848 seconds**; the repair is **0.94% faster** than
+the same-round baseline.
+
+After current-result certificate checks and input-bound independent reference
+evidence, fixed160 verifies **123 / 124 / 117 results**. The repaired version
+gains **one verified SAT** and loses none in this round. Its 35 timeouts and
+one unconfirmed UNSAT remain unresolved. The baseline has 37 timeouts; Z3 has
+37 timeouts and six unconfirmed UNSATs. Independent checks for all seven
+remaining unconfirmed observations time out. Their original hashes and archive
+bindings are rechecked; the candidate's pending result matches the earlier
+unconfirmed input. Two explicit qualified historical audits contain no verified
+SAT counterexample for it. This is an evidence boundary, not an UNSAT proof;
+none of these observations earns verified credit.
+
+The disjoint 14,568-input fixed/private union verifies **14,531 / 14,532 /
+14,525 results**. Verified PAR-2 totals are **5,348.3049 / 5,236.7543 /
+5,659.7717 seconds**, an improvement of **111.5506 seconds** over baseline.
+Development587 separately retains **587 / 587 / 584**, with total times
+**7.9050 / 7.8306 / 11.6519 seconds**; it is not added to the scored union.
+The final audit reconstructs cross-cohort CPU leases and confirms at most
+40 distinct physical CPUs without sibling overlap. No new opposite verdict,
+invalid model or verified loss is observed. Raw reports, current solver times
+and remaining unconfirmed results are preserved. These are this frozen round's
+results, not a combination with the previous cache experiment or a permanent
+capability claim from one timing-boundary gain.
+
+This necessary correctness repair must remain if later performance changes.
+Server qualification is complete; PR and exact-commit CI delivery remain open.
+Remaining fixed inputs, original-C QCP verification and one-time protected
+evaluation are still open. This is not an overall Z3-superiority claim.
+
+| Source-coordinate artifact | SHA-256 |
+| --- | --- |
+| Native qualification | `9a7ab67bf3eee198108c101b359ac32c9e084d6b4fc9dde011e83a395b9d842a` |
+| Complete source binding | `e1aae4fe09cf69e957980675b1122dfecea88b26a3202d0007f0f3a5c251da5d` |
+| Frozen CLI | `e1ed2411b654106e958a16297ce4326504c2831c9289f5d7385fe9bb9678d600` |
+| Native before/after audit | `945c45ee7953aafa815bb617df04f5d684431270de96203d792477db2d28ad9d` |
+| Public regression audit | `a0423509289a31aacf41de89da320f4ed3830f1d03da4e739f6c6bd6792d6186` |
+| Diagnostic pilot audit | `c0ec8f4266d879f1b1faa705d9986caf45f2d059441fc4de384c7e05c60a570f` |
+| Paired profile audit | `aaa74c08c47537c1e1edcd3e6675b55914abdc6be5b938cf0d63998f9738e227` |
+| Complete stage audit | `b0a7f8751cadfeebdaa9a7a6d8c9f489642211c6653dd244ca2d36a09c4839cf` |
+| Remaining unconfirmed audit | `e4fab7f854130ec5b25ce11af5ba4e4dcfdd20ea098f557a47a90b287d22d14f` |
+
+The cache-withdrawal core separately passes all **2,315 unit cases / 1,554,865
+assertions**. Its frozen CLI SHA-256 equals the delivered binary exactly,
+`558ef3b8e361235ebc700c9f7ffc0403f8840a66a8c5b0a98159958bbcfd2bb8`.
+Restoration qualification SHA-256:
+`a9cdc22175c39256c2d221f015d74031a1ee3a3ad70c6e151cd37bdac390b658`.
+
+## Closed: cached-value borrowing fails complete performance acceptance (2026-11-09)
+
+Three existing qualified profiles of core `b535fe02` record **176,591 calls**
+to `ArithModelValidator::eval`, each calling the full `TR` copy constructor.
+The relevant evaluator source is identical in the corrected `3bd0865c` core.
+This identifies owned copies on cache reads; it is not a timing measurement
+for the new candidate. Diagnosis-audit SHA-256:
+`90766960edbf5ffb0c3166434dab212d68e7c824f9cb6a68085b7b1ed7b6fc32`.
+
+The experimental implementation returns immutable references to cache-owned values and
+borrows them in arithmetic, Boolean, array and UF readers. Distinctness and UF
+argument collections retain references to these same values. Cache insertion
+owns each newly evaluated result; `Store` still creates an independent array
+version. Public numeric/token results still own their values. Each validation
+entry rebuilds the caches, preserving model updates, missing-value semantics,
+exact arithmetic and the independent evaluator. No model check is skipped or
+shared with the model producer.
+
+Two new public regressions exercise independent array-store versions and
+mixed array/rational/Boolean/token UF arguments across model changes. Qualified
+core `9b99d568df4a1ce06997f481c2c7b1bbe8323962` passes **2,315 unit cases /
+1,554,865 assertions**, including both new cases / 20 assertions. All **2,345
+source bodies** match that core. Memcheck passes **17 public model-validator
+cases / 60 assertions**, with zero errors and exit code 0. All **965 public
+regressions** pass without waivers. A versioned regression audit corrects a
+predecessor unit-count assertion while preserving the original test results
+and the initial audit rejection.
+
+Eight diagnostic pairs retain five SAT controls, with all ten actual models
+independently replayed; three gaps remain timeouts in both arms. There is no
+verified gain, loss or opposite verdict. Three fresh paired profiles also
+validate all six actual models. Cache-read `TR` copies fall from **176,591 to
+zero**, while total instructions fall from **7,743,536,469 to 7,576,839,688
+(-2.15%)** and malloc calls from **16,991,436 to 16,456,038**. Model construction
+(442), validation (525) and warm evaluations (113,136) remain unchanged.
+These are diagnostic observations, not complete-cohort wall-time or solve
+credit. The fresh complete round has now finished and **fails the unchanged
+performance gate**; this optional optimization is withdrawn, with no PR.
+
+The frozen main-equivalent baseline, candidate and Z3 all independently verify
+**14,408 private inputs**, with total solver times **201.0600 / 200.1497 /
+293.9912 seconds**. The candidate is 0.45% faster on that cohort. Fixed160,
+however, verifies **124 / 123 / 118 results**: the candidate loses one baseline
+SAT to a timeout. No new opposite verdict or invalid model is observed; a
+mathematical or memory defect has not been established. Six reference
+unconfirmed results remain excluded. Verified PAR-2 means are **31.6542 /
+32.1450 / 32.8630 seconds**.
+
+The disjoint 14,568-input fixed/private union verifies **14,532 / 14,531 /
+14,526 results**, with PAR-2 totals **5,265.7343 / 5,343.3567 / 5,552.0684
+seconds**. The candidate is **77.6224 seconds worse** than baseline. The
+separately reported development587 cohort retains **587 / 587 / 584**;
+its timings cannot repair the failed disjoint score. All processes use the
+same formal 60-second, one-physical-CPU, 16-GiB budget. The final audit proves
+a peak of 40 physical CPUs without cross-cohort CPU overlap. Its
+`server_qualified=true` records completed evidence processing;
+`eligible_for_pr=false` records the failed promotion decision.
+
+The production evaluator is restored exactly to delivered main `2da2dda6`.
+Both independent public semantic regressions remain. The already delivered
+EUF lifetime repair is retained. The restoration has its own native
+qualification described above; this experiment's diagnostic tests and profiles
+describe frozen `9b99d568`, not a new performance claim for the restoration. Original reports and frozen binaries remain
+unchanged. A subsequent focused QF_LIA diagnosis may explain the timeout but
+cannot overwrite this failed round or earn additional formal score credit.
+
+The focused diagnostic has completed: both frozen arms return independently
+model-checked SAT in **17.1318 / 17.1153 seconds**, with **85.91% / 85.72%** of
+solver time in early integer bit encoding, before general SAT/theory setup.
+A separate private control also passes both arms. All four actual SAT outputs
+receive eight successful independent model checks. This observation does not
+reproduce or explain the formal timeout and does not prove a cache defect.
+Diagnostic-audit SHA-256:
+`203df95ae6d0bf6a59e638ace2285b418ef8f9a50b84177aa5077eb9f60bdf10`.
+
+| Cache-read artifact | SHA-256 |
+| --- | --- |
+| Native qualification | `e4baf47bc4f7dc8d22f6513fcfce0d802d411aefb1858e57f726b6fd902d723a` |
+| Complete source binding | `345b73e98116f4b51f043b573c58ed22146b7ba76cf54d9fb350d5e403526ab8` |
+| Frozen CLI | `7e296ac9ef4237c24c011b47e95f9763aa90312b53c64c86694d25399cfe5d7d` |
+| Public memory-check audit | `38e2654a280dc2bae62b9e2ab7ef1e8ec32cd2ab84772cdb596d70ddfc9f740a` |
+| Diagnostic pilot audit | `763db84e049e1f6677921142f80d97d3884c2d1c20815ad9b27fdfaa8b1553ad` |
+| Paired profile audit | `5245828a4ec22eb83a6c0d27c73f7c5586f5385f3e37049c0760eb3ed94020b7` |
+| Corrected public regression audit | `2efa2680cbcc63520e84d4fd070780f83c97332063051a03d2da6a1ba25520e3` |
+| Failed complete-stage audit | `14ae77e7ed330a38da87f3e12ebd21b76e58b56f138f948ed83253303408c6a0` |
+
+## Delivered: EUF lifetime repair and stable priority drain (2026-11-09)
+
+Before the repair, Memcheck on the qualified priority candidate confirms **six invalid
 read contexts and six invalid write contexts** in `EufSolver::onEclassMerged`.
 All **16 public incremental EUF cases / 20 assertions** still pass, showing
 that ordinary test success does not exclude this memory error. The trace
 identifies a read inside a freed four-byte metadata vector, released by
 `classInfo(killed)` after the retained `kept` reference was acquired. Union by
 size can retain an earlier class while admitting a later class identifier.
-The merge-handler source is identical in delivered main and the candidate.
+The affected handler was shared by the then-delivered main and that candidate.
 Memory-diagnosis audit SHA-256:
 `bbc868ad2300ed573a43373bd17eb5658a92cc5cabded514f2d40a3de01e250e`.
 
@@ -54,9 +239,15 @@ preserved. The corrected source has its own acceptance; the preceding
 queue-only instruction measurements remain diagnostic evidence for that
 earlier version. Final-audit SHA-256:
 `eaa44528948dbb0bba69d8424e25337db60c3137e0d1173b7841598670b65ab1`.
-PR and exact merged-main CI acceptance are pending. Remaining fixed inputs,
-final original-C QCP verification and one-time protected evaluation remain
-open; this is not an overall solver-superiority claim.
+PR **#123** passes both jobs in CI **42571109166** at exact reviewed head
+`2697160d53361a667b3769bdfa096428da632010` and is normally squash-merged as
+`2da2dda62b93e0d2b77fd6bae01ebc5de11fe10d`. The entire merged tree matches
+the reviewed tree, `2f088287a4ced5d6eb81576b9f219fc53396a31c`. Exact main
+push CI **42572960000** passes both build-test and proof-gate at that exact
+merged head. This stage is delivered.
+Remaining fixed inputs, final original-C QCP verification and one-time
+protected evaluation remain open; this is not an overall solver-superiority
+claim.
 
 | Corrected-core artifact | SHA-256 |
 | --- | --- |

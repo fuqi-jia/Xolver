@@ -647,3 +647,94 @@ TEST_CASE("LIA: fractional disequality gaps use the explained aggregate lattice 
         }
     }
 }
+
+
+TEST_CASE("LIA: shared coordinates keep source names distinct from tableau labels") {
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Int);
+    SharedTermRegistry shared;
+    shared.setNativeTerms(&ir);
+    LiaSolver solver;
+    solver.setNativeTerms(&ir);
+    solver.setSharedTermRegistry(&shared);
+    auto term = [&](const std::string& name) {
+        const auto expr = ir.add({Kind::Variable, 0, {}, Payload(name)});
+        const auto id = shared.getOrCreate(expr, 0, name, false);
+        shared.addOwner(id, TheoryId::LIA);
+        shared.addOwner(id, TheoryId::EUF);
+        return id;
+    };
+    const auto source = term("s0"), other = term("other");
+    auto pin = [&](const std::string& name, int value, SatVar variable) {
+        solver.assertLit({variable, TheoryId::LIA, false, NullExpr,
+            LinearAtomPayload{LinearFormKey{{{name, 1}}}, Relation::Eq,
+                              RealValue::fromInt(value)}},
+            true, 0, SatLit::positive(variable));
+    };
+    pin("s0", 5, 1);
+    int otherValue = 0;
+    SUBCASE("different fixed values never imply equality") { otherValue = 0; }
+    SUBCASE("equal source values retain their equality") { otherValue = 5; }
+    pin("other", otherValue, 2);
+    TheoryLemmaDatabase lemmas;
+    REQUIRE(solver.check(lemmas, TheoryEffort::Standard).kind ==
+            TheoryCheckResult::Kind::Consistent);
+    const auto fixed = solver.proveFixedValueByName("s0");
+    REQUIRE(fixed);
+    CHECK(fixed->first == 5);
+    bool found = false;
+    for (const auto& equality : solver.getDeducedSharedEqualities()) {
+        if (!((equality.a == source && equality.b == other) ||
+              (equality.b == source && equality.a == other))) continue;
+        found = true;
+        CHECK(otherValue == 5);
+        CHECK(equality.reasons.size() == 2);
+        CHECK(std::find(equality.reasons.begin(), equality.reasons.end(),
+                        SatLit::positive(1)) != equality.reasons.end());
+        CHECK(std::find(equality.reasons.begin(), equality.reasons.end(),
+                        SatLit::positive(2)) != equality.reasons.end());
+    }
+    CHECK(found == (otherValue == 5));
+}
+
+TEST_CASE("LIA: shared coordinates observe late variables and withdrawn bounds") {
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Int);
+    SharedTermRegistry shared;
+    shared.setNativeTerms(&ir);
+    LiaSolver solver;
+    solver.setNativeTerms(&ir);
+    solver.setSharedTermRegistry(&shared);
+    const auto sourceExpr = ir.add({Kind::Variable, 0, {}, Payload(std::string("s0"))});
+    const auto otherExpr = ir.add({Kind::Variable, 0, {}, Payload(std::string("other"))});
+    const auto source = shared.getOrCreate(sourceExpr, 0, "s0", false);
+    const auto other = shared.getOrCreate(otherExpr, 0, "other", false);
+    auto pin = [&](const std::string& name, int value, SatVar variable, int level) {
+        solver.assertLit({variable, TheoryId::LIA, false, NullExpr,
+            LinearAtomPayload{LinearFormKey{{{name, 1}}}, Relation::Eq,
+                              RealValue::fromInt(value)}},
+            true, level, SatLit::positive(variable));
+    };
+    auto equal = [&] {
+        TheoryLemmaDatabase lemmas;
+        CHECK(solver.check(lemmas, TheoryEffort::Standard).kind ==
+              TheoryCheckResult::Kind::Consistent);
+        const auto equalities = solver.getDeducedSharedEqualities();
+        return std::any_of(equalities.begin(), equalities.end(), [&](const auto& equality) {
+            return (equality.a == source && equality.b == other) ||
+                   (equality.a == other && equality.b == source);
+        });
+    };
+    pin("other", 0, 1, 1);
+    CHECK_FALSE(equal());
+    pin("s0", 5, 2, 2);
+    CHECK_FALSE(equal());
+    solver.backtrackToLevel(1);
+    CHECK_FALSE(equal());
+    pin("s0", 0, 3, 2);
+    CHECK(equal());
+    solver.backtrackToLevel(1);
+    CHECK_FALSE(equal());
+    pin("s0", 7, 4, 2);
+    CHECK_FALSE(equal());
+}
