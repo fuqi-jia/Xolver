@@ -77,6 +77,9 @@ public:
     ExprId addShared(TermExpr);
     // Canonical classification without materializing children or payload.
     Kind kind(ExprId) const;
+    // Owning canonical child IDs, with the same alias resolution and comparison
+    // direction as get(), without materializing a sort or literal/name payload.
+    SmallVector<ExprId, 4> children(ExprId) const;
     const TermExpr get(ExprId) const;
     size_t size() const;
     // Index the original DAG by identity, including all reachable children.

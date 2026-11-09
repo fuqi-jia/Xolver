@@ -114,6 +114,76 @@ TEST_CASE("NativeTerms scope management") {
     CHECK(ir.assertions().size() == 1);
 }
 
+TEST_CASE("native child projection preserves ordered operands and owns wide results") {
+    NativeTerms terms;
+    terms.registerSort(0, SortKind::Bool);
+    terms.registerSort(1, SortKind::Int);
+    const auto variable = terms.add({Kind::Variable, 1, {},
+        Payload(std::string(128, 'x'))});
+    const auto literal = terms.add({Kind::ConstInt, 1, {},
+        Payload(std::string("1606938044258990275541962092341162602522202993782792835301377"))});
+    CHECK(terms.children(variable).empty());
+    CHECK(terms.children(literal).empty());
+    for (const auto op : {Kind::Gt, Kind::Geq}) {
+        const auto comparison = terms.add({op, 0, {variable, literal}, {}});
+        const auto children = terms.children(comparison);
+        REQUIRE(children.size() == 2);
+        CHECK(children[0] == literal);
+        CHECK(children[1] == variable);
+    }
+    // Only binary comparisons reverse their operands in the IR projection.
+    const auto chain = terms.add({Kind::Gt, 0, {variable, literal, variable}, {}});
+    CHECK((terms.children(chain) == SmallVector<ExprId, 4>{variable, literal, variable}));
+
+    TermExpr wide{Kind::Add, 1, {}, {}};
+    for (size_t i = 0; i < 9; ++i) wide.children.push_back(i % 2 ? literal : variable);
+    const auto sum = terms.add(std::move(wide));
+    auto retained = terms.children(sum);
+    const auto original = retained;
+    auto copy = terms;
+    for (size_t i = 0; i < 256; ++i) terms.makeFreshVariable(1, "grow");
+    CHECK(terms.children(sum) == original);
+    retained[0] = literal;
+    CHECK(terms.children(sum) == original);
+    terms = NativeTerms{};
+    CHECK(copy.children(sum) == original);
+    CHECK(original.size() == 9);
+    CHECK_THROWS_AS(copy.children(static_cast<ExprId>(copy.size())), std::out_of_range);
+}
+
+TEST_CASE("native child projection resolves preserved lets and distinct bound identities") {
+    NativeTerms survivor;
+    ExprId root = NullExpr;
+    SmallVector<ExprId, 4> retained;
+    {
+        SOMTParser::Parser parser;
+        parser.getOptions()->parsing_preserve_let = true;
+        REQUIRE(parser.parseStr("(set-logic LIA)(declare-const x Int)"
+            "(assert (let ((y (+ x 1))) (forall ((x Int)) (= x y))))"));
+        NativeTerms terms(parser.getNodeManager());
+        root = terms.index(parser.getAssertions().at(0));
+        REQUIRE(terms.kind(root) == Kind::Forall);
+        retained = terms.children(root);
+        REQUIRE(retained.size() == 2);
+        CHECK(terms.kind(retained[0]) == Kind::Eq);
+        CHECK(terms.kind(retained[1]) == Kind::BoundVariable);
+        ExprId freeVariable = NullExpr;
+        for (ExprId id = 0; id < terms.size(); ++id) {
+            CHECK(terms.children(id) == terms.get(id).children);
+            if (terms.kind(id) == Kind::Variable) freeVariable = id;
+        }
+        REQUIRE(freeVariable != NullExpr);
+        CHECK(freeVariable != retained[1]);
+        const auto equality = terms.children(retained[0]);
+        REQUIRE(equality.size() == 2);
+        const auto bound = retained[1];
+        CHECK((equality[0] == bound || equality[1] == bound));
+        survivor = terms;
+    }
+    auto moved = std::move(survivor);
+    CHECK(moved.children(root) == retained);
+}
+
 TEST_CASE("native term indexing preserves parser node identity and immutable views") {
     SOMTParser::Parser parser;
     REQUIRE(parser.parseStr("(set-logic QF_LIA)(declare-const x Int)"

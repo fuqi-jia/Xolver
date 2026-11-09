@@ -41,18 +41,18 @@ ExprId NaryDistinctLowerer::lowerRec(ExprId root) {
         ExprId e = frame.e;
         if (memo_.find(e) != memo_.end()) { stack.pop_back(); continue; }
 
-        const auto node = ir_.get(e);  // value copy: ir_.addShared() may relocate exprs_
-
         if (!frame.processed) {
             frame.processed = true;
-            if (node.children.empty()) { memo_[e] = e; stack.pop_back(); continue; }
-            for (int i = static_cast<int>(node.children.size()) - 1; i >= 0; --i) {
-                ExprId c = node.children[i];
+            const auto children = ir_.children(e);
+            if (children.empty()) { memo_[e] = e; stack.pop_back(); continue; }
+            for (int i = static_cast<int>(children.size()) - 1; i >= 0; --i) {
+                ExprId c = children[i];
                 if (memo_.find(c) == memo_.end()) stack.push_back({c, false});
             }
             continue;
         }
 
+        const auto node = ir_.get(e);
         stack.pop_back();
         std::vector<ExprId> newChildren;
         newChildren.reserve(node.children.size());
