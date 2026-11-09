@@ -1,6 +1,6 @@
 # Arithmetic validation and continuation record
 
-## In development: resume closure after first finite bounds (2026-11-09)
+## Server-qualified: resume closure after first finite bounds (2026-11-09)
 
 The standalone prefix experiment below did not realize any reuse. A separate
 counter-only derivative then measured actual snapshot invalidations on the
@@ -15,12 +15,75 @@ The common fixed-value work queue now supports resuming from affected rows.
 A first finite endpoint withdraws no old premise; compatible owning facts and
 proof dependencies can therefore be retained while new pins and tight faces
 propagate through incident rows. Pure definitions use that same work queue.
-Replacing finite endpoints, resetting bounds, pivots and backtracking retain
-full invalidation. Dirty work survives context copies and is never silently
+Other bound changes keep their previous invalidation rules; pivots, bound
+resets and backtracking still invalidate completely. Dirty work survives context copies and is never silently
 lost through complete-base replacement. Outstanding snapshots stay immutable;
 exact infinitesimals, revisions, APIs and LRA/LIA rollback policies remain.
-Candidate native qualification and fresh performance comparisons are pending;
-no measured speed or solve gain is claimed for this implementation yet.
+Frozen core `c9d3678eb59f13e5081eed7eb513a4a65c1521fe` passes the complete
+proof-enabled Panda9 / ExperimentOS build of 832 units and **2,326 unit cases /
+1,556,154 assertions**, including three focused cases / 469 assertions and
+260 targeted cases. All **965 public regressions** pass. All 2,345 qualified
+source bodies independently match Git (2,184 root and 161 pinned parser files).
+The unchanged pilot retains five SAT controls and independently replays all ten
+actual models with Z3/cvc5; three gaps remain timeouts in both arms, with no
+verified gain, loss or opposite verdict.
+
+On eight unchanged ordinary queries, the separate source observer confirms
+**29 to 20 complete analyses plus nine resumed closures**. Counted rows fall
+from 2,017 to 1,307. Callgrind instructions from the unmodified qualified executable fall from
+280,884,206 to 275,391,164 (**1.96%**), and malloc calls from 481,406 to 461,653.
+Model validations (4), term evaluations (879) and interface proof requests (48)
+remain unchanged; all four actual SAT models pass both replay checkers. The
+observer restores source, CLI, worker and unit executable byte-for-byte. Its
+source counters supply the pass counts: broad helper-symbol prefixes include
+nested lambdas and are not source-path counts. These observations establish the
+mechanism, not whole-suite wall-clock performance.
+
+A fresh complete comparison uses delivered main `f311425e`, this
+frozen candidate and unchanged frozen Z3/cvc5, with **60 seconds, one physical
+CPU and 16 GiB per solver/input**. All **14,408 private results** independently
+verify in all three arms (8,940 SAT / 5,468 UNSAT). Main/candidate/Z3 total solver
+times are **195.3085 / 194.0446 / 295.6066 seconds**: an observed
+**0.65%** reduction against the same-round main, with no verified loss.
+
+Fixed160 verifies **124 / 124 / 117 results**, with identical main/candidate
+verified membership and zero gains or losses. The candidate's 35 timeouts and
+one unconfirmed UNSAT remain unresolved; main has 36 timeouts, and Z3 has 37
+timeouts plus six unconfirmed UNSATs. All seven independent unresolved checks
+time out. Original hashes and archive bindings are rechecked; the candidate
+matches the earlier pending input, with no verified SAT counterpart in two
+explicit qualified historical audits. These boundaries do not prove UNSAT,
+and all remaining unconfirmed results stay excluded. Fixed verified PAR-2 means
+are **31.563095 / 31.510110 / 33.709894 seconds**.
+
+The disjoint 14,568-input fixed/private union verifies **14,532 / 14,532 /
+14,525**, with verified PAR-2 totals **5,245.4037 / 5,235.6621 / 5,689.1897
+seconds**: **9.7416 seconds saved** against main. Development587 separately
+retains **587 / 587 / 584**, with total solver times **7.6394 / 7.6076 /
+11.5454 seconds**; it is not added to the scored union. No new opposite verdict,
+invalid actual model, protocol error or verified loss is observed. The resource
+audit reconstructs at most 40 distinct physical CPUs without overlapping sibling
+leases across all three cohorts. Original reports and current timings remain
+unchanged; the input-bound certificate and independent evidence supplement only
+successful current UNSAT observations, never timeout/unknown or reused SAT models.
+
+Server acceptance and the preregistered optional performance gate pass. This is
+a modest observed speed improvement with unchanged verified coverage, not an
+overall Z3-superiority claim. Final original-C QCP, remaining fixed inputs and
+one-time protected evaluation remain open. Exact PR/main CI delivery receipts
+are maintained in the pull request merging this frozen source. Private inputs,
+models, identifiers and per-input evidence stay on the server.
+
+| Incremental-closure artifact | SHA-256 |
+| --- | --- |
+| Native qualification | `9c249b50aa5170082ac8db1d6e3ebd7ac4c80b123ae7803fc17dc13e849e4aae` |
+| Complete qualified source manifest | `d3ebb0da18ed7bafd69acdd4b2426e2a502f23da977d32192af5044ef47454bf` |
+| Frozen CLI | `3058ae6b25f7f5795fa2953dfa804985071bf3e47b0e13f84848df4146e4c7cf` |
+| Source-path observation | `d289cbbb0b9cc38d56d539fa527091a29754f3205a9ae6b4199b5492f28bcfae` |
+| Mechanism audit | `2d68f9b91f3064c1a5cb14f978c500a8fc868d459e11da8942494c52b99f63e0` |
+| Complete private cohort | `e3f28a0607f1b1a72a76a7961380f64a9a2d6092949d64c6e6183b80839eb168` |
+| Complete stage | `96476f7be04172770a1f82b89bc7dfef797b29b1dc21098011210c42052b7872` |
+| Remaining unconfirmed audit | `6af87289f6f4d3187c9a24fb46fc6cb816b70e4aa01bf728cbdb327681d638fb` |
 
 ## Closed: standalone definition-prefix retention (2026-11-09)
 
