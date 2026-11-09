@@ -1,5 +1,40 @@
 # Arithmetic validation and continuation record
 
+## In development: stable priority draining for EUF saturation (2026-11-09)
+
+Instruction-level diagnosis uses the preceding frozen versions and private
+diagnostic selection. ExperimentOS **dae80995dccf** completes all three paired
+jobs; all six actual SAT models pass Z3/cvc5 replay. Costs match the actual CLI
+ELF and an independent name-based reader. No unknown-object address is assumed
+to be a CLI offset. Individual evidence remains server-only.
+Instruction-audit SHA-256:
+`0c7b847a842b488d5f8a1a2b3f5e8adb29a03b9bf74751d259e4ea6992b5eb4d`.
+
+`EufSolver::check` performs **110,803 pending-merge pops**, but its repeated
+minimum-level scan makes **12,525,016 comparisons**. The identified scan kernel
+executes **360,552,460 instructions**, **4.4768%** of the sampled candidate's
+total. This is an instruction measurement, not a wall-time gain.
+Root-audit SHA-256:
+`a89cf9aeb9f1bd25d1ca98e0bbb7f5f3246b0593228dd22c79df30686a11e701`.
+
+The candidate replaces this scan and middle erase with the generic
+`base/StablePriorityDrain.h`. Its heap contains cached priorities and source
+indices; producers keep appending to the original deque. Minimum level and
+FIFO ties are unchanged. Stable compaction bounds retired storage and rebuild
+work. Early return, exception and normal scope exit preserve all unconsumed
+tasks in original insertion order. Payloads require nonthrowing ownership
+moves. Key extraction or comparison failures discard the index without losing
+pending work. Constant-time `empty()` keeps the existing deadline check before
+heap construction. No theory rule, explanation, model check, budget or
+LRA/LIA rollback policy changes.
+
+Seven general regressions cover interleaved appends against independent linear
+selection, interrupted scopes, key/comparison exceptions and recovery,
+noncopyable ownership, subquadratic comparisons, nonintegral priorities and
+reversed ordering. **Native build, unit acceptance, candidate profiles and
+complete performance validation remain pending.** This code has no demonstrated
+solver gain yet and must pass the existing performance gate.
+
 ## Qualified performance stage: directly owned finite bounds (2026-11-09)
 
 Core `328c3b3ef3ce6466bfaf871606713fb02241c351` constructs finite simplex
@@ -74,9 +109,15 @@ Historical-evidence-audit SHA-256:
 The complete stage passes the preregistered performance gate: no verified
 losses, a faster complete private cohort, and an improved disjoint-union
 count-first/PAR-2 score. All native jobs and both watchers are terminal;
-do not restart them or register duplicate formal runs. The stage is eligible
-for PR review. Exact-review-source binding, PR CI and normal main merge/CI
-must complete before claiming delivery. This is **not** a final overall
+do not restart them or register duplicate formal runs. All source bodies bind
+to reviewed head `5778ac5f3ed35a83ad458002480f11c747411b85`, binding SHA-256
+`4199d37515279a577d8a90547942e6fda67892aef64b08d99cc59330197d7306`.
+Both exact-head [PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42560273920)
+pass. [PR #122](https://github.com/fuqi-jia/Xolver/pull/122) merges normally as
+`c2d85b4d4952a099a8832c0a8e514a9e69199886`; its entire tree matches the
+reviewed tree. FULINA is retained. Exact merged-main
+[CI](https://github.com/fuqi-jia/Xolver/actions/runs/42562749855) is still in
+progress; delivery confirmation awaits its result. This is **not** a final overall
 superiority claim: remaining fixed inputs, final original-C QCP acceptance,
 the final frozen comparison and the one-time protected evaluation remain
 open. No protected set was read or run. Private inputs, models and per-case
@@ -96,8 +137,8 @@ Evidence hashes:
 | Development complete audit | `913a0f0b319b0be1bb1921c9759e679afa9a51cdd474653d2aaf79068e3f2e05` |
 | Final complete-stage audit | `8015e2a7ad97f25f7e590bda663a9e9c4b30a1d987445a492f9ca5bc2c520e78` |
 
-Continue with this stage's single FULINA-to-main PR, exact-head CI and normal
-merge; retain FULINA. After delivery, continue private UFLIA performance work
+Continue checking the existing merged-main CI; do not create another PR for
+this stage. Continue private UFLIA performance work
 from measured hotspots while preserving independent model checks. The user
 cancelled `validation/current-main.json`; it is not required and must not
 become a new post-CI archive gate.

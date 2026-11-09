@@ -1,4 +1,5 @@
 #include "base/RuntimeConfig.h"
+#include "base/StablePriorityDrain.h"
 #include <cstdlib>
 #include "base/EnvParam.h"
 #include <chrono>
@@ -277,8 +278,11 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
     {
     aniaprof::Scope _profSat(aniaprof::EUF_SATURATE);
     {
-        // Baseline: O(n) linear min-level scan + O(n) erase per pop (byte-identical
-        // to the historical loop). Congruences append to mergeQueue_.
+        // Preserve minimum-level order and FIFO ties without scanning every
+        // pending merge on each pop. All producers keep appending to the same
+        // deque; an interrupted drain retains the unconsumed insertion order.
+        StablePriorityDrain pending(mergeQueue_,
+            [](const PendingMerge& merge) { return merge.level; });
         // Wall-clock guard: a heavy array+UF congruence saturation (e.g. the
         // s3_srvr/s3_clnt AUFNIA cases, 680 KB of array+UF ops) is a single long
         // EUF check() the CaDiCaL-callback entry guards cannot interrupt. Throwing
@@ -287,15 +291,10 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
         // callback). Checked every 1024 merges; default-inert unless a deadline is
         // set and has passed (XOLVER_WALLCLOCK_MS).
         size_t _satScan = 0;
-        while (!mergeQueue_.empty()) {
+        while (!pending.empty()) {
             if (((++_satScan & 0x3FF) == 0) && wall::hasDeadline() && wall::remainingMs() == 0)
                 throw std::runtime_error("wall-clock deadline (EUF saturation)");
-            // Pick the minimum-level pending merge (earliest at that level).
-            size_t mi = 0;
-            for (size_t i = 1; i < mergeQueue_.size(); ++i)
-                if (mergeQueue_[i].level < mergeQueue_[mi].level) mi = i;
-            PendingMerge req = mergeQueue_[mi];
-            mergeQueue_.erase(mergeQueue_.begin() + static_cast<long>(mi));
+            PendingMerge req = pending.pop();
             if (hotProfileEnabled_) ++hotProfile_.mergesProcessed;
             auto r = applyMerge(std::move(req),
                                 [&](PendingMerge c) { mergeQueue_.push_back(std::move(c)); });
