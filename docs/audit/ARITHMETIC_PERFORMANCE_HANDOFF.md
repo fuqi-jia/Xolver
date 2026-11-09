@@ -4,8 +4,8 @@
 
 The existing independently checked private diagnostic profiles of the accepted
 core make **285 calls** to `LiaSolver::getDeducedSharedEqualities`. Each call
-rebuilds a name-to-column hash table from every simplex column; direct insertion
-calls alone account for **33,372,839 simulated instructions**. These are sampled
+rebuilds a name-to-column hash table from every simplex column: **69,921
+insertions / 33,372,839 simulated instructions** in the sample. These are sampled
 instruction costs, not whole-cohort timing. The shared `LinearAtomManager`
 already maintains the source-variable index used by model and entailment paths.
 
@@ -24,10 +24,43 @@ correct equality propagation but reveals the same display-label identity bug
 in `LinearModelValidator`: its first-wins map rejects valid late-source models.
 The shared checker now receives the existing canonical coordinate index and
 still independently evaluates every original form. Missing coordinates reject
-validation. Both failed attempts are retained; complete repaired-source
-qualification is pending.
-No new whole-SMT opposite verdict, performance gain or promotion is claimed.
-LRA/LIA rollback policies and all model checks are unchanged.
+validation. Both failed attempts are retained. The combined repair
+`256ecfad2645b3407938d9269286dbf29c330600` now passes **2,317 native unit cases /
+1,554,889 assertions**, including both new cases / **24 assertions**.
+All **2,345 qualified source bodies** independently match that Git core.
+All **965 public regressions** pass without waivers.
+LRA/LIA rollback policies and all model checks are preserved.
+
+Eight unique diagnostic pairs retain all five SAT controls; all ten actual
+models pass both independent replay checkers. Three gaps remain timeouts in
+both arms, with no gain, loss or opposite verdict. The preceding cache-round
+regression is already one of these controls; it is not duplicated.
+Three fresh paired profiles validate all six actual SAT models. The **69,921
+identity-map insertions fall to zero**; the shared checker makes **14,692
+canonical coordinate lookups across 630 validations**. Total sampled instructions
+fall from **7,743,575,759 to 7,598,926,737 (-1.87%)**, and malloc calls from
+**16,991,436 to 16,756,766**. Full independent-model validations (525) and model
+constructions (442) remain unchanged on this sample. Owned cache-read copies
+also remain unchanged, confirming that the rejected cache borrowing is absent.
+These measurements are diagnostic, not full-cohort timing or solve credit.
+
+Fresh complete **14,408 private / 160 fixed / 587 development** comparisons are
+registered with the same frozen baseline and references, original inputs,
+60-second / one-physical-CPU / 16-GiB budgets and independent actual-model
+checks. They remain open. This necessary correctness repair must be retained
+if performance changes; all verified gains/losses and timings still require
+reporting. No new whole-SMT opposite verdict, complete-cohort performance gain,
+protected-set result or promotion is claimed.
+
+| Source-coordinate artifact | SHA-256 |
+| --- | --- |
+| Native qualification | `9a7ab67bf3eee198108c101b359ac32c9e084d6b4fc9dde011e83a395b9d842a` |
+| Complete source binding | `e1aae4fe09cf69e957980675b1122dfecea88b26a3202d0007f0f3a5c251da5d` |
+| Frozen CLI | `e1ed2411b654106e958a16297ce4326504c2831c9289f5d7385fe9bb9678d600` |
+| Native before/after audit | `945c45ee7953aafa815bb617df04f5d684431270de96203d792477db2d28ad9d` |
+| Public regression audit | `a0423509289a31aacf41de89da320f4ed3830f1d03da4e739f6c6bd6792d6186` |
+| Diagnostic pilot audit | `c0ec8f4266d879f1b1faa705d9986caf45f2d059441fc4de384c7e05c60a570f` |
+| Paired profile audit | `aaa74c08c47537c1e1edcd3e6675b55914abdc6be5b938cf0d63998f9738e227` |
 
 The cache-withdrawal core separately passes all **2,315 unit cases / 1,554,865
 assertions**. Its frozen CLI SHA-256 equals the delivered binary exactly,
