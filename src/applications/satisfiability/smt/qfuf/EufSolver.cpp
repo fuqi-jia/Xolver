@@ -361,8 +361,11 @@ std::vector<SatLit> EufSolver::allActiveReasons() const {
 }
 
 void EufSolver::onEclassMerged(EClassId kept, EClassId killed) {
-    auto& kInfo = classInfo(kept);
-    auto& dInfo = classInfo(killed);
+    // Grow before taking either reference: admitting a later class can
+    // relocate the metadata vector and invalidate an earlier reference.
+    classInfo(std::max(kept, killed));
+    auto& kInfo = classInfo_[kept];
+    auto& dInfo = classInfo_[killed];
 
     BoolConstMark merged = mergeBoolMark(kInfo.boolMark, dInfo.boolMark);
     kInfo.boolMark = merged;

@@ -1,6 +1,163 @@
 # Arithmetic validation and continuation record
 
-## Qualified performance stage: directly owned finite bounds (2026-11-09)
+## Qualified for review: EUF lifetime repair and stable priority drain (2026-11-09)
+
+Read-only Memcheck on the qualified priority candidate confirms **six invalid
+read contexts and six invalid write contexts** in `EufSolver::onEclassMerged`.
+All **16 public incremental EUF cases / 20 assertions** still pass, showing
+that ordinary test success does not exclude this memory error. The trace
+identifies a read inside a freed four-byte metadata vector, released by
+`classInfo(killed)` after the retained `kept` reference was acquired. Union by
+size can retain an earlier class while admitting a later class identifier.
+The merge-handler source is identical in delivered main and the candidate.
+Memory-diagnosis audit SHA-256:
+`bbc868ad2300ed573a43373bd17eb5658a92cc5cabded514f2d40a3de01e250e`.
+
+The fix ensures storage for both identifiers before acquiring either
+reference. A general regression repeatedly introduces late classes, checks
+equality/disequality conflicts, and withdraws each scope. The production change
+does not alter merge ordering, explanations or the separate LRA/LIA rollback
+policies. Corrected core `3bd0865c702871ff041a9fd9085af4a89762145c`
+passes proof-enabled native acceptance: **2,313 unit cases / 1,554,845
+assertions**, including **128 late-class rounds / 640 new assertions**.
+All **965 public regressions** pass. A fresh Memcheck run passes **17 public
+incremental EUF cases / 660 assertions**, with **zero invalid reads, zero
+invalid writes, zero reported errors and exit code 0**. The before/after
+audit binds both frozen test binaries and all 2,345 qualified source bodies.
+This correctness fix must be retained even if its performance changes; the
+optional queue improvement remains subject to its performance requirements.
+
+The corrected version also completes eight diagnostic pairs: five SAT controls
+retain all ten independently replayed actual models, while three difficult
+controls remain timeouts in both arms. There is no diagnostic verified gain,
+loss or opposite verdict. Fresh complete private/fixed/development comparisons
+have now passed the unchanged performance gate. All arms independently verify
+**14,408 private results**, with main/corrected/Z3 total solver times
+**201.1806 / 199.7612 / 293.1442 seconds**; the corrected version is **0.71%
+faster** than main. Independent checks use the actual timed-run SAT models.
+
+Fixed160 retains **124 / 124 / 117** independently verified results after
+input-bound certificate checking and existing independent reference evidence.
+Main has 36 timeouts; the corrected version has 35 timeouts and one remaining
+unconfirmed UNSAT. Z3 has 37 timeouts and six unconfirmed results. All
+unconfirmed results remain excluded. Main/corrected verified PAR-2 means are
+**31.5849 / 31.5171 seconds**. There is no verified loss in any cohort.
+Development587 retains **587 / 587 / 584**, reported separately because it
+can overlap the scored cohorts.
+
+The disjoint fixed/private union retains **14,532 verified results** in both
+Xolver arms. Verified PAR-2 totals fall from **5,254.7697 to 5,242.4962
+seconds**, an improvement of **12.2736 seconds**. The remaining candidate
+UNSAT is the same unconfirmed input as in the preceding queue-only round;
+it receives no additional credit. Raw reports and current timings are
+preserved. The corrected source has its own acceptance; the preceding
+queue-only instruction measurements remain diagnostic evidence for that
+earlier version. Final-audit SHA-256:
+`eaa44528948dbb0bba69d8424e25337db60c3137e0d1173b7841598670b65ab1`.
+PR and exact merged-main CI acceptance are pending. Remaining fixed inputs,
+final original-C QCP verification and one-time protected evaluation remain
+open; this is not an overall solver-superiority claim.
+
+| Corrected-core artifact | SHA-256 |
+| --- | --- |
+| Native qualification | `1efa5551bb0236d31d7ef9b290f5f75e16df294c75c819be9fd13c5f527388db` |
+| Complete source binding | `5e525375f4ba29acd862ec3c1a614cf56b4ca86e8e26e5153a61e45c66fbe992` |
+| Frozen CLI | `558ef3b8e361235ebc700c9f7ffc0403f8840a66a8c5b0a98159958bbcfd2bb8` |
+| Memory-lifetime repair audit | `27028e7b47137110bbc451161c7dbb2a9bf00d511094a243fa4ef611bf43c1f7` |
+| Public regression audit | `d3b7e0881e177bf372808e8cc7c3106fd605c057c48e118fc26f6dafdfd672f5` |
+| Diagnostic model audit | `17d8c476bd3caeadd189e900e111d42ebdbe065c1deec814666b235ede48cb4d` |
+
+The first two memory diagnostics failed before executing the tests because
+the isolated debug search tree did not expose the loader's GNU debuglink name.
+The successful run verifies the loader build ID and uses matching existing
+debug data; it neither suppresses errors nor modifies production binaries.
+No private query is involved in these diagnostics.
+
+## In development: stable priority draining for EUF saturation (2026-11-09)
+
+Instruction-level diagnosis uses the preceding frozen versions and private
+diagnostic selection. ExperimentOS **dae80995dccf** completes all three paired
+jobs; all six actual SAT models pass Z3/cvc5 replay. Costs match the actual CLI
+ELF and an independent name-based reader. No unknown-object address is assumed
+to be a CLI offset. Individual evidence remains server-only.
+Instruction-audit SHA-256:
+`0c7b847a842b488d5f8a1a2b3f5e8adb29a03b9bf74751d259e4ea6992b5eb4d`.
+
+`EufSolver::check` performs **110,803 pending-merge pops**, but its repeated
+minimum-level scan makes **12,525,016 comparisons**. The identified scan kernel
+executes **360,552,460 instructions**, **4.4768%** of the sampled candidate's
+total. This is an instruction measurement, not a wall-time gain.
+Root-audit SHA-256:
+`a89cf9aeb9f1bd25d1ca98e0bbb7f5f3246b0593228dd22c79df30686a11e701`.
+
+The candidate replaces this scan and middle erase with the generic
+`base/StablePriorityDrain.h`. Its heap contains cached priorities and source
+indices; producers keep appending to the original deque. Minimum level and
+FIFO ties are unchanged. Stable compaction bounds retired storage and rebuild
+work. Early return, exception and normal scope exit preserve all unconsumed
+tasks in original insertion order. Payloads require nonthrowing ownership
+moves. Key extraction or comparison failures discard the index without losing
+pending work. Constant-time `empty()` keeps the existing deadline check before
+heap construction. No theory rule, explanation, model check, budget or
+LRA/LIA rollback policy changes.
+
+Seven general regressions cover interleaved appends against independent linear
+selection, interrupted scopes, key/comparison exceptions and recovery,
+noncopyable ownership, subquadratic comparisons, nonintegral priorities and
+reversed ordering. Qualified core
+`b535fe02bca2f981ea811f3bffdaa3a3f1a616e8` passes proof-enabled native acceptance
+**f80f489d83bc**: **7 new cases / 16,600 assertions**, **125 targeted cases /
+245,355 assertions**, and all **2,312 unit cases / 1,554,205 assertions**.
+All **2,345** source bodies match the core (2,184 root blobs and 161
+SOMTParser blobs); architecture checks report 744 files, 11 layers and no
+violations. All **965 public regressions** pass without waivers.
+
+Eight same-core diagnostic pairs **dad0e5315c7b** retain the five SAT
+controls, with all ten actual models independently replayed. Three reference
+gaps remain timeouts in both arms; no verified solve is gained or lost and
+there is no opposite verdict. Three paired profiles **94032be0a319** also
+validate all six actual models. Total instructions fall from **8,053,828,211
+to 7,743,112,438 (-3.86%)**; EUF-check exclusive instructions fall from
+**377,103,789 to 9,912,182**. Model construction (442), validation (525),
+warm evaluation (113,136) and face attempts (108,838) are unchanged. Numeric
+copies stay unchanged; malloc increases by 4,890. These are structural and
+small-sample observations, not complete-cohort timing or solve credit.
+
+Fresh complete comparisons are registered for **private14,408**, **fixed160**
+and **development587**, against the finite-bound version delivered below and
+the same frozen Z3. They retain every input, actual-model capture, independent
+checks, rotated solver order and **60 seconds / one physical core / 16 GiB**.
+ExperimentOS limits the three queues together to 40 physical cores. The full
+round is complete: all arms verify **14,408 private results**, with main/
+candidate/Z3 totals **201.4821 / 200.4680 / 293.6215 seconds**. The candidate
+is **0.50% faster** on this cohort. Fixed160 retains **124 / 124 / 118**
+independently confirmed results; main/candidate verified PAR-2 means are
+**31.5314 / 31.5196 seconds**. The candidate still has one unconfirmed UNSAT,
+and six reference results remain unconfirmed; none receives solve credit.
+There are no verified losses. Development587 retains **587 / 587 / 584**.
+
+The disjoint fixed/private union retains **14,532 verified** in both Xolver
+arms and improves verified PAR-2 total by **2.8982 seconds**. Independent
+certificate checking confirms actual current UNSAT only; no timeout or unknown
+is upgraded. Final-audit SHA-256:
+`66ab6e526f86062fd550b497378d8c7d53eeb29eba3edffd257f1bd1f0690c9d`.
+This passes the existing performance gate for frozen **b535fe02**. All jobs and
+watchers are terminal; do not repeat them. No PR is opened: the confirmed
+memory-lifetime fix above takes priority. The combined version requires its
+own acceptance and fresh timings before these gains can be attributed to it.
+Protected evaluation and final original-C QCP acceptance remain open.
+
+| Current artifact | SHA-256 |
+| --- | --- |
+| Native qualification | `cd50bb9388ac36fa5d84f891eda04f19f1885248457a4177c56056c3e225ed81` |
+| Source manifest | `886210dd020ad424298de1cdfde4b5050b2b55aaa0bbf45c19255e711aa4551e` |
+| Complete source binding | `80cd2653e4f6e7c4d8771f8b07e00b18f3f5b5edd6bc824491fb9ecdda9d326b` |
+| Frozen CLI | `b277c4e47395792106cc28e274ef8417280d7d444e6cfbe79de0b1849cd72d46` |
+| Pilot audit | `90aa0e645ce0c3116e45573754e6c6022feb5baba6dd9a19ac6ef55ed66ccb7e` |
+| Profile audit | `cb7534281fe86bba11bf7e9b3e40ae19fe790bcb407c0e9c7e748a72ae3589b5` |
+| Public regression audit | `b59dc38585d449c59c9154bb0a59843ad9716b698151cd29b20dc4c8208e42e2` |
+
+## Delivered performance stage: directly owned finite bounds (2026-11-09)
 
 Core `328c3b3ef3ce6466bfaf871606713fb02241c351` constructs finite simplex
 endpoints without intermediate ownership copies. `BoundInfo::finite` directly
@@ -74,9 +231,15 @@ Historical-evidence-audit SHA-256:
 The complete stage passes the preregistered performance gate: no verified
 losses, a faster complete private cohort, and an improved disjoint-union
 count-first/PAR-2 score. All native jobs and both watchers are terminal;
-do not restart them or register duplicate formal runs. The stage is eligible
-for PR review. Exact-review-source binding, PR CI and normal main merge/CI
-must complete before claiming delivery. This is **not** a final overall
+do not restart them or register duplicate formal runs. All source bodies bind
+to reviewed head `5778ac5f3ed35a83ad458002480f11c747411b85`, binding SHA-256
+`4199d37515279a577d8a90547942e6fda67892aef64b08d99cc59330197d7306`.
+Both exact-head [PR CI jobs](https://github.com/fuqi-jia/Xolver/actions/runs/42560273920)
+pass. [PR #122](https://github.com/fuqi-jia/Xolver/pull/122) merges normally as
+`c2d85b4d4952a099a8832c0a8e514a9e69199886`; its entire tree matches the
+reviewed tree. FULINA is retained. Exact merged-main
+[CI](https://github.com/fuqi-jia/Xolver/actions/runs/42562749855) completes with
+both build-test and proof-gate successful, closing this delivery. This is **not** a final overall
 superiority claim: remaining fixed inputs, final original-C QCP acceptance,
 the final frozen comparison and the one-time protected evaluation remain
 open. No protected set was read or run. Private inputs, models and per-case
@@ -96,8 +259,8 @@ Evidence hashes:
 | Development complete audit | `913a0f0b319b0be1bb1921c9759e679afa9a51cdd474653d2aaf79068e3f2e05` |
 | Final complete-stage audit | `8015e2a7ad97f25f7e590bda663a9e9c4b30a1d987445a492f9ca5bc2c520e78` |
 
-Continue with this stage's single FULINA-to-main PR, exact-head CI and normal
-merge; retain FULINA. After delivery, continue private UFLIA performance work
+This stage is delivered; do not create another PR or server archive gate for
+it. Continue private UFLIA performance work
 from measured hotspots while preserving independent model checks. The user
 cancelled `validation/current-main.json`; it is not required and must not
 become a new post-CI archive gate.
