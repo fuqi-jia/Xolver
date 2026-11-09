@@ -1,5 +1,7 @@
 #include <doctest/doctest.h>
 #include "ir/NativeTerms.h"
+#include "ir/NumericLiteral.h"
+#include <array>
 #include <somtparser/parser.h>
 #include <utility>
 
@@ -15,6 +17,57 @@ TEST_CASE("NativeTerms basic storage") {
     CHECK(id == 0);
     CHECK(ir.size() == 1);
     CHECK(ir.get(id).kind == Kind::ConstBool);
+}
+
+TEST_CASE("native numeric reads preserve exact values and owned payloads") {
+    struct Sample {
+        Kind kind;
+        SortId sort;
+        const char* literal;
+        const char* expected;
+        bool smallInteger;
+    };
+    const std::array<Sample, 6> samples{{
+        {Kind::ConstInt, 1, "-9223372036854775808", "-9223372036854775808", true},
+        {Kind::ConstInt, 1, "9223372036854775807", "9223372036854775807", true},
+        {Kind::ConstInt, 1, "9223372036854775808", "9223372036854775808", false},
+        {Kind::ConstInt, 1, "-9223372036854775809", "-9223372036854775809", false},
+        {Kind::ConstReal, 2, "-100000000000000000000000000000000000001/3",
+            "-100000000000000000000000000000000000001/3", false},
+        {Kind::ConstReal, 2, "0.00000000000000000001", "1/100000000000000000000", false},
+    }};
+    std::vector<TermExpr> snapshots;
+    {
+        NativeTerms terms;
+        terms.registerSort(1, SortKind::Int);
+        terms.registerSort(2, SortKind::Real);
+        std::vector<ExprId> ids;
+        for (const auto& sample : samples) {
+            const auto id = terms.add({sample.kind, sample.sort, {},
+                Payload(std::string(sample.literal))});
+            const auto snapshot = terms.get(id);
+            CHECK(snapshot.kind == sample.kind);
+            CHECK(snapshot.sort == sample.sort);
+            const auto exact = numericLiteral(snapshot);
+            REQUIRE(exact);
+            CHECK(*exact == mpq_class(sample.expected));
+            if (sample.kind == Kind::ConstInt)
+                CHECK(std::holds_alternative<int64_t>(snapshot.payload.value) == sample.smallInteger);
+            ids.push_back(id);
+            snapshots.push_back(snapshot);
+        }
+        for (size_t i = 0; i < 64; ++i) terms.makeFreshVariable(1, "grow");
+        for (size_t i = 0; i < ids.size(); ++i) {
+            const auto exact = numericLiteral(terms, ids[i]);
+            REQUIRE(exact);
+            CHECK(*exact == mpq_class(samples[i].expected));
+        }
+    }
+    for (size_t i = 0; i < snapshots.size(); ++i) {
+        const auto exact = numericLiteral(snapshots[i]);
+        REQUIRE(exact);
+        CHECK(*exact == mpq_class(samples[i].expected));
+    }
 }
 
 TEST_CASE("native kind metadata preserves exact literal sorts and comparison direction") {
