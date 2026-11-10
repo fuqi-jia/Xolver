@@ -52,19 +52,19 @@ struct DeltaRational {
     }
 
     DeltaRational operator+(const DeltaRational& rhs) const {
-        return DeltaRational(a + rhs.a, b + rhs.b);
+        return DeltaRational(Computed{}, a + rhs.a, b + rhs.b);
     }
     DeltaRational operator-(const DeltaRational& rhs) const {
-        return DeltaRational(a - rhs.a, b - rhs.b);
+        return DeltaRational(Computed{}, a - rhs.a, b - rhs.b);
     }
     DeltaRational operator-() const {
-        return DeltaRational(-a, -b);
+        return DeltaRational(Computed{}, -a, -b);
     }
     DeltaRational operator*(const mpq_class& c) const {
-        return DeltaRational(a * c, b * c);
+        return DeltaRational(Computed{}, a * c, b * c);
     }
     DeltaRational operator/(const mpq_class& c) const {
-        return DeltaRational(a / c, b / c);
+        return DeltaRational(Computed{}, a / c, b / c);
     }
 
     DeltaRational& operator+=(const DeltaRational& rhs) {
@@ -81,17 +81,30 @@ struct DeltaRational {
         else       s += " - " + mpq_class(-b).get_str() + "δ";
         return s;
     }
+
+private:
+    // Evaluate GMP expressions directly into the owned components. The public
+    // constructors still copy their inputs; arithmetic avoids materializing
+    // temporary rationals and copying those results a second time.
+    struct Computed {};
+    template<class Real, class Infinitesimal>
+    DeltaRational(Computed, const Real& real, const Infinitesimal& infinitesimal)
+        : a(real), b(infinitesimal) {}
+
+    friend DeltaRational operator+(const mpq_class&, const DeltaRational&);
+    friend DeltaRational operator-(const mpq_class&, const DeltaRational&);
+    friend DeltaRational operator*(const mpq_class&, const DeltaRational&);
 };
 
 // Convenience: treat mpq_class as DeltaRational in mixed ops
 inline DeltaRational operator+(const mpq_class& c, const DeltaRational& d) {
-    return DeltaRational(c + d.a, d.b);
+    return DeltaRational(DeltaRational::Computed{}, c + d.a, d.b);
 }
 inline DeltaRational operator-(const mpq_class& c, const DeltaRational& d) {
-    return DeltaRational(c - d.a, -d.b);
+    return DeltaRational(DeltaRational::Computed{}, c - d.a, -d.b);
 }
 inline DeltaRational operator*(const mpq_class& c, const DeltaRational& d) {
-    return DeltaRational(c * d.a, c * d.b);
+    return DeltaRational(DeltaRational::Computed{}, c * d.a, c * d.b);
 }
 
 } // namespace xolver

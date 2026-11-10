@@ -13,6 +13,61 @@
 
 using namespace xolver;
 
+TEST_CASE("DeltaRational: computed arithmetic preserves exact infinitesimal identities") {
+    std::array<mpq_class, 7> values{0, 1, -1, mpq_class(2, 3), mpq_class(-5, 7),
+        mpq_class(mpz_class(1) << 180, mpz_class(11)),
+        mpq_class(-(mpz_class(1) << 160), mpz_class(13))};
+    for (auto& value : values) value.canonicalize();
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        const DeltaRational x(values[i], values[(i + 1) % values.size()]);
+        for (std::size_t j = 0; j < values.size(); ++j) {
+            const DeltaRational y(values[j], values[(j + 2) % values.size()]);
+            const mpq_class& scale = values[(j + 3) % values.size()];
+            CHECK((x + y) - y == x);
+            CHECK((x - y) + y == x);
+            CHECK((x + (-x)).isZero());
+            CHECK(scale * (x + y) == scale * x + scale * y);
+            CHECK(scale * x == x * scale);
+            CHECK((scale - x) + x == DeltaRational(scale));
+            CHECK(scale + x == DeltaRational(scale) + x);
+            if (scale != 0) CHECK((x * scale) / scale == x);
+        }
+    }
+    const DeltaRational strict(mpq_class(7, 11), mpq_class(1, 13));
+    CHECK(strict * mpq_class(3, 5) > DeltaRational(mpq_class(21, 55)));
+    CHECK(strict * mpq_class(-3, 5) < DeltaRational(mpq_class(-21, 55)));
+}
+
+TEST_CASE("DeltaRational: computed results own operands through aliasing and temporary lifetimes") {
+    const mpq_class expectedReal(mpz_class(1) << 180, mpz_class(11));
+    const mpq_class expectedDelta(-5, 7);
+    mpq_class real = expectedReal, infinitesimal = expectedDelta;
+    const DeltaRational original(real, infinitesimal);
+    const DeltaRational shifted = real + original;
+    const DeltaRational reflected = real - original;
+    const DeltaRational scaled = infinitesimal * original;
+    CHECK(real == expectedReal);
+    CHECK(infinitesimal == expectedDelta);
+    real = 0;
+    infinitesimal = 0;
+    CHECK(original == DeltaRational(expectedReal, expectedDelta));
+    CHECK(shifted == DeltaRational(2 * expectedReal, expectedDelta));
+    CHECK(reflected == DeltaRational(0, -expectedDelta));
+    CHECK(scaled == DeltaRational(expectedReal * expectedDelta, expectedDelta * expectedDelta));
+
+    DeltaRational aliased = original;
+    aliased = aliased.a * aliased;
+    CHECK(aliased == DeltaRational(expectedReal * expectedReal, expectedReal * expectedDelta));
+    aliased = aliased / aliased.a;
+    CHECK(aliased == DeltaRational(1, expectedDelta / expectedReal));
+    const DeltaRational temporary = [] {
+        const mpq_class factor(2, 3);
+        return factor * (DeltaRational(mpq_class(3, 5), mpq_class(-7, 11)) /
+                         mpq_class(4, 9));
+    }();
+    CHECK(temporary == DeltaRational(mpq_class(9, 10), mpq_class(-21, 22)));
+}
+
 TEST_CASE("SparseTableau: batched substitution preserves exact coefficients and sparse links") {
     for (const int width : {1, 7, 31, 32, 65}) {
         SparseTableau tableau;
