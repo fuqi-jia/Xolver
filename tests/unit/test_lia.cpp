@@ -51,6 +51,12 @@ TEST_CASE("LIA sharing: fixed-value bases retain explanations across withdrawal 
         pinned[index] = true;
         values[index] = value;
     };
+    auto rebuildRoot = [&] {
+        solver.backtrackToLevel(0);
+        // A LIA root rebuild replays retained Boolean assignments through
+        // assertLit; non-root withdrawals retain their own source prefix.
+        for (size_t i = 0; i < 4; ++i) pin(i, values[i], sources[i].var, 0);
+    };
     auto verify = [&](size_t edges) {
         REQUIRE(solver.check(lemmas, TheoryEffort::Standard).kind == TheoryCheckResult::Kind::Consistent);
         const auto facts = solver.getDeducedSharedEqualities();
@@ -88,17 +94,17 @@ TEST_CASE("LIA sharing: fixed-value bases retain explanations across withdrawal 
     for (size_t i = 0; i < 8; ++i)
         pin(i, i < 4 ? 2 : 5, static_cast<SatVar>(i + 1), i < 4 ? 0 : 1);
     verify(6);
-    solver.backtrackToLevel(0);
+    rebuildRoot();
     for (size_t i = 4; i < 8; ++i) pinned[i] = false;
     verify(3);
     for (size_t i = 4; i < 8; ++i) pin(i, 2, static_cast<SatVar>(20 + i), 1);
     verify(7);
-    solver.backtrackToLevel(0);
+    rebuildRoot();
     for (size_t i = 4; i < 8; ++i) pinned[i] = false;
     addTerm();
     pin(8, 2, 40, 1);
     verify(4);
-    solver.backtrackToLevel(0);
+    rebuildRoot();
     pinned[8] = false;
     const auto application = ir.add({Kind::UFApply, 0, {expressions[3]}, Payload(std::string("f"))});
     const auto zero = ir.add({Kind::ConstInt, 0, {}, Payload(int64_t(0))});
