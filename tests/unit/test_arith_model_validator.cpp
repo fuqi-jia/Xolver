@@ -410,9 +410,9 @@ TEST_CASE("ArithModelValidator: function number parsing preserves grammar and in
     function.entries.front().value = "@element";
     CHECK(validator.evalToken(application) == "@element");
     function.retSort = "Real";
-    function.entries = {{{"3/2"}, "1/2"}, {{"#n:6/4"}, "2/4"}};
-    // Conflicting textual outputs remain an invalid interpretation even when
-    // their rational values coincide; parsing cannot hide that check.
+    function.entries = {{{"3/2"}, "1/2"}, {{"#n:6/4"}, "3/4"}};
+    // Equal argument tuples with different numeric results are inconsistent;
+    // parsing reuse must retain the check across every matching row.
     CHECK_FALSE(validator.evalNumber(application));
     function.entries.back().value = "1/2";
     CHECK(validator.evalNumber(application) == mpq_class(1, 2));
