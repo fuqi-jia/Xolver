@@ -62,6 +62,71 @@ TEST_CASE("ArithModelValidator: satisfied model") {
     CHECK(v.validate({a1, a2}) == ArithModelValidator::Verdict::Satisfied);
 }
 
+TEST_CASE("ArithModelValidator: guarded postorder preserves all three verdicts") {
+    Fix f;
+    using Verdict = ArithModelValidator::Verdict;
+    const auto yes = f.ir.add({Kind::ConstBool, f.boolS, {}, Payload(true)});
+    const auto no = f.ir.add({Kind::ConstBool, f.boolS, {}, Payload(false)});
+    const auto missing = f.var("missing", f.boolS);
+    const ExprId values[] = {no, yes, missing};
+    ArithModelValidator validator(f.ir, {}, {});
+    for (size_t i = 0; i < 3; ++i) {
+        for (size_t j = 0; j < 3; ++j) {
+            const auto conjunction = f.bin(Kind::And, values[i], values[j], f.boolS);
+            const auto disjunction = f.bin(Kind::Or, values[i], values[j], f.boolS);
+            const auto andResult = i == 0 || j == 0 ? Verdict::Violated :
+                i == 2 || j == 2 ? Verdict::Indeterminate : Verdict::Satisfied;
+            const auto orResult = i == 1 || j == 1 ? Verdict::Satisfied :
+                i == 2 || j == 2 ? Verdict::Indeterminate : Verdict::Violated;
+            CHECK(validator.validate({conjunction}) == andResult);
+            CHECK(validator.validate({disjunction}) == orResult);
+        }
+    }
+    const auto conditional = f.ir.add({Kind::Ite, f.boolS, {missing, yes, yes}, {}});
+    CHECK(validator.validate({conditional}) == Verdict::Indeterminate);
+    CHECK(validator.validate({missing, no, yes}) == Verdict::Violated);
+    CHECK(validator.validate({yes, missing, yes}) == Verdict::Indeterminate);
+    CHECK(validator.validate({yes, yes}) == Verdict::Satisfied);
+    CHECK(validator.validate({}) == Verdict::Satisfied);
+}
+
+TEST_CASE("ArithModelValidator: guarded deep DAGs remain independent across model updates") {
+    Fix f;
+    using Verdict = ArithModelValidator::Verdict;
+    const auto selector = f.var("selector", f.realS);
+    const auto zero = f.ir.add({Kind::ConstReal, f.realS, {}, Payload(std::string("0"))});
+    const auto condition = f.bin(Kind::Geq, selector, zero, f.boolS);
+    const auto input = f.var("input", f.intS);
+    const auto absent = f.var("absent", f.intS);
+    auto deep = input;
+    constexpr unsigned depth = 2048;
+    for (unsigned i = 0; i < depth; ++i) deep = f.bin(Kind::Add, deep, deep, f.intS);
+    auto selected = deep;
+    for (unsigned i = 0; i < depth; ++i)
+        selected = f.ir.add({Kind::Ite, f.intS, {condition, selected, absent}, {}});
+    const auto goal = f.bin(Kind::Eq, selected, deep, f.boolS);
+    const auto absentGoal = f.bin(Kind::Eq, absent, f.cint(9), f.boolS);
+    ArithModelValidator::RealAssignment numbers{
+        {"selector", RealValue::fromInt(1)}, {"input", RealValue::fromInt(3)}};
+    ArithModelValidator validator(f.ir, {}, {});
+    validator.setRealAssignments(&numbers);
+    CHECK(validator.validate({goal, goal}) == Verdict::Satisfied);
+    CHECK(validator.evalNumber(selected) == mpq_class(mpz_class(3) << depth));
+    CHECK(validator.validate({goal, absentGoal}) == Verdict::Indeterminate);
+    numbers["absent"] = RealValue::fromInt(9);
+    numbers["selector"] = RealValue::fromInt(-1);
+    CHECK(validator.evalNumber(selected) == mpq_class(9));
+    CHECK(validator.validate({goal}) == Verdict::Violated);
+    CHECK(validator.validate({absentGoal}) == Verdict::Satisfied);
+    numbers.erase("selector");
+    CHECK_FALSE(validator.evalNumber(selected));
+    CHECK(validator.validate({goal}) == Verdict::Indeterminate);
+    numbers["selector"] = RealValue::fromInt(1);
+    numbers["input"] = RealValue::fromInt(-3);
+    CHECK(validator.evalNumber(selected) == mpq_class(mpz_class(-3) << depth));
+    CHECK(validator.validate({goal, absentGoal}) == Verdict::Satisfied);
+}
+
 TEST_CASE("ArithModelValidator: violated model") {
     Fix f;
     ExprId x = f.var("x", f.intS), y = f.var("y", f.intS);

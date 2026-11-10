@@ -155,9 +155,9 @@ private:
 
     TR eval(ExprId e) const;       // cached dispatcher (memo when enabled)
     TR evalImpl(ExprId e) const;   // the actual evaluator (recurses via eval)
-    // Iterative bottom-up pre-pass: fills `cache` with every subterm's TR so the
-    // recursive eval/evalImpl resolves children from it and never recurses deeply
-    // (deep-formula/term stack-overflow guard). Used by validate()/evalNumber().
+    // Iterative postorder of required subterms. Boolean guards retain evalImpl's
+    // three-valued short circuit; every dependency it reads is warmed, keeping
+    // deep formulas off the native call stack. Cache lifetime is one evaluation.
     void warmEval(ExprId root, std::unordered_map<ExprId, TR>& cache) const;
 
     // Coerce a fully-evaluated TR into an opaque equality token (Number/Bool/

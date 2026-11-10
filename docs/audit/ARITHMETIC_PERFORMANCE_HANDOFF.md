@@ -1,5 +1,27 @@
 # Arithmetic validation and continuation record
 
+## Guarded iterative model validation (in progress, 2026-11-10)
+
+The validator bodies still match the qualified 24-profile reference. Those
+profiles record 669 validations, 130,642 exact evaluator calls and 975,855,718
+instructions under the validation warm pass. Every validation has one root;
+moving the assertion loop alone therefore cannot explain a sample improvement.
+Source inspection identifies eager expansion below `and`, `or` and `ite`, even
+when the existing evaluator subsequently short-circuits. Root-audit SHA-256:
+`459835feae2805108b8927f37d7ddc3d0b0201d52855a775576c7b5107376aad`.
+
+`ArithModelValidator::warmEval` now schedules guarded dependencies iteratively
+using the current evaluation's cached values. An indeterminate condition remains
+indeterminate, and an indeterminate Boolean operand does not suppress a later
+decisive operand. Ordinary postorder, exact arithmetic and query-local ownership
+remain unchanged. Validation warms successive assertion roots until its existing
+definite-violation exit; diagnostic descent also warms each requested expression.
+Tests exercise all three Boolean outcomes, shared roots, deep selected branches,
+missing assignments and external typed-model changes. The stronger LIA
+fresh-literal regression is retained after the optional-cache withdrawal.
+Native qualification, actual avoided-work measurement and fresh full performance
+acceptance are pending. No speed or new-coverage claim is made.
+
 ## Closed: isolated auxiliary projection reuse (2026-11-10)
 
 Optional core `0c181247` passes 2,342 proof-enabled unit cases, 965 public

@@ -170,6 +170,20 @@ TEST_CASE("LIA: isolated shared forms rebuild proofs after backtracking") {
     fixture.solver.backtrackToLevel(0);
     fixture.equation(LinearFormKey{{{"b", 3}, {"x", -3}, {"y", -3}}}, 3, 0);
     check(false, 3);
+    fixture.solver.backtrackToLevel(0);
+    fixture.equation(LinearFormKey{{{"a", 1}, {"x", -1}, {"y", -1}}}, 5, 0);
+    fixture.equation(LinearFormKey{{{"b", 3}, {"x", -3}, {"y", -3}}}, 6, 0);
+    check(true, 6);
+    for (const auto& propagation : fixture.equalities()) {
+        if (!SharedAffineFixture::connects(propagation, a, b)) continue;
+        for (SatVar retired : {1U, 2U, 3U, 4U})
+            CHECK(std::find(propagation.reasons.begin(), propagation.reasons.end(),
+                            SatLit::positive(retired)) == propagation.reasons.end());
+        CHECK(std::find(propagation.reasons.begin(), propagation.reasons.end(),
+                        SatLit::positive(5)) != propagation.reasons.end());
+        CHECK(std::find(propagation.reasons.begin(), propagation.reasons.end(),
+                        SatLit::positive(6)) != propagation.reasons.end());
+    }
 }
 
 TEST_CASE("LIA: unbounded Boolean integer models survive widening and query scopes") {
