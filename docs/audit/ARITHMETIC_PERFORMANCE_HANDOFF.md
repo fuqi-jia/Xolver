@@ -21,6 +21,16 @@ insertion. Changed payloads, relations, signs or levels still execute the existi
 replacement path; each theory retains its established rollback policy.
 The shared regression covers large rational coefficients, RHS and LHS changes
 under reused IDs, cached conflicts, level replacement, reset and API scopes.
+The initial focused run fails one of 59 assertions: its bare LIA instance needs
+an integer split but has no SAT registry. Replaying the accepted pre-change
+`LiaSolver.cpp` under the same fixture also gives 58 passes and the same
+`unknown`; this is an isolated method reproduction, not whole-main acceptance.
+All 2,346 source bodies, 832 objects/dependencies, libraries, binaries, cache
+and output timestamps are restored afterwards. Prior-method record SHA-256:
+`a18c6028d4a8226e0652ec5d02a8da2c2f5a02287a5c4cc662395c8a9d8ce385`.
+The failed native run remains unqualified. The fixture now uses a false strict
+upper bound whose relaxation point is already integral, retaining the same
+source-lifecycle checks. Column definitions are constructed before publication.
 Native qualification, actual saved-work counts and fresh performance acceptance
 remain pending. No solved-count or elapsed-time benefit is claimed.
 

@@ -113,7 +113,9 @@ TEST_CASE("Arithmetic admission: exact replays retain payload replacement and sc
         engine.assertLit(source, true, 0, {1, true});
         consistent();
         engine.push();
-        std::get<LinearAtomPayload>(source.payload).rel = Relation::Leq;
+        // This lifecycle fixture has no SAT registry for fractional branching.
+        // A false strict upper bound leaves the integral relaxation point y=2.
+        source.payload = LinearAtomPayload{y, Relation::Lt, RealValue::fromMpq(2 * coefficient)};
         engine.assertLit(source, false, 1, {1, false});
         consistent();
         CHECK(value("admission-y") > 1);

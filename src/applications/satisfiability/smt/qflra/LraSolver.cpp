@@ -148,8 +148,8 @@ void LraSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
     }
     int auxVar = manager_.getOrCreateAuxVar(gs_, payload.lhs, rhs);
     // A column's defining form is immutable, including across source replay.
-    auto [column, inserted] = columnForms_.try_emplace(auxVar);
-    if (inserted) column->second = {payload.lhs, rhs};
+    if (!columnForms_.contains(auxVar))
+        columnForms_.emplace(auxVar, ColumnForm{payload.lhs, rhs});
     Relation effectiveRel = value ? payload.rel : negateRelation(payload.rel);
     bool isDiseq = (effectiveRel == Relation::Neq);
 
