@@ -3,6 +3,7 @@
 #include "search/arith/ArithSolverBase.h"
 #include "search/coordination/TheoryAtomRegistry.h"
 #include "search/linear/LinearAtomManager.h"
+#include "search/linear/LinearSource.h"
 #include "search/combination/SharedTermRegistry.h"
 #include "search/lra/GeneralSimplex.h"
 #include "search/lra/LraPropagationEngine.h"
@@ -88,18 +89,7 @@ private:
     // -------------------------------------------------------------------------
     // Incremental trail (Phase 1)
     // -------------------------------------------------------------------------
-    struct LraTrailEntry {
-        int level;
-        SatLit lit;
-        TheoryAtomRecord atom;
-        bool value;
-        int auxVar = -1;  // pre-computed aux var for this linear form
-        bool isDiseq = false;
-    };
-    struct TrailKey {
-        SatVar operator()(const LraTrailEntry& entry) const { return entry.atom.satVar; }
-    };
-    using TrailContext = incremental::IndexedContext<LraTrailEntry, TrailKey>;
+    using TrailContext = incremental::IndexedContext<LinearSource, LinearSource::Key>;
     TrailContext theoryTrail_;
     size_t appliedCursor_ = 0;
     size_t appliedInterfaceCursor_ = 0;
@@ -114,7 +104,7 @@ private:
     void rebuildTrailCaches();
     void resetAppliedBounds(GeneralSimplex::AssignmentPolicy policy);
     void recordAppliedLevel(int level);
-    bool applyEntryToSimplex(const LraTrailEntry& e);
+    bool applyEntryToSimplex(const LinearSource& e);
 
     // -------------------------------------------------------------------------
     // Disequality handling
@@ -177,11 +167,7 @@ private:
     // -------------------------------------------------------------------------
     LraPropagationEngine propagationEngine_;
 
-    struct ColumnForm {
-        LinearFormKey lhs;
-        mpq_class rhs;
-    };
-    std::unordered_map<int, ColumnForm> columnForms_;
+    std::unordered_map<int, AffineFormDefinition> columnForms_;
 
     // Build a SOUND propagation clause (¬reason₁ ∨ ... ∨ impliedBound) carrying
     // the Farkas reasons, tagged Entailment. Safe to give the SAT solver during

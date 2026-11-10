@@ -24,6 +24,8 @@ public:
     };
 
     void add(const LinearAtomPayload& atom, bool value, SatLit reason);
+    void add(const LinearFormKey& lhs, Relation relation, const mpq_class& rhs,
+             bool value, SatLit reason);
 
     // Positions refer to sharedNames, including repeated names. Results have
     // first < second and the order of an ordinary nested shared-variable loop.

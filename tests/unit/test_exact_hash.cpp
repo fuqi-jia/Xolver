@@ -2,6 +2,8 @@
 #include "base/GmpHash.h"
 #include "contracts/LinearFormKey.h"
 #include "search/linear/LinearAtomManager.h"
+#include "search/linear/LinearSource.h"
+#include "base/IncrementalContext.h"
 #include <unordered_map>
 #include <unordered_set>
 
@@ -72,4 +74,73 @@ TEST_CASE("exact hashes: normalized linear forms reuse the same simplex coordina
         CHECK(manager.getOrCreateAuxVar(simplex, equivalent, mpq_class(2, 5)) == coordinate);
     CHECK(simplex.numVars() == variables);
     CHECK(simplex.numRows() == 1);
+}
+
+TEST_CASE("shared linear sources: canonical definitions survive growth and owner replacement") {
+    mpq_class coefficient((mpz_class(1) << 181) + 7, (mpz_class(1) << 139) + 3);
+    coefficient.canonicalize();
+    LinearFormKey input{{{"left;part", coefficient}, {"right:part", mpq_class(-5, 7)}}};
+    const auto expected = input;
+    const mpq_class rhs(11, 13);
+    AffineFormDefinition retained;
+    {
+        GeneralSimplex simplex;
+        LinearAtomManager manager;
+        const auto aux = manager.getOrCreateAuxVar(simplex, input, rhs);
+        retained = manager.auxForm(aux);
+        REQUIRE(retained);
+        input.terms.front().second = 99;
+        auto copied = manager;
+        CHECK(copied.auxForm(aux) == retained);
+        CHECK_FALSE(manager.auxForm(-1));
+        CHECK_FALSE(manager.auxForm(manager.findVarIndex("left;part")));
+        for (int offset = 0; offset < 256; ++offset)
+            manager.getOrCreateAuxVar(simplex, expected, mpq_class(offset));
+        CHECK(manager.auxForm(aux) == retained);
+        copied = LinearAtomManager{};
+        manager = LinearAtomManager{};
+        CHECK(retained->lhs == expected);
+        CHECK(retained->rhs == rhs);
+    }
+    CHECK(retained->lhs == expected);
+    CHECK(retained->rhs == rhs);
+    std::unordered_map<AffineFormDefinition, int, AffineFormKeyHash, AffineFormKeyEqual> index;
+    index.emplace(retained, 7);
+    const auto found = index.find(AffineFormKeyView{expected, rhs});
+    REQUIRE(found != index.end());
+    CHECK(found->second == 7);
+}
+
+TEST_CASE("shared linear sources: snapshots share definitions and retain independent premises") {
+    LinearAtomManager manager;
+    GeneralSimplex simplex;
+    const LinearFormKey lhs{{{"snapshot-x", 1}}};
+    const auto aux = manager.getOrCreateAuxVar(simplex, lhs, 3);
+    LinearSource root{0, SatLit::positive(1), 1, NullExpr, Relation::Geq,
+                      true, aux, false, manager.auxForm(aux)};
+    incremental::IndexedContext<LinearSource, LinearSource::Key> context;
+    context.append(root);
+    auto saved = context.snapshot();
+    auto child = root;
+    child.level = 2;
+    child.value = false;
+    child.lit = SatLit::negative(1);
+    context.replace(0, child);
+    CHECK(context[0].form == root.form);
+    CHECK(context[0].lit == SatLit::negative(1));
+    CHECK(root.lit == SatLit::positive(1));
+    context.restore(std::move(saved));
+    CHECK(context[0].level == 0);
+    CHECK(context[0].value);
+    CHECK(context[0].lit == SatLit::positive(1));
+    TheoryAtomRecord record{1, TheoryId::LIA, false, NullExpr,
+        LinearAtomPayload{lhs, Relation::Geq, RealValue::fromInt(3)}};
+    const auto& payload = std::get<LinearAtomPayload>(record.payload);
+    CHECK(context[0].matches(record, payload, payload.rhs.asRational(), true, 0, root.lit));
+    CHECK_FALSE(context[0].matches(record, payload, mpq_class(4), true, 0, root.lit));
+    CHECK_FALSE(context[0].matches(record, payload, mpq_class(3), true, 1, root.lit));
+    manager = LinearAtomManager{};
+    CHECK(context[0].lhs() == lhs);
+    CHECK(context[0].rhs() == 3);
+    CHECK(child.lit == SatLit::negative(1));
 }

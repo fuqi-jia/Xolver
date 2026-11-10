@@ -372,11 +372,9 @@ bool LiaSolver::isSimplexVarInteger(int idx) const {
     }
     // Auxiliary variable s = Σ c_k * v_k - rhs: integer iff every c_k and rhs
     // are integers and every v_k is an integer variable.
-    LinearFormKey form;
-    mpq_class auxRhs;
-    if (!manager_.auxForm(idx, form, auxRhs)) return false;
-    if (auxRhs.get_den() != 1) return false;
-    for (const auto& [vn, c] : form.terms) {
+    const auto form = manager_.auxForm(idx);
+    if (!form || form->rhs.get_den() != 1) return false;
+    for (const auto& [vn, c] : form->lhs.terms) {
         if (c.get_den() != 1) return false;
         int vi = manager_.findVarIndex(vn);
         if (vi < 0 || integerVars_.count(vi) == 0) return false;
@@ -442,11 +440,10 @@ std::optional<TheoryLemma> LiaSolver::generateGomoryCut(int xi) {
         if (!nm.empty()) {
             coeff[nm] += tau;
         } else {
-            LinearFormKey form;
-            mpq_class auxRhs;
-            if (!manager_.auxForm(nb[j].var, form, auxRhs)) return std::nullopt;
-            for (const auto& [vn, c] : form.terms) coeff[vn] += tau * c;
-            rhsFinal += tau * auxRhs;
+            const auto form = manager_.auxForm(nb[j].var);
+            if (!form) return std::nullopt;
+            for (const auto& [vn, c] : form->lhs.terms) coeff[vn] += tau * c;
+            rhsFinal += tau * form->rhs;
         }
         reasons.push_back(nb[j].reason);
     }

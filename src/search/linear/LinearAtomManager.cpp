@@ -78,7 +78,7 @@ int LinearAtomManager::getOrCreateAuxVar(GeneralSimplex& gs,
         return it->second;
     }
 
-    AffineFormKey key{lhs, rhs};
+    auto form = std::make_shared<const AffineFormKey>(AffineFormKey{lhs, rhs});
     // Build GeneralSimplex terms: (varIndex, coeff)
     std::vector<std::pair<int, mpq_class>> gsTerms;
     gsTerms.reserve(lhs.terms.size());
@@ -88,17 +88,19 @@ int LinearAtomManager::getOrCreateAuxVar(GeneralSimplex& gs,
     }
 
     int auxVar = gs.addConstraint(gsTerms, rhs);
-    formToAux_[key] = auxVar;
-    auxToForm_[auxVar] = key;
+    auxToForm_.emplace(auxVar, form);
+    try {
+        formToAux_.emplace(std::move(form), auxVar);
+    } catch (...) {
+        auxToForm_.erase(auxVar);
+        throw;
+    }
     return auxVar;
 }
 
-bool LinearAtomManager::auxForm(int aux, LinearFormKey& lhsOut, mpq_class& rhsOut) const {
+AffineFormDefinition LinearAtomManager::auxForm(int aux) const {
     auto it = auxToForm_.find(aux);
-    if (it == auxToForm_.end()) return false;
-    lhsOut = it->second.lhs;
-    rhsOut = it->second.rhs;
-    return true;
+    return it == auxToForm_.end() ? AffineFormDefinition{} : it->second;
 }
 
 LinearAtomManager::RelationBoundViews LinearAtomManager::effectiveBoundViews(

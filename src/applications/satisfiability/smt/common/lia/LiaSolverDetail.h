@@ -5,14 +5,14 @@
 // them header-shareable with identical (pure-function) behavior — every call
 // site resolves to the same xolver:: name it did before the split.
 #include <gmpxx.h>
-#include "contracts/TheoryAtomTypes.h"  // LinearAtomPayload
+#include "contracts/AffineFormKey.h"
 
 namespace xolver {
 
-// True iff a linear atom payload is integral: integer rhs and all-integer
+// True iff a linear form is integral: integer rhs and all-integer
 // coefficients on the lhs terms.
-inline bool isIntegerLinearForm(const LinearAtomPayload& p) {
-    if (!p.rhs.isRational() || p.rhs.asRational().get_den() != 1) return false;
+inline bool isIntegerLinearForm(const AffineFormKey& p) {
+    if (p.rhs.get_den() != 1) return false;
     for (const auto& t : p.lhs.terms) {
         if (t.second.get_den() != 1) return false;
     }

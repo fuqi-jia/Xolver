@@ -95,15 +95,14 @@ void LiaSolver::rebuildTrailCaches() {
     clearIntegerVariables();
     for (size_t i = 0; i < theoryTrail_.size(); ++i) {
         const auto& e = theoryTrail_[i];
-        const auto& p = std::get<LinearAtomPayload>(e.atom.payload);
-        retainIntegerVariables(p.lhs);
-        if (e.isDiseq) disequalities_.push_back({e.auxVar, p.lhs, p.rhs.asRational(), e.lit});
-        else activeAtoms_.push_back({e.atom.exprId, e.auxVar, p.rel, e.value, p.lhs, p.rhs.asRational(), e.lit});
+        retainIntegerVariables(e.lhs());
+        if (e.isDiseq) disequalities_.push_back({e.auxVar, e.lhs(), e.rhs(), e.lit});
+        else activeAtoms_.push_back({e.exprId, e.auxVar, e.relation, e.value, e.lhs(), e.rhs(), e.lit});
     }
     trailCachesOrdered_ = true;
 }
 
-void LiaSolver::withdrawTrailEntry(const LiaTrailEntry& entry) {
+void LiaSolver::withdrawTrailEntry(const LinearSource& entry) {
     // Reverse removal preserves parent formula objects and their GMP storage.
     // Variables disappear in reverse first-occurrence order, including terms
     // first introduced by the same source.
@@ -114,7 +113,7 @@ void LiaSolver::withdrawTrailEntry(const LiaTrailEntry& entry) {
         assert(!activeAtoms_.empty() && activeAtoms_.back().lit == entry.lit);
         activeAtoms_.pop_back();
     }
-    const auto& terms = std::get<LinearAtomPayload>(entry.atom.payload).lhs.terms;
+    const auto& terms = entry.lhs().terms;
     for (auto term = terms.rbegin(); term != terms.rend(); ++term) {
         const int var = manager_.findVarIndex(term->first);
         assert(var >= 0 && integerVarUses_[var] > 0);
@@ -165,13 +164,13 @@ void LiaSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
     const auto position = theoryTrail_.find(atom.satVar);
     if (position) {
         const auto& previous = theoryTrail_[*position];
-        if (previous.level == level && previous.lit == assertedLit &&
-            previous.atom.exprId == atom.exprId && previous.value == value &&
-            std::get<LinearAtomPayload>(previous.atom.payload) == payload) return;
+        if (previous.matches(atom, payload, rhs, value, level, assertedLit)) return;
     }
     int auxVar = manager_.getOrCreateAuxVar(gs_, payload.lhs, rhs);
     Relation effectiveRel = value ? payload.rel : negateRelation(payload.rel);
     bool isDiseq = (effectiveRel == Relation::Neq);
+    LinearSource source{level, assertedLit, atom.satVar, atom.exprId, payload.rel,
+                        value, auxVar, isDiseq, manager_.auxForm(auxVar)};
 
     if (position) {
         const auto& previous = theoryTrail_[*position];
@@ -185,14 +184,14 @@ void LiaSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
                 activeAtoms_.erase(std::remove_if(activeAtoms_.begin(), activeAtoms_.end(),
                     [&](const auto& a) { return a.lit == previous.lit; }), activeAtoms_.end());
         }
-        theoryTrail_.replace(*position, {level, assertedLit, atom, value, auxVar, isDiseq});
+        theoryTrail_.replace(*position, std::move(source));
         if (!sameForm) rebuildTrailCaches();
         else if (isDiseq) disequalities_.push_back({auxVar, payload.lhs, rhs, assertedLit});
         else activeAtoms_.push_back({atom.exprId, auxVar, payload.rel, value, payload.lhs, rhs, assertedLit});
         return;
     }
     retainIntegerVariables(payload.lhs);
-    theoryTrail_.append({level, assertedLit, atom, value, auxVar, isDiseq});
+    theoryTrail_.append(std::move(source));
     if (isDiseq) {
         disequalities_.push_back({auxVar, payload.lhs, rhs, assertedLit});
     } else {
@@ -200,9 +199,9 @@ void LiaSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
     }
 }
 
-LiaSolver::AppliedBound LiaSolver::appliedKey(const LiaTrailEntry& entry) {
-    return {entry.atom.satVar, entry.atom.exprId, entry.lit, entry.level, entry.auxVar,
-            std::get<LinearAtomPayload>(entry.atom.payload).rel, entry.value, entry.isDiseq};
+LiaSolver::AppliedBound LiaSolver::appliedKey(const LinearSource& entry) {
+    return {entry.satVar, entry.exprId, entry.lit, entry.level, entry.auxVar,
+            entry.relation, entry.value, entry.isDiseq};
 }
 
 void LiaSolver::onBacktrack(int level) {
@@ -256,8 +255,8 @@ void LiaSolver::onBacktrack(int level) {
         bounds.reserve(2 * (theoryTrail_.size() + interfaceEqualities_.size()));
         appliedBounds_.clear();
         for (const auto& entry : theoryTrail_) {
-            const auto& atom = std::get<LinearAtomPayload>(entry.atom.payload);
-            const auto endpoints = LinearAtomManager::effectiveBoundViews(atom.rel, entry.value, isIntegerLinearForm(atom));
+            const auto endpoints = LinearAtomManager::effectiveBoundViews(
+                entry.relation, entry.value, isIntegerLinearForm(*entry.form));
             if (endpoints.lower) bounds.push_back({entry.auxVar, true, endpoints.lower, entry.lit});
             if (endpoints.upper) bounds.push_back({entry.auxVar, false, endpoints.upper, entry.lit});
             appliedBounds_.push_back(appliedKey(entry));
@@ -308,9 +307,8 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
     appliedBoundRevision_.reset();
     for (size_t i = appliedBounds_.size(); i < theoryTrail_.size(); ++i) {
         const auto& e = theoryTrail_[i];
-        const auto& payload = std::get<LinearAtomPayload>(e.atom.payload);
-        if (!e.isDiseq && !manager_.assertBound(gs_, e.auxVar, payload.rel, e.value,
-                                               e.lit, e.level, isIntegerLinearForm(payload))) {
+        if (!e.isDiseq && !manager_.assertBound(gs_, e.auxVar, e.relation, e.value,
+                                               e.lit, e.level, isIntegerLinearForm(*e.form))) {
             pendingConflict_ = PendingConflict{e.level, manager_.translateConflict(gs_)};
             break;
         }

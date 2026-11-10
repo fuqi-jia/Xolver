@@ -39,8 +39,6 @@ struct LinearAtomPayload {
     LinearFormKey lhs;
     Relation rel;
     RealValue rhs;
-
-    bool operator==(const LinearAtomPayload&) const = default;
 };
 
 struct PolynomialAtomPayload {

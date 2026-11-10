@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 #include "search/linear/IntegerReasoner.h"
+#include "search/linear/LinearSource.h"
 #include "search/linear/BoundAxiomGenerator.h"
 #include "search/linear/DiffLogicDiseqSplitter.h"
 #include "algebra/linear/LinearConstraintNormalizer.h"
@@ -770,11 +771,10 @@ TEST_CASE("linear propagation: auxiliary lookup owns new forms and reuses borrow
     const auto count = gs.numVars();
     CHECK(manager.getOrCreateAuxVar(gs, original, mpq_class(2, 3)) == aux);
     CHECK(gs.numVars() == count);
-    LinearFormKey recovered;
-    mpq_class recoveredRhs;
-    REQUIRE(manager.auxForm(aux, recovered, recoveredRhs));
-    CHECK(recovered == original);
-    CHECK(recoveredRhs == mpq_class(2, 3));
+    const auto recovered = manager.auxForm(aux);
+    REQUIRE(recovered);
+    CHECK(recovered->lhs == original);
+    CHECK(recovered->rhs == mpq_class(2, 3));
     for (auto [name, value] : {std::pair{"lookup-x", 2}, std::pair{"lookup-y", 3}}) {
         const auto var = manager.findVarIndex(name);
         const BoundInfo pin(BoundValue(DeltaRational(value)), SatLit::positive(1));
@@ -881,15 +881,14 @@ TEST_CASE("Real tentative phase advice never replaces pending theory checks") {
 }
 
 TEST_CASE("Linear model hint validity separates integer and real points and tracks coordinate changes") {
-    struct Source { int level; TheoryAtomRecord atom; bool value; int auxVar; };
-    incremental::Context<Source> sources;
+    incremental::Context<LinearSource> sources;
     LinearAtomManager manager;
     GeneralSimplex simplex;
     const LinearFormKey x{{{"typed-hint-x", 1}}};
     const auto auxiliary = manager.getOrCreateAuxVar(simplex, x, 0);
     const auto column = manager.findVarIndex("typed-hint-x");
-    sources.append({0, TheoryAtomRecord{1, TheoryId::LIA, false, NullExpr,
-        LinearAtomPayload{x, Relation::Geq, RealValue::fromInt(0)}}, true, auxiliary});
+    sources.append({0, SatLit::positive(1), 1, NullExpr, Relation::Geq,
+                    true, auxiliary, false, manager.auxForm(auxiliary)});
     const auto pin = [&](mpq_class value) {
         simplex.resetActiveBounds(GeneralSimplex::AssignmentPolicy::Reinitialize);
         REQUIRE(simplex.assertLower(column, BoundInfo(BoundValue(DeltaRational(value)), SatLit::positive(1))));
@@ -914,7 +913,10 @@ TEST_CASE("Linear model hint validity separates integer and real points and trac
     CHECK(manager.currentPointSatisfies(simplex, sources, SortKind::Int, extraCheck));
     pin(-1);
     CHECK_FALSE(manager.currentPointSatisfies(simplex, sources, SortKind::Int, extraCheck));
-    sources.replace(0, {0, sources[0].atom, false, auxiliary}); // x < 0
+    auto opposite = sources[0];
+    opposite.value = false;
+    opposite.lit = SatLit::negative(1);
+    sources.replace(0, std::move(opposite)); // x < 0
     CHECK(manager.currentPointSatisfies(simplex, sources, SortKind::Int, extraCheck));
 }
 

@@ -1,6 +1,31 @@
 # Arithmetic validation and continuation record
 
-## Exact early admission of repeated linear sources (in progress, 2026-11-10)
+## Shared immutable linear source definitions (in progress, 2026-11-10)
+
+The private manifest contains 14,336 UFLIA and 72 UFNIA queries. In 24 existing
+qualified profiles, all 16,751 LIA admissions append a source; the exact-duplicate
+upper bound is zero, and no LRA admission occurs. Only 287 auxiliary definitions
+are created. Early duplicate rejection therefore does not address this measured
+private workload; repeated owning source-payload copies are the next target.
+Read-only replay-flow audit SHA-256:
+`6731509eece57ad48c04bc228011e99420248d042855e02274fc5128d3c8f68f`.
+
+`LinearAtomManager` now owns one immutable exact affine definition shared by
+both lookup directions. LIA and LRA use the same small `LinearSource` record:
+current signed premises, levels, relation and expression identity remain local,
+while the constant mathematics is shared. Scope snapshots retain independent
+premises and safe definition ownership. LRA column metadata shares those same
+definitions. The old copying reverse-lookup API is removed and all consumers
+use immutable handles. No bounds, models, explanations or active-state snapshots
+are cached in the definitions. Existing replacement, integer-variable accounting,
+point-hint validation and each theory's rollback policy remain in place.
+
+Tests cover map growth, independent manager copies, input mutation, owner
+replacement/destruction and snapshot premise changes. Native qualification,
+measured copy reduction and fresh full-suite performance remain pending.
+No elapsed-time or new-coverage claim is made.
+
+## Early linear-source admission prototype (2026-11-10)
 
 Five stable verified-reference gaps are profiled with the delivered main binary:
 three LRA, one NIA and one NRA input. All remain diagnostic timeouts. Among the
@@ -31,8 +56,14 @@ and output timestamps are restored afterwards. Prior-method record SHA-256:
 The failed native run remains unqualified. The fixture now uses a false strict
 upper bound whose relaxation point is already integral, retaining the same
 source-lifecycle checks. Column definitions are constructed before publication.
-Native qualification, actual saved-work counts and fresh performance acceptance
-remain pending. No solved-count or elapsed-time benefit is claimed.
+Corrected core `95d9ac09` passes 2,342 proof-enabled unit cases / 1,557,079
+assertions. All 2,346 source bodies and 832 objects/dependencies are checked;
+the explicit build-only checkpoint remains distinct from its qualified ancestor.
+Qualification SHA-256:
+`8998690dca458cb46a2d43a1751b9ae8cc2cd72b445eddfa3ade7eb34cc89dfc`.
+No full timing round or PR is started for this prototype. The replay-flow
+evidence above shifts work to shared immutable source definitions.
+No solved-count or elapsed-time benefit is claimed.
 
 ## Closed: guarded iterative model validation (2026-11-10)
 
