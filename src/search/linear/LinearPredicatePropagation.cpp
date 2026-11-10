@@ -132,11 +132,12 @@ std::optional<bool> LinearPredicatePropagation::value(SatVar variable,
     return entry.literal.sign;
 }
 
-void LinearPredicatePropagation::derive(size_t family, const TheoryAssignmentView* assignment) {
-    struct Endpoint { const mpq_class* point; bool strict; SatLit reason; };
-    struct Excluded { const mpq_class* point; SatLit reason; };
-    std::optional<Endpoint> lower, upper;
-    std::vector<Excluded> excluded;
+LinearPredicatePropagation::Bounds LinearPredicatePropagation::collectBounds(
+    size_t family, const TheoryAssignmentView* assignment) const {
+    Bounds bounds;
+    auto& lower = bounds.lower;
+    auto& upper = bounds.upper;
+    auto& excluded = bounds.excluded;
     auto addLower = [&](const mpq_class& point, bool strict, SatLit reason) {
         if (!lower || point > *lower->point || (point == *lower->point && strict && !lower->strict))
             lower = Endpoint{&point, strict, reason};
@@ -166,16 +167,47 @@ void LinearPredicatePropagation::derive(size_t family, const TheoryAssignmentVie
             case Relation::Neq: excluded.push_back({&atom.endpoint, entry.literal}); break;
         }
     }
+    return bounds;
+}
+
+std::optional<std::vector<SatLit>> LinearPredicatePropagation::contradiction(const Bounds& bounds) {
+    const auto& lower = bounds.lower;
+    const auto& upper = bounds.upper;
     if (lower && upper && (*lower->point > *upper->point ||
-        (*lower->point == *upper->point && (lower->strict || upper->strict)))) {
-        pending_.push_back({{lower->reason, upper->reason}, std::nullopt});
+        (*lower->point == *upper->point && (lower->strict || upper->strict))))
+        return std::vector<SatLit>{lower->reason, upper->reason};
+    if (lower && upper && *lower->point == *upper->point)
+        for (const auto& hole : bounds.excluded) if (*hole.point == *lower->point)
+            return std::vector<SatLit>{lower->reason, upper->reason, hole.reason};
+    return std::nullopt;
+}
+
+std::optional<TheoryCheckResult> LinearPredicatePropagation::checkConsistency(
+    const TheoryAtomRegistry& registry, const TheoryAssignmentView* assignment) {
+    synchronize(registry);
+    // This pass is independent of pending propagation and its dirty queue.
+    // Repeated complete checks must still see an already reported conflict.
+    for (size_t family = 0; family < families_.size(); ++family) {
+        if (families_[family].atoms.size() < 2) continue;
+        if (auto reasons = contradiction(collectBounds(family, assignment))) {
+            for (auto& literal : *reasons) literal = literal.negated();
+            if (normalizeTheoryClause(*reasons))
+                return TheoryCheckResult::mkConflict(TheoryConflict{std::move(*reasons)});
+        }
+    }
+    return std::nullopt;
+}
+
+void LinearPredicatePropagation::derive(size_t family, const TheoryAssignmentView* assignment) {
+    const auto bounds = collectBounds(family, assignment);
+    if (auto reasons = contradiction(bounds)) {
+        pending_.push_back({std::move(*reasons), std::nullopt});
         return;
     }
+    const auto& lower = bounds.lower;
+    const auto& upper = bounds.upper;
+    const auto& excluded = bounds.excluded;
     const bool fixed = lower && upper && *lower->point == *upper->point;
-    if (fixed) for (const auto& hole : excluded) if (*hole.point == *lower->point) {
-        pending_.push_back({{lower->reason, upper->reason, hole.reason}, std::nullopt});
-        return;
-    }
     struct Proof { bool truth; std::vector<SatLit> reasons; };
     auto proveUpper = [&](const mpq_class& endpoint, bool strict) -> std::optional<Proof> {
         if (upper && (*upper->point < endpoint ||

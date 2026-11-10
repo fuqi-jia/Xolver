@@ -204,7 +204,29 @@ TEST_CASE("Linear predicate propagation: same-name coordinates keep their theory
     CHECK_FALSE(f.check());
 }
 
-TEST_CASE("TheoryManager: original predicate implications precede the complete theory check") {
+TEST_CASE("Linear predicate propagation: consistency preserves queued propagation and source lifetimes") {
+    Fixture f;
+    const auto source = f.atom(Relation::Leq, 0);
+    const auto target = f.atom(Relation::Leq, 1);
+    f.assertLit(source, 1);
+    CHECK_FALSE(f.propagation.checkConsistency(f.registry, nullptr));
+    CHECK_FALSE(f.propagation.checkConsistency(f.registry, nullptr));
+    const auto implication = f.check();
+    REQUIRE(implication.has_value());
+    REQUIRE(implication->kind == TheoryCheckResult::Kind::Lemma);
+    CHECK(implication->lemmaOpt->lits.back() == target);
+    f.assertLit(target.negated(), 2);
+    REQUIRE(f.propagation.checkConsistency(f.registry, nullptr).has_value());
+    const auto conflict = f.check();
+    REQUIRE(conflict.has_value());
+    CHECK(conflict->kind == TheoryCheckResult::Kind::Conflict);
+    REQUIRE(f.propagation.checkConsistency(f.registry, nullptr).has_value());
+    f.propagation.backtrackToLevel(1);
+    CHECK_FALSE(f.propagation.checkConsistency(f.registry, nullptr));
+    CHECK(f.registry.numAtomVars() == 2);
+}
+
+TEST_CASE("TheoryManager: original predicate implications remain available after a complete check") {
     struct CountingTheory : TheorySolver {
         int checks = 0;
         TheoryId id() const override { return TheoryId::LRA; }
@@ -227,12 +249,82 @@ TEST_CASE("TheoryManager: original predicate implications precede the complete t
     auto* counter = solver.get();
     manager.registerSolver(std::move(solver));
     manager.assertTheoryLit(*f.registry.findBySatVar(source.var), source, 0);
+    CHECK(manager.check(f.lemmas, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Consistent);
+    CHECK(counter->checks == 1);
     const auto result = manager.check(f.lemmas, TheoryEffort::Standard);
     REQUIRE(result.kind == TheoryCheckResult::Kind::Lemma);
-    CHECK(counter->checks == 0);
+    CHECK(counter->checks == 1);
     f.lemmas.insertIfNew(*result.lemmaOpt);
     manager.assertTheoryLit(*f.registry.findBySatVar(target.var), target, 0);
     CHECK(manager.check(f.lemmas, TheoryEffort::Full).kind == TheoryCheckResult::Kind::Consistent);
-    CHECK(counter->checks == 1);
+    CHECK(counter->checks == 2);
     CHECK(f.registry.numAtomVars() == 2);
+}
+
+TEST_CASE("TheoryManager: complete checks prefer structural conflicts and retain an independent guard") {
+    struct ExplainingTheory : TheorySolver {
+        int checks = 0;
+        std::optional<TheoryConflict> explanation;
+        std::optional<TheoryLemma> refinement;
+        bool unknown = false;
+        TheoryId id() const override { return TheoryId::LRA; }
+        void push() override {}
+        void pop(uint32_t) override {}
+        void reset() override {}
+        void backtrackToLevel(int) override {}
+        void assertLit(const TheoryAtomRecord&, bool, int, SatLit) override {}
+        TheoryCheckResult check(TheoryLemmaStorage&, TheoryEffort) override {
+            ++checks;
+            if (explanation) return TheoryCheckResult::mkConflict(*explanation);
+            if (refinement) return TheoryCheckResult::mkLemma(*refinement);
+            return unknown ? TheoryCheckResult::unknown() : TheoryCheckResult::consistent();
+        }
+    };
+    Fixture f;
+    const auto coupling = f.registry.getOrCreateLinearBoundAtom(
+        LinearFormKey{{{"x", 1}, {"y", -1}}}, Relation::Leq, 0, TheoryId::LRA);
+    const auto upperY = f.registry.getOrCreateLinearBoundAtom(
+        LinearFormKey{{{"y", 1}}}, Relation::Leq, 0, TheoryId::LRA);
+    const auto lowerX = f.atom(Relation::Geq, 2);
+    const auto upperX = f.atom(Relation::Leq, 1);
+    TheoryManager manager;
+    manager.setRegistry(&f.registry);
+    auto solver = std::make_unique<ExplainingTheory>();
+    auto* engine = solver.get();
+    size_t expectedSize = 0;
+    SUBCASE("engine supplies an explanation involving original coupled constraints") {
+        engine->explanation = TheoryConflict{{coupling, upperY, lowerX}};
+        expectedSize = 3;
+    }
+    SUBCASE("independent guard rejects an inconsistent engine answer") {
+        expectedSize = 2;
+    }
+    SUBCASE("independent guard can refute an otherwise unknown context") {
+        engine->unknown = true;
+        expectedSize = 2;
+    }
+    SUBCASE("independent contradiction takes priority over a refinement") {
+        engine->refinement = TheoryLemma{{coupling.negated(), upperY.negated(), upperX},
+                                         LemmaKind::Entailment};
+        expectedSize = 2;
+    }
+    manager.registerSolver(std::move(solver));
+    for (const auto literal : {coupling, upperY, lowerX, upperX})
+        manager.assertTheoryLit(*f.registry.findBySatVar(literal.var), literal, 0);
+    const auto result = manager.check(f.lemmas, TheoryEffort::Full);
+    CHECK(engine->checks == 1);
+    REQUIRE(result.kind == TheoryCheckResult::Kind::Conflict);
+    REQUIRE(result.conflictOpt.has_value());
+    CHECK(result.conflictOpt->clause.size() == expectedSize);
+    for (int x = -3; x <= 3; ++x) for (int y = -3; y <= 3; ++y) {
+        bool valid = false;
+        for (const auto literal : result.conflictOpt->clause) {
+            const auto& atom = std::get<LinearAtomPayload>(f.registry.findBySatVar(literal.var)->payload);
+            mpq_class lhs;
+            for (const auto& [name, coefficient] : atom.lhs.terms)
+                lhs += coefficient * (name == "x" ? x : y);
+            valid |= compare(atom.rel, lhs, atom.rhs.asRational()) == literal.sign;
+        }
+        CHECK(valid);
+    }
 }

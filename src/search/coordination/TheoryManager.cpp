@@ -340,7 +340,42 @@ std::optional<bool> TheoryManager::evalTheoryAtom(SatVar v) {
     return it->second->evalAtomAtModel(v);
 }
 
+void TheoryManager::recordCheckResult(const TheoryCheckResult& tr) {
+    ++aggStats_.checkCalls;
+    if (tr.kind == TheoryCheckResult::Kind::Conflict) {
+        ++aggStats_.conflicts;
+        if (tr.conflictOpt && !tr.conflictOpt->clause.empty()) {
+            size_t sz = tr.conflictOpt->clause.size();
+            aggStats_.totalConflictSize += static_cast<int64_t>(sz);
+            if (static_cast<int64_t>(sz) > aggStats_.maxConflictSize)
+                aggStats_.maxConflictSize = static_cast<int64_t>(sz);
+        }
+    } else if (tr.kind == TheoryCheckResult::Kind::Lemma) {
+        ++aggStats_.lemmas;
+    }
+}
+
 TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
+    if (effort == TheoryEffort::Standard && registry_) {
+        if (auto result = linearPredicates_.check(*registry_, assignmentView_, lemmaDb)) {
+            recordCheckResult(*result);
+            return std::move(*result);
+        }
+    }
+    // Complete models need the engine's global explanation or validated model.
+    // A local predicate conflict must not replace that structural reasoning.
+    auto result = checkEngines(lemmaDb, effort);
+    if (effort == TheoryEffort::Full && registry_ &&
+        result.kind != TheoryCheckResult::Kind::Conflict) {
+        if (auto conflict = linearPredicates_.checkConsistency(*registry_, assignmentView_)) {
+            recordCheckResult(*conflict);
+            return std::move(*conflict);
+        }
+    }
+    return result;
+}
+
+TheoryCheckResult TheoryManager::checkEngines(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
     NO_DBG << "\n========== NO model check #" << (++noDebugModelCheckId) << " ==========\n";
     if (g_combDiag()) { ++g_cd.checks; combDiagDump(); }
 
@@ -397,30 +432,6 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         }
         return true;
     };
-
-    auto recordCheckResult = [this](const TheoryCheckResult& tr) {
-        ++aggStats_.checkCalls;
-        if (tr.kind == TheoryCheckResult::Kind::Conflict) {
-            ++aggStats_.conflicts;
-            if (tr.conflictOpt && !tr.conflictOpt->clause.empty()) {
-                size_t sz = tr.conflictOpt->clause.size();
-                aggStats_.totalConflictSize += static_cast<int64_t>(sz);
-                if (static_cast<int64_t>(sz) > aggStats_.maxConflictSize)
-                    aggStats_.maxConflictSize = static_cast<int64_t>(sz);
-            }
-        } else if (tr.kind == TheoryCheckResult::Kind::Lemma) {
-            ++aggStats_.lemmas;
-        }
-    };
-
-    // Reuse relations between existing predicates before invoking the arithmetic
-    // engines. Every result is an explained clause, never a SAT certificate.
-    if (registry_) {
-        if (auto result = linearPredicates_.check(*registry_, assignmentView_, lemmaDb)) {
-            recordCheckResult(*result);
-            return std::move(*result);
-        }
-    }
 
     if (!combinationMode_) {
         // Single-theory path

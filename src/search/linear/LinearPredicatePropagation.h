@@ -23,6 +23,10 @@ public:
     void backtrackToLevel(int level);
     std::optional<TheoryCheckResult> check(const TheoryAtomRegistry& registry,
         const TheoryAssignmentView* assignment, TheoryLemmaStorage& lemmas);
+    // Independently validate the asserted sources without consuming or
+    // generating propagation work for unassigned predicate variables.
+    std::optional<TheoryCheckResult> checkConsistency(const TheoryAtomRegistry& registry,
+        const TheoryAssignmentView* assignment);
 
 private:
     static constexpr size_t kNoFamily = static_cast<size_t>(-1);
@@ -49,6 +53,12 @@ private:
         std::vector<SatLit> reasons;
         std::optional<SatLit> conclusion;
     };
+    struct Endpoint { const mpq_class* point; bool strict; SatLit reason; };
+    struct Excluded { const mpq_class* point; SatLit reason; };
+    struct Bounds {
+        std::optional<Endpoint> lower, upper;
+        std::vector<Excluded> excluded;
+    };
     using Trail = incremental::IndexedContext<Assertion, AssertionKey>;
     Trail trail_;
     size_t seenRecords_ = 0;
@@ -65,6 +75,8 @@ private:
     void markDirty(size_t family) noexcept;
     std::optional<bool> value(SatVar variable, const TheoryAssignmentView* assignment) const;
     void derive(size_t family, const TheoryAssignmentView* assignment);
+    Bounds collectBounds(size_t family, const TheoryAssignmentView* assignment) const;
+    static std::optional<std::vector<SatLit>> contradiction(const Bounds& bounds);
     std::optional<TheoryCheckResult> takePending(const TheoryAssignmentView* assignment,
                                                TheoryLemmaStorage& lemmas);
 };

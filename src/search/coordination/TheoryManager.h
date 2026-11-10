@@ -143,6 +143,8 @@ private:
     AggregateStats aggStats_;
     LinearPredicatePropagation linearPredicates_;
     ModelCandidateCheck modelCandidateCheck_;
+    TheoryCheckResult checkEngines(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
+    void recordCheckResult(const TheoryCheckResult& result);
 
     SharedEqualityManager sharedEqMgr_;
 
