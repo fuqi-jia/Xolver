@@ -333,3 +333,123 @@ TEST_CASE("ArithModelValidator: mixed UF cache values are rebuilt after model ch
     tokens["tag"] = "@tag-a";
     CHECK(validator.validate({goal}) == ArithModelValidator::Verdict::Satisfied);
 }
+
+TEST_CASE("ArithModelValidator: function numbers remain exact across repeated tables and sessions") {
+    Fix f;
+    mpq_class base((mpz_class(1) << 191) + 19, (mpz_class(1) << 151) + 3);
+    base.canonicalize();
+    const mpq_class next = base + 1, firstResult = base + 7, secondResult = base - 3;
+    ArithModelValidator::NumAssignment numbers{{"anchor", base}};
+    const auto anchor = f.var("anchor", f.realS);
+    ArithModelValidator::FuncInterpMap functions;
+    for (const auto& name : {"first", "second"}) {
+        auto& function = functions[name];
+        function.argSorts = {"Real", "Real"};
+        function.retSort = "Real";
+        function.deflt = "-1";
+        function.entries = {{{base.get_str(), "#n:" + base.get_str()}, firstResult.get_str()},
+                            {{next.get_str(), base.get_str()}, secondResult.get_str()}};
+    }
+    std::vector<ExprId> goals, applications;
+    for (int i = 0; i < 48; ++i) {
+        const auto name = "argument-" + std::to_string(i);
+        numbers[name] = i % 2 ? next : base;
+        const auto variable = f.var(name, f.realS);
+        const auto application = f.ir.add({Kind::UFApply, f.realS, {variable, anchor},
+                                           Payload(std::string(i % 3 ? "first" : "second"))});
+        const auto expected = f.ir.add({Kind::ConstReal, f.realS, {},
+                                        Payload((i % 2 ? secondResult : firstResult).get_str())});
+        applications.push_back(application);
+        goals.push_back(f.bin(Kind::Eq, application, expected, f.boolS));
+    }
+    ArithModelValidator validator(f.ir, numbers, {});
+    validator.setFunctionInterps(&functions);
+    for (int repetition = 0; repetition < 3; ++repetition)
+        CHECK(validator.validate(goals) == ArithModelValidator::Verdict::Satisfied);
+    for (std::size_t i = 0; i < applications.size(); ++i)
+        CHECK(validator.evalNumber(applications[i]) == (i % 2 ? secondResult : firstResult));
+    const auto saved = validator.evalNumber(applications[0]);
+    REQUIRE(saved);
+    CHECK(validator.evalToken(applications[0]) == "#n:" + firstResult.get_str());
+    functions["second"].entries.front().value = "0";
+    CHECK(validator.validate(goals) == ArithModelValidator::Verdict::Violated);
+    CHECK(*saved == firstResult);
+    functions["second"] = functions["first"];
+    CHECK(validator.validate(goals) == ArithModelValidator::Verdict::Satisfied);
+    functions.clear();
+    CHECK(validator.validate(goals) == ArithModelValidator::Verdict::Indeterminate);
+}
+
+TEST_CASE("ArithModelValidator: function number parsing preserves grammar and invalid table behavior") {
+    Fix f;
+    const auto argument = f.var("argument", f.realS);
+    const auto application = f.ir.add({Kind::UFApply, f.realS, {argument}, Payload(std::string("function"))});
+    ArithModelValidator validator(f.ir, {{"argument", mpq_class(3, 2)}}, {});
+    ArithModelValidator::FuncInterpMap functions;
+    auto& function = functions["function"];
+    function.argSorts = {"Real"}; function.retSort = "Real"; function.deflt = "0";
+    function.entries = {{{"#n:6/4"}, "5/2"}};
+    validator.setFunctionInterps(&functions);
+    CHECK(validator.evalNumber(application) == mpq_class(5, 2));
+    function.retSort = "Int";
+    CHECK_FALSE(validator.evalNumber(application));
+    function.retSort = "Real";
+    function.argSorts = {"Int"};
+    CHECK_FALSE(validator.evalNumber(application));
+    function.argSorts = {"Real"};
+    function.entries.front().args.front() = "3/0";
+    CHECK_FALSE(validator.evalNumber(application));
+    function.entries.front().args.front() = "@not-a-number";
+    CHECK_FALSE(validator.evalNumber(application));
+    function.entries.front().args.front() = "3/2";
+    function.entries.front().value = "#n:3/2";
+    CHECK_FALSE(validator.evalNumber(application));
+    function.entries.front().value = "1/0";
+    function.retSort = "Element";
+    CHECK_FALSE(validator.evalToken(application));
+    function.entries.front().value = "@element";
+    CHECK(validator.evalToken(application) == "@element");
+    function.retSort = "Real";
+    function.entries = {{{"3/2"}, "1/2"}, {{"#n:6/4"}, "2/4"}};
+    // Conflicting textual outputs remain an invalid interpretation even when
+    // their rational values coincide; parsing cannot hide that check.
+    CHECK_FALSE(validator.evalNumber(application));
+    function.entries.back().value = "1/2";
+    CHECK(validator.evalNumber(application) == mpq_class(1, 2));
+    function.entries.push_back({{"bad-key"}, "0"});
+    CHECK_FALSE(validator.evalNumber(application));
+    function.entries.pop_back();
+    CHECK(validator.evalNumber(application) == mpq_class(1, 2));
+}
+
+TEST_CASE("ArithModelValidator: function number keys retain algebraic equality and owning results") {
+    Fix f;
+    const auto argument = f.var("argument", f.realS);
+    const auto application = f.ir.add({Kind::UFApply, f.realS, {argument}, Payload(std::string("function"))});
+    const auto expected = f.ir.add({Kind::ConstReal, f.realS, {}, Payload(std::string("7/3"))});
+    const auto goal = f.bin(Kind::Eq, application, expected, f.boolS);
+    ArithModelValidator::RealAssignment numbers{
+        {"argument", RealValue::fromAlgebraic(AlgebraicNumber{{-5, 1}, 4, 6})}};
+    ArithModelValidator::FuncInterpMap functions;
+    auto& function = functions["function"];
+    function.argSorts = {"Int"}; function.retSort = "Real"; function.deflt = "2/3";
+    function.entries = {{{"#n:10/2"}, "7/3"}};
+    ArithModelValidator validator(f.ir, {}, {});
+    validator.setRealAssignments(&numbers);
+    validator.setFunctionInterps(&functions);
+    CHECK(validator.validate({goal}) == ArithModelValidator::Verdict::Satisfied);
+    const auto saved = validator.evalNumber(application);
+    REQUIRE(saved);
+    numbers["argument"] = RealValue::fromAlgebraic(AlgebraicNumber{{-2, 0, 1}, 1, 2});
+    CHECK(validator.evalNumber(application) == mpq_class(2, 3));
+    numbers["argument"] = RealValue::fromInt(5);
+    function.entries.front().value = "8/3";
+    CHECK(validator.validate({goal}) == ArithModelValidator::Verdict::Violated);
+    CHECK(*saved == mpq_class(7, 3));
+    function.entries.front().value = "7/3";
+    CHECK(validator.validate({goal}) == ArithModelValidator::Verdict::Satisfied);
+    validator.setFunctionInterps(nullptr);
+    CHECK(validator.validate({goal}) == ArithModelValidator::Verdict::Indeterminate);
+    validator.setFunctionInterps(&functions);
+    CHECK(validator.validate({goal}) == ArithModelValidator::Verdict::Satisfied);
+}
