@@ -1,6 +1,6 @@
 # Arithmetic validation and continuation record
 
-## Guarded iterative model validation (in progress, 2026-11-10)
+## Closed: guarded iterative model validation (2026-11-10)
 
 The validator bodies still match the qualified 24-profile reference. Those
 profiles record 669 validations, 130,642 exact evaluator calls and 975,855,718
@@ -10,17 +10,36 @@ Source inspection identifies eager expansion below `and`, `or` and `ite`, even
 when the existing evaluator subsequently short-circuits. Root-audit SHA-256:
 `459835feae2805108b8927f37d7ddc3d0b0201d52855a775576c7b5107376aad`.
 
-`ArithModelValidator::warmEval` now schedules guarded dependencies iteratively
+Candidate `373ee116` schedules guarded dependencies iteratively in
+`ArithModelValidator::warmEval`
 using the current evaluation's cached values. An indeterminate condition remains
 indeterminate, and an indeterminate Boolean operand does not suppress a later
 decisive operand. Ordinary postorder, exact arithmetic and query-local ownership
 remain unchanged. Validation warms successive assertion roots until its existing
 definite-violation exit; diagnostic descent also warms each requested expression.
+Panda9 / ExperimentOS passes all 2,341 proof-enabled unit cases / 1,557,011
+assertions, all 965 public regressions and nine independent public obligations:
+four actual SAT models pass Z3/cvc5 replay and five UNSAT decisions are checked
+independently. All 2,346 source bodies and 832 objects/dependencies qualify.
 Tests exercise all three Boolean outcomes, shared roots, deep selected branches,
-missing assignments and external typed-model changes. The stronger LIA
-fresh-literal regression is retained after the optional-cache withdrawal.
-Native qualification, actual avoided-work measurement and fresh full performance
-acceptance are pending. No speed or new-coverage claim is made.
+missing assignments and external typed-model changes.
+
+The unchanged 24 development diagnostics provide **669 validations**. Actual
+evaluator calls and eager transitive closure both contain **130,642 nodes**:
+**zero evaluations are avoided on these inputs**. Twenty actual SAT models
+pass dual replay and four UNSAT decisions are independently checked. The first
+counter observation is unavailable because CLI silences `std::cerr`; that audit
+is preserved. A logging-only `--verbose` observation of the same frozen
+derivative exposes the counters, without changing solver parameters, budgets,
+source or build. Counter-audit SHA-256:
+`047d90bba6a079e5e4863c144d36beda2e76489318a81c1e22d1e0ed47e99754`.
+
+The optional traversal is withdrawn because its proposed work reduction is not
+exercised by the measured workload. No full timing round or PR is started for
+this candidate. Both new semantic regressions and the stronger LIA fresh-literal
+regression remain. Native qualification SHA-256:
+`e01bc305b54477a777b082b608e9f33cebae9d8458890b464b230843797279df`.
+No speed or new-coverage claim is made; private artifacts remain unpublished.
 
 ## Closed: isolated auxiliary projection reuse (2026-11-10)
 

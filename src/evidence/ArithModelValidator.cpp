@@ -40,16 +40,16 @@ static void amvDumpExpr(const NativeTerms& ir, ExprId eid, int depth, int maxDep
 ArithModelValidator::Verdict
 ArithModelValidator::validate(const std::vector<ExprId>& assertions) const {
     evalMemo_.clear();
-    // Share a query-local cache, warming each root before reading its verdict.
+    // Warm a local cache bottom-up so eval() below never recurses deeply.
     std::unordered_map<ExprId, TR> prepass;
     prepassCache_ = &prepass;
+    for (ExprId a : assertions) warmEval(a, prepass);
 
     Verdict verdict = Verdict::Satisfied;
     bool anyIndeterminate = false;
     const bool diag = xolver::config::read<xolver::config::ReadKind::Presence>("XOLVER_DIAG_AMV");
     const bool diagDeep = xolver::config::read<xolver::config::ReadKind::Presence>("XOLVER_DIAG_AMV_DEEP");
     for (ExprId a : assertions) {
-        warmEval(a, prepass);
         TR r = eval(a);
         if (r.kind == Kind2::Indeterminate || r.kind != Kind2::Bool) {
             if (diag) {
@@ -57,7 +57,6 @@ ArithModelValidator::validate(const std::vector<ExprId>& assertions) const {
                           << " kind2=" << (int)r.kind << "\n";
                 amvDumpExpr(ir_, a, 0, 4);
                 std::function<void(ExprId,int)> drill = [&](ExprId e, int depth) {
-                    warmEval(e, prepass);
                     TR sr = eval(e);
                     const char* k = sr.kind == Kind2::Bool ? "Bool"
                                   : sr.kind == Kind2::Number ? "Number"
@@ -85,7 +84,6 @@ ArithModelValidator::validate(const std::vector<ExprId>& assertions) const {
                 // where the floor caught a model violation but the cause is in
                 // a complex arith+UF subterm. Depth-capped at 12 to bound output.
                 std::function<void(ExprId, int)> drill = [&](ExprId e, int depth) {
-                    warmEval(e, prepass);
                     TR sr = eval(e);
                     std::string val;
                     if (sr.kind == Kind2::Bool) val = sr.b ? "TRUE" : "FALSE";
@@ -186,64 +184,22 @@ ArithModelValidator::TR ArithModelValidator::eval(ExprId eid) const {
 }
 
 void ArithModelValidator::warmEval(ExprId root, std::unordered_map<ExprId, TR>& cache) const {
-    // Keep ordinary postorder and its stack bound. Guarded expressions expand
-    // only the dependencies that evalImpl will read under this fixed model.
-    struct Frame { ExprId e; bool processed; bool guarded = false; };
-    struct Guard {
-        Kind kind;
-        SmallVector<ExprId, 4> children;
-        size_t next = 0;
-    };
+    // Bottom-up post-order: evaluate each subterm into `cache` before its parent.
+    // While prepassCache_ points at `cache`, evalImpl's eval(child) calls resolve
+    // from it, so each evalImpl runs without deep native recursion.
+    struct Frame { ExprId e; bool processed; };
     std::vector<Frame> stack;
-    std::vector<Guard> guards;
     stack.push_back({root, false});
     while (!stack.empty()) {
         Frame& fr = stack.back();
         ExprId e = fr.e;
         if (e >= ir_.size() || cache.find(e) != cache.end()) { stack.pop_back(); continue; }
         if (!fr.processed) {
-            auto n = ir_.get(e);
+            const TermExpr& n = ir_.get(e);
             fr.processed = true;
-            if (n.kind == Kind::And || n.kind == Kind::Or || n.kind == Kind::Ite) {
-                fr.guarded = true;
-                guards.push_back({n.kind, std::move(n.children)});
-                continue;
-            }
             for (ExprId c : n.children)
                 if (c < ir_.size() && cache.find(c) == cache.end()) stack.push_back({c, false});
             continue;
-        }
-        if (fr.guarded) {
-            auto& guard = guards.back();
-            ExprId child = NullExpr;
-            if (guard.kind == Kind::Ite) {
-                if (guard.children.size() == 3) {
-                    if (guard.next == 0) child = guard.children[0];
-                    else if (guard.next == 1) {
-                        const auto condition = cache.find(guard.children[0]);
-                        if (condition != cache.end() && condition->second.kind == Kind2::Bool)
-                            child = guard.children[condition->second.b ? 1 : 2];
-                    }
-                    ++guard.next;
-                }
-            } else if (guard.next < guard.children.size()) {
-                bool stop = false;
-                if (guard.next != 0) {
-                    const auto previous = cache.find(guard.children[guard.next - 1]);
-                    if (previous != cache.end()) {
-                        const auto& value = previous->second;
-                        stop = value.kind != Kind2::Indeterminate &&
-                            (value.kind != Kind2::Bool || value.b == (guard.kind == Kind::Or));
-                    }
-                }
-                if (!stop) child = guard.children[guard.next++];
-            }
-            if (child != NullExpr) {
-                if (child < ir_.size() && cache.find(child) == cache.end())
-                    stack.push_back({child, false});
-                continue;
-            }
-            guards.pop_back();
         }
         stack.pop_back();
         cache.emplace(e, evalImpl(e));  // children resolved from cache -> shallow
