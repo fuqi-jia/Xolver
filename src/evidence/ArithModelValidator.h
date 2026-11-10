@@ -153,7 +153,9 @@ private:
         ArrVal arr;          // Array kind
     };
 
-    TR eval(ExprId e) const;       // cached dispatcher (memo when enabled)
+    // Cache entries own their payloads; unordered_map rehashing preserves
+    // references. Borrow only until this evaluation ends or its cache clears.
+    const TR& eval(ExprId e) const;
     TR evalImpl(ExprId e) const;   // the actual evaluator (recurses via eval)
     // Iterative bottom-up pre-pass: fills `cache` with every subterm's TR so the
     // recursive eval/evalImpl resolves children from it and never recurses deeply

@@ -24,6 +24,90 @@ struct Fix {
 };
 }
 
+TEST_CASE("ArithModelValidator: cached operands preserve exact values and result ownership") {
+    Fix f;
+    const mpq_class first("90071992547409931234567890123456789/7");
+    std::vector<ExprId> operands;
+    std::vector<std::string> arguments;
+    ArithModelValidator::RealAssignment real;
+    TermExpr distinct;
+    distinct.kind = Kind::Distinct;
+    distinct.sort = f.boolS;
+    TermExpr application;
+    application.kind = Kind::UFApply;
+    application.sort = f.boolS;
+    application.payload = Payload(std::string("cached_predicate"));
+    TheoryModel::FuncInterp interpretation;
+    interpretation.retSort = "Bool";
+    interpretation.deflt = "false";
+    for (int i = 0; i < 64; ++i) {
+        const std::string name = "operand_" + std::to_string(i);
+        const mpq_class value = first + i;
+        const ExprId operand = f.var(name, f.realS);
+        operands.push_back(operand);
+        arguments.push_back(value.get_str());
+        real.emplace(name, RealValue::fromMpq(value));
+        interpretation.argSorts.push_back("Real");
+        distinct.children.push_back(operand);
+        application.children.push_back(operand);
+    }
+    interpretation.entries.push_back({arguments, "true"});
+    ArithModelValidator::FuncInterpMap functions{{"cached_predicate", interpretation}};
+    const ExprId different = f.ir.add(std::move(distinct));
+    const ExprId applied = f.ir.add(std::move(application));
+    std::optional<mpq_class> savedNumber;
+    std::optional<std::string> savedToken;
+    {
+        ArithModelValidator validator(f.ir, {}, {});
+        validator.setRealAssignments(&real);
+        validator.setFunctionInterps(&functions);
+        CHECK(validator.validate({different, applied}) == ArithModelValidator::Verdict::Satisfied);
+        savedNumber = validator.evalNumber(operands[0]);
+        savedToken = validator.evalToken(operands[0]);
+        real["operand_0"] = real.at("operand_1");
+        CHECK(validator.validate({different}) == ArithModelValidator::Verdict::Violated);
+        CHECK(validator.validate({applied}) == ArithModelValidator::Verdict::Violated);
+        CHECK(validator.evalNumber(operands[0]) == std::optional<mpq_class>(first + 1));
+        real["operand_0"] = RealValue::fromMpq(first);
+        CHECK(validator.validate({different, applied}) == ArithModelValidator::Verdict::Satisfied);
+        functions.at("cached_predicate").entries[0].value = "false";
+        CHECK(validator.validate({applied}) == ArithModelValidator::Verdict::Violated);
+    }
+    CHECK(savedNumber == std::optional<mpq_class>(first));
+    CHECK(savedToken == std::optional<std::string>("#n:" + first.get_str()));
+}
+
+TEST_CASE("ArithModelValidator: cached array operands stay immutable across stores") {
+    Fix f;
+    const SortId arraySort = f.ir.allocateSortId();
+    f.ir.registerArraySort(arraySort, f.intS, f.intS);
+    const ExprId array = f.var("cached_array", arraySort);
+    const ExprId index = f.cint(5);
+    const ExprId zero = f.cint(0);
+    const ExprId large = f.ir.add(TermExpr{Kind::ConstInt, f.intS, {},
+        Payload(std::string("90071992547409931234567890123456789"))});
+    TermExpr store;
+    store.kind = Kind::Store;
+    store.sort = arraySort;
+    store.children = {array, index, large};
+    const ExprId updated = f.ir.add(std::move(store));
+    const ExprId originalRead = f.bin(Kind::Select, array, index, f.intS);
+    const ExprId updatedRead = f.bin(Kind::Select, updated, index, f.intS);
+    const ExprId originalGoal = f.bin(Kind::Eq, originalRead, zero, f.boolS);
+    const ExprId updatedGoal = f.bin(Kind::Eq, updatedRead, large, f.boolS);
+    const ExprId wrongGoal = f.bin(Kind::Eq, originalRead, large, f.boolS);
+    ArithModelValidator::ArrayAssignment arrays;
+    arrays["cached_array"].defaultVal = "#n:0";
+    const ArithModelValidator::TokenAssignment tokens;
+    ArithModelValidator validator(f.ir, {}, {}, arrays, tokens);
+    CHECK(validator.validate({originalGoal, updatedGoal}) == ArithModelValidator::Verdict::Satisfied);
+    CHECK(validator.validate({updatedGoal, originalGoal}) == ArithModelValidator::Verdict::Satisfied);
+    CHECK(validator.validate({updatedGoal, wrongGoal}) == ArithModelValidator::Verdict::Violated);
+    CHECK(validator.evalNumber(updatedRead) ==
+        std::optional<mpq_class>(mpq_class("90071992547409931234567890123456789")));
+    CHECK(validator.evalNumber(originalRead) == std::optional<mpq_class>(mpq_class(0)));
+}
+
 TEST_CASE("ArithModelValidator: integer zero extensions are explicit model data") {
     Fix f;
     auto x = f.var("x", f.intS);
