@@ -140,7 +140,7 @@ TEST_CASE("LIA: isolated shared forms retain every exact group in a text bucket"
 TEST_CASE("LIA: isolated shared forms rebuild proofs after backtracking") {
     SharedAffineFixture fixture;
     const auto a = fixture.term("a"), b = fixture.term("b");
-    fixture.equation(LinearFormKey{{{"a", 1}, {"x", -1}, {"y", -1}}}, 1, 0);
+    fixture.equation(LinearFormKey{{{"a", 1}, {"x", -1}, {"y", -1}}}, 1, 1);
     auto check = [&](bool expected, SatVar currentReason) {
         bool found = false;
         for (const auto& propagation : fixture.equalities()) {
@@ -154,15 +154,22 @@ TEST_CASE("LIA: isolated shared forms rebuild proofs after backtracking") {
         }
         CHECK(found == expected);
     };
-    fixture.equation(LinearFormKey{{{"b", 1}, {"x:1;y", -1}}}, 2, 1);
+    fixture.equation(LinearFormKey{{{"b", 1}, {"x:1;y", -1}}}, 2, 2);
     check(false, 2);
-    fixture.solver.backtrackToLevel(0);
+    fixture.solver.backtrackToLevel(1);
     check(false, 1);
-    fixture.equation(LinearFormKey{{{"b", 3}, {"x", -3}, {"y", -3}}}, 3, 1);
+    fixture.equation(LinearFormKey{{{"b", 3}, {"x", -3}, {"y", -3}}}, 3, 2);
+    check(true, 3);
+    fixture.solver.backtrackToLevel(1);
+    fixture.equation(LinearFormKey{{{"b", 1}, {"x:1;y", -1}}}, 4, 2);
+    check(false, 4);
+    fixture.solver.backtrackToLevel(0);
+    fixture.equation(LinearFormKey{{{"a", 1}, {"x", -1}, {"y", -1}}}, 1, 0);
+    fixture.equation(LinearFormKey{{{"b", 3}, {"x", -3}, {"y", -3}}}, 3, 0);
     check(true, 3);
     fixture.solver.backtrackToLevel(0);
-    fixture.equation(LinearFormKey{{{"b", 1}, {"x:1;y", -1}}}, 4, 1);
-    check(false, 4);
+    fixture.equation(LinearFormKey{{{"b", 3}, {"x", -3}, {"y", -3}}}, 3, 0);
+    check(false, 3);
 }
 
 TEST_CASE("LIA: unbounded Boolean integer models survive widening and query scopes") {
