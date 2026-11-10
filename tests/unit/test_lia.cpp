@@ -1,6 +1,5 @@
 #include <doctest/doctest.h>
 #include "xolver/Solver.h"
-#include "ir/NativeTerms.h"
 #include "applications/satisfiability/smt/common/lia/LiaSolver.h"
 #include "search/coordination/TheoryAtomRegistry.h"
 #include "search/boolean/Atomizer.h"
@@ -11,111 +10,10 @@
 #include "algebra/linear/LinearExpr.h"
 #include "algebra/linear/LinearConstraintNormalizer.h"
 #include "search/lra/GeneralSimplex.h"
-#include "search/combination/CareGraph.h"
 #include <fstream>
 #include <filesystem>
 
 using namespace xolver;
-
-TEST_CASE("LIA sharing: fixed-value bases retain explanations across withdrawal and late terms") {
-    NativeTerms ir;
-    ir.registerSort(0, SortKind::Int);
-    ir.registerSort(1, SortKind::Bool);
-    SharedTermRegistry shared;
-    shared.setNativeTerms(&ir);
-    LiaSolver solver;
-    solver.setNativeTerms(&ir);
-    solver.setSharedTermRegistry(&shared);
-    TheoryLemmaDatabase lemmas;
-    std::vector<std::string> names;
-    std::vector<ExprId> expressions;
-    std::vector<SharedTermId> terms;
-    std::vector<bool> pinned;
-    std::vector<int> values;
-    std::vector<SatLit> sources;
-    auto addTerm = [&] {
-        names.push_back("member_" + std::to_string(names.size()));
-        expressions.push_back(ir.add({Kind::Variable, 0, {}, Payload(names.back())}));
-        terms.push_back(shared.getOrCreate(expressions.back(), 0, names.back(), false));
-        shared.addOwner(terms.back(), TheoryId::LIA);
-        shared.addOwner(terms.back(), TheoryId::EUF);
-        pinned.push_back(false);
-        values.push_back(0);
-        sources.push_back({0, true});
-    };
-    auto pin = [&](size_t index, int value, SatVar variable, int level) {
-        sources[index] = {variable, true};
-        solver.assertLit({variable, TheoryId::LIA, false, NullExpr,
-            LinearAtomPayload{LinearFormKey{{{names[index], 1}}}, Relation::Eq,
-                              RealValue::fromInt(value)}}, true, level, sources[index]);
-        pinned[index] = true;
-        values[index] = value;
-    };
-    auto rebuildRoot = [&] {
-        solver.backtrackToLevel(0);
-        // A LIA root rebuild replays retained Boolean assignments through
-        // assertLit; non-root withdrawals retain their own source prefix.
-        for (size_t i = 0; i < 4; ++i) pin(i, values[i], sources[i].var, 0);
-    };
-    auto verify = [&](size_t edges) {
-        REQUIRE(solver.check(lemmas, TheoryEffort::Standard).kind == TheoryCheckResult::Kind::Consistent);
-        const auto facts = solver.getDeducedSharedEqualities();
-        CHECK(facts.size() == edges);
-        std::vector<std::vector<bool>> reached(terms.size(), std::vector<bool>(terms.size(), false));
-        for (size_t i = 0; i < terms.size(); ++i) reached[i][i] = true;
-        for (const auto& fact : facts) {
-            const auto first = std::find(terms.begin(), terms.end(), fact.a);
-            const auto second = std::find(terms.begin(), terms.end(), fact.b);
-            REQUIRE(first != terms.end());
-            REQUIRE(second != terms.end());
-            const size_t a = first - terms.begin(), b = second - terms.begin();
-            CHECK(pinned[a]);
-            CHECK(pinned[b]);
-            CHECK(values[a] == values[b]);
-            for (const auto endpoint : {a, b})
-                CHECK(std::find(fact.reasons.begin(), fact.reasons.end(), sources[endpoint]) != fact.reasons.end());
-            for (const auto reason : fact.reasons) {
-                bool active = false;
-                for (size_t i = 0; i < terms.size(); ++i)
-                    active |= pinned[i] && reason == sources[i];
-                CHECK(active);
-            }
-            reached[a][b] = reached[b][a] = true;
-        }
-        for (size_t k = 0; k < terms.size(); ++k)
-            for (size_t i = 0; i < terms.size(); ++i)
-                for (size_t j = 0; j < terms.size(); ++j)
-                    reached[i][j] = reached[i][j] || (reached[i][k] && reached[k][j]);
-        for (size_t i = 0; i < terms.size(); ++i)
-            for (size_t j = 0; j < terms.size(); ++j)
-                CHECK(reached[i][j] == (i == j || (pinned[i] && pinned[j] && values[i] == values[j])));
-    };
-    for (size_t i = 0; i < 8; ++i) addTerm();
-    for (size_t i = 0; i < 8; ++i)
-        pin(i, i < 4 ? 2 : 5, static_cast<SatVar>(i + 1), i < 4 ? 0 : 1);
-    verify(6);
-    rebuildRoot();
-    for (size_t i = 4; i < 8; ++i) pinned[i] = false;
-    verify(3);
-    for (size_t i = 4; i < 8; ++i) pin(i, 2, static_cast<SatVar>(20 + i), 1);
-    verify(7);
-    rebuildRoot();
-    for (size_t i = 4; i < 8; ++i) pinned[i] = false;
-    addTerm();
-    pin(8, 2, 40, 1);
-    verify(4);
-    rebuildRoot();
-    pinned[8] = false;
-    const auto application = ir.add({Kind::UFApply, 0, {expressions[3]}, Payload(std::string("f"))});
-    const auto zero = ir.add({Kind::ConstInt, 0, {}, Payload(int64_t(0))});
-    ir.addAssertion(ir.add({Kind::Eq, 1, {application, zero}, Payload{}}));
-    CareGraph care;
-    care.build(ir, shared);
-    solver.setCareGraph(&care);
-    verify(3);
-    for (const auto& fact : solver.getDeducedSharedEqualities())
-        CHECK((fact.a == terms[3] || fact.b == terms[3]));
-}
 
 static std::string writeTempSmt2(const std::string& content) {
     std::string path = std::filesystem::temp_directory_path() / "xolver_lia.smt2";

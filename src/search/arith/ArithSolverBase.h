@@ -14,7 +14,6 @@ namespace xolver {
 class Reasoner;
 class NativeTerms;
 class SharedTermRegistry;
-class CareGraph;
 
 /**
  * ArithSolverBase — shared base for the arithmetic theory solvers
@@ -106,7 +105,6 @@ public:
     void setSharedTermRegistry(const SharedTermRegistry* reg) {
         sharedTermRegistry_ = reg;
     }
-    void setCareGraph(const CareGraph* graph) override { careGraph_ = graph; }
 
 protected:
     // ----- Reasoner pipeline (Phase 2) -----
@@ -187,7 +185,6 @@ protected:
     // ----- Frontend / combination state (was duplicated 4× across solvers) -----
     const NativeTerms* nativeTerms_ = nullptr;
     const SharedTermRegistry* sharedTermRegistry_ = nullptr;
-    const CareGraph* careGraph_ = nullptr;
 
     // Names are structural properties of native expressions. Shared-term IDs
     // can be reused after registry reset; index identities distinguish copied

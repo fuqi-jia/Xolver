@@ -7,7 +7,6 @@
 #include "contracts/TheoryAtomTypes.h"
 #include "search/arith/Reasoner.h"
 #include "search/arith/LinearDifferenceEqualityIndex.h"
-#include "search/combination/SharedEqualityGroup.h"
 #include "search/linear/SimplexDiseqSplitter.h"
 #include "algebra/linear/LinearConstraintNormalizer.h"
 #include "search/lia/GomoryCut.h"
@@ -208,7 +207,7 @@ LiaSolver::getDeducedSharedEqualities() {
     // their identity, independently of auxiliary rows and later pivots.
 
     // Map fixed-value shared terms
-    using GroupEntry = SharedEqualityWitness;
+    using GroupEntry = std::pair<SharedTermId, std::vector<SatLit>>;
     std::map<DeltaRational, std::vector<GroupEntry>> groups;
     std::shared_ptr<const GeneralSimplex::FixedValueAnalysis> fixedAnalysis;
 
@@ -241,9 +240,22 @@ LiaSolver::getDeducedSharedEqualities() {
     }
 
     std::vector<TheorySolver::SharedEqualityPropagation> result;
-    for (const auto& [value, terms] : groups) {
-        (void)value;
-        appendSharedEqualityGroup(terms, result, careGraph_);
+    for (auto& [valKey, terms] : groups) {
+        if (terms.size() < 2) continue;
+        for (size_t i = 0; i < terms.size(); ++i) {
+            for (size_t j = i + 1; j < terms.size(); ++j) {
+                std::vector<SatLit> reasons;
+                reasons.insert(reasons.end(), terms[i].second.begin(), terms[i].second.end());
+                reasons.insert(reasons.end(), terms[j].second.begin(), terms[j].second.end());
+                std::sort(reasons.begin(), reasons.end(), [](SatLit a, SatLit b) {
+                    return a.var < b.var || (a.var == b.var && a.sign < b.sign);
+                });
+                reasons.erase(std::unique(reasons.begin(), reasons.end(), [](SatLit a, SatLit b) {
+                    return a.var == b.var && a.sign == b.sign;
+                }), reasons.end());
+                result.push_back(TheorySolver::SharedEqualityPropagation{terms[i].first, terms[j].first, std::move(reasons)});
+            }
+        }
     }
 
     // Variable-variable implied equalities. The fixed-value grouping above only
