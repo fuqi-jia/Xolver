@@ -163,8 +163,10 @@ void SparseTableau::eliminateColumn(
     };
     erase(eliminated);
     r.rhs += rhsDelta;
+    // Reuse the product's GMP storage across this row's coefficient updates.
+    mpq_class delta;
     for (const auto& [variable, coefficient] : entries) {
-        const mpq_class delta = scale * coefficient;
+        delta = scale * coefficient;
         if (delta == 0) continue;
         const int position = rowPositions_[variable];
         if (position < 0) {
