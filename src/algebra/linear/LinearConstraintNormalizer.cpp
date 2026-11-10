@@ -1,6 +1,7 @@
 #include "algebra/linear/LinearConstraintNormalizer.h"
 #include <algorithm>
 #include <cassert>
+#include <stdexcept>
 
 namespace xolver {
 
@@ -181,6 +182,48 @@ void LinearConstraintNormalizer::normalizeIntegerConstraint(
     } else if (rel == Relation::Gt) {
         rel = Relation::Geq;
         rhs += 1;
+    }
+}
+
+void LinearConstraintNormalizer::normalizePrimitiveConstraint(
+    LinearFormKey& lhs, Relation& rel, mpq_class& rhs, SortKind sort) {
+    if (sort != SortKind::Int && sort != SortKind::Real)
+        throw std::invalid_argument("primitive linear normalization requires an arithmetic sort");
+
+    LinearExpr expression;
+    expression.terms.reserve(lhs.terms.size());
+    for (const auto& [name, coefficient] : lhs.terms)
+        expression.terms.push_back({name, coefficient});
+    expression = canonicalize(std::move(expression));
+
+    mpz_class denominator = 1;
+    for (const auto& term : expression.terms)
+        mpz_lcm(denominator.get_mpz_t(), denominator.get_mpz_t(), term.coeff.get_den_mpz_t());
+    mpz_class divisor = 0;
+    for (const auto& term : expression.terms) {
+        const mpq_class integral = term.coeff * denominator;
+        mpz_gcd(divisor.get_mpz_t(), divisor.get_mpz_t(), integral.get_num_mpz_t());
+    }
+    if (divisor == 0) divisor = 1;
+    mpq_class scale(denominator, divisor);
+    scale.canonicalize();
+    lhs.terms.clear();
+    lhs.terms.reserve(expression.terms.size());
+    for (const auto& term : expression.terms)
+        lhs.terms.push_back({term.var, mpq_class(term.coeff * scale)});
+    rhs *= scale;
+    canonicalizeSign(lhs, rel, rhs);
+
+    if (sort == SortKind::Real || rel == Relation::Eq || rel == Relation::Neq) return;
+    mpz_class floor, ceiling;
+    mpz_fdiv_q(floor.get_mpz_t(), rhs.get_num_mpz_t(), rhs.get_den_mpz_t());
+    mpz_cdiv_q(ceiling.get_mpz_t(), rhs.get_num_mpz_t(), rhs.get_den_mpz_t());
+    switch (rel) {
+        case Relation::Leq: rhs = floor; break;
+        case Relation::Lt: rel = Relation::Leq; rhs = ceiling - 1; break;
+        case Relation::Geq: rhs = ceiling; break;
+        case Relation::Gt: rel = Relation::Geq; rhs = floor + 1; break;
+        default: break;
     }
 }
 

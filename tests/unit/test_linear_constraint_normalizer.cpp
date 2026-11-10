@@ -1,7 +1,131 @@
 #include <doctest/doctest.h>
 #include "algebra/linear/LinearConstraintNormalizer.h"
+#include "search/lra/DeltaRational.h"
+#include <stdexcept>
 
 using namespace xolver;
+
+namespace {
+bool relationTrue(Relation relation, const mpq_class& lhs, const mpq_class& rhs) {
+    switch (relation) {
+        case Relation::Eq: return lhs == rhs;
+        case Relation::Neq: return lhs != rhs;
+        case Relation::Leq: return lhs <= rhs;
+        case Relation::Lt: return lhs < rhs;
+        case Relation::Geq: return lhs >= rhs;
+        case Relation::Gt: return lhs > rhs;
+    }
+    throw std::logic_error("invalid arithmetic relation");
+}
+
+mpq_class evaluate(const LinearFormKey& form, const mpq_class& x, const mpq_class& y) {
+    mpq_class result;
+    for (const auto& [name, coefficient] : form.terms)
+        result += coefficient * (name == "x" ? x : name == "y" ? y : mpq_class(0));
+    return result;
+}
+}
+
+TEST_CASE("Primitive linear normalization: rational content and integer lattice endpoints") {
+    for (const auto sort : {SortKind::Int, SortKind::Real}) {
+        LinearFormKey form{{{"y", mpq_class(-4, 9)}, {"x", mpq_class(2, 3)},
+                            {"y", mpq_class(1, 9)}}};
+        auto relation = Relation::Geq;
+        mpq_class rhs(5, 6);
+        LinearConstraintNormalizer::normalizePrimitiveConstraint(form, relation, rhs, sort);
+        CHECK(form == LinearFormKey{{{"x", 2}, {"y", -1}}});
+        CHECK(relation == Relation::Geq);
+        CHECK(rhs == (sort == SortKind::Int ? mpq_class(3) : mpq_class(5, 2)));
+    }
+}
+
+TEST_CASE("Primitive linear normalization: exact truth on integer and rational assignments") {
+    const mpq_class coefficients[] = {mpq_class(-3), mpq_class(-1, 2), 0, mpq_class(2, 3), 4};
+    const mpq_class second[] = {mpq_class(-2, 5), 0, mpq_class(5, 6)};
+    const mpq_class endpoints[] = {mpq_class(-7, 3), -1, 0, mpq_class(2, 7), 6};
+    for (const auto sort : {SortKind::Int, SortKind::Real})
+        for (const auto relation : {Relation::Eq, Relation::Neq, Relation::Leq,
+                                    Relation::Lt, Relation::Geq, Relation::Gt})
+            for (const auto& a : coefficients) for (const auto& b : second)
+                for (const auto& endpoint : endpoints) {
+                    const LinearFormKey original{{{"y", b}, {"x", a}, {"x", mpq_class(1, 7)},
+                                                  {"x", mpq_class(-1, 7)}, {"z", 0}}};
+                    auto form = original;
+                    auto effective = relation;
+                    auto rhs = endpoint;
+                    LinearConstraintNormalizer::normalizePrimitiveConstraint(form, effective, rhs, sort);
+                    for (int x = -3; x <= 3; ++x) for (int y = -3; y <= 3; ++y) {
+                        mpq_class xv(x, sort == SortKind::Int ? 1 : 3);
+                        mpq_class yv(y, sort == SortKind::Int ? 1 : 4);
+                        xv.canonicalize();
+                        yv.canonicalize();
+                        CHECK(relationTrue(relation, evaluate(original, xv, yv), endpoint) ==
+                              relationTrue(effective, evaluate(form, xv, yv), rhs));
+                    }
+                    for (const auto& term : form.terms) CHECK(term.second.get_den() == 1);
+                    auto again = form;
+                    auto nextRelation = effective;
+                    auto nextRhs = rhs;
+                    LinearConstraintNormalizer::normalizePrimitiveConstraint(again, nextRelation, nextRhs, sort);
+                    CHECK(again == form);
+                    CHECK(nextRelation == effective);
+                    CHECK(nextRhs == rhs);
+                }
+}
+
+TEST_CASE("Primitive linear normalization: large common factors do not control cut admission") {
+    const mpz_class factor = mpz_class(1) << 2000;
+    LinearFormKey form{{{"x", mpq_class(3 * factor, 7)}, {"y", mpq_class(-9 * factor, 7)}}};
+    mpq_class rhs(6 * factor + 1, 7);
+    auto relation = Relation::Geq;
+    LinearConstraintNormalizer::normalizePrimitiveConstraint(form, relation, rhs, SortKind::Int);
+    CHECK(form == LinearFormKey{{{"x", 1}, {"y", -3}}});
+    CHECK(relation == Relation::Geq);
+    CHECK(rhs == 3);
+}
+
+TEST_CASE("Primitive linear normalization: sign and nonintegral equality remain exact") {
+    LinearFormKey form{{{"x", mpq_class(-7, 11)}}};
+    mpq_class rhs(14, 33);
+    auto relation = Relation::Geq;
+    LinearConstraintNormalizer::normalizePrimitiveConstraint(form, relation, rhs, SortKind::Int);
+    CHECK(form == LinearFormKey{{{"x", 1}}});
+    CHECK(relation == Relation::Leq);
+    CHECK(rhs == -1);
+    for (const auto equality : {Relation::Eq, Relation::Neq}) {
+        form = LinearFormKey{{{"x", 2}}}; rhs = 1; relation = equality;
+        LinearConstraintNormalizer::normalizePrimitiveConstraint(form, relation, rhs, SortKind::Int);
+        CHECK(form == LinearFormKey{{{"x", 1}}});
+        CHECK(relation == equality);
+        CHECK(rhs == mpq_class(1, 2));
+    }
+}
+
+TEST_CASE("Primitive linear normalization: unsupported sorts leave inputs intact") {
+    LinearFormKey form{{{"x", 2}}};
+    auto relation = Relation::Leq;
+    mpq_class rhs(3);
+    CHECK_THROWS_AS(LinearConstraintNormalizer::normalizePrimitiveConstraint(
+        form, relation, rhs, SortKind::Bool), std::invalid_argument);
+    CHECK(form == LinearFormKey{{{"x", 2}}});
+    CHECK(relation == Relation::Leq);
+    CHECK(rhs == 3);
+}
+
+TEST_CASE("Primitive linear normalization: real strict endpoints preserve infinitesimals") {
+    LinearFormKey form{{{"x", mpq_class(-2, 3)}}};
+    auto relation = Relation::Lt;
+    mpq_class rhs(1, 5);
+    LinearConstraintNormalizer::normalizePrimitiveConstraint(form, relation, rhs, SortKind::Real);
+    CHECK(form == LinearFormKey{{{"x", 1}}});
+    CHECK(relation == Relation::Gt);
+    CHECK(rhs == mpq_class(-3, 10));
+    for (const int epsilon : {-1, 0, 1}) {
+        const DeltaRational point(mpq_class(-3, 10), epsilon);
+        CHECK((mpq_class(-2, 3) * point < DeltaRational(mpq_class(1, 5))) ==
+              (point > DeltaRational(rhs)));
+    }
+}
 
 TEST_CASE("LinearConstraintNormalizer: canonicalize merges and sorts") {
     LinearExpr e;
