@@ -1,12 +1,12 @@
 # Arithmetic validation and continuation record
 
-## Shared immutable linear source definitions (in progress, 2026-11-10)
+## Shared immutable linear source definitions (server-qualified, 2026-11-10)
 
 The private manifest contains 14,336 UFLIA and 72 UFNIA queries. In 24 existing
 qualified profiles, all 16,751 LIA admissions append a source; the exact-duplicate
 upper bound is zero, and no LRA admission occurs. Only 287 auxiliary definitions
 are created. Early duplicate rejection therefore does not address this measured
-private workload; repeated owning source-payload copies are the next target.
+private workload; repeated owning source-payload copies are the implemented target.
 Read-only replay-flow audit SHA-256:
 `6731509eece57ad48c04bc228011e99420248d042855e02274fc5128d3c8f68f`.
 
@@ -21,9 +21,53 @@ are cached in the definitions. Existing replacement, integer-variable accounting
 point-hint validation and each theory's rollback policy remain in place.
 
 Tests cover map growth, independent manager copies, input mutation, owner
-replacement/destruction and snapshot premise changes. Native qualification,
-measured copy reduction and fresh full-suite performance remain pending.
-No elapsed-time or new-coverage claim is made.
+replacement/destruction and snapshot premise changes. Frozen core
+`cece6271f5057bb97b1688749df8199d966daafe` passes 2,344 proof-enabled unit cases /
+1,557,102 assertions and all 965 public regressions. Four current public SAT
+models pass Z3/cvc5 replay; five UNSAT obligations are independently checked.
+All 2,347 Git source bodies (including 161 pinned parser files) and 832
+objects/dependencies are checked; 206 affected units are rebuilt and 626 retained.
+The writer lock serializes build updates, with at most 39 leased physical
+compiler cores plus one coordinator. Lifetime tests check shared ownership;
+they do not constitute a new workload instruction-count measurement.
+
+Fresh frozen delivered main `b7bb0766` / candidate / Z3 results use 60 seconds,
+one physical core and 16 GiB per solver/input, with at most 40 physical tasks:
+
+| Cohort / metric | Main baseline | Candidate | Z3 |
+| --- | ---: | ---: | ---: |
+| Private 14,408, verified | 14,408 | 14,408 | 14,408 |
+| Private cumulative solver seconds | 189.092181 | 188.616838 | 295.439026 |
+| Fixed 160, verified | 124 | 124 | 116 |
+| Fixed verified PAR-2 mean, seconds | 31.374441 | 31.279790 | 34.153457 |
+| Disjoint 14,568, verified PAR-2 total, seconds | 5,209.002723 | 5,193.383291 | 5,759.992136 |
+| Separate development 587, verified | 587 | 587 | 584 |
+
+Candidate gains/losses are both zero. Private time improves 0.2514%; 36 of 40
+paired groups and 8,081 of 14,408 cases are faster. The disjoint PAR-2 total
+improves 15.619432 seconds. These are descriptive results from one round, not
+statistical proof of repeatability or a new capability claim. Unknown, error,
+opposite-verdict and invalid-model counts are zero. Fixed baseline/candidate/Z3
+timeouts are 36/35/38; one candidate and six Z3 UNSAT decisions remain
+unconfirmed and excluded. Their original hashes and existing evidence are
+rechecked once; no contrary verified SAT evidence is found, which is not an
+UNSAT proof. Original timed models and raw pre-supplement counters remain intact.
+Only current successful UNSAT decisions receive qualifying original-input evidence.
+
+Whole-artifact SHA-256 records:
+
+- Native qualification: `7b51af08e00600c2c183010d1dc4107f13d7c5bbe1aec53629ecd3d18dc2e981`.
+- Qualified source: `e6414fe3c18d0ed1738b23c0166a2d5695f05c1c8a67caa76c8b5fc423e4d9dc`.
+- Frozen CLI: `36b0c9f7bd55dc6ba3fb5381afa8933e7a16d813160e1412cd08c54d07ec701c`.
+- Source binding: `1b2cfd94b587d8e42584fc9038c49d70c08f6eca844c9fef4af2a91e5fa0f0ac`.
+- Final server acceptance: `1974a27ce91f9869c1677fc57e0574afae7dfe92ee94855bc565acbdd8036bc2`.
+- Unconfirmed audit: `a1f3a5a4ac0da2454ab184db4a71d8da7b6578c7ff6c5ba505bdd9c2845612e0`.
+- Privacy-checked public summary: `25549bb13ad9c2b56f98ddfacc1da41ca298af49099f0da35c3a25760ca6b252`.
+
+Server acceptance passes the preregistered coverage/private-time/disjoint-PAR-2
+criteria. PR and main CI delivery are pending. Private inputs, identities, models
+and raw reports remain unpublished. Difficult inputs, original-C QCP and the final
+once-only protected comparison remain open; no overall Z3 superiority is claimed.
 
 ## Early linear-source admission prototype (2026-11-10)
 
@@ -39,10 +83,11 @@ without repeating any solve or changing formal results.
 
 Both linear theories previously look up an auxiliary before recognizing an
 identical active source. LRA also overwrites an immutable column definition on
-every such admission. Exact `LinearAtomPayload` equality now lets both existing
-indexed contexts reject identical level/literal/value/expression/payload replays
-before auxiliary lookup. LRA constructs each column definition only on its first
-insertion. Changed payloads, relations, signs or levels still execute the existing
+every such admission. The prototype uses exact `LinearAtomPayload` equality to
+reject identical level/literal/value/expression/payload replays before auxiliary
+lookup. The final shared-source implementation compares these current premises
+and the immutable exact form directly. LRA shares each column's definition.
+Changed payloads, relations, signs or levels still execute the existing
 replacement path; each theory retains its established rollback policy.
 The shared regression covers large rational coefficients, RHS and LHS changes
 under reused IDs, cached conflicts, level replacement, reset and API scopes.
