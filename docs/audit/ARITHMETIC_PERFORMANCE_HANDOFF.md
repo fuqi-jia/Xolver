@@ -1,5 +1,82 @@
 # Arithmetic validation and continuation record
 
+## Reinitialize only simplex rows with changed dependencies (2026-11-10)
+
+Bound rollback can request a canonical simplex point while the retained point
+still satisfies every existing row equation. The original `recomputeBeta()`
+chooses every nonbasic value and evaluates every row again. Completed-scope
+counter diagnostics observe **1,262 recomputations**, **77,739 nonbasic values**
+examined but only **29 changed values**; **508,640 of 512,102 row evaluations**
+have unchanged inputs and an unchanged result. This is an independent repeated
+work opportunity, not a demonstrated cause of the earlier LRA regressions.
+
+Core `2f57d8fd87fa9b0502b29b7af198c6c2b11e2479` tracks the prefix of rows with
+coherent assignments. Reinitialization marks incident rows of nonbasic values
+that actually change, recomputes those rows and initializes every row appended
+while dirty. Clean additions extend the initialized prefix; full reset clears
+it. Canonical zero/midpoint/endpoint selection, exact infinitesimals, complete
+violation queue reconstruction and ordering, model/proof checks, public APIs
+and the distinct LRA/LIA rollback policies remain unchanged. The shared simplex
+implementation serves its existing arithmetic clients without another gate.
+
+Panda9 / ExperimentOS verifies all **832 parent object/dependency hashes** and
+all qualified library/binary outputs, compiles **53 affected units** under leased
+physical CPUs, preserves **779 objects** and serially links under one writer
+lock. Proofs remain enabled. All **2,333 unit cases / 1,556,841 assertions**,
+including two new cases / 580 assertions, and **965 public regressions** pass.
+The tests cover large exact rationals, strict bounds, sparse definitions, late
+rows, pivots, copies, rollback and reset. All **2,345 public source bodies**
+match Git and the pinned parser.
+
+Twenty-four new candidate instruction profiles reuse the 24 qualified accepted
+baseline profiles. All 20 new actual SAT models pass Z3/cvc5 replay; all four
+UNSAT results are independently checked. Total instructions fall
+**9,168,873,790 to 8,534,137,580 (6.92%)**, with recomputation inclusive cost
+**779,552,819 to 145,019,472 (81.40%)**. Exact primary calls remain unchanged:
+recomputation 988, canonical selection 84,505, pivots 216, model validation 669,
+term evaluation 130,642, native term reads 1,177,555 and integrality checks 1,049.
+These diagnostics establish removed work, not wall-clock performance.
+
+The fresh complete comparison freezes delivered main `501116a3` / qualified08,
+this candidate and Z3/cvc5, each with **60 seconds, one physical CPU and 16 GiB
+per solver/input**. All three independently verify all **14,408 private queries**
+(8,940 SAT / 5,468 UNSAT). Main/candidate/Z3 cumulative solver times are
+**192.0422 / 188.3520 / 295.7887 seconds**: the candidate is **1.92% faster**
+than same-round main. Fixed160 verifies **124 / 124 / 117**, with identical
+main/candidate verified membership and zero gains or losses. Verified PAR-2
+means are **31.442276 / 31.433642 / 33.509592 seconds**.
+
+The disjoint 14,568-input union verifies **14,532 / 14,532 / 14,525**. Verified
+PAR-2 totals are **5,222.8064 / 5,217.7347 / 5,657.3235 seconds**: **5.0716 seconds
+saved** against main. Development587 remains separate, verifying **587 / 587 /
+584**, with cumulative solver times **7.4653 / 7.3241 / 11.4893 seconds**.
+No opposite verdict, invalid actual model, protocol error or verified loss is
+observed. Peak simultaneous physical CPU leases are 40 without sibling overlap.
+
+The candidate retains **35 timeouts plus one unconfirmed UNSAT**, and Z3
+**37 timeouts plus six unconfirmed UNSATs**. All seven independent checks time
+out; original input hashes and archive bindings are rechecked. The two specified
+historical audits contain no contrary verified SAT; this is not an UNSAT proof.
+Unconfirmed results remain excluded, and no timeout or old SAT model is upgraded.
+
+Server acceptance and the optional performance gate pass. CI/delivery receipts
+belong to the merging PR. This is one development round, not statistical proof
+of reproducibility or overall superiority over Z3. Remaining fixed inputs,
+final original-C QCP and once-only protected evaluation remain open. Private
+inputs, models, identifiers and per-input evidence stay on the server. The
+cancelled `validation/current-main.json` archive is not a delivery requirement.
+
+| Incremental simplex artifact | SHA-256 |
+| --- | --- |
+| Measured repeated-work root | `6511df12cfdb3cb15b25f507f3cf28920fbc2dd9fc7d0a73175a369e2053bea2` |
+| Native qualification | `3c8ecc08e93e585b7bb7baae54a2b8de9c563de8abd9501aaf03510852f06861` |
+| Complete qualified source manifest | `861073f65a43a41c5465578f5d7276bcb7a28aa6ee85048969b7efda11c5ad8e` |
+| Frozen CLI | `b2b36b86c66e9a3c786c3f8c1b6ee1929ea8785c605320ea59435fa2d1ad8013` |
+| Exact-call mechanism | `6ebdaf2c0db934744e19242e9520f3bb0e85218cf2a37a03c1cc56a8066da2d8` |
+| Complete private cohort | `20a475a1cc11cd5321e821c5779143eae9d82bfb013dc17879b35ccd9ffce759` |
+| Complete stage | `53e70350ef8d1c9e32166b6bdf2d9dd882adaa86a62dac6876df8da1fe1319f2` |
+| Remaining unconfirmed audit | `1d53661342277b0ba058932e190ad0aeaf663be399921e2eddbd0664e6153ef1` |
+
 ## Format native numeric payloads without copying values (2026-11-10)
 
 `NativeTerms::get` formatted NUMBER values through `getNumberValue()`, which
@@ -53,7 +130,13 @@ Input-bound independent evidence supplements only successful current UNSAT
 observations, never timeouts, unknowns or reused SAT models.
 
 Server acceptance and the optional performance gate pass with unchanged
-verified coverage. Exact review/main CI receipts belong to the merging PR.
+verified coverage. [PR #130](https://github.com/fuqi-jia/Xolver/pull/130) reviewed
+`0d335ac086f32a79ae37b323aaf7cf2e3292404b`; both jobs passed in
+[PR CI 42683460311](https://github.com/fuqi-jia/Xolver/actions/runs/42683460311).
+The normal merge `501116a3f9d9ebaa179a3ad808fde8aa5cbfec41` has the same
+complete tree; both jobs passed in its exact
+[main CI 42686635194](https://github.com/fuqi-jia/Xolver/actions/runs/42686635194).
+No additional server archive is required after CI.
 Original-C QCP, remaining fixed inputs and the once-only protected comparison
 remain open; these development results do not establish overall superiority
 over Z3. Private inputs, models, identifiers and per-input evidence remain

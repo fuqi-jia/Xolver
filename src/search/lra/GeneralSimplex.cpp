@@ -199,6 +199,7 @@ int GeneralSimplex::addConstraint(const std::vector<std::pair<int, mpq_class>>& 
         for (const auto& [var, coefficient] : f.terms)
             value += coefficient * vars_[var].beta;
         vars_[aux].beta = std::move(value);
+        initializedBetaRows_ = tab_.numRows();
     }
     return aux;
 }
@@ -360,11 +361,9 @@ bool GeneralSimplex::assertUpper(int var, const BoundInfo& info, int level) {
 
 void GeneralSimplex::recomputeBeta() {
     notePointChange();
-    // recomputeBeta is a full O(rows*nnz) rebuild fired on every backtrack /
-    // new-var / reset (betaDirty_). The diagnostic below (env XOLVER_LRA_BETA_EVERY=N:
-    // dump call count + cumulative time every N calls) confirms whether it — not
-    // pivoting — is the LIA/LRA theory-throughput hot path. It is env-driven (not
-    // compile-gated) so it works on the shipped binary; zero-overhead when unset.
+    // Reinitialize the canonical nonbasic point under the current bounds.
+    // Coherent rows only need evaluation when one of their inputs
+    // changes; rows appended while dirty must always be initialized.
     const int betaEvery = []() {
         return config::read<config::ReadKind::Int>("XOLVER_LRA_BETA_EVERY", 0);
     }();
@@ -375,11 +374,23 @@ void GeneralSimplex::recomputeBeta() {
     std::chrono::steady_clock::time_point bt0;
     if (betaTimed) bt0 = std::chrono::steady_clock::now();
 
-    for (int x : nonBasicVars_) {
-        vars_[x].beta = chooseValueWithinBounds(x);
+    if (initializedBetaRows_ == 0) {
+        for (int x : nonBasicVars_)
+            vars_[x].beta = chooseValueWithinBounds(x);
+    } else {
+        betaChangedRows_.assign(tab_.numRows(), 0);
+        for (int x : nonBasicVars_) {
+            DeltaRational selected = chooseValueWithinBounds(x);
+            if (selected != vars_[x].beta) {
+                for (const auto& entry : tab_.col(x).entries)
+                    betaChangedRows_[entry.row] = 1;
+            }
+            vars_[x].beta = std::move(selected);
+        }
     }
 
     for (int r = 0; r < tab_.numRows(); ++r) {
+        if (r < initializedBetaRows_ && !betaChangedRows_[r]) continue;
         const SparseRow& row = tab_.row(r);
         int xb = row.basicVar;
 
@@ -390,6 +401,7 @@ void GeneralSimplex::recomputeBeta() {
         vars_[xb].beta = v;
     }
 
+    initializedBetaRows_ = tab_.numRows();
     betaDirty_ = false;
     rebuildViolationQueue();
 
@@ -1117,6 +1129,8 @@ void GeneralSimplex::reset() {
     trail_.clear();
     scopeStack_.clear();
     betaDirty_ = true;
+    initializedBetaRows_ = 0;
+    betaChangedRows_.clear();
     hasImmediateConflict_ = false;
 }
 
