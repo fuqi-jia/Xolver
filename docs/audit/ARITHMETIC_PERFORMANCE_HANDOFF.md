@@ -1,5 +1,29 @@
 # Arithmetic validation and continuation record
 
+## Exact early admission of repeated linear sources (in progress, 2026-11-10)
+
+Five stable verified-reference gaps are profiled with the delivered main binary:
+three LRA, one NIA and one NRA input. All remain diagnostic timeouts. Among the
+447 LRA CPU samples, 134 have propagation as the nearest resolved solver frame,
+45 have `LraSolver::assertLit`, and 29 have auxiliary-form lookup. Ancestor
+counts are not additive or exact elapsed-time measurements. Sampling audit:
+`b534b6236c00f9debb9021f0585b4ba72dad0f08ebbd95a893687f3845e17a71`.
+The first analysis assumed a space in glibc frame syntax and resolved no solver
+frames; it remains preserved. Correct parsing reuses the same 745 samples,
+without repeating any solve or changing formal results.
+
+Both linear theories previously look up an auxiliary before recognizing an
+identical active source. LRA also overwrites an immutable column definition on
+every such admission. Exact `LinearAtomPayload` equality now lets both existing
+indexed contexts reject identical level/literal/value/expression/payload replays
+before auxiliary lookup. LRA constructs each column definition only on its first
+insertion. Changed payloads, relations, signs or levels still execute the existing
+replacement path; each theory retains its established rollback policy.
+The shared regression covers large rational coefficients, RHS and LHS changes
+under reused IDs, cached conflicts, level replacement, reset and API scopes.
+Native qualification, actual saved-work counts and fresh performance acceptance
+remain pending. No solved-count or elapsed-time benefit is claimed.
+
 ## Closed: guarded iterative model validation (2026-11-10)
 
 The validator bodies still match the qualified 24-profile reference. Those

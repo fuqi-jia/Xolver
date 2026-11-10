@@ -139,16 +139,22 @@ void LraSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
     const auto& payload = std::get<LinearAtomPayload>(atom.payload);
     // LRA bounds are rational; an algebraic RHS never arises from inputs.
     const mpq_class& rhs = payload.rhs.asRational();
+    const auto position = theoryTrail_.find(atom.satVar);
+    if (position) {
+        const auto& previous = theoryTrail_[*position];
+        if (previous.level == level && previous.lit == assertedLit &&
+            previous.atom.exprId == atom.exprId && previous.value == value &&
+            std::get<LinearAtomPayload>(previous.atom.payload) == payload) return;
+    }
     int auxVar = manager_.getOrCreateAuxVar(gs_, payload.lhs, rhs);
-    columnForms_[auxVar] = {payload.lhs, rhs};
+    // A column's defining form is immutable, including across source replay.
+    auto [column, inserted] = columnForms_.try_emplace(auxVar);
+    if (inserted) column->second = {payload.lhs, rhs};
     Relation effectiveRel = value ? payload.rel : negateRelation(payload.rel);
     bool isDiseq = (effectiveRel == Relation::Neq);
 
-    if (const auto position = theoryTrail_.find(atom.satVar)) {
+    if (position) {
         const auto& previous = theoryTrail_[*position];
-        if (previous.auxVar == auxVar && previous.level == level && previous.lit == assertedLit &&
-            previous.atom.exprId == atom.exprId && previous.value == value &&
-            std::get<LinearAtomPayload>(previous.atom.payload).rel == payload.rel) return;
         const bool replay = *position < appliedCursor_ || pendingConflict_.has_value();
         if (previous.isDiseq) {
             // Remove stale disequality from incremental cache.

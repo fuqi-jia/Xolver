@@ -162,15 +162,19 @@ void LiaSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
     // LIA bounds are rational (integer-theory inputs never produce algebraic
     // RHS); asRational() is the standard conversion at this boundary.
     const mpq_class& rhs = payload.rhs.asRational();
+    const auto position = theoryTrail_.find(atom.satVar);
+    if (position) {
+        const auto& previous = theoryTrail_[*position];
+        if (previous.level == level && previous.lit == assertedLit &&
+            previous.atom.exprId == atom.exprId && previous.value == value &&
+            std::get<LinearAtomPayload>(previous.atom.payload) == payload) return;
+    }
     int auxVar = manager_.getOrCreateAuxVar(gs_, payload.lhs, rhs);
     Relation effectiveRel = value ? payload.rel : negateRelation(payload.rel);
     bool isDiseq = (effectiveRel == Relation::Neq);
 
-    if (const auto position = theoryTrail_.find(atom.satVar)) {
+    if (position) {
         const auto& previous = theoryTrail_[*position];
-        if (previous.auxVar == auxVar && previous.level == level && previous.lit == assertedLit &&
-            previous.atom.exprId == atom.exprId && previous.value == value &&
-            std::get<LinearAtomPayload>(previous.atom.payload).rel == payload.rel) return;
         const bool sameForm = previous.auxVar == auxVar;
         if (sameForm) {
             trailCachesOrdered_ = false;
