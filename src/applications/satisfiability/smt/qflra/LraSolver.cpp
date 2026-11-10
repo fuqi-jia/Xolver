@@ -108,8 +108,7 @@ void LraSolver::rebuildTrailCaches() {
     activeDisequalities_.clear();
     for (const auto& entry : theoryTrail_) {
         if (!entry.isDiseq) continue;
-        const auto& payload = std::get<LinearAtomPayload>(entry.atom.payload);
-        activeDisequalities_.push_back({entry.auxVar, payload.lhs, payload.rhs.asRational(), entry.lit, entry.level});
+        activeDisequalities_.push_back({entry.auxVar, entry.lhs(), entry.rhs(), entry.lit, entry.level});
     }
 }
 
@@ -139,16 +138,21 @@ void LraSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
     const auto& payload = std::get<LinearAtomPayload>(atom.payload);
     // LRA bounds are rational; an algebraic RHS never arises from inputs.
     const mpq_class& rhs = payload.rhs.asRational();
+    const auto position = theoryTrail_.find(atom.satVar);
+    if (position) {
+        const auto& previous = theoryTrail_[*position];
+        if (previous.matches(atom, payload, rhs, value, level, assertedLit)) return;
+    }
     int auxVar = manager_.getOrCreateAuxVar(gs_, payload.lhs, rhs);
-    columnForms_[auxVar] = {payload.lhs, rhs};
+    auto form = manager_.auxForm(auxVar);
+    columnForms_.try_emplace(auxVar, form);
     Relation effectiveRel = value ? payload.rel : negateRelation(payload.rel);
     bool isDiseq = (effectiveRel == Relation::Neq);
+    LinearSource source{level, assertedLit, atom.satVar, atom.exprId, payload.rel,
+                        value, auxVar, isDiseq, std::move(form)};
 
-    if (const auto position = theoryTrail_.find(atom.satVar)) {
+    if (position) {
         const auto& previous = theoryTrail_[*position];
-        if (previous.auxVar == auxVar && previous.level == level && previous.lit == assertedLit &&
-            previous.atom.exprId == atom.exprId && previous.value == value &&
-            std::get<LinearAtomPayload>(previous.atom.payload).rel == payload.rel) return;
         const bool replay = *position < appliedCursor_ || pendingConflict_.has_value();
         if (previous.isDiseq) {
             // Remove stale disequality from incremental cache.
@@ -156,7 +160,7 @@ void LraSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
                 [&previous](const auto& d) { return d.lit == previous.lit; });
             activeDisequalities_.erase(it, activeDisequalities_.end());
         }
-        theoryTrail_.replace(*position, {level, assertedLit, atom, value, auxVar, isDiseq});
+        theoryTrail_.replace(*position, std::move(source));
         if (isDiseq)
             activeDisequalities_.push_back({auxVar, payload.lhs, rhs, assertedLit, level});
         // A cursor cannot withdraw the previous source's bounds. Rebuild from
@@ -164,7 +168,7 @@ void LraSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
         if (replay) resetAppliedBounds(GeneralSimplex::AssignmentPolicy::Preserve);
         return;
     }
-    theoryTrail_.append({level, assertedLit, atom, value, auxVar, isDiseq});
+    theoryTrail_.append(std::move(source));
 
     if (isDiseq) {
         activeDisequalities_.push_back({auxVar, payload.lhs, rhs, assertedLit, level});
@@ -221,16 +225,15 @@ void LraSolver::onBacktrack(int level) {
         manager_.invalidateModelHints();
 }
 
-bool LraSolver::applyEntryToSimplex(const LraTrailEntry& e) {
-    const auto& payload = std::get<LinearAtomPayload>(e.atom.payload);
-    Relation effectiveRel = e.value ? payload.rel : negateRelation(payload.rel);
+bool LraSolver::applyEntryToSimplex(const LinearSource& e) {
+    Relation effectiveRel = e.value ? e.relation : negateRelation(e.relation);
 
     if (effectiveRel == Relation::Neq) {
         // Disequalities are handled after simplex check, not as bounds.
         return true;
     }
 
-    return manager_.assertBound(gs_, e.auxVar, payload.rel, e.value, e.lit, e.level);
+    return manager_.assertBound(gs_, e.auxVar, e.relation, e.value, e.lit, e.level);
 }
 
 std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
@@ -558,8 +561,7 @@ LraSolver::assertedVarEqualityReason(SharedTermId a, SharedTermId b) const {
     SatLit loLit{}, upLit{};
     for (const auto& e : theoryTrail_) {
         if (e.isDiseq) continue;
-        if (!std::holds_alternative<LinearAtomPayload>(e.atom.payload)) continue;
-        const auto& payload = std::get<LinearAtomPayload>(e.atom.payload);
+        const auto& payload = *e.form;
         if (payload.lhs.terms.size() != 2) continue;
         const auto& t0 = payload.lhs.terms[0];
         const auto& t1 = payload.lhs.terms[1];
@@ -568,8 +570,8 @@ LraSolver::assertedVarEqualityReason(SharedTermId a, SharedTermId b) const {
         if (t0.first == na && t1.first == nb)      c0 = t0.second;
         else if (t0.first == nb && t1.first == na) c0 = t1.second;
         else continue;
-        Relation rel = e.value ? payload.rel : negateRelation(payload.rel);
-        const mpq_class& rhs = payload.rhs.asRational();
+        Relation rel = e.value ? e.relation : negateRelation(e.relation);
+        const mpq_class& rhs = payload.rhs;
         mpq_class bnd = rhs / c0;
         bool flip = (c0 < 0);
         auto addLower = [&](const mpq_class& v, SatLit lit) {
@@ -654,8 +656,7 @@ LraSolver::getDeducedSharedEqualities() {
     LinearDifferenceEqualityIndex index;
     for (const auto& entry : theoryTrail_) {
         if (entry.isDiseq) continue;
-        if (const auto* atom = std::get_if<LinearAtomPayload>(&entry.atom.payload))
-            index.add(*atom, entry.value, entry.lit);
+        index.add(entry.lhs(), entry.relation, entry.rhs(), entry.value, entry.lit);
     }
     std::vector<std::string> sharedNames(n);
     for (int i = 0; i < n; ++i)
@@ -706,9 +707,11 @@ std::optional<TheoryLemma> LraSolver::buildEntailmentLemma(
         // this immutable view once for the lifetime of the simplex column.
         const auto name = manager_.getVarName(eb.var);
         if (name.empty()) return std::nullopt;
-        it = columnForms_.emplace(eb.var, ColumnForm{LinearFormKey{{{name, 1}}}, 0}).first;
+        auto form = std::make_shared<const AffineFormKey>(
+            AffineFormKey{LinearFormKey{{{name, 1}}}, 0});
+        it = columnForms_.emplace(eb.var, std::move(form)).first;
     }
-    const auto& info = it->second;
+    const auto& info = *it->second;
     const mpq_class boundRhs = info.rhs + eb.value.a;
 
     // Sound rational reconstruction of a delta-rational bound s ~ a + bδ

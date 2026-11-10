@@ -2,6 +2,7 @@
 
 #include "search/arith/ArithSolverBase.h"
 #include "search/linear/LinearAtomManager.h"
+#include "search/linear/LinearSource.h"
 #include "search/linear/LinearModelValidator.h"
 #include "search/linear/IntegerReasoner.h"
 #include "search/lra/GeneralSimplex.h"
@@ -154,18 +155,7 @@ private:
     LinearModelValidator validator_;
     IntegerReasoner integerReasoner_;
 
-    struct LiaTrailEntry {
-        int level;
-        SatLit lit;
-        TheoryAtomRecord atom;
-        bool value;
-        int auxVar;
-        bool isDiseq;
-    };
-    struct TrailKey {
-        SatVar operator()(const LiaTrailEntry& entry) const { return entry.atom.satVar; }
-    };
-    using TrailContext = incremental::IndexedContext<LiaTrailEntry, TrailKey>;
+    using TrailContext = incremental::IndexedContext<LinearSource, LinearSource::Key>;
     TrailContext theoryTrail_;
     struct PendingConflict {
         int level;
@@ -186,7 +176,7 @@ private:
     void resetAppliedBounds(GeneralSimplex::AssignmentPolicy policy =
                                 GeneralSimplex::AssignmentPolicy::Preserve);
     void rebuildTrailCaches();
-    void withdrawTrailEntry(const LiaTrailEntry& entry);
+    void withdrawTrailEntry(const LinearSource& entry);
     void relinkIntegerVariables();
     // Same-source replacement appends its cache entry; rebuilding restores
     // trail order. Only ordered caches can be trimmed as a suffix.
@@ -214,7 +204,7 @@ private:
         bool isDiseq;
         bool operator==(const AppliedBound&) const = default;
     };
-    static AppliedBound appliedKey(const LiaTrailEntry& entry);
+    static AppliedBound appliedKey(const LinearSource& entry);
     std::vector<AppliedBound> appliedBounds_;
     std::vector<InterfaceEq> appliedInterfaceEqualities_;
     std::optional<uint64_t> appliedBoundRevision_;

@@ -56,6 +56,77 @@ void checkWithdrawnInterface(TheoryId theory, bool disequality, bool applied) {
 }
 } // namespace
 
+TEST_CASE("Arithmetic admission: exact replays retain payload replacement and scope semantics") {
+    const auto check = []<class Engine>(TheoryId theory) {
+        Engine engine;
+        TheoryLemmaDatabase lemmas;
+        mpq_class coefficient((mpz_class(1) << 181) + 7, (mpz_class(1) << 139) + 3);
+        coefficient.canonicalize();
+        const LinearFormKey x{{{"admission-x", coefficient}}};
+        const LinearFormKey y{{{"admission-y", coefficient}}};
+        TheoryAtomRecord source{1, theory, false, NullExpr,
+            LinearAtomPayload{x, Relation::Eq, RealValue::fromInt(0)}};
+        const TheoryAtomRecord anchor{2, theory, false, NullExpr,
+            LinearAtomPayload{x, Relation::Eq, RealValue::fromInt(0)}};
+        const auto consistent = [&] {
+            REQUIRE(engine.check(lemmas).kind == TheoryCheckResult::Kind::Consistent);
+        };
+        const auto value = [&](const std::string& name) {
+            const auto model = engine.getModel();
+            REQUIRE(model);
+            REQUIRE(model->numericAssignments.contains(name));
+            const auto number = model->numericAssignments.at(name).tryAsRational();
+            REQUIRE(number);
+            return *number;
+        };
+        engine.assertLit(anchor, true, 0, {2, true});
+        for (int repeat = 0; repeat < 4; ++repeat) engine.assertLit(source, true, 0, {1, true});
+        consistent();
+        engine.assertLit(source, true, 0, {1, true});
+        consistent();
+        CHECK(value("admission-x") == 0);
+
+        // Reusing SAT and expression IDs does not identify a changed payload.
+        source.payload = LinearAtomPayload{x, Relation::Eq, RealValue::fromMpq(coefficient)};
+        engine.assertLit(source, true, 0, {1, true});
+        REQUIRE(engine.check(lemmas).kind == TheoryCheckResult::Kind::Conflict);
+        engine.assertLit(source, true, 0, {1, true});
+        REQUIRE(engine.check(lemmas).kind == TheoryCheckResult::Kind::Conflict);
+        source.payload = LinearAtomPayload{y, Relation::Eq, RealValue::fromMpq(coefficient)};
+        engine.assertLit(source, true, 0, {1, true});
+        consistent();
+        CHECK(value("admission-x") == 0);
+        CHECK(value("admission-y") == 1);
+
+        // A level replacement must still withdraw the former root source.
+        engine.assertLit(source, true, 2, {1, true});
+        consistent();
+        engine.backtrackToLevel(1);
+        const TheoryAtomRecord next{3, theory, false, NullExpr,
+            LinearAtomPayload{y, Relation::Eq, RealValue::fromMpq(2 * coefficient)}};
+        engine.assertLit(next, true, 1, {3, true});
+        consistent();
+        CHECK(value("admission-y") == 2);
+
+        engine.reset();
+        engine.assertLit(anchor, true, 0, {2, true});
+        engine.assertLit(source, true, 0, {1, true});
+        consistent();
+        engine.push();
+        // This lifecycle fixture has no SAT registry for fractional branching.
+        // A false strict upper bound leaves the integral relaxation point y=2.
+        source.payload = LinearAtomPayload{y, Relation::Lt, RealValue::fromMpq(2 * coefficient)};
+        engine.assertLit(source, false, 1, {1, false});
+        consistent();
+        CHECK(value("admission-y") > 1);
+        engine.pop(1);
+        consistent();
+        CHECK(value("admission-y") == 1);
+    };
+    check.template operator()<LraSolver>(TheoryId::LRA);
+    check.template operator()<LiaSolver>(TheoryId::LIA);
+}
+
 TEST_CASE("Arithmetic reset: withdraw old interface equalities before checking a new context") {
     for (bool applied : {false, true}) {
         checkWithdrawnInterface<LraSolver>(TheoryId::LRA, false, applied);

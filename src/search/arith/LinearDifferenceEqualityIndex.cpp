@@ -8,18 +8,25 @@ namespace xolver {
 
 void LinearDifferenceEqualityIndex::add(
         const LinearAtomPayload& atom, bool value, SatLit reason) {
-    if (atom.lhs.terms.size() != 2 || !atom.rhs.isRational()) return;
-    const auto& [name0, coefficient0] = atom.lhs.terms[0];
-    const auto& [name1, coefficient1] = atom.lhs.terms[1];
+    if (!atom.rhs.isRational()) return;
+    add(atom.lhs, atom.rel, atom.rhs.asRational(), value, reason);
+}
+
+void LinearDifferenceEqualityIndex::add(
+        const LinearFormKey& lhs, Relation assertedRelation, const mpq_class& rhs,
+        bool value, SatLit reason) {
+    if (lhs.terms.size() != 2) return;
+    const auto& [name0, coefficient0] = lhs.terms[0];
+    const auto& [name1, coefficient1] = lhs.terms[1];
     if (name0 == name1 || coefficient0 == 0 || coefficient0 != -coefficient1) return;
-    const Relation relation = value ? atom.rel : negateRelation(atom.rel);
+    const Relation relation = value ? assertedRelation : negateRelation(assertedRelation);
     // Strict bounds and disequalities do not pin a real difference to zero.
     if (relation != Relation::Eq && relation != Relation::Leq && relation != Relation::Geq)
         return;
     if (name0 < name1)
-        entries_[{name0, name1}].push_back({coefficient0, relation, atom.rhs.asRational(), reason});
+        entries_[{name0, name1}].push_back({coefficient0, relation, rhs, reason});
     else
-        entries_[{name1, name0}].push_back({coefficient1, relation, atom.rhs.asRational(), reason});
+        entries_[{name1, name0}].push_back({coefficient1, relation, rhs, reason});
 }
 
 std::vector<LinearDifferenceEqualityIndex::PinnedPair>

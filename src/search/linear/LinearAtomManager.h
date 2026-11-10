@@ -112,11 +112,10 @@ public:
         bool valid = domain == SortKind::Int || domain == SortKind::Real;
         for (size_t i = begin; valid && i < sources.size(); ++i) {
             const auto& source = sources[i];
-            const auto* payload = std::get_if<LinearAtomPayload>(&source.atom.payload);
-            if (!payload || source.auxVar < 0 || source.auxVar >= gs.numVars()) { valid = false; break; }
-            valid = relationHolds(gs.value(source.auxVar), source.value ? payload->rel : negateRelation(payload->rel));
+            if (!source.form || source.auxVar < 0 || source.auxVar >= gs.numVars()) { valid = false; break; }
+            valid = relationHolds(gs.value(source.auxVar), source.value ? source.relation : negateRelation(source.relation));
             if (valid && domain == SortKind::Int) {
-                for (const auto& [name, coefficient] : payload->lhs.terms) {
+                for (const auto& [name, coefficient] : source.lhs().terms) {
                     if (coefficient == 0) continue;
                     const int column = findVarIndex(name);
                     if (column < 0 || column >= gs.numVars()) { valid = false; break; }
@@ -148,9 +147,9 @@ public:
 
     // Reverse of getOrCreateAuxVar: if `aux` is an auxiliary variable created
     // for some constraint, recover its defining form (aux = Σ lhs - rhs over
-    // ORIGINAL variable names). Returns false for original (non-aux) vars. Used
+    // ORIGINAL variable names). Returns null for original (non-aux) vars. Used
     // by Gomory-cut generation to re-express a cut over original variables.
-    bool auxForm(int aux, LinearFormKey& lhsOut, mpq_class& rhsOut) const;
+    AffineFormDefinition auxForm(int aux) const;
 
 private:
     static bool relationHolds(const DeltaRational& difference, Relation relation);
@@ -161,10 +160,10 @@ private:
     mutable size_t hintSourceCount_ = 0;
     mutable bool hintPointValid_ = false;
     // Canonical (lhs, rhs) -> aux var (solver-local)
-    std::unordered_map<AffineFormKey, int, AffineFormKeyHash, AffineFormKeyEqual> formToAux_;
+    std::unordered_map<AffineFormDefinition, int, AffineFormKeyHash, AffineFormKeyEqual> formToAux_;
 
     // Reverse map: aux var index -> its defining (lhs, rhs).
-    std::unordered_map<int, AffineFormKey> auxToForm_;
+    std::unordered_map<int, AffineFormDefinition> auxToForm_;
 
     // Variable name -> GeneralSimplex var index
     std::unordered_map<std::string, int> varToIndex_;

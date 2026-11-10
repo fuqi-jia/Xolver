@@ -1,5 +1,188 @@
 # Arithmetic validation and continuation record
 
+## Shared immutable linear source definitions (server-qualified, 2026-11-10)
+
+The private manifest contains 14,336 UFLIA and 72 UFNIA queries. In 24 existing
+qualified profiles, all 16,751 LIA admissions append a source; the exact-duplicate
+upper bound is zero, and no LRA admission occurs. Only 287 auxiliary definitions
+are created. Early duplicate rejection therefore does not address this measured
+private workload; repeated owning source-payload copies are the implemented target.
+Read-only replay-flow audit SHA-256:
+`6731509eece57ad48c04bc228011e99420248d042855e02274fc5128d3c8f68f`.
+
+`LinearAtomManager` now owns one immutable exact affine definition shared by
+both lookup directions. LIA and LRA use the same small `LinearSource` record:
+current signed premises, levels, relation and expression identity remain local,
+while the constant mathematics is shared. Scope snapshots retain independent
+premises and safe definition ownership. LRA column metadata shares those same
+definitions. The old copying reverse-lookup API is removed and all consumers
+use immutable handles. No bounds, models, explanations or active-state snapshots
+are cached in the definitions. Existing replacement, integer-variable accounting,
+point-hint validation and each theory's rollback policy remain in place.
+
+Tests cover map growth, independent manager copies, input mutation, owner
+replacement/destruction and snapshot premise changes. Frozen core
+`cece6271f5057bb97b1688749df8199d966daafe` passes 2,344 proof-enabled unit cases /
+1,557,102 assertions and all 965 public regressions. Four current public SAT
+models pass Z3/cvc5 replay; five UNSAT obligations are independently checked.
+All 2,347 Git source bodies (including 161 pinned parser files) and 832
+objects/dependencies are checked; 206 affected units are rebuilt and 626 retained.
+The writer lock serializes build updates, with at most 39 leased physical
+compiler cores plus one coordinator. Lifetime tests check shared ownership;
+they do not constitute a new workload instruction-count measurement.
+
+Fresh frozen delivered main `b7bb0766` / candidate / Z3 results use 60 seconds,
+one physical core and 16 GiB per solver/input, with at most 40 physical tasks:
+
+| Cohort / metric | Main baseline | Candidate | Z3 |
+| --- | ---: | ---: | ---: |
+| Private 14,408, verified | 14,408 | 14,408 | 14,408 |
+| Private cumulative solver seconds | 189.092181 | 188.616838 | 295.439026 |
+| Fixed 160, verified | 124 | 124 | 116 |
+| Fixed verified PAR-2 mean, seconds | 31.374441 | 31.279790 | 34.153457 |
+| Disjoint 14,568, verified PAR-2 total, seconds | 5,209.002723 | 5,193.383291 | 5,759.992136 |
+| Separate development 587, verified | 587 | 587 | 584 |
+
+Candidate gains/losses are both zero. Private time improves 0.2514%; 36 of 40
+paired groups and 8,081 of 14,408 cases are faster. The disjoint PAR-2 total
+improves 15.619432 seconds. These are descriptive results from one round, not
+statistical proof of repeatability or a new capability claim. Unknown, error,
+opposite-verdict and invalid-model counts are zero. Fixed baseline/candidate/Z3
+timeouts are 36/35/38; one candidate and six Z3 UNSAT decisions remain
+unconfirmed and excluded. Their original hashes and existing evidence are
+rechecked once; no contrary verified SAT evidence is found, which is not an
+UNSAT proof. Original timed models and raw pre-supplement counters remain intact.
+Only current successful UNSAT decisions receive qualifying original-input evidence.
+
+Whole-artifact SHA-256 records:
+
+- Native qualification: `7b51af08e00600c2c183010d1dc4107f13d7c5bbe1aec53629ecd3d18dc2e981`.
+- Qualified source: `e6414fe3c18d0ed1738b23c0166a2d5695f05c1c8a67caa76c8b5fc423e4d9dc`.
+- Frozen CLI: `36b0c9f7bd55dc6ba3fb5381afa8933e7a16d813160e1412cd08c54d07ec701c`.
+- Source binding: `1b2cfd94b587d8e42584fc9038c49d70c08f6eca844c9fef4af2a91e5fa0f0ac`.
+- Final server acceptance: `1974a27ce91f9869c1677fc57e0574afae7dfe92ee94855bc565acbdd8036bc2`.
+- Unconfirmed audit: `a1f3a5a4ac0da2454ab184db4a71d8da7b6578c7ff6c5ba505bdd9c2845612e0`.
+- Privacy-checked public summary: `25549bb13ad9c2b56f98ddfacc1da41ca298af49099f0da35c3a25760ca6b252`.
+
+Server acceptance passes the preregistered coverage/private-time/disjoint-PAR-2
+criteria. PR and main CI delivery are pending. Private inputs, identities, models
+and raw reports remain unpublished. Difficult inputs, original-C QCP and the final
+once-only protected comparison remain open; no overall Z3 superiority is claimed.
+
+## Early linear-source admission prototype (2026-11-10)
+
+Five stable verified-reference gaps are profiled with the delivered main binary:
+three LRA, one NIA and one NRA input. All remain diagnostic timeouts. Among the
+447 LRA CPU samples, 134 have propagation as the nearest resolved solver frame,
+45 have `LraSolver::assertLit`, and 29 have auxiliary-form lookup. Ancestor
+counts are not additive or exact elapsed-time measurements. Sampling audit:
+`b534b6236c00f9debb9021f0585b4ba72dad0f08ebbd95a893687f3845e17a71`.
+The first analysis assumed a space in glibc frame syntax and resolved no solver
+frames; it remains preserved. Correct parsing reuses the same 745 samples,
+without repeating any solve or changing formal results.
+
+Both linear theories previously look up an auxiliary before recognizing an
+identical active source. LRA also overwrites an immutable column definition on
+every such admission. The prototype uses exact `LinearAtomPayload` equality to
+reject identical level/literal/value/expression/payload replays before auxiliary
+lookup. The final shared-source implementation compares these current premises
+and the immutable exact form directly. LRA shares each column's definition.
+Changed payloads, relations, signs or levels still execute the existing
+replacement path; each theory retains its established rollback policy.
+The shared regression covers large rational coefficients, RHS and LHS changes
+under reused IDs, cached conflicts, level replacement, reset and API scopes.
+The initial focused run fails one of 59 assertions: its bare LIA instance needs
+an integer split but has no SAT registry. Replaying the accepted pre-change
+`LiaSolver.cpp` under the same fixture also gives 58 passes and the same
+`unknown`; this is an isolated method reproduction, not whole-main acceptance.
+All 2,346 source bodies, 832 objects/dependencies, libraries, binaries, cache
+and output timestamps are restored afterwards. Prior-method record SHA-256:
+`a18c6028d4a8226e0652ec5d02a8da2c2f5a02287a5c4cc662395c8a9d8ce385`.
+The failed native run remains unqualified. The fixture now uses a false strict
+upper bound whose relaxation point is already integral, retaining the same
+source-lifecycle checks. Column definitions are constructed before publication.
+Corrected core `95d9ac09` passes 2,342 proof-enabled unit cases / 1,557,079
+assertions. All 2,346 source bodies and 832 objects/dependencies are checked;
+the explicit build-only checkpoint remains distinct from its qualified ancestor.
+Qualification SHA-256:
+`8998690dca458cb46a2d43a1751b9ae8cc2cd72b445eddfa3ade7eb34cc89dfc`.
+No full timing round or PR is started for this prototype. The replay-flow
+evidence above shifts work to shared immutable source definitions.
+No solved-count or elapsed-time benefit is claimed.
+
+## Closed: guarded iterative model validation (2026-11-10)
+
+The validator bodies still match the qualified 24-profile reference. Those
+profiles record 669 validations, 130,642 exact evaluator calls and 975,855,718
+instructions under the validation warm pass. Every validation has one root;
+moving the assertion loop alone therefore cannot explain a sample improvement.
+Source inspection identifies eager expansion below `and`, `or` and `ite`, even
+when the existing evaluator subsequently short-circuits. Root-audit SHA-256:
+`459835feae2805108b8927f37d7ddc3d0b0201d52855a775576c7b5107376aad`.
+
+Candidate `373ee116` schedules guarded dependencies iteratively in
+`ArithModelValidator::warmEval`
+using the current evaluation's cached values. An indeterminate condition remains
+indeterminate, and an indeterminate Boolean operand does not suppress a later
+decisive operand. Ordinary postorder, exact arithmetic and query-local ownership
+remain unchanged. Validation warms successive assertion roots until its existing
+definite-violation exit; diagnostic descent also warms each requested expression.
+Panda9 / ExperimentOS passes all 2,341 proof-enabled unit cases / 1,557,011
+assertions, all 965 public regressions and nine independent public obligations:
+four actual SAT models pass Z3/cvc5 replay and five UNSAT decisions are checked
+independently. All 2,346 source bodies and 832 objects/dependencies qualify.
+Tests exercise all three Boolean outcomes, shared roots, deep selected branches,
+missing assignments and external typed-model changes.
+
+The unchanged 24 development diagnostics provide **669 validations**. Actual
+evaluator calls and eager transitive closure both contain **130,642 nodes**:
+**zero evaluations are avoided on these inputs**. Twenty actual SAT models
+pass dual replay and four UNSAT decisions are independently checked. The first
+counter observation is unavailable because CLI silences `std::cerr`; that audit
+is preserved. A logging-only `--verbose` observation of the same frozen
+derivative exposes the counters, without changing solver parameters, budgets,
+source or build. Counter-audit SHA-256:
+`047d90bba6a079e5e4863c144d36beda2e76489318a81c1e22d1e0ed47e99754`.
+
+The optional traversal is withdrawn because its proposed work reduction is not
+exercised by the measured workload. No full timing round or PR is started for
+this candidate. Both new semantic regressions and the stronger LIA fresh-literal
+regression remain. Native qualification SHA-256:
+`e01bc305b54477a777b082b608e9f33cebae9d8458890b464b230843797279df`.
+No speed or new-coverage claim is made; private artifacts remain unpublished.
+
+## Closed: isolated auxiliary projection reuse (2026-11-10)
+
+Optional core `0c181247` passes 2,342 proof-enabled unit cases, 965 public
+regressions and independent model/verdict checks. A counter derivative confirms
+4,708 hits in 4,832 requests and removes repeated exact divisions on the
+diagnostic inputs. These mechanism counts do not establish elapsed-time gains.
+
+The complete frozen main `b7bb0766` / candidate / Z3 comparison uses 60 seconds,
+one physical core and 16 GiB per input through Panda9 / ExperimentOS. All three
+verify all 14,408 private queries, taking cumulative seconds
+**188.566730 / 188.526355 / 295.026383**. The candidate difference is only
+**0.0214%**. Fixed160 verifies **123 / 124 / 118**, with zero losses and one
+same-round gain; candidate membership equals the historical accepted 124.
+The original final audit is retained unchanged:
+`352082bdbe3042a6e68b8c90e236cf8ca3f5a204c5a19d6c3a84c2d6f04e6598`.
+
+The apparent gained solve never calls the projection helper. Three additional
+paired runs of the unchanged production binaries all return independently
+checked SAT, with baseline/candidate seconds **19.720/19.019**,
+**19.028/19.716**, and **19.515/18.893**. All seven diagnostic SAT models,
+including the observer, pass Z3/cvc5 replay. The pairs share their assigned
+physical CPU; budgets and parameters are unchanged. This follow-up carries no
+formal score credit and cannot replace the original round. Causal audit:
+`3ca0b5cbc3275ced737136749d25b3700439bf7acffb2c3633dcae861c591eec`.
+
+The optional cache and borrowed-key implementation are withdrawn because
+reproducible useful benefit is unproven. The necessary exact affine identity
+repair remains, together with the stronger fresh-literal rollback regression.
+Candidate one and Z3 six unconfirmed results remain excluded; the remaining
+timeouts, final original-C QCP and once-only protected evaluation remain open.
+Private input identities, formulas, models and raw records remain unpublished.
+
 ## Exact affine identities for shared equality explanations (2026-11-10)
 
 A public synthetic direct-API regression confirms an invalid shared equality:

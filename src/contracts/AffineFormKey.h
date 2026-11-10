@@ -2,6 +2,7 @@
 
 #include "contracts/LinearFormKey.h"
 #include <cstddef>
+#include <memory>
 
 namespace xolver {
 
@@ -21,11 +22,16 @@ struct AffineFormKeyView {
     const mpq_class& rhs;
 };
 
+using AffineFormDefinition = std::shared_ptr<const AffineFormKey>;
+
 struct AffineFormKeyHash {
     using is_transparent = void;
 
     std::size_t operator()(const AffineFormKey& key) const {
         return (*this)(AffineFormKeyView{key.lhs, key.rhs});
+    }
+    std::size_t operator()(const AffineFormDefinition& key) const {
+        return (*this)(*key);
     }
     std::size_t operator()(AffineFormKeyView key) const {
         std::size_t hash = LinearFormKeyHash{}(key.lhs);
@@ -45,6 +51,15 @@ struct AffineFormKeyEqual {
     }
     bool operator()(AffineFormKeyView a, const AffineFormKey& b) const {
         return (*this)(b, a);
+    }
+    bool operator()(const AffineFormDefinition& a, const AffineFormDefinition& b) const {
+        return *a == *b;
+    }
+    bool operator()(const AffineFormDefinition& a, AffineFormKeyView b) const {
+        return (*this)(*a, b);
+    }
+    bool operator()(AffineFormKeyView a, const AffineFormDefinition& b) const {
+        return (*this)(a, *b);
     }
 };
 
