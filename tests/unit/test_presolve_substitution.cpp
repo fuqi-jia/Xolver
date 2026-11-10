@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 #include "search/presolve/Presolve.h"
+#include "search/presolve/BoundChainComposer.h"
 #include "search/presolve/AffineSubstitution.h"
 #include "search/presolve/PolynomialDefSubstitution.h"
 #include "search/presolve/PolynomialEqualityCombination.h"
@@ -398,4 +399,130 @@ TEST_CASE("native presolve rejects cyclic and unrepresentable exponent substitut
     auto power = RationalPolynomial::fromVar(0, 1, 1).pow(std::numeric_limits<int>::max());
     CHECK(power.degree(0) == std::numeric_limits<int>::max());
     CHECK(power.terms().size() == 1);
+}
+
+TEST_CASE("bound composition: indexed chains retain strictness, live facts and explanations") {
+    for (bool integerDomain : {false, true}) {
+        PresolveState state;
+        state.integerDomain = integerDomain;
+        constexpr unsigned chains = 64;
+        mpz_class large = 1;
+        large <<= 181;
+        const mpz_class numerator = large + 1;
+        mpq_class scale(numerator, large);
+        scale.canonicalize();
+        auto conclusion = [](unsigned i) {
+            return RationalPolynomial::fromVar(2 * i + 1) -
+                   RationalPolynomial::fromConstant(i + 1);
+        };
+        for (unsigned i = 0; i < chains; ++i) {
+            const auto factor = i + 1 == chains ? scale : mpq_class(1);
+            state.atoms.push_back({RationalPolynomial::fromVar(2 * i, 1, -factor) +
+                RationalPolynomial::fromVar(2 * i + 1, 1, factor),
+                i % 2 ? Relation::Leq : Relation::Lt, reason(2 * i + 1)});
+            state.atoms.push_back({RationalPolynomial::fromVar(2 * i, 1, 2 * factor) -
+                RationalPolynomial::fromConstant(2 * factor * (i + 1)),
+                Relation::Leq, reason(2 * i + 2)});
+        }
+        state.atoms.push_back({conclusion(0), Relation::Leq, reason(400)});
+        state.atoms.push_back({conclusion(1), Relation::Leq, reason(401)});
+        state.atoms.push_back({conclusion(2), Relation::Lt, reason(402), false});
+        state.atoms.shrink_to_fit();
+        const auto original = state.atoms.size();
+        BoundChainComposer composer;
+        CHECK(composer.run(state));
+        CHECK_FALSE(state.hasConflict);
+        CHECK(state.atoms.size() == original + chains - 1);
+        for (unsigned i = 0; i < chains; ++i) {
+            const auto expected = conclusion(i);
+            const auto relation = i % 2 ? Relation::Leq : Relation::Lt;
+            const auto count = std::count_if(state.atoms.begin(), state.atoms.end(),
+                [&](const auto& atom) {
+                    return atom.live && atom.rel == relation && atom.poly.terms() == expected.terms();
+                });
+            REQUIRE(count == 1);
+            for (const auto& atom : state.atoms) {
+                if (!atom.live || atom.rel != relation || atom.poly.terms() != expected.terms()) continue;
+                const std::set<SatVar> expectedReasons = i == 1
+                    ? std::set<SatVar>{401} : std::set<SatVar>{2 * i + 1, 2 * i + 2};
+                CHECK(support(state.ledger.flattenReasons(atom.reasons)) == expectedReasons);
+            }
+        }
+        CHECK_FALSE(composer.run(state));
+    }
+}
+
+TEST_CASE("bound composition: nonlinear cancellation and exact tight boundaries") {
+    SUBCASE("signed premises survive exact equality publication") {
+        PresolveState state;
+        const auto p = RationalPolynomial::fromVar(0) - RationalPolynomial::fromConstant(7);
+        ReasonNode lower, upper;
+        lower.baseLiterals = {SatLit::negative(3)};
+        upper.baseLiterals = {SatLit::positive(4)};
+        state.atoms = {{-p, Relation::Leq, lower}, {p, Relation::Leq, upper}};
+        BoundChainComposer composer;
+        CHECK(composer.run(state));
+        REQUIRE(state.atoms.size() == 3);
+        const auto premises = state.ledger.flattenReasons(state.atoms.back().reasons);
+        CHECK(premises == std::vector<SatLit>{SatLit::negative(3), SatLit::positive(4)});
+    }
+    SUBCASE("cancelled nonlinear terms can leave a valid univariate consequence") {
+        for (bool integerDomain : {false, true}) {
+            PresolveState state;
+            state.integerDomain = integerDomain;
+            const auto v = RationalPolynomial::fromVar(0);
+            const auto x = RationalPolynomial::fromVar(1);
+            const auto z = RationalPolynomial::fromVar(2);
+            const auto product = v * x;
+            state.atoms = {{-v + product + z, Relation::Leq, reason(1)},
+                           {v - product - RationalPolynomial::fromConstant(3), Relation::Lt, reason(2)}};
+            BoundChainComposer composer;
+            CHECK(composer.run(state));
+            REQUIRE(state.atoms.size() == 3);
+            CHECK(state.atoms.back().poly.terms() == (z - RationalPolynomial::fromConstant(3)).terms());
+            CHECK(state.atoms.back().rel == Relation::Lt);
+            CHECK(support(state.ledger.flattenReasons(state.atoms.back().reasons)) == std::set<SatVar>{1, 2});
+        }
+    }
+    SUBCASE("an uncancelled variable is never dropped from a nonlinear term") {
+        PresolveState state;
+        const auto v = RationalPolynomial::fromVar(0);
+        const auto x = RationalPolynomial::fromVar(1);
+        const auto z = RationalPolynomial::fromVar(2);
+        state.atoms = {{-v + v * x + z, Relation::Leq, reason(1)},
+                       {v - RationalPolynomial::fromConstant(3), Relation::Leq, reason(2)}};
+        BoundChainComposer composer;
+        CHECK_FALSE(composer.run(state));
+        CHECK_FALSE(state.hasConflict);
+        CHECK(state.atoms.size() == 2);
+    }
+    SUBCASE("strict contradictory endpoints retain exactly the two premises") {
+        for (bool integerDomain : {false, true}) {
+            PresolveState state;
+            state.integerDomain = integerDomain;
+            const auto v = RationalPolynomial::fromVar(0);
+            state.atoms = {{-v + RationalPolynomial::fromConstant(7), Relation::Leq, reason(1)},
+                           {v - RationalPolynomial::fromConstant(7), Relation::Lt, reason(2)}};
+            BoundChainComposer composer;
+            CHECK(composer.run(state));
+            CHECK(state.hasConflict);
+            CHECK(support(state.conflict.clause) == std::set<SatVar>{1, 2});
+        }
+    }
+    SUBCASE("non-strict tight endpoints derive an exact equality once") {
+        for (bool integerDomain : {false, true}) {
+            PresolveState state;
+            state.integerDomain = integerDomain;
+            const auto p = RationalPolynomial::fromVar(0) - RationalPolynomial::fromConstant(7);
+            state.atoms = {{-p, Relation::Leq, reason(1)}, {p, Relation::Leq, reason(2)}};
+            BoundChainComposer composer;
+            CHECK(composer.run(state));
+            REQUIRE(state.atoms.size() == 3);
+            CHECK_FALSE(state.hasConflict);
+            CHECK(state.atoms.back().rel == Relation::Eq);
+            CHECK(state.atoms.back().poly.terms() == p.terms());
+            CHECK(support(state.ledger.flattenReasons(state.atoms.back().reasons)) == std::set<SatVar>{1, 2});
+            CHECK_FALSE(composer.run(state));
+        }
+    }
 }
