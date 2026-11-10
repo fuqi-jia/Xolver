@@ -1540,6 +1540,129 @@ TEST_CASE("GeneralSimplex: explicit preserved rollback keeps feasible child poin
     }
 }
 
+TEST_CASE("GeneralSimplex: reinitialized points retain exact sparse definitions and late rows") {
+    GeneralSimplex simplex;
+    std::array<int, 8> columns;
+    for (std::size_t i = 0; i < columns.size(); ++i)
+        columns[i] = simplex.addVar("column-" + std::to_string(i));
+    struct Definition {
+        int variable;
+        std::vector<std::pair<int, mpq_class>> terms;
+        mpq_class rhs;
+    };
+    std::vector<Definition> definitions;
+    const mpz_class large = (mpz_class(1) << 181) + 31;
+    auto addDefinition = [&](int step) {
+        std::vector<std::pair<int, mpq_class>> terms{
+            {columns[step % columns.size()], mpq_class(7, 3)},
+            {columns[(step + 3) % columns.size()], mpq_class(-11, 5)}};
+        if (!definitions.empty()) terms.emplace_back(definitions.back().variable, mpq_class(2, 7));
+        mpq_class rhs(large + step, mpz_class(13));
+        rhs.canonicalize();
+        const int variable = simplex.addConstraint(terms, rhs);
+        definitions.push_back({variable, std::move(terms), std::move(rhs)});
+    };
+    addDefinition(0);
+    for (int step = 0; step < 32; ++step) {
+        CAPTURE(step);
+        std::vector<GeneralSimplex::ActiveBound> bounds;
+        std::array<DeltaRational, 8> expected;
+        for (std::size_t i = 0; i < columns.size(); ++i) {
+            const int mode = (step / 8 + static_cast<int>(i)) % 5;
+            auto lower = [&](const DeltaRational& value) {
+                bounds.push_back({columns[i], true, BoundInfo(BoundValue(value), SatLit::positive(1))});
+            };
+            auto upper = [&](const DeltaRational& value) {
+                bounds.push_back({columns[i], false, BoundInfo(BoundValue(value), SatLit::positive(2))});
+            };
+            if (mode == 0) {
+                lower(DeltaRational(-4)); upper(DeltaRational(4));
+                expected[i] = DeltaRational(0);
+            } else if (mode == 1) {
+                lower(DeltaRational(2, 1)); upper(DeltaRational(4, 3));
+                expected[i] = DeltaRational(3, 2);
+            } else if (mode == 2) {
+                mpq_class value(large, mpz_class(7)); value.canonicalize();
+                expected[i] = DeltaRational(value, 2);
+                lower(expected[i]);
+            } else if (mode == 3) {
+                mpq_class value(-large, mpz_class(11)); value.canonicalize();
+                expected[i] = DeltaRational(value, -5);
+                upper(expected[i]);
+            } else {
+                lower(DeltaRational(0, 1)); upper(DeltaRational(0, 3));
+                expected[i] = DeltaRational(0, 2);
+            }
+        }
+        REQUIRE(simplex.replaceActiveBounds(bounds));
+        // Definitions may arrive while a canonical point is still pending,
+        // including a row with no changed nonbasic dependencies.
+        if (step % 4 == 0) addDefinition(step + 1);
+        REQUIRE(simplex.check() == GeneralSimplex::Result::Sat);
+        for (std::size_t i = 0; i < columns.size(); ++i)
+            CHECK(simplex.value(columns[i]) == expected[i]);
+        for (const auto& definition : definitions) {
+            DeltaRational expectedValue(-definition.rhs);
+            for (const auto& [var, coefficient] : definition.terms)
+                expectedValue += coefficient * simplex.value(var);
+            CHECK(simplex.value(definition.variable) == expectedValue);
+        }
+        CHECK(simplex.debugCheckInvariants());
+    }
+}
+
+TEST_CASE("GeneralSimplex: reinitialized points survive pivots copies rollback and reset") {
+    GeneralSimplex simplex;
+    const int x = simplex.addVar("pivot-x"), y = simplex.addVar("pivot-y");
+    const int sum = simplex.addConstraint({{x, 1}, {y, 2}}, 3);
+    REQUIRE(simplex.assertLower(x, BoundInfo(BoundValue(DeltaRational(0)), SatLit::positive(1))));
+    REQUIRE(simplex.assertLower(y, BoundInfo(BoundValue(DeltaRational(0)), SatLit::positive(2))));
+    REQUIRE(simplex.assertLower(sum, BoundInfo(BoundValue(DeltaRational(9, 1)), SatLit::positive(3))));
+    REQUIRE(simplex.check() == GeneralSimplex::Result::Sat);
+    REQUIRE((simplex.basicRowOfVar(x) >= 0 || simplex.basicRowOfVar(y) >= 0));
+    auto checkRows = [](const GeneralSimplex& current) {
+        for (int row = 0; row < current.tableau().numRows(); ++row) {
+            const auto& equation = current.tableau().row(row);
+            DeltaRational value(equation.rhs);
+            for (const auto& entry : equation.entries)
+                value += entry.coeff * current.value(entry.col);
+            CHECK(current.value(equation.basicVar) == value);
+        }
+        CHECK(current.debugCheckInvariants());
+    };
+    simplex.push();
+    REQUIRE(simplex.assertUpper(sum, BoundInfo(BoundValue(DeltaRational(20)), SatLit::positive(4)), 1));
+    REQUIRE(simplex.check() == GeneralSimplex::Result::Sat);
+    simplex.pop();
+    const int late = simplex.addConstraint({{sum, 3}, {x, -2}}, 11);
+    REQUIRE(simplex.check() == GeneralSimplex::Result::Sat);
+    CHECK(simplex.value(late) == mpq_class(3) * simplex.value(sum) - mpq_class(2) * simplex.value(x) - DeltaRational(11));
+    checkRows(simplex);
+    GeneralSimplex copied = simplex;
+    for (auto* current : {&simplex, &copied}) {
+        current->resetActiveBounds();
+        const int added = current->addConstraint({{late, -3}, {y, 7}}, 17);
+        REQUIRE(current->check() == GeneralSimplex::Result::Sat);
+        CHECK(current->value(added) == mpq_class(-3) * current->value(late) + mpq_class(7) * current->value(y) - DeltaRational(17));
+        for (int var = 0; var < current->numVars(); ++var)
+            if (current->basicRowOfVar(var) < 0) CHECK(current->value(var).isZero());
+        checkRows(*current);
+        current->push();
+        REQUIRE(current->assertLower(added, BoundInfo(BoundValue(DeltaRational(1)), SatLit::positive(5)), 1));
+        REQUIRE(current->check() == GeneralSimplex::Result::Sat);
+        current->backtrackToLevel(0);
+        REQUIRE(current->check() == GeneralSimplex::Result::Sat);
+        checkRows(*current);
+        current->reset();
+        const int fresh = current->addVar("fresh");
+        const int definition = current->addConstraint({{fresh, 2}}, 19);
+        REQUIRE(current->check() == GeneralSimplex::Result::Sat);
+        CHECK(current->value(fresh).isZero());
+        CHECK(current->value(definition) == DeltaRational(-19));
+        checkRows(*current);
+    }
+}
+
 TEST_CASE("GeneralSimplex: direct finite endpoints own values and preserve explanations") {
     const mpz_class large = (mpz_class(1) << 257) + 19;
     const std::array<DeltaRational, 5> values{

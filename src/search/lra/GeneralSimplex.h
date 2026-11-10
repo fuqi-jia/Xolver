@@ -370,6 +370,10 @@ private:
     // Other state
     // ========================================================================
     bool betaDirty_ = true;
+    // A pending canonical assignment can still satisfy the existing row
+    // equations. Rows appended while dirty have not acquired that invariant.
+    int initializedBetaRows_ = 0;
+    std::vector<unsigned char> betaChangedRows_;
     std::vector<BoundReason> conflict_;
 #ifdef XOLVER_ENABLE_PROOFS
     std::vector<mpq_class> conflictCoeffs_;  // Farkas multipliers, 1:1 with conflict_
