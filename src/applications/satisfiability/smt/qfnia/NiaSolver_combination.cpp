@@ -5,6 +5,7 @@
 #include "search/dl/DifferenceGraph.h"
 #include "search/dl/BellmanFord.h"
 #include "search/arith/Reasoner.h"
+#include "search/combination/SharedEqualityGroup.h"
 #include <random>
 #include "search/nia/search/NiaLinearizationAdapter.h"
 #include "search/nia/search/NiaIcpAdapter.h"
@@ -240,10 +241,7 @@ NiaSolver::getDeducedSharedEqualities() {
     // label as a source-variable name. Retraction withdraws the domain facts.
     if (!sharedTermRegistry_) return {};
 
-    struct Entry {
-        SharedTermId stId;
-        std::vector<SatLit> reasons;
-    };
+    using Entry = SharedEqualityWitness;
     // Exact integer keys keep the propagation order deterministic.
     std::map<mpz_class, std::vector<Entry>> groups;
 
@@ -278,27 +276,9 @@ NiaSolver::getDeducedSharedEqualities() {
     }
 
     std::vector<TheorySolver::SharedEqualityPropagation> result;
-    for (auto& [val, entries] : groups) {
-        if (entries.size() < 2) continue;
-        for (size_t i = 0; i < entries.size(); ++i) {
-            for (size_t j = i + 1; j < entries.size(); ++j) {
-                std::vector<SatLit> combined;
-                combined.insert(combined.end(), entries[i].reasons.begin(),
-                                entries[i].reasons.end());
-                combined.insert(combined.end(), entries[j].reasons.begin(),
-                                entries[j].reasons.end());
-                std::sort(combined.begin(), combined.end(),
-                          [](SatLit a, SatLit b) {
-                    return a.var < b.var || (a.var == b.var && a.sign < b.sign);
-                });
-                combined.erase(std::unique(combined.begin(), combined.end(),
-                                           [](SatLit a, SatLit b) {
-                    return a.var == b.var && a.sign == b.sign;
-                }), combined.end());
-                result.push_back(TheorySolver::SharedEqualityPropagation{
-                    entries[i].stId, entries[j].stId, std::move(combined)});
-            }
-        }
+    for (const auto& [value, entries] : groups) {
+        (void)value;
+        appendSharedEqualityGroup(entries, result, careGraph_);
     }
 
     // ---------------------------------------------------------------------

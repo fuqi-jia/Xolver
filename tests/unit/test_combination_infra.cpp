@@ -1,11 +1,96 @@
 #include <doctest/doctest.h>
 #include "search/combination/ConflictMinimizer.h"
+#include "search/combination/SharedEqualityBasis.h"
+#include "search/combination/SharedEqualityGroup.h"
+#include "search/combination/SharedTermRegistry.h"
+#include "ir/NativeTerms.h"
 #include "search/coordination/TheoryLemmaDatabase.h"
 #include "contracts/TheoryAtomTypes.h"
 #include "search/coordination/TheoryManager.h"
 #include <cstdlib>
 
 using namespace xolver;
+
+TEST_CASE("Shared equal-value groups: a linear basis preserves closure and exact premises") {
+    for (SharedTermId count = 0; count <= 32; ++count) {
+        std::vector<SharedEqualityWitness> entries;
+        const SatLit common{1000, true};
+        for (SharedTermId i = 0; i < count; ++i) {
+            const SatLit source{i + 1, i % 2 == 0};
+            entries.push_back({i + 1, {common, source, common, source}});
+        }
+        std::vector<TheorySolver::SharedEqualityPropagation> facts;
+        appendSharedEqualityGroup(entries, facts);
+        CHECK(facts.size() == (count ? count - 1 : 0));
+        SharedEqualityBasis forest;
+        std::vector<std::vector<SharedTermId>> adjacent(count);
+        for (const auto& fact : facts) {
+            REQUIRE(fact.a > 0);
+            REQUIRE(fact.a <= count);
+            REQUIRE(fact.b > 0);
+            REQUIRE(fact.b <= count);
+            CHECK(forest.insert(fact.a, fact.b));
+            CHECK(fact.reasons.size() == 3);
+            CHECK(std::find(fact.reasons.begin(), fact.reasons.end(), common) != fact.reasons.end());
+            for (const auto term : {fact.a, fact.b}) {
+                const SatLit source{term, (term - 1) % 2 == 0};
+                CHECK(std::find(fact.reasons.begin(), fact.reasons.end(), source) != fact.reasons.end());
+            }
+            adjacent[fact.a - 1].push_back(fact.b - 1);
+            adjacent[fact.b - 1].push_back(fact.a - 1);
+        }
+        if (!count) continue;
+        std::vector<bool> reached(count, false);
+        std::vector<SharedTermId> pending{0};
+        reached[0] = true;
+        while (!pending.empty()) {
+            const auto term = pending.back();
+            pending.pop_back();
+            for (const auto other : adjacent[term]) if (!reached[other]) {
+                reached[other] = true;
+                pending.push_back(other);
+            }
+        }
+        CHECK(std::all_of(reached.begin(), reached.end(), [](bool value) { return value; }));
+    }
+}
+
+TEST_CASE("Shared equal-value groups: a cared anchor preserves filtered connectivity") {
+    NativeTerms ir;
+    ir.registerSort(0, SortKind::Int);
+    ir.registerSort(1, SortKind::Bool);
+    SharedTermRegistry shared;
+    shared.setNativeTerms(&ir);
+    std::vector<ExprId> expressions;
+    std::vector<SharedEqualityWitness> entries;
+    for (SatVar i = 0; i < 3; ++i) {
+        const auto name = "member_" + std::to_string(i);
+        expressions.push_back(ir.add({Kind::Variable, 0, {}, Payload(name)}));
+        entries.push_back({shared.getOrCreate(expressions.back(), 0, name, false), {{i + 1, true}}});
+    }
+    const auto application = ir.add({Kind::UFApply, 0, {expressions.back()}, Payload(std::string("f"))});
+    const auto zero = ir.add({Kind::ConstInt, 0, {}, Payload(int64_t(0))});
+    ir.addAssertion(ir.add({Kind::Eq, 1, {application, zero}, Payload{}}));
+    CareGraph care;
+    care.build(ir, shared);
+    REQUIRE_FALSE(care.cares(entries.front().term));
+    REQUIRE(care.cares(entries.back().term));
+    std::vector<TheorySolver::SharedEqualityPropagation> facts;
+    appendSharedEqualityGroup(entries, facts, &care);
+    REQUIRE(facts.size() == 2);
+    for (const auto& fact : facts) {
+        CHECK((fact.a == entries.back().term || fact.b == entries.back().term));
+        CHECK(care.caresPair(fact.a, fact.b));
+        CHECK(fact.reasons.size() == 2);
+    }
+    facts.clear();
+    appendSharedEqualityGroup(std::span(entries).first(2), facts, &care);
+    CHECK(facts.empty());
+    care.clear();
+    appendSharedEqualityGroup(entries, facts, &care);
+    REQUIRE(facts.size() == 2);
+    for (const auto& fact : facts) CHECK(fact.a == entries.front().term);
+}
 
 TEST_CASE("ConflictMinimizer: dedup removes exact-duplicate literals only") {
     std::vector<SatLit> lits = {
