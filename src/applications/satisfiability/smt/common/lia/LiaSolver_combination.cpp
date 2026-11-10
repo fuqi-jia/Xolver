@@ -20,7 +20,6 @@
 #include <cstdlib>
 #include <sstream>
 #include <map>
-#include <string_view>
 
 namespace xolver {
 
@@ -329,12 +328,11 @@ LiaSolver::getDeducedSharedEqualities() {
             if (!nm.empty()) nameToShared.emplace(nm, stId);
         }
         using Definitions = std::vector<std::pair<SharedTermId, SatLit>>;
-        using ExactGroups = std::unordered_map<AffineFormKeyView, Definitions,
+        using ExactGroups = std::unordered_map<AffineFormKey, Definitions,
                                               AffineFormKeyHash, AffineFormKeyEqual>;
         // Text preserves publication order. Exact keys keep identifier text
-        // separate from coefficients when legal names contain delimiters. Views
-        // borrow immutable manager-owned projections; active reasons stay local.
-        std::map<std::string_view, ExactGroups> byForm;
+        // separate from coefficients when legal names contain delimiters.
+        std::map<std::string, ExactGroups> byForm;
         for (const auto& e : theoryTrail_) {
             if (e.isDiseq || !e.value) continue;
             if (!std::holds_alternative<LinearAtomPayload>(e.atom.payload)) continue;
@@ -342,13 +340,29 @@ LiaSolver::getDeducedSharedEqualities() {
             if (p.rel != Relation::Eq) continue;
             const auto& terms = p.lhs.terms;  // sorted by var name
             if (terms.size() < 2) continue;   // 2-var handled above; need >=2 here too
+            const mpq_class& rhs = p.rhs.asRational();
             for (size_t vi = 0; vi < terms.size(); ++vi) {
                 auto sit = nameToShared.find(terms[vi].first);
                 if (sit == nameToShared.end()) continue;   // v not shared
-                const auto* isolated = manager_.isolatedAuxForm(e.auxVar, vi);
-                if (!isolated) continue;
-                auto [group, inserted] = byForm[isolated->orderingText].try_emplace(
-                    AffineFormKeyView{isolated->form.lhs, isolated->form.rhs});
+                const mpq_class& cv = terms[vi].second;
+                if (cv == 0) continue;
+                // Canonical key: const rhs/cv, then (u, -c_u/cv) for u != v
+                // (terms stay name-sorted with vi removed).
+                AffineFormKey form;
+                form.rhs = rhs / cv;
+                form.lhs.terms.reserve(terms.size() - 1);
+                std::string key = form.rhs.get_str();
+                key.push_back('|');
+                for (size_t ui = 0; ui < terms.size(); ++ui) {
+                    if (ui == vi) continue;
+                    key += terms[ui].first;
+                    key.push_back(':');
+                    form.lhs.terms.emplace_back(terms[ui].first,
+                                               mpq_class(-terms[ui].second / cv));
+                    key += form.lhs.terms.back().second.get_str();
+                    key.push_back(';');
+                }
+                auto [group, inserted] = byForm[key].try_emplace(std::move(form));
                 (void)inserted;
                 group->second.push_back({sit->second, e.lit});
             }

@@ -101,36 +101,6 @@ bool LinearAtomManager::auxForm(int aux, LinearFormKey& lhsOut, mpq_class& rhsOu
     return true;
 }
 
-const LinearAtomManager::IsolatedAffineForm*
-LinearAtomManager::isolatedAuxForm(int aux, size_t termIndex) const {
-    auto row = isolatedForms_.find(aux);
-    if (row != isolatedForms_.end()) {
-        auto cached = row->second.find(termIndex);
-        if (cached != row->second.end()) return &cached->second;
-    }
-    const auto source = auxToForm_.find(aux);
-    if (source == auxToForm_.end()) return nullptr;
-    const auto& terms = source->second.lhs.terms;
-    if (termIndex >= terms.size() || terms[termIndex].second == 0) return nullptr;
-    const auto& coefficient = terms[termIndex].second;
-    IsolatedAffineForm isolated;
-    isolated.form.rhs = source->second.rhs / coefficient;
-    isolated.form.lhs.terms.reserve(terms.size() - 1);
-    isolated.orderingText = isolated.form.rhs.get_str();
-    isolated.orderingText.push_back('|');
-    for (size_t i = 0; i < terms.size(); ++i) {
-        if (i == termIndex) continue;
-        isolated.form.lhs.terms.emplace_back(terms[i].first, mpq_class(-terms[i].second / coefficient));
-        isolated.orderingText += terms[i].first;
-        isolated.orderingText.push_back(':');
-        isolated.orderingText += isolated.form.lhs.terms.back().second.get_str();
-        isolated.orderingText.push_back(';');
-    }
-    // Publish only fully constructed values. Node ownership keeps borrowed
-    // grouping keys valid even when either cache map rehashes.
-    return &isolatedForms_[aux].emplace(termIndex, std::move(isolated)).first->second;
-}
-
 LinearAtomManager::RelationBoundViews LinearAtomManager::effectiveBoundViews(
     Relation rel, bool value, bool integerForm) {
     static const DeltaRational zero(0), minusOne(-1), plusOne(1);

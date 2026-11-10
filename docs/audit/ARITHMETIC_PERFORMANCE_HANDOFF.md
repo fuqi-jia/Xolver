@@ -1,29 +1,36 @@
 # Arithmetic validation and continuation record
 
-## Reuse of exact isolated auxiliary forms (in progress, 2026-11-10)
+## Closed: isolated auxiliary projection reuse (2026-11-10)
 
-The accepted comparison parent is main `b7bb0766`, corresponding to qualified
-core `90632248`. [PR132 CI](https://github.com/fuqi-jia/Xolver/actions/runs/42783565553)
-and [exact main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42786100009)
-pass both required jobs. The complete main/review tree is identical and binds
-all 2,346 qualified source bodies. CI/source delivery receipt SHA-256:
-`eae419b610931da089c426af50bc5785e3505c5e897363f9977200e9b301a57f`.
+Optional core `0c181247` passes 2,342 proof-enabled unit cases, 965 public
+regressions and independent model/verdict checks. A counter derivative confirms
+4,708 hits in 4,832 requests and removes repeated exact divisions on the
+diagnostic inputs. These mechanism counts do not establish elapsed-time gains.
 
-A completed 24-input diagnostic records 533 shared-equality calls, 4,832
-isolated-form requests and 124 distinct exact form/target inputs, with 14,488
-rational divisions. Twenty actual SAT models pass dual replay and four UNSAT
-results are independently checked. These process-wide counts indicate possible
-pure-work reuse; they do not establish per-manager cache hits or elapsed-time
-benefits. Whole diagnostic SHA-256:
-`7deb2e14b5c47100dfd40d6d52e2a6b0898bc7abd35a1098cf0de2bc112acc39`.
+The complete frozen main `b7bb0766` / candidate / Z3 comparison uses 60 seconds,
+one physical core and 16 GiB per input through Panda9 / ExperimentOS. All three
+verify all 14,408 private queries, taking cumulative seconds
+**188.566730 / 188.526355 / 295.026383**. The candidate difference is only
+**0.0214%**. Fixed160 verifies **123 / 124 / 118**, with zero losses and one
+same-round gain; candidate membership equals the historical accepted 124.
+The original final audit is retained unchanged:
+`352082bdbe3042a6e68b8c90e236cf8ca3f5a204c5a19d6c3a84c2d6f04e6598`.
 
-`LinearAtomManager` now owns lazy exact projections of its immutable auxiliary
-definitions. LIA combination borrows their keys and ordering text, rebuilding
-current groups and explanations on every call. Tests cover rational substitution,
-negative scaling, owned-reference stability during growth, delimiter collisions,
-changing bounds and newly replayed reason literals. Native qualification and
-fresh performance comparison remain pending. This optional change must preserve
-verified coverage and improve the agreed complete-corpus comparison to qualify.
+The apparent gained solve never calls the projection helper. Three additional
+paired runs of the unchanged production binaries all return independently
+checked SAT, with baseline/candidate seconds **19.720/19.019**,
+**19.028/19.716**, and **19.515/18.893**. All seven diagnostic SAT models,
+including the observer, pass Z3/cvc5 replay. The pairs share their assigned
+physical CPU; budgets and parameters are unchanged. This follow-up carries no
+formal score credit and cannot replace the original round. Causal audit:
+`3ca0b5cbc3275ced737136749d25b3700439bf7acffb2c3633dcae861c591eec`.
+
+The optional cache and borrowed-key implementation are withdrawn because
+reproducible useful benefit is unproven. The necessary exact affine identity
+repair remains, together with the stronger fresh-literal rollback regression.
+Candidate one and Z3 six unconfirmed results remain excluded; the remaining
+timeouts, final original-C QCP and once-only protected evaluation remain open.
+Private input identities, formulas, models and raw records remain unpublished.
 
 ## Exact affine identities for shared equality explanations (2026-11-10)
 
@@ -85,10 +92,8 @@ Whole-artifact evidence SHA-256:
 
 Source manifest SHA-256: `8a8a9da8539d9340e6537d467be2fefcb3f5e8d470a5bd780197af323659e694`;
 CLI SHA-256: `15aed1cdfd408978189a259b70264f57e024ce80b14c9615232337132f969509`.
-Private inputs and artifacts remain unpublished. The user explicitly requested
-an offline query archive, delivered outside the local repository with full
-integrity checks. Models and original validation reports remain on the server.
-Normal exact-head PR/main CI and source equivalence govern Git delivery;
+Private inputs, models, per-input identities and original reports remain on the
+server. Normal exact-head PR/main CI and source equivalence govern Git delivery;
 no additional server archive is required after green CI.
 
 The legacy diagnostic restores all 2,345 source bodies, 832 objects and their
