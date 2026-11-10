@@ -1,5 +1,30 @@
 # Arithmetic validation and continuation record
 
+## Reuse of exact isolated auxiliary forms (in progress, 2026-11-10)
+
+The accepted comparison parent is main `b7bb0766`, corresponding to qualified
+core `90632248`. [PR132 CI](https://github.com/fuqi-jia/Xolver/actions/runs/42783565553)
+and [exact main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42786100009)
+pass both required jobs. The complete main/review tree is identical and binds
+all 2,346 qualified source bodies. CI/source delivery receipt SHA-256:
+`eae419b610931da089c426af50bc5785e3505c5e897363f9977200e9b301a57f`.
+
+A completed 24-input diagnostic records 533 shared-equality calls, 4,832
+isolated-form requests and 124 distinct exact form/target inputs, with 14,488
+rational divisions. Twenty actual SAT models pass dual replay and four UNSAT
+results are independently checked. These process-wide counts indicate possible
+pure-work reuse; they do not establish per-manager cache hits or elapsed-time
+benefits. Whole diagnostic SHA-256:
+`7deb2e14b5c47100dfd40d6d52e2a6b0898bc7abd35a1098cf0de2bc112acc39`.
+
+`LinearAtomManager` now owns lazy exact projections of its immutable auxiliary
+definitions. LIA combination borrows their keys and ordering text, rebuilding
+current groups and explanations on every call. Tests cover rational substitution,
+negative scaling, owned-reference stability during growth, delimiter collisions,
+changing bounds and newly replayed reason literals. Native qualification and
+fresh performance comparison remain pending. This optional change must preserve
+verified coverage and improve the agreed complete-corpus comparison to qualify.
+
 ## Exact affine identities for shared equality explanations (2026-11-10)
 
 A public synthetic direct-API regression confirms an invalid shared equality:
@@ -60,8 +85,10 @@ Whole-artifact evidence SHA-256:
 
 Source manifest SHA-256: `8a8a9da8539d9340e6537d467be2fefcb3f5e8d470a5bd780197af323659e694`;
 CLI SHA-256: `15aed1cdfd408978189a259b70264f57e024ce80b14c9615232337132f969509`.
-Private inputs, models, per-input identities and original reports remain on the
-server. Normal exact-head PR/main CI and source equivalence govern Git delivery;
+Private inputs and artifacts remain unpublished. The user explicitly requested
+an offline query archive, delivered outside the local repository with full
+integrity checks. Models and original validation reports remain on the server.
+Normal exact-head PR/main CI and source equivalence govern Git delivery;
 no additional server archive is required after green CI.
 
 The legacy diagnostic restores all 2,345 source bodies, 832 objects and their

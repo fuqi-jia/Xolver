@@ -46,6 +46,9 @@ struct AffineFormKeyEqual {
     bool operator()(AffineFormKeyView a, const AffineFormKey& b) const {
         return (*this)(b, a);
     }
+    bool operator()(AffineFormKeyView a, AffineFormKeyView b) const {
+        return a.lhs == b.lhs && a.rhs == b.rhs;
+    }
 };
 
 } // namespace xolver

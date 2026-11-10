@@ -152,6 +152,17 @@ public:
     // by Gomory-cut generation to re-express a cut over original variables.
     bool auxForm(int aux, LinearFormKey& lhsOut, mpq_class& rhsOut) const;
 
+    struct IsolatedAffineForm {
+        AffineFormKey form;
+        std::string orderingText;
+    };
+    // Isolate one source term in the immutable equation aux = 0. This is pure
+    // algebra, without asserting that equation or retaining its explanation.
+    // Null denotes an unknown aux, invalid term index or zero coefficient.
+    // Returned forms and their text remain stable across further registrations
+    // and projections, until this manager is destroyed or assigned to.
+    const IsolatedAffineForm* isolatedAuxForm(int aux, size_t termIndex) const;
+
 private:
     static bool relationHolds(const DeltaRational& difference, Relation relation);
     mutable const GeneralSimplex* hintSimplex_ = nullptr;
@@ -165,6 +176,7 @@ private:
 
     // Reverse map: aux var index -> its defining (lhs, rhs).
     std::unordered_map<int, AffineFormKey> auxToForm_;
+    mutable std::unordered_map<int, std::unordered_map<size_t, IsolatedAffineForm>> isolatedForms_;
 
     // Variable name -> GeneralSimplex var index
     std::unordered_map<std::string, int> varToIndex_;
