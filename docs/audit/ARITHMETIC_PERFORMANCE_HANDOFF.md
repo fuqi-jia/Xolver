@@ -1,5 +1,92 @@
 # Arithmetic validation and continuation record
 
+## Sparse elimination product reuse and Z3 4.16.0 (2026-11-10)
+
+`SparseTableau::eliminate` now retains one call-local exact rational product
+across coefficient updates instead of reconstructing its GMP storage for every
+term. Arithmetic order, alias-safe RHS capture, cancellation, backpointers,
+row versions, explanations and each theory's rollback policy are unchanged.
+This shared linear kernel also serves integer and nonlinear reasoning; no
+cross-call cache, pool, heuristic parameter or feature gate is introduced.
+
+Four constructed dense linear systems provide a matched Callgrind measurement:
+both binaries execute 2,730 eliminations and 72,397 kernel multiplications with
+identical insertion/erasure counts. The candidate removes 66,937 kernel rational
+initializations and clears each, and 154,034 whole-run GMP allocations and frees
+each. All eight actual SAT models pass independent Z3/cvc5 replay. These counts
+demonstrate the mechanism, rather than whole-suite wall-clock improvement.
+The first read-only profile analysis misinterprets anonymous PLT addresses; it
+is preserved as failed. Corrected analysis derives and cross-checks the load
+bias from the same profiles without repeating any solve.
+
+Frozen core `59a1413fa21f2bcbca890499d6ecb548526e63d9` passes 2,344 proof-enabled
+unit cases / 1,557,102 assertions and 965 public regressions. Existing randomized,
+differential and aliased-RHS tableau tests cover this storage-lifetime change.
+All 2,347 source bodies and 832 objects/dependencies qualify: one unit is rebuilt
+and 831 retained under the serialized build writer. Four current public SAT
+models pass dual replay and five UNSAT obligations are independently checked.
+
+At the user's request, this fresh round uses the official
+[Z3 4.16.0 release](https://github.com/Z3Prover/z3/releases/tag/z3-4.16.0), reporting
+`Z3 version 4.16.0 - 64 bit`. The x64 glibc-2.39 archive SHA-256 matches the
+official release asset digest:
+`7288c49a5bd6dbafd7b0b0d1f65956b91672da24b08f09242919af159be3418e`.
+The frozen Z3 executable SHA-256 is
+`e583c4186a45e72411fa2cb2048401eed03f0f8e5f24694676a8f6271a50b765`.
+Nine independent public obligations qualify the new reference interface.
+Historical sections retain their previous Z3 5.3.2 results; their timings and
+decisions are not substituted for this round's observations.
+
+Panda9 / ExperimentOS runs delivered main `8fc63b15`, candidate and Z3 4.16.0
+fresh on identical inputs, each with 60 seconds, one physical core and 16 GiB.
+At most 40 tasks run concurrently, with physical siblings excluded.
+
+| Cohort / metric | Main baseline | Candidate | Z3 4.16.0 |
+| --- | ---: | ---: | ---: |
+| Private 14,408, verified | 14,408 | 14,408 | 14,408 |
+| Private cumulative solver seconds | 188.844238 | 188.602664 | 278.607182 |
+| Private median, milliseconds | 9.757932 | 9.796441 | 19.402720 |
+| Private maximum, milliseconds | 605.832551 | 596.635289 | 44.620141 |
+| Fixed 160, verified | 123 | 123 | 118 |
+| Fixed verified PAR-2 mean, seconds | 32.065294 | 31.960514 | 33.559758 |
+| Disjoint 14,568, verified PAR-2 total, seconds | 5,319.291305 | 5,302.284939 | 5,648.168461 |
+| Separate development 587, verified | 587 | 587 | 584 |
+
+Candidate gains/losses are zero. Private cumulative time improves 0.1279% over
+main, and disjoint PAR-2 improves 17.006366 seconds. These are descriptive
+observations from one round, not statistical proof of repeatability or added
+capability. All private queries finish below one second; Z3 has the lower
+maximum despite Xolver's lower cumulative time. Timings cover query solving
+and actual model output; independent validation is separate.
+
+Fixed baseline/candidate/Z3 timeouts are 35/35/33 and unknowns 0/0/3. Two UNSAT
+decisions in each Xolver arm and six in Z3 remain unconfirmed and excluded;
+independent checks time out. Their original hashes and existing evidence are
+rechecked once, with no contrary verified SAT judgment found. That absence is
+not an UNSAT proof. Three separate-development Z3 results also remain excluded.
+No error, opposite verdict or invalid model occurs. Historical independent
+cvc5 evidence applies only to identical original inputs and successful current
+UNSAT decisions, with the same checker binary; no old SAT model or old solver
+timing is reused, and no timeout/unknown is upgraded.
+
+Whole-artifact SHA-256 records:
+
+- Native qualification: `8deb0fe21334f2c4db6539356f1cc7c32f57ccb9fdf8d21db12e01b97495123c`.
+- Qualified source: `77e821a1b37cc6fa3902cc1d05a04f99f18507b93b313b10d0b239509938aea6`.
+- Frozen CLI: `53a486e2811fed578233ac74952c357870267c4b9d3fd543c8bf18825c2cf9b3`.
+- Mechanism measurement: `b1f0ff8853f317fdbff03fde0c77d5efcb266f51c33d165ed1272040f91e7008`.
+- Z3 4.16.0 interface qualification: `07b072226989ac31876bdfaf59cda1894bd69137c0f172e5fa7fa6ab98d1df97`.
+- Final server acceptance: `600590c4987dce4aa683d94c7ee1d06f209d738cac05c0244566ffc3691ce19b`.
+- Privacy-checked public summary: `3aeadbe94f5dc3ea1ce338d4ed92c04e792f928214a0db9dba7061e8bdb57b5f`.
+
+Server acceptance passes the preregistered coverage/private-time/disjoint-PAR-2
+criteria. CI delivery is tracked on this change's pull request. Private inputs,
+identities, models and raw reports remain unpublished. The current reference
+solves four verified fixed inputs that Xolver times out on: two LRA, one NIA
+and one NRA. These gaps, remaining difficult inputs, original-C QCP verification
+and the final once-only protected comparison remain open. No overall Z3
+superiority is claimed.
+
 ## Shared immutable linear source definitions (server-qualified, 2026-11-10)
 
 The private manifest contains 14,336 UFLIA and 72 UFNIA queries. In 24 existing
@@ -65,7 +152,12 @@ Whole-artifact SHA-256 records:
 - Privacy-checked public summary: `25549bb13ad9c2b56f98ddfacc1da41ca298af49099f0da35c3a25760ca6b252`.
 
 Server acceptance passes the preregistered coverage/private-time/disjoint-PAR-2
-criteria. PR and main CI delivery are pending. Private inputs, identities, models
+criteria. [PR #133](https://github.com/fuqi-jia/Xolver/pull/133) is merged as
+`8fc63b156f13a0577a81bae597f5b355c8aba169`; exact
+[PR CI](https://github.com/fuqi-jia/Xolver/actions/runs/42826182107) and
+[main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42830491003) both pass
+their build-test and proof-gate jobs. Main and reviewed source trees match.
+Private inputs, identities, models
 and raw reports remain unpublished. Difficult inputs, original-C QCP and the final
 once-only protected comparison remain open; no overall Z3 superiority is claimed.
 
