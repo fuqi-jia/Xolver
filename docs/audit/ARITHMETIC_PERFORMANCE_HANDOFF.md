@@ -1,5 +1,116 @@
 # Arithmetic validation and continuation record
 
+## Exact affine identities for shared equality explanations (2026-11-10)
+
+A public synthetic direct-API regression confirms an invalid shared equality:
+delimiter-only text can encode different isolated linear forms identically.
+The legacy `LiaSolver::getDeducedSharedEqualities()` emits one unsupported
+equality; the targeted soundness assertion fails. Independent Z3/cvc5 checks
+admit the constructed premises with unequal values. Five complete CLI inputs
+retain correct verdicts, so this is an exposed internal-lemma defect, without
+an observed opposite top-level verdict in that diagnostic.
+
+The repair introduces an exact `AffineFormKey` shared by `LinearAtomManager`
+and LIA combination. Variable names, rational coefficients and the offset
+determine identity; presentation text retains the existing publication order.
+Different exact groups within one text bucket each retain their own valid
+representative and explanations. The old private key definitions are removed.
+Tests cover punctuation, large exact coefficients, negative rational scaling,
+multiple groups and withdrawn explanations. Positive-level withdrawal and root
+caller replay retain the established LIA policy. This necessary soundness repair
+must remain even if it costs time.
+
+Frozen core `9063224899458337bd22602478d6ed94ed0775e1` passes **2,339
+proof-enabled unit cases / 1,556,966 assertions** and **965 public regressions**.
+All **2,346 source bodies** match Git; all **832 objects and dependencies** are
+verified. The initial 44-unit build is followed by one corrected test-only
+compilation; production CLI, worker and library bytes remain identical across
+that follow-up. The initial failed fixture record remains explicitly
+unqualified. Four actual public SAT models pass Z3/cvc5 replay; five public
+UNSAT obligations are independently checked. These diagnostics carry no suite
+coverage or speed credit.
+
+Panda9 / ExperimentOS completes a fresh frozen main489 / candidate / Z3 round,
+each with **60 seconds, one physical core and 16 GiB per input**, at most 40
+exclusive physical CPU leases. All three independently verify all **14,408
+private queries**, with cumulative seconds **189.1218 / 188.5615 / 294.6730**.
+Fixed160 verifies **124 / 124 / 117**, zero candidate gains or losses, with
+verified PAR-2 means **31.454374 / 31.458979 / 33.500766** seconds. The disjoint
+14,568-input union verifies **14,532 / 14,532 / 14,525** and has PAR-2 totals
+**5,221.8216 / 5,221.9981 / 5,654.7955** seconds. Candidate PAR-2 rises by
+**0.1764 seconds**; this round establishes no overall speed improvement.
+The necessary soundness repair is retained. Development587 stays separate:
+**587 / 587 / 584** verified, with seconds **7.3358 / 7.3174 / 11.4081**.
+
+No opposite verdict, invalid actual model, protocol error or verified loss is
+observed. Candidate35 timeouts and one unconfirmed UNSAT remain; Z3 has37
+timeouts and six unconfirmed UNSAT results. All seven unresolved input hashes
+and available evidence are rechecked and remain excluded. No historical SAT
+model or current timeout is upgraded. Final original-C QCP, remaining difficult
+inputs, final fair comparison and once-only protected evaluation remain open;
+no overall superiority claim is made.
+
+Whole-artifact evidence SHA-256:
+
+- Native qualification: `6ccd4723e83f0a9a782b27c93b36fb262d4a708f8f4c62d392e25c7538a3f680`.
+- Complete source binding: `ffe7da98cc20820d36939db686e315bed6d8d935e798e87a7311a692753f9f6b`.
+- Independent public model/proof audit: `545eef0fb8284fdde4325695ca3128953a1d68f17cab25b88e34fbb69073f4e0`.
+- Final server acceptance: `1429409afe40ab7d5cdfb3e85ee4490b920738bf463ef1271347c3ceb650db01`.
+- Privacy-checked aggregate export: `52452dc2a8669f6d36ca0ded80587394e4ae2753655a7c4e0cc5fc6b6558f55f`.
+
+Source manifest SHA-256: `8a8a9da8539d9340e6537d467be2fefcb3f5e8d470a5bd780197af323659e694`;
+CLI SHA-256: `15aed1cdfd408978189a259b70264f57e024ce80b14c9615232337132f969509`.
+Private inputs, models, per-input identities and original reports remain on the
+server. Normal exact-head PR/main CI and source equivalence govern Git delivery;
+no additional server archive is required after green CI.
+
+The legacy diagnostic restores all 2,345 source bodies, 832 objects and their
+dependencies, libraries, binaries, cache and output timestamps before releasing
+the native writer. Whole diagnostic SHA-256:
+`f1afcb88904d2deb62ad8fdd0e9426bf0039878589eb4c9fda9aa346beaa1b08`.
+
+The comparison parent is delivered main `489ea183` / qualified core `2f57d8fd`.
+[PR131 CI](https://github.com/fuqi-jia/Xolver/actions/runs/42762388882) and its
+[exact main CI](https://github.com/fuqi-jia/Xolver/actions/runs/42765113945)
+pass both required jobs. The complete main/review tree is identical; all 2,345
+qualified source bodies match. Delivery receipt SHA-256:
+`57239cb7a50be334cb215fb579fec47e8b155575f6a0913dbc6aa0d7ca515512`.
+
+## Closed: evaluation-scoped numeric parsing cache (rejected, 2026-11-10)
+
+Candidate `6ae37e02` reuses owned exact numeric function-table text parsing
+inside each independent-model evaluation. The measured mechanism is real:
+24 complete profile pairs remove 159,212 string parses and 318,424 rational
+normalizations, reducing total instructions by 2.06% with identical primary
+validation, canonical selection, pivot and term-read counts. All 2,336 unit
+cases / 1,556,918 assertions, 965 public regressions and retention controls pass.
+
+The fresh frozen main489 / candidate / Z3 round uses 60 seconds, one physical
+core and 16 GiB per input, with at most 40 exclusive ExperimentOS CPU leases.
+All three verify all 14,408 private queries; cumulative seconds are
+**188.7545 / 187.6516 / 295.5016**. The 0.58% private reduction does not qualify
+the whole change. Fixed160 verifies **124 / 124 / 116**, zero candidate gains
+or losses, with PAR-2 means **31.311607 / 31.533859 / 34.147831** seconds.
+The disjoint union PAR-2 totals **5,198.6115 / 5,233.0690 / 5,759.1546**:
+the candidate is **34.4575 seconds worse** than main. Development587 stays
+separate: **587 / 587 / 584** verified. No model, verdict or formal harness error
+is observed; one candidate and six Z3 unconfirmed UNSAT results remain excluded.
+
+An extra public diagnostic omitted its required ExperimentOS metrics file.
+Its invalid record is preserved; only its finished scope entry was retired.
+After the halted controller drained and exited, the unchanged controller
+resumed the original pending formal jobs. No input, budget, frozen version,
+completed timing or acceptance gate changed, and no completed case was rerun.
+
+**Rejected and closed.** The optional production cache is withdrawn; generic
+validation regressions and all accepted correctness/simplex changes remain.
+Do not repeat this candidate or open a PR for it. Final acceptance SHA-256:
+`92f0ea0b79d3bf29f0f4aee2eac5eefe108b89fa1ad0fa677114371174b2dfcf`.
+Privacy-checked aggregate export SHA-256:
+`685cea1960b34a19f0f005ac974e52fb5a0b019ed23c747cff22c8cd41bd39ec`.
+Private formulas, models and per-input evidence remain server-only. No
+protected evaluation or final original-C QCP result is claimed.
+
 ## Reinitialize only simplex rows with changed dependencies (2026-11-10)
 
 Bound rollback can request a canonical simplex point while the retained point
