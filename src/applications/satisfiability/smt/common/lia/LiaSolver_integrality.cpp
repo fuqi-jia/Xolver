@@ -246,22 +246,11 @@ TheoryCheckResult LiaSolver::checkIntegrality(TheoryLemmaStorage& lemmaDb, Theor
         // Try an explanation-carrying cut before splitting, within the solve budget.
         if (effort == TheoryEffort::Full &&
             cutsThisSolve_ < kMaxCutsPerSolve) {
-            auto tryRow = [&](int variable) -> std::optional<TheoryCheckResult> {
-                if (auto cut = generateGomoryCut(variable); cut && !lemmaDb.contains(*cut)) {
+            if (auto cut = generateGomoryCut(bestVar)) {
+                if (!lemmaDb.contains(*cut)) {
                     ++cutsThisSolve_;
                     return TheoryCheckResult::mkLemma(std::move(*cut));
                 }
-                return std::nullopt;
-            };
-            if (auto cut = tryRow(bestVar)) return std::move(*cut);
-            // A poor row for the branch coordinate does not rule out a cut in
-            // another integer basic row. Integral auxiliary definitions supply
-            // the same integer-valued basic variable required by the theorem.
-            for (int variable = 0; variable < gs_.numVars(); ++variable) {
-                if (variable == bestVar || !gs_.isBasic(variable)) continue;
-                const auto point = gs_.value(variable);
-                if (point.b != 0 || point.a.get_den() == 1 || !isSimplexVarInteger(variable)) continue;
-                if (auto cut = tryRow(variable)) return std::move(*cut);
             }
         }
         if (!registry_) return TheoryCheckResult::unknown();
@@ -468,8 +457,6 @@ std::optional<TheoryLemma> LiaSolver::generateGomoryCut(int xi) {
     std::sort(cutForm.terms.begin(), cutForm.terms.end(),
               [](const auto& a, const auto& b) { return a.first < b.first; });
 
-    Relation cutRelation = Relation::Geq;
-
     // Cut-coefficient size cap: reject blown-up cuts. On large-coefficient
     // instances (CAV coef-size) the Gomory fractional parts compound into huge
     // rationals; such cuts bog down the exact-rational simplex (it hits its
@@ -486,26 +473,11 @@ std::optional<TheoryLemma> LiaSolver::generateGomoryCut(int xi) {
         };
         size_t mx = bits(rhsFinal);
         for (const auto& [vn, c] : cutForm.terms) mx = std::max(mx, bits(c));
-        if (mx > static_cast<size_t>(kMaxBits)) {
-            // Admission depends on the represented constraint, not an arbitrary
-            // common factor introduced by tableau substitution. Round only if
-            // every original coordinate in this cut is known to be integer.
-            const bool integerForm = std::all_of(cutForm.terms.begin(), cutForm.terms.end(),
-                [&](const auto& term) {
-                    const int variable = manager_.findVarIndex(term.first);
-                    return variable >= 0 && integerVars_.count(variable) != 0;
-                });
-            LinearConstraintNormalizer::normalizePrimitiveConstraint(
-                cutForm, cutRelation, rhsFinal, integerForm ? SortKind::Int : SortKind::Real);
-            mx = bits(rhsFinal);
-            for (const auto& [name, coefficient] : cutForm.terms)
-                mx = std::max(mx, bits(coefficient));
-            if (mx > static_cast<size_t>(kMaxBits)) return std::nullopt;
-        }
+        if (mx > static_cast<size_t>(kMaxBits)) return std::nullopt;
     }
 
     SatLit cutLit = registry_->getOrCreateLinearBoundAtom(
-        cutForm, cutRelation, rhsFinal, TheoryId::LIA);
+        cutForm, Relation::Geq, rhsFinal, TheoryId::LIA);
 
     // Explanation-aware lemma: (Σ reasons) -> cut, i.e. clause {¬reasons, cutLit}.
     std::vector<SatLit> clause;

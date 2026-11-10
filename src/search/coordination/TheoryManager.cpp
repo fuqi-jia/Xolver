@@ -86,7 +86,6 @@ void TheoryManager::registerSolver(std::unique_ptr<TheorySolver> solver) {
 }
 
 void TheoryManager::clearSolvers() {
-    linearPredicates_.reset();
     solvers_.clear();
     solverByTheory_.clear();
     if (sharedTermRegistry_) sharedTermRegistry_->clear();
@@ -175,7 +174,6 @@ void TheoryManager::discardSnapshotsAbove(int level) {
 
 void TheoryManager::assertTheoryLit(const TheoryAtomRecord& atom,
                                     SatLit assignedLit, int level) {
-    if (registry_) linearPredicates_.assertLit(*registry_, atom, assignedLit, level);
     if (combinationMode_ && atom.theory == TheoryId::Combination) {
         auto& payload = std::get<SharedEqualityPayload>(atom.payload);
         SatLit reasonLit = assignedLit; // already the actual assigned literal
@@ -195,7 +193,6 @@ void TheoryManager::assertTheoryLit(const TheoryAtomRecord& atom,
 }
 
 void TheoryManager::restoreRootLiteral(const TheoryAtomRecord& atom, SatLit lit) {
-    if (registry_) linearPredicates_.assertLit(*registry_, atom, lit, 0);
     if (combinationMode_ && atom.theory == TheoryId::Combination) {
         const auto& payload = std::get<SharedEqualityPayload>(atom.payload);
         // An unprocessed root event already survived withdrawal. Processed
@@ -215,7 +212,6 @@ void TheoryManager::restoreRootLiteral(const TheoryAtomRecord& atom, SatLit lit)
 }
 
 void TheoryManager::backtrackToLevel(int level) {
-    linearPredicates_.backtrackToLevel(level);
     // Remove pending events from levels above target
     auto it = std::remove_if(
         pendingSharedEqEvents_.begin(),
@@ -340,42 +336,7 @@ std::optional<bool> TheoryManager::evalTheoryAtom(SatVar v) {
     return it->second->evalAtomAtModel(v);
 }
 
-void TheoryManager::recordCheckResult(const TheoryCheckResult& tr) {
-    ++aggStats_.checkCalls;
-    if (tr.kind == TheoryCheckResult::Kind::Conflict) {
-        ++aggStats_.conflicts;
-        if (tr.conflictOpt && !tr.conflictOpt->clause.empty()) {
-            size_t sz = tr.conflictOpt->clause.size();
-            aggStats_.totalConflictSize += static_cast<int64_t>(sz);
-            if (static_cast<int64_t>(sz) > aggStats_.maxConflictSize)
-                aggStats_.maxConflictSize = static_cast<int64_t>(sz);
-        }
-    } else if (tr.kind == TheoryCheckResult::Kind::Lemma) {
-        ++aggStats_.lemmas;
-    }
-}
-
 TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
-    if (effort == TheoryEffort::Standard && registry_) {
-        if (auto result = linearPredicates_.check(*registry_, assignmentView_, lemmaDb)) {
-            recordCheckResult(*result);
-            return std::move(*result);
-        }
-    }
-    // Complete models need the engine's global explanation or validated model.
-    // A local predicate conflict must not replace that structural reasoning.
-    auto result = checkEngines(lemmaDb, effort);
-    if (effort == TheoryEffort::Full && registry_ &&
-        result.kind != TheoryCheckResult::Kind::Conflict) {
-        if (auto conflict = linearPredicates_.checkConsistency(*registry_, assignmentView_)) {
-            recordCheckResult(*conflict);
-            return std::move(*conflict);
-        }
-    }
-    return result;
-}
-
-TheoryCheckResult TheoryManager::checkEngines(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
     NO_DBG << "\n========== NO model check #" << (++noDebugModelCheckId) << " ==========\n";
     if (g_combDiag()) { ++g_cd.checks; combDiagDump(); }
 
@@ -433,8 +394,23 @@ TheoryCheckResult TheoryManager::checkEngines(TheoryLemmaStorage& lemmaDb, Theor
         return true;
     };
 
+    auto recordCheckResult = [this](const TheoryCheckResult& tr) {
+        ++aggStats_.checkCalls;
+        if (tr.kind == TheoryCheckResult::Kind::Conflict) {
+            ++aggStats_.conflicts;
+            if (tr.conflictOpt && !tr.conflictOpt->clause.empty()) {
+                size_t sz = tr.conflictOpt->clause.size();
+                aggStats_.totalConflictSize += static_cast<int64_t>(sz);
+                if (static_cast<int64_t>(sz) > aggStats_.maxConflictSize)
+                    aggStats_.maxConflictSize = static_cast<int64_t>(sz);
+            }
+        } else if (tr.kind == TheoryCheckResult::Kind::Lemma) {
+            ++aggStats_.lemmas;
+        }
+    };
+
     if (!combinationMode_) {
-        // Single-theory path
+        // Legacy single-theory path
         if (solvers_.empty()) {
             return TheoryCheckResult::consistent();
         }

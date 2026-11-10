@@ -72,12 +72,6 @@ public:
     // this operation must not be applied to real-valued linear forms.
     static void normalizeIntegerConstraint(LinearFormKey& lhs, Relation& rel, mpq_class& rhs);
 
-    // Remove rational content from the LHS and canonicalize its sign. Real
-    // constraints retain exact strictness; integer bounds are rounded on the
-    // primitive integer lattice. Equality RHS values remain exact rationals.
-    static void normalizePrimitiveConstraint(LinearFormKey& lhs, Relation& rel,
-                                             mpq_class& rhs, SortKind sort);
-
 private:
 
     // Relation flip for assigned false.

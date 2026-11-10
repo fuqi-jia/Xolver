@@ -7,7 +7,6 @@
 #include "search/combination/SharedEqualityManager.h"
 #include "search/combination/CareGraph.h"
 #include "search/combination/ConflictMinimizer.h"
-#include "search/linear/LinearPredicatePropagation.h"
 #include <memory>
 #include <vector>
 #include <unordered_map>
@@ -70,10 +69,7 @@ public:
     // A solver without model evaluation support declines with no value.
     std::optional<bool> evalTheoryAtom(SatVar v) override;
 
-    void setRegistry(TheoryAtomRegistry* registry) {
-        if (registry_ != registry) linearPredicates_.reset();
-        registry_ = registry;
-    }
+    void setRegistry(TheoryAtomRegistry* registry) { registry_ = registry; }
     void setAssignmentView(TheoryAssignmentView* view) override { assignmentView_ = view; }
     void setSharedTermRegistry(SharedTermRegistry* reg) { sharedTermRegistry_ = reg; }
 
@@ -141,10 +137,7 @@ private:
     TheoryAssignmentView* assignmentView_ = nullptr;
     SharedTermRegistry* sharedTermRegistry_ = nullptr;
     AggregateStats aggStats_;
-    LinearPredicatePropagation linearPredicates_;
     ModelCandidateCheck modelCandidateCheck_;
-    TheoryCheckResult checkEngines(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
-    void recordCheckResult(const TheoryCheckResult& result);
 
     SharedEqualityManager sharedEqMgr_;
 
