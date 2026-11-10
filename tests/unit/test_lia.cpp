@@ -22,6 +22,149 @@ static std::string writeTempSmt2(const std::string& content) {
     return path;
 }
 
+namespace {
+struct SharedAffineFixture {
+    NativeTerms ir;
+    SharedTermRegistry shared;
+    LiaSolver solver;
+
+    SharedAffineFixture() {
+        ir.registerSort(0, SortKind::Int);
+        shared.setNativeTerms(&ir);
+        solver.setNativeTerms(&ir);
+        solver.setSharedTermRegistry(&shared);
+    }
+
+    SharedTermId term(const std::string& name) {
+        const auto expression = ir.add({Kind::Variable, 0, {}, Payload(name)});
+        const auto id = shared.getOrCreate(expression, 0, name, false);
+        shared.addOwner(id, TheoryId::LIA);
+        shared.addOwner(id, TheoryId::EUF);
+        return id;
+    }
+
+    void equation(LinearFormKey form, SatVar variable, int level, mpq_class rhs = 0) {
+        solver.assertLit({variable, TheoryId::LIA, false, NullExpr,
+            LinearAtomPayload{std::move(form), Relation::Eq, RealValue::fromMpq(std::move(rhs))}},
+            true, level, SatLit::positive(variable));
+    }
+
+    std::vector<TheorySolver::SharedEqualityPropagation> equalities() {
+        TheoryLemmaDatabase lemmas;
+        REQUIRE(solver.check(lemmas, TheoryEffort::Standard).kind ==
+                TheoryCheckResult::Kind::Consistent);
+        return solver.getDeducedSharedEqualities();
+    }
+
+    static bool connects(const TheorySolver::SharedEqualityPropagation& equality,
+                         SharedTermId a, SharedTermId b) {
+        return (equality.a == a && equality.b == b) ||
+               (equality.b == a && equality.a == b);
+    }
+};
+}
+
+TEST_CASE("LIA: isolated shared forms distinguish coefficients from identifier text") {
+    SharedAffineFixture fixture;
+    const auto a = fixture.term("a"), b = fixture.term("b");
+    LinearFormKey first{{{"a", 1}, {"x", -1}, {"y", -1}}};
+    LinearFormKey second{{{"b", 1}, {"x:1;y", -1}}};
+    mpq_class rhs = 0;
+    bool equal = false;
+    SUBCASE("delimiters remain part of a variable name") {}
+    SUBCASE("scaled equal forms retain their explanations") {
+        second = LinearFormKey{{{"b", 2}, {"x", -2}, {"y", -2}}};
+        equal = true;
+    }
+    SUBCASE("nonzero offsets preserve term boundaries") { rhs = 7; }
+    SUBCASE("large coefficients remain separate from identifier contents") {
+        mpz_class large = 1;
+        large <<= 181;
+        first.terms[1].second = -mpq_class(large);
+        second.terms[1].first = "x:" + large.get_str() + ";y";
+    }
+    SUBCASE("negative scaling preserves exact rational identities") {
+        mpz_class large = 1;
+        large <<= 181;
+        const mpz_class numerator = large + 1;
+        mpq_class ratio(numerator, large);
+        ratio.canonicalize();
+        first.terms[1].second = -ratio;
+        second = LinearFormKey{{{"b", -mpq_class(large)},
+                                {"x", mpq_class(numerator)}, {"y", mpq_class(large)}}};
+        equal = true;
+    }
+    fixture.equation(std::move(first), 1, 0, rhs);
+    fixture.equation(std::move(second), 2, 0, rhs);
+    bool found = false;
+    for (const auto& propagation : fixture.equalities()) {
+        if (!SharedAffineFixture::connects(propagation, a, b)) continue;
+        found = true;
+        CHECK(equal);
+        CHECK(propagation.reasons.size() == 2);
+        for (SatVar reason : {1, 2})
+            CHECK(std::find(propagation.reasons.begin(), propagation.reasons.end(),
+                            SatLit::positive(reason)) != propagation.reasons.end());
+    }
+    CHECK(found == equal);
+}
+
+TEST_CASE("LIA: isolated shared forms retain every exact group in a text bucket") {
+    SharedAffineFixture fixture;
+    const auto a = fixture.term("a"), b = fixture.term("b");
+    const auto c = fixture.term("c"), d = fixture.term("d");
+    fixture.equation(LinearFormKey{{{"a", 1}, {"x", -1}, {"y", -1}}}, 1, 0);
+    fixture.equation(LinearFormKey{{{"b", 1}, {"x:1;y", -1}}}, 2, 0);
+    fixture.equation(LinearFormKey{{{"c", 1}, {"x", -1}, {"y", -1}}}, 3, 0);
+    fixture.equation(LinearFormKey{{{"d", 1}, {"x:1;y", -1}}}, 4, 0);
+    const auto equalities = fixture.equalities();
+    CHECK(equalities.size() == 2);
+    bool first = false, second = false;
+    for (const auto& propagation : equalities) {
+        const bool ac = SharedAffineFixture::connects(propagation, a, c);
+        const bool bd = SharedAffineFixture::connects(propagation, b, d);
+        CHECK((ac || bd));
+        first |= ac;
+        second |= bd;
+        CHECK(propagation.reasons.size() == 2);
+        const std::vector<SatVar> expected = ac ? std::vector<SatVar>{1, 3}
+                                               : std::vector<SatVar>{2, 4};
+        for (SatVar reason : expected)
+            CHECK(std::find(propagation.reasons.begin(), propagation.reasons.end(),
+                            SatLit::positive(reason)) != propagation.reasons.end());
+    }
+    CHECK(first);
+    CHECK(second);
+}
+
+TEST_CASE("LIA: isolated shared forms rebuild proofs after backtracking") {
+    SharedAffineFixture fixture;
+    const auto a = fixture.term("a"), b = fixture.term("b");
+    fixture.equation(LinearFormKey{{{"a", 1}, {"x", -1}, {"y", -1}}}, 1, 0);
+    auto check = [&](bool expected, SatVar currentReason) {
+        bool found = false;
+        for (const auto& propagation : fixture.equalities()) {
+            if (!SharedAffineFixture::connects(propagation, a, b)) continue;
+            found = true;
+            CHECK(expected);
+            CHECK(std::find(propagation.reasons.begin(), propagation.reasons.end(),
+                            SatLit::positive(currentReason)) != propagation.reasons.end());
+            CHECK(std::find(propagation.reasons.begin(), propagation.reasons.end(),
+                            SatLit::positive(2)) == propagation.reasons.end());
+        }
+        CHECK(found == expected);
+    };
+    fixture.equation(LinearFormKey{{{"b", 1}, {"x:1;y", -1}}}, 2, 1);
+    check(false, 2);
+    fixture.solver.backtrackToLevel(0);
+    check(false, 1);
+    fixture.equation(LinearFormKey{{{"b", 3}, {"x", -3}, {"y", -3}}}, 3, 1);
+    check(true, 3);
+    fixture.solver.backtrackToLevel(0);
+    fixture.equation(LinearFormKey{{{"b", 1}, {"x:1;y", -1}}}, 4, 1);
+    check(false, 4);
+}
+
 TEST_CASE("LIA: unbounded Boolean integer models survive widening and query scopes") {
     Solver solver;
     solver.setLogic("QF_LIA");

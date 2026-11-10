@@ -73,12 +73,12 @@ int LinearAtomManager::getOrCreateAuxVar(GeneralSimplex& gs,
                                           const mpq_class& rhs) {
     // Borrow the lookup input; only a genuinely new auxiliary column needs an
     // owned copy of the form and its GMP coefficients.
-    auto it = formToAux_.find(FormKeyView{lhs, rhs});
+    auto it = formToAux_.find(AffineFormKeyView{lhs, rhs});
     if (it != formToAux_.end()) {
         return it->second;
     }
 
-    FormKey key{lhs, rhs};
+    AffineFormKey key{lhs, rhs};
     // Build GeneralSimplex terms: (varIndex, coeff)
     std::vector<std::pair<int, mpq_class>> gsTerms;
     gsTerms.reserve(lhs.terms.size());

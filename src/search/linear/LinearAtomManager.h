@@ -1,6 +1,7 @@
 #pragma once
 
 #include "algebra/linear/LinearExpr.h"
+#include "contracts/AffineFormKey.h"
 #include "contracts/TheorySolver.h"
 #include "search/lra/GeneralSimplex.h"
 #include <gmpxx.h>
@@ -160,38 +161,10 @@ private:
     mutable size_t hintSourceCount_ = 0;
     mutable bool hintPointValid_ = false;
     // Canonical (lhs, rhs) -> aux var (solver-local)
-    struct FormKey {
-        LinearFormKey lhs;
-        mpq_class rhs;
-        bool operator==(const FormKey& o) const {
-            return lhs == o.lhs && rhs == o.rhs;
-        }
-    };
-    struct FormKeyView {
-        const LinearFormKey& lhs;
-        const mpq_class& rhs;
-    };
-    struct FormKeyHash {
-        using is_transparent = void;
-        std::size_t operator()(const FormKey& k) const {
-            return (*this)(FormKeyView{k.lhs, k.rhs});
-        }
-        std::size_t operator()(FormKeyView k) const {
-            std::size_t h = LinearFormKeyHash{}(k.lhs);
-            h ^= MpqHash{}(k.rhs) + 0x9e3779b9 + (h << 6) + (h >> 2);
-            return h;
-        }
-    };
-    struct FormKeyEqual {
-        using is_transparent = void;
-        bool operator()(const FormKey& a, const FormKey& b) const { return a == b; }
-        bool operator()(const FormKey& a, FormKeyView b) const { return a.lhs == b.lhs && a.rhs == b.rhs; }
-        bool operator()(FormKeyView a, const FormKey& b) const { return (*this)(b, a); }
-    };
-    std::unordered_map<FormKey, int, FormKeyHash, FormKeyEqual> formToAux_;
+    std::unordered_map<AffineFormKey, int, AffineFormKeyHash, AffineFormKeyEqual> formToAux_;
 
     // Reverse map: aux var index -> its defining (lhs, rhs).
-    std::unordered_map<int, FormKey> auxToForm_;
+    std::unordered_map<int, AffineFormKey> auxToForm_;
 
     // Variable name -> GeneralSimplex var index
     std::unordered_map<std::string, int> varToIndex_;

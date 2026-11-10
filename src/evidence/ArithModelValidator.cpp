@@ -1,57 +1,10 @@
 #include "base/RuntimeConfig.h"
 #include "evidence/ArithModelValidator.h"
 #include "base/EnvParam.h"
-#include <cassert>
 #include <iostream>
 #include <functional>
 
 namespace xolver {
-struct ArithModelValidator::ParsedFunctionNumber {
-    RealValue value;
-    bool valid = false;
-    bool integer = false;
-    bool zeroDenominator = false;
-};
-
-struct ArithModelValidator::FunctionNumberCache {
-    struct TextHash {
-        using is_transparent = void;
-        size_t operator()(std::string_view text) const noexcept {
-            return std::hash<std::string_view>{}(text);
-        }
-    };
-    std::unordered_map<std::string, ParsedFunctionNumber, TextHash, std::equal_to<>> values;
-    FunctionNumberCache*& slot;
-    FunctionNumberCache* previous;
-
-    explicit FunctionNumberCache(FunctionNumberCache*& active) : slot(active), previous(active) {
-        slot = this;
-    }
-    FunctionNumberCache(const FunctionNumberCache&) = delete;
-    FunctionNumberCache& operator=(const FunctionNumberCache&) = delete;
-    ~FunctionNumberCache() { slot = previous; }
-};
-
-const ArithModelValidator::ParsedFunctionNumber&
-ArithModelValidator::parsedFunctionNumber(std::string_view text) const {
-    assert(functionNumberCache_);
-    auto& values = functionNumberCache_->values;
-    if (auto found = values.find(text); found != values.end()) return found->second;
-    auto [entry, inserted] = values.try_emplace(std::string(text));
-    (void)inserted;
-    auto& parsed = entry->second;
-    try {
-        mpq_class number(entry->first);
-        parsed.zeroDenominator = number.get_den() == 0;
-        if (parsed.zeroDenominator) return parsed;
-        number.canonicalize();
-        parsed.integer = number.get_den() == 1;
-        parsed.value = RealValue::fromMpq(std::move(number));
-        parsed.valid = true;
-    } catch (...) {}
-    return parsed;
-}
-
 std::optional<ArithModelValidator::RealAssignment>
 ArithModelValidator::numericClassValues(const TheoryModel& model) {
     RealAssignment classes;
@@ -87,9 +40,6 @@ static void amvDumpExpr(const NativeTerms& ir, ExprId eid, int depth, int maxDep
 ArithModelValidator::Verdict
 ArithModelValidator::validate(const std::vector<ExprId>& assertions) const {
     evalMemo_.clear();
-    // Model-table text is immutable during one evaluation. Own parsed values
-    // and keys locally; later calls still rebuild their expression results.
-    FunctionNumberCache numbers(functionNumberCache_);
     // Warm a local cache bottom-up so eval() below never recurses deeply.
     std::unordered_map<ExprId, TR> prepass;
     prepassCache_ = &prepass;
@@ -164,7 +114,6 @@ ArithModelValidator::validate(const std::vector<ExprId>& assertions) const {
 
 std::optional<mpq_class> ArithModelValidator::evalNumber(ExprId e) const {
     evalMemo_.clear();
-    FunctionNumberCache numbers(functionNumberCache_);
     std::unordered_map<ExprId, TR> prepass;
     prepassCache_ = &prepass;
     warmEval(e, prepass);
@@ -176,7 +125,6 @@ std::optional<mpq_class> ArithModelValidator::evalNumber(ExprId e) const {
 
 std::optional<std::string> ArithModelValidator::evalToken(ExprId e) const {
     evalMemo_.clear();
-    FunctionNumberCache numbers(functionNumberCache_);
     std::unordered_map<ExprId, TR> prepass;
     prepassCache_ = &prepass;
     warmEval(e, prepass);
@@ -681,11 +629,11 @@ ArithModelValidator::TR ArithModelValidator::evalImpl(ExprId eid) const {
                         else if (!*same) match = false;
                     } else if (arg.kind == Kind2::Number) {
                         try {
-                            std::string_view text(key);
-                            if (text.starts_with("#n:")) text.remove_prefix(3);
-                            const auto& number = parsedFunctionNumber(text);
-                            if (!number.valid || (fi.argSorts[i] == "Int" && !number.integer)) return r;
-                            if (arg.n != number.value) match = false;
+                            mpq_class number(key.rfind("#n:", 0) == 0 ? key.substr(3) : key);
+                            if (number.get_den() == 0) return r;
+                            number.canonicalize();
+                            if (fi.argSorts[i] == "Int" && number.get_den() != 1) return r;
+                            if (arg.n != RealValue::fromMpq(number)) match = false;
                         } catch (...) { return r; }
                     } else if (arg.kind == Kind2::Bool) {
                         const bool yes = key == "true" || key == "1" || key == "#b:1";
@@ -721,12 +669,11 @@ ArithModelValidator::TR ArithModelValidator::evalImpl(ExprId eid) const {
                 return r;
             }
             try {
-                const auto& number = parsedFunctionNumber(*valStr);
-                if (number.zeroDenominator) return r;
-                if (number.valid) {
-                    if (fi.retSort == "Int" && !number.integer) return r;
-                    return num(number.value);
-                }
+                mpq_class q(*valStr);
+                if (q.get_den() == 0) return r;
+                q.canonicalize();
+                if (fi.retSort == "Int" && q.get_den() != 1) return r;
+                return num(RealValue::fromMpq(q));
             } catch (...) {}
             if (fi.retSort == "Int" || fi.retSort == "Real") return r;
             // Non-numeric (uninterpreted-sort) result: an opaque equality token.

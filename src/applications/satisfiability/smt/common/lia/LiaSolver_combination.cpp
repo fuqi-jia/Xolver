@@ -5,6 +5,7 @@
 #include "search/coordination/TheoryAtomRegistry.h"
 #include "search/coordination/TheoryLemmaDatabase.h"
 #include "contracts/TheoryAtomTypes.h"
+#include "contracts/AffineFormKey.h"
 #include "search/arith/Reasoner.h"
 #include "search/arith/LinearDifferenceEqualityIndex.h"
 #include "search/linear/SimplexDiseqSplitter.h"
@@ -326,8 +327,12 @@ LiaSolver::getDeducedSharedEqualities() {
             std::string nm = getVarNameForSharedTerm(stId);
             if (!nm.empty()) nameToShared.emplace(nm, stId);
         }
-        // canonical isolated-form key -> [(sharedVar, defining-atom literal)]
-        std::map<std::string, std::vector<std::pair<SharedTermId, SatLit>>> byForm;
+        using Definitions = std::vector<std::pair<SharedTermId, SatLit>>;
+        using ExactGroups = std::unordered_map<AffineFormKey, Definitions,
+                                              AffineFormKeyHash, AffineFormKeyEqual>;
+        // Text preserves publication order. Exact keys keep identifier text
+        // separate from coefficients when legal names contain delimiters.
+        std::map<std::string, ExactGroups> byForm;
         for (const auto& e : theoryTrail_) {
             if (e.isDiseq || !e.value) continue;
             if (!std::holds_alternative<LinearAtomPayload>(e.atom.payload)) continue;
@@ -343,16 +348,23 @@ LiaSolver::getDeducedSharedEqualities() {
                 if (cv == 0) continue;
                 // Canonical key: const rhs/cv, then (u, -c_u/cv) for u != v
                 // (terms stay name-sorted with vi removed).
-                std::string key = mpq_class(rhs / cv).get_str();
+                AffineFormKey form;
+                form.rhs = rhs / cv;
+                form.lhs.terms.reserve(terms.size() - 1);
+                std::string key = form.rhs.get_str();
                 key.push_back('|');
                 for (size_t ui = 0; ui < terms.size(); ++ui) {
                     if (ui == vi) continue;
                     key += terms[ui].first;
                     key.push_back(':');
-                    key += mpq_class(-terms[ui].second / cv).get_str();
+                    form.lhs.terms.emplace_back(terms[ui].first,
+                                               mpq_class(-terms[ui].second / cv));
+                    key += form.lhs.terms.back().second.get_str();
                     key.push_back(';');
                 }
-                byForm[key].push_back({sit->second, e.lit});
+                auto [group, inserted] = byForm[key].try_emplace(std::move(form));
+                (void)inserted;
+                group->second.push_back({sit->second, e.lit});
             }
         }
         // REPRESENTATIVE-based emission (NOT pairwise): publish only v = rep for
@@ -363,15 +375,18 @@ LiaSolver::getDeducedSharedEqualities() {
         // completeness step; the production design is demand-driven (Array posts
         // a (storeIndex,readIndex) ProveEq demand, this oracle answers only that
         // pair) — see [[project_array_reasoning]].
-        for (auto& [key, group] : byForm) {
+        for (auto& [key, groups] : byForm) {
             (void)key;
-            if (group.size() < 2) continue;
-            const auto& rep = group.front();
-            for (size_t k = 1; k < group.size(); ++k) {
-                if (group[k].first == rep.first) continue;  // same shared term
-                result.push_back(TheorySolver::SharedEqualityPropagation{
-                    group[k].first, rep.first,
-                    std::vector<SatLit>{group[k].second, rep.second}});
+            for (auto& [form, group] : groups) {
+                (void)form;
+                if (group.size() < 2) continue;
+                const auto& rep = group.front();
+                for (size_t k = 1; k < group.size(); ++k) {
+                    if (group[k].first == rep.first) continue;  // same shared term
+                    result.push_back(TheorySolver::SharedEqualityPropagation{
+                        group[k].first, rep.first,
+                        std::vector<SatLit>{group[k].second, rep.second}});
+                }
             }
         }
     }

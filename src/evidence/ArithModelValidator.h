@@ -6,7 +6,6 @@
 #include <gmpxx.h>
 #include <optional>
 #include <string>
-#include <string_view>
 #include <map>
 #include <unordered_map>
 #include <unordered_set>
@@ -156,10 +155,6 @@ private:
 
     TR eval(ExprId e) const;       // cached dispatcher (memo when enabled)
     TR evalImpl(ExprId e) const;   // the actual evaluator (recurses via eval)
-    struct ParsedFunctionNumber;
-    struct FunctionNumberCache;
-    const ParsedFunctionNumber& parsedFunctionNumber(std::string_view text) const;
-    mutable FunctionNumberCache* functionNumberCache_ = nullptr;
     // Iterative bottom-up pre-pass: fills `cache` with every subterm's TR so the
     // recursive eval/evalImpl resolves children from it and never recurses deeply
     // (deep-formula/term stack-overflow guard). Used by validate()/evalNumber().
