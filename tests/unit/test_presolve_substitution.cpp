@@ -412,7 +412,7 @@ TEST_CASE("bound composition: indexed chains retain strictness, live facts and e
         mpq_class scale(numerator, large);
         scale.canonicalize();
         auto conclusion = [](unsigned i) {
-            return RationalPolynomial::fromVar(2 * i + 1) -
+            return RationalPolynomial::fromVar(2 * i + 1, 1) -
                    RationalPolynomial::fromConstant(i + 1);
         };
         for (unsigned i = 0; i < chains; ++i) {
@@ -455,7 +455,7 @@ TEST_CASE("bound composition: indexed chains retain strictness, live facts and e
 TEST_CASE("bound composition: nonlinear cancellation and exact tight boundaries") {
     SUBCASE("signed premises survive exact equality publication") {
         PresolveState state;
-        const auto p = RationalPolynomial::fromVar(0) - RationalPolynomial::fromConstant(7);
+        const auto p = RationalPolynomial::fromVar(0, 1) - RationalPolynomial::fromConstant(7);
         ReasonNode lower, upper;
         lower.baseLiterals = {SatLit::negative(3)};
         upper.baseLiterals = {SatLit::positive(4)};
@@ -470,9 +470,9 @@ TEST_CASE("bound composition: nonlinear cancellation and exact tight boundaries"
         for (bool integerDomain : {false, true}) {
             PresolveState state;
             state.integerDomain = integerDomain;
-            const auto v = RationalPolynomial::fromVar(0);
-            const auto x = RationalPolynomial::fromVar(1);
-            const auto z = RationalPolynomial::fromVar(2);
+            const auto v = RationalPolynomial::fromVar(0, 1);
+            const auto x = RationalPolynomial::fromVar(1, 1);
+            const auto z = RationalPolynomial::fromVar(2, 1);
             const auto product = v * x;
             state.atoms = {{-v + product + z, Relation::Leq, reason(1)},
                            {v - product - RationalPolynomial::fromConstant(3), Relation::Lt, reason(2)}};
@@ -486,9 +486,9 @@ TEST_CASE("bound composition: nonlinear cancellation and exact tight boundaries"
     }
     SUBCASE("an uncancelled variable is never dropped from a nonlinear term") {
         PresolveState state;
-        const auto v = RationalPolynomial::fromVar(0);
-        const auto x = RationalPolynomial::fromVar(1);
-        const auto z = RationalPolynomial::fromVar(2);
+        const auto v = RationalPolynomial::fromVar(0, 1);
+        const auto x = RationalPolynomial::fromVar(1, 1);
+        const auto z = RationalPolynomial::fromVar(2, 1);
         state.atoms = {{-v + v * x + z, Relation::Leq, reason(1)},
                        {v - RationalPolynomial::fromConstant(3), Relation::Leq, reason(2)}};
         BoundChainComposer composer;
@@ -500,7 +500,7 @@ TEST_CASE("bound composition: nonlinear cancellation and exact tight boundaries"
         for (bool integerDomain : {false, true}) {
             PresolveState state;
             state.integerDomain = integerDomain;
-            const auto v = RationalPolynomial::fromVar(0);
+            const auto v = RationalPolynomial::fromVar(0, 1);
             state.atoms = {{-v + RationalPolynomial::fromConstant(7), Relation::Leq, reason(1)},
                            {v - RationalPolynomial::fromConstant(7), Relation::Lt, reason(2)}};
             BoundChainComposer composer;
@@ -513,7 +513,7 @@ TEST_CASE("bound composition: nonlinear cancellation and exact tight boundaries"
         for (bool integerDomain : {false, true}) {
             PresolveState state;
             state.integerDomain = integerDomain;
-            const auto p = RationalPolynomial::fromVar(0) - RationalPolynomial::fromConstant(7);
+            const auto p = RationalPolynomial::fromVar(0, 1) - RationalPolynomial::fromConstant(7);
             state.atoms = {{-p, Relation::Leq, reason(1)}, {p, Relation::Leq, reason(2)}};
             BoundChainComposer composer;
             CHECK(composer.run(state));
